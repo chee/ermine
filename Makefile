@@ -2,7 +2,7 @@
 
 LAYERS := scheduler programs views transactions live histories optypes hosts
 
-docs: core/docs/design.pdf core/docs/protocol.pdf core/plans/core-architecture.pdf plans/hosts-and-provenance.pdf $(foreach l,$(LAYERS),$(l)/$(l).pdf)
+docs: core/docs/design.pdf core/docs/protocol.pdf core/plans/core-architecture.pdf plans/hosts-and-provenance.pdf plans/found-not-given.pdf $(foreach l,$(LAYERS),$(l)/$(l).pdf)
 
 %.pdf: %.tex docs/common.tex
 	tectonic -o $(dir $@) $<
