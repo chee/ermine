@@ -2,8 +2,11 @@
 //
 // Values are any JSON. { set: v } replaces the whole value and applies to an
 // empty node too; { splice: [from, to, s] } edits a string by code points.
-// Anything else is not an op. It is here and not in the core because the core
-// has no optypes of its own; a graph is given its optypes when made.
+// Anything else is not an op. Two values are the same when both are the same
+// null, boolean, number or string; an array or an object is never the same as
+// anything, so nothing is compared deeply. It is here and not in the core
+// because the core has no optypes of its own; a graph is given its optypes
+// when made.
 
 import { type Held, type Json, type Optype, Refused } from "./ermine.ts"
 
@@ -11,9 +14,14 @@ export type Op = { set: Json } | { splice: [number, number, string] }
 
 const isObject = (x: Json): x is { [key: string]: Json } => typeof x === "object" && x !== null && !Array.isArray(x)
 
+const primitive = (x: Json) => x === null || typeof x !== "object"
+
 export const basic: Optype = {
 	holds(_value) {
 		return true
+	},
+	equal(a, b) {
+		return primitive(a) && primitive(b) && a === b
 	},
 	apply(held, ops) {
 		let current = held

@@ -2,8 +2,11 @@
 //
 // Values are any JSON. { set: v } replaces the whole value and applies to an
 // empty node too; { splice: [from, to, s] } edits a string by code points.
-// Anything else is not an op. It is here and not in the core because the core
-// has no optypes of its own; a graph is given its optypes when made.
+// Anything else is not an op. Two values are the same when both are the same
+// null, boolean, number or string; an array or an object is never the same as
+// anything, so nothing is compared deeply. It is here and not in the core
+// because the core has no optypes of its own; a graph is given its optypes
+// when made.
 
 const std = @import("std");
 const ermine = @import("ermine.zig");
@@ -11,10 +14,21 @@ const json = @import("json.zig");
 const Value = json.Value;
 const Error = ermine.Error;
 
-pub const optype = ermine.Optype{ .holds = holds, .apply = apply };
+pub const optype = ermine.Optype{ .holds = holds, .apply = apply, .equal = equal };
 
 fn holds(_: *const Value) bool {
     return true;
+}
+
+/// the same primitive: both null, both the same boolean, numbers that are numerically equal, or strings of the same bytes
+fn equal(a: *const Value, b: *const Value) bool {
+    return switch (a.*) {
+        .null => b.* == .null,
+        .boolean => |x| b.* == .boolean and b.boolean == x,
+        .number => |x| b.* == .number and b.number == x,
+        .string => |x| b.* == .string and std.mem.eql(u8, b.string, x),
+        .array, .object => false,
+    };
 }
 
 fn notAnOp(graph: *ermine.Graph, op: *const Value) Error {

@@ -2,8 +2,11 @@
 //
 // Values are any JSON. { set: v } replaces the whole value and applies to an
 // empty node too; { splice: [from, to, s] } edits a string by code points.
-// Anything else is not an op. It is here and not in the core because the core
-// has no optypes of its own; a graph is given its optypes when made.
+// Anything else is not an op. Two values are the same when both are the same
+// null, boolean, number or string; an array or an object is never the same as
+// anything, so nothing is compared deeply. It is here and not in the core
+// because the core has no optypes of its own; a graph is given its optypes
+// when made.
 
 #include "basic.h"
 
@@ -13,6 +16,25 @@
 static bool basicHolds(const Json *value) {
 	(void)value;
 	return true;
+}
+
+/** the same null, boolean, number (numerically) or string (byte for byte, NULs included); never an array or an object */
+static bool basicEqual(const Json *a, const Json *b) {
+	if (a->type != b->type) return false;
+	switch (a->type) {
+		case JSON_NULL:
+			return true;
+		case JSON_BOOLEAN:
+			return a->boolean == b->boolean;
+		case JSON_NUMBER:
+			return a->number == b->number;
+		case JSON_STRING:
+			return a->stringLength == b->stringLength && memcmp(a->string, b->string, a->stringLength) == 0;
+		case JSON_ARRAY:
+		case JSON_OBJECT:
+			return false;
+	}
+	return false;
 }
 
 /** how many code points a UTF-8 string holds: one per byte that is not a continuation byte */
@@ -101,4 +123,4 @@ static Refusal basicApply(Held held, const Json *ops, Json **result) {
 	return NULL;
 }
 
-const Optype basic = { "basic", basicHolds, basicApply };
+const Optype basic = { "basic", basicHolds, basicApply, basicEqual };
