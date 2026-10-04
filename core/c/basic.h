@@ -5,6 +5,6 @@
 
 #include "ermine.h"
 
-extern const Optype basic;
+extern const Implementation basic;
 
 #endif

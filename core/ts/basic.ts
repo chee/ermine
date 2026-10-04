@@ -8,7 +8,7 @@
 // because the core has no optypes of its own; a graph is given its optypes
 // when made.
 
-import { type Held, type Json, type Optype, Refused } from "./ermine.ts"
+import { type Held, type Implementation, type Json, Refused } from "./ermine.ts"
 
 export type Op = { set: Json } | { splice: [number, number, string] }
 
@@ -16,7 +16,7 @@ const isObject = (x: Json): x is { [key: string]: Json } => typeof x === "object
 
 const primitive = (x: Json) => x === null || typeof x !== "object"
 
-export const basic: Optype = {
+export const basic: Implementation = {
 	holds(_value) {
 		return true
 	},
@@ -35,7 +35,9 @@ export const basic: Optype = {
 				const parts = op.splice
 				if (!Array.isArray(parts) || parts.length !== 3) throw new Refused(`not an op: ${JSON.stringify(op)}`)
 				const [from, to, insert] = parts
-				if (!Number.isInteger(from) || !Number.isInteger(to) || typeof insert !== "string") throw new Refused(`not an op: ${JSON.stringify(op)}`)
+				if (!Number.isInteger(from) || !Number.isInteger(to) || typeof insert !== "string") {
+					throw new Refused(`not an op: ${JSON.stringify(op)}`)
+				}
 				if (!current.present || typeof current.value !== "string") {
 					throw new Refused(`splice applies only to a string, not ${current.present ? JSON.stringify(current.value) : "an empty node"}`)
 				}

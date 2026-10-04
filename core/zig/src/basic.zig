@@ -5,8 +5,8 @@
 // Anything else is not an op. Two values are the same when both are the same
 // null, boolean, number or string; an array or an object is never the same as
 // anything, so nothing is compared deeply. It is here and not in the core
-// because the core has no optypes of its own; a graph is given its optypes
-// when made.
+// because the core has no optypes of its own: the driver mounts the optype
+// node basic at every root and gives the graph this code for its id.
 
 const std = @import("std");
 const ermine = @import("ermine.zig");

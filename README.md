@@ -8,7 +8,8 @@ none, one, or several. Nothing happens silently, and every entry has a
 shareable part a sync layer can carry.
 
 This is a Deno workspace. `core/` is the graph; the other directories are the
-layers to be built on it, each with a page saying what it will be.
+layers to be built on it, empty for now. `TODO.md` says what each will be and
+what is still open about it.
 
 ```
 core/docs/design.tex       the design: what the core is and must guarantee
@@ -19,15 +20,9 @@ core/bench/                how fast and how big the TypeScript core is: its shap
 core/haskell/ermine.hs     the executable specification; passes the whole suite
 core/c/, core/zig/         the ports that measure whether the core is small enough; both pass the suite
 core/ts/                   the TypeScript core, written by hand (@chee/ermine)
-core/plans/                how the Haskell core was planned
 docs/common.tex            the LaTeX preamble every document shares
-plans/                     plans that span layers
+TODO.md                    the layers: one section each, what is decided and what is open
 demos/core-web/            a canvas for the core: nodes, placements, processes, every method of the library
-
-scheduler/   glitch freedom as a process          programs/   processes whose code is a node
-views/       processes that draw                  transactions/  writes held back and landed together
-live/        values too frequent to log           histories/  nodes that remember and merge
-optypes/     what a node's ops mean, and optypes that are data    hosts/      devices, adapters and painting
 ```
 
 ```

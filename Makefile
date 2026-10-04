@@ -1,8 +1,6 @@
-# ermine: the core (its design, protocol, suite and implementations), and the layers to be built on it
+# ermine: the core (its design, protocol, suite and implementations); the layers to be built on it are in TODO.md
 
-LAYERS := scheduler programs views transactions live histories optypes hosts
-
-docs: core/docs/design.pdf core/docs/protocol.pdf core/plans/core-architecture.pdf plans/hosts-and-provenance.pdf plans/found-not-given.pdf $(foreach l,$(LAYERS),$(l)/$(l).pdf)
+docs: core/docs/design.pdf core/docs/protocol.pdf
 
 %.pdf: %.tex docs/common.tex
 	tectonic -o $(dir $@) $<
