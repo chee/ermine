@@ -6,3 +6,8 @@ node_modules/
 *.o
 *.hi
 core/ts/dist/
+core/c/ermine
+core/c/*.o
+core/zig/zig-out/
+core/zig/.zig-cache/
+demos/core-web/dist/

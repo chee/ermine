@@ -8,15 +8,22 @@
 		"./live",
 		"./histories",
 		"./optypes",
-		"./hosts"
+		"./hosts",
+		"./demos/core-web"
 	],
 	"tasks": {
 		"scenarios": "python3 core/conformance/scenarios.py",
 		"lint": "deno task scenarios && deno run --allow-read core/conformance/run.mjs --lint",
 		"conformance": "deno run --allow-read --allow-run core/conformance/run.mjs",
+		"fuzz": "deno run --allow-read --allow-write --allow-run core/fuzz/fuzz.mjs",
+		"bench": "deno bench --allow-read core/bench/",
+		"bench:memory": "deno run --v8-flags=--expose-gc core/bench/memory.ts",
+		"bench:reactivity": "deno run --allow-read --v8-flags=--expose-gc core/bench/reactivity.ts",
+		"bench:variants": "deno run --allow-read --allow-write --v8-flags=--expose-gc core/bench/variants.ts",
 		"watch": "deno run --allow-read --allow-run core/conformance/watch.mjs",
 		"driver": "deno run core/ts/driver.ts",
-		"build": "deno task --cwd core/ts build"
+		"build": "deno task --cwd core/ts build",
+		"demo": "deno task --cwd demos/core-web serve"
 	},
 	"fmt": {
 		"useTabs": true,

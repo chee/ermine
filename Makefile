@@ -20,6 +20,19 @@ IMPL ?= ts
 conformance:
 	deno task conformance $(IMPL)
 
+# random sessions with invariants, against one implementation or several at once (make fuzz IMPLS="ts c" SEEDS=500)
+IMPLS ?= ts
+SEEDS ?= 100
+fuzz:
+	deno task fuzz $(IMPLS) --seeds $(SEEDS)
+
+# how fast, and how big in heap, the TypeScript core is on the shapes that matter
+bench:
+	deno task bench
+	deno task bench:memory
+	deno task bench:reactivity
+	deno task bench:variants
+
 # rerun the suite whenever the implementation or the suite changes (make watch IMPL=ts)
 watch:
 	deno task watch $(IMPL)
@@ -33,4 +46,13 @@ core/haskell/ermine.wasm: core/haskell/ermine.hs
 build:
 	deno task build
 
-.PHONY: docs scenarios lint conformance watch haskell build
+# the C implementation (clang or gcc)
+c: core/c/ermine
+core/c/ermine: core/c/*.c core/c/*.h
+	$(MAKE) -C core/c
+
+# the Zig implementation (zig 0.16)
+zig:
+	cd core/zig && zig build
+
+.PHONY: docs scenarios lint conformance fuzz bench watch haskell build c zig
