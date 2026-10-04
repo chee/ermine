@@ -1,0 +1,27 @@
+{
+	"workspace": [
+		"./core/ts",
+		"./scheduler",
+		"./programs",
+		"./views",
+		"./transactions",
+		"./live",
+		"./histories",
+		"./optypes",
+		"./hosts"
+	],
+	"tasks": {
+		"scenarios": "python3 core/conformance/scenarios.py",
+		"lint": "deno task scenarios && deno run --allow-read core/conformance/run.mjs --lint",
+		"conformance": "deno run --allow-read --allow-run core/conformance/run.mjs",
+		"watch": "deno run --allow-read --allow-run core/conformance/watch.mjs",
+		"driver": "deno run core/ts/driver.ts",
+		"build": "deno task --cwd core/ts build"
+	},
+	"fmt": {
+		"useTabs": true,
+		"semiColons": false,
+		"lineWidth": 140,
+		"singleQuote": false
+	}
+}

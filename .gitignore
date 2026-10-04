@@ -1,0 +1,8 @@
+dist/
+*.log
+*.aux
+node_modules/
+*.wasm
+*.o
+*.hi
+core/ts/dist/
