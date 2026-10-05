@@ -1,0 +1,9 @@
+{"name":"with drive, an invalid request makes no change and takes no time: the next change gets the number it would have had","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"init","time":1}}}},
+{"send":{"cmd":"make","agent":"host","id":"a","value":"ab","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":2}}}},
+{"send":{"cmd":"write","agent":"host","node":"a","patches":[{"type":"splice","path":[],"range":[5,6],"value":"x"}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"error":{"kind":"invalid"}}},
+{"send":{"cmd":"write","agent":"host","node":"ghost","patches":[{"type":"snapshot","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"error":{"kind":"invalid"}}},
+{"send":{"cmd":"write","agent":"host","node":"a","patches":[{"type":"snapshot","value":"cd"}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":3}}}},
+{"send":{"cmd":"read","agent":"host","node":"a"},"expect":{"ok":{"value":"cd"}}}
+]}

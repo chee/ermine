@@ -1,0 +1,17 @@
+{"name":"what a handler's changes mark still runs, and fire's runs list it","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"count","value":0,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"hc","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"return","value":"h"}]}},
+{"send":{"cmd":"make","agent":"host","id":"he","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"handler","name":"bump","steps":[{"do":"write","node":"count","patches":[{"type":"snapshot","value":{"$":"input"}}]}]}]}},
+{"send":{"cmd":"make","agent":"host","id":"rc","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"count","as":"c"},{"do":"return","value":{"$":"c"}}]}},
+{"send":{"cmd":"make","agent":"host","id":"h","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"r","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"h","name":"compute","id":"hc","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"h","name":"effect","id":"he","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"r","name":"compute","id":"rc","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"h","id":"h","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"h","run":1,"value":"h","changes":[{"node":"h","time":12}]}]}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"r","id":"r","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"r","run":1,"value":0,"changes":[{"node":"r","time":14}]}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"h","handler":"bump","input":5},"expect":{"ok":{"runs":[{"process":"r","run":2,"marked":[{"node":"count","time":15}],"value":5,"changes":[{"node":"r","time":16}],"ending":"done"}]}}},
+{"send":{"cmd":"read","agent":"host","node":"r"},"expect":{"ok":{"value":5}}}
+]}

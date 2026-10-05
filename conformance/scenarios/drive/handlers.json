@@ -6,7 +6,7 @@
 {"send":{"cmd":"make","agent":"host","id":"eff","site":{"file":"s.js","line":1,"column":1},"value":[
   {"do":"handler","name":"type","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":{"$":"input"}}]}]},
   {"do":"handler","name":"boom","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"pre"}]},{"do":"throw","message":"bad"}]}]}},
-{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"ed","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"ed","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},
@@ -18,6 +18,6 @@
 {"send":{"cmd":"write","agent":"host","node":"doc","patches":[{"type":"snapshot","value":"x"}],"site":{"file":"s.js","line":1,"column":1}},
  "expect":{"ok":{"marked":[{"process":"ed","by":{"node":"doc","time":11}}],"runs":[{"process":"ed","run":2,"value":"x","changes":[{"node":"ed","time":12}]}]}}},
 {"send":{"cmd":"fire","agent":"host","process":"ed","handler":"boom"},
- "expect":{"ok":{"changes":[{"node":"doc","time":13,"process":"ed"}],"runs":[],"error":{}}}},
+ "expect":{"ok":{"changes":[{"node":"doc","time":13,"process":"ed"}],"runs":[],"stopped":[],"error":{"kind":"thrown","why":"bad"}}}},
 {"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"pre"}}}
 ]}

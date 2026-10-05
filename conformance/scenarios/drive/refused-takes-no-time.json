@@ -1,0 +1,8 @@
+{"name":"with drive, a refused request makes no change and takes no time: the next change gets the number it would have had","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"agent":"eve","op":"write","allow":false}]}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"init","time":1}}}},
+{"send":{"cmd":"make","agent":"host","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":2}}}},
+{"send":{"cmd":"write","agent":"eve","node":"a","patches":[{"type":"snapshot","value":9}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"error":{"kind":"refused"}}},
+{"send":{"cmd":"write","agent":"host","node":"a","patches":[{"type":"snapshot","value":2}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":3}}}},
+{"send":{"cmd":"read","agent":"host","node":"a"},"expect":{"ok":{"value":2}}}
+]}

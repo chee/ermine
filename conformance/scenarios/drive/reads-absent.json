@@ -1,0 +1,11 @@
+{"name":"a compute that read an absent id is marked when the node is made, even when it returned a value","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"ghost","as":"g"},{"do":"if","test":{"$absent":{"$":"g"}},"then":[{"do":"return","value":"none"}],"else":[{"do":"return","value":{"$":"g"}}]}]}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"runs":[{"process":"p1","run":1,"value":"none","changes":[{"node":"p1","time":6}],"ending":"done"}]}}},
+{"send":{"cmd":"make","agent":"host","id":"ghost","value":7,"site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"marked":[{"process":"p1","by":{"node":"ghost","time":7}}],"runs":[{"process":"p1","run":2,"value":7,"changes":[{"node":"p1","time":8}],"ending":"done"}]}}}
+]}

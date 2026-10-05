@@ -1,0 +1,16 @@
+{"name":"make carries fixed data, from outside or from an effect; data reads it; a process's path variable is its data.path","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"cpar","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"cchild","value":[{"do":"return","value":{"$":"path"}}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"epar","value":[{"do":"make","id":"child","value":null,"data":{"path":[{"parent":"init","name":"par","node":"par"},{"parent":"par","name":"kid","node":"child"}]}},{"do":"place","parent":"child","name":"compute","id":"cchild"},{"do":"place","parent":{"$":"self"},"name":"kid","id":"child"}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"par","value":null,"data":{"path":[{"parent":"init","name":"par","node":"par"}]},"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"par","time":5,"kind":"make","value":null,"data":{"path":[{"parent":"init","name":"par","node":"par"}]}}}}},
+{"send":{"cmd":"place","agent":"host","parent":"par","name":"compute","id":"cpar","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"par","name":"effect","id":"epar","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"par","id":"par","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"runs":[{"process":"par","run":1,"value":1,"changes":[{"node":"par","time":9},{"node":"child","time":10},{"node":"child","time":11},{"node":"par","time":12}],"ending":"done"},{"process":"child","run":1,"agent":"host","marked":[{"node":"par","time":12}],"value":[{"parent":"init","name":"par","node":"par"},{"parent":"par","name":"kid","node":"child"}],"changes":[{"node":"child","time":13}],"ending":"done"}]}}},
+{"send":{"cmd":"data","agent":"host","node":"child"},"expect":{"ok":{"data":{"path":[{"parent":"init","name":"par","node":"par"},{"parent":"par","name":"kid","node":"child"}]}}}},
+{"send":{"cmd":"data","agent":"host","node":"par"},"expect":{"ok":{"data":{"path":[{"parent":"init","name":"par","node":"par"}]}}}},
+{"send":{"cmd":"data","agent":"host","node":"init"},"expect":{"ok":{"data":null}}},
+{"send":{"cmd":"data","agent":"host","node":"ghost"},"expect":{"ok":{"absent":true}}},
+{"send":{"cmd":"read","agent":"host","node":"child"},"expect":{"ok":{"value":[{"parent":"init","name":"par","node":"par"},{"parent":"par","name":"kid","node":"child"}]}}}
+]}

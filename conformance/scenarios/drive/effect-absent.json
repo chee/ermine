@@ -3,7 +3,7 @@
 {"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"make","agent":"host","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"make","agent":"host","id":"seen","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p1","name":"effect","id":"ghost","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},

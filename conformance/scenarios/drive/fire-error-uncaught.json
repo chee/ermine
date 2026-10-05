@@ -1,0 +1,17 @@
+{"name":"a fire's error is the error that ended its handler; a refusal the handler caught is not one","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"process":"ed","op":"write","node":"locked","allow":false}]}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"locked","value":0,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"doc","value":"a","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"eff","value":[{"do":"handler","name":"careful","steps":[{"do":"try","steps":[{"do":"write","node":"locked","patches":[{"type":"snapshot","value":1}]}],"as":"e"},{"do":"write","node":"doc","patches":[{"type":"snapshot","value":{"$":"e"}}]}]},{"do":"handler","name":"careless","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"b"}]},{"do":"write","node":"locked","patches":[{"type":"snapshot","value":1}]},{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"never"}]}]}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"ed","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"ed","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"ed","run":1,"changes":[{"node":"ed","time":10}]}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"careful"},"expect":{"ok":{"changes":[{"node":"doc","time":11,"process":"ed","patches":[{"type":"snapshot","value":{"kind":"refused","op":"write"}}]}],"runs":[],"stopped":[]}}},
+{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":{"kind":"refused","op":"write"}}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"careless"},"expect":{"ok":{"changes":[{"node":"doc","time":12,"process":"ed"}],"runs":[],"stopped":[],"error":{"kind":"refused","op":"write"}}}},
+{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"b"}}},
+{"send":{"cmd":"read","agent":"host","node":"locked"},"expect":{"ok":{"value":0}}}
+]}

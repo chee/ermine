@@ -19,7 +19,7 @@
     "path":{"$":"path"},
     "marks":{"$len":{"$":"changes"}},
     "nested":{"inner":[{"$not":true}]}}}]}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"path":[{"parent":"init","name":"x","node":"p1"}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[{"parent":"init","name":"x","node":"p1"}]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},
  "expect":{"ok":{"runs":[{"process":"p1","ending":"done","value":{
@@ -27,7 +27,7 @@
     "len":[2,3,2],"quote":{"$":"x"},"not":true,"self":"p1",
     "path":[{"parent":"init","name":"x","node":"p1"}],"marks":1,"nested":{"inner":[false]}}}]}}},
 {"send":{"cmd":"make","agent":"host","id":"none","value":[{"do":"let","as":"x","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p2","value":0,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"p2","value":0,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p2","name":"compute","id":"none","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"y","id":"p2","site":{"file":"s.js","line":1,"column":1}},
  "expect":{"ok":{"runs":[{"process":"p2","value":null,"ending":"done"}]}}},
@@ -36,7 +36,7 @@
   {"do":"each","list":[1,2,3],"as":"i","steps":[
     {"do":"if","test":{"$eq":[{"$":"i"},2]},"then":[{"do":"return","value":{"$add":[{"$":"i"},100]}}],"else":[]}]},
   {"do":"return","value":0}]}},
-{"send":{"cmd":"make","agent":"host","id":"p3","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"p3","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p3","name":"compute","id":"loop","site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"z","id":"p3","site":{"file":"s.js","line":1,"column":1}},
  "expect":{"ok":{"runs":[{"process":"p3","value":102,"ending":"done"}]}}}

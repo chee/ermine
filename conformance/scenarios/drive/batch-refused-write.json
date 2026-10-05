@@ -1,0 +1,21 @@
+{"name":"in a batch a refused write answers refused and takes no time, the writes around it stand, and what they marked runs once after the last request","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"agent":"eve","op":"write","allow":false}]}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"b","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"show","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"a","as":"x"},{"do":"read","node":"b","as":"y"},{"do":"return","value":[{"$":"x"},{"$":"y"}]}]}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"show","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"runs":[{"process":"p1","run":1,"value":[1,1],"changes":[{"node":"p1","time":8}]}]}}},
+{"send":{"cmd":"batch","agent":"host","requests":[
+  {"cmd":"write","agent":"host","node":"a","patches":[{"type":"snapshot","value":2}],"site":{"file":"s.js","line":1,"column":1}},
+  {"cmd":"write","agent":"eve","node":"a","patches":[{"type":"snapshot","value":9}],"site":{"file":"s.js","line":1,"column":1}},
+  {"cmd":"write","agent":"host","node":"b","patches":[{"type":"snapshot","value":2}],"site":{"file":"s.js","line":1,"column":1}}]},
+ "expect":{"ok":{"answers":[
+    {"ok":{"change":{"node":"a","time":9},"marked":[{"process":"p1","by":{"node":"a","time":9}}]}},
+    {"error":{"kind":"refused"}},
+    {"ok":{"change":{"node":"b","time":10},"marked":[{"process":"p1","by":{"node":"b","time":10}}]}}],
+   "runs":[{"process":"p1","run":2,"marked":[{"node":"a","time":9},{"node":"b","time":10}],"value":[2,2],"changes":[{"node":"p1","time":11}],"ending":"done"}]}}},
+{"send":{"cmd":"read","agent":"host","node":"a"},"expect":{"ok":{"value":2}}},
+{"send":{"cmd":"read","agent":"host","node":"p1"},"expect":{"ok":{"value":[2,2]}}}
+]}

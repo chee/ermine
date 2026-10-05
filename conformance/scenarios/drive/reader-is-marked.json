@@ -3,7 +3,7 @@
 {"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"init","time":1}}}},
 {"send":{"cmd":"make","agent":"host","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"make","agent":"host","id":"show","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"a","as":"x"},{"do":"return","value":{"$":"x"}}]}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
 {"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"show","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":5},"runs":[]}}},
 {"send":{"cmd":"place","agent":"host","parent":"init","name":"show","id":"p1","site":{"file":"s.js","line":1,"column":1}},
  "expect":{"ok":{"change":{"node":"init","time":6},"marked":[],"runs":[{"process":"p1","run":1,"agent":"host","marked":[{"node":"init","time":6}],"compute":{"node":"show","saw":3,"slot":["show"]},"lookups":[],"value":1,"cleanup":[],"changes":[{"node":"p1","time":7}],"ending":"done","errors":[]}]}}},
