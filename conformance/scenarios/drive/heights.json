@@ -1,0 +1,32 @@
+{"name":"heights come from the last runs: a reader may run once before its new writer, and after that runs once, after both","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"s","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"cl","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"s","as":"x"},{"do":"return","value":{"$add":[{"$":"x"},1]}}]}},
+{"send":{"cmd":"make","agent":"host","id":"cr","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"s","as":"x"},{"do":"return","value":{"$add":[{"$":"x"},10]}}]}},
+{"send":{"cmd":"make","agent":"host","id":"cbot","site":{"file":"s.js","line":1,"column":1},"value":[
+  {"do":"read","node":"s","as":"x"},{"do":"read","node":"left","as":"l"},{"do":"read","node":"right","as":"r"},
+  {"do":"return","value":{"$add":[{"$":"x"},{"$":"l"},{"$":"r"}]}}]}},
+{"send":{"cmd":"make","agent":"host","id":"left","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"right","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"bot","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"left","name":"compute","id":"cl","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"right","name":"compute","id":"cr","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"bot","name":"compute","id":"cbot","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"batch","agent":"host","requests":[
+  {"cmd":"place","agent":"host","parent":"init","name":"left","id":"left","site":{"file":"s.js","line":1,"column":1}},
+  {"cmd":"place","agent":"host","parent":"init","name":"right","id":"right","site":{"file":"s.js","line":1,"column":1}},
+  {"cmd":"place","agent":"host","parent":"init","name":"bot","id":"bot","site":{"file":"s.js","line":1,"column":1}}]},
+ "expect":{"ok":{"answers":[{"ok":{"change":{"time":12}}},{"ok":{"change":{"time":13}}},{"ok":{"change":{"time":14}}}],
+   "runs":[{"process":"left","run":1,"value":2,"changes":[{"node":"left","time":15}]},
+           {"process":"right","run":1,"value":11,"changes":[{"node":"right","time":16}]},
+           {"process":"bot","run":1,"value":14,"changes":[{"node":"bot","time":17}]}]}}},
+{"send":{"cmd":"write","agent":"host","node":"s","patches":[{"type":"snapshot","value":2}],"site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"change":{"time":18},"marked":[{"process":"bot","by":{"node":"s","time":18}},{"process":"left","by":{"node":"s","time":18}},{"process":"right","by":{"node":"s","time":18}}]}}},
+{"send":{"cmd":"read","agent":"host","node":"bot"},"expect":{"ok":{"value":17}}},
+{"send":{"cmd":"write","agent":"host","node":"s","patches":[{"type":"snapshot","value":3}],"site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"change":{"time":23},
+   "runs":[{"process":"left","run":3,"value":4,"changes":[{"node":"left","time":24}]},
+           {"process":"right","run":3,"value":13,"changes":[{"node":"right","time":25}]},
+           {"process":"bot","run":4,"value":20,"marked":[{"node":"s","time":23},{"node":"left","time":24},{"node":"right","time":25}],"changes":[{"node":"bot","time":26}]}]}}}
+]}

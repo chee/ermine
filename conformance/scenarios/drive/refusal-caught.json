@@ -1,0 +1,11 @@
+{"name":"a refusal ends the run refused even when the program catches it","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"process":"p1","op":"read","node":"secret","allow":false}]}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"secret","value":42,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"try","steps":[{"do":"read","node":"secret","as":"s"}],"as":"e"},{"do":"return","value":1}]}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"runs":[{"process":"p1","run":1,"ending":"refused","errors":[{"kind":"refused","op":"read"}]}]}}},
+{"send":{"cmd":"read","agent":"host","node":"secret"},"expect":{"ok":{"value":42}}}
+]}

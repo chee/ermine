@@ -1,0 +1,17 @@
+{"name":"the process's value is written as a change by the process, as the agent that started it, and its record is sent to subscribers","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"show","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"a","as":"x"},{"do":"return","value":{"$":"x"}}]}},
+{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"show","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"subscribe","agent":"host","node":"p1"},"expect":{"ok":{"sub":1}}},
+{"send":{"cmd":"place","agent":"alice","parent":"init","name":"show","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"p1","run":1,"agent":"alice"}]}}},
+{"send":{"cmd":"events","agent":"host","sub":1},"expect":{"ok":[
+  {"change":{"node":"p1","time":7,"kind":"write","patches":[{"type":"snapshot","value":1}],"agent":"alice","process":"p1"}},
+  {"record":{"process":"p1","run":1,"agent":"alice","value":1,"ending":"done"}}]}},
+{"send":{"cmd":"write","agent":"host","node":"a","patches":[{"type":"snapshot","value":2}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"events","agent":"host","sub":1},"expect":{"ok":[
+  {"change":{"node":"p1","time":9,"agent":"alice","process":"p1"}},
+  {"record":{"process":"p1","run":2,"agent":"alice","marked":[{"node":"a","time":8}]}}]}}
+]}

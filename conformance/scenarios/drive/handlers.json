@@ -1,0 +1,23 @@
+{"name":"a handler writes through the lasting interface as the process, does not echo back, and a throw in it is the fire's error","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"init"}},
+{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"doc","value":"hi","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"make","agent":"host","id":"comp","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"doc","as":"d"},{"do":"return","value":{"$":"d"}}]}},
+{"send":{"cmd":"make","agent":"host","id":"eff","site":{"file":"s.js","line":1,"column":1},"value":[
+  {"do":"handler","name":"type","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":{"$":"input"}}]}]},
+  {"do":"handler","name":"boom","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"pre"}]},{"do":"throw","message":"bad"}]}]}},
+{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"path":[],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"ed","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"ed","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"runs":[{"process":"ed","run":1,"value":"hi","changes":[{"node":"ed","time":9}]}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"hey"},
+ "expect":{"ok":{"changes":[{"node":"doc","time":10,"kind":"write","patches":[{"type":"snapshot","value":"hey"}],"agent":"host","process":"ed"}],"runs":[]}}},
+{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"hey"}}},
+{"send":{"cmd":"read","agent":"host","node":"ed"},"expect":{"ok":{"value":"hi"}}},
+{"send":{"cmd":"write","agent":"host","node":"doc","patches":[{"type":"snapshot","value":"x"}],"site":{"file":"s.js","line":1,"column":1}},
+ "expect":{"ok":{"marked":[{"process":"ed","by":{"node":"doc","time":11}}],"runs":[{"process":"ed","run":2,"value":"x","changes":[{"node":"ed","time":12}]}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"boom"},
+ "expect":{"ok":{"changes":[{"node":"doc","time":13,"process":"ed"}],"runs":[],"error":{}}}},
+{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"pre"}}}
+]}
