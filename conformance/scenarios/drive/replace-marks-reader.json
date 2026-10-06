@@ -1,9 +1,9 @@
 {"name":"placing an id already in the slot without a position is a change: it takes the next time and marks a process that read the slot","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"d","id":"d","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["d"],"name":"x","id":"a","value":0,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"directory","address":["d"],"name":"x","as":"s"},{"do":"return","value":{"$ids":{"$":"s"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"value":["a"],"changes":[{"node":"p1","time":5}],"ending":"done"}]}}},
-{"send":{"cmd":"place","agent":"host","address":["d"],"name":"x","id":"a","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"d","time":6,"kind":"place","name":"x","id":"a"},"marked":[{"process":"p1","by":{"node":"d","time":6}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"d","time":6}],"value":["a"],"changes":[],"ending":"done"}],"stopped":[]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"d","id":"d","value":{},"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"x","id":"a","value":0,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"directory","address":["d"],"name":"x","as":"s"},{"do":"return","value":{"$ids":{"$":"s"}}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"value":["a"],"changes":[{"node":"p1","time":5}],"ending":"done"}]}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"x","id":"a","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"d","time":6,"kind":"place","name":"x","id":"a"},"marked":[{"process":"p1","by":{"node":"d","time":6}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"d","time":6}],"value":["a"],"changes":[],"ending":"done"}],"stopped":[]}}},
 {"send":{"cmd":"directory","agent":"host","address":["d"],"name":"x"},"expect":{"ok":{"items":[{"id":"a"}]}}}
 ]}

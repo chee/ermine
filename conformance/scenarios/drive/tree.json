@@ -1,11 +1,11 @@
 {"name":"the driver walks every node reachable from its root, skips compute and effect slots, and reaches each node once, at the first place it reaches it","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"prog","id":"prog","value":[{"do":"return","value":{"cwd":{"$":"cwd"},"name":{"$":"name"}}}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"f","id":"f","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["f"],"name":"x","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"marked":[{"node":"p1","time":4}],"value":{"cwd":["f"],"name":"x"},"changes":[{"node":"p1","time":5}]}]}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"effect","id":"p2","value":null,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[]}}},
-{"send":{"cmd":"place","agent":"host","address":["effect"],"name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"marked":[],"runs":[]}}},
-{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"me","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"marked":[],"runs":[],"stopped":[]}}},
-{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"kid","id":"p2","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":9},"marked":[],"runs":[{"process":"p2","run":1,"marked":[{"node":"p1","time":9}],"value":{"cwd":["f","x"],"name":"kid"},"changes":[{"node":"p2","time":10}]}],"stopped":[]}}}
+{"send":{"cmd":"place","agent":"host","address":[],"name":"prog","id":"prog","value":[{"do":"return","value":{"cwd":{"$":"cwd"},"name":{"$":"name"}}}],"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"f","id":"f","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["f"],"name":"x","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"compute","id":"prog","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"marked":[{"node":"p1","time":4}],"value":{"cwd":["f"],"name":"x"},"changes":[{"node":"p1","time":5}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"effect","id":"p2","value":null,"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[]}}},
+{"send":{"cmd":"place","agent":"host","address":["effect"],"name":"compute","id":"prog","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"marked":[],"runs":[]}}},
+{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"me","id":"p1","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"marked":[],"runs":[],"stopped":[]}}},
+{"send":{"cmd":"place","agent":"host","address":["f","x"],"name":"kid","id":"p2","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":9},"marked":[],"runs":[{"process":"p2","run":1,"marked":[{"node":"p1","time":9}],"value":{"cwd":["f","x"],"name":"kid"},"changes":[{"node":"p2","time":10}]}],"stopped":[]}}}
 ]}

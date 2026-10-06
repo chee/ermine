@@ -1,6 +1,6 @@
 {"name":"a lookup that finds no slot with the name lists every directory from its working directory up to the root and finds nothing","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a","ed"],"name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$ids":{"$":"t"}}}]},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"lookups":[{"name":"theme","searched":[{"node":"a"},{"node":"root"}],"found":[]}],"value":[],"changes":[{"node":"p1","time":4}],"ending":"done"}]}}}
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a"],"name":"ed","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a","ed"],"name":"compute","id":"prog","cause":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$ids":{"$":"t"}}}]},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"lookups":[{"name":"theme","searched":[{"node":"a"},{"node":"root"}],"found":[]}],"value":[],"changes":[{"node":"p1","time":4}],"ending":"done"}]}}}
 ]}

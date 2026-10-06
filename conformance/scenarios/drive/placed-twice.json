@@ -1,8 +1,8 @@
 {"name":"a process node placed twice in the tree is one process, run where the walk first reaches it, moved when that place goes, and stopped when no longer reached","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a"],"name":"compute","id":"prog","value":[{"do":"return","value":{"$":"name"}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"value":"a","changes":[{"node":"p1","time":3}]}]}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"b","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"marked":[],"runs":[],"stopped":[]}}},
-{"send":{"cmd":"unplace","agent":"host","address":[],"name":"a","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":5},"marked":[{"process":"p1","by":{"node":"root","time":5}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"root","time":5}],"value":"b","changes":[{"node":"p1","time":6}],"ending":"done"}],"stopped":[]}}},
-{"send":{"cmd":"unplace","agent":"host","address":[],"name":"b","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"marked":[{"process":"p1","by":{"node":"root","time":7}}],"runs":[],"stopped":[{"process":"p1","changes":[],"errors":[]}]}}}
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a"],"name":"compute","id":"prog","value":[{"do":"return","value":{"$":"name"}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"value":"a","changes":[{"node":"p1","time":3}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"b","id":"p1","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"marked":[],"runs":[],"stopped":[]}}},
+{"send":{"cmd":"unplace","agent":"host","address":[],"name":"a","id":"p1","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":5},"marked":[{"process":"p1","by":{"node":"root","time":5}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"root","time":5}],"value":"b","changes":[{"node":"p1","time":6}],"ending":"done"}],"stopped":[]}}},
+{"send":{"cmd":"unplace","agent":"host","address":[],"name":"b","id":"p1","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"marked":[{"process":"p1","by":{"node":"root","time":7}}],"runs":[],"stopped":[{"process":"p1","changes":[],"errors":[]}]}}}
 ]}

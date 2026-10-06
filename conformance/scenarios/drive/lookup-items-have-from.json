@@ -1,10 +1,10 @@
 {"name":"the items a lookup gives are each from their position in the slot they were found in and how many directories above the first searched it was","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a"],"name":"b","id":"b","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"theme","id":"dark","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"theme","id":"blue","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a","b"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["a","b","ed"],"name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$":"t"}}]},"expect":{"ok":{"change":{"time":6},"runs":[{"process":"p1","run":1,"ending":"done","value":[{"id":"dark","from":{"position":0,"path":["..","..","theme"]}},{"id":"blue","from":{"position":1,"path":["..","..","theme"]}}],"changes":[{"node":"p1","time":7}]}]}}},
-{"send":{"cmd":"place","agent":"host","address":["a"],"name":"theme","id":"light","value":null,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":8},"marked":[{"process":"p1","by":{"node":"a","time":8}}],"runs":[{"process":"p1","run":2,"ending":"done","value":[{"id":"light","from":{"position":0,"path":["..","theme"]}}],"changes":[{"node":"p1","time":9}]}]}}}
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a"],"name":"b","id":"b","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"theme","id":"dark","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"theme","id":"blue","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a","b"],"name":"ed","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["a","b","ed"],"name":"compute","id":"prog","cause":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$":"t"}}]},"expect":{"ok":{"change":{"time":6},"runs":[{"process":"p1","run":1,"ending":"done","value":[{"id":"dark","from":{"position":0,"path":["..","..","theme"]}},{"id":"blue","from":{"position":1,"path":["..","..","theme"]}}],"changes":[{"node":"p1","time":7}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":["a"],"name":"theme","id":"light","value":null,"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":8},"marked":[{"process":"p1","by":{"node":"a","time":8}}],"runs":[{"process":"p1","run":2,"ending":"done","value":[{"id":"light","from":{"position":0,"path":["..","theme"]}}],"changes":[{"node":"p1","time":9}]}]}}}
 ]}

@@ -1,8 +1,8 @@
-{"name":"a refusal ends the run refused even when the program catches it, and the compute's value is not written","steps":[
+{"name":"a refusal the program catches stays in the record, and the run goes on: it ends done and its value is written","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root","rules":[{"process":"p1","op":"read","node":"secret","allow":false}]}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"secret","id":"secret","value":42,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"try","steps":[{"do":"read","address":["secret"],"as":"s"}],"as":"e"},{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"changes":[],"ending":"refused","errors":[{"kind":"refused","op":"read","why":{"code":"rule","rule":0}}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"secret","id":"secret","value":42,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"try","steps":[{"do":"read","address":["secret"],"as":"s"}],"as":"e"},{"do":"return","value":1}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"value":1,"changes":[{"node":"p1","time":4}],"ending":"done","errors":[{"kind":"refused","op":"read","why":{"code":"rule","rule":0}}]}]}}},
 {"send":{"cmd":"read","agent":"host","address":["secret"]},"expect":{"ok":{"items":[{"value":42}]}}},
-{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"error":{"kind":"refused","op":"read"},"from":{"process":"p1","run":1}},{"value":null}]}}}
+{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"value":1}]}}}
 ]}

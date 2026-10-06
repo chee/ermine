@@ -1,7 +1,7 @@
 {"name":"a record's lookups are listed in the order made","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"d","id":"d","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["d"],"name":"font","id":"mono","value":"mono","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["d"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["d","ed"],"name":"compute","id":"prog","value":[{"do":"lookup","name":"zoom","as":"z"},{"do":"lookup","name":"font","as":"f"},{"do":"return","value":{"$ids":{"$":"f"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"lookups":[{"name":"zoom","searched":[{"node":"d","saw":null},{"node":"root","saw":null}],"found":[]},{"name":"font","searched":[{"node":"d","saw":2}],"found":["mono"]}],"value":["mono"],"changes":[{"node":"p1","time":5}],"ending":"done"}]}}}
+{"send":{"cmd":"place","agent":"host","address":[],"name":"d","id":"d","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"font","id":"mono","value":"mono","cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"ed","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d","ed"],"name":"compute","id":"prog","value":[{"do":"lookup","name":"zoom","as":"z"},{"do":"lookup","name":"font","as":"f"},{"do":"return","value":{"$ids":{"$":"f"}}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"lookups":[{"name":"zoom","searched":[{"node":"d","saw":null},{"node":"root","saw":null}],"found":[]},{"name":"font","searched":[{"node":"d","saw":2}],"found":["mono"]}],"value":["mono"],"changes":[{"node":"p1","time":5}],"ending":"done"}]}}}
 ]}

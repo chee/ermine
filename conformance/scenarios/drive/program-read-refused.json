@@ -1,6 +1,6 @@
 {"name":"a refused read of a program node is given as {node, refused, slot}, and the run ends refused before its compute","steps":[
 {"send":{"cmd":"reset","stack":"drive","root":"root","rules":[{"process":"p1","op":"read","node":"prog","allow":false}]}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"compute":{"node":"prog","refused":true,"slot":["prog"]},"changes":[],"ending":"refused","errors":[{"kind":"refused","op":"read","why":{"code":"rule","rule":0}}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":[{"do":"return","value":1}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"compute":{"node":"prog","refused":true,"slot":["prog"]},"changes":[],"ending":"refused","errors":[{"kind":"refused","op":"read","why":{"code":"rule","rule":0}}]}]}}},
 {"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"error":{"kind":"refused","op":"read","why":{"code":"rule","rule":0}},"from":{"process":"p1","run":1}},{"value":null}]}}}
 ]}

@@ -11,3 +11,10 @@ core/c/*.o
 core/zig/zig-out/
 core/zig/.zig-cache/
 demos/core-web/dist/
+
+# C build outputs and the agents' scratch runs (generated, hundreds of MB)
+c/ermine
+c/ermine-asan
+c/json_test
+*.dSYM/
+c/scratch/
