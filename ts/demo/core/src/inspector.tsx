@@ -3,7 +3,9 @@
 // Each button writes a line of code into the workspace and does it, so the
 // change it makes carries a site, and the code teaches the api.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { signal } from "@preact/signals";
+import { Code, type Mark } from "./editor.tsx";
 import type { Change, Id, Json, Record as Run } from "../../../src/mod.ts";
 import {
   Agent,
@@ -19,7 +21,8 @@ import {
   SiteLink,
 } from "./bits.tsx";
 import { act, dock, focus, select, selected, world } from "./state.ts";
-import { J, ROOT } from "./world.ts";
+import { palette } from "./palette.tsx";
+import { J, ROOT, siteOf } from "./world.ts";
 
 export function Inspector() {
   world.version.value;
@@ -54,9 +57,8 @@ export function Inspector() {
       <div class="inspector-body">
         {world.isProcess(sel.id) ? <ProcessPart id={sel.id} /> : null}
         {isProgram(sel.id) ? <ProgramPart id={sel.id} /> : null}
-        <ValuePart id={sel.id} />
+        {isProgram(sel.id) ? null : <ValuePart id={sel.id} />}
         <DirectoryPart id={sel.id} />
-        <DataPart id={sel.id} />
         <SubscribePart id={sel.id} />
         <HistoryPart id={sel.id} />
       </div>
@@ -70,9 +72,10 @@ function isProgram(id: Id) {
   const v = r.value;
   if (typeof v !== "string" && !Array.isArray(v)) return false;
   for (const ps of world.placements().get(id) ?? []) {
-    if (ps.name === "compute" || ps.name === "effect") return true;
+    if (ps.name === "compute" || ps.name === "effect" || ps.name.startsWith("render-")) return true;
   }
-  return false;
+  // code that is not in a slot yet still reads as code
+  return typeof v === "string" && /\breturn\b|=>|screen\(|el\.|\bconst\b/.test(v);
 }
 
 function Header({ id }: { id: Id }) {
@@ -81,8 +84,39 @@ function Header({ id }: { id: Id }) {
   const where = world.placements().get(id) ?? [];
   const running = world.running().has(id);
   const route = selected.value?.route ?? [];
+  const step = route[route.length - 1];
+  const ask = (only: string) => (palette.value = { context: { id, route }, only });
   return (
     <div class="inspector-head">
+      <div class="node-actions">
+        <button
+          type="button"
+          class="mini go"
+          onClick={() => ask("make in")}
+          title="make something in this node"
+        >
+          ＋ make here
+        </button>
+        {step
+          ? (
+            <>
+              <button type="button" class="mini" onClick={() => ask("rename")}>rename</button>
+              <button type="button" class="mini" onClick={() => ask("duplicate")}>duplicate</button>
+              <button
+                type="button"
+                class="mini danger"
+                title={`unplace it from ${step.parent}`}
+                onClick={() => {
+                  act(`unplace(${J(step.parent)}, ${J(step.name)}, ${J(id)})`, "edit: remove");
+                  select(step.parent, route.slice(0, -1));
+                }}
+              >
+                remove
+              </button>
+            </>
+          )
+          : null}
+      </div>
       <div class="crumbs">
         {route.length
           ? (
@@ -127,7 +161,7 @@ function Header({ id }: { id: Id }) {
                 </>
               )
               : null}
-            {made.site ? <SiteLink site={made.site} /> : null}
+            {siteOf(made.cause) ? <SiteLink site={siteOf(made.cause)!} /> : null}
           </div>
         )
         : null}
@@ -145,14 +179,18 @@ function Header({ id }: { id: Id }) {
         )
         : id === ROOT
         ? <div class="placed-in muted">the root: the host gave it</div>
-        : <div class="placed-in unreachable">placed nowhere: by CORE.tex, removed</div>}
+        : (
+          <div class="placed-in unreachable">
+            placed nowhere: by CORE.tex, it cannot be addressed; placing its id again brings it back
+          </div>
+        )}
     </div>
   );
 }
 
 function ValuePart({ id }: { id: Id }) {
   world.version.value;
-  const r = world.read(id);
+  const r = world.read(id, selected.value?.route);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string>();
@@ -174,8 +212,8 @@ function ValuePart({ id }: { id: Id }) {
     );
   }
   const value = "value" in r ? r.value : undefined;
-  const write = () => {
-    const p = parseJson(text);
+  const write = (t = text) => {
+    const p = parseJson(t);
     if (!p.ok) return setErr(p.why);
     const s = act(`write(${J(id)}, ${JSON.stringify(p.value)})`, "inspector: write");
     if (s.ok) setEditing(false);
@@ -213,17 +251,9 @@ function ValuePart({ id }: { id: Id }) {
       {editing
         ? (
           <div class="editbox">
-            <textarea
-              class="code"
-              value={text}
-              rows={Math.min(14, text.split("\n").length + 1)}
-              onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) write();
-              }}
-            />
+            <Code value={text} lang="json" autofocus onChange={setText} onRun={(t) => write(t)} />
             <div class="row-actions">
-              <button type="button" class="primary" onClick={write}>write snapshot</button>
+              <button type="button" class="primary" onClick={() => write()}>write snapshot</button>
               <span class="hint">⌘↵ — a snapshot patch replaces the whole value</span>
             </div>
           </div>
@@ -233,6 +263,26 @@ function ValuePart({ id }: { id: Id }) {
             <JsonView value={value} />
           </div>
         )}
+      {r.address === undefined
+        ? (
+          <div class="hint">
+            no address from the root reaches{" "}
+            {id}, so it cannot be read or written: it is placed nowhere the root reaches, or only
+            behind another node in its slots (CORE.tex)
+          </div>
+        )
+        : r.items.map((item, i) => (
+          <div class="hint" key={i}>
+            from /{item.from.route.map((s) => s.name).join("/")}
+            {item.change
+              ? (
+                <>
+                  {" "}· set <Ref r={item.change} /> by <Agent agent={item.change.agent} />
+                </>
+              )
+              : " · as the host gave it"}
+          </div>
+        ))}
       <div class="patcher">
         <div class="patcher-head">
           <span class="muted">patch</span>
@@ -308,25 +358,9 @@ function ValuePart({ id }: { id: Id }) {
   );
 }
 
-function DataPart({ id }: { id: Id }) {
-  world.version.value;
-  const d = world.data(id);
-  return (
-    <Section
-      title="fixed data"
-      aside={<span class="muted">given when made, never changes</span>}
-      open={d !== null}
-    >
-      <div class="value-view">
-        <JsonView value={d} />
-      </div>
-    </Section>
-  );
-}
-
 function DirectoryPart({ id }: { id: Id }) {
   world.version.value;
-  const dir = world.directory(id);
+  const dir = world.directory(id, selected.value?.route);
   const [name, setName] = useState("");
   const [child, setChild] = useState("");
   const [pos, setPos] = useState("");
@@ -358,7 +392,10 @@ function DirectoryPart({ id }: { id: Id }) {
             <div class="slot-ids">
               {xs.map((x, i) => (
                 <span class="slot-id">
-                  <NodeLink id={x} route={[...route, { parent: id, name: slot, node: x }]} />
+                  <NodeLink
+                    id={x}
+                    route={[...route, { parent: id, name: slot, node: x, position: i }]}
+                  />
                   <span class="slot-tools">
                     <button
                       type="button"
@@ -376,7 +413,8 @@ function DirectoryPart({ id }: { id: Id }) {
                       disabled={i === xs.length - 1}
                       title="move later"
                       onClick={() =>
-                        act(`place(${J(id)}, ${J(slot)}, ${J(x)}, ${i + 1})`, "inspector: move")}
+                        // a position is a gap in the slot as it is: the one after the next id
+                        act(`place(${J(id)}, ${J(slot)}, ${J(x)}, ${i + 2})`, "inspector: move")}
                     >
                       ↓
                     </button>
@@ -431,8 +469,6 @@ function DirectoryPart({ id }: { id: Id }) {
 
 function describe(c: Change): string {
   switch (c.kind) {
-    case "make":
-      return `made ${peek(c.value, 28)}`;
     case "write":
       return c.patches.map((p) =>
         p.type === "snapshot"
@@ -444,7 +480,10 @@ function describe(c: Change): string {
           : `[${p.range[0]},${p.range[1]}) ${"value" in p ? "← " + peek(p.value, 18) : "deleted"}`
       ).join("; ") || "no patches";
     case "place":
-      return `${c.name} ← ${c.id}${c.position !== undefined ? ` at ${c.position}` : ""}`;
+      // a placement with a value made the node
+      return `${c.name} ← ${c.id}${c.position !== undefined ? ` at ${c.position}` : ""}${
+        c.value !== undefined ? `, made ${peek(c.value, 28)}` : ""
+      }`;
     case "unplace":
       return `${c.name} ✕ ${c.id}`;
   }
@@ -453,9 +492,12 @@ export { describe };
 
 function HistoryPart({ id }: { id: Id }) {
   world.version.value;
-  const changes = world.log.filter((e) => e.t === "change" && e.change.node === id).map((e) =>
-    (e as { change: Change }).change
-  ).reverse();
+  // its changes, and the placement that made it: the parent's change and its first
+  const changes = world.log.filter((e) =>
+    e.t === "change" &&
+    (e.change.node === id || (e.change.kind === "place" && e.change.value !== undefined &&
+      e.change.id === id))
+  ).map((e) => (e as { change: Change }).change).reverse();
   return (
     <Section title="changes" aside={<span class="muted">{changes.length}</span>}>
       <div class="history">
@@ -475,18 +517,15 @@ function HistoryPart({ id }: { id: Id }) {
 
 function ProcessPart({ id }: { id: Id }) {
   world.version.value;
-  const running = world.running().has(id);
-  const data = world.data(id) as { path?: unknown } | undefined;
-  const path = Array.isArray(data?.path)
-    ? data.path as { parent: Id; name: string; node: Id }[]
-    : [];
+  // a process runs where the driver's walk reaches it: in the directory it sits in, its cwd
+  const at = world.running().get(id);
+  const running = at !== undefined;
+  const path = (at?.route ?? []).slice(0, -1);
   const runs: Run[] = world.records.get(id) ?? [];
   const last = runs[runs.length - 1];
   const handlers = [...(world.handlers.get(id) ?? [])];
-  const where = (world.placements().get(id) ?? []).filter((p) =>
-    p.parent === ROOT || world.isProcess(p.parent)
-  );
-  const dir = world.directory(id);
+  const where = at ? [{ parent: at.parent, name: at.name }] : [];
+  const dir = world.directory(id, at?.route);
   const slot = (n: string) => Array.isArray(dir) ? dir.find(([s]) => s === n)?.[1] ?? [] : [];
   const [inputs, setInputs] = useState<{ [h: string]: string }>({});
   return (
@@ -521,7 +560,7 @@ function ProcessPart({ id }: { id: Id }) {
     >
       <div class="proc-grid">
         <div class="kv">
-          <span class="k">path</span>
+          <span class="k">runs in</span>
           <span class="v">
             {path.length
               ? path.map((s, i) => (
@@ -530,7 +569,9 @@ function ProcessPart({ id }: { id: Id }) {
                   <NodeLink id={s.node} route={path.slice(0, i + 1)} />
                 </>
               ))
-              : <span class="muted">[] — lookups find nothing</span>}
+              : running
+              ? <span class="muted">the root — lookups search it</span>
+              : <span class="muted">nowhere — no place the root reaches holds it</span>}
           </span>
         </div>
         <div class="kv">
@@ -549,7 +590,7 @@ function ProcessPart({ id }: { id: Id }) {
                   <span class="slot-name">.{p.name}</span>
                 </span>
               ))
-              : <span class="muted">nothing: it is not placed under the root or a process</span>}
+              : <span class="muted">nothing: no place the root reaches holds it</span>}
           </span>
         </div>
         <div class="kv">
@@ -636,66 +677,140 @@ function ProcessPart({ id }: { id: Id }) {
   );
 }
 
+/** Whether to write a program as it is typed, a moment after each pause. */
+const live = signal(
+  (() => {
+    try {
+      return localStorage.getItem("ermine-live") !== "off";
+    } catch {
+      return true;
+    }
+  })(),
+);
+
 function ProgramPart({ id }: { id: Id }) {
   world.version.value;
   const r = world.read(id);
   const code = "value" in r ? r.value : null;
+  const steps = typeof code !== "string";
   const asText = typeof code === "string" ? code : JSON.stringify(code, null, 2);
   const [text, setText] = useState(asText);
   const [err, setErr] = useState<string>();
-  useEffect(() => setText(asText), [id, asText]);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  // a write from elsewhere shows, unless there is typing not yet written
+  const written = useRef(asText);
+  useEffect(() => {
+    if (text === written.current) setText(asText);
+    written.current = asText;
+  }, [id, asText]);
   const users = (world.placements().get(id) ?? []).filter((p) =>
-    p.name === "compute" || p.name === "effect"
+    p.name === "compute" || p.name === "effect" || p.name.startsWith("render-")
   );
-  const save = () => {
-    let value: Json = text;
-    if (typeof code !== "string") {
-      const p = parseJson(text);
+  const save = (t = text) => {
+    let value: Json = t;
+    if (steps) {
+      const p = parseJson(t);
       if (!p.ok) return setErr(p.why);
       value = p.value;
     }
-    const s = act(`write(${J(id)}, ${J(value)})`, "inspector: rewrite program");
+    if (t === written.current) return;
+    written.current = t;
+    const s = act(
+      `write(${J(id)}, ${J(value)})`,
+      live.value ? "live: program" : "inspector: rewrite program",
+    );
     setErr(s.ok ? undefined : s.error?.why);
   };
+  // what the processes running it threw, and where
+  const thrown = [...world.thrown.entries()].filter(([, t]) => t.code === code);
+  const failing = users.filter((u) => u.name === "compute" || u.name === "effect").map((u) => {
+    const runs = world.records.get(u.parent);
+    return { process: u.parent, last: runs?.[runs.length - 1] };
+  });
+  const marks: Mark[] = thrown.flatMap((
+    [, t],
+  ) => (t.line ? [{ line: t.line, cls: "error" as const }] : []));
   return (
     <Section
       title="program"
       aside={
-        <span class="muted">
-          {typeof code === "string" ? "JS" : "steps"} · the {users.map((u) => u.name).join(" & ")}
-          {" "}
-          of {users.map((u) => <NodeLink key={u.parent + u.name} id={u.parent} />)}
+        <span class="program-aside">
+          <label class="live" title="write the program a moment after you stop typing">
+            <input
+              type="checkbox"
+              checked={live.value}
+              onChange={() => {
+                live.value = !live.value;
+                try {
+                  localStorage.setItem("ermine-live", live.value ? "on" : "off");
+                } catch { /* fine */ }
+              }}
+            />
+            live
+          </label>
+          <span class="muted">{steps ? "steps" : "JS"}</span>
         </span>
       }
     >
-      <textarea
-        class="code program"
-        spellcheck={false}
+      <div class="program-users">
+        {users.length
+          ? users.map((u) => {
+            const f = failing.find((x) => x.process === u.parent);
+            return (
+              <span class="program-user" key={u.parent + u.name}>
+                the {u.name} of <NodeLink id={u.parent} />
+                {f?.last ? <Ending ending={f.last.ending} /> : null}
+              </span>
+            );
+          })
+          : (
+            <span class="muted">
+              no process runs this yet: drop it into a process's compute or effect slot
+            </span>
+          )}
+      </div>
+      <Code
         value={text}
-        rows={Math.max(4, Math.min(22, text.split("\n").length + 1))}
-        onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            save();
-          }
-          if (e.key === "Tab") {
-            e.preventDefault();
-            const t = e.target as HTMLTextAreaElement;
-            const a = t.selectionStart;
-            t.setRangeText("  ", a, t.selectionEnd, "end");
-            setText(t.value);
+        lang={steps ? "json" : "js"}
+        marks={marks}
+        minHeight={120}
+        maxHeight={520}
+        onChange={(t) => {
+          setText(t);
+          if (live.value) {
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => save(t), 650);
           }
         }}
+        onRun={() => save()}
       />
+      {thrown.map(([p, t]) => (
+        <div class="error-line" key={p}>
+          ✕ {t.part} of <b>{p}</b>
+          {t.line ? ` threw at line ${t.line}` : " threw"}: {t.message}
+        </div>
+      ))}
       <div class="row-actions">
-        <button type="button" class="primary" disabled={text === asText} onClick={save}>
-          save — write the program
-        </button>
-        <span class="hint">
-          ⌘↵ · a write to a program marks every process running it ·{" "}
-          <a onClick={() => (dock.value = "make")}>what can programs use?</a>
-        </span>
+        {live.value
+          ? (
+            <span class="hint">
+              live: each pause writes it, and every process running it runs again
+            </span>
+          )
+          : (
+            <>
+              <button
+                type="button"
+                class="primary"
+                disabled={text === written.current}
+                onClick={() => save()}
+              >
+                save — write the program
+              </button>
+              <span class="hint">⌘↵ · a write to a program marks every process running it</span>
+            </>
+          )}
+        <a onClick={() => (dock.value = "make")}>what can programs use?</a>
       </div>
       {err ? <div class="error-line">✕ {err}</div> : null}
     </Section>

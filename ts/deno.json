@@ -11,7 +11,15 @@
     "@std/assert": "jsr:@std/assert@^1",
     "preact": "npm:preact@^10.29.0",
     "preact/": "npm:/preact@^10.29.0/",
-    "@preact/signals": "npm:@preact/signals@^2"
+    "@preact/signals": "npm:@preact/signals@^2",
+    "codemirror": "npm:codemirror@^6",
+    "@codemirror/lang-javascript": "npm:@codemirror/lang-javascript@^6",
+    "@codemirror/lang-json": "npm:@codemirror/lang-json@^6",
+    "@codemirror/view": "npm:@codemirror/view@^6",
+    "@codemirror/state": "npm:@codemirror/state@^6",
+    "@codemirror/language": "npm:@codemirror/language@^6",
+    "@codemirror/commands": "npm:@codemirror/commands@^6",
+    "@lezer/highlight": "npm:@lezer/highlight@^1"
   },
   "lint": {
     "exclude": [

@@ -1,188 +1,156 @@
 # ermine core in C
 
-The spec is `../CORE.tex` (design) and `../PROTOCOL.tex` (harness contract).
-Never edit CORE.tex, PROTOCOL.tex or `../conformance/`. If a scenario
-contradicts the spec, the spec wins: report it rather than bending the code.
-`../haskell/` passes the whole suite: read `../haskell/NOTES.md` for the
-readings the spec leaves open, and use it as an oracle.
+The spec is `../CORE.tex` (the graph) and `../PROTOCOL.tex` (the harness
+contract). DRIVER.tex and PROTECT.tex are out of scope for now; IDEAS.tex is
+never implemented. Never edit a .tex file or anything under `../conformance/`.
+If a scenario contradicts the spec, the spec wins: report it rather than
+bending the code. Where the spec does not decide, do not invent a rule:
+ask chee, with the concrete case.
 
 ## Build and run
 
 ```sh
 make -C c                 # c/ermine            (CC ?= cc, CFLAGS ?= -std=c11 -Wall -Wextra -Werror -O2, LDLIBS ?= -lm)
 make -C c asan            # c/ermine-asan       (-fsanitize=address,undefined)
-make -C c check           # json_test.c: number printing, strings, code points, equality
-cd conformance && ERMINE_HARNESS="$PWD/../c/ermine" deno task test
-cd conformance && ERMINE_HARNESS="$PWD/../c/ermine-asan" deno task test
-cd conformance && ERMINE_REQUIRE=graph,protect,drive ERMINE_HARNESS="$PWD/../c/ermine" deno task test   # once everything is claimed
+make -C c check           # json_test.c: numbers, strings, code points, equality, a million-deep value
+cd conformance && ERMINE_REQUIRE=graph ERMINE_HARNESS="$PWD/../c/ermine" deno task test
+cd conformance && ERMINE_REQUIRE=graph ERMINE_HARNESS="$PWD/../c/ermine-asan" deno task test
 ```
 
-Oracle: pipe the same lines into both and diff.
+`deno task fuzz` saves what it finds under `conformance/fuzz/failures/`;
+`scratch/now/fuzz.ts` (scratch is ignored by git) runs the fuzz suite's
+generator and invariants against a harness without saving anything:
+`deno run --no-check --allow-run --allow-read --allow-env fuzz.ts 1 30 [harness]`.
+`scratch/now/agree.ts` runs the same sessions in agree mode, c against ts
+and haskell: `deno run --no-check --allow-run --allow-read --allow-env agree.ts 1 20`.
 
-```sh
-printf '%s\n' '{"seq":1,"cmd":"reset","stack":"graph"}' ... > /tmp/in
-c/ermine < /tmp/in > /tmp/c.out
-$HOME/.ghc-wasm/wasmtime/bin/wasmtime run haskell/ermine.wasm < /tmp/in > /tmp/hs.out
-diff /tmp/c.out /tmp/hs.out
-```
+## Status (2026-10-06)
 
-Key order in an object does not matter to the runner, but matching the
-Haskell order (the order of PROTOCOL's listings, which the encoders in
-ermine.c use) keeps diffs clean.
+- The graph stack follows CORE.tex and PROTOCOL.tex as read below: reads
+  are lists of items with `from` and `change`; addresses are parts (a first
+  `/`, then `..`, then names) walked as Plan 9 walks a union; placing makes
+  (with a value), mounts (without one, for an id the graph lacks), places
+  again or moves (positions are gaps, 0 to the slot's length); nothing is
+  ever removed, so an unreachable node keeps its value and directory and
+  placing its id again brings it back; lookup searches from the place's `.`
+  up to its start; subscribe follows its address, and is sent the placement
+  that switched it; errors carry PROTOCOL's codes; requests take `place`
+  and `chroot`; changes from outside need `cause` (and below drive `time`).
+- A whole number is whole however large: PROTOCOL Encodings gives a time
+  no upper bound, and Lines only promises numbers a binary64 holds exactly.
+  A time is kept as a double (`ErmTime`), so 2^53+2 and 1e21 are times, and
+  print as JavaScript does (`1e+21`). A position, path index, splice end,
+  `chroot` or `sub` past int64 is held at INT64_MAX or INT64_MIN
+  (`jsonIsWhole`), past every length: a position too large is `position`,
+  an index too large `no-key`, a range end too large `range`.
+- `op` is on the errors answering CORE's operations (read, directory,
+  lookup, write, place, unplace, subscribe, unsubscribe), never on those
+  answering `reset` or `events`: those are the harness's, not operations
+  (PROTOCOL Errors, The reference protect; CORE's table of operations).
+- `reset` with stack `protect` or `drive` answers `{"unsupported": "reset"}`;
+  `batch` and `fire` answer unsupported. protect.c, drive.c and program.c
+  are gone: they were written against the old id-based graph and are about
+  to be redesigned.
+- Marking is kept, dormant: `record` and `finish`, each process's reads
+  (its last finished run's and its run under way's, through a read-only
+  interface), and what a change marks (CORE Changes: value readers for a
+  write; slot readers, walks that tried the slot and whole-directory readers
+  for a placement; walks that passed over an id when the placement makes
+  its node). Nothing below drive records a run, so `marked` is always `[]`.
+  A throwaway test (`scratch/now/marks.c`) checked it once.
+- `ERMINE_REQUIRE=graph deno task test`: 260 passed, 0 failed, 112 ignored
+  (protect and drive scenarios), on `c/ermine` and on `c/ermine-asan`.
+  Every graph scenario's requests piped through `c/ermine-asan` leave ASan
+  and UBSan silent. Fuzz seeds 1 to 30 of the graph generator pass its
+  invariants on `c/ermine`, 31 to 40 on `c/ermine-asan`; in agree mode
+  (`scratch/now/agree.ts`), seeds 1 to 20 answer as ts and haskell do.
+- Nothing recurses. json.c parses, prints, frees and compares with stacks
+  on the heap; a walk is a loop over names and a patch a loop over its
+  path. main runs on the main thread (the old 64 GiB stack thread is gone).
+  A 300,000-deep value goes through place, a write along a 299,999-key
+  path, and read, under ASan on the default stack.
 
-## Status (2026-10-05)
+## Disputes: what the suite expects against the papers
 
-- The whole suite passes on `c/ermine` and `c/ermine-asan` with
-  `ERMINE_REQUIRE=graph,protect,drive`: 215 passed, 0 failed. ASan and UBSan
-  print nothing.
-- Every scenario's requests were also piped through `c/ermine-asan` and
-  `haskell/ermine.wasm`, and the outputs compared. They are byte for byte the
-  same, including `why` texts, key order and number printing.
-- The only known text difference from Haskell is the `why` of a line that is
-  not JSON (the C parser names the byte offset). The runner does not match on
-  it.
-- Review fixes (2026-10-05): ids and names may hold U+0000 (see Strings);
-  there is no nesting limit and nothing overflows the stack (see Depth); a
-  change request with no `time` below drive says "a change needs a time", as
-  Haskell does. Re-checked against Haskell on the review's 6,800 generated
-  sessions (`scratch/diff`, `run.ts`) and repros (`scratch/review2`,
-  `scratch/review3`): no answer differs.
-- `scratch/` holds the graph agent's test harnesses. They are not part of
-  the build.
+None open. The suite now agrees with the papers on the two raised before:
+unplacing removes nothing (`graph/removal.json`, `graph/removal-cycle.json`)
+and every item carries its `change` (`lines_test.ts`, `encoding_test.ts`).
 
-## Who owns what
+## Readings the papers leave open (asked of chee)
 
-| file | owner | what |
-|---|---|---|
-| json.h, json.c | done | `Json`, parser, JS-exact printer, `jsonEqual` (= `$eq`), code point helpers, `allocate`/`growArray` |
-| ermine.h, ermine.c | done | types, the vtable interface, record/finish types, errors, paths, patch shapes, encodings, ops, apis, `ErmMap` |
-| json_test.c, Makefile | done | |
-| graph.c | Graph agent | `ermGraph` |
-| protect.c | Protect+Main agent | `ermRulesFrom`, `ermMayFromRules`, `ermProtect` |
-| main.c | Protect+Main agent | line loop (done), `reset`, `dispatch`, answers, events |
-| drive.c | Drive+Program agent | `ermDrive`, `ermDriverInterface`, `ermDriverBatchBegin/End`, `ermDriverFire`, `ermDriverTake` |
-| program.c | Drive+Program agent | `ermLoadProgram` |
+1. A place reaches `.` by its own walk (its last name takes the first id
+   whose node is here); an address walks from there, and its route lists
+   only its own names. `..` is the place less one name, walked afresh, so
+   with `u = [m1, m2]` and only `m2` holding `y`, place `["u","y"]` reaches
+   `m2`'s `y` but `[".."]` reaches `m1`. Lookup reads one directory per
+   level, never a union. The fuzz model reads it the same way.
+2. The graph checks in this order: `above-root`, `time`, `nothing-there`,
+   then `exists`, `position`, `not-in-slot` or the patches'.
+3. A time of 0 or less on a fresh graph is code `time` with `"last": 0`.
+4. Patch codes the scenarios leave open: a splice value of the wrong kind
+   is `wrong-kind`; a path key of the wrong kind for its container, or out
+   of range, is `no-key`; a missing path, a key neither a string nor a
+   whole number, a set without a string key, a snapshot without a value are
+   `not-a-patch`; a splice with no range is `range`, with its length.
+5. Request-level: a request before the first reset is `missing` with
+   `"field": "reset"`; an unknown or already unsubscribed `sub` is
+   `wrong-field`; an object line with no string `cmd` is `missing` or
+   `wrong-field` `cmd` (it is one JSON object, so not `not-a-request`); a
+   negative or fractional position is `wrong-field`. Fields are checked in
+   the order agent, process, place, chroot, address, name, id, position,
+   value, patches, cause, time. Haskell answers a request before the
+   first reset `not-a-request` instead (TS as here). Which errors carry
+   `op` is ruled, not open: see Status.
+6. An item's `change` is the whole change, as `c` is in events and change
+   answers (references are written `ref`). Placing an id again with no
+   position leaves the slot as it is but is still its last change.
 
-Do not change a type or signature in ermine.h or json.h on your own: the
-other agents code against them. Add static helpers in your own file. If you
-truly need a shared change, say so in your report rather than making it.
+## Files and interface
 
-## The interface
+| file | what |
+|---|---|
+| json.h, json.c | `Json`, parser, JS-exact printer, `jsonEqual` (= `$eq`), code points |
+| ermine.h, ermine.c | places, addresses, routes, items, changes, ops, results, errors; the vtable; records; encodings; `ErmMap` |
+| graph.c | `ermGraph(root)` |
+| main.c | the line loop, request decoding, reset, commands |
+| json_test.c | `make check` |
 
 ```c
-typedef struct ErmInterface { const ErmVtable *vt; void *self; } ErmInterface;
 struct ErmVtable {
   ErmErr        (*op)(void *self, const ErmCtx *ctx, const ErmStamp *stamp, const ErmOp *op, ErmResult *out);
-  ErmErr        (*subscribe)(void *self, const ErmCtx *ctx, Json *node, ErmEventFn fn, void *data, int64_t *sub);
+  ErmErr        (*subscribe)(void *self, const ErmCtx *ctx, const ErmAddress *address, ErmEventFn fn, void *data, int64_t *sub);
   ErmErr        (*unsubscribe)(void *self, const ErmCtx *ctx, int64_t sub);
-  ErmRecording *(*record)(void *self, ErmApi api, int64_t run, const ErmRefs *marked);
+  ErmRecording *(*record)(void *self, ErmApi api, const ErmRefs *marked);
   ErmRecord    *(*finish)(void *self, ErmRecording *recording, ErmEnding ending);
   void          (*setTop)(void *self, ErmInterface top);
 };
-ErmCtx   { Json *agent; const char *process; ErmPath path; ErmMode mode; int64_t run; }   // fixed by bind
-ErmStamp { Json *cause; Json *site; ErmTime time; }                                       // per change
-ErmApi   { ErmInterface iface; ErmCtx ctx; }                                              // ermBind
-ErmErr   { ErmErrKind kind /* OK INVALID REFUSED THROWN */; const char *op; Json *why; }
+ErmCtx   { Json *agent; const char *process; ErmPlace place; ErmMode mode; int64_t run; }
+ErmPlace { ErmIds names; int chroot; }          // names from the root; the first chroot are hidden
+ErmStamp { Json *cause; ErmTime time; }        // ErmTime: a double, any whole number from 1
+ErmOp    { kind; ErmAddress address; name; id; hasPosition, position; Json *value; Json *patches; }
+ErmResult{ ErmItems items; ErmListing listing; ErmChange *change; ErmIds marked; }
 ```
 
-- **One `op` for every operation** (`ErmOp`, raw `Json *` arguments; the
-  graph decodes and answers invalid). A wrapper overrides `op`, looks at
-  `ermOpName(op->kind)` and `ermOpNode(op)`, and passes the rest on. Typed
-  helpers `ermApiRead`, `ermApiWrite`, ... wrap `ermApiOp`.
-- **Wrappers stack**: each keeps the `ErmInterface` below and implements all
-  six entries, forwarding what it does not change. Every layer forwards
-  `setTop`.
-- **The top**: main calls `top.vt->setTop(top.self, top)` once after
-  building. The graph's lookup reads each slot through the top (with the
-  lookup's ctx, so protect can refuse it and the graph remembers it); drive
-  binds runs, value writes and lasting interfaces from the top. Drive also
-  holds `beneath`, the bare graph, for the tree walk, data reads and value
-  comparison (ermHostCtx), which read beneath protect.
-- **Records**: `record` (graph; wrappers forward) returns an `ErmRecording`
-  with `api` (logs), `quiet` (remembered, not logged), `with` (log another api
-  into the same run) and the plain `record` struct drive fills
-  (compute/effect/value/cleanup). `finish` sets the ending, ends the run
-  (apis then answer invalid), sends the record to the process node's
-  subscribers, returns `&recording->record`.
-- **Drive** intercepts change ops (stamps time, applies, queues marks, walks
-  the tree, runs rounds unless busy or batching); main calls
-  `ermDriverTake` after every request under drive for "runs" and "stopped".
-  `batch` is `ermDriverBatchBegin`, each inner request through the top (each
-  inner answer with its own take), `ermDriverBatchEnd`, then a take.
-- **Programs**: `ErmLoader` (`ermLoadProgram`) turns a value into an
-  `ErmProgram {self, compute, effect}`; effects return handlers and a
-  cleanup as `ErmHandler {self, run}`, run later with the lasting interface.
-
-The full rules are the CONVENTIONS block at the top of ermine.h: memory,
-absent, ids, raw arguments, errors, time, modes, remembered reads, what
-marks what, wrappers, the top, recording, drive's interception. Read it.
-
-## Errors, briefly
-
-A layer returns `ermInvalid(...)` (the graph rejected it) or `ermRefused(...)`
-(a wrapper said no) with `op == NULL`. The recording logs it as `{kind, op:
-ermOpName, why}`; program.c raises it as the thrown value
-`ermErrToJson(ermWithOp(err, ermOpName(kind)))`; main answers
-`{"error": ermErrToJson(err)}` (no op). `ERM_THROWN` is program.c's only:
-a throw step (why = its message, any value) or an operator error. The run's
-ending: refused if any record error is a refusal, else failed on any error
-or uncaught throw, else pending or done.
+Operations take decoded arguments: main answers `missing` and `wrong-field`
+before the graph sees a request. The graph's lookup reads each level
+through the top of the stack, so a wrapper can refuse one. A recording's
+api logs every operation with what it got (items carry routes and the
+change that set what was read), so a driver can build PROTOCOL's record.
 
 ## Strings
 
 U+0000 is held as the two bytes C0 80 (Java's "modified UTF-8"): the parser
 makes it from `\u0000`, the printer writes it back as `\u0000`, and it counts
-as one code point. So no string holds a NUL byte, every string is C text
-(`jsonText` fails only on a non-string), and ids and names with U+0000 are
-`const char *` like any other. Raw C0 80 is not UTF-8, so a line can never
-spell it. Byte order is code point order except for C0 80, so order ids and
-names with `textCompare` (or `utf8Compare`), never `strcmp`; equality with
-`strcmp` is fine.
-
-## Depth
-
-The protocol sets no nesting limit (a line that is one JSON object is a
-request; JSON.parse takes any depth), and a value can also grow deeper write
-by write. Parsing, printing, cloning, equality, patching and program
-evaluation recurse once per level, so main runs the session on a thread with
-a 64 GiB stack (reserved, touched only as deep as a session goes; it falls
-back to smaller sizes, then the main thread). Checked: a 1,000,000-deep
-value parses, stores and prints; the review's 58,000-level write chain and a
-40,000-deep process chain (the tree walk, which also now keeps its own
-stack) answer every line, plain and under ASan.
+as one code point. So no string holds a NUL byte, every string is C text,
+and ids and names with U+0000 are `const char *` like any other. Order ids
+and names with `textCompare`, never `strcmp`; equality with `strcmp` is fine.
 
 ## Memory
 
-A harness session is short-lived, so nothing is freed while it runs: every
-`Json`, change, record, id and list, once returned, stored or handed on,
-lives until exit and is never changed. Pointers can therefore be kept
-without copying, and there is no use-after-free to make. To change a node's
-value the graph builds a new value (clone, then patch the clone before
-anyone sees it) and swaps its pointer. Main never frees a parsed request
-(the graph may hold its parts) and frees only each printed answer string.
-`jsonFree` is for scratch that never escaped (the parser's failures). The
-ASan build has no leak checking on macOS; on Linux run it with
-`ASAN_OPTIONS=detect_leaks=0`.
-
-## Readings to keep (from ../haskell/NOTES.md, which passes the suite)
-
-- A make marks readers of the new node's value, of its whole directory and
-  of any slot of it.
-- The lasting interface is WRITE_ONLY. A stopped process's lasting
-  interfaces (and those of an earlier start) answer invalid.
-- `fire` on a process that is not running, or with no such handler, is an
-  `invalid` error answer.
-- A refused read of a program slot itself leaves `compute`/`effect` out; a
-  refused read of the program node gives `{"node", "refused": true, "slot"}`.
-- A loader-rejected program or a gone compute slot fails the run with
-  `{"kind":"invalid","op":"compute"|"effect"}`; an absent program node
-  leaves it pending. A data.path that is not a path fails with `"op":"path"`
-  before the slots are read.
-- A cleanup's own errors are dropped. If the cleanup before an effect stops
-  the process, the effect does not run.
-- `lookup` without a `path` is invalid; reset answers `null`; a request
-  before the first reset is invalid; `events` on an unknown subscription is
-  invalid; unsubscribing keeps what already arrived.
-- Inside a batch each inner change answer has its own `runs`/`stopped`.
-- The graph keeps a stopped process's remembered reads; drive ignores marks
-  for processes it is not running.
+A harness session is short-lived, so little is freed while it runs: every
+`Json`, change, id and list, once stored or handed on, lives until exit and
+is never changed, so pointers are kept without copying. A write builds the
+new value by copying only the containers along each patch's path and swaps
+the node's pointer. Scratch that never escapes (walk routes not used, the
+parser's failures, a gone slot's ids) is freed. A device that runs for long
+would want real ownership; that is not done.

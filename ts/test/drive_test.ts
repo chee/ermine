@@ -4,11 +4,11 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { type Compute, drive, type Driver, type Effect, type Load, PENDING } from "../src/drive.ts";
 import { graph } from "../src/graph.ts";
-import { protect } from "../src/protect.ts";
+import { protect, subject } from "../src/protect.ts";
 import { type Interface, Invalid, type Json, type Recording, Refused } from "../src/types.ts";
 
 const site = { file: "drive_test.ts", line: 1, column: 1 };
-const host = { agent: "host", site };
+const host = { agent: "host", cause: site };
 
 /** A loader whose program nodes hold a name from a table of JS parts. */
 function table(parts: { [name: string]: Compute | Effect }): Load {
@@ -19,54 +19,64 @@ function table(parts: { [name: string]: Compute | Effect }): Load {
   }) as Load;
 }
 
+/** The value of what a read reached, if it reached anything. */
+function first(items: { value: Json }[]): Json | typeof PENDING {
+  return items.length ? items[0].value : PENDING;
+}
+
 /**
- * A driver over the api (a bare graph by default), with a root, a node a, and
- * a process p, not yet started, whose compute is show and effect is eff.
+ * A driver over the api (a bare graph by default), with a node a, programs
+ * show and eff, and a node p, not yet a process: start() places show in its
+ * compute slot.
  */
-function setup(show: Compute, eff?: Effect, api: Interface = graph()) {
+function setup(show: Compute, eff?: Effect, api: Interface = graph("init")) {
   const d = drive(api, "init", table(eff ? { show, eff } : { show }));
-  d.make({ ...host, id: "init", value: {} });
-  d.make({ ...host, id: "a", value: 1 });
-  d.make({ ...host, id: "show", value: "show" });
-  d.make({ ...host, id: "p", value: null, data: { path: [] } });
-  d.place({ ...host, parent: "p", name: "compute", id: "show" });
+  d.place({ ...host, address: [], name: "a", id: "a", value: 1 });
+  d.place({ ...host, address: [], name: "show", id: "show", value: "show" });
+  d.place({ ...host, address: [], name: "p", id: "p", value: null });
   if (eff) {
-    d.make({ ...host, id: "eff", value: "eff" });
-    d.place({ ...host, parent: "p", name: "effect", id: "eff" });
+    d.place({ ...host, address: [], name: "eff", id: "eff", value: "eff" });
+    d.place({ ...host, address: ["p"], name: "effect", id: "eff" });
   }
   return d;
 }
 
-const show: Compute = ({ api }) => {
-  const r = api.read({ node: "a" });
-  return "value" in r ? r.value : PENDING;
-};
+const show: Compute = ({ api }) => first(api.read({ address: ["a"] }));
 
 function start(d: Driver) {
-  return d.place({ ...host, parent: "init", name: "p", id: "p" });
+  return d.place({ ...host, address: ["p"], name: "compute", id: "show" });
 }
 
 Deno.test("drive gives each change the next time, and runs what a write marked", () => {
   const d = setup(show);
   const started = start(d);
-  assertEquals(started.change.time, 6);
+  assertEquals(started.change.time, 4);
   assertEquals(started.runs.map((r) => [r.run, r.value, r.changes]), [
-    [1, 1, [{ node: "p", time: 7 }]],
+    [1, 1, [{ node: "p", time: 5 }]],
   ]);
-  const written = d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 2 }] });
-  assertEquals(written.change.time, 8);
+  const written = d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 2 }] });
+  assertEquals(written.change.time, 6);
   assertEquals(written.runs.map((r) => r.value), [2]);
-  assertEquals(d.read({ agent: "host", node: "p" }), { value: 2 });
+  assertEquals(d.read({ agent: "host", address: ["p"] }).map((i) => i.value), [2]);
+});
+
+Deno.test("a process runs where the walk reached it: its cwd and name", () => {
+  const seen: [readonly string[], string][] = [];
+  const where: Compute = ({ cwd, name }) => (seen.push([cwd, name]), null);
+  const d = drive(graph("init"), "init", table({ show: where }));
+  d.place({ ...host, address: [], name: "dir", id: "dir", value: null });
+  d.place({ ...host, address: ["dir"], name: "x", id: "p", value: null });
+  d.place({ ...host, address: [], name: "show", id: "show", value: "show" });
+  d.place({ ...host, address: ["dir", "x"], name: "compute", id: "show" });
+  assertEquals(seen, [[["dir"], "x"]]);
 });
 
 Deno.test("a compute that returns PENDING leaves the value, and runs when the node is made", () => {
-  const d = drive(graph(), "init", table({ show }));
-  d.make({ ...host, id: "init", value: {} });
-  d.make({ ...host, id: "show", value: "show" });
-  d.make({ ...host, id: "p", value: null, data: { path: [] } });
-  d.place({ ...host, parent: "p", name: "compute", id: "show" });
+  const d = drive(graph("init"), "init", table({ show }));
+  d.place({ ...host, address: [], name: "show", id: "show", value: "show" });
+  d.place({ ...host, address: [], name: "p", id: "p", value: null });
   assertEquals(start(d).runs.map((r) => [r.ending, "value" in r]), [["pending", false]]);
-  const made = d.make({ ...host, id: "a", value: 5 });
+  const made = d.place({ ...host, address: [], name: "a", id: "a", value: 5 });
   assertEquals(made.runs.map((r) => [r.ending, r.value]), [["done", 5]]);
 });
 
@@ -77,20 +87,20 @@ Deno.test("a compute's interface stops working when the compute returns", () => 
     return show(ctx);
   });
   start(d);
-  assertThrows(() => kept!.read({ node: "a" }), Invalid);
+  assertThrows(() => kept!.read({ address: ["a"] }), Invalid);
 });
 
 Deno.test("an effect's cleanup runs before its next effect and when the process stops", () => {
   const log: string[] = [];
   const d = setup(show, ({ api, value }) => {
     log.push(`effect ${value}`);
-    api.write({ node: "log", patches: [{ type: "snapshot", value }] });
+    api.write({ address: ["log"], patches: [{ type: "snapshot", value }] });
     return () => void log.push(`cleanup ${value}`);
   });
-  d.make({ ...host, id: "log", value: null });
+  d.place({ ...host, address: [], name: "log", id: "log", value: null });
   start(d);
-  d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 2 }] });
-  const stopped = d.unplace({ ...host, parent: "init", name: "p", id: "p" });
+  d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 2 }] });
+  const stopped = d.unplace({ ...host, address: [], name: "p", id: "p" });
   assertEquals(log, ["effect 1", "cleanup 1", "effect 2", "cleanup 2"]);
   assertEquals(stopped.stopped.map((s) => s.process), ["p"]);
 });
@@ -102,18 +112,18 @@ Deno.test("the lasting interface works until the process stops; the effect's doe
     effectApi = ctx.api;
     lasting = ctx.lasting;
     ctx.handler("set", (input) => {
-      ctx.lasting.write({ node: "b", patches: [{ type: "snapshot", value: input ?? null }] });
+      ctx.lasting.write({ address: ["b"], patches: [{ type: "snapshot", value: input ?? null }] });
     });
   });
-  d.make({ ...host, id: "b", value: null });
+  d.place({ ...host, address: [], name: "b", id: "b", value: null });
   start(d);
-  assertThrows(() => effectApi!.write({ node: "b", patches: [] }), Invalid);
+  assertThrows(() => effectApi!.write({ address: ["b"], patches: [] }), Invalid);
   const fired = d.fire({ agent: "host", process: "p", handler: "set", input: "hey" });
   assertEquals(fired.changes.map((c) => [c.node, c.agent, c.process]), [["b", "host", "p"]]);
   assert(!("error" in fired));
-  assertEquals(d.read({ agent: "host", node: "b" }), { value: "hey" });
-  d.unplace({ ...host, parent: "init", name: "p", id: "p" });
-  assertThrows(() => lasting!.write({ node: "b", patches: [] }), Invalid);
+  assertEquals(d.read({ agent: "host", address: ["b"] }).map((i) => i.value), ["hey"]);
+  d.unplace({ ...host, address: [], name: "p", id: "p" });
+  assertThrows(() => lasting!.write({ address: ["b"], patches: [] }), Invalid);
   assertThrows(() => d.fire({ agent: "host", process: "p", handler: "set" }), Invalid);
 });
 
@@ -122,15 +132,15 @@ Deno.test("protect is asked before every operation a run makes, as its process",
   const d = setup(
     show,
     undefined,
-    protect(graph(), (_agent, process, op, args) => {
-      if (process === "p") asked.push(`${op} ${(args as { node?: string }).node}`);
+    protect(graph("init"), (_agent, process, op, args) => {
+      if (process === "p") asked.push(`${op} ${subject(op, args)}`);
       return true;
     }),
   );
   start(d);
   // binding the lasting and reading interfaces, recording the run, the program
-  // slots and nodes, the compute's read, the driver's write of the value, and
-  // finishing the run
+  // slot and node, the effect slot, the compute's read, the driver's write of
+  // the value, and finishing the run
   assertEquals(asked, [
     "bind undefined",
     "bind undefined",
@@ -152,15 +162,21 @@ Deno.test("a wrapper above drive, once told the top, sees what a run does", () =
   for (const op of ["read", "directory", "write"] as const) {
     // deno-lint-ignore no-explicit-any
     (above as any)[op] = (args: any) => {
-      if (args.process === "p") seen.push(`${op} ${args.node}`);
+      if (args.process === "p") seen.push(`${op} ${JSON.stringify(args.address)}`);
       // deno-lint-ignore no-explicit-any
       return (below as any)[op](args);
     };
   }
   above.top = (api) => below.top(api);
   below.top(above);
-  (above as Driver).place({ ...host, parent: "init", name: "p", id: "p" });
-  assertEquals(seen, ["directory p", "read show", "directory p", "read a", "write p"]);
+  (above as Driver).place({ ...host, address: ["p"], name: "compute", id: "show" });
+  assertEquals(seen, [
+    'directory ["p"]',
+    'read ["p","compute"]',
+    'directory ["p"]',
+    'read ["a"]',
+    'write ["p"]',
+  ]);
 });
 
 Deno.test("batch runs what its changes marked once, after the last, even when it throws", () => {
@@ -169,22 +185,22 @@ Deno.test("batch runs what its changes marked once, after the last, even when it
   let settled;
   assertThrows(() => {
     settled = d.batch(() => {
-      d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 2 }] });
-      d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 3 }] });
-      d.write({ ...host, node: "ghost", patches: [] });
+      d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 2 }] });
+      d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 3 }] });
+      d.write({ ...host, address: ["ghost"], patches: [] });
     });
   }, Invalid);
   assertEquals(settled, undefined);
-  assertEquals(d.read({ agent: "host", node: "p" }), { value: 3 });
+  assertEquals(d.read({ agent: "host", address: ["p"] }).map((i) => i.value), [3]);
   const runs = d.batch(() => {
-    d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 4 }] });
-    d.write({ ...host, node: "a", patches: [{ type: "snapshot", value: 5 }] });
+    d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 4 }] });
+    d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 5 }] });
   }).runs;
   assertEquals(runs.map((r) => [r.marked.length, r.value]), [[2, 5]]);
 });
 
 Deno.test("drive passes on operations it does not know", () => {
-  const below = { ...graph(), hello: () => "hi" };
+  const below = { ...graph("init"), hello: () => "hi" };
   const d = drive(below, "init", table({})) as Driver & { hello(): string };
   assertEquals(d.hello(), "hi");
 });
@@ -194,7 +210,7 @@ Deno.test("in a batch, a change's answer has what it stopped; the batch's, what 
   start(d);
   const answers: string[][] = [];
   const settled = d.batch(() => {
-    const a = d.unplace({ ...host, parent: "init", name: "p", id: "p" });
+    const a = d.unplace({ ...host, address: [], name: "p", id: "p" });
     answers.push(a.stopped.map((s) => s.process), a.runs.map((r) => r.process));
   });
   assertEquals(answers, [["p"], []]);
@@ -203,13 +219,12 @@ Deno.test("in a batch, a change's answer has what it stopped; the batch's, what 
 
 Deno.test("a process stopped by another's cleanup comes after it", () => {
   const d = setup(show, ({ lasting }) => () => {
-    lasting.unplace({ parent: "init", name: "q", id: "q" });
+    lasting.unplace({ address: [], name: "q", id: "q" });
   });
-  d.make({ ...host, id: "q", value: null, data: { path: [] } });
-  d.place({ ...host, parent: "q", name: "compute", id: "show" });
-  d.place({ ...host, parent: "init", name: "q", id: "q" });
+  d.place({ ...host, address: [], name: "q", id: "q", value: null });
+  d.place({ ...host, address: ["q"], name: "compute", id: "show" });
   start(d);
-  const stopped = d.unplace({ ...host, parent: "init", name: "p", id: "p" }).stopped;
+  const stopped = d.unplace({ ...host, address: [], name: "p", id: "p" }).stopped;
   assertEquals(stopped.map((s) => [s.process, s.changes.map((c) => c.kind)]), [
     ["p", ["unplace"]],
     ["q", []],
@@ -221,42 +236,44 @@ Deno.test("a refused read of a program node is in the record, and the run is ref
     show,
     undefined,
     protect(
-      graph(),
+      graph("init"),
       (_agent, process, op, args) =>
-        !(process === "p" && op === "read" && (args as { node: string }).node === "show"),
+        !(process === "p" && op === "read" && subject(op, args) === "show"),
     ),
   );
   const [run] = start(d).runs;
   assertEquals(run.compute, { node: "show", refused: true, slot: ["show"] });
   assertEquals(run.ending, "refused");
-  assertEquals(run.errors.map((e) => [e.kind, e.op]), [["refused", "read"]]);
+  assertEquals(run.errors.map((e) => [e.kind, e.op, e.why.code]), [["refused", "read", "rule"]]);
 });
 
-Deno.test("a process whose data.path is not a path fails each run with op path, before its programs", () => {
-  const d = drive(graph(), "init", table({ show }));
-  d.make({ ...host, id: "init", value: {} });
-  d.make({ ...host, id: "show", value: "show" });
-  const path = [{ parent: "a", name: "x", node: "b" }, { parent: "c", name: "y", node: "p" }];
-  d.make({ ...host, id: "p", value: null, data: { path } });
-  d.place({ ...host, parent: "p", name: "compute", id: "show" });
-  const [run] = start(d).runs;
-  assertEquals(run.ending, "failed");
-  assertEquals(run.errors.map((e) => [e.kind, e.op]), [["invalid", "path"]]);
-  assert(!("compute" in run));
-  // it read nothing, so nothing marks it
-  assertEquals(d.place({ ...host, parent: "p", name: "compute", id: "show" }).runs, []);
+Deno.test("a process the walk reaches at another place keeps running there", () => {
+  const seen: string[] = [];
+  const where: Compute = ({ cwd, name }) => (seen.push([...cwd, name].join("/")), null);
+  const d = drive(graph("init"), "init", table({ show: where }));
+  d.place({ ...host, address: [], name: "d1", id: "d1", value: null });
+  d.place({ ...host, address: [], name: "d2", id: "d2", value: null });
+  d.place({ ...host, address: [], name: "show", id: "show", value: "show" });
+  d.place({ ...host, address: ["d1"], name: "x", id: "p", value: null });
+  d.place({ ...host, address: ["d1", "x"], name: "compute", id: "show" });
+  d.place({ ...host, address: ["d2"], name: "y", id: "p" });
+  const moved = d.unplace({ ...host, address: ["d1"], name: "x", id: "p" });
+  assertEquals(moved.stopped, []);
+  assertEquals(seen, ["d1/x", "d2/y"]);
 });
 
 Deno.test("a process a cleanup makes reachable is marked by the change that made it so", () => {
   const d = setup(show, ({ lasting }) => () => {
-    lasting.write({ node: "log", patches: [{ type: "snapshot", value: "bye" }] });
-    lasting.place({ parent: "init", name: "x", id: "x" });
+    lasting.write({ address: ["log"], patches: [{ type: "snapshot", value: "bye" }] });
+    lasting.place({ address: [], name: "x", id: "x" });
   });
-  d.make({ ...host, id: "log", value: null });
-  d.make({ ...host, id: "x", value: null, data: { path: [] } });
-  d.place({ ...host, parent: "x", name: "compute", id: "show" });
+  d.place({ ...host, address: [], name: "log", id: "log", value: null });
+  // x is made and given its program, then taken out, so it starts when placed again
+  d.place({ ...host, address: [], name: "x", id: "x", value: null });
+  d.place({ ...host, address: ["x"], name: "compute", id: "show" });
+  d.unplace({ ...host, address: [], name: "x", id: "x" });
   start(d);
-  const answer = d.unplace({ ...host, parent: "init", name: "p", id: "p" });
+  const answer = d.unplace({ ...host, address: [], name: "p", id: "p" });
   const [, placed] = answer.stopped[0].changes;
   assertEquals(placed.kind, "place");
   const run = answer.runs.find((r) => r.process === "x")!;
@@ -266,29 +283,29 @@ Deno.test("a process a cleanup makes reachable is marked by the change that made
 Deno.test("an effect raises a process whose compute read the program node it changed", () => {
   const order: string[] = [];
   const d = drive(
-    graph(),
+    graph("init"),
     "init",
     table({
       ca: () => 1,
       ea: (({ api }) => {
-        api.write({ node: "m", patches: [{ type: "snapshot", value: 1 }] });
-        api.write({ node: "cb", patches: [{ type: "snapshot", value: "cb2" }] });
+        api.write({ address: ["m"], patches: [{ type: "snapshot", value: 1 }] });
+        api.write({ address: ["cb"], patches: [{ type: "snapshot", value: "cb2" }] });
       }) as Effect,
       cb: () => (order.push("b"), "b"),
       cb2: () => (order.push("b"), "b"),
-      cc: (({ api }) => (order.push("c"), api.read({ node: "m" }), "c")) as Compute,
+      cc: (({ api }) => (order.push("c"), api.read({ address: ["m"] }), "c")) as Compute,
     }),
   );
-  d.make({ ...host, id: "init", value: {} });
-  d.make({ ...host, id: "m", value: 0 });
-  for (const code of ["ca", "ea", "cb", "cc"]) d.make({ ...host, id: code, value: code });
-  for (const [p, compute, effect] of [["a", "ca", "ea"], ["b", "cb"], ["c", "cc"]]) {
-    d.make({ ...host, id: p, value: null, data: { path: [] } });
-    d.place({ ...host, parent: p, name: "compute", id: compute });
-    if (effect) d.place({ ...host, parent: p, name: "effect", id: effect });
+  d.place({ ...host, address: [], name: "m", id: "m", value: 0 });
+  for (const code of ["ca", "ea", "cb", "cc"]) {
+    d.place({ ...host, address: [], name: code, id: code, value: code });
   }
   d.batch(() => {
-    for (const p of ["a", "b", "c"]) d.place({ ...host, parent: "init", name: p, id: p });
+    for (const [p, compute, effect] of [["a", "ca", "ea"], ["b", "cb"], ["c", "cc"]]) {
+      d.place({ ...host, address: [], name: p, id: p, value: null });
+      if (effect) d.place({ ...host, address: [p], name: "effect", id: effect });
+      d.place({ ...host, address: [p], name: "compute", id: compute });
+    }
   });
   // b and c are both above a now; c's first mark, m, is older than b's, cb
   assertEquals(order, ["b", "c", "c", "b"]);
@@ -299,16 +316,23 @@ Deno.test("under drive, a change a subscriber makes takes the next time, and is 
   const times: number[] = [];
   d.subscribe({
     agent: "host",
-    node: "p",
+    address: ["p"],
     send: (e) => {
-      if (!("change" in e) || e.change.agent !== "host") return;
+      if (!("change" in e) || e.change.agent !== "host" || e.change.kind !== "write") return;
       const patches = [{ type: "set" as const, path: [], key: "seen", value: true }];
-      times.push(d.write({ agent: "watcher", site, node: "p", patches }).change.time);
+      times.push(d.write({ agent: "watcher", cause: site, address: ["p"], patches }).change.time);
     },
   });
-  const written = d.write({ ...host, node: "p", patches: [{ type: "snapshot", value: { n: 1 } }] });
-  assertEquals([written.change.time, times], [6, [7]]);
-  assertEquals(d.read({ agent: "host", node: "p" }), { value: { n: 1, seen: true } });
+  const written = d.write({
+    ...host,
+    address: ["p"],
+    patches: [{ type: "snapshot", value: { n: 1 } }],
+  });
+  assertEquals([written.change.time, times], [4, [5]]);
+  assertEquals(d.read({ agent: "host", address: ["p"] }).map((i) => i.value), [{
+    n: 1,
+    seen: true,
+  }]);
   // the driver learned both, in order, so the compute's equal value is not written
   assertEquals(start(d).runs.map((r) => r.changes), [[]]);
 });
@@ -326,19 +350,19 @@ Deno.test("a caught refusal, and a fire's error, name the operation", () => {
     show,
     ({ api, lasting, handler }) => {
       try {
-        api.write({ node: "locked", patches: [] });
+        api.write({ address: ["locked"], patches: [] });
       } catch (e) {
         caught.push([(e as Refused).kind, (e as Refused).op]);
       }
-      handler("careless", () => void lasting.write({ node: "locked", patches: [] }));
+      handler("careless", () => void lasting.write({ address: ["locked"], patches: [] }));
     },
     protect(
-      graph(),
+      graph("init"),
       (_agent, process, op, args) =>
-        !(process === "p" && op === "write" && (args as { node: string }).node === "locked"),
+        !(process === "p" && op === "write" && subject(op, args) === "locked"),
     ),
   );
-  d.make({ ...host, id: "locked", value: 0 });
+  d.place({ ...host, address: [], name: "locked", id: "locked", value: 0 });
   start(d);
   assertEquals(caught, [["refused", "write"]]);
   const fired = d.fire({ agent: "host", process: "p", handler: "careless" });
@@ -360,4 +384,24 @@ Deno.test("a run cannot record or finish runs, and trying spoils its value", () 
     "invalid",
     "finish",
   ]]]);
+});
+
+Deno.test("a fire on what is not running, or a handler it does not have, is invalid with a code", () => {
+  const d = setup(show);
+  const code = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      return (e as Invalid).why.code;
+    }
+  };
+  assertEquals(
+    code(() => d.fire({ agent: "host", process: "p", handler: "h" })),
+    "unknown-process",
+  );
+  start(d);
+  assertEquals(
+    code(() => d.fire({ agent: "host", process: "p", handler: "h" })),
+    "unknown-handler",
+  );
 });

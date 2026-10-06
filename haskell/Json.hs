@@ -36,6 +36,7 @@ module Json
   , object
   , optional
   , int
+  , integer
   , str
     -- * taking apart
   , field
@@ -102,6 +103,9 @@ optional key = maybe [] (\v -> [(key, v)])
 int :: Int -> Value
 int = JNumber . fromIntegral
 
+integer :: Integer -> Value
+integer = JNumber . fromInteger
+
 str :: Text -> Value
 str = JString
 
@@ -123,11 +127,15 @@ asNumber :: Value -> Maybe Double
 asNumber (JNumber d) = Just d
 asNumber _ = Nothing
 
--- | A whole number that fits an 'Int' (negative allowed; callers check range).
-asWhole :: Value -> Maybe Int
+-- | A whole number of any size, negative allowed; callers check range.
+-- There is no cap at 2^53: a time is "a whole number, at least 1" with no
+-- upper bound (PROTOCOL Encodings), and every whole binary64, such as 2^53+2
+-- or 1e21, is held exactly, so a position or index that large is simply past
+-- the slot or list. An 'Integer', exact for all of them, since 'Int' is 32
+-- bits on wasm32.
+asWhole :: Value -> Maybe Integer
 asWhole (JNumber d)
-  | not (isNaN d) && not (isInfinite d) && d == fromInteger r
-  , abs r <= 2 ^ (53 :: Int) = Just (fromInteger r)
+  | not (isNaN d) && not (isInfinite d) && d == fromInteger r = Just r
   where r = truncate d :: Integer
 asWhole _ = Nothing
 

@@ -1,214 +1,156 @@
 # ermine core in Haskell
 
-The spec is `../CORE.tex` (design) and `../PROTOCOL.tex` (harness contract).
-Never edit CORE.tex or PROTOCOL.tex. If a scenario contradicts the spec, the
-spec wins: report it rather than bending the code to it.
+The spec is `../CORE.tex` (the graph) and `../PROTOCOL.tex` (the harness).
+Never edit a .tex file. If a scenario contradicts the spec, the spec wins:
+report it rather than bending the code to it.
 
 ## Build and run
 
 ```sh
 . ~/.ghc-wasm/env
 cd haskell && wasm32-wasi-ghc -O1 -Wall -outputdir build -o ermine.wasm Main.hs
-echo '{"seq":1,"cmd":"reset","stack":"graph"}' | wasmtime run ermine.wasm
-cd ../conformance && ERMINE_HARNESS="$HOME/.ghc-wasm/wasmtime/bin/wasmtime run $PWD/../haskell/ermine.wasm" deno task test
+echo '{"seq":1,"cmd":"reset","stack":"graph","root":"root"}' | wasmtime run ermine.wasm
+cd ../conformance && ERMINE_REQUIRE=graph ERMINE_HARNESS="$HOME/.ghc-wasm/wasmtime/bin/wasmtime run $PWD/../haskell/ermine.wasm" deno task test
 ```
 
-Use the full wasmtime path in `ERMINE_HARNESS`, because deno's child process
-does not see the PATH that `~/.ghc-wasm/env` sets. `ERMINE_PARALLEL` (default 4)
-and `ERMINE_TIMEOUT` (ms per scenario, default 10000) are optional.
+Use the full wasmtime path in `ERMINE_HARNESS`: deno's child process does not
+see the PATH that `~/.ghc-wasm/env` sets.
 
-Unit checks (from `haskell/`):
+Unit checks (from `haskell/`), each `wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/X.wasm tests/X.hs && wasmtime run build/X.wasm`:
 
-```sh
-wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/JsonTest.wasm tests/JsonTest.hs && wasmtime run build/JsonTest.wasm
-wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/TypesTest.wasm tests/TypesTest.hs && wasmtime run build/TypesTest.wasm
-```
+- `tests/JsonTest.hs`: the parser, the printer (numbers as JSON.stringify prints them), `$eq`,
+  `asWhole` (no cap at 2^53).
+- `tests/TypesTest.hs`: addresses, and the encodings of changes, items, froms, errors and records.
+- `tests/GraphTest.hs`: what the graph stack's scenarios cannot reach: which
+  processes a change marks, recordings, read-only and write-only interfaces,
+  patch error codes, and times, positions, indexes and ranges past 2^53.
 
-You may only use boot libraries: base, containers, text, bytestring, mtl and transformers.
+Boot libraries only: base, containers, text, bytestring, mtl, transformers.
 
-## Status (2026-10-05, revised spec)
+## Status (2026-10-06)
 
-Updated to the revised CORE.tex and PROTOCOL.tex: fixed `data` replaces the
-make `path`, a `data` command, placement marks only slot and directory
-readers, the driver's walk and value comparison read beneath protect, errors
-are `{"kind", "op"?, "why"}` (a throw's message is its why), and a refused
-program read is `{"node", "refused": true, "slot"}`. Builds with `-Wall`, no
-warnings. Conformance suite: 166 passed, 0 failed (24 graph, 8 protect, 43
-drive scenarios, plus the well-formedness, lines, encoding and runner tests).
-Unit checks `tests/JsonTest.hs` and `tests/TypesTest.hs` pass;
-`scratch/GraphTest.hs` exercises recording and marking directly.
+The graph stack matches CORE.tex and PROTOCOL.tex as they now read:
 
-## Who owns what
+- reads answer lists of items, each with its `from` and the `change` that last
+  set its value or slot (none for the root's first value); an address that
+  reaches nothing reads as `[]`;
+- addresses are lists of parts (`/`, `..`, names) walked from the request's
+  `place` and `chroot`; a walk takes the first member here that has the next
+  name; a directory read whose last name selects a union lists every member;
+- placing makes (with a value), mounts (an absent id, no value: a pending
+  item), places again, or moves (a position is a gap, 0 to the slot's length);
+  nothing is ever removed;
+- lookup searches from `.` up to the place's start, each step a read of one
+  slot through the top of the stack;
+- subscriptions follow their address, with the change that switched them;
+- errors are `{"kind", "op"?, "why": {"code", ...details, "text"?}}` with
+  PROTOCOL's codes; a change needs `cause` and `time` (code `missing`);
+- whole numbers (time, position, chroot, sub, a path's index, a splice's
+  range) have no upper bound: any whole binary64 is one, held exactly as an
+  `Integer` (`asWhole`). A time past 2^53, such as 9007199254740994 or 1e21,
+  is a time and prints as JSON.stringify prints it (`1e+21`); a position that
+  large is code `position`, an index that large `no-key`, a range `range`
+  (PROTOCOL Encodings: "a whole number, at least 1", with no cap; Lines only
+  promises numbers a binary64 holds exactly);
+- reset with stack `protect` or `drive`, `batch` and `fire` answer
+  `unsupported`;
+- only a line that is not one JSON object is `not-a-request`. Before the
+  first reset, as after it, a `cmd` the protocol does not have is
+  `unknown-command` `{"cmd": s}` (`{"cmd":"frob"}` included), and `batch` and
+  `fire` are `unsupported`; any other command before the first reset is
+  `missing` `{"field": "reset"}`, with the command as `op` unless it is
+  `events`, as C and TS answer it (the code is open: see the questions).
 
-| file | owner | what |
-|---|---|---|
-| Json.hs | done | `Value`, parser, printer that matches JS, `Eq` = `$eq` |
-| Types.hs | done | ids, paths, patches, changes, records, encodings, `Interface`, `Api`, `Recording`, loader types, `Driver` |
-| Graph.hs | Graph agent | `graph :: IO Interface`, `applyPatches` |
-| Protect.hs | Protect+Main agent | `Rule`, `May`, `rulesFrom`, `mayFromRules`, `protect` |
-| Main.hs | Protect+Main agent | line loop (done), `reset`, `respond`, answers, events |
-| Drive.hs | Drive+Program agent | `drive :: Interface -> Interface -> Id -> Loader -> IO Driver` (protect, the bare graph beneath it, root, loader) |
-| Program.hs | Drive+Program agent | `load :: Loader` |
+Builds with `-Wall`, no warnings. Unit checks pass. Conformance suite with
+`ERMINE_REQUIRE=graph`: 260 passed, 0 failed, 112 ignored (the 103 protect
+and drive scenarios and the one drive encoding test, whose reset is answered
+`unsupported`, and the 8 saved fuzz failures, which the suite skips as not
+saved by this fuzzer). Every graph scenario passes,
+`removal.json` and `removal-cycle.json` included. No scenario or fuzz session
+sends a request before its reset. Fuzz (graph stack, no save): invariants 12
+seeds and agree with c 12 seeds, all ok.
 
-Do not change a type or signature in Types.hs or Json.hs on your own: the
-other agents are coding against them. You may add helpers in your own
-module, and you may export more from it.
+Protect, the driver and the program interpreter are gone (they were written
+for the earlier spec; see git, f3b65b1). The graph keeps CORE's marking:
+`iRecord`/`iFinish`, remembered reads and marks, which nothing below drive
+uses: `marked` is always `[]`.
+
+## Files
+
+| file | what |
+|---|---|
+| Json.hs | `Value`, parser, printer that matches JS, `Eq` = `$eq` |
+| Types.hs | ids, addresses, routes, froms, changes, items, errors, `Ctx`, `Op`, `Result`, records, `Interface` |
+| Graph.hs | `graph :: Id -> IO Interface`, `applyPatches` |
+| Main.hs | the line loop, request decoding, answers |
 
 ## The interface
 
 ```haskell
 data Interface = Interface
-  { iOp          :: Ctx -> Stamp -> Op -> IO (Either Err Result)   -- make read directory lookup write place unplace
-  , iSubscribe   :: Ctx -> Value -> (Event -> IO ()) -> IO (Either Err Int)
+  { iOp          :: Ctx -> Stamp -> Op -> IO (Either Err Result)   -- read directory lookup write place unplace
+  , iSubscribe   :: Ctx -> Address -> (Event -> IO ()) -> IO (Either Err Int)
   , iUnsubscribe :: Ctx -> Int -> IO (Either Err ())
   , iRecord      :: Api -> RecordStart -> IO Recording
   , iFinish      :: Recording -> Ending -> IO Record
   , iSetTop      :: Interface -> IO () }
 
-data Ctx   = Ctx { ctxAgent :: Value, ctxProcess :: Maybe Id, ctxPath :: Path, ctxMode :: Mode, ctxRun :: Maybe RunTag }
-data Mode  = ReadWrite | ReadOnly | WriteOnly
-data Stamp = Stamp { stampCause, stampSite :: Maybe Value, stampTime :: Maybe Time }
-data Op    = OpMake id value data? | OpRead node | OpData node | OpDirectory node name? | OpLookup name
-           | OpWrite node patches | OpPlace parent name id position? | OpUnplace parent name id   -- all raw Values
-data Result = ResultApplied Applied | ResultSeen Seen | ResultData (Maybe Value) | ResultDir DirSeen | ResultFound Found
-data Api   = Api { apiInterface :: Interface, apiCtx :: Ctx }   -- bind = Api
+data Ctx = Ctx { ctxAgent :: Value, ctxProcess :: Maybe Id, ctxPlace :: [Name], ctxChroot :: Int, ctxMode :: Mode, ctxRun :: Maybe RunTag }
+data Op  = OpRead Address | OpDirectory Address (Maybe Name) | OpLookup Name
+         | OpWrite Address [Value] | OpPlace Address Name Id (Maybe Int) (Maybe Value) | OpUnplace Address Name Id
 ```
 
-- **One `iOp` for every operation.** A wrapper overrides the one function
-  `iOp`, sees `opName op` ("make", "read", ...) and `opNode op` (the new id
-  for a make, the parent for a placement, nothing for a lookup), and passes
-  the rest on unchanged. The typed helpers `apiRead`, `apiWrite` and the
-  others wrap `apiOp`.
-- **Arguments are raw JSON.** The graph decodes them with `asText`,
-  `pathFrom`, `patchesFrom` and `asWhole`, and answers `invalid` for a bad
-  one. That way an id from a program that is not a string fails in the graph,
-  and the error passes back up through every layer and the run's recording.
-  Main can still reject a malformed request itself.
-- **Wrappers stack** by record update: `pure inner { iOp = ..., iSetTop = \t -> keep t >> iSetTop inner t }`.
-  Every layer passes `iSetTop` on to the layer below it.
-- **The top of the stack.** After building, Main calls `iSetTop top top`
-  once. The graph's lookup reads each directory through `iOp top` with the
-  lookup's own ctx, so protect can refuse it and the graph remembers it.
-  The driver binds each run's interfaces, its value writes and its lasting
-  interfaces from the top.
-- **Errors.** `Err Invalid why` comes from the graph, which rejected the
-  operation. `Err Refused why` comes from a wrapper that said no. An
-  operation that fails changes nothing.
+Arguments are decoded by whoever makes the request (PROTOCOL Errors: the
+request is checked first, for `missing` and `wrong-field`); patches stay raw,
+since whether each is a patch is the graph's to say. A wrapper overrides
+`iOp` and passes `iSetTop` on; Main calls `iSetTop top top` once.
 
-## Conventions every agent shares
+## Marking (kept, not exercised)
 
-1. **Times.** Under graph and protect, Main passes the request's `"time"`
-   as `stampTime`. The graph rejects a missing time, or one that is not
-   greater than every time already in the graph, as `invalid`. Under drive,
-   requests carry no time. The driver sets `stampTime = Just (last+1)` on
-   every change operation that passes through it. A change operation that
-   fails uses up no time.
-2. **Sites and causes** are stored as given (`Maybe Value`). Changes made by
-   processes carry no site.
-3. **The graph remembers reads** only for a ctx where `ctxMode == ReadOnly`
-   and `ctxRun` is the current tag of `ctxProcess`. Only recordings set
-   `ctxRun`. Requests from outside therefore never leave reads behind, and
-   below drive, `marked` is always `[]`. When `iRecord` is given a ReadOnly
-   api, it replaces that process's remembered reads with an empty set under
-   a new tag.
-4. **What marks what.** A read of a node's value is marked by its making
-   and by writes to it (an empty patch list included), not by placements.
-   A read of one slot is marked by a place or unplace of that name in that
-   node, and by the node's making. A read of the whole directory is marked
-   by any place or unplace in it, and by the node's making. The process that
-   made a change is never marked by it. `appliedMarked` lists ids in code
-   point order (`Ord Text` gives that order).
-5. **Recording** (see the comment on `Recording` in Types.hs).
-   - `recordingApi` and anything passed through `recordingWith` are logged:
-     reads, directories, lookups, refs of changes, and every `Left` as
-     `ErrEntry kind (opName op) why`.
-   - `recordingQuiet` is remembered for marking but not logged. The driver
-     uses it to read the program slots and program nodes, and reports those
-     in `recordCompute` and `recordEffect`.
-   - The driver sets the compute, effect, value, cleanup and ending fields
-     with `recordingModify`.
-   - `iFinish` sets the ending, sends `EventRecord` to the subscribers of
-     the process node, and stops the recording. After that, its apis answer
-     `invalid`.
-   - Program reads therefore never show up in `reads`.
-6. **Modes.**
-   - Outside requests and driver housekeeping are `ReadWrite`.
-   - A compute is `ReadOnly`, so a change operation in it is `invalid`.
-   - Effects, the driver's value write, cleanups and handlers (the lasting
-     interface) are `WriteOnly`, so a read, directory or lookup in them is
-     `invalid`.
-   - The graph enforces modes, so these errors land in the record.
-7. **Driver housekeeping** uses `hostCtx` (agent null, no process) on the
-   bare graph, which Main hands the driver as well as protect: the tree walk
-   and reading a process's value to compare read beneath protect. The driver
-   learns which nodes are process nodes from the make changes that pass
-   through it: fixed data that is an object with a `"path"`. data.path
-   decoded by `pathFrom` is the process's path; one that does not decode
-   fails each run with `{"kind": "invalid", "op": "path"}`.
-8. **Drive's extras.** Main calls `driverTake` after every request under
-   drive, to get `Ran { ranRuns, ranStopped }` for the answer's `"runs"`
-   and `"stopped"`. Both lists are always present under drive. `batch` is
-   `driverBatch (mapM_ ... requests)`; Main collects the inner answers in an
-   IORef. `fire` is `driverFire ctx process handler input`.
-9. **Programs.**
-   - `Loader = Value -> Either Text Program`.
-   - `Program` gives a compute (`ComputeIn -> IO ComputeOut`) and an
-     effect (`EffectIn -> IO EffectOut`).
-   - `ComputeOut` is `Returned v | WentPending | Threw t`.
-   - An effect returns the handlers registered during it, in order, and its
-     last cleanup.
-   - `Handler` takes the lasting api, self and input.
-   - A caught error, and a fire's `"error"`, is `thrownValue`. For an
-     operation it is `{"kind":"invalid"|"refused","op","why"}`; for a throw
-     step or an operator error (an unknown operator included) it is
-     `{"kind":"thrown","why"}`, a throw step's message as its why.
-10. **Events.** `iSubscribe` numbers subscriptions from 1 in each graph. Main
-    queues each subscription's events (in an IORef map) for `events`.
-11. **Encodings** live in Types.hs: `changeToJson`, `changeRefToJson`,
-    `recordToJson`, `pathToJson`, `patchToJson` and `errToJson`. A field that
-    is not there is left out. In `reads` and `directories`, an absent node's
-    `saw` is `null`. A refused `searched` entry is `{"node", "refused": true}`
-    with no `saw`.
+A read through a ctx that is `ReadOnly` and in its process's current run
+remembers what it depended on: each slot its walks looked in, each member they
+tried that was not here, the slot looked for in each member that was, the
+value, slot or directory it read, and each pending id it listed. A run's
+reads count alongside its process's last finished run's and replace them when
+it finishes. A change marks every process whose reads it touched, its own
+included: a write the value's readers; a place or unplace the slot's and the
+directory's; a placement that makes a node also those that passed over its id.
 
-## Points the spec leaves open (decided here; tell chee)
+## Choices where the papers are open (questions for chee)
 
-- A making marks readers of the new node's directory or of one of its slots
-  as well as of its value: those reads saw it absent. CORE lists only "the
-  readers of the node's value" for a making. A program cannot tell the
-  difference (a directory step on an absent node binds `[]`), only `saw`.
-- The lasting interface is `WriteOnly`, like the effect's. The spec does not
-  say whether a handler may read.
-- `fire` on a process that is not running, or with a handler it does not
-  have, answers `{"error": {"kind": "invalid"}}`, not an ok answer with an
-  `error`: its handlers stop working with it.
-- A handler whose own operation stops its process (unplacing it) gets
-  `invalid` on its next operation, which ends it and is the fire's error.
-  Handlers and lasting interfaces of an earlier start stay invalid after a
-  restart. The cleanup run by the stop itself still works.
-- If the cleanup run before an effect stops the process, the effect does not
-  run.
-- A process node whose data.path is not a path fails each run before its
-  program slots are read, so `compute` and `effect` are left out and the run
-  reads nothing: only a restart runs it again.
-- A refused read of the program slot itself (a rule on `directory` of the
-  process node) leaves the record's `compute`/`effect` entry out: the slot is
-  unknown.
-- `data` is not remembered as a read (fixed data never changes), and is
-  invalid through a write-only interface; no program step makes one.
-- `lookup` without a `path` is `invalid`. A make's `path`, if a request gives
-  one, is only the path it acts at.
-- Lone surrogate escapes (`\ud800`) are accepted as one code point, as
-  JSON.parse does (scenarios never send them). Text holds them as WTF-8
-  bytes (`Json.surrogate`).
-- A program the loader rejects, or a gone compute slot, fails the run with
-  `{"kind":"invalid","op":"compute"|"effect"}`. An absent program leaves it
-  pending.
-- A run's ending: `refused` if any error in it is a refusal, else `failed`
-  on any error or uncaught throw, else pending or done.
-- A cleanup's own errors and throws are dropped (it runs outside any run).
-- Inside a batch each inner change answer carries its own (normally empty)
-  `runs` and `stopped`. A Haskell exception answering a line becomes
-  `{"error":{"kind":"crash",...}}`; that kind only marks a bug.
-- Marks for stopped processes: the graph keeps a stopped process's
-  remembered reads. A later change may therefore list that process in
-  `"marked"`. The driver ignores such marks.
+- Places through a union. A place is names from the root. `..` takes one
+  name off, and the shorter place is followed afresh from the root, as
+  Plan 9's lexical `..` is; lookup searches those shorter places. The
+  address's own names are walked from the node that reaches, so the place's
+  last name does not look ahead to the address's first. With `u = [m1, m2]`
+  where only `m2` has `b`, the place `["u", "b"]` reaches m2's `b`, but
+  `[".."]` reaches `m1`, and a lookup from there searches `b`, `m1` and the
+  root, never `m2`, which the place's own walk went through. The fuzz model
+  reads it this way too.
+- Checks inside the graph run in this order: the address, the time, then
+  what the change does (`exists`, `position`, `not-in-slot`, patches).
+- Patch codes: a patch that is not an object, has no known type, is a
+  snapshot without a value, has a path that is not a list, or is a set whose
+  key is not a string: `not-a-patch`. A key of the wrong kind for where the
+  path is, or a path into a string, number, boolean or null: `no-key`. A
+  splice range that is missing or malformed: `range`, with the target's
+  length. A splice value of the wrong kind: `wrong-kind`.
+- A time not greater than every time, before any change: code `time`,
+  `last: 0`; so a time of 0 or below is code `time`, never `wrong-field`. An
+  address of the wrong form, a name `.`, `..` or `/`, a fractional time, a
+  negative or fractional position or chroot, or a chroot past the place:
+  `wrong-field`.
+- `events` or `unsubscribe` of a subscription the session does not have:
+  `wrong-field` `sub`.
+- A known command before the first reset. PROTOCOL's table has no code for
+  it: `not-a-request` is only for a line that is not one JSON object, and
+  `missing` is for a field a request lacks, which `reset` is not. Sent to a
+  fresh harness, `{"seq":2,"cmd":"read","agent":"h","address":[]}` is
+  answered `{"kind":"invalid","op":"read","why":{"code":"missing","field":"reset"}}`,
+  as C and TS answer it. `batch` or `fire` then is `unsupported`, as C
+  answers it; TS answers those `missing` `reset` too.
+- A lookup's nearest slot with the name is found even when every id in it is
+  pending: its items say so.
+- A subscription receives a change only when it changed the node the address
+  reached, or the node the address reaches is another one now; a change that
+  moves the route but not the node is not sent.

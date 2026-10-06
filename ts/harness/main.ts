@@ -1,36 +1,35 @@
 // The conformance harness (PROTOCOL.tex): one JSON request per line on stdin,
-// one JSON answer per line on stdout. Each reset builds a fresh stack.
+// one JSON answer per line on stdout. Each reset builds a fresh graph. The
+// protect and drive stacks are being redesigned, so a reset asking for one is
+// answered unsupported, and so are batch and fire.
 
-import { equal, isObject } from "../src/patch.ts";
-import { graph } from "../src/graph.ts";
-import { type May, protect, subject } from "../src/protect.ts";
-import { drive, type Settled } from "../src/drive.ts";
-import { ErmineError, type Event, type Interface, Invalid, type Json } from "../src/types.ts";
-import { errorJson, loader } from "./programs.ts";
-import { dataItems, listingItems, lookupItems, readItems } from "./items.ts";
+import { isObject } from "../src/patch.ts";
+import { acting, graph } from "../src/graph.ts";
+import {
+  ErmineError,
+  type Event,
+  type Interface,
+  invalid,
+  type Json,
+  missing,
+  wrongField,
+} from "../src/types.ts";
 
 export type Request = { readonly [key: string]: Json };
 
-/** A stack as the harness holds it: the interface, and any operations its wrappers add. */
-// deno-lint-ignore no-explicit-any
-export type Stack = Interface & { [op: string]: any };
-
 /** One session: the stack, and the events waiting for each subscription. */
-export type Session = { api: Stack; queues: Map<number, Event[]> };
+export type Session = { api: Interface; queues: Map<number, Event[]> };
 
-/** Answers what the stack does not have. */
+/** Answers what the harness does not do. */
 export class Unsupported {
   constructor(readonly cmd: string) {}
 }
 
-/** Builds each stack a reset can ask for, and tells it its top once built. */
-export const stacks: { [stack: string]: ((request: Request) => Stack) | undefined } = {
-  graph: () => graph(),
-  protect: (r) => built(protect(graph(), rules(r.rules))),
-  drive: (r) => {
-    if (typeof r.root !== "string") throw new Invalid("drive needs a root, an id");
-    return built(drive(protect(graph(), rules(r.rules)), r.root, loader));
-  },
+/** The stacks a reset can ask for; those left out are answered unsupported. */
+export const stacks: { [stack: string]: ((root: string) => Interface) | undefined } = {
+  graph: (root) => built(graph(root)),
+  protect: undefined,
+  drive: undefined,
 };
 
 /** Tells the outermost layer it is the top, so no holder can tell it otherwise. */
@@ -39,61 +38,67 @@ function built<T extends Interface>(api: T): T {
   return api;
 }
 
-/** The harness's may: the first rule whose given fields all equal the operation's wins. */
-export function rules(list: Json | undefined): May {
-  if (list === undefined) return () => true;
-  if (!Array.isArray(list) || !list.every(isObject)) {
-    throw new Invalid("rules are a list of objects");
-  }
-  const all = list as { readonly [key: string]: Json }[];
-  return (agent, process, op, args) => {
-    const node = subject(op, args);
-    for (const rule of all) {
-      if ("agent" in rule && !equal(rule.agent, agent)) continue;
-      if ("process" in rule && (process === undefined || rule.process !== process)) continue;
-      if ("op" in rule && rule.op !== op) continue;
-      if ("node" in rule && (node === undefined || rule.node !== node)) continue;
-      return rule.allow === true;
-    }
-    return true;
-  };
-}
-
 /** The request's fields with these names, those it has. */
 export function pick(request: Request, ...keys: string[]) {
   const out: { [key: string]: Json } = {};
-  for (const key of keys) if (key in request) out[key] = request[key];
+  for (const key of keys) if (Object.hasOwn(request, key)) out[key] = request[key];
   // deno-lint-ignore no-explicit-any
   return out as any;
 }
 
-const ACTING = ["agent", "process"];
-const STAMP = ["time", "site", "cause"];
+const ACTING = ["agent", "process", "place", "chroot"];
+const STAMP = ["time", "cause"];
+
+/**
+ * The commands that are operations, which an error answering one names in its
+ * op (PROTOCOL.tex, Errors): the graph's (CORE.tex, Operations) and batch, the
+ * driver's own (DRIVER.tex). events and fire are the harness's, and reset
+ * builds the stack as a host does, so an error answering one has no op.
+ */
+const OPERATIONS = new Set([
+  "read",
+  "directory",
+  "lookup",
+  "write",
+  "place",
+  "unplace",
+  "subscribe",
+  "unsubscribe",
+  "batch",
+]);
+
+/**
+ * Every request from outside that makes a change carries a cause, even one
+ * acting as a process: it stands for the site a host captures, which the
+ * harness cannot. Below drive it carries a time too, which the graph checks.
+ */
+function outside(r: Request) {
+  if (!Object.hasOwn(r, "cause")) throw missing("cause");
+}
 
 /** The commands, each given the session and the request, returning the ok result. */
-export const commands: {
-  [cmd: string]: (s: Session, r: Request) => unknown;
-} = {
-  make: (s, r) => plain(s.api.make(pick(r, ...ACTING, ...STAMP, "id", "value", "data"))),
-  write: (s, r) => plain(s.api.write(pick(r, ...ACTING, ...STAMP, "node", "patches"))),
-  place: (s, r) =>
-    plain(s.api.place(pick(r, ...ACTING, ...STAMP, "parent", "name", "id", "position"))),
-  unplace: (s, r) => plain(s.api.unplace(pick(r, ...ACTING, ...STAMP, "parent", "name", "id"))),
-  read: (s, r) => ({ items: readItems(r.node as string, s.api.read(pick(r, ...ACTING, "node"))) }),
-  data: (s, r) => ({ items: dataItems(r.node as string, s.api.data(pick(r, ...ACTING, "node"))) }),
-  directory: (s, r) =>
-    listingItems(
-      r.node as string,
-      r.name as string | undefined,
-      s.api.directory(pick(r, ...ACTING, "node", "name")),
-    ),
-  lookup: (s, r) => ({
-    items: lookupItems(r.name as string, s.api.lookup(pick(r, ...ACTING, "name", "path"))),
-  }),
+export const commands: { [cmd: string]: (s: Session, r: Request) => unknown } = {
+  read: (s, r) => ({ items: s.api.read(pick(r, ...ACTING, "address")) }),
+  directory: (s, r) => s.api.directory(pick(r, ...ACTING, "address", "name")),
+  lookup: (s, r) => ({ items: s.api.lookup(pick(r, ...ACTING, "name")) }),
+  write: (s, r) => {
+    outside(r);
+    return s.api.write(pick(r, ...ACTING, ...STAMP, "address", "patches"));
+  },
+  place: (s, r) => {
+    outside(r);
+    return s.api.place(
+      pick(r, ...ACTING, ...STAMP, "address", "name", "id", "position", "value"),
+    );
+  },
+  unplace: (s, r) => {
+    outside(r);
+    return s.api.unplace(pick(r, ...ACTING, ...STAMP, "address", "name", "id"));
+  },
   subscribe: (s, r) => {
     const queue: Event[] = [];
     const { sub } = s.api.subscribe({
-      ...pick(r, ...ACTING, "node"),
+      ...pick(r, ...ACTING, "address"),
       send: (event: Event) => queue.push(event),
     });
     s.queues.set(sub, queue);
@@ -105,74 +110,55 @@ export const commands: {
     return null;
   },
   events: (s, r) => {
+    // every request but reset says who makes it (PROTOCOL.tex, Acting as someone)
+    acting(pick(r, ...ACTING));
+    if (!Object.hasOwn(r, "sub")) throw missing("sub");
     const queue = s.queues.get(r.sub as number);
-    if (!queue) throw new Invalid(`there is no subscription ${JSON.stringify(r.sub)}`);
+    if (!queue) throw wrongField("sub", `there is no subscription ${JSON.stringify(r.sub)}`);
     return queue.splice(0);
   },
   // drive's own operations
-  batch: (s, r) => {
-    if (typeof s.api.batch !== "function") throw new Unsupported("batch");
-    const requests = r.requests;
-    if (!Array.isArray(requests) || !requests.every(isObject)) {
-      throw new Invalid("a batch's requests are a list of requests");
-    }
-    const answers: unknown[] = [];
-    const settled: Settled = s.api.batch(() => {
-      for (const request of requests as Request[]) answers.push(answer(s, request));
-    });
-    return plain({ answers, ...settled });
+  batch: () => {
+    throw new Unsupported("batch");
   },
-  fire: (s, r) => {
-    if (typeof s.api.fire !== "function") throw new Unsupported("fire");
-    const fired = s.api.fire(pick(r, ...ACTING, "handler", "input"));
-    return plain("error" in fired ? { ...fired, error: errorJson(fired.error) } : fired);
+  fire: () => {
+    throw new Unsupported("fire");
   },
 };
-
-/** A record's program entry for an absent program node: saw null, not absent. */
-function encoded(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(encoded);
-  if (typeof v !== "object" || v === null) return v;
-  const o = v as { [key: string]: unknown };
-  const out: { [key: string]: unknown } = {};
-  for (const [k, x] of Object.entries(o)) {
-    out[k] = (k === "compute" || k === "effect") && isObject(x as never) &&
-        (x as { absent?: unknown }).absent === true
-      ? (({ absent: _, ...rest }) => ({ ...rest, saw: null }))(x as { absent: true })
-      : encoded(x);
-  }
-  return out;
-}
-
-/** An answer as JSON: a stopped process's cleanup error as {kind, why}. */
-function plain<T>(answer: T): T {
-  const stopped = (answer as { stopped?: { error?: unknown }[] })?.stopped;
-  if (!Array.isArray(stopped)) return answer;
-  return {
-    ...answer,
-    stopped: stopped.map((s) => "error" in s ? { ...s, error: errorJson(s.error) } : s),
-  };
-}
 
 /** The answer to one request, without its seq. */
 export function answer(session: Session | undefined, request: Request): { [key: string]: unknown } {
   const cmd = request.cmd;
   try {
-    if (typeof cmd !== "string") throw new Invalid("a request has a cmd, a string");
-    const command = commands[cmd];
-    if (!command) return { unsupported: cmd };
-    if (!session) throw new Invalid("no session yet: reset first");
-    return { ok: encoded(command(session, request)) };
+    if (cmd === undefined) throw missing("cmd");
+    if (typeof cmd !== "string") throw wrongField("cmd", "a request's cmd is a string");
+    if (!Object.hasOwn(commands, cmd)) {
+      return trouble(
+        invalid("unknown-command", `there is no command ${JSON.stringify(cmd)}`, { cmd }),
+      );
+    }
+    if (!session) throw invalid("missing", "no session yet: reset first", { field: "reset" });
+    return { ok: commands[cmd](session, request) };
   } catch (e) {
-    return trouble(e);
+    return trouble(e, typeof cmd === "string" && OPERATIONS.has(cmd) ? cmd : undefined);
   }
 }
 
-export function trouble(e: unknown): { [key: string]: unknown } {
+/** An error as an answer: its kind, the operation it ended if there was one, and why. */
+export function trouble(e: unknown, op?: string): { [key: string]: unknown } {
   if (e instanceof Unsupported) return { unsupported: e.cmd };
-  if (e instanceof ErmineError) return { error: { kind: e.kind, why: e.message } };
-  // a request the stack could not take at all, such as a field of the wrong kind
-  return { error: { kind: "invalid", why: String(e) } };
+  if (e instanceof ErmineError) {
+    if (e.op === undefined && op !== undefined) e.op = op;
+    return { error: e.toJSON() };
+  }
+  // the harness's own mistake: never expected, and shown as one
+  console.error(e);
+  const error: { [key: string]: unknown } = {
+    kind: "invalid",
+    why: { code: "internal", text: String(e) },
+  };
+  if (op !== undefined) error.op = op;
+  return { error };
 }
 
 /** A harness: reads lines, answers each, until stdin closes. */
@@ -186,31 +172,123 @@ export class Harness {
       if (text === undefined) throw new Error("the line is not UTF-8");
       request = JSON.parse(text);
     } catch (e) {
-      return JSON.stringify({ seq: null, error: { kind: "invalid", why: String(e) } });
+      return encode({ seq: null, error: notARequest(String(e)) });
     }
     if (!isObject(request)) {
-      return JSON.stringify({
-        seq: null,
-        error: { kind: "invalid", why: "a request is one JSON object" },
-      });
+      return encode({ seq: null, error: notARequest("a request is one JSON object") });
     }
-    const seq = "seq" in request ? request.seq : null;
-    return JSON.stringify({ seq, ...this.#answer(request) });
+    const seq = Object.hasOwn(request, "seq") ? request.seq : null;
+    const answer = this.#answer(request);
+    try {
+      return encode({ seq, ...answer });
+    } catch (e) {
+      // the harness's own mistake, answered so that the lines stay in step
+      return encode({ seq, ...trouble(e) });
+    }
   }
 
   #answer(request: Request) {
     if (request.cmd !== "reset") return answer(this.session, request);
     try {
-      const stack = typeof request.stack === "string" ? request.stack : "";
-      if (!Object.hasOwn(stacks, stack)) throw new Invalid(`no stack ${JSON.stringify(stack)}`);
+      const stack = request.stack;
+      if (stack === undefined) throw missing("stack");
+      if (typeof stack !== "string" || !Object.hasOwn(stacks, stack)) {
+        throw wrongField("stack", `there is no stack ${JSON.stringify(stack)}`);
+      }
       const build = stacks[stack];
       if (!build) return { unsupported: "reset" };
-      this.session = { api: build(request), queues: new Map() };
+      if (request.root === undefined) throw missing("root");
+      if (typeof request.root !== "string") throw wrongField("root", "the root is an id, a string");
+      this.session = { api: build(request.root), queues: new Map() };
       return { ok: null };
     } catch (e) {
+      // reset is not an operation: its errors name none
       return trouble(e);
     }
   }
+}
+
+function notARequest(text: string) {
+  return { kind: "invalid", why: { code: "not-a-request", text } };
+}
+
+/**
+ * The JSON text of an answer, as JSON.stringify writes it, however deep its
+ * values nest. A value is any JSON value, with no bound on its depth
+ * (CORE.tex, Nodes), and V8's JSON.stringify recurses into a frozen list, as
+ * every list the graph holds is, so it runs out of stack a few thousand
+ * deep. This keeps its own stack instead.
+ */
+export function encode(value: unknown): string {
+  const out: string[] = [];
+  // Each entry is text to write as it is, or, where its text is undefined, a
+  // value to write as JSON. The text closing a list or object carries it, so
+  // the walk knows it has left it.
+  const texts: (string | undefined)[] = [undefined];
+  const values: unknown[] = [prepare(value, "")];
+  const open = new Set<object>();
+  const text = (t: string, closing?: object) => {
+    texts.push(t);
+    values.push(closing);
+  };
+  const json = (v: unknown) => {
+    texts.push(undefined);
+    values.push(v);
+  };
+  while (texts.length) {
+    const t = texts.pop();
+    const v = values.pop();
+    if (t !== undefined) {
+      out.push(t);
+      if (v !== undefined) open.delete(v as object);
+      continue;
+    }
+    if (v === null || skipped(v)) out.push("null");
+    else if (typeof v === "boolean") out.push(v ? "true" : "false");
+    else if (typeof v === "number" || typeof v === "string") out.push(JSON.stringify(v));
+    else if (typeof v !== "object") throw new TypeError(`a ${typeof v} is not JSON`);
+    else if (open.has(v)) throw new TypeError("a value that holds itself is not JSON");
+    else if (Array.isArray(v)) {
+      open.add(v);
+      out.push("[");
+      text("]", v);
+      // the members go on last first, so the first comes out first
+      for (let i = v.length - 1; i >= 0; i--) {
+        const member = prepare(v[i], String(i));
+        json(skipped(member) ? null : member);
+        if (i > 0) text(",");
+      }
+    } else {
+      open.add(v);
+      out.push("{");
+      text("}", v);
+      const kept: [string, unknown][] = [];
+      for (const key of Object.keys(v)) {
+        const member = prepare((v as { [key: string]: unknown })[key], key);
+        if (!skipped(member)) kept.push([key, member]);
+      }
+      for (let i = kept.length - 1; i >= 0; i--) {
+        json(kept[i][1]);
+        text(JSON.stringify(kept[i][0]) + ":");
+        if (i > 0) text(",");
+      }
+    }
+  }
+  return out.join("");
+}
+
+/** A value as JSON.stringify sees it: what its toJSON gives, if it has one. */
+function prepare(value: unknown, key: string): unknown {
+  if (value !== null && (typeof value === "object" || typeof value === "function")) {
+    const toJSON = (value as { toJSON?: unknown }).toJSON;
+    if (typeof toJSON === "function") return toJSON.call(value, key);
+  }
+  return value;
+}
+
+/** What JSON.stringify leaves out of an object, and writes as null in a list. */
+function skipped(value: unknown): boolean {
+  return value === undefined || typeof value === "function" || typeof value === "symbol";
 }
 
 async function main() {

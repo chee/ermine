@@ -141,6 +141,11 @@ int main(void) {
 
 	int64_t whole;
 	expectTrue("whole", jsonIsWhole(parse("3"), &whole) && whole == 3 && !jsonIsWhole(parse("3.5"), &whole) && !jsonIsWhole(parse("\"3\""), &whole));
+	// any size is whole; past int64 it is held at the edge
+	expectTrue("whole past 2^53", jsonIsWhole(parse("9007199254740994"), &whole) && whole == 9007199254740994);
+	expectTrue("whole past int64", jsonIsWhole(parse("1e21"), &whole) && whole == INT64_MAX && jsonIsWhole(parse("-1e21"), &whole) && whole == INT64_MIN);
+	expectTrue("whole at int64's edge", jsonIsWhole(parse("-9223372036854775808"), &whole) && whole == INT64_MIN && jsonIsWhole(parse("9223372036854775807"), &whole) && whole == INT64_MAX);
+	expectTrue("whole without out", jsonIsWhole(parse("1.7976931348623157e308"), NULL) && jsonIsWhole(parse("-0"), NULL) && !jsonIsWhole(parse("1e-7"), NULL));
 	Json *nul = parse("\"a\\u0000b\"");
 	expectTrue("nul is text", jsonText(nul) && strcmp(jsonText(nul), "a\xc0\x80" "b") == 0 && utf8Count(nul->string, nul->stringLength) == 3);
 	char *nulPrinted = jsonPrint(nul);
@@ -149,13 +154,42 @@ int main(void) {
 	expectTrue("nul sorts first", textCompare("a\xc0\x80", "a\x01") < 0 && textCompare("a", "a\xc0\x80") < 0 && textCompare("\xc0\x80", "\xc0\x80") == 0);
 	expectTrue("nul is not the end", !jsonEqual(nul, parse("\"a\"")));
 	{
-		size_t depth = 200000;
+		// nothing recurses: a value a million levels deep parses, prints, compares and frees on the default stack
+		size_t depth = 1000000;
 		char *deep = allocate(2 * depth + 1);
 		memset(deep, '[', depth);
 		memset(deep + depth, ']', depth);
 		char *why = NULL;
-		expectTrue("deep parses", jsonParse(deep, 2 * depth, &why) != NULL);
+		Json *a = jsonParse(deep, 2 * depth, &why), *b = jsonParse(deep, 2 * depth, &why);
+		expectTrue("deep parses", a != NULL && b != NULL);
+		char *printed = jsonPrint(a);
+		expectTrue("deep prints", strcmp(printed, deep) == 0);
+		expectTrue("deep equal", jsonEqual(a, b));
+		jsonPush(b, jsonNull());
+		expectTrue("deep unequal", !jsonEqual(a, b));
+		jsonFree(a);
+		jsonFree(b);
+		free(printed);
+		memset(deep + depth - 1, '{', 1);
+		expectTrue("deep fails", jsonParse(deep, 2 * depth, &why) == NULL && why != NULL);
+		free(why);
 		free(deep);
+		Json *o = parse("{\"a\":[{\"b\":{\"c\":[1,\"x\",null]}}],\"d\":{}}");
+		char *text = jsonPrint(o);
+		expectText("nested prints", text, "{\"a\":[{\"b\":{\"c\":[1,\"x\",null]}}],\"d\":{}}");
+		free(text);
+		expectTrue("nested equal", jsonEqual(o, parse("{\"d\":{},\"a\":[{\"b\":{\"c\":[1,\"x\",null]}}]}")));
+		expectTrue("nested unequal", !jsonEqual(o, parse("{\"d\":{},\"a\":[{\"b\":{\"c\":[1,\"x\",false]}}]}")));
+		expectTrue("missing key", !jsonEqual(parse("{\"a\":1}"), parse("{\"b\":1}")));
+		jsonFree(o);
+	}
+	{
+		const char *partial[] = { "[[1],{\"a\":[2,", "{\"a\":{\"b\"", "[{}],", "{\"a\":1,}" };
+		for (size_t i = 0; i < sizeof partial / sizeof *partial; i++) {
+			char *why = NULL;
+			expectTrue(partial[i], jsonParse(partial[i], strlen(partial[i]), &why) == NULL && why != NULL);
+			free(why);
+		}
 	}
 
 	if (failures) {

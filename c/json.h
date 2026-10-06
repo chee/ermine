@@ -1,12 +1,14 @@
 // json.h: a JSON value, its parser and printer, value equality, and the
 // code point helpers every other file uses. Nothing here knows about graphs.
-// Owner: the skeleton (done). Do not change a signature here on your own.
 //
 // VALUES ARE IMMUTABLE AND NEVER FREED (see NOTES.md, Memory). A Json that
 // has been handed to another function, stored, or returned is shared: no one
-// may change it or free it. To change a value, build a new one (jsonClone it,
-// then change the clone before anyone else sees it). jsonFree exists only for
-// scratch a function made and never let go of.
+// may change it or free it. To change a value, build a new one (jsonShallow
+// the containers you change, then change the copies before anyone else sees
+// them). jsonFree exists only for scratch a function made and never let go of.
+//
+// NO RECURSION: parsing, printing, freeing and equality keep their own
+// stacks on the heap, so a value may nest as deep as memory allows.
 //
 // ABSENT is a NULL `Json *`. A present null is a JSON_NULL value.
 //
@@ -75,8 +77,6 @@ Json *jsonInteger(int64_t value);
 Json *jsonString(const char *text);
 /** copies `length` bytes, NUL included */
 Json *jsonStringOfLength(const char *text, size_t length);
-/** printf into a fresh string value */
-Json *jsonStringFormat(const char *format, ...) __attribute__((format(printf, 1, 2)));
 Json *jsonArray(void);
 Json *jsonObject(void);
 /** appends to an array; takes the item */
@@ -88,9 +88,7 @@ void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value);
 void jsonSet(Json *object, const char *key, size_t length, Json *value);
 /** removes a key of an object; false if it was not there (the object is unchanged) */
 bool jsonRemove(Json *object, const char *key, size_t length);
-/** a deep copy */
-Json *jsonClone(const Json *value);
-/** a shallow copy: a new array or object holding the same items/values (shared), or a deep copy of a scalar */
+/** a shallow copy: a new array or object holding the same items/values (shared), or a copy of a scalar */
 Json *jsonShallow(const Json *value);
 /** frees scratch only (see the header comment) */
 void jsonFree(Json *value);
@@ -103,11 +101,15 @@ Json *jsonGetOfLength(const Json *object, const char *key, size_t length);
 bool jsonIsObject(const Json *value);
 bool jsonIsArray(const Json *value);
 bool jsonIsString(const Json *value);
-bool jsonIsBoolean(const Json *value);
 bool jsonIsNumber(const Json *value);
 /** a string's C text (every string is one, see STRINGS), or NULL when the value is not a string */
 const char *jsonText(const Json *value);
-/** a whole number (Number.isInteger) within +-2^53: puts it in *out */
+/**
+ * a whole number (Number.isInteger), of any size: puts it in *out when out
+ * is not NULL, held at INT64_MIN or INT64_MAX past them (no list, slot or
+ * string is that long, so comparing it with a length or an index still
+ * answers right)
+ */
 bool jsonIsWhole(const Json *value, int64_t *out);
 /**
  * Value equality, the relation of $eq and of the driver's comparison: null,
@@ -117,8 +119,6 @@ bool jsonIsWhole(const Json *value, int64_t *out);
  * value are not.
  */
 bool jsonEqual(const Json *a, const Json *b);
-/** the member's key as C text */
-const char *jsonKeyText(const JsonMember *member);
 
 // text -------------------------------------------------------------------------
 
@@ -148,8 +148,6 @@ void jsonNumberText(double number, char out[32]);
 size_t utf8Count(const char *text, size_t length);
 /** the byte offset of code point `index` (0..count); `length` when index >= count */
 size_t utf8Offset(const char *text, size_t length, size_t index);
-/** whether the bytes are well-formed UTF-8 */
-bool utf8Valid(const char *text, size_t length);
 /** code point order: <0, 0, >0 */
 int utf8Compare(const char *a, size_t aLength, const char *b, size_t bLength);
 /** code point order of two C texts (ids, names) */

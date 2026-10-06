@@ -1,4 +1,4 @@
-// Programs as data (PROTOCOL.tex): the harness's loader.
+// Programs as data (PROTOCOL.tex, Programs as data): the harness's loader.
 //
 // A program node's value is a list of steps. load() checks that and gives a
 // program with two parts, compute and effect; runHandler() runs a handler's
@@ -8,34 +8,34 @@
 // stack's interface; loader, at the end, is the loader the harness gives
 // drive:
 //
-//   read(node)                 the items of the node's value, as in the read answer
-//   directory(node, name?)     with a name, the slot's items ([] if gone); without,
-//                              [[name, [item]]] as in the directory answer
-//   lookup(name)               the items found, as in the lookup answer
-//   make({id, value, data?, cause?})
-//   write({node, patches, cause?})
-//   place({parent, name, id, position?, cause?})
-//   unplace({parent, name, id, cause?})
+//   read(address)                the items of the value, as in the read answer
+//   directory(address, name?)    with a name, the slot's items; without,
+//                                [[name, [item]]] as in the directory answer
+//   lookup(name)                 the items found, as in the lookup answer
+//   write({address, patches, cause?})
+//   place({address, name, id, position?, value?, cause?})
+//   unplace({address, name, id, cause?})
 //
 // Every method is optional. A step whose operation the interface leaves out
 // is invalid, {kind: "invalid", op}; so an effect may be given an interface
 // with no reads, and a compute one with no writes. An interface that has the
 // method may throw instead (and record it): the interpreter lets that error
 // pass as it is, so drive sees the graph's own invalid or refused error.
+// Fields are evaluated and passed on as they are: an address is evaluated,
+// then read as an address, by the graph.
 //
-// Errors. A throw step, an operator given the wrong kind or absent, an
-// unknown variable, a step used in the wrong part: each throws a
-// ProgramError of kind "thrown", why the message as text. A try binds its
-// variable to errorJson(e) of what it caught: {kind, why} with op when an
-// operation failed, so a caught refusal is {kind: "refused", op, why}.
+// Errors. A throw step, an operator given the wrong kind, an unbound
+// variable, a missing value used, a test that is not a boolean, a step used
+// in the wrong part: each throws a ProgramError of kind "thrown", with
+// PROTOCOL.tex's code. A try binds its variable to errorJson(e) of what it
+// caught: {kind, op?, why}, so a caught refusal is {kind: "refused", op, why}.
 //
 // Variables live in one scope per part; let, each and try set them in it.
-// An optional field (cause, position, name) that evaluates to absent is
-// left out.
+// An optional field (cause, position, value, name) that evaluates to missing
+// is left out.
 
 import { type Compute, type Effect, type Load, PENDING } from "../src/drive.ts";
-import type { Interface, WriteOp } from "../src/types.ts";
-import { listingItems, lookupItems, readItems } from "./items.ts";
+import { ErmineError, type Interface, type Why } from "../src/types.ts";
 
 export type Json =
   | null
@@ -45,37 +45,31 @@ export type Json =
   | Json[]
   | { [key: string]: Json };
 
-/** Absent is not a value: a read of an absent node, a missing key. */
-export const ABSENT: unique symbol = Symbol("absent");
+/** Missing is not a value: a key that is not there, a $value of no items. */
+export const ABSENT: unique symbol = Symbol("missing");
 export type Absent = typeof ABSENT;
 export type Value = Json | Absent;
 
+type Op = { [key: string]: Json };
+
 export type Api = {
-  read?(node: string): Json;
-  directory?(node: string, name?: string): Json;
-  lookup?(name: string): Json;
-  make?(op: { id: string; value: Json; data?: Json; cause?: Json }): unknown;
-  write?(op: { node: string; patches: Json; cause?: Json }): unknown;
-  place?(
-    op: {
-      parent: string;
-      name: string;
-      id: string;
-      position?: number;
-      cause?: Json;
-    },
-  ): unknown;
-  unplace?(
-    op: { parent: string; name: string; id: string; cause?: Json },
-  ): unknown;
+  read?(address: Json): Json;
+  directory?(address: Json, name?: Json): Json;
+  lookup?(name: Json): Json;
+  write?(op: Op): unknown;
+  place?(op: Op): unknown;
+  unplace?(op: Op): unknown;
 };
 
 export type ComputeContext = {
   api: Api;
   /** the process id */
   self: string;
-  path: Json;
-  /** the changes that marked the process */
+  /** its working directory, as names */
+  cwd: Json;
+  /** the name its node was reached by */
+  name: string;
+  /** the changes kept for it */
   changes: Json;
 };
 
@@ -87,9 +81,11 @@ export type Cleanup = (api: Api) => void;
 export type EffectContext = {
   api: Api;
   self: string;
+  cwd: Json;
+  name: string;
   /** the process's value */
   value: Json;
-  /** its value before this run; ABSENT on the first run */
+  /** the value its last effect was given; ABSENT on the first */
   previous: Value;
   /** registers a handler; one of the same name replaces it */
   handler(name: string, fire: Fire): void;
@@ -105,12 +101,13 @@ export type Program = {
   effect(ctx: EffectContext): void;
 };
 
+/** A mistake in a program, or an operation its interface does not have. */
 export class ProgramError extends Error {
-  kind: string;
+  kind: "thrown" | "invalid";
   op?: string;
-  why: string;
-  constructor(kind: string, why: string, op?: string) {
-    super(why);
+  why: Why;
+  constructor(kind: "thrown" | "invalid", why: Why, op?: string) {
+    super(why.text ?? why.code);
     this.name = "ProgramError";
     this.kind = kind;
     this.why = why;
@@ -118,25 +115,21 @@ export class ProgramError extends Error {
   }
 }
 
-function thrown(why: string): ProgramError {
-  return new ProgramError("thrown", why);
+function thrown(code: string, text: string, details: { [key: string]: Json } = {}): ProgramError {
+  return new ProgramError("thrown", { code, ...details, text });
 }
 
-/** An error as a try step binds it: {kind, why} and op if there is one. */
+/** An error as a try step binds it, and as a record lists it: {kind, op?, why}. */
 export function errorJson(e: unknown): Json {
-  const out: { [key: string]: Json } = {};
-  if (e !== null && typeof e === "object") {
-    const o = e as { kind?: unknown; op?: unknown; why?: unknown };
-    if (typeof o.kind === "string") {
-      out.kind = o.kind;
-      if (typeof o.op === "string") out.op = o.op;
-      out.why = typeof o.why === "string" ? o.why : e instanceof Error ? e.message : String(e);
-      return out;
-    }
+  if (e instanceof ErmineError) return e.toJSON() as unknown as Json;
+  if (e instanceof ProgramError) {
+    const out: { [key: string]: Json } = { kind: e.kind };
+    if (e.op !== undefined) out.op = e.op;
+    out.why = e.why as unknown as Json;
+    return out;
   }
-  out.kind = "thrown";
-  out.why = e instanceof Error ? e.message : String(e);
-  return out;
+  const text = e instanceof Error ? e.message : String(e);
+  return { kind: "thrown", why: { code: "thrown", message: text, text } };
 }
 
 // --- values ---------------------------------------------------------------
@@ -156,14 +149,15 @@ function put(o: { [key: string]: Json }, key: string, value: Json) {
 }
 
 function kindOf(v: Value): string {
-  if (v === ABSENT) return "absent";
+  if (v === ABSENT) return "missing";
   if (v === null) return "null";
   if (Array.isArray(v)) return "list";
   return typeof v;
 }
 
-/** Value equality, as $eq: objects in any key order, numbers by value. */
+/** Value equality, as $eq: objects in any key order, numbers as Object.is compares them. */
 export function equal(a: Json, b: Json): boolean {
+  if (typeof a === "number" && typeof b === "number") return Object.is(a, b);
   if (a === b) return true;
   if (Array.isArray(a)) {
     if (!Array.isArray(b) || a.length !== b.length) return false;
@@ -199,9 +193,9 @@ function operator(e: Json): string | undefined {
   return undefined;
 }
 
-/** A value that must be there: anything but absent. */
+/** A value that must be there: anything but missing. */
 function present(v: Value, what: string): Json {
-  if (v === ABSENT) throw thrown(`${what} is absent`);
+  if (v === ABSENT) throw thrown("missing-value", `${what} is missing`);
   return v;
 }
 
@@ -228,115 +222,98 @@ function value(e: Json, vars: Vars, what: string): Json {
   return present(evaluate(e, vars), what);
 }
 
-function list(e: Json, vars: Vars, what: string): Json[] {
-  const v = value(e, vars, what);
-  if (!Array.isArray(v)) {
-    throw thrown(`${what} must be a list, not ${kindOf(v)}`);
-  }
+/** An operator's operand that must be a list. */
+function operands(op: string, e: Json, vars: Vars): Json[] {
+  const v = value(e, vars, op);
+  if (!Array.isArray(v)) throw wrongKind(op, `${op} takes a list, not ${kindOf(v)}`);
   return v;
 }
 
-function string(e: Json, vars: Vars, what: string): string {
-  const v = value(e, vars, what);
-  if (typeof v !== "string") {
-    throw thrown(`${what} must be a string, not ${kindOf(v)}`);
-  }
-  return v;
+function wrongKind(op: string, text: string): ProgramError {
+  return thrown("operator", text, { operator: op });
 }
 
 function apply(op: string, arg: Json, vars: Vars): Value {
   switch (op) {
     case "$": {
-      if (typeof arg !== "string") throw thrown("$ takes a variable name");
-      if (!vars.has(arg)) throw thrown(`no variable ${JSON.stringify(arg)}`);
+      if (typeof arg !== "string") throw wrongKind("$", "$ takes a variable name");
+      if (!vars.has(arg)) {
+        throw thrown("unbound", `no variable ${JSON.stringify(arg)}`, { name: arg });
+      }
       return vars.get(arg)!;
     }
     case "$get": {
-      const [base, ...keys] = list(arg, vars, "$get");
-      if (base === undefined) throw thrown("$get needs a value");
+      const [base, ...keys] = operands("$get", arg, vars);
+      if (base === undefined) throw wrongKind("$get", "$get needs a value");
       let v: Value = base;
       for (const k of keys) {
+        if (v === ABSENT) return ABSENT;
         if (Array.isArray(v)) {
           if (typeof k !== "number") {
-            throw thrown(
-              `$get: a list's key must be a number, not ${kindOf(k)}`,
-            );
+            throw wrongKind("$get", `$get: a list's key is a number, not ${kindOf(k)}`);
           }
           v = Number.isInteger(k) && k >= 0 && k < v.length ? v[k] : ABSENT;
         } else if (isObject(v)) {
           if (typeof k !== "string") {
-            throw thrown(
-              `$get: an object's key must be a string, not ${kindOf(k)}`,
-            );
+            throw wrongKind("$get", `$get: an object's key is a string, not ${kindOf(k)}`);
           }
           v = Object.hasOwn(v, k) ? v[k] : ABSENT;
-        } else if (v === ABSENT) {
-          return ABSENT;
         } else {
-          throw thrown(`$get: cannot get from ${kindOf(v)}`);
+          throw wrongKind("$get", `$get: cannot get from ${kindOf(v)}`);
         }
       }
       return v;
     }
     case "$eq": {
-      const args = list(arg, vars, "$eq");
-      if (args.length !== 2) throw thrown("$eq takes two values");
+      const args = operands("$eq", arg, vars);
+      if (args.length !== 2) throw wrongKind("$eq", "$eq takes two values");
       return equal(args[0], args[1]);
     }
     case "$not": {
       const v = value(arg, vars, "$not");
-      if (typeof v !== "boolean") {
-        throw thrown(`$not takes a boolean, not ${kindOf(v)}`);
-      }
+      if (typeof v !== "boolean") throw wrongKind("$not", `$not takes a boolean, not ${kindOf(v)}`);
       return !v;
     }
     case "$missing":
       return evaluate(arg, vars) === ABSENT;
     case "$value": {
-      const items = list(arg, vars, "$value");
-      if (items.length === 0) return ABSENT;
-      const first = items[0];
-      if (
-        typeof first !== "object" || first === null || Array.isArray(first) || !("value" in first)
-      ) {
-        throw thrown("$value takes items with a value");
+      for (const item of operands("$value", arg, vars)) {
+        if (isObject(item) && Object.hasOwn(item, "value")) return item.value;
       }
-      return first.value;
+      return ABSENT;
     }
-    case "$ids":
-      return list(arg, vars, "$ids").map((item) => {
-        if (typeof item !== "object" || item === null || Array.isArray(item) || !("id" in item)) {
-          throw thrown("$ids takes items with an id");
-        }
-        return item.id;
-      });
+    case "$ids": {
+      const ids: Json[] = [];
+      for (const item of operands("$ids", arg, vars)) {
+        if (isObject(item) && Object.hasOwn(item, "id")) ids.push(item.id);
+      }
+      return ids;
+    }
     case "$add": {
       let sum = 0;
-      for (const v of list(arg, vars, "$add")) {
-        if (typeof v !== "number") {
-          throw thrown(`$add takes numbers, not ${kindOf(v)}`);
-        }
+      for (const v of operands("$add", arg, vars)) {
+        if (typeof v !== "number") throw wrongKind("$add", `$add takes numbers, not ${kindOf(v)}`);
         sum += v;
       }
       return sum;
     }
     case "$concat": {
-      const args = list(arg, vars, "$concat");
+      const args = operands("$concat", arg, vars);
       if (args.every((v) => typeof v === "string")) return args.join("");
       if (args.every(Array.isArray)) return args.flat(1);
-      throw thrown("$concat takes all strings or all lists");
+      throw wrongKind("$concat", "$concat takes all strings or all lists");
     }
     case "$len": {
       const v = value(arg, vars, "$len");
       if (typeof v === "string") return [...v].length;
       if (Array.isArray(v)) return v.length;
       if (isObject(v)) return Object.keys(v).length;
-      throw thrown(`$len takes a string, list or object, not ${kindOf(v)}`);
+      throw wrongKind("$len", `$len takes a string, list or object, not ${kindOf(v)}`);
     }
     case "$quote":
       return copy(arg);
   }
-  throw thrown(`unknown operator ${op}`);
+  throw wrongKind(op, `unknown operator ${op}`);
 }
 
 // --- steps ----------------------------------------------------------------
@@ -357,8 +334,8 @@ type End = undefined | { value: Json } | { pending: true };
 
 // fields each step must have, and those it may have
 const shapes: { [step: string]: { need: string[]; may: string[] } } = {
-  read: { need: ["node", "as"], may: [] },
-  directory: { need: ["node", "as"], may: ["name"] },
+  read: { need: ["address", "as"], may: [] },
+  directory: { need: ["address", "as"], may: ["name"] },
   lookup: { need: ["name", "as"], may: [] },
   let: { need: ["as", "value"], may: [] },
   if: { need: ["test", "then"], may: ["else"] },
@@ -367,10 +344,9 @@ const shapes: { [step: string]: { need: string[]; may: string[] } } = {
   pending: { need: [], may: [] },
   throw: { need: ["message"], may: [] },
   try: { need: ["steps", "as"], may: [] },
-  make: { need: ["id", "value"], may: ["data", "cause"] },
-  write: { need: ["node", "patches"], may: ["cause"] },
-  place: { need: ["parent", "name", "id"], may: ["position", "cause"] },
-  unplace: { need: ["parent", "name", "id"], may: ["cause"] },
+  write: { need: ["address", "patches"], may: ["cause"] },
+  place: { need: ["address", "name", "id"], may: ["position", "value", "cause"] },
+  unplace: { need: ["address", "name", "id"], may: ["cause"] },
   handler: { need: ["name", "steps"], may: [] },
   cleanup: { need: ["steps"], may: [] },
 };
@@ -407,9 +383,7 @@ function checkStep(s: Json, at: string): string | undefined {
     if (!Object.hasOwn(s, f)) return `${at}: ${kind} needs "${f}"`;
   }
   for (const f of literal[kind] ?? []) {
-    if (typeof s[f] !== "string") {
-      return `${at}: ${kind}'s "${f}" must be a string`;
-    }
+    if (typeof s[f] !== "string") return `${at}: ${kind}'s "${f}" must be a string`;
   }
   if (
     kind === "if" || kind === "each" || kind === "try" || kind === "handler" ||
@@ -425,7 +399,7 @@ function checkStep(s: Json, at: string): string | undefined {
   return undefined;
 }
 
-/** An optional field: undefined when not given or absent. */
+/** An optional field: undefined when not given or missing. */
 function optional(s: Step, field: string, vars: Vars): Json | undefined {
   if (!Object.hasOwn(s, field)) return undefined;
   const v = evaluate(s[field], vars);
@@ -435,7 +409,9 @@ function optional(s: Step, field: string, vars: Vars): Json | undefined {
 function method<K extends keyof Api>(api: Api, op: K): NonNullable<Api[K]> {
   const f = api[op];
   if (typeof f !== "function") {
-    throw new ProgramError("invalid", `this interface has no ${op}`, op);
+    // as the graph's own interfaces say it: one that only reads, or only writes
+    const code = op === "write" || op === "place" || op === "unplace" ? "read-only" : "write-only";
+    throw new ProgramError("invalid", { code, text: `this interface has no ${op}` }, op);
   }
   const g = f as (...args: unknown[]) => unknown;
   return ((...args: unknown[]) => g.apply(api, args)) as NonNullable<Api[K]>;
@@ -449,26 +425,35 @@ function runSteps(steps: Step[], vars: Vars, run: Run): End {
   return undefined;
 }
 
+/** The fields of a change step: each needed one evaluated, each optional one if not missing. */
+function fields(s: Step, vars: Vars): Op {
+  const kind = s.do as string;
+  const op: Op = {};
+  for (const f of shapes[kind].need) op[f] = value(s[f], vars, `${kind}'s ${f}`);
+  for (const f of shapes[kind].may) {
+    const v = optional(s, f, vars);
+    if (v !== undefined) op[f] = v;
+  }
+  return op;
+}
+
 function runStep(s: Step, vars: Vars, run: Run): End {
   const kind = s.do as string;
   switch (kind) {
     case "read": {
-      const node = string(s.node, vars, "read's node");
-      vars.set(s.as as string, method(run.api, "read")(node));
+      const address = value(s.address, vars, "read's address");
+      vars.set(s.as as string, method(run.api, "read")(address));
       return;
     }
     case "directory": {
-      const node = string(s.node, vars, "directory's node");
+      const address = value(s.address, vars, "directory's address");
       const name = optional(s, "name", vars);
-      if (name !== undefined && typeof name !== "string") {
-        throw thrown(`directory's name must be a string, not ${kindOf(name)}`);
-      }
       const f = method(run.api, "directory");
-      vars.set(s.as as string, name === undefined ? f(node) : f(node, name));
+      vars.set(s.as as string, name === undefined ? f(address) : f(address, name));
       return;
     }
     case "lookup": {
-      const name = string(s.name, vars, "lookup's name");
+      const name = value(s.name, vars, "lookup's name");
       vars.set(s.as as string, method(run.api, "lookup")(name));
       return;
     }
@@ -478,16 +463,16 @@ function runStep(s: Step, vars: Vars, run: Run): End {
     case "if": {
       const test = value(s.test, vars, "if's test");
       if (typeof test !== "boolean") {
-        throw thrown(`if's test must be a boolean, not ${kindOf(test)}`);
+        throw thrown("not-boolean", `if's test must be a boolean, not ${kindOf(test)}`);
       }
       if (test) return runSteps(s.then as Step[], vars, run);
-      if (Object.hasOwn(s, "else")) {
-        return runSteps(s.else as Step[], vars, run);
-      }
+      if (Object.hasOwn(s, "else")) return runSteps(s.else as Step[], vars, run);
       return;
     }
     case "each": {
-      for (const x of list(s.list, vars, "each's list")) {
+      const list = value(s.list, vars, "each's list");
+      if (!Array.isArray(list)) throw wrongKind("each", `each takes a list, not ${kindOf(list)}`);
+      for (const x of list) {
         vars.set(s.as as string, x);
         const end = runSteps(s.steps as Step[], vars, run);
         if (end) return end;
@@ -497,11 +482,13 @@ function runStep(s: Step, vars: Vars, run: Run): End {
     case "return":
       return { value: value(s.value, vars, "the value returned") };
     case "pending":
-      if (run.part !== "compute") throw thrown(`pending in ${a(run.part)}`);
+      if (run.part !== "compute") throw thrown("wrong-part", `pending in ${a(run.part)}`);
       return { pending: true };
     case "throw": {
-      const m = value(s.message, vars, "throw's message");
-      throw thrown(typeof m === "string" ? m : JSON.stringify(m));
+      const message = value(s.message, vars, "throw's message");
+      throw thrown("thrown", typeof message === "string" ? message : JSON.stringify(message), {
+        message,
+      });
     }
     case "try": {
       let caught: Json = null;
@@ -514,68 +501,14 @@ function runStep(s: Step, vars: Vars, run: Run): End {
       vars.set(s.as as string, caught);
       return end;
     }
-    case "make": {
-      const op: { id: string; value: Json; data?: Json; cause?: Json } = {
-        id: string(s.id, vars, "make's id"),
-        value: value(s.value, vars, "make's value"),
-      };
-      const data = optional(s, "data", vars);
-      if (data !== undefined) op.data = data;
-      const cause = optional(s, "cause", vars);
-      if (cause !== undefined) op.cause = cause;
-      method(run.api, "make")(op);
+    case "write":
+    case "place":
+    case "unplace":
+      method(run.api, kind)(fields(s, vars));
       return;
-    }
-    case "write": {
-      const op: { node: string; patches: Json; cause?: Json } = {
-        node: string(s.node, vars, "write's node"),
-        patches: value(s.patches, vars, "write's patches"),
-      };
-      const cause = optional(s, "cause", vars);
-      if (cause !== undefined) op.cause = cause;
-      method(run.api, "write")(op);
-      return;
-    }
-    case "place": {
-      const op: {
-        parent: string;
-        name: string;
-        id: string;
-        position?: number;
-        cause?: Json;
-      } = {
-        parent: string(s.parent, vars, "place's parent"),
-        name: string(s.name, vars, "place's name"),
-        id: string(s.id, vars, "place's id"),
-      };
-      const position = optional(s, "position", vars);
-      if (position !== undefined) {
-        if (typeof position !== "number") {
-          throw thrown(
-            `place's position must be a number, not ${kindOf(position)}`,
-          );
-        }
-        op.position = position;
-      }
-      const cause = optional(s, "cause", vars);
-      if (cause !== undefined) op.cause = cause;
-      method(run.api, "place")(op);
-      return;
-    }
-    case "unplace": {
-      const op: { parent: string; name: string; id: string; cause?: Json } = {
-        parent: string(s.parent, vars, "unplace's parent"),
-        name: string(s.name, vars, "unplace's name"),
-        id: string(s.id, vars, "unplace's id"),
-      };
-      const cause = optional(s, "cause", vars);
-      if (cause !== undefined) op.cause = cause;
-      method(run.api, "unplace")(op);
-      return;
-    }
     case "handler": {
       if (run.part !== "effect" || !run.handler) {
-        throw thrown(`handler in ${a(run.part)}`);
+        throw thrown("wrong-part", `handler in ${a(run.part)}`);
       }
       const steps = s.steps as Step[];
       const self = vars.get("self") ?? ABSENT;
@@ -586,7 +519,7 @@ function runStep(s: Step, vars: Vars, run: Run): End {
     }
     case "cleanup": {
       if (run.part !== "effect" || !run.cleanup) {
-        throw thrown(`cleanup in ${a(run.part)}`);
+        throw thrown("wrong-part", `cleanup in ${a(run.part)}`);
       }
       const steps = s.steps as Step[];
       // the cleanup sees the effect's variables as they are now
@@ -597,7 +530,7 @@ function runStep(s: Step, vars: Vars, run: Run): End {
       return;
     }
   }
-  throw thrown(`unknown step ${kind}`);
+  throw thrown("not-a-program", `unknown step ${kind}`);
 }
 
 function a(part: Part): string {
@@ -608,17 +541,18 @@ function a(part: Part): string {
 
 /**
  * Reads a program node's value. A list of steps gives a program; anything
- * else gives a ProgramError (kind "thrown"), and the run fails.
+ * else gives a ProgramError with code not-a-program, and the run fails.
  */
 export function load(code: Json): Program | ProgramError {
   const why = checkSteps(code, "the program");
-  if (why) return thrown(why);
+  if (why) return thrown("not-a-program", why);
   const steps = copy(code) as Step[];
   return {
     compute(ctx) {
       const vars: Vars = new Map<string, Value>([
         ["self", ctx.self],
-        ["path", ctx.path],
+        ["cwd", ctx.cwd],
+        ["name", ctx.name],
         ["changes", ctx.changes],
       ]);
       const end = runSteps(steps, vars, { part: "compute", api: ctx.api });
@@ -627,6 +561,8 @@ export function load(code: Json): Program | ProgramError {
     effect(ctx) {
       const vars: Vars = new Map<string, Value>([
         ["self", ctx.self],
+        ["cwd", ctx.cwd],
+        ["name", ctx.name],
         ["value", ctx.value],
         ["previous", ctx.previous],
       ]);
@@ -650,7 +586,7 @@ export function runHandler(
   api: Api,
 ): void {
   const why = checkSteps(steps, "the handler");
-  if (why) throw thrown(why);
+  if (why) throw thrown("not-a-program", why);
   const scope: Vars = vars instanceof Map ? new Map(vars) : new Map(Object.entries(vars));
   runSteps(steps as Step[], scope, { part: "handler", api });
 }
@@ -659,21 +595,18 @@ export function runHandler(
 
 /** The interpreter's interface over a stack's interface. */
 export function adapt(api: Interface): Api {
+  // deno-lint-ignore no-explicit-any
+  const loose = api as any;
   return {
-    read: (node) => readItems(node, api.read({ node })) as Json,
-    directory(node, name) {
-      const r = listingItems(
-        node,
-        name,
-        api.directory(name === undefined ? { node } : { node, name }),
-      );
-      return (("directory" in r) ? r.directory : r.items) as Json;
+    read: (address) => loose.read({ address }),
+    directory(address, name) {
+      const r = loose.directory(name === undefined ? { address } : { address, name });
+      return "directory" in r ? r.directory : r.items;
     },
-    lookup: (name) => lookupItems(name, api.lookup({ name })) as Json,
-    make: (op) => api.make(op),
-    write: (op) => api.write(op as unknown as WriteOp),
-    place: (op) => api.place(op),
-    unplace: (op) => api.unplace(op),
+    lookup: (name) => loose.lookup({ name }),
+    write: (op) => loose.write(op),
+    place: (op) => loose.place(op),
+    unplace: (op) => loose.unplace(op),
   };
 }
 
@@ -690,7 +623,8 @@ export const loader = ((code: Json, part: "compute" | "effect") => {
       const outcome = program.compute({
         api: adapt(ctx.api),
         self: ctx.self,
-        path: ctx.path as unknown as Json,
+        cwd: [...ctx.cwd],
+        name: ctx.name,
         changes: ctx.changes as unknown as Json,
       });
       return "pending" in outcome ? PENDING : outcome.value;
@@ -703,6 +637,8 @@ export const loader = ((code: Json, part: "compute" | "effect") => {
     program.effect({
       api: adapt(ctx.api),
       self: ctx.self,
+      cwd: [...ctx.cwd],
+      name: ctx.name,
       value: ctx.value as Json,
       previous: "previous" in ctx ? ctx.previous as Json : ABSENT,
       handler: (name, fire) =>

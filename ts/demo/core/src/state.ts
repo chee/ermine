@@ -21,6 +21,9 @@ export const focus = signal<Focus | undefined>(undefined);
 /** Whether the graph is exploded onto the canvas. */
 export const explode = signal(false);
 
+/** Whether the dock takes most of the height, for watching the stage. */
+export const tall = signal(false);
+
 export type DockTab = "workspace" | "stage" | "protect" | "lookup" | "make";
 export const dock = signal<DockTab>("workspace");
 
@@ -47,7 +50,39 @@ export function select(id: Id, route: Step[] = []) {
 }
 
 /** Runs code in the workspace and shows it there. */
+/** The last act from the ui, shown for a moment with the code it ran. */
+export const toast = signal<
+  { n: number; code: string; label?: string; ok: boolean; why?: string } | undefined
+>(
+  undefined,
+);
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
 export function act(code: string, label?: string) {
   const s = world.run(code, label);
+  toast.value = { n: s.n, code, label, ok: s.ok !== false, why: s.error?.why };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toast.value = undefined), s.ok === false ? 5000 : 2600);
   return s;
+}
+
+/** Undoes or redoes the last act, as a new change, and shows the code it ran. */
+export function undo(redo = false) {
+  const s = redo ? world.redo() : world.undo();
+  if (!s) {
+    toast.value = {
+      n: -1,
+      code: redo ? "nothing to redo" : "nothing to undo",
+      label: redo ? "redo" : "undo",
+      ok: true,
+    };
+  } else {toast.value = {
+      n: s.n,
+      code: s.code,
+      label: s.label,
+      ok: s.ok !== false,
+      why: s.error?.why,
+    };}
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (toast.value = undefined), 2600);
 }

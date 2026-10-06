@@ -1,11 +1,18 @@
 /// <reference lib="dom" />
-// The world the demo plays with: drive(protect(watch(graph()), may), root, load),
+// The world the demo plays with: drive(protect(watch(graph(root)), may), root, load),
 // a log of everything that happened, and the workspace that every outside act
-// goes through, so that each change from outside carries a real site: the
-// snippet, line and column it was made from.
+// goes through, so that each change from outside carries a real site as its
+// cause: the snippet, line and column it was made from.
+//
+// The graph is reached by address only. The host keeps its own copy of the
+// graph, learned from the changes as the driver learns it, and turns the ids
+// the workspace and the panes name into addresses from the root that reach them.
 
 import { signal } from "@preact/signals";
 import {
+  type Address,
+  applyPatches,
+  byCodePoint,
   type Change,
   type ChangeRef,
   type Compute,
@@ -20,15 +27,26 @@ import {
   type Interface,
   type Json,
   type Load,
+  members,
+  parseAddress,
   type Patch,
-  type Path,
+  type PathFrom,
   PENDING,
+  placed,
   protect,
+  type ReadEntry,
   type Record as Run,
+  Refused,
+  type Searched,
   type Settled,
   type Site,
+  type SlotFrom,
+  type SlotItem,
   type Step,
   subject,
+  type ValueItem,
+  type View,
+  walk,
 } from "../../../src/mod.ts";
 import { loader as steps } from "../../../harness/programs.ts";
 
@@ -52,6 +70,12 @@ export type Entry =
   | { t: "error"; n: number; error: Problem; snippet?: number }
   | { t: "snippet"; n: number; snippet: number };
 
+/** What reverses a change from outside. */
+export type Inverse =
+  | { op: "write"; node: Id; value: Json }
+  | { op: "unplace"; parent: Id; name: string; id: Id }
+  | { op: "place"; parent: Id; name: string; id: Id; position: number };
+
 /** An entry before the log numbers it. */
 type Unnumbered = Entry extends infer E ? E extends Entry ? Omit<E, "n"> : never : never;
 
@@ -67,8 +91,36 @@ export type Snippet = {
   times: number[];
 };
 
+/**
+ * A read as the acting agent: the items, and the first one's value, if there
+ * is one; and the address it read, if one from the root reaches the node.
+ */
+export type Reading = { items: ValueItem[]; value?: Json; address?: Address } | {
+  refused: string;
+};
+
+/** A process the driver's walk reaches: where it runs, and the route to it. */
+export type Running = { cwd: string[]; name: string; parent: Id; route: Step[] };
+
+/** A lookup tried from a place: each directory searched, nearest first, and what it found. */
+export type Found = { searched: Searched[]; found: Id[]; items: SlotItem[] };
+
 export const key = (r: ChangeRef) => `${r.node}@${r.time}`;
 export const J = (v: unknown) => JSON.stringify(v);
+
+/** A cause that is a site: the file, line and column a change from outside was made at. */
+export function siteOf(cause: Json | undefined): Site | undefined {
+  if (cause === null || typeof cause !== "object" || Array.isArray(cause)) return;
+  const { file, line, column } = cause as { [k: string]: Json };
+  if (typeof file !== "string" || typeof line !== "number" || typeof column !== "number") return;
+  return { file, line, column };
+}
+
+/** The node whose slot a directory item is in: the last of its route, or the root. */
+function slotNode(item: SlotItem): Id {
+  const route = (item.from as SlotFrom).route ?? [];
+  return route.length ? route[route.length - 1].node : ROOT;
+}
 
 export function problem(e: unknown): Problem {
   if (e instanceof ErmineError) return { kind: e.kind, why: e.message, op: e.op };
@@ -86,8 +138,11 @@ const HEADER_LINES = 1;
 export class World {
   version = signal(0);
   log: Entry[] = [];
-  /** every node made, in the order made, with its making */
-  made = new Map<Id, Change>();
+  /**
+   * every node made, in the order made, with the placement that made it; the
+   * root, which the host gave when the graph was made, with none
+   */
+  made = new Map<Id, Change | undefined>();
   /** the time of each node's latest change */
   latest = new Map<Id, number>();
   changes = new Map<string, Change>();
@@ -111,6 +166,8 @@ export class World {
   /** the layer under protect: what the trusted host sees */
   bare!: Interface;
   #n = 0;
+  /** which reset made the graph being watched */
+  #gen = 0;
   #snippet?: { n: number; cause?: Json; agent?: string };
   #bump = false;
 
@@ -142,6 +199,17 @@ export class World {
     this.handlers.clear();
     this.snippets = [];
     this.subs.clear();
+    this.#values.clear();
+    this.#dirs.clear();
+    this.#byTime.clear();
+    this.#t++;
+    // a graph is made with one node, its root, which the host gives: its value is null
+    this.made.set(ROOT, undefined);
+    this.#values.set(ROOT, null);
+    this.inverses.clear();
+    this.undoable = [];
+    this.redoable = [];
+    this.thrown.clear();
     const may = (agent: Json, process: Id | undefined, op: string, args: object) => {
       const node = subject(op, args);
       for (const r of this.rules) {
@@ -154,17 +222,16 @@ export class World {
       }
       return true;
     };
-    this.bare = watch(graph(), {
-      change: (c) => this.#change(c),
-      record: (r) => this.#record(r),
+    // a graph from before a reset may still run, as a timer an effect set does;
+    // what it does is not this world's, and would spoil the host's copy
+    const gen = ++this.#gen;
+    this.bare = watch(graph(ROOT), {
+      change: (c) => gen === this.#gen && this.#change(c),
+      record: (r) => gen === this.#gen && this.#record(r),
     });
     this.driver = drive(protect(this.bare, may), ROOT, this.#load);
     this.driver.top(this.driver);
-    // a graph is made with one node, its root, which the host gives
-    this.run(
-      `as("host", () => api.make({ id: ${J(ROOT)}, value: {} }))`,
-      "the host gives the root",
-    );
+    this.bump();
   }
 
   bump() {
@@ -172,6 +239,14 @@ export class World {
     this.#bump = true;
     queueMicrotask(() => {
       this.#bump = false;
+      // a screen lasts as long as its process runs, however it was stopped
+      const running = this.running();
+      for (const [id, box] of this.screens) {
+        if (!running.has(id)) {
+          box.remove();
+          this.screens.delete(id);
+        }
+      }
       this.version.value++;
     });
   }
@@ -182,13 +257,247 @@ export class World {
   }
 
   #change(c: Change) {
-    if (c.kind === "make") this.made.set(c.node, c);
+    this.#t++;
+    this.#byTime.set(c.time, c);
+    // a placement with a value made the node it placed: the parent's change and the node's first
+    if (c.kind === "place" && c.value !== undefined && !this.made.has(c.id)) {
+      this.made.set(c.id, c);
+      this.latest.set(c.id, c.time);
+    }
+    this.#inverse(c);
     this.latest.set(c.node, c.time);
     this.changes.set(key(c), c);
     const s = this.#snippet;
     if (s && !c.process) this.snippets.find((x) => x.n === s.n)?.times.push(c.time);
     this.#push({ t: "change", change: c });
   }
+
+  // --- undo: what each change from outside would take to reverse ---
+
+  /**
+   * values and slots as they were before each change, for its inverse: the
+   * host's own copy of the graph, learned from the changes, as the driver
+   * learns it, since the graph is read by address and not by id
+   */
+  #values = new Map<Id, Json>();
+  #dirs = new Map<Id, Map<string, Id[]>>();
+  /** the inverse of each change, by "node@time" */
+  inverses = new Map<string, Inverse>();
+  /** snippets that can be undone, last first; and undos that can be redone */
+  undoable: number[] = [];
+  redoable: number[] = [];
+
+  #inverse(c: Change) {
+    const k = key(c);
+    switch (c.kind) {
+      case "write": {
+        const before = this.#values.get(c.node) ?? null;
+        try {
+          this.#values.set(c.node, applyPatches(before, c.patches));
+        } catch {
+          // the graph applied it; a copy that disagrees is the host's own trouble
+        }
+        if (!c.process) this.inverses.set(k, { op: "write", node: c.node, value: before });
+        break;
+      }
+      case "place":
+      case "unplace": {
+        // a placement with a value made the node it placed
+        if (c.kind === "place" && c.value !== undefined) this.#values.set(c.id, c.value);
+        const before = this.slotOf(c.node, c.name);
+        this.#setSlot(
+          c.node,
+          c.name,
+          c.kind === "place" ? placed(before, c.id, c.position) : before.filter((x) => x !== c.id),
+        );
+        if (c.process) break;
+        const was = before.indexOf(c.id);
+        // a position is a gap in the slot as it is: one moved earlier goes back past its old place
+        const now = this.slotOf(c.node, c.name).indexOf(c.id);
+        this.inverses.set(
+          k,
+          c.kind === "place" && was < 0
+            ? { op: "unplace", parent: c.node, name: c.name, id: c.id }
+            : {
+              op: "place",
+              parent: c.node,
+              name: c.name,
+              id: c.id,
+              position: Math.max(0, now >= 0 && now < was ? was + 1 : was),
+            },
+        );
+        break;
+      }
+    }
+  }
+
+  /** Code that reverses a snippet's changes from outside, last first. */
+  inverseOf(n: number): string | undefined {
+    const s = this.snippets[n - 1];
+    if (!s?.times.length) return;
+    const lines: string[] = [];
+    for (const t of [...s.times].reverse()) {
+      const c = [...this.changes.values()].find((x) => x.time === t);
+      const inv = c && this.inverses.get(key(c));
+      if (!inv) continue;
+      if (inv.op === "write") lines.push(`write(${J(inv.node)}, ${J(inv.value)})`);
+      else if (inv.op === "unplace") {
+        lines.push(`unplace(${J(inv.parent)}, ${J(inv.name)}, ${J(inv.id)})`);
+      } else lines.push(`place(${J(inv.parent)}, ${J(inv.name)}, ${J(inv.id)}, ${inv.position})`);
+    }
+    if (!lines.length) return;
+    return `because({ undo: ${n} }, () => batch(() => {\n${
+      lines.map((l) => "  " + l).join("\n")
+    }\n}))`;
+  }
+
+  undo(): Snippet | undefined {
+    const n = this.undoable.pop();
+    if (n === undefined) return;
+    const code = this.inverseOf(n);
+    if (!code) return this.undo();
+    const s = this.run(code, `undo snippet-${n}`, "undo");
+    if (s.ok) this.redoable.push(s.n);
+    return s;
+  }
+
+  redo(): Snippet | undefined {
+    const n = this.redoable.pop();
+    if (n === undefined) return;
+    const code = this.inverseOf(n);
+    if (!code) return;
+    const s = this.run(code, `redo (undo snippet-${n})`, "redo");
+    if (s.ok) this.undoable.push(s.n);
+    return s;
+  }
+
+  // --- the host's copy of the graph, and the addresses it finds in it ---
+
+  /** the change at each time: times in one graph are unique */
+  #byTime = new Map<number, Change>();
+  /** how many changes there have been: what is worked out from the copy is kept until the next */
+  #t = 0;
+  #kept: { t: number; [k: string]: unknown } = { t: -1 };
+
+  #keep<T>(name: string, make: () => T): T {
+    if (this.#kept.t !== this.#t) this.#kept = { t: this.#t };
+    if (!(name in this.#kept)) this.#kept[name] = make();
+    return this.#kept[name] as T;
+  }
+
+  /** What a walk reads of the host's copy: whether a node is here, and its slots. */
+  #view: View = {
+    here: (id) => this.made.has(id),
+    slot: (id, name) => this.slotOf(id, name),
+  };
+
+  #setSlot(node: Id, name: string, ids: Id[]) {
+    let d = this.#dirs.get(node);
+    if (!d) this.#dirs.set(node, d = new Map());
+    // a slot with no ids in it is gone
+    if (ids.length) d.set(name, ids);
+    else d.delete(name);
+  }
+
+  /** The change made at a time, whichever node it was made to. */
+  at(time: number): Change | undefined {
+    return this.#byTime.get(time);
+  }
+
+  /** A node's value, as the host's copy has it, read by nothing; undefined if it is not here. */
+  valueOf(node: Id): Json | undefined {
+    return this.#values.has(node) ? this.#values.get(node) : undefined;
+  }
+
+  /** The ids in one of a node's slots, as the host's copy has them. */
+  slotOf(node: Id, name: string): Id[] {
+    return this.#dirs.get(node)?.get(name) ?? [];
+  }
+
+  /** A node's directory, as the host's copy has it: [name, ids] in code point order. */
+  slotsOf(node: Id): [string, Id[]][] {
+    return [...(this.#dirs.get(node) ?? [])]
+      .map(([name, ids]): [string, Id[]] => [name, [...ids]])
+      .sort(([a], [b]) => byCodePoint(a, b));
+  }
+
+  /** A step of a route: a node in a parent's slot, at its position there. */
+  step(parent: Id, name: string, node: Id): Step {
+    return { parent, name, node, position: Math.max(0, this.slotOf(parent, name).indexOf(node)) };
+  }
+
+  /**
+   * The addresses from the root that the host's copy has, shortest first, as
+   * the graph walks them: each name takes the first node in its slot that is
+   * here and has the next name. reach is, for each node an address reaches,
+   * the shortest; list is, for each node in a slot an address selects, the
+   * shortest such address, whose listing, a union, has that node's slots.
+   */
+  #addresses(): { reach: Map<Id, string[]>; list: Map<Id, string[]> } {
+    return this.#keep("addresses", () => {
+      const reach = new Map<Id, string[]>([[ROOT, []]]);
+      const list = new Map<Id, string[]>([[ROOT, []]]);
+      const seen = new Set<string>();
+      const queue: string[][] = [[]];
+      while (queue.length) {
+        const at = queue.shift()!;
+        const names = new Set<string>();
+        for (const m of members(this.#view, ROOT, at)) {
+          for (const [n] of this.#dirs.get(m.node) ?? []) names.add(n);
+        }
+        for (const n of [...names].sort(byCodePoint)) {
+          const next = [...at, n];
+          const w = walk(this.#view, ROOT, next);
+          const last = w.route[w.route.length - 1];
+          if (w.node === undefined || !last) continue;
+          const k = J([last.parent, n]);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          if (!reach.has(w.node)) reach.set(w.node, next);
+          for (const id of this.slotOf(last.parent, n)) {
+            if (this.made.has(id) && !list.has(id)) list.set(id, next);
+          }
+          queue.push(next);
+        }
+      }
+      return { reach, list };
+    });
+  }
+
+  /**
+   * An address from the root that reaches the node: the route's names, if
+   * they reach it, or else the shortest. Undefined when none does: a node
+   * placed nowhere the root reaches, or only behind others in its slots.
+   */
+  addressOf(node: Id, route?: readonly { name: string }[]): string[] | undefined {
+    if (route) {
+      const names = route.map((s) => s.name);
+      if (walk(this.#view, ROOT, names).node === node) return names;
+    }
+    return this.#addresses().reach.get(node);
+  }
+
+  /** The address of a node, or an error saying why there is none. */
+  #need(node: Id | Address): Address {
+    if (typeof node !== "string") return node;
+    const address = this.addressOf(node);
+    if (address) return address;
+    throw new Error(
+      this.made.has(node)
+        ? `no address from the root reaches ${
+          J(node)
+        }: it is placed nowhere the root reaches, or only behind another node in its slots (CORE.tex: mount it under a name of its own)`
+        : `${J(node)} is not here: no node has that id`,
+    );
+  }
+
+  // --- what programs threw, for the editor to show where ---
+
+  /** the last error each process's program threw, with the line, while it lasts */
+  thrown = new Map<
+    Id,
+    { part: "compute" | "effect"; code: string; message: string; line?: number }
+  >();
 
   #record(r: Run) {
     const list = this.records.get(r.process) ?? [];
@@ -205,13 +514,16 @@ export class World {
   /** Subscriptions the inspector made, by node: what each has received. */
   subs = new Map<Id, { sub: number; events: Event[] }>();
 
-  /** Subscribes to a node as the acting agent; protect checks it like any operation. */
+  /**
+   * Subscribes to a node as the acting agent, by an address that reaches it;
+   * protect checks it like any operation. It follows the address from then on.
+   */
   subscribe(node: Id): Problem | undefined {
     try {
       const entry = { sub: 0, events: [] as Event[] };
       entry.sub = this.driver.subscribe({
         agent: this.agent,
-        node,
+        address: this.#need(node),
         send: (e) => {
           entry.events.push(e);
           this.bump();
@@ -251,85 +563,157 @@ export class World {
     return this.seeAll ? this.bare : this.driver;
   }
 
-  read(node: Id): { value: Json } | { absent: true } | { refused: string } {
+  /**
+   * A node's value, read by an address that reaches it: the route's, if it
+   * does, or the shortest. A node no address reaches reads as nothing.
+   */
+  read(node: Id, route?: readonly Step[]): Reading {
+    const address = this.addressOf(node, route);
+    if (!address) return { items: [] };
     try {
-      return this.view.read({ agent: this.agent, node });
+      const items = this.view.read({ agent: this.agent, address });
+      return items.length ? { items, value: items[0].value, address } : { items, address };
     } catch (e) {
       return { refused: problem(e).why };
     }
   }
 
-  data(node: Id): Json | undefined {
+  /**
+   * The node's own directory, as [name, ids] in code point order. Where the
+   * address selects a slot of several nodes, the graph lists their union;
+   * this keeps the slots of the node asked for.
+   */
+  directory(node: Id, route?: readonly Step[]): [string, Id[]][] | { refused: string } | undefined {
+    const address = this.addressOf(node, route) ?? this.#addresses().list.get(node);
+    if (!address) return undefined;
     try {
-      const d = this.view.data({ agent: this.agent, node });
-      return "data" in d ? d.data : undefined;
+      const d = this.view.directory({ agent: this.agent, address });
+      if (!("directory" in d)) return undefined;
+      const own: [string, Id[]][] = [];
+      for (const [name, items] of d.directory) {
+        const ids = items.filter((i) => slotNode(i) === node).map((i) => i.id);
+        if (ids.length) own.push([name, ids]);
+      }
+      return own;
+    } catch (e) {
+      return { refused: problem(e).why };
+    }
+  }
+
+  /** Every slot each node is placed in, from the host's copy, beneath protect. */
+  placements(): Map<Id, { parent: Id; name: string; index: number }[]> {
+    return this.#keep("placements", () => {
+      const where = new Map<Id, { parent: Id; name: string; index: number }[]>();
+      for (const parent of this.made.keys()) {
+        for (const [name, ids] of this.slotsOf(parent)) {
+          ids.forEach((id, index) => {
+            where.set(id, [...(where.get(id) ?? []), { parent, name, index }]);
+          });
+        }
+      }
+      return where;
+    });
+  }
+
+  /** A process node is a node with a compute slot (DRIVER.tex). */
+  isProcess(node: Id): boolean {
+    return this.slotOf(node, "compute").length > 0;
+  }
+
+  /**
+   * The processes the driver runs: its walk from the root, beneath protect,
+   * depth first, names in code point order, as an address walks: where a slot
+   * holds several nodes, their names are the union, and under each name the
+   * first member that has it. Program slots are not walked, and no node is
+   * entered twice. Each runs where it was reached.
+   */
+  running(): Map<Id, Running> {
+    return this.#keep("running", () => {
+      const reached = new Map<Id, Running>();
+      const seen = new Set<Id>([ROOT]);
+      const enter = (members: Id[], cwd: string[], route: Step[]) => {
+        const names = new Set<string>();
+        for (const m of members) for (const [n] of this.#dirs.get(m) ?? []) names.add(n);
+        for (const name of [...names].sort(byCodePoint)) {
+          if (name === "compute" || name === "effect") continue;
+          const owner = members.find((m) => this.slotOf(m, name).length > 0)!;
+          const slot = this.slotOf(owner, name);
+          const here = slot.filter((id) => this.made.has(id));
+          if (!here.length || seen.has(here[0])) continue;
+          seen.add(here[0]);
+          const to = [...route, {
+            parent: owner,
+            name,
+            node: here[0],
+            position: slot.indexOf(here[0]),
+          }];
+          if (this.isProcess(here[0])) {
+            reached.set(here[0], { cwd, name, parent: owner, route: to });
+          }
+          enter(here, [...cwd, name], to);
+        }
+      };
+      enter([ROOT], [], []);
+      return reached;
+    });
+  }
+
+  /** The node a run's read reached: the last of its route, or, with none, where it started. */
+  readNode(process: Id, x: ReadEntry): Id | undefined {
+    const last = x.route[x.route.length - 1];
+    if (last) return last.node;
+    const p = this.running().get(process);
+    if (!p) return undefined;
+    try {
+      const { root, up } = parseAddress(x.address);
+      const base = root ? [] : p.cwd;
+      return walk(this.#view, ROOT, base.slice(0, base.length - up)).node;
     } catch {
       return undefined;
     }
   }
 
-  /** The node's directory, as [name, ids] in code point order. */
-  directory(node: Id): [string, Id[]][] | { refused: string } | undefined {
-    try {
-      const d = this.view.directory({ agent: this.agent, node });
-      return "directory" in d ? d.directory : undefined;
-    } catch (e) {
-      return { refused: problem(e).why };
-    }
-  }
-
-  /** Every slot each node is placed in, read beneath protect. */
-  placements(): Map<Id, { parent: Id; name: string; index: number }[]> {
-    const where = new Map<Id, { parent: Id; name: string; index: number }[]>();
-    for (const parent of this.made.keys()) {
-      const d = this.bare.directory({ agent: "host", node: parent });
-      if (!("directory" in d)) continue;
-      for (const [name, ids] of d.directory) {
-        ids.forEach((id, index) => {
-          where.set(id, [...(where.get(id) ?? []), { parent, name, index }]);
-        });
+  /**
+   * A lookup from the directory the route's last node is in, as the acting
+   * agent: each step an ordinary read of one slot, nearest first, as the graph
+   * makes them, to show what was searched; then the lookup itself.
+   */
+  lookup(name: string, route: readonly Step[]): Found {
+    const place = route.slice(0, -1).map((s) => s.name);
+    const as = { agent: this.agent, place };
+    const searched: Searched[] = [];
+    for (let k = 0; k <= place.length; k++) {
+      const node = walk(this.#view, ROOT, place.slice(0, place.length - k)).node;
+      const address = Array.from({ length: k }, () => "..");
+      try {
+        const d = this.view.directory({ ...as, address, name });
+        const items = "items" in d ? d.items : [];
+        let saw: number | null = null;
+        for (const i of items) if (saw === null || i.change.time > saw) saw = i.change.time;
+        if (node !== undefined) searched.push({ node, saw });
+        if (items.length) break;
+      } catch (e) {
+        if (!(e instanceof Refused)) throw e;
+        if (node !== undefined) searched.push({ node, refused: true });
+        break;
       }
     }
-    return where;
-  }
-
-  isProcess(node: Id): boolean {
-    const m = this.made.get(node);
-    const d = m && m.kind === "make" ? m.data : undefined;
-    return typeof d === "object" && d !== null && !Array.isArray(d) && "path" in d;
-  }
-
-  /** The processes the driver runs: the walk of PROTOCOL.tex, beneath protect. */
-  running(): Set<Id> {
-    const seen = new Set<Id>([ROOT]);
-    const out = new Set<Id>();
-    const go = (node: Id) => {
-      const d = this.bare.directory({ agent: "host", node });
-      if (!("directory" in d)) return;
-      for (const [name, ids] of d.directory) {
-        if (name === "compute" || name === "effect") continue;
-        for (const id of ids) {
-          if (seen.has(id) || !this.isProcess(id)) continue;
-          seen.add(id);
-          out.add(id);
-          go(id);
-        }
-      }
-    };
-    go(ROOT);
-    return out;
+    const items = this.view.lookup({ ...as, name });
+    return { searched, found: items.map((i) => i.id), items };
   }
 
   // --- the workspace: every act from outside is a snippet ---
 
-  /** The host interface for snippets: fills in the agent, the cause and the site. */
+  /**
+   * The host interface for snippets: fills in the agent and the cause, which
+   * is the snippet's site, unless because() gave another.
+   */
   host(): Driver & { [op: string]: unknown } {
     const d = this.driver;
     const fill = <T extends object>(op: T) => {
       const s = this.#snippet;
       const out: Record<string, unknown> = { agent: s?.agent ?? this.agent, ...op };
-      if (!("site" in op)) out.site = siteHere();
-      if (s?.cause !== undefined && !("cause" in op)) out.cause = s.cause;
+      if (!("cause" in op)) out.cause = s?.cause !== undefined ? s.cause : siteHere();
       return out as T;
     };
     const change = <T extends object>(f: (op: T) => Settled) => (op: T) => {
@@ -341,12 +725,10 @@ export class World {
       f({ agent: this.#snippet?.agent ?? this.agent, ...op });
     return {
       ...d,
-      make: change(d.make),
       write: change(d.write),
       place: change(d.place),
       unplace: change(d.unplace),
       read: acting(d.read),
-      data: acting(d.data),
       directory: acting(d.directory),
       lookup: acting(d.lookup),
       fire: (op) => {
@@ -363,99 +745,112 @@ export class World {
     } as Driver & { [op: string]: unknown };
   }
 
-  /** The words a snippet can use, besides api. */
+  /**
+   * The words a snippet can use, besides api. A word names a node by its id,
+   * or by an address; the host turns an id into an address from the root that
+   * reaches it, from its own copy of the graph.
+   */
   vocabulary() {
     const api = this.host();
     const has = (id: Id) => this.made.has(id);
-    const value = (r: { value: Json } | { absent: true }) => "value" in r ? r.value : undefined;
+    const at = (node: Id | Address) => this.#need(node);
+    const value = (items: ValueItem[]) => items.length ? items[0].value : undefined;
     const words = {
       api,
       /**
-       * Makes a node by placing it, as CORE.tex has it: the making is its first
-       * change and the placement follows. An id the graph has is placed once more.
+       * Makes a node by placing it with its value, as CORE.tex has it: one
+       * change, the parent's and the node's first. An id the graph has is
+       * placed once more.
        */
-      make: (parent: Id, name: string, id: Id, value: Json = null, data?: Json) =>
-        made(api, has, parent, name, id, value, data),
-      write: (node: Id, value: Json) => api.write({ node, patches: [{ type: "snapshot", value }] }),
-      patch: (node: Id, ...patches: Patch[]) => api.write({ node, patches }),
-      splice: (node: Id, path: (string | number)[], from: number, to: number, value?: Json) =>
+      make: (parent: Id | Address, name: string, id: Id, value: Json = null) =>
+        made(api, has, at(parent), name, id, value),
+      write: (node: Id | Address, value: Json) =>
+        api.write({ address: at(node), patches: [{ type: "snapshot", value }] }),
+      patch: (node: Id | Address, ...patches: Patch[]) => api.write({ address: at(node), patches }),
+      splice: (
+        node: Id | Address,
+        path: (string | number)[],
+        from: number,
+        to: number,
+        value?: Json,
+      ) =>
         api.write({
-          node,
+          address: at(node),
           patches: [
             value === undefined
               ? { type: "splice", path, range: [from, to] }
               : { type: "splice", path, range: [from, to], value },
           ],
         }),
-      set: (node: Id, path: (string | number)[], key: string, value?: Json) =>
+      set: (node: Id | Address, path: (string | number)[], key: string, value?: Json) =>
         api.write({
-          node,
+          address: at(node),
           patches: [
             value === undefined ? { type: "set", path, key } : { type: "set", path, key, value },
           ],
         }),
-      place: (parent: Id, name: string, id: Id, position?: number) =>
-        api.place(position === undefined ? { parent, name, id } : { parent, name, id, position }),
-      unplace: (parent: Id, name: string, id: Id) => api.unplace({ parent, name, id }),
-      read: (node: Id) => value(api.read({ node })),
-      data: (node: Id) => {
-        const d = api.data({ node });
-        return "data" in d ? d.data : undefined;
+      place: (parent: Id | Address, name: string, id: Id, position?: number) =>
+        api.place(
+          position === undefined
+            ? { address: at(parent), name, id }
+            : { address: at(parent), name, id, position },
+        ),
+      unplace: (parent: Id | Address, name: string, id: Id) =>
+        api.unplace({ address: at(parent), name, id }),
+      /** A node's value: the first item's; undefined if no address reaches it. */
+      read: (node: Id | Address) => {
+        const address = typeof node === "string" ? this.addressOf(node) : node;
+        return address ? value(api.read({ address })) : undefined;
       },
-      dir: (node: Id, name?: string) => {
-        const d = api.directory(name === undefined ? { node } : { node, name });
-        if ("absent" in d) return undefined;
-        return "slot" in d ? d.slot : Object.fromEntries(d.directory);
+      /** A node's own slots: with a name, its ids; without, {name: ids}. */
+      dir: (node: Id | Address, name?: string) => {
+        const address = typeof node === "string" ? this.addressOf(node) : node;
+        if (!address) return undefined;
+        const d = api.directory(name === undefined ? { address } : { address, name });
+        const mine = (items: SlotItem[]) =>
+          items.filter((i) => typeof node !== "string" || slotNode(i) === node).map((i) => i.id);
+        if ("items" in d) return mine(d.items);
+        return Object.fromEntries(
+          d.directory.map(([n, items]) => [n, mine(items)]).filter(([, ids]) => ids.length),
+        );
       },
-      lookup: (name: string, path: Path) => api.lookup({ name, path }).found,
-      /** A path through these nodes, each placed in the one before: path("root", "home", "note"). */
-      path: (...ids: Id[]): Step[] => {
-        const steps: Step[] = [];
-        for (let i = 1; i < ids.length; i++) {
-          const d = this.bare.directory({ agent: "host", node: ids[i - 1] });
-          const slot = "directory" in d
-            ? d.directory.find(([, xs]) => xs.includes(ids[i]))
-            : undefined;
-          if (!slot) throw new Error(`${J(ids[i])} is not placed in ${J(ids[i - 1])}`);
-          steps.push({ parent: ids[i - 1], name: slot[0], node: ids[i] });
-        }
-        return steps;
-      },
+      /** The ids a lookup of name finds, from a place: names from the root. */
+      lookup: (name: string, place?: string[]) =>
+        api.lookup(place === undefined ? { name } : { name, place }).map((i) => i.id),
       /** A program node, JS source or a list of steps, made in a parent's slot of its name. */
-      program: (parent: Id, id: Id, code: Json) => made(api, has, parent, id, id, code),
+      program: (parent: Id | Address, id: Id, code: Json) =>
+        made(api, has, at(parent), id, id, code),
       /**
-       * A process, made in its programs' slots and placed in parent's slot name.
-       * Placing it under the root or a process starts it, so it is all one batch.
-       * Its place is where it is put, so its lookups search parent and up,
-       * unless a path is given. Code that is not a program's id is made into
+       * A process: made by placing it in parent's slot name, then its programs
+       * in its own slots. A process node the root reaches runs where it sits,
+       * so its lookups search parent and up; it is all one batch, so it starts
+       * with its programs there. Code that is not a program's id is made into
        * the process's own slot.
        */
       process: (
-        parent: Id,
+        parent: Id | Address,
         name: string,
         id: Id,
-        o: { compute: Json; effect?: Json; path?: Path; value?: Json },
+        o: { compute: Json; effect?: Json; value?: Json },
       ) => {
         api.batch(() => {
-          const path = o.path ?? [{ parent, name, node: id }];
-          api.make({ id, value: o.value ?? null, data: { path: path as unknown as Json } });
+          made(api, has, at(parent), name, id, o.value ?? null);
           for (const part of ["compute", "effect"] as const) {
             const code = o[part];
             if (code === undefined) continue;
             if (typeof code === "string" && this.made.has(code)) {
-              api.place({ parent: id, name: part, id: code });
+              api.place({ address: at(id), name: part, id: code });
             } else {
-              made(api, has, id, part, `${id}.${part}`, code);
+              made(api, has, at(id), part, `${id}.${part}`, code);
             }
           }
-          api.place({ parent, name, id });
         });
         return id;
       },
-      start: (id: Id, under: Id = ROOT, name: string = id) =>
-        api.place({ parent: under, name, id }),
-      stop: (id: Id, under: Id = ROOT, name: string = id) =>
-        api.unplace({ parent: under, name, id }),
+      start: (id: Id, under: Id | Address = ROOT, name: string = id) =>
+        api.place({ address: at(under), name, id }),
+      stop: (id: Id, under: Id | Address = ROOT, name: string = id) =>
+        api.unplace({ address: at(under), name, id }),
       fire: (process: Id, handler: string, input?: Json) =>
         api.fire(input === undefined ? { process, handler } : { process, handler, input }),
       batch: (fn: () => void) => api.batch(fn),
@@ -487,7 +882,7 @@ export class World {
   }
 
   /** Runs code as a snippet: its changes carry its site. Returns the snippet. */
-  run(code: string, label?: string): Snippet {
+  run(code: string, label?: string, kind: "act" | "undo" | "redo" | "boot" = "act"): Snippet {
     const n = this.snippets.length + 1;
     const snippet: Snippet = { n, code, label, agent: this.agent, times: [] };
     this.snippets.push(snippet);
@@ -511,6 +906,11 @@ export class World {
       this.#snippet = outer;
       this.bump();
     }
+    // a new act can be undone, and makes what was undone no longer redoable
+    if (!outer && snippet.times.length && kind === "act") {
+      this.undoable.push(n);
+      this.redoable = [];
+    }
     return snippet;
   }
 
@@ -524,19 +924,87 @@ export class World {
     return this.run(body, label);
   }
 
+  // --- boot images: the graph as code that rebuilds it ---
+
+  /**
+   * A boot image: a snippet that, run in a fresh graph, makes everything the
+   * root reaches, by placing it, in one batch so nothing runs until it is all
+   * there. A node in several places is made in the first and placed in the
+   * rest. Processes' values are left out: their computes give them again.
+   * What the root does not reach cannot be addressed (CORE.tex), so it is not
+   * here. It reads the host's copy of the graph, beneath protect.
+   */
+  image(): string {
+    const lit = (v: Json) => {
+      if (typeof v === "string" && v.includes("\n") && !/[`]|\$\{|\\$/.test(v)) {
+        return "String.raw`" + v + "`";
+      }
+      return JSON.stringify(
+        v,
+        null,
+        v !== null && typeof v === "object" && JSON.stringify(v).length > 70 ? 2 : 0,
+      );
+    };
+    const lines: string[] = [];
+    // the root's value starts null, as the graph is made
+    const rootValue = this.valueOf(ROOT);
+    if (rootValue !== undefined && rootValue !== null) {
+      lines.push(`write(${J(ROOT)}, ${lit(rootValue)})`);
+    }
+    const made = new Set<Id>([ROOT]);
+    const queue: Id[] = [ROOT];
+    while (queue.length) {
+      const parent = queue.shift()!;
+      for (const [name, ids] of this.slotsOf(parent)) {
+        for (const id of ids) {
+          if (made.has(id) || !this.made.has(id)) {
+            lines.push(`place(${J(parent)}, ${J(name)}, ${J(id)})`);
+            continue;
+          }
+          made.add(id);
+          queue.push(id);
+          const value = this.isProcess(id) ? null : this.valueOf(id) ?? null;
+          lines.push(`make(${J(parent)}, ${J(name)}, ${J(id)}, ${lit(value)})`);
+        }
+      }
+    }
+    return [
+      "// a boot image: run in a fresh graph, it makes everything the root reaches",
+      "batch(() => {",
+      ...lines.map((l) => "  " + l.replaceAll("\n", "\n  ")),
+      "})",
+    ].join("\n");
+  }
+
   // --- what the stage and the loader need ---
 
+  /**
+   * The element a process's effect draws on. A process started by another
+   * draws inside its starter's screen, so the stage nests as the process tree
+   * does. The effect gets the screen's own part; its children go beside it.
+   */
   screenFor(process: Id): HTMLElement {
-    let el = this.screens.get(process);
-    if (!el) {
-      el = document.createElement("div");
-      el.className = "screen";
-      el.dataset.process = process;
-      this.screens.set(process, el);
-      this.stage.append(el);
+    let box = this.screens.get(process);
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "screen";
+      box.dataset.process = process;
+      const own = document.createElement("div");
+      own.className = "own";
+      const kids = document.createElement("div");
+      kids.className = "kids";
+      box.append(own, kids);
+      this.screens.set(process, box);
+      const starter = (this.placements().get(process) ?? [])
+        .map((p) => p.parent)
+        .find((p) => p !== ROOT && this.isProcess(p));
+      const home = starter
+        ? this.screenFor(starter).parentElement!.querySelector(":scope > .kids")!
+        : this.stage;
+      home.append(box);
       this.bump();
     }
-    return el;
+    return box.querySelector(":scope > .own") as HTMLElement;
   }
 
   /** Fires a handler from the world, such as a click on a screen, as the acting agent. */
@@ -552,6 +1020,27 @@ export class World {
       return r;
     } catch (e) {
       this.#push({ t: "error", error: problem(e) });
+    }
+  }
+
+  /** Runs a program, and keeps what it threw, with the line, for the editor. */
+  #catching<T>(process: Id, part: "compute" | "effect", code: string, run: () => T): T {
+    try {
+      const v = run();
+      const t = this.thrown.get(process);
+      if (t?.part === part) this.thrown.delete(process);
+      return v;
+    } catch (e) {
+      if (!(e instanceof ErmineError)) {
+        const m = (e as Error)?.stack?.match(new RegExp(`ermine:${part}-\\d+:(\\d+):\\d+`));
+        this.thrown.set(process, {
+          part,
+          code,
+          message: (e as Error)?.message ?? String(e),
+          line: m ? Number(m[1]) - 1 : undefined,
+        });
+      }
+      throw e;
     }
   }
 
@@ -581,32 +1070,33 @@ export class World {
       const names = [
         "ctx",
         "read",
-        "data",
         "dir",
         "lookup",
         "find",
         "where",
         "self",
-        "path",
+        "cwd",
+        "name",
         "changes",
         "PENDING",
       ];
       const fn = this.#compile(code, part, names);
       const compute: Compute = (ctx) => {
         const r = readers(ctx.api);
-        const v = fn(
-          ctx,
-          r.read,
-          r.data,
-          r.dir,
-          r.lookup,
-          r.find,
-          r.where,
-          ctx.self,
-          ctx.path,
-          ctx.changes,
-          PENDING,
-        );
+        const v = this.#catching(ctx.self, "compute", code, () =>
+          fn(
+            ctx,
+            r.read,
+            r.dir,
+            r.lookup,
+            r.find,
+            r.where,
+            ctx.self,
+            ctx.cwd,
+            ctx.name,
+            ctx.changes,
+            PENDING,
+          ));
         return v as Json;
       };
       return compute;
@@ -616,6 +1106,8 @@ export class World {
       "value",
       "previous",
       "self",
+      "cwd",
+      "name",
       "write",
       "patch",
       "make",
@@ -626,6 +1118,8 @@ export class World {
       "fire",
       "screen",
       "h",
+      "start",
+      "stop",
     ];
     const fn = this.#compile(code, part, names);
     const effect: Effect = (ctx) => {
@@ -641,22 +1135,50 @@ export class World {
       const fire = (name: string, input?: Json) =>
         queueMicrotask(() => this.fireFromWorld(ctx.self, name, input));
       const screen = () => this.screenFor(ctx.self);
-      return fn(
-        ctx,
-        ctx.value,
-        ctx.previous,
-        ctx.self,
-        w.write,
-        w.patch,
-        w.make,
-        w.place,
-        w.unplace,
-        later,
-        handler,
-        fire,
-        screen,
-        h,
-      ) as void | (() => void);
+      /** this process's node, from the directory it runs in */
+      const me = [ctx.name];
+      /**
+       * Starts a child process: places it under this one, in slot name, where
+       * it runs. Made the first time, by placing it, then its programs in its
+       * own slots; placed again after that.
+       */
+      const start = (
+        name: string,
+        id: Id,
+        o: { compute: Json; effect?: Json; value?: Json },
+      ) => {
+        if (has(id)) return w.place(me, name, id);
+        const making = w.make(me, name, id, o.value ?? null);
+        for (const part of ["compute", "effect"] as const) {
+          const code = o[part];
+          if (code === undefined) continue;
+          if (typeof code === "string" && has(code)) w.place([...me, name], part, code);
+          else w.make([...me, name], part, `${id}.${part}`, code);
+        }
+        return making;
+      };
+      const stop = (name: string, id: Id) => w.unplace(me, name, id);
+      return this.#catching(ctx.self, "effect", code, () =>
+        fn(
+          ctx,
+          ctx.value,
+          ctx.previous,
+          ctx.self,
+          ctx.cwd,
+          ctx.name,
+          w.write,
+          w.patch,
+          w.make,
+          w.place,
+          w.unplace,
+          later,
+          handler,
+          fire,
+          screen,
+          h,
+          start,
+          stop,
+        )) as void | (() => void);
     };
     return effect;
   }) as Load;
@@ -665,12 +1187,10 @@ export class World {
 /** The layer above the graph that tells the demo every change and record. */
 function watch(api: Interface, sink: { change(c: Change): void; record(r: Run): void }): Interface {
   return {
-    make: (op) => tap(api.make(op), sink),
     write: (op) => tap(api.write(op), sink),
     place: (op) => tap(api.place(op), sink),
     unplace: (op) => tap(api.unplace(op), sink),
     read: (op) => api.read(op),
-    data: (op) => api.data(op),
     directory: (op) => api.directory(op),
     lookup: (op) => api.lookup(op),
     subscribe: (op) => api.subscribe(op),
@@ -683,6 +1203,9 @@ function watch(api: Interface, sink: { change(c: Change): void; record(r: Run): 
       return r;
     },
     top: (t) => api.top(t),
+    cwd: api.cwd,
+    // protect learns the node an address reaches from the layer below
+    reach: api.reach,
   };
 }
 
@@ -704,62 +1227,69 @@ function siteHere(): Site {
   return { file: `snippet-${m[1]}`, line: Number(m[2]) - HEADER_LINES, column: Number(m[3]) };
 }
 
+/**
+ * A program's reads, by address from its place: the directory it runs in is
+ * [], and its own node is [name]. A read gives the value of its first item.
+ */
 function readers(api: Interface) {
+  /** The address a lookup found the name at, which reads straight back: ["..", "theme"]. */
+  const where = (name: string): Address | undefined => {
+    const first = api.lookup({ name })[0];
+    return first && (first.from as PathFrom).path;
+  };
+  const first = (items: ValueItem[]) => items.length ? items[0].value : undefined;
   return {
-    read: (node: Id) => {
-      const r = api.read({ node });
-      return "value" in r ? r.value : undefined;
+    read: (at: Address) => first(api.read({ address: at })),
+    dir: (at: Address, name?: string) => {
+      const r = api.directory(name === undefined ? { address: at } : { address: at, name });
+      if ("items" in r) return r.items.map((i) => i.id);
+      return Object.fromEntries(r.directory.map(([n, items]) => [n, items.map((i) => i.id)]));
     },
-    data: (node: Id) => {
-      const r = api.data({ node });
-      return "data" in r ? r.data : undefined;
-    },
-    dir: (node: Id, name?: string) => {
-      const r = api.directory(name === undefined ? { node } : { node, name });
-      if ("absent" in r) return name === undefined ? undefined : [];
-      return "slot" in r ? r.slot : Object.fromEntries(r.directory);
-    },
-    lookup: (name: string) => api.lookup({ name }).found,
-    /** The id of the nearest node by that name, searching up the place. */
-    where: (name: string): Id | undefined => api.lookup({ name }).found[0],
+    lookup: (name: string) => api.lookup({ name }).map((i) => i.id),
+    /** The address of the nearest node by that name, searching up the place. */
+    where,
     /** The value of the nearest node by that name, or undefined. */
     find: (name: string): Json | undefined => {
-      const id = api.lookup({ name }).found[0];
-      if (id === undefined) return undefined;
-      const r = api.read({ node: id });
-      return "value" in r ? r.value : undefined;
+      const at = where(name);
+      if (at === undefined) return undefined;
+      return first(api.read({ address: at }));
     },
   };
 }
 
 /**
- * Makes a node and places it: a node is made by placing it. An id the graph
- * has is only placed. Whether it has it is the host's knowledge, since an
- * effect's interface cannot read, and an invalid make would end its run.
+ * Makes a node by placing it with its value: one change. An id the graph has
+ * is only placed. Whether it has it is the host's knowledge, since an
+ * effect's interface cannot read, and a value for an id the graph has is
+ * invalid, which would end its run.
  */
 function made(
   api: Interface,
   has: (id: Id) => boolean,
-  parent: Id,
+  parent: Address,
   name: string,
   id: Id,
   value: Json,
-  data?: Json,
 ) {
-  if (!has(id)) api.make(data === undefined ? { id, value } : { id, value, data });
-  return api.place({ parent, name, id });
+  return api.place(has(id) ? { address: parent, name, id } : { address: parent, name, id, value });
 }
 
+/** A program's writes, by address from its place. */
 function writers(api: Interface, has: (id: Id) => boolean) {
   return {
     api,
-    write: (node: Id, value: Json) => api.write({ node, patches: [{ type: "snapshot", value }] }),
-    patch: (node: Id, ...patches: Patch[]) => api.write({ node, patches }),
-    make: (parent: Id, name: string, id: Id, value: Json = null, data?: Json) =>
-      made(api, has, parent, name, id, value, data),
-    place: (parent: Id, name: string, id: Id, position?: number) =>
-      api.place(position === undefined ? { parent, name, id } : { parent, name, id, position }),
-    unplace: (parent: Id, name: string, id: Id) => api.unplace({ parent, name, id }),
+    write: (at: Address, value: Json) =>
+      api.write({ address: at, patches: [{ type: "snapshot", value }] }),
+    patch: (at: Address, ...patches: Patch[]) => api.write({ address: at, patches }),
+    make: (parent: Address, name: string, id: Id, value: Json = null) =>
+      made(api, has, parent, name, id, value),
+    place: (parent: Address, name: string, id: Id, position?: number) =>
+      api.place(
+        position === undefined
+          ? { address: parent, name, id }
+          : { address: parent, name, id, position },
+      ),
+    unplace: (parent: Address, name: string, id: Id) => api.unplace({ address: parent, name, id }),
   };
 }
 

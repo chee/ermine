@@ -3,10 +3,22 @@
 // rules protect asks, the lookup tester, and forms for making things.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { Found, Id } from "../../../src/mod.ts";
+import { Code } from "./editor.tsx";
+import type { Id } from "../../../src/mod.ts";
 import { Agent, Empty, literal, NodeLink } from "./bits.tsx";
-import { act, dock, type DockTab, draft, focus, lit, pointAt, selected, world } from "./state.ts";
-import { J, problem, ROOT, type Rule } from "./world.ts";
+import {
+  act,
+  dock,
+  type DockTab,
+  draft,
+  focus,
+  lit,
+  pointAt,
+  selected,
+  tall,
+  world,
+} from "./state.ts";
+import { type Found, J, problem, ROOT, type Rule } from "./world.ts";
 
 export function Dock() {
   world.version.value;
@@ -34,6 +46,14 @@ export function Dock() {
               : null}
           </button>
         ))}
+        <button
+          type="button"
+          class="dock-tab grow"
+          title={tall.value ? "give the dock back its room" : "give the dock most of the height"}
+          onClick={() => (tall.value = !tall.value)}
+        >
+          {tall.value ? "⤡" : "⤢"}
+        </button>
       </div>
       <div class="dock-body">
         <div class={`dock-page${dock.value === "workspace" ? "" : " hidden"}`}>
@@ -55,21 +75,10 @@ export function Dock() {
 function Workspace() {
   world.version.value;
   const [out, setOut] = useState<{ ok: boolean; text: string } | undefined>();
-  const ta = useRef<HTMLTextAreaElement>(null);
-  const gutter = useRef<HTMLDivElement>(null);
   const code = draft.value;
   const p = pointAt.value;
   const hot = p && world.snippets[p.n - 1]?.code === code ? p.line : undefined;
-  useEffect(() => {
-    if (hot && ta.current) {
-      const lh = parseFloat(getComputedStyle(ta.current).lineHeight) || 18;
-      ta.current.scrollTop = Math.max(0, (hot - 3) * lh);
-    }
-  }, [hot]);
-  const doIt = (print: boolean) => {
-    const t = ta.current!;
-    const sel = t.value.slice(t.selectionStart, t.selectionEnd);
-    const text = sel.trim() ? sel : t.value;
+  const doIt = (text: string, print: boolean) => {
     if (!text.trim()) return;
     const s = print ? world.print(text) : world.run(text);
     pointAt.value = undefined;
@@ -81,47 +90,22 @@ function Workspace() {
       );
     } else setOut({ ok: false, text: `✕ ${s.error?.kind}: ${s.error?.why}` });
   };
-  const lines = code.split("\n").length;
   return (
     <div class="workspace">
       <div class="ws-main">
         <div class="ws-editor">
-          <div class="gutter" ref={gutter}>
-            {Array.from(
-              { length: Math.max(lines, 1) },
-              (_, i) => <div key={i} class={`gl${hot === i + 1 ? " hot" : ""}`}>{i + 1}</div>,
-            )}
-          </div>
-          <textarea
-            ref={ta}
-            class="code ws-text"
-            spellcheck={false}
-            placeholder={`// do it with ⌘↵, print it with ⇧⌘↵. a selection runs alone.\nmake("root", "n", "n", 1)\nwrite("n", 2)\nread("n")`}
+          <Code
             value={code}
-            onInput={(e) => (draft.value = (e.target as HTMLTextAreaElement).value)}
-            onScroll={(e) => {
-              if (gutter.current) {gutter.current.scrollTop =
-                  (e.target as HTMLTextAreaElement).scrollTop;}
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                doIt(e.shiftKey);
-              }
-              if (e.key === "Tab") {
-                e.preventDefault();
-                const t = e.target as HTMLTextAreaElement;
-                t.setRangeText("  ", t.selectionStart, t.selectionEnd, "end");
-                draft.value = t.value;
-              }
-            }}
+            marks={hot ? [{ line: hot, cls: "hot" }] : []}
+            onChange={(t) => (draft.value = t)}
+            onRun={doIt}
           />
         </div>
         <div class="ws-bar">
-          <button type="button" class="primary" onClick={() => doIt(false)}>
+          <button type="button" class="primary" onClick={() => doIt(draft.value, false)}>
             do it <kbd>⌘↵</kbd>
           </button>
-          <button type="button" onClick={() => doIt(true)}>
+          <button type="button" onClick={() => doIt(draft.value, true)}>
             print it <kbd>⇧⌘↵</kbd>
           </button>
           <button
@@ -131,6 +115,7 @@ function Workspace() {
           >
             clear
           </button>
+          <span class="hint">a selection runs alone</span>
           <span class="ws-as">
             acting as <Agent agent={world.agent} />
           </span>
@@ -199,9 +184,7 @@ function Stage() {
 // --- protect ---
 
 const OPS = [
-  "make",
   "read",
-  "data",
   "directory",
   "lookup",
   "write",
@@ -378,9 +361,11 @@ function Lookup() {
   const [name, setName] = useState("theme");
   const [res, setRes] = useState<Found | { error: string } | undefined>();
   const route = selected.value?.route ?? [];
+  // the directory the selected node is in: where a process placed beside it runs
+  const place = route.slice(0, -1);
   const run = () => {
     try {
-      const r = world.view.lookup({ agent: world.agent, name, path: route });
+      const r = world.lookup(name, route);
       setRes(r);
       lit.value = {
         searched: r.searched.map((s) => s.node),
@@ -395,21 +380,21 @@ function Lookup() {
   return (
     <div class="lookup">
       <div class="protect-intro">
-        a process finds a node by name by searching the directories along its path, starting at the
-        parent of the last step and going up, taking the nearest slot with that name. the path here
-        is the route you took to the selected node in the browser.
+        a process finds a node by name by searching the directories along its place, starting in the
+        directory it sits in and going up, taking the nearest slot with that name. the place here is
+        the directory the selected node is in, by the route you took to it in the browser.
       </div>
       <div class="lookup-form">
-        <span class="muted">path</span>
+        <span class="muted">place</span>
         <span class="route">
-          {route.length
-            ? route.map((s, i) => (
+          {place.length
+            ? place.map((s, i) => (
               <>
                 {i ? <span class="crumb-sep">/</span> : null}
                 <span class="crumb">{s.name}</span>
               </>
             ))
-            : <span class="muted">[] — select a node by its route in the browser</span>}
+            : <span class="muted">the root — select a node by its route in the browser</span>}
         </span>
         <input
           class="code"
@@ -436,8 +421,15 @@ function Lookup() {
             </ol>
             <div class="sub-title">found</div>
             {res.found.length
-              ? res.found.map((x) => <NodeLink key={x} id={x} />)
-              : <Empty>no slot named {J(name)} along the path.</Empty>}
+              ? res.items.map((x, i) => (
+                <span key={`${x.id}#${i}`}>
+                  <NodeLink id={x.id} />
+                  {"path" in x.from
+                    ? <code class="muted">{x.from.path.join("/")}[{x.from.position}]</code>
+                    : null}
+                </span>
+              ))
+              : <Empty>no slot named {J(name)} along the place.</Empty>}
           </div>
         )
         : null}
@@ -448,15 +440,17 @@ function Lookup() {
 // --- make ---
 
 const COMPUTE_TEMPLATE = `// a compute only reads. it returns the process's value, or PENDING.
-// you have: find(name) and where(name), which look up from the process's place,
-// lookup(name), read(id), data(id), dir(id, name?), self, path, changes, ctx.api
+// you have: find(name), and where(name), the address a lookup found it at,
+// which look up from the process's place; lookup(name), read(address),
+// dir(address, name?), self, cwd, name, changes, ctx.api. an address is a list
+// of names from the directory it runs in, []; its own node is [name]
 return find("clicks")`;
 
 const EFFECT_TEMPLATE = `// an effect only writes. it runs when the driver wrote the value.
-// you have: value, previous, self, write(id, v), patch(id, ...patches),
-// make(parent, name, id, v), place, unplace, later (the lasting interface),
-// handler(name, fn), fire(name, input), screen() and h(tag, props, ...children).
-// return a cleanup if you like.
+// you have: value, previous, self, cwd, name, write(address, v),
+// patch(address, ...patches), make(address, name, id, v), place, unplace,
+// later (the lasting interface), handler(name, fn), fire(name, input),
+// screen() and h(tag, props, ...children). return a cleanup if you like.
 screen().replaceChildren(h("div", { class: "big" }, value))`;
 
 function Make() {
@@ -465,7 +459,6 @@ function Make() {
   const [name, setName] = useState("");
   const [id, setId] = useState("");
   const [value, setValue] = useState("");
-  const [data, setData] = useState("");
   const [pname, setPname] = useState("");
   const [compute, setCompute] = useState(COMPUTE_TEMPLATE);
   const [effect, setEffect] = useState(EFFECT_TEMPLATE);
@@ -474,13 +467,13 @@ function Make() {
   const [err, setErr] = useState<string>();
   // a node is made by placing it: into the selected node, or the root
   const parent: Id = sel && world.made.has(sel.id) ? sel.id : ROOT;
-  // a process runs once placed under the root or a process
-  const runner: Id = sel && world.isProcess(sel.id) ? sel.id : ROOT;
+  // a process runs where it sits, once the root reaches it: under the root or a
+  // process, or, with there, in the selected node, so its lookups search there
+  const runner: Id = there ? parent : sel && world.isProcess(sel.id) ? sel.id : ROOT;
   const makeNode = () => {
     if (!name) return setErr("a node is made by placing it: it needs a name in its parent");
-    const d = data.trim() ? ", " + literal(data) : "";
     const s = act(
-      `make(${J(parent)}, ${J(name)}, ${J(id || name)}, ${literal(value)}${d})`,
+      `make(${J(parent)}, ${J(name)}, ${J(id || name)}, ${literal(value)})`,
       "make: node",
     );
     setErr(s.ok ? undefined : s.error?.why);
@@ -490,7 +483,6 @@ function Make() {
     if (!pname) return setErr("a process needs a name");
     const lines = [
       `process(${J(runner)}, ${J(pname)}, ${J(pname)}, {`,
-      ...(there && sel ? [`  path: ${JSON.stringify(sel.route)},`] : []),
       `  compute: ${J(compute)},`,
       ...(withEffect ? [`  effect: ${J(effect)},`] : []),
       `})`,
@@ -519,22 +511,22 @@ function Make() {
         <label>name{input(name, setName, "its name in the slot")}</label>
         <label>id{input(id, setId, name || "defaults to the name")}</label>
         <label>value{input(value, setValue, 'JSON, or text: "hello", 1, {"a": 1}')}</label>
-        <label>fixed data{input(data, setData, "optional; never changes")}</label>
         <button type="button" class="primary" onClick={makeNode}>make</button>
         <div class="sub-title">reference</div>
         <div class="reference">
           <p>
             <b>workspace</b> — <code>api</code>{" "}
-            is the top of the stack, acting as you, with sites filled in. a node is made by placing
-            it.
+            is the top of the stack, acting as you, with sites filled in as causes. a node is made
+            by placing it. the graph is reached by address; a word names a node by its id or an
+            address, and the host turns an id into an address from the root that reaches it.
           </p>
           <code>
-            make(parent, name, id, value, data?) · write(id, v) · patch(id, ...patches) · splice(id,
-            path, from, to, v?) · set(id, path, key, v?) · place(parent, name, id, pos?) ·
-            unplace(parent, name, id) · read(id) · data(id) · dir(id, name?) · lookup(name, path) ·
-            path(...ids) · program(parent, id, code) · process(parent, name, id,{" "}
-            {"{"}compute, effect?, path?{"}"}) · start(id, under?, name?) · stop(id, under?, name?)
-            · fire(process, handler, input?) · batch(fn) · as(agent, fn) · because(cause, fn) ·
+            make(parent, name, id, value) · write(id, v) · patch(id, ...patches) · splice(id, path,
+            from, to, v?) · set(id, path, key, v?) · place(parent, name, id, pos?) · unplace(parent,
+            name, id) · read(id) · dir(id, name?) · lookup(name, place?) · program(parent, id, code)
+            · process(parent, name, id,{" "}
+            {"{"}compute, effect?{"}"}) · start(id, under?, name?) · stop(id, under?, name?) ·
+            fire(process, handler, input?) · batch(fn) · as(agent, fn) · because(cause, fn) ·
             PENDING
           </code>
         </div>
@@ -543,17 +535,17 @@ function Make() {
         <div class="sub-title">
           a process{" "}
           <span class="muted">
-            placed in <code>{runner}</code>, which starts it
+            placed in <code>{runner}</code>, where it runs
           </span>
         </div>
         <div class="inline">
           <label>name{input(pname, setPname, "its name and id")}</label>
           <label class="check">
             <input type="checkbox" checked={there} onChange={() => setThere(!there)} />
-            its place is {there && sel?.route.length
+            put it in the selected node, {there && sel?.route.length
               ? <code>{sel.route.map((s) => s.name).join("/")}</code>
-              : <code>where it is put</code>}
-            <span class="muted">(lookups search from there)</span>
+              : <code>{parent}</code>}
+            <span class="muted">(it runs there, and lookups search from there)</span>
           </label>
         </div>
         <div class="two">

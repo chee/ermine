@@ -17,7 +17,7 @@ import {
 } from "./bits.tsx";
 import { describe } from "./inspector.tsx";
 import { dock, draft, focus, pointAt, selected, world } from "./state.ts";
-import { type Entry, key } from "./world.ts";
+import { type Entry, key, siteOf } from "./world.ts";
 
 type Filter = "all" | "changes" | "runs" | "trouble" | "here";
 
@@ -47,7 +47,8 @@ function Transcript() {
         return e.t === "error" ||
           (e.t === "record" && (e.record.ending === "failed" || e.record.ending === "refused"));
       case "here":
-        return (e.t === "change" && e.change.node === here) ||
+        return (e.t === "change" && (e.change.node === here ||
+          (e.change.kind === "place" && e.change.value !== undefined && e.change.id === here))) ||
           (e.t === "record" && e.record.process === here) ||
           (e.t === "stopped" && e.process === here);
     }
@@ -96,7 +97,9 @@ function EntryRow({ e }: { e: Entry }) {
           <span class="entry-who">
             <Agent agent={c.agent} />
             {c.process ? <span class="via">◉ {c.process}</span> : null}
-            {c.site ? <span class="via">✎ {c.site.file}:{c.site.line}</span> : null}
+            {siteOf(c.cause)
+              ? <span class="via">✎ {siteOf(c.cause)!.file}:{siteOf(c.cause)!.line}</span>
+              : null}
           </span>
         </div>
       );
@@ -215,17 +218,17 @@ function WhyChange({ r }: { r: ChangeRef }) {
           </div>
         )
         : null}
-      {c.kind === "make" && "data" in c
+      {c.kind === "place" && c.value !== undefined
         ? (
           <div class="kv">
-            <span class="k">data</span>
+            <span class="k">made</span>
             <span class="v">
-              <JsonView value={c.data} />
+              <NodeLink id={c.id} /> <JsonView value={c.value} />
             </span>
           </div>
         )
         : null}
-      {"cause" in c
+      {"cause" in c && !siteOf(c.cause)
         ? (
           <div class="kv">
             <span class="k">cause</span>
@@ -279,12 +282,12 @@ function WhyChange({ r }: { r: ChangeRef }) {
                     </div>
                   )
                   : null}
-                {ch?.site
+                {siteOf(ch?.cause)
                   ? (
                     <div class="origin">
-                      <SiteLink site={ch.site} />
-                      {siteLine(ch.site)
-                        ? <pre class="code-line">{siteLine(ch.site)!.trim()}</pre>
+                      <SiteLink site={siteOf(ch?.cause)!} />
+                      {siteLine(siteOf(ch?.cause)!)
+                        ? <pre class="code-line">{siteLine(siteOf(ch?.cause)!)!.trim()}</pre>
                         : null}
                     </div>
                   )
@@ -314,6 +317,10 @@ function WhyRun({ process, run }: { process: string; run: number }) {
   world.version.value;
   const r = (world.records.get(process) ?? []).find((x) => x.run === run);
   if (!r) return <Empty>no record of {process} run {run}.</Empty>;
+  // each read with the node it reached; values and directories apart, as before
+  const entries = r.reads.map((x) => ({ x, node: world.readNode(r.process, x) }));
+  const reads = entries.filter((e) => e.x.op === "read");
+  const directories = entries.filter((e) => e.x.op === "directory");
   /** The node's latest change, if it is newer than what the run saw. */
   const since = (node: string, saw: number | null) => {
     const latest = world.latest.get(node);
@@ -326,8 +333,8 @@ function WhyRun({ process, run }: { process: string; run: number }) {
           <span class="k">{label}</span>
           <span class="v">
             <NodeLink id={p.node} />
-            {"saw" in p ? <span class="at">saw @{p.saw}</span> : null}
-            {"absent" in p ? <span class="muted">absent</span> : null}
+            {"saw" in p && p.saw !== null ? <span class="at">saw @{p.saw}</span> : null}
+            {"saw" in p && p.saw === null ? <span class="muted">no items</span> : null}
             {"refused" in p ? <span class="refused">🔒 refused</span> : null}
             {p.slot.length > 1
               ? <span class="muted">(also in the slot: {p.slot.slice(1).join(", ")})</span>
@@ -391,22 +398,27 @@ function WhyRun({ process, run }: { process: string; run: number }) {
           </>
         )
         : null}
-      {r.reads.length
+      {reads.length
         ? (
           <>
             <div class="sub-title">
               read <span class="muted">which change of each node it saw</span>
             </div>
-            {r.reads.map((x) => (
+            {reads.map(({ x, node }) => (
               <div class="read-row">
-                <NodeLink id={x.node} />
+                {node ? <NodeLink id={node} /> : <span class="muted">nothing</span>}
+                <code class="muted">{x.address.join("/") || "."}</code>
+                {x.refused ? <span class="refused">🔒 refused</span> : null}
                 {x.saw === null
-                  ? <span class="muted">absent</span>
-                  : <Ref r={{ node: x.node, time: x.saw }} />}
-                {since(x.node, x.saw)
+                  ? <span class="muted">no items</span>
+                  : <Ref r={world.at(x.saw) ?? { node: node ?? "", time: x.saw }} />}
+                {node && since(node, x.saw)
                   ? (
                     <span class="since" title="the node has changed since this run read it">
-                      changed since <Ref r={{ node: x.node, time: since(x.node, x.saw)! }} />
+                      changed since{" "}
+                      <Ref
+                        r={world.at(since(node, x.saw)!) ?? { node, time: since(node, x.saw)! }}
+                      />
                     </span>
                   )
                   : null}
@@ -415,16 +427,17 @@ function WhyRun({ process, run }: { process: string; run: number }) {
           </>
         )
         : null}
-      {r.directories.length
+      {directories.length
         ? (
           <>
             <div class="sub-title">directories</div>
-            {r.directories.map((x) => (
+            {directories.map(({ x, node }) => (
               <div class="read-row">
-                <NodeLink id={x.node} />
+                {node ? <NodeLink id={node} /> : <span class="muted">nothing</span>}
                 {x.name !== undefined ? <code>.{x.name}</code> : <span class="muted">whole</span>}
+                {x.refused ? <span class="refused">🔒 refused</span> : null}
                 {x.saw === null
-                  ? <span class="muted">absent</span>
+                  ? <span class="muted">no items</span>
                   : <span class="at">@{x.saw}</span>}
               </div>
             ))}
@@ -453,7 +466,8 @@ function WhyRun({ process, run }: { process: string; run: number }) {
             <div class="sub-title">errors</div>
             {r.errors.map((e) => (
               <div class="error-line">
-                <span class={`kind-tag kt-${e.kind}`}>{e.kind}</span> <b>{e.op}</b> {e.why}
+                <span class={`kind-tag kt-${e.kind}`}>{e.kind}</span> <b>{e.op}</b> {e.why.code}
+                {e.why.text ? `: ${e.why.text}` : ""}
               </div>
             ))}
           </>

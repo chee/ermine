@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- Types.hs encoding checks. From haskell/:
---   wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/types-test.wasm tests/TypesTest.hs && wasmtime run build/types-test.wasm
+--   wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/TypesTest.wasm tests/TypesTest.hs && wasmtime run build/TypesTest.wasm
 module Main (main) where
 
 import Control.Monad (unless)
 import Data.IORef
+import Data.Text (Text)
 import qualified Data.Text as Text
 import Json
 import System.Exit
@@ -18,47 +19,90 @@ main = do
         putStrLn ("FAIL " <> name)
         modifyIORef bad (+ 1)
       parsed t = either (error . Text.unpack) id (parseValue t)
-      patchTrip t = check ("patch " <> Text.unpack t) (fmap patchToJson (patchFrom (parsed t)) == Right (parsed t))
-      patchBad t = check ("bad patch " <> Text.unpack t) (either (const True) (const False) (patchFrom (parsed t)))
-  patchTrip "{\"type\":\"snapshot\",\"value\":{\"a\":[1]}}"
-  patchTrip "{\"type\":\"splice\",\"path\":[\"a\",0],\"range\":[0,2],\"value\":\"xy\"}"
-  patchTrip "{\"type\":\"splice\",\"path\":[],\"range\":[1,1]}"
-  patchTrip "{\"type\":\"set\",\"path\":[\"a\"],\"key\":\"k\",\"value\":null}"
-  patchTrip "{\"type\":\"set\",\"path\":[],\"key\":\"k\"}"
-  patchBad "{\"type\":\"snapshot\"}"
-  patchBad "{\"type\":\"splice\",\"path\":[],\"range\":[1]}"
-  patchBad "{\"type\":\"splice\",\"path\":[1.5],\"range\":[0,0]}"
-  patchBad "{\"type\":\"set\",\"path\":[],\"key\":1}"
-  patchBad "{\"type\":\"move\"}"
-  check "path" (fmap pathToJson (pathFrom (parsed "[{\"parent\":\"a\",\"name\":\"run\",\"node\":\"p\"}]")) == Right (parsed "[{\"parent\":\"a\",\"name\":\"run\",\"node\":\"p\"}]"))
-  check "bad path" (either (const True) (const False) (pathFrom (parsed "[{\"parent\":\"a\"}]")))
-  check "bad path 2" (either (const True) (const False) (pathFrom "nope"))
-  let c = Change "a" 3 (KindPlace "x" "b" Nothing) "host" Nothing (Just JNull) (Just (parsed "{\"file\":\"s.js\",\"line\":1,\"column\":1}"))
-  check "place change" (render (changeToJson c) == "{\"node\":\"a\",\"time\":3,\"kind\":\"place\",\"name\":\"x\",\"id\":\"b\",\"agent\":\"host\",\"cause\":null,\"site\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}")
-  let r = (emptyRecord "p1" 1 "host" [ChangeRef "init" 6])
-        { recordCompute = Just (ProgramSeen "show" (Just 3) ["show"] False)
-        , recordEffect = Just (ProgramSeen "eff" Nothing ["eff"] False)
-        , recordReads = [ReadEntry "a" (Just 2), ReadEntry "gone" Nothing]
-        , recordDirectories = [DirEntry "d" (Just "x") (Just 4), DirEntry "d" Nothing Nothing]
-        , recordLookups = [LookupEntry "theme" [Searched "g" (Just 1) False, Searched "h" Nothing True] []]
-        , recordValue = Just (JNumber 1)
-        , recordChanges = [ChangeRef "p1" 7]
-        , recordErrors = [ErrEntry Invalid "read" "no"]
-        }
-  check "record" (recordToJson r == parsed "{\"process\":\"p1\",\"run\":1,\"agent\":\"host\",\"marked\":[{\"node\":\"init\",\"time\":6}],\"compute\":{\"node\":\"show\",\"saw\":3,\"slot\":[\"show\"]},\"effect\":{\"node\":\"eff\",\"absent\":true,\"slot\":[\"eff\"]},\"lookups\":[{\"name\":\"theme\",\"searched\":[{\"node\":\"g\",\"saw\":1},{\"node\":\"h\",\"refused\":true}],\"found\":[]}],\"reads\":[{\"node\":\"a\",\"saw\":2},{\"node\":\"gone\",\"saw\":null}],\"directories\":[{\"node\":\"d\",\"name\":\"x\",\"saw\":4},{\"node\":\"d\",\"saw\":null}],\"value\":1,\"cleanup\":[],\"changes\":[{\"node\":\"p1\",\"time\":7}],\"ending\":\"done\",\"errors\":[{\"kind\":\"invalid\",\"op\":\"read\",\"why\":\"no\"}]}")
+      renders name v t = check name (render v == t)
+      address t = addressFrom (parsed t)
+
+  -- addresses: an optional first "/", then any "..", then names
+  check "empty address" (address "[]" == Just (Address False 0 []))
+  check "root" (address "[\"/\"]" == Just (Address True 0 []))
+  check "up and names" (address "[\"..\",\"..\",\"a\",\"b\"]" == Just (Address False 2 ["a", "b"]))
+  check "root then up" (address "[\"/\",\"..\"]" == Just (Address True 1 []))
+  check "a name may hold a slash" (address "[\"a/b\"]" == Just (Address False 0 ["a/b"]))
+  check "no up after a name" (address "[\"a\",\"..\"]" == Nothing)
+  check "no dot" (address "[\".\"]" == Nothing)
+  check "no root after the first part" (address "[\"a\",\"/\"]" == Nothing)
+  check "not strings" (address "[1]" == Nothing)
+  check "not a list" (address "\"a\"" == Nothing)
+  let roundTrip t = check ("address " <> Text.unpack t) (fmap (render . addressToJson) (address t) == Just t)
+  mapM_ roundTrip ["[]", "[\"/\"]", "[\"..\",\"a\"]", "[\"/\",\"x\",\"y\"]"]
+
+  -- changes
   let site = parsed "{\"file\":\"s.js\",\"line\":1,\"column\":1}"
-      made d = Change "p" 2 (KindMake JNull d) "host" Nothing Nothing (Just site)
-  check "make change with data" (render (changeToJson (made (Just (parsed "{\"path\":[]}")))) == "{\"node\":\"p\",\"time\":2,\"kind\":\"make\",\"value\":null,\"data\":{\"path\":[]},\"agent\":\"host\",\"site\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}")
-  check "make change with null data" (render (changeToJson (made (Just JNull))) == "{\"node\":\"p\",\"time\":2,\"kind\":\"make\",\"value\":null,\"data\":null,\"agent\":\"host\",\"site\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}")
-  check "make change without data" (render (changeToJson (made Nothing)) == "{\"node\":\"p\",\"time\":2,\"kind\":\"make\",\"value\":null,\"agent\":\"host\",\"site\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}")
-  let refusedProgram = (emptyRecord "p1" 1 "host" []) {recordCompute = Just (ProgramSeen "prog" Nothing ["prog", "other"] True), recordEnding = RefusedEnding}
-  check "refused program read" (field "compute" (recordToJson refusedProgram) == Just (parsed "{\"node\":\"prog\",\"refused\":true,\"slot\":[\"prog\",\"other\"]}"))
-  check "thrown from an op" (thrownValue (thrownFromErr "write" (refused "no")) == parsed "{\"kind\":\"refused\",\"op\":\"write\",\"why\":\"no\"}")
-  check "data op" (opName (OpData "a") == "data" && opNode (OpData "a") == Just "a")
-  check "lookup has no node" (opNode (OpLookup "theme") == Nothing)
-  patchBad "{\"type\":\"splice\",\"path\":[],\"range\":[-1,0]}"
-  patchBad "{\"type\":\"splice\",\"path\":[],\"range\":[0.5,1]}"
-  patchBad "{\"type\":\"splice\",\"path\":[],\"range\":[0,1,2]}"
-  check "chained path" (either (const True) (const False) (pathFrom (parsed "[{\"parent\":\"a\",\"name\":\"x\",\"node\":\"b\"},{\"parent\":\"c\",\"name\":\"y\",\"node\":\"d\"}]")))
+      change k = Change "a" 3 k "host" Nothing (Just site)
+  renders
+    "a mount: no position, no value"
+    (changeToJson (change (KindPlace "x" "b" Nothing Nothing)))
+    "{\"node\":\"a\",\"time\":3,\"kind\":\"place\",\"name\":\"x\",\"id\":\"b\",\"agent\":\"host\",\"cause\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}"
+  renders
+    "a making with a position, by a process, with a null cause"
+    (changeToJson (Change "a" 3 (KindPlace "x" "b" (Just 0) (Just JNull)) (int 7) (Just "p") (Just JNull)))
+    "{\"node\":\"a\",\"time\":3,\"kind\":\"place\",\"name\":\"x\",\"id\":\"b\",\"position\":0,\"value\":null,\"agent\":7,\"process\":\"p\",\"cause\":null}"
+  renders
+    "a write without a cause"
+    (changeToJson (Change "a" 4 (KindWrite [parsed "{\"type\":\"snapshot\",\"value\":1}"]) "host" Nothing Nothing))
+    "{\"node\":\"a\",\"time\":4,\"kind\":\"write\",\"patches\":[{\"type\":\"snapshot\",\"value\":1}],\"agent\":\"host\"}"
+  renders
+    "an unplace"
+    (changeToJson (change (KindUnplace "x" "b")))
+    "{\"node\":\"a\",\"time\":3,\"kind\":\"unplace\",\"name\":\"x\",\"id\":\"b\",\"agent\":\"host\",\"cause\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}"
+
+  -- items and froms
+  let step = Step "root" "a" "a" 0
+      made = Change "root" 1 (KindPlace "a" "a" Nothing (Just (int 1))) "host" Nothing Nothing
+  renders
+    "a value item"
+    (itemToJson (ItemValue (int 1) (FromRoute [step]) (Just made)))
+    "{\"value\":1,\"from\":{\"route\":[{\"parent\":\"root\",\"name\":\"a\",\"node\":\"a\",\"position\":0}]},\"change\":{\"node\":\"root\",\"time\":1,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"value\":1,\"agent\":\"host\"}}"
+  renders "the root's first value has no change" (itemToJson (ItemValue JNull (FromRoute []) Nothing)) "{\"value\":null,\"from\":{\"route\":[]}}"
+  check
+    "a pending slot item"
+    (itemToJson (ItemId "g" (FromSlot [] 2) made True) == parsed "{\"id\":\"g\",\"from\":{\"route\":[],\"position\":2},\"change\":{\"node\":\"root\",\"time\":1,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"value\":1,\"agent\":\"host\"},\"pending\":true}")
+  check "a slot item here says nothing of pending" (field "pending" (itemToJson (ItemId "g" (FromSlot [] 0) made False)) == Nothing)
+  check
+    "a lookup's from"
+    (fromToJson (FromPath (Address False 1 ["theme"]) 0) == parsed "{\"path\":[\"..\",\"theme\"],\"position\":0}")
+
+  -- errors
+  renders
+    "an error with its op and details"
+    (errToJson (withOp "place" (invalid "position" [("length", int 3)] "")))
+    "{\"kind\":\"invalid\",\"op\":\"place\",\"why\":{\"code\":\"position\",\"length\":3}}"
+  renders
+    "an error's text"
+    (errToJson (invalid "unknown-command" [("cmd", "frob")] "no"))
+    "{\"kind\":\"invalid\",\"why\":{\"code\":\"unknown-command\",\"cmd\":\"frob\",\"text\":\"no\"}}"
+  check "withOp keeps the first op" (errOp (withOp "lookup" (withOp "directory" (invalid "x" [] ""))) == Just "directory")
+  check "refused" (errToJson (err Refused "rule" [("rule", int 0)] "") == parsed "{\"kind\":\"refused\",\"why\":{\"code\":\"rule\",\"rule\":0}}")
+
+  -- names
+  check "names" (all isName ["a", "", "a/b", "...", ". "] && not (any isName [".", "..", "/" :: Text]))
+
+  -- records
+  let r =
+        (emptyRecord "p1" 1 "host" [ChangeRef "init" 6])
+          { recordLookups = [LookupEntry "theme" [Searched "g" (Just 1) False, Searched "h" Nothing True] []]
+          , recordReads = [ReadEntry "read" (Address False 0 ["a"]) Nothing [Step "r" "a" "a" 0] (Just 2), ReadEntry "directory" (Address True 0 []) (Just "x") [] Nothing]
+          , recordValue = Just (JNumber 1)
+          , recordChanges = [ChangeRef "p1" 7]
+          , recordErrors = [withOp "read" (invalid "write-only" [] "")]
+          }
+  check
+    "record"
+    ( recordToJson r
+        == parsed
+          "{\"process\":\"p1\",\"run\":1,\"agent\":\"host\",\"marked\":[{\"node\":\"init\",\"time\":6}],\"lookups\":[{\"name\":\"theme\",\"searched\":[{\"node\":\"g\",\"saw\":1},{\"node\":\"h\",\"refused\":true}],\"found\":[]}],\"reads\":[{\"op\":\"read\",\"address\":[\"a\"],\"route\":[{\"parent\":\"r\",\"name\":\"a\",\"node\":\"a\",\"position\":0}],\"saw\":2},{\"op\":\"directory\",\"address\":[\"/\"],\"name\":\"x\",\"route\":[],\"saw\":null}],\"value\":1,\"cleanup\":[],\"changes\":[{\"node\":\"p1\",\"time\":7}],\"ending\":\"done\",\"errors\":[{\"kind\":\"invalid\",\"op\":\"read\",\"why\":{\"code\":\"write-only\"}}]}"
+    )
+  check "op names" (map opName [OpRead (Address False 0 []), OpLookup "x", OpUnplace (Address False 0 []) "x" "y"] == ["read", "lookup", "unplace"])
+
   n <- readIORef bad
   if n == 0 then putStrLn "types: all passed" else do putStrLn (show n <> " failed"); exitFailure

@@ -45,9 +45,18 @@ ERMINE_HARNESS="deno run --quiet $PWD/../ts/harness/main.ts" \
 file changes; `deno task demo:build` only builds it, into `demo/core/dist/`. It runs
 `drive(protect(graph(), may), "root", load)` in the page, with a browser, an inspector, a
 transcript, a why pane, a workspace, a stage for effects, rules for protect, a lookup tester, and
-example boot images, among them a trip planner in the spirit of Embark and a spreadsheet whose
-formulas are processes. "explode" lays the whole graph out on a canvas: what holds what, which
+example boot images, among them a trip planner in the spirit of Embark, a spreadsheet whose
+formulas are processes, a desk whose things are drawn by renderers found by lookup, two documents
+sharing a paragraph, and a pixel pipeline that is just a slot. Nodes can be dragged between
+folders in the browser and on the canvas: a drop is a move (place, then unplace), shift-drop
+mounts it in one more place, and dropping on a row's edge places it in that slot, before or after. "explode" lays the whole graph out on a canvas: what holds what, which
 programs a process runs, what each run read and wrote, with sparks when a change marks a process.
+It is an authoring tool: ⌘K, or the + on a row, makes folders, texts, lists, programs, renderers
+and processes where you are; a new process lives in the folder it works on, so its lookups search
+there, and runs because it is also under the root. Programs are edited in CodeMirror, live by
+default, with what they throw shown at its line. ⌘Z undoes with a new change whose cause names
+what it undoes. Each graph is a project that saves itself in the browser as a boot image: code
+that rebuilds it in a fresh graph, which can be exported and imported as a `.ermine.js` file.
 Every act from outside is a workspace snippet, so each change carries the
 site it was made from. Programs are JS function bodies, or lists of steps as in the protocol.
 

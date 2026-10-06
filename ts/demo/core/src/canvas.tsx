@@ -6,10 +6,11 @@
 // process writes, from the process to the node.
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { Change, Id, Json, Record as Run } from "../../../src/mod.ts";
+import type { Change, Id, Json, Record as Run, Step } from "../../../src/mod.ts";
 import { Agent, Ending, Json as JsonView, peek } from "./bits.tsx";
 import { explode, focus, select, selected, world } from "./state.ts";
 import { type Entry, ROOT } from "./world.ts";
+import { drop } from "./dnd.ts";
 
 const W = 184;
 const H = 58;
@@ -30,15 +31,15 @@ function layout(): {
   const at = new Map<Id, { x: number; y: number }>();
   const edges: Edge[] = [];
   const children = new Map<Id, { name: string; id: Id }[]>();
+  // a process runs where the driver's walk reaches it
+  const reached = world.running();
   for (const parent of world.made.keys()) {
-    const d = world.bare.directory({ agent: "host", node: parent });
-    if (!("directory" in d)) continue;
     const list: { name: string; id: Id }[] = [];
-    for (const [name, ids] of d.directory) {
+    for (const [name, ids] of world.slotsOf(parent)) {
       for (const id of ids) {
         list.push({ name, id });
         const program = name === "compute" || name === "effect";
-        const process = world.isProcess(id) && (parent === ROOT || world.isProcess(parent));
+        const process = reached.get(id)?.parent === parent && reached.get(id)?.name === name;
         edges.push({
           from: parent,
           to: id,
@@ -100,7 +101,7 @@ function layout(): {
   for (const [p, runs] of world.records) {
     const last = runs[runs.length - 1];
     if (!last) continue;
-    const read = new Set(last.reads.map((r) => r.node));
+    const read = new Set(last.reads.flatMap((r) => world.readNode(p, r) ?? []));
     for (const l of last.lookups) for (const f of l.found) read.add(f);
     for (const n of read) if (n !== p) edges.push({ from: p, to: n, kind: "read" });
   }
@@ -119,8 +120,7 @@ function kindOf(id: Id): string {
   if (world.isProcess(id)) return "process";
   const where = world.placements().get(id) ?? [];
   if (where.some((p) => p.name === "compute" || p.name === "effect")) return "program";
-  const r = world.bare.read({ agent: "host", node: id });
-  const v = "value" in r ? r.value : undefined;
+  const v = world.valueOf(id);
   if (v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0) {
     return "folder";
   }
@@ -142,6 +142,9 @@ export function Canvas() {
     sparks: true,
   });
   const [sparks, setSparks] = useState<Spark[]>([]);
+  /** the card a dragged card would be dropped into */
+  const [dropOn, setDropOn] = useState<Id>();
+  const [dragging, setDragging] = useState<Id>();
   const seenLog = useRef(world.log.length ? world.log[world.log.length - 1].n : 0);
   const drag = useRef<
     | { t: "pan"; x: number; y: number; vx: number; vy: number }
@@ -265,13 +268,36 @@ export function Canvas() {
     } else {
       const dx = (e.clientX - d.x) / view.k, dy = (e.clientY - d.y) / view.k;
       if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-      if (d.moved) setPinned(new Map(pinned).set(d.id, { x: d.ox + dx, y: d.oy + dy }));
+      if (d.moved) {
+        setPinned(new Map(pinned).set(d.id, { x: d.ox + dx, y: d.oy + dy }));
+        if (dragging !== d.id) setDragging(d.id);
+        const under = document.elementsFromPoint(e.clientX, e.clientY)
+          .map((el) => (el as HTMLElement).closest?.("[data-card]") as HTMLElement | null)
+          .find((el) => el && el.dataset.card !== d.id);
+        const on = under?.dataset.card;
+        if (on !== dropOn) setDropOn(on);
+      }
     }
   };
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
     const d = drag.current;
     drag.current = undefined;
+    setDragging(undefined);
     if (d?.t === "card" && !d.moved) select(d.id, routeTo(d.id));
+    if (d?.t === "card" && d.moved && dropOn) {
+      // dropped into another card: a placement, and the card goes back to the layout
+      const from = routeTo(d.id).at(-1);
+      drop(
+        d.id,
+        from && { parent: from.parent, name: from.name },
+        { into: dropOn },
+        e.shiftKey || e.altKey,
+      );
+      const next = new Map(pinned);
+      next.delete(d.id);
+      setPinned(next);
+    }
+    setDropOn(undefined);
   };
 
   const sel = selected.value?.id;
@@ -334,8 +360,8 @@ export function Canvas() {
         ref={host}
         onPointerDown={onDown as never}
         onPointerMove={onMove as never}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
+        onPointerUp={onUp as never}
+        onPointerCancel={onUp as never}
       >
         <div
           class="canvas-world"
@@ -344,7 +370,7 @@ export function Canvas() {
           {unreachable.length
             ? (
               <div class="unreach-zone" style={{ left: `${ux - 20}px`, top: `${uy - 40}px` }}>
-                unreachable — removed, by CORE.tex
+                unreachable — cannot be addressed, by CORE.tex
               </div>
             )
             : null}
@@ -366,7 +392,7 @@ export function Canvas() {
             </defs>
             {shown.map((e) => (
               <g
-                class={`edge e-${e.kind}${touches(e) ? "" : " faint"}`}
+                class={`edge e-${e.kind}${touches(e) ? "" : " faint"}${mine(e) ? " near" : ""}`}
                 key={`${e.kind}${e.from}>${e.to}${e.label}`}
               >
                 <path d={curve(e.from, e.to)} marker-end={`url(#arrow-${e.kind})`} />
@@ -398,8 +424,7 @@ export function Canvas() {
           {[...world.made.keys()].map((id) => {
             const p = pos(id);
             const kind = kindOf(id);
-            const r = world.bare.read({ agent: "host", node: id });
-            const v: Json | undefined = "value" in r ? r.value : undefined;
+            const v: Json | undefined = world.valueOf(id);
             const runs = world.records.get(id);
             const last = runs?.[runs.length - 1];
             const latest = world.latest.get(id) ?? 0;
@@ -409,8 +434,10 @@ export function Canvas() {
                 key={id}
                 data-card={id}
                 class={`card k-${kind}${sel === id ? " sel" : ""}${hover === id ? " hov" : ""}${
-                  running.has(id) ? " running" : ""
-                }${lit ? " lit" : ""}${
+                  dropOn === id ? " drop-into" : ""
+                }${dragging === id ? " dragging" : ""}${running.has(id) ? " running" : ""}${
+                  lit ? " lit" : ""
+                }${
                   near && near !== id &&
                     !edges.some((e) =>
                       (e.from === near && e.to === id) || (e.to === near && e.from === id)
@@ -439,7 +466,7 @@ export function Canvas() {
                   {kind === "program"
                     ? (typeof v === "string" ? v.trim().split("\n")[0] : "steps")
                     : kind === "folder"
-                    ? `${(world.directory(id) as [string, Id[]][] | undefined)?.length ?? 0} names`
+                    ? `${world.slotsOf(id).length} names`
                     : peek(v, 40)}
                 </div>
                 <span class="card-time" key={latest}>@{latest}</span>
@@ -457,7 +484,7 @@ export function Canvas() {
 /** The route from the root to a node by first placements, for lookups from it. */
 function routeTo(id: Id) {
   const where = world.placements();
-  const route: { parent: Id; name: string; node: Id }[] = [];
+  const route: Step[] = [];
   let at = id;
   const seen = new Set<Id>();
   while (at !== ROOT && !seen.has(at)) {
@@ -465,7 +492,7 @@ function routeTo(id: Id) {
     const p = (where.get(at) ?? []).find((x) => x.name !== "compute" && x.name !== "effect") ??
       where.get(at)?.[0];
     if (!p) return [];
-    route.unshift({ parent: p.parent, name: p.name, node: at });
+    route.unshift({ parent: p.parent, name: p.name, node: at, position: p.index });
     at = p.parent;
   }
   return at === ROOT ? route : [];
@@ -480,7 +507,7 @@ function Legend() {
         <i class="sw l-place" /> a directory holds a node
       </div>
       <div>
-        <i class="sw l-process" /> placing a process under one runs it
+        <i class="sw l-process" /> a process runs where it sits
       </div>
       <div>
         <i class="sw l-program" /> a process's compute and effect
@@ -501,7 +528,7 @@ function Legend() {
 
 function Detail({ id }: { id: Id }) {
   world.version.value;
-  const r = world.bare.read({ agent: "host", node: id });
+  const v = world.valueOf(id);
   const runs: Run[] = world.records.get(id) ?? [];
   const last = runs[runs.length - 1];
   const changes = world.log.filter((e): e is Entry & { t: "change" } =>
@@ -515,7 +542,7 @@ function Detail({ id }: { id: Id }) {
         <span class="muted">{kindOf(id)}</span>
       </div>
       <div class="value-view small">
-        <JsonView value={"value" in r ? r.value : undefined} />
+        <JsonView value={v} />
       </div>
       {lastChange
         ? (

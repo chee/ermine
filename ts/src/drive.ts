@@ -1,15 +1,16 @@
-// The reference driver (CORE.tex, Running and wrapping; PROTOCOL.tex, The
-// reference driver). It keeps the time, walks the tree of processes beneath
-// its root after every change, and runs what is due in rounds: computes
-// first, lowest height first, then effects.
+// The reference driver (DRIVER.tex). It keeps the time, walks from its root
+// after every change to find the processes, and runs what is due in rounds:
+// computes first, lowest height first, then effects.
 //
 // Every change passes through it, since it gives each its time, so it learns
-// the tree and each process's value from the changes themselves and reads
-// nothing on its own account. A run's interfaces are bound from the top of the
-// stack, so what a program does passes through every wrapper.
+// the graph from the changes themselves and reads nothing on its own account.
+// A process node is a node the walk reaches that has a compute slot; it runs
+// at the directory the walk reached it in, its cwd, and is the node [name]
+// there. A run's interfaces are bound from the top of the stack, so what a
+// program does passes through every wrapper.
 
-import { applyPatches, byCodePoint, equal, isObject, placed } from "./patch.ts";
-import { checkPath } from "./graph.ts";
+import { type View } from "./address.ts";
+import { applyPatches, byCodePoint, equal, placed } from "./patch.ts";
 import {
   type Acting,
   type Bound,
@@ -19,10 +20,9 @@ import {
   type Finishing,
   type Id,
   type Interface,
-  Invalid,
+  invalid,
   type Json,
-  type MakeOp,
-  type Path,
+  ours,
   type PlaceOp,
   type Record,
   type RecordError,
@@ -33,14 +33,19 @@ import {
   type WriteOp,
 } from "./types.ts";
 
+ours(import.meta.url);
+
 /** What a compute returns when it read something that is not there yet. */
 export const PENDING: unique symbol = Symbol("pending");
 
 export type ComputeContext = {
-  /** reads only, recorded into the run */
+  /** reads only, recorded into the run, bound at the process's cwd */
   api: Interface;
   self: Id;
-  path: Path;
+  /** the directory the walk reached the process node in, as names from the root */
+  cwd: readonly string[];
+  /** the name it was reached by: the address [name] is the process node */
+  name: string;
   /** the changes that marked the process */
   changes: readonly Change[];
 };
@@ -49,6 +54,8 @@ export type EffectContext = {
   /** writes only, recorded into the run */
   api: Interface;
   self: Id;
+  cwd: readonly string[];
+  name: string;
   value: Json;
   /** the value before this run; left out on the first run since the process started */
   previous?: Json;
@@ -83,7 +90,6 @@ export type FireOp = Acting & { process: Id; handler: string; input?: Json };
 export type Fired = Settled & { changes: Change[]; error?: unknown };
 
 export interface Driver extends Interface {
-  make(op: MakeOp): Driven;
   write(op: WriteOp): Driven;
   place(op: PlaceOp): Driven;
   unplace(op: UnplaceOp): Driven;
@@ -93,12 +99,11 @@ export interface Driver extends Interface {
   fire(op: FireOp): Fired;
 }
 
-/**
- * The root and each process node, as the changes have shown them. A process
- * node is one whose fixed data is an object with a path; its path is kept
- * as given, a path or not.
- */
-type Known = { process?: { path: unknown }; value: Json; slots: Map<string, Id[]> };
+/** A node here, as the changes have shown it. */
+type Known = { value: Json; slots: Map<string, Id[]> };
+
+/** A process node the walk reached: where, and by what name. */
+type Reached = { id: Id; cwd: string[]; name: string };
 
 /** One run, from its compute until it is finished. */
 type Run = {
@@ -117,8 +122,8 @@ type Run = {
 type Process = {
   id: Id;
   agent: Json;
-  /** its path, or why its fixed data's path is not one */
-  path: Path | { not: string };
+  cwd: string[];
+  name: string;
   height: number;
   /** no run since it started has run its effect */
   fresh: boolean;
@@ -126,8 +131,8 @@ type Process = {
   handlers: Map<string, Handler>;
   cleanup?: () => void;
   /** the nodes its last compute read the value of, and every node it read */
-  values: Set<Id>;
-  read: Set<Id>;
+  values: ReadonlySet<Id>;
+  read: ReadonlySet<Id>;
   /** whether the driver wrote its value this round */
   wrote: boolean;
   /** its run this round, until finished */
@@ -137,12 +142,21 @@ type Process = {
 /** A due process: the changes that marked it, and the time of the first. */
 type Due = { marks: Change[]; first: number };
 
+/**
+ * A driver over api, whose root is the graph's root. It learns the graph from
+ * the changes that pass through it, so it is made over a graph that has had
+ * none yet: the root alone, its value null.
+ */
 export function drive(api: Interface, root: Id, load: Load): Driver {
   const lower = api;
   let top: Interface;
   let clock = 0;
 
-  const known = new Map<Id, Known>();
+  const known = new Map<Id, Known>([[root, { value: null, slots: new Map() }]]);
+  const view: View = {
+    here: (id) => known.has(id),
+    slot: (id, name) => known.get(id)?.slots.get(name) ?? [],
+  };
   const running = new Map<Id, Process>();
   const due = new Map<Id, Due>();
   /** the processes in the order the last walk reached them */
@@ -210,7 +224,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
     }
   }
 
-  /** Adds what a change marked to the due list, then learns from it and walks the tree. */
+  /** Adds what a change marked to the due list, then learns from it and walks. */
   function note(answer: Changed) {
     const c = answer.change;
     gathering?.push(c);
@@ -219,21 +233,21 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   }
 
   function learn(c: Change) {
-    if (c.kind === "make") {
-      const data = c.data;
-      if (isObject(data) && Object.hasOwn(data, "path")) {
-        known.set(c.node, { process: { path: data.path }, value: c.value, slots: new Map() });
-      } else if (c.node === root) {
-        known.set(c.node, { value: c.value, slots: new Map() });
+    if (c.kind === "write") {
+      const node = known.get(c.node);
+      if (!node) return;
+      try {
+        node.value = applyPatches(node.value, c.patches);
+      } catch {
+        // the graph applied it; a node known wrongly is the host's doing
       }
       return;
     }
+    if (c.kind === "place" && c.value !== undefined && !known.has(c.id)) {
+      known.set(c.id, { value: c.value, slots: new Map() });
+    }
     const node = known.get(c.node);
     if (!node) return;
-    if (c.kind === "write") {
-      node.value = applyPatches(node.value, c.patches);
-      return;
-    }
     const slot = node.slots.get(c.name) ?? [];
     const next = c.kind === "place"
       ? placed(slot, c.id, c.position)
@@ -249,7 +263,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
     else due.set(id, { marks: [c], first: c.time });
   }
 
-  // the tree
+  // finding processes
 
   let walking = false;
   const walks: Change[] = [];
@@ -268,10 +282,16 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
         const c = walks.shift()!;
         learn(c);
         const reached = tree();
-        for (const id of reached) if (!running.has(id)) start(id, c);
-        const now = new Set(reached);
+        const now = new Map(reached.map((r) => [r.id, r]));
+        // a process reached at another place runs there, marked by the change that moved it
+        for (const id of order) {
+          const p = running.get(id);
+          const r = now.get(id);
+          if (p && r && (p.name !== r.name || !sameNames(p.cwd, r.cwd))) move(p, r, c);
+        }
+        for (const r of reached) if (!running.has(r.id)) start(r, c);
         const gone = order.filter((id) => running.has(id) && !now.has(id));
-        order = reached;
+        order = reached.map((r) => r.id);
         for (const id of gone) stop(id);
       }
     } finally {
@@ -279,49 +299,60 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
     }
   }
 
-  /** The process nodes beneath the root: depth first, names in code point order, ids in slot order. */
-  function tree(): Id[] {
-    const reached: Id[] = [];
+  /**
+   * The process nodes beneath the root, depth first, names in code point
+   * order, as an address walks: where a slot holds several nodes, their names
+   * are the union, and under each name the first member that has it, then the
+   * first id there whose node is here, is taken. Program slots are not
+   * walked, and no node is entered twice.
+   */
+  function tree(): Reached[] {
+    const reached: Reached[] = [];
     const seen = new Set<Id>([root]);
-    const enter = (node: Id) => {
-      const slots = known.get(node)?.slots;
-      if (!slots) return;
-      for (const name of [...slots.keys()].sort(byCodePoint)) {
+    const enter = (members: Id[], cwd: string[]) => {
+      const names = new Set<string>();
+      for (const m of members) for (const n of known.get(m)!.slots.keys()) names.add(n);
+      for (const name of [...names].sort(byCodePoint)) {
         if (name === "compute" || name === "effect") continue;
-        for (const id of slots.get(name)!) {
-          if (seen.has(id) || !known.get(id)?.process) continue;
-          seen.add(id);
-          reached.push(id);
-          enter(id);
-        }
+        const owner = members.find((m) => view.slot(m, name).length > 0)!;
+        const here = view.slot(owner, name).filter((id) => known.has(id));
+        if (!here.length || seen.has(here[0])) continue;
+        seen.add(here[0]);
+        if (view.slot(here[0], "compute").length) reached.push({ id: here[0], cwd, name });
+        enter(here, [...cwd, name]);
       }
     };
-    enter(root);
+    enter([root], []);
     return reached;
   }
 
-  function start(id: Id, c: Change) {
-    const given = known.get(id)!.process!.path;
-    let path: Process["path"];
-    try {
-      checkPath(given);
-      path = given;
-    } catch (e) {
-      path = { not: (e as Error).message };
-    }
-    running.set(id, {
-      id,
+  function start(r: Reached, c: Change) {
+    running.set(r.id, {
+      id: r.id,
       agent: c.agent,
-      path,
+      cwd: r.cwd,
+      name: r.name,
       height: 0,
       fresh: true,
-      lasting: top.bind(top, { ...binding(c.agent, id, path), writes: true, reads: false }),
+      lasting: top.bind(top, { ...binding(c.agent, r), writes: true, reads: false }),
       handlers: new Map(),
       values: new Set(),
       read: new Set(),
       wrote: false,
     });
-    due.set(id, { marks: [c], first: c.time });
+    due.set(r.id, { marks: [c], first: c.time });
+  }
+
+  /** Runs a process at the place the walk now reaches it, its lasting interface bound there. */
+  function move(p: Process, r: Reached, c: Change) {
+    p.cwd = r.cwd;
+    p.name = r.name;
+    const old = p.lasting;
+    p.lasting = top.bind(top, { ...binding(p.agent, p), writes: true, reads: false });
+    old.end();
+    const d = due.get(p.id);
+    if (!d) due.set(p.id, { marks: [c], first: c.time });
+    else if (!d.marks.includes(c)) d.marks.push(c);
   }
 
   function stop(id: Id) {
@@ -394,31 +425,36 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   }
 
   function compute(p: Process, marks: Change[]) {
-    const bound = binding(p.agent, p.id, p.path);
+    const bound = binding(p.agent, p);
     const reader = top.bind(top, { ...bound, writes: false });
     const rec = top.record(reader, marks);
-    const run: Run = { rec, errors: [], before: known.get(p.id)!.value };
+    const run: Run = { rec, errors: [], before: known.get(p.id)?.value ?? null };
     p.run = run;
+    const at = [p.name];
     try {
-      if ("not" in p.path) {
-        // fixed data never changes, so it fails each run until a restart
-        run.errors.push({ kind: "invalid", op: "path", why: p.path.not });
-        run.ending = "failed";
-        return;
-      }
-      const c = rec.program("compute");
+      const c = rec.program("compute", at);
       if (!c) {
-        run.errors.push({ kind: "invalid", op: "compute", why: "the compute slot is gone" });
+        run.errors.push({
+          kind: "invalid",
+          op: "compute",
+          why: { code: "nothing-there", text: "the compute slot is gone" },
+        });
         run.ending = "failed";
         return;
       }
-      const e = rec.program("effect");
-      if ("absent" in c || (e && "absent" in e)) {
+      const e = rec.program("effect", at);
+      if (!c.items.length || (e && !e.items.length)) {
         run.ending = "pending";
         return;
       }
-      if (e && "value" in e) run.effect = { code: e.value };
-      const v = load(c.value, "compute")({ api: rec, self: p.id, path: p.path, changes: marks });
+      if (e) run.effect = { code: e.items[0].value };
+      const v = load(c.items[0].value, "compute")({
+        api: rec,
+        self: p.id,
+        cwd: p.cwd,
+        name: p.name,
+        changes: marks,
+      });
       if (v === PENDING) {
         run.ending = "pending";
         return;
@@ -430,10 +466,10 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
       }
       const value = v === undefined ? null : v;
       run.result = { value };
-      if (!equal(value, known.get(p.id)!.value)) {
+      if (!equal(value, known.get(p.id)?.value ?? null)) {
         const writer = top.bind(top, { ...bound, writes: true });
         try {
-          rec.through(writer).write({ node: p.id, patches: [{ type: "snapshot", value }] });
+          rec.through(writer).write({ address: at, patches: [{ type: "snapshot", value }] });
         } finally {
           writer.end();
         }
@@ -443,17 +479,8 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
       run.ending = blame(rec.errors, e);
     } finally {
       reader.end();
-      // the program nodes are read as part of the compute
-      const programs = rec.programs.filter((node) => node !== p.id);
-      p.values = new Set([...programs, ...rec.reads.map((r) => r.node)]);
-      p.read = new Set([
-        ...rec.programs,
-        ...p.values,
-        ...rec.directories.map((d) => d.node),
-        ...rec.lookups.flatMap((l) =>
-          l.searched.filter((s) => !("refused" in s)).map((s) => s.node)
-        ),
-      ]);
+      p.values = new Set(rec.values);
+      p.read = new Set(rec.nodes);
       rise(p, (q) => q.values.has(p.id));
     }
   }
@@ -482,13 +509,15 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   }
 
   function effect(p: Process, run: Run, previous: { previous?: Json }) {
-    const writer = top.bind(top, { ...binding(p.agent, p.id, p.path), writes: true, reads: false });
+    const writer = top.bind(top, { ...binding(p.agent, p), writes: true, reads: false });
     const outer = gathering;
     const changes: Change[] = gathering = [];
     try {
       const after = load(run.effect!.code, "effect")({
         api: run.rec.through(writer),
         self: p.id,
+        cwd: p.cwd,
+        name: p.name,
         value: run.result!.value,
         ...previous,
         lasting: p.lasting,
@@ -532,9 +561,13 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
 
   function fire(op: FireOp): Fired {
     const p = typeof op?.process === "string" ? running.get(op.process) : undefined;
-    if (!p) throw new Invalid(`${JSON.stringify(op?.process)} is not a running process`);
+    if (!p) {
+      throw invalid("unknown-process", `${JSON.stringify(op?.process)} is not a running process`);
+    }
     const handler = typeof op.handler === "string" ? p.handlers.get(op.handler) : undefined;
-    if (!handler) throw new Invalid(`${p.id} has no handler ${JSON.stringify(op.handler)}`);
+    if (!handler) {
+      throw invalid("unknown-handler", `${p.id} has no handler ${JSON.stringify(op.handler)}`);
+    }
     const changes: Change[] = [];
     let error: { error?: unknown } = {};
     const [, settled] = request(() => {
@@ -554,7 +587,6 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
 
   const driver: Driver = {
     ...lower,
-    make: change((op: MakeOp) => lower.make(op)),
     write: change((op: WriteOp) => lower.write(op)),
     place: change((op: PlaceOp) => lower.place(op)),
     unplace: change((op: UnplaceOp) => lower.unplace(op)),
@@ -570,9 +602,13 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   return driver;
 }
 
-/** What a process's interfaces are bound to: a path that is not one is left out. */
-function binding(agent: Json, process: Id, path: Process["path"]) {
-  return "not" in path ? { agent, process } : { agent, process, path };
+/** What a process's interfaces are bound to: its agent, its id, and its cwd. */
+function binding(agent: Json, p: { id: Id; cwd: readonly string[] }) {
+  return { agent, process: p.id, place: p.cwd };
+}
+
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
 /** How a run ends after trouble: refused if anything was refused, failed otherwise. */

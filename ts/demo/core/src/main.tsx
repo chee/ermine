@@ -9,18 +9,20 @@ import { Dock } from "./dock.tsx";
 import { examples, rulesFor } from "./examples.ts";
 import { Inspector } from "./inspector.tsx";
 import {
-  dock,
   draft,
   explode,
   focus,
-  lit,
-  pointAt,
   select,
   selected,
+  tall,
   theme,
+  toast,
+  undo,
   world,
 } from "./state.ts";
 import { Right } from "./transcript.tsx";
+import { Palette, palette } from "./palette.tsx";
+import { current, fresh, last, open, rename, save, savedAt } from "./projects.ts";
 import { ROOT } from "./world.ts";
 
 function Ermine({ size = 34 }: { size?: number }) {
@@ -55,20 +57,49 @@ function Ermine({ size = 34 }: { size?: number }) {
   );
 }
 
+/** Opens an example as a project of its own. */
 function boot(id: string) {
   const ex = examples.find((e) => e.id === id)!;
-  world.rules = (rulesFor[id] ?? []).map((r) => ({ ...r }));
-  world.agent = "chee";
-  world.reset();
-  focus.value = undefined;
-  lit.value = undefined;
-  pointAt.value = undefined;
-  const s = world.run(ex.code, `boot: ${ex.title}`);
+  open({ name: fresh(ex.title), image: ex.code, rules: rulesFor[id] ?? [] }, "example");
   draft.value = ex.code;
-  select(ROOT, []);
-  if (world.screens.size) dock.value = "stage";
-  else dock.value = "workspace";
-  return s;
+}
+
+function ProjectName() {
+  world.version.value;
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState("");
+  if (editing) {
+    return (
+      <input
+        class="code project-input"
+        autoFocus
+        value={name}
+        onInput={(e) => setName((e.target as HTMLInputElement).value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && name.trim()) {
+            rename(name.trim());
+            setEditing(false);
+          }
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      class="project-name"
+      title="this project: it saves itself, as a boot image. click to rename"
+      onClick={() => {
+        setName(current.value);
+        setEditing(true);
+      }}
+    >
+      {current.value}
+      <span class="saved">{savedAt.value ? "saved" : ""}</span>
+    </button>
+  );
 }
 
 function TopBar() {
@@ -87,6 +118,30 @@ function TopBar() {
           <div class="tagline">a graph of values that says why</div>
         </div>
       </div>
+      <ProjectName />
+      <div class="history-btns">
+        <button
+          type="button"
+          class="iconbtn"
+          title="undo (⌘Z): a new change that reverses the last"
+          disabled={!world.undoable.length}
+          onClick={() => undo()}
+        >
+          ↶
+        </button>
+        <button
+          type="button"
+          class="iconbtn"
+          title="redo (⇧⌘Z)"
+          disabled={!world.redoable.length}
+          onClick={() => undo(true)}
+        >
+          ↷
+        </button>
+      </div>
+      <button type="button" class="palette-btn" onClick={() => (palette.value = {})}>
+        make, find, open… <kbd>⌘K</kbd>
+      </button>
       <div class="boot">
         <button type="button" class="boot-btn" onClick={() => setMenu(!menu)}>
           ✿ examples <span class="caret-down">▾</span>
@@ -198,6 +253,17 @@ function TopBar() {
   );
 }
 
+function Toast() {
+  const t = toast.value;
+  if (!t) return null;
+  return (
+    <div class={`toast${t.ok ? "" : " bad"}`} key={t.n}>
+      <span class="toast-label">{t.ok ? `✓ ${t.label ?? "done"}` : "✕ " + (t.why ?? "")}</span>
+      <pre>{t.code}</pre>
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme.value;
@@ -207,7 +273,26 @@ function App() {
   }, [theme.value]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") focus.value = undefined;
+      const mod = e.metaKey || e.ctrlKey;
+      const typing = (e.target as HTMLElement)?.closest?.(
+        "input, textarea, [contenteditable], .cm-editor",
+      );
+      if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        palette.value = palette.value ? undefined : {};
+      } else if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        save();
+        toast.value = {
+          n: -1,
+          code: `saved ${current.value}, as a boot image`,
+          label: "save",
+          ok: true,
+        };
+      } else if (mod && e.key.toLowerCase() === "z" && !typing) {
+        e.preventDefault();
+        undo(e.shiftKey);
+      } else if (e.key === "Escape" && !palette.value) focus.value = undefined;
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -215,7 +300,7 @@ function App() {
   return (
     <div class="app">
       <TopBar />
-      <div class={`grid${explode.value ? " exploded" : ""}`}>
+      <div class={`grid${explode.value ? " exploded" : ""}${tall.value ? " tall" : ""}`}>
         {explode.value ? null : <Browser />}
         <div class="center">
           {explode.value ? <Canvas /> : <Inspector />}
@@ -223,10 +308,15 @@ function App() {
         </div>
         <Right />
       </div>
+      <Toast />
+      <Palette />
     </div>
   );
 }
 
-boot("hello");
+// open the project last open here, or a fresh one with just the root
+const was = last();
+open(was ?? { name: "untitled", image: "" }, "open");
+if (!was) palette.value = { only: "examples" };
 if (!selected.value) select(ROOT, []);
 render(<App />, document.getElementById("app")!);

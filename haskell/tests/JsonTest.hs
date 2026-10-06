@@ -98,6 +98,16 @@ main = do
   -- helpers
   check "asWhole 3" (asWhole (JNumber 3) == Just 3)
   check "asWhole 3.5" (asWhole (JNumber 3.5) == Nothing)
+  check "asWhole does not wrap past 32 bits" (asWhole (JNumber 4294967297) == Just 4294967297)
+  check "asWhole 2^53" (asWhole (JNumber 9007199254740992) == Just 9007199254740992)
+  -- no cap: every whole binary64 is a whole number, held exactly
+  check "asWhole 2^53+2" (asWhole (JNumber 9007199254740994) == Just 9007199254740994)
+  check "asWhole 1e21" (asWhole (JNumber 1e21) == Just (10 ^ (21 :: Int)))
+  check "asWhole -(2^53+2)" (asWhole (JNumber (-9007199254740994)) == Just (-9007199254740994))
+  check "asWhole 1e300" (asWhole (JNumber 1e300) == Just (truncate (1e300 :: Double)))
+  check "asWhole 1.7976931348623157e308" (fmap fromInteger (asWhole (JNumber 1.7976931348623157e308)) == Just (1.7976931348623157e308 :: Double))
+  check "asWhole 2^51+0.5 is not whole" (asWhole (JNumber 2251799813685248.5) == Nothing)
+  check "asWhole 5e-324" (asWhole (JNumber 5e-324) == Nothing)
   check "field null present" (field "c" (parsed "{\"c\":null}") == Just JNull)
   check "optional" (optional "k" (Nothing :: Maybe Value) == [])
 

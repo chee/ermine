@@ -1,47 +1,58 @@
-// The reference protect (CORE.tex, Running and wrapping). It asks may before
-// every operation, including each directory a lookup reads, which reaches it
-// again from the graph through the top of the stack. Each layer is told the
-// top once: protect tells the layer below when it is made, and the host tells
-// the outermost layer once the stack is built, so no holder can tell it again.
+// The reference protect (CORE.tex, Running and wrapping; PROTECT.tex). It
+// asks may before every operation, including each directory a lookup reads,
+// which reaches it again from the graph through the top of the stack. Each
+// layer is told the top once: protect tells the layer below when it is made,
+// and the host tells the outermost layer once the stack is built, so no
+// holder can tell it again.
+//
+// may is given the operation's args and, as node, the node its address
+// reaches: the parent, for a placement; the node the subscription reaches
+// now, for an unsubscribe. protect learns it from the layer below's reach,
+// as its own bookkeeping, which nothing is asked about.
 
 import {
   type Acting,
+  type Address,
   type Binding,
   type Id,
   type Interface,
   type Json,
+  ours,
   Refused,
   told,
 } from "./types.ts";
 
+ours(import.meta.url);
+
 /** Whether the operation's agent and process may make it. */
 export type May = (agent: Json, process: Id | undefined, op: string, args: object) => boolean;
 
-/** The operations that carry their agent and process, and need nothing more. */
-const ACTING = [
-  "make",
-  "read",
-  "data",
-  "directory",
-  "lookup",
-  "write",
-  "place",
-  "unplace",
-] as const;
+/** The operations that carry their agent, process and place, and need nothing more. */
+const ACTING = ["read", "directory", "lookup", "write", "place", "unplace"] as const;
 
 export function protect(api: Interface, may: May): Interface {
   const check = (agent: unknown, process: unknown, op: string, args: object) => {
     const p = typeof process === "string" ? process : undefined;
     if (!may(agent as Json, p, op, args)) {
-      throw new Refused(`${JSON.stringify(agent)} may not ${op}${on(op, args)}`, op);
+      throw new Refused(
+        { code: "rule", text: `${JSON.stringify(agent)} may not ${op}${on(args)}` },
+        op,
+      );
     }
   };
-  const ask = <A extends Acting, R>(op: string, pass: (args: A) => R) => (args: A): R => {
-    check(args?.agent, args?.process, op, args);
-    return pass(args);
+  /** The args may is given: the operation's, and the node its address reaches, if any. */
+  const about = (args: Acting & { address?: Address }): object => {
+    if (args === null || typeof args !== "object" || args.address === undefined) return args ?? {};
+    let node: Id | undefined;
+    try {
+      node = api.reach?.(args as Acting & { address: Address });
+    } catch {
+      // an operation the graph will find invalid; protect answers first
+    }
+    return node === undefined ? args : { ...args, node };
   };
-  // the node each subscription made through here is on, for its unsubscribe
-  const subs = new Map<number, Id>();
+  // each subscription made through here, for its unsubscribe
+  const subs = new Map<number, Acting & { address: Address }>();
   // the binding of each interface bound through here, for its record
   const bindings = new WeakMap<object, Binding>();
 
@@ -49,16 +60,23 @@ export function protect(api: Interface, may: May): Interface {
   const wrapped: Interface = { ...api };
   for (const op of ACTING) {
     // deno-lint-ignore no-explicit-any
-    (wrapped as any)[op] = ask(op, (api as any)[op]);
+    const pass = (api as any)[op];
+    // deno-lint-ignore no-explicit-any
+    (wrapped as any)[op] = (args: any) => {
+      check(args?.agent, args?.process, op, about(args));
+      return pass(args);
+    };
   }
   wrapped.subscribe = (args) => {
-    check(args?.agent, args?.process, "subscribe", args);
+    check(args?.agent, args?.process, "subscribe", about(args));
     const answer = api.subscribe(args);
-    subs.set(answer.sub, args.node);
+    const { send: _send, ...kept } = args;
+    subs.set(answer.sub, kept);
     return answer;
   };
   wrapped.unsubscribe = (args) => {
-    const node = subs.get(args?.sub);
+    const sub = subs.get(args?.sub);
+    const node = sub === undefined ? undefined : (about(sub) as { node?: Id }).node;
     check(args?.agent, args?.process, "unsubscribe", node === undefined ? args : { ...args, node });
     api.unsubscribe(args);
     subs.delete(args.sub);
@@ -85,17 +103,16 @@ export function protect(api: Interface, may: May): Interface {
 }
 
 /**
- * The node an operation is on: the parent for a placement, the new id for a
- * make, and otherwise its node; protect gives an unsubscribe its
- * subscription's node.
+ * The node an operation is on, as protect gives it to may: the node its
+ * address reaches (the parent, for a placement), or the node a subscription
+ * reaches, for an unsubscribe. A lookup has none.
  */
-export function subject(op: string, args: object): Id | undefined {
-  const a = args as { [key: string]: unknown };
-  const node = op === "make" ? a.id : op === "place" || op === "unplace" ? a.parent : a.node;
+export function subject(_op: string, args: object): Id | undefined {
+  const node = (args as { node?: unknown }).node;
   return typeof node === "string" ? node : undefined;
 }
 
-function on(op: string, args: object): string {
-  const node = subject(op, args);
+function on(args: object): string {
+  const node = subject("", args);
   return node === undefined ? "" : ` on ${JSON.stringify(node)}`;
 }

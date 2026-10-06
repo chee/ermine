@@ -101,17 +101,6 @@ Json *jsonStringOfLength(const char *text, size_t length) {
 	return value;
 }
 
-Json *jsonStringFormat(const char *format, ...) {
-	va_list arguments;
-	va_start(arguments, format);
-	char *text = vformat(format, arguments);
-	va_end(arguments);
-	Json *value = make(JSON_STRING);
-	value->string = text;
-	value->stringLength = strlen(text);
-	return value;
-}
-
 Json *jsonArray(void) {
 	return make(JSON_ARRAY);
 }
@@ -162,71 +151,61 @@ bool jsonRemove(Json *object, const char *key, size_t length) {
 	return true;
 }
 
-Json *jsonClone(const Json *value) {
-	switch (value->type) {
-		case JSON_NULL:
-			return jsonNull();
-		case JSON_BOOLEAN:
-			return jsonBoolean(value->boolean);
-		case JSON_NUMBER:
-			return jsonNumber(value->number);
-		case JSON_STRING:
-			return jsonStringOfLength(value->string, value->stringLength);
-		case JSON_ARRAY: {
-			Json *copy = jsonArray();
-			for (int i = 0; i < value->array.count; i++) jsonPush(copy, jsonClone(value->array.items[i]));
-			return copy;
-		}
-		case JSON_OBJECT: {
-			Json *copy = jsonObject();
-			for (int i = 0; i < value->object.count; i++) {
-				const JsonMember *member = &value->object.members[i];
-				jsonAddOfLength(copy, member->key, member->keyLength, jsonClone(member->value));
-			}
-			return copy;
-		}
-	}
-	return jsonNull();
-}
-
 Json *jsonShallow(const Json *value) {
-	if (value->type == JSON_ARRAY) {
-		Json *copy = jsonArray();
-		for (int i = 0; i < value->array.count; i++) jsonPush(copy, value->array.items[i]);
-		return copy;
-	}
-	if (value->type == JSON_OBJECT) {
-		Json *copy = jsonObject();
-		for (int i = 0; i < value->object.count; i++) {
-			const JsonMember *member = &value->object.members[i];
-			jsonAddOfLength(copy, member->key, member->keyLength, member->value);
-		}
-		return copy;
-	}
-	return jsonClone(value);
-}
-
-void jsonFree(Json *value) {
-	if (!value) return;
+	Json *copy = make(value->type);
 	switch (value->type) {
-		case JSON_STRING:
-			free(value->string);
-			break;
 		case JSON_ARRAY:
-			for (int i = 0; i < value->array.count; i++) jsonFree(value->array.items[i]);
-			free(value->array.items);
+			for (int i = 0; i < value->array.count; i++) jsonPush(copy, value->array.items[i]);
 			break;
 		case JSON_OBJECT:
 			for (int i = 0; i < value->object.count; i++) {
-				free(value->object.members[i].key);
-				jsonFree(value->object.members[i].value);
+				const JsonMember *member = &value->object.members[i];
+				jsonAddOfLength(copy, member->key, member->keyLength, member->value);
 			}
-			free(value->object.members);
+			break;
+		case JSON_STRING:
+			copy->string = copyStringOfLength(value->string, value->stringLength);
+			copy->stringLength = value->stringLength;
 			break;
 		default:
+			*copy = *value;
 			break;
 	}
-	free(value);
+	return copy;
+}
+
+/** a stack of values, for the walks below that would otherwise recurse once per level */
+typedef struct Stack {
+	const Json **items;
+	int count;
+	int capacity;
+} Stack;
+
+static void push(Stack *stack, const Json *value) {
+	stack->items = growArray(stack->items, stack->count, &stack->capacity, sizeof *stack->items);
+	stack->items[stack->count++] = value;
+}
+
+void jsonFree(Json *value) {
+	Stack stack = { NULL, 0, 0 };
+	if (value) push(&stack, value);
+	while (stack.count) {
+		Json *at = (Json *)stack.items[--stack.count];
+		if (at->type == JSON_STRING) {
+			free(at->string);
+		} else if (at->type == JSON_ARRAY) {
+			for (int i = 0; i < at->array.count; i++) push(&stack, at->array.items[i]);
+			free(at->array.items);
+		} else if (at->type == JSON_OBJECT) {
+			for (int i = 0; i < at->object.count; i++) {
+				free(at->object.members[i].key);
+				push(&stack, at->object.members[i].value);
+			}
+			free(at->object.members);
+		}
+		free(at);
+	}
+	free(stack.items);
 }
 
 // reading values ---------------------------------------------------------------
@@ -252,10 +231,6 @@ bool jsonIsString(const Json *value) {
 	return value && value->type == JSON_STRING;
 }
 
-bool jsonIsBoolean(const Json *value) {
-	return value && value->type == JSON_BOOLEAN;
-}
-
 bool jsonIsNumber(const Json *value) {
 	return value && value->type == JSON_NUMBER;
 }
@@ -265,46 +240,51 @@ const char *jsonText(const Json *value) {
 	return value->string;
 }
 
-const char *jsonKeyText(const JsonMember *member) {
-	return strlen(member->key) == member->keyLength ? member->key : NULL;
-}
-
 bool jsonIsWhole(const Json *value, int64_t *out) {
 	if (!jsonIsNumber(value)) return false;
-	double number = value->number;
-	if (!isfinite(number) || floor(number) != number || fabs(number) > 9007199254740992.0) return false;
-	*out = (int64_t)number;
+	double number = value->number, edge = 9223372036854775808.0; // 2^63
+	if (!isfinite(number) || floor(number) != number) return false;
+	if (out) *out = number >= edge ? INT64_MAX : number < -edge ? INT64_MIN : (int64_t)number;
 	return true;
 }
 
 bool jsonEqual(const Json *a, const Json *b) {
-	if (!a || !b) return a == b;
-	if (a->type != b->type) return false;
-	switch (a->type) {
-		case JSON_NULL:
-			return true;
-		case JSON_BOOLEAN:
-			return a->boolean == b->boolean;
-		case JSON_NUMBER:
-			return a->number == b->number;
-		case JSON_STRING:
-			return a->stringLength == b->stringLength && memcmp(a->string, b->string, a->stringLength) == 0;
-		case JSON_ARRAY:
-			if (a->array.count != b->array.count) return false;
-			for (int i = 0; i < a->array.count; i++) {
-				if (!jsonEqual(a->array.items[i], b->array.items[i])) return false;
+	// pairs to compare, two entries each
+	Stack stack = { NULL, 0, 0 };
+	push(&stack, a);
+	push(&stack, b);
+	bool equal = true;
+	while (equal && stack.count) {
+		const Json *y = stack.items[--stack.count], *x = stack.items[--stack.count];
+		if (!x || !y) {
+			equal = x == y;
+		} else if (x->type != y->type) {
+			equal = false;
+		} else if (x->type == JSON_BOOLEAN) {
+			equal = x->boolean == y->boolean;
+		} else if (x->type == JSON_NUMBER) {
+			equal = x->number == y->number;
+		} else if (x->type == JSON_STRING) {
+			equal = x->stringLength == y->stringLength && memcmp(x->string, y->string, x->stringLength) == 0;
+		} else if (x->type == JSON_ARRAY) {
+			equal = x->array.count == y->array.count;
+			for (int i = 0; equal && i < x->array.count; i++) {
+				push(&stack, x->array.items[i]);
+				push(&stack, y->array.items[i]);
 			}
-			return true;
-		case JSON_OBJECT:
-			if (a->object.count != b->object.count) return false;
-			for (int i = 0; i < a->object.count; i++) {
-				const JsonMember *member = &a->object.members[i];
-				const Json *other = jsonGetOfLength(b, member->key, member->keyLength);
-				if (!other || !jsonEqual(member->value, other)) return false;
+		} else if (x->type == JSON_OBJECT) {
+			equal = x->object.count == y->object.count;
+			for (int i = 0; equal && i < x->object.count; i++) {
+				const JsonMember *member = &x->object.members[i];
+				const Json *other = jsonGetOfLength(y, member->key, member->keyLength);
+				equal = other != NULL;
+				push(&stack, member->value);
+				push(&stack, other);
 			}
-			return true;
+		}
 	}
-	return false;
+	free(stack.items);
+	return equal;
 }
 
 // code points ------------------------------------------------------------------
@@ -386,17 +366,6 @@ static size_t utf8SequenceLength(const unsigned char *text, size_t available) {
 	return length;
 }
 
-bool utf8Valid(const char *text, size_t length) {
-	const unsigned char *bytes = (const unsigned char *)text;
-	size_t at = 0;
-	while (at < length) {
-		size_t step = utf8SequenceLength(bytes + at, length - at);
-		if (!step) return false;
-		at += step;
-	}
-	return true;
-}
-
 /** writes a code point (a surrogate too, as WTF-8) as UTF-8; returns how many bytes */
 static int utf8Encode(uint32_t code, char *out) {
 	if (code < 0x80) {
@@ -427,7 +396,6 @@ typedef struct Parser {
 	const unsigned char *text;
 	size_t length;
 	size_t at;
-	int depth;
 	char *why;
 } Parser;
 
@@ -458,8 +426,6 @@ static void skipWhitespace(Parser *parser) {
 static unsigned char peek(Parser *parser) {
 	return parser->at < parser->length ? parser->text[parser->at] : 0;
 }
-
-static Json *parseValue(Parser *parser);
 
 static Json *parseWord(Parser *parser, const char *word, Json *value) {
 	size_t length = strlen(word);
@@ -630,113 +596,10 @@ static Json *parseString(Parser *parser) {
 	return value;
 }
 
-static Json *parseArray(Parser *parser) {
-	parser->at++;
-	Json *array = jsonArray();
-	skipWhitespace(parser);
-	if (peek(parser) == ']') {
-		parser->at++;
-		return array;
-	}
-	while (true) {
-		Json *item = parseValue(parser);
-		if (!item) {
-			jsonFree(array);
-			return NULL;
-		}
-		jsonPush(array, item);
-		skipWhitespace(parser);
-		if (peek(parser) == ',') {
-			parser->at++;
-			continue;
-		}
-		if (peek(parser) == ']') {
-			parser->at++;
-			return array;
-		}
-		fail(parser, "expected , or ]");
-		jsonFree(array);
-		return NULL;
-	}
-}
-
-static Json *parseObject(Parser *parser) {
-	parser->at++;
-	Json *object = jsonObject();
-	skipWhitespace(parser);
-	if (peek(parser) == '}') {
-		parser->at++;
-		return object;
-	}
-	while (true) {
-		skipWhitespace(parser);
-		if (peek(parser) != '"') {
-			fail(parser, "expected a key");
-			jsonFree(object);
-			return NULL;
-		}
-		size_t keyLength;
-		char *key = parseStringText(parser, &keyLength);
-		if (!key) {
-			jsonFree(object);
-			return NULL;
-		}
-		skipWhitespace(parser);
-		if (peek(parser) != ':') {
-			fail(parser, "expected :");
-			free(key);
-			jsonFree(object);
-			return NULL;
-		}
-		parser->at++;
-		Json *value = parseValue(parser);
-		if (!value) {
-			free(key);
-			jsonFree(object);
-			return NULL;
-		}
-		int at = memberIndex(object, key, keyLength);
-		if (at >= 0) {
-			// a repeated key keeps the last value, as JSON.parse does
-			jsonFree(object->object.members[at].value);
-			object->object.members[at].value = value;
-		} else {
-			jsonAddOfLength(object, key, keyLength, value);
-		}
-		free(key);
-		skipWhitespace(parser);
-		if (peek(parser) == ',') {
-			parser->at++;
-			continue;
-		}
-		if (peek(parser) == '}') {
-			parser->at++;
-			return object;
-		}
-		fail(parser, "expected , or }");
-		jsonFree(object);
-		return NULL;
-	}
-}
-
-// No depth limit: a line that is one JSON object is a request, however deep
-// (JSON.parse takes it too). main.c runs the session on a stack big enough
-// for every recursion here and in the graph (see NOTES.md, Depth).
-static Json *parseNested(Parser *parser, Json *(*parse)(Parser *)) {
-	parser->depth++;
-	Json *value = parse(parser);
-	parser->depth--;
-	return value;
-}
-
-static Json *parseValue(Parser *parser) {
-	skipWhitespace(parser);
+/** a string, true, false, null or a number at the position; NULL (and a why) when there is none */
+static Json *parseScalar(Parser *parser) {
 	unsigned char c = peek(parser);
 	switch (c) {
-		case '{':
-			return parseNested(parser, parseObject);
-		case '[':
-			return parseNested(parser, parseArray);
 		case '"':
 			return parseString(parser);
 		case 't':
@@ -752,23 +615,117 @@ static Json *parseValue(Parser *parser) {
 	}
 }
 
+/** a list or object being parsed, and the key of the member whose value comes next */
+typedef struct Open {
+	Json *container;
+	char *key;
+	size_t keyLength;
+} Open;
+
+/** an object's next key and its colon, into the open object */
+static bool parseKey(Parser *parser, Open *open) {
+	skipWhitespace(parser);
+	if (peek(parser) != '"') {
+		fail(parser, "expected a key");
+		return false;
+	}
+	open->key = parseStringText(parser, &open->keyLength);
+	if (!open->key) return false;
+	skipWhitespace(parser);
+	if (peek(parser) != ':') {
+		fail(parser, "expected :");
+		return false;
+	}
+	parser->at++;
+	return true;
+}
+
+/** a whole value into the open list or object; a repeated key keeps the last value, as JSON.parse does */
+static void putInto(Open *open, Json *value) {
+	Json *container = open->container;
+	if (container->type == JSON_ARRAY) {
+		jsonPush(container, value);
+		return;
+	}
+	int at = memberIndex(container, open->key, open->keyLength);
+	if (at >= 0) {
+		jsonFree(container->object.members[at].value);
+		container->object.members[at].value = value;
+	} else {
+		jsonAddOfLength(container, open->key, open->keyLength, value);
+	}
+	free(open->key);
+	open->key = NULL;
+}
+
+// No depth limit and no recursion: a line that is one JSON object is a
+// request, however deep (JSON.parse takes it too), so the lists and objects
+// being parsed are kept on a stack of their own.
 Json *jsonParse(const char *text, size_t length, char **why) {
-	Parser parser = { (const unsigned char *)text, length, 0, 0, NULL };
-	Json *value = parseValue(&parser);
-	if (value) {
+	Parser parser = { (const unsigned char *)text, length, 0, NULL };
+	Open *opens = NULL;
+	int depth = 0, capacity = 0;
+	Json *value = NULL;
+	for (;;) {
+		// a value starts here: a scalar is whole at once, a list or object opens
 		skipWhitespace(&parser);
-		if (parser.at != parser.length) {
-			fail(&parser, "trailing characters");
-			jsonFree(value);
+		unsigned char c = peek(&parser);
+		if (c == '[' || c == '{') {
+			parser.at++;
+			opens = growArray(opens, depth, &capacity, sizeof *opens);
+			opens[depth++] = (Open){ c == '[' ? jsonArray() : jsonObject(), NULL, 0 };
+			skipWhitespace(&parser);
+			if (peek(&parser) == (c == '[' ? ']' : '}')) {
+				parser.at++;
+				value = opens[--depth].container;
+			} else {
+				if (c == '{' && !parseKey(&parser, &opens[depth - 1])) goto failed;
+				continue;
+			}
+		} else if (!(value = parseScalar(&parser))) {
+			goto failed;
+		}
+		// the value is whole: put it in its container, and close every container that ends after it
+		for (;;) {
+			if (depth == 0) goto parsed;
+			Open *open = &opens[depth - 1];
+			bool list = open->container->type == JSON_ARRAY;
+			putInto(open, value);
 			value = NULL;
+			skipWhitespace(&parser);
+			c = peek(&parser);
+			if (c == ',') {
+				parser.at++;
+				if (!list && !parseKey(&parser, open)) goto failed;
+				break;
+			}
+			if (c != (list ? ']' : '}')) {
+				fail(&parser, list ? "expected , or ]" : "expected , or }");
+				goto failed;
+			}
+			parser.at++;
+			value = open->container;
+			depth--;
 		}
 	}
-	if (!value) {
-		*why = parser.why ? parser.why : copyString("unreadable");
-		return NULL;
+parsed:
+	skipWhitespace(&parser);
+	if (parser.at == parser.length) {
+		free(opens);
+		free(parser.why);
+		return value;
 	}
-	free(parser.why);
-	return value;
+	fail(&parser, "trailing characters");
+failed:
+	// the open containers are not yet in each other: each is freed on its own
+	jsonFree(value);
+	for (int i = 0; i < depth; i++) {
+		jsonFree(opens[i].container);
+		free(opens[i].key);
+	}
+	free(opens);
+	*why = parser.why ? parser.why : copyString("unreadable");
+	return NULL;
 }
 
 // the printer ------------------------------------------------------------------
@@ -871,7 +828,9 @@ static void putString(Bytes *bytes, const char *text, size_t length) {
 	putBytes(bytes, "\"", 1);
 }
 
-static void putValue(Bytes *bytes, const Json *value) {
+/** a scalar as JSON.stringify writes it */
+static void putScalar(Bytes *bytes, const Json *value) {
+	char spelled[32];
 	switch (value->type) {
 		case JSON_NULL:
 			putText(bytes, "null");
@@ -879,39 +838,61 @@ static void putValue(Bytes *bytes, const Json *value) {
 		case JSON_BOOLEAN:
 			putText(bytes, value->boolean ? "true" : "false");
 			break;
-		case JSON_NUMBER: {
-			char spelled[32];
+		case JSON_NUMBER:
 			jsonNumberText(value->number, spelled);
 			putText(bytes, spelled);
 			break;
-		}
 		case JSON_STRING:
 			putString(bytes, value->string, value->stringLength);
 			break;
-		case JSON_ARRAY:
-			putBytes(bytes, "[", 1);
-			for (int i = 0; i < value->array.count; i++) {
-				if (i) putBytes(bytes, ",", 1);
-				putValue(bytes, value->array.items[i]);
-			}
-			putBytes(bytes, "]", 1);
-			break;
-		case JSON_OBJECT:
-			putBytes(bytes, "{", 1);
-			for (int i = 0; i < value->object.count; i++) {
-				if (i) putBytes(bytes, ",", 1);
-				putString(bytes, value->object.members[i].key, value->object.members[i].keyLength);
-				putBytes(bytes, ":", 1);
-				putValue(bytes, value->object.members[i].value);
-			}
-			putBytes(bytes, "}", 1);
+		default:
 			break;
 	}
 }
 
+/** a list or object being printed, and how many of its members are out */
+typedef struct Printing {
+	const Json *container;
+	int next;
+} Printing;
+
+// No recursion: the lists and objects being printed are kept on a stack of their own.
 char *jsonPrint(const Json *value) {
 	Bytes bytes = { NULL, 0, 0 };
-	putValue(&bytes, value);
+	Printing *stack = NULL;
+	int depth = 0, capacity = 0;
+	while (value) {
+		if (value->type == JSON_ARRAY || value->type == JSON_OBJECT) {
+			putBytes(&bytes, value->type == JSON_ARRAY ? "[" : "{", 1);
+			stack = growArray(stack, depth, &capacity, sizeof *stack);
+			stack[depth++] = (Printing){ value, 0 };
+		} else {
+			putScalar(&bytes, value);
+		}
+		// the next value to print, closing every container that is done
+		value = NULL;
+		while (depth && !value) {
+			Printing *top = &stack[depth - 1];
+			const Json *container = top->container;
+			bool list = container->type == JSON_ARRAY;
+			if (top->next == (list ? container->array.count : container->object.count)) {
+				putBytes(&bytes, list ? "]" : "}", 1);
+				depth--;
+				continue;
+			}
+			if (top->next) putBytes(&bytes, ",", 1);
+			if (list) {
+				value = container->array.items[top->next];
+			} else {
+				const JsonMember *member = &container->object.members[top->next];
+				putString(&bytes, member->key, member->keyLength);
+				putBytes(&bytes, ":", 1);
+				value = member->value;
+			}
+			top->next++;
+		}
+	}
+	free(stack);
 	putBytes(&bytes, "", 1);
 	return bytes.text;
 }
