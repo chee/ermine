@@ -128,6 +128,13 @@ type Process = {
   /** no run since it started has run its effect */
   fresh: boolean;
   lasting: Bound;
+  /**
+   * What its effects are given as lasting: it passes each call to lasting, or,
+   * while a handler is called, to the interface bound to the agent firing it
+   */
+  door: Interface;
+  /** the interface a handler call acts through, while one is called */
+  firing?: Bound;
   handlers: Map<string, Handler>;
   cleanup?: () => void;
   /** the nodes its last compute read the value of, and every node it read */
@@ -327,7 +334,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   }
 
   function start(r: Reached, c: Change) {
-    running.set(r.id, {
+    const p: Process = {
       id: r.id,
       agent: c.agent,
       cwd: r.cwd,
@@ -335,12 +342,31 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
       height: 0,
       fresh: true,
       lasting: top.bind(top, { ...binding(c.agent, r), writes: true, reads: false }),
+      door: undefined!,
       handlers: new Map(),
       values: new Set(),
       read: new Set(),
       wrote: false,
-    });
+    };
+    p.door = door(p);
+    running.set(r.id, p);
     due.set(r.id, { marks: [c], first: c.time });
+  }
+
+  /**
+   * A process's lasting interface as its effects hold it: each call goes to the
+   * process's own, as its actor, or, during a handler call, to the one bound to
+   * the agent that fired it (SCHEDULER.tex: the host binds each call of a
+   * handler to the actor it can vouch for). It follows the process when it moves.
+   */
+  function door(p: Process): Interface {
+    return new Proxy({} as Interface, {
+      get(_, k) {
+        const to = (p.firing ?? p.lasting) as unknown as { [k: string | symbol]: unknown };
+        const v = to[k];
+        return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(to) : v;
+      },
+    });
   }
 
   /** Runs a process at the place the walk now reaches it, its lasting interface bound there. */
@@ -520,7 +546,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
         name: p.name,
         value: run.result!.value,
         ...previous,
-        lasting: p.lasting,
+        lasting: p.door,
         handler: (name, h) => void p.handlers.set(name, h),
       });
       if (typeof after === "function") p.cleanup = after;
@@ -573,12 +599,23 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
     const [, settled] = request(() => {
       const outer = gathering;
       gathering = changes;
+      let firing: Bound | undefined;
       try {
+        // the call acts as the agent of the fire request; without one, as the process's actor
+        if (op.agent !== undefined) {
+          firing = p.firing = top.bind(top, {
+            ...binding(op.agent, p),
+            writes: true,
+            reads: false,
+          });
+        }
         if ("input" in op && op.input !== undefined) handler(op.input);
         else handler();
       } catch (e) {
         error = { error: e };
       } finally {
+        p.firing = undefined;
+        firing?.end();
         gathering = outer;
       }
     });

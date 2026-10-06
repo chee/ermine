@@ -5,9 +5,10 @@
 // under its seq, nothing else goes to stdout, and the harness exits when
 // stdin closes. Only the graph stack is built: a reset with stack "protect"
 // or "drive" is unsupported, and so are batch and fire. A request is checked
-// field by field, in the order the commands below read them, and the first
-// problem answers (missing, wrong-field); then the graph checks it. The
-// readings the protocol leaves open are in NOTES.md.
+// field by field, in PROTOCOL's order (cmd, agent, process, place, chroot,
+// address, name, id, position, value, patches, cause, time, then the
+// command's own), and the first problem answers (missing, wrong-field); then
+// the graph checks it. The readings the protocol leaves open are in NOTES.md.
 //
 // Requests are never freed (the graph keeps parts of them); each printed
 // answer is.
@@ -23,6 +24,8 @@
 /** one subscription's changes since the last events */
 typedef struct Queue {
 	ERM_LIST(Json *) events;
+	bool unsubscribed; // the next events still hands over what arrived before
+	bool gone;         // and after that, no request may name it
 } Queue;
 
 /** what reset built */
@@ -93,11 +96,11 @@ static bool whole(Request *request, const char *key, bool required, int64_t leas
 	return false;
 }
 
-/** a time: a whole number of any size, kept as given; whether it is late enough is for the graph (code time) */
+/** a time: a whole number from 1, of any size, kept as given; whether it is late enough is for the graph (code time) */
 static ErmTime timeOf(Request *request) {
 	Json *value = field(request, "time", true);
 	if (!value) return 0;
-	if (jsonIsWhole(value, NULL)) return value->number;
+	if (jsonIsWhole(value, NULL) && value->number >= 1) return value->number;
 	problem(request, "wrong-field", "time");
 	return 0;
 }
@@ -142,10 +145,14 @@ static void queueChange(void *data, const ErmChange *change) {
 	ERM_PUSH(queue->events, keyed("change", ermChangeToJson(change)));
 }
 
-/** the queue of the subscription the request names, or NULL (wrong-field sub) */
+/**
+ * The queue of the subscription the request's sub names: subscriptions are
+ * numbered from 1 in the order they were made. NULL (wrong-field sub) for a
+ * number there never was, or one unsubscribed whose last events was taken.
+ */
 static Queue *queueOf(Session *session, Request *request, int64_t *sub) {
 	if (!whole(request, "sub", true, 1, sub)) return NULL;
-	if (*sub > session->queues.count) {
+	if (*sub > session->queues.count || session->queues.items[*sub - 1]->gone) {
 		problem(request, "wrong-field", "sub");
 		return NULL;
 	}
@@ -154,7 +161,24 @@ static Queue *queueOf(Session *session, Request *request, int64_t *sub) {
 
 // commands -------------------------------------------------------------------------
 
-/** PROTOCOL Commands, below drive */
+/**
+ * PROTOCOL Commands: events {sub}, not an operation, so it carries no agent:
+ * what arrived since the last events. After unsubscribe the next events
+ * still hands over what arrived before it, once, as a program would already
+ * have been called back with it.
+ */
+static Reply events(Session *session, Request *request) {
+	int64_t sub;
+	Queue *queue = queueOf(session, request, &sub);
+	if (request->err.kind) return replyError(request->err);
+	Json *list = jsonArray();
+	for (int i = 0; i < queue->events.count; i++) jsonPush(list, queue->events.items[i]);
+	queue->events.count = 0;
+	queue->gone = queue->unsubscribed;
+	return replyOk(list);
+}
+
+/** PROTOCOL Commands, below drive: CORE's operations */
 static Reply command(Session *session, Request *request) {
 	const char *cmd = request->cmd;
 	ErmCtx ctx = ctxOf(request);
@@ -169,19 +193,15 @@ static Reply command(Session *session, Request *request) {
 		ERM_PUSH(session->queues, queue);
 		return replyOk(keyed("sub", jsonInteger(sub)));
 	}
-	if (strcmp(cmd, "unsubscribe") == 0 || strcmp(cmd, "events") == 0) {
+	if (strcmp(cmd, "unsubscribe") == 0) {
 		int64_t sub;
 		Queue *queue = queueOf(session, request, &sub);
+		if (queue && queue->unsubscribed) problem(request, "wrong-field", "sub");
 		if (request->err.kind) return replyError(request->err);
-		if (strcmp(cmd, "events") == 0) {
-			// what arrived since the last events; unsubscribing keeps what already arrived
-			Json *list = jsonArray();
-			for (int i = 0; i < queue->events.count; i++) jsonPush(list, queue->events.items[i]);
-			queue->events.count = 0;
-			return replyOk(list);
-		}
 		ErmErr err = top.vt->unsubscribe(top.self, &ctx, sub);
-		return err.kind ? replyError(err) : replyOk(jsonNull());
+		if (err.kind) return replyError(err);
+		queue->unsubscribed = true;
+		return replyOk(jsonNull());
 	}
 	ErmOp op = { 0 };
 	ErmStamp stamp = { 0 };
@@ -215,11 +235,13 @@ static Reply command(Session *session, Request *request) {
 
 static Reply respond(Session *session, Request *request) {
 	const char *cmd = request->cmd;
-	if (strcmp(cmd, "batch") == 0 || strcmp(cmd, "fire") == 0) return (Reply){ NULL, ermOk(), cmd }; // only with drive
-	// CORE's operations; reset and events are the harness's, so their errors name no op (PROTOCOL Errors)
-	bool operation = strcmp(cmd, "subscribe") == 0 || strcmp(cmd, "unsubscribe") == 0;
+	// An error names its command as op when the command is an operation, session or not (PROTOCOL Errors):
+	// CORE's operations, and batch, the driver's own (DRIVER Outside operations, batches and handlers).
+	// reset, events and fire are the harness's, so their errors name no op.
+	bool operation = strcmp(cmd, "subscribe") == 0 || strcmp(cmd, "unsubscribe") == 0 || strcmp(cmd, "batch") == 0;
 	for (int kind = ERM_OP_READ; kind <= ERM_OP_UNPLACE; kind++) operation = operation || strcmp(cmd, ermOpName(kind)) == 0;
-	if (!operation && strcmp(cmd, "reset") != 0 && strcmp(cmd, "events") != 0) {
+	bool drive = strcmp(cmd, "batch") == 0 || strcmp(cmd, "fire") == 0; // only with drive
+	if (!operation && !drive && strcmp(cmd, "reset") != 0 && strcmp(cmd, "events") != 0) {
 		return replyError(ermDetail(ermInvalid("unknown-command"), "cmd", jsonString(cmd)));
 	}
 	Reply reply;
@@ -228,6 +250,10 @@ static Reply respond(Session *session, Request *request) {
 	} else if (!session->started) {
 		problem(request, "missing", "reset");
 		reply = replyError(ermDetail(request->err, "text", jsonString("no session: send reset first")));
+	} else if (drive) {
+		reply = (Reply){ NULL, ermOk(), cmd };
+	} else if (strcmp(cmd, "events") == 0) {
+		reply = events(session, request);
 	} else {
 		reply = command(session, request);
 	}
@@ -237,12 +263,26 @@ static Reply respond(Session *session, Request *request) {
 
 // lines ----------------------------------------------------------------------------
 
+/**
+ * The seq a line that is not one JSON object is answered under: a "seq" key
+ * of the object it starts with, holding a whole number (0, 1, 2 ...), that a
+ * parser reading the line from its start reached before the line stopped
+ * being JSON; otherwise null.
+ */
+static Json *seqRead(Json *read) {
+	Json *seq = jsonGet(read, "seq");
+	int64_t n;
+	return jsonIsWhole(seq, &n) && n >= 0 ? jsonNumber(seq->number) : jsonNull();
+}
+
 /** one line in, one answer out (PROTOCOL Lines) */
 static Json *answerLine(Session *session, const char *line, size_t length) {
 	char *why = NULL;
-	Json *json = jsonParse(line, length, &why);
+	Json *read = NULL;
+	Json *json = jsonParseRead(line, length, &why, &read);
 	Json *answer = jsonObject();
-	Json *seq = jsonIsObject(json) ? jsonGet(json, "seq") : NULL;
+	Json *seq = jsonIsObject(json) ? jsonGet(json, "seq") : seqRead(read);
+	jsonFree(read);
 	jsonAdd(answer, "seq", seq ? seq : jsonNull());
 	Reply reply;
 	if (!jsonIsObject(json)) {

@@ -18,8 +18,9 @@ export type Site = { file: string; line: number; column: number };
 
 /**
  * An address: an optional first "/", which starts at the start of the
- * interface's place; then any "..", each going up one along the place; then
- * names, going down. ".", ".." and "/" are never names.
+ * interface's place; then any "..", each going back one step the way the
+ * place was reached, to the node its walk came through; then names, going
+ * down. ".", ".." and "/" are never names.
  */
 export type Address = readonly string[];
 
@@ -135,7 +136,11 @@ export type Stamp = { time?: number; cause?: Json };
 
 export type ReadOp = Acting & { address: Address };
 export type DirectoryOp = Acting & { address: Address; name?: string };
-/** The search starts at the place's directory, ".", and goes up to its start. */
+/**
+ * The search goes through the directories the place's walk went through,
+ * from the one it reaches, ".", back up to its start, and takes the nearest
+ * slot with the name that holds a node that is here.
+ */
 export type LookupOp = Acting & { name: string };
 export type WriteOp = Acting & Stamp & { address: Address; patches: readonly Patch[] };
 /** With a value, makes the node; without one, places it, or mounts it if the graph does not have it. */
@@ -174,7 +179,12 @@ export type Finishing = { value?: Json; cleanup?: ChangeRef[]; errors?: RecordEr
  * may add operations, and passes on those it does not know.
  */
 export interface Interface {
-  /** The items of the value of the node the address reaches: one, or none. */
+  /**
+   * An item for each node the address's last name selects that is here, in
+   * slot order, each with its own value, from and change: the first is the
+   * node the address reaches. An address with no names, or only "..", reads
+   * the one node it reaches; one that reaches nothing reads as none.
+   */
   read(op: ReadOp): ValueItem[];
   /** The items of one slot, or every name with its slot's items; of a union's members together. */
   directory(op: DirectoryOp): Listing;
@@ -183,6 +193,11 @@ export interface Interface {
   write(op: WriteOp): Changed;
   place(op: PlaceOp): Changed;
   unplace(op: UnplaceOp): Changed;
+  /**
+   * Sends each change to the node the address reaches, following the address
+   * as its route changes, and each placement that changes its route, whether
+   * or not it then reaches another node. Numbered from 1, in the order made.
+   */
   subscribe(op: SubscribeOp): { sub: number };
   unsubscribe(op: UnsubscribeOp): void;
   /** An interface acting as that agent and process, at that place. */
@@ -218,8 +233,8 @@ export interface Bound extends Interface {
 
 /**
  * A program read through a recording: every id in its slot, the first whose
- * node is here (the one used), and that node's value items, none if no id is
- * here or the node gave none.
+ * node is here (the one used), and the items of reading the slot's address,
+ * the used node's first: none if no id is here or the node gave none.
  */
 export type Program = { node?: Id; slot: Id[]; items: ValueItem[] };
 

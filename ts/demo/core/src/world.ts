@@ -9,9 +9,11 @@
 // the workspace and the panes name into addresses from the root that reach them.
 
 import { signal } from "@preact/signals";
+import * as ermine from "../../../src/mod.ts";
 import {
   type Address,
   applyPatches,
+  back,
   byCodePoint,
   type Change,
   type ChangeRef,
@@ -30,7 +32,6 @@ import {
   members,
   parseAddress,
   type Patch,
-  type PathFrom,
   PENDING,
   placed,
   protect,
@@ -131,7 +132,7 @@ export function problem(e: unknown): Problem {
 const AGENT_COLORS = ["rose", "lilac", "mint", "butter", "sky", "peach"];
 
 /** One frame of a snippet in a stack: snippets are evaluated with a sourceURL. */
-const SNIPPET_FRAME = /ermine:snippet-(\d+):(\d+):(\d+)/;
+const SNIPPET_FRAME = /ermine:snippet-(\d+)(?:, <anonymous>)?:(\d+):(\d+)/;
 /** Snippets are wrapped in one line of function header. */
 const HEADER_LINES = 1;
 
@@ -165,6 +166,7 @@ export class World {
   driver!: Driver;
   /** the layer under protect: what the trusted host sees */
   bare!: Interface;
+  #guarded!: Interface;
   #n = 0;
   /** which reset made the graph being watched */
   #gen = 0;
@@ -187,6 +189,7 @@ export class World {
 
   /** A fresh graph: everything made so far is gone. Rules and agents stay. */
   reset() {
+    for (const [id, p] of this.#previews) this.#unpreview(id, p);
     for (const el of this.screens.values()) el.remove();
     this.screens.clear();
     this.log = [];
@@ -229,13 +232,16 @@ export class World {
       change: (c) => gen === this.#gen && this.#change(c),
       record: (r) => gen === this.#gen && this.#record(r),
     });
-    this.driver = drive(protect(this.bare, may), ROOT, this.#load);
+    this.#guarded = protect(this.bare, may);
+    this.driver = drive(this.#guarded, ROOT, this.#load);
     this.driver.top(this.driver);
     this.bump();
   }
 
+  #previewing = false;
+
   bump() {
-    if (this.#bump) return;
+    if (this.#bump || this.#previewing) return;
     this.#bump = true;
     queueMicrotask(() => {
       this.#bump = false;
@@ -247,16 +253,162 @@ export class World {
           this.screens.delete(id);
         }
       }
+      this.#follow();
       this.version.value++;
     });
   }
 
+  /** Each screen drawn again for an agent its process does not run as: when, and its cleanup. */
+  #previews = new Map<Id, { agent: string; t: number; value?: Json; cleanup?: () => void }>();
+
+  /**
+   * The stage follows the acting agent. A process runs as its starter, and
+   * its screen shows what that agent sees. For any other agent the screen is
+   * drawn again beside it, from the same programs run as that agent: reads
+   * through protect, writes nowhere. It is drawn again when the graph changes.
+   */
+  #follow() {
+    for (const [id, p] of this.#previews) {
+      if (!this.screens.has(id)) this.#unpreview(id, p);
+    }
+    for (const [id, box] of this.screens) {
+      const own = box.querySelector(":scope > .own") as HTMLElement;
+      const starter = this.records.get(id)?.at(-1)?.agent;
+      if (starter === undefined || starter === this.agent) {
+        const p = this.#previews.get(id);
+        if (p) this.#unpreview(id, p);
+        own.style.display = "";
+        continue;
+      }
+      own.style.display = "none";
+      const was = this.#previews.get(id);
+      if (was?.agent === this.agent && was.t === this.#t) continue;
+      if (was && was.agent !== this.agent) this.#unpreview(id, was);
+      let seen = box.querySelector(":scope > .seen") as HTMLElement | null;
+      if (!seen) {
+        seen = document.createElement("div");
+        seen.className = "seen";
+        box.insertBefore(seen, own.nextSibling);
+      }
+      this.#previewing = true;
+      try {
+        this.#preview(id, seen, was?.agent === this.agent ? was : undefined);
+      } finally {
+        this.#previewing = false;
+      }
+    }
+  }
+
+  #unpreview(id: Id, p: { cleanup?: () => void }) {
+    this.#previews.delete(id);
+    try {
+      p.cleanup?.();
+    } catch { /* a preview's cleanup is not the process's */ }
+    this.screens.get(id)?.querySelector(":scope > .seen")?.remove();
+  }
+
+  /** Draws on seen what a process would show the acting agent, or why it shows nothing. */
+  #preview(id: Id, seen: HTMLElement, was?: { value?: Json; cleanup?: () => void }) {
+    const agent = this.agent;
+    const note = (text: string) => {
+      const d = document.createElement("div");
+      d.className = "label";
+      d.textContent = text;
+      seen.replaceChildren(d);
+    };
+    const preview: { agent: string; t: number; value?: Json; cleanup?: () => void } = {
+      agent,
+      t: this.#t,
+    };
+    try {
+      was?.cleanup?.();
+    } catch { /* as above */ }
+    this.#previews.set(id, preview);
+    const at = this.running().get(id);
+    const code = (part: string) => {
+      const node = this.slotOf(id, part)[0];
+      return node === undefined ? undefined : this.valueOf(node);
+    };
+    const compute = code("compute");
+    if (!at || compute === undefined) return note(`nothing to show ${agent}`);
+    try {
+      const api = this.#guarded.bind(this.#guarded, {
+        agent,
+        process: id,
+        place: at.cwd,
+        writes: false,
+      });
+      const value = (this.#load(compute, "compute") as Compute)({
+        api,
+        self: id,
+        cwd: at.cwd,
+        name: at.name,
+        changes: [],
+      });
+      if (value === PENDING || value === undefined) return note(`waiting, as ${agent}`);
+      preview.value = value;
+      const effect = code("effect");
+      if (effect === undefined) return note(J(value));
+      const nothing: Interface = new Proxy({} as Interface, { get: () => () => undefined });
+      // the effect's screen() is this one, and its writes go nowhere
+      const draw = this.screenFor;
+      this.screenFor = (p: Id) => p === id ? seen : draw.call(this, p);
+      try {
+        const after = (this.#load(effect, "effect") as Effect)({
+          api: nothing,
+          lasting: nothing,
+          self: id,
+          cwd: at.cwd,
+          name: at.name,
+          value,
+          ...(was?.value === undefined ? {} : { previous: was.value }),
+          handler: () => {},
+        });
+        if (typeof after === "function") preview.cleanup = after;
+      } finally {
+        this.screenFor = draw;
+      }
+    } catch (e) {
+      note(`${agent}: ${problem(e).why}`);
+    }
+  }
+
   #push(e: Unnumbered) {
+    // a preview is not part of the history
+    if (this.#previewing) return;
     this.log.push({ ...e, n: ++this.#n } as Entry);
     this.bump();
   }
 
-  #change(c: Change) {
+  /**
+   * Whether nobody may read a node: a rule, on, refuses everything on it to
+   * everyone. The host keeps its value out of its own copy, so nothing the
+   * demo shows has it, not even the host's eye; only revealed() reads it.
+   */
+  secret(node: Id): boolean {
+    return this.rules.some((r) =>
+      r.on && !r.allow && r.node === node && r.agent === undefined && r.op === undefined &&
+      r.process === undefined
+    );
+  }
+
+  /** What stands for a secret's value in the host's copy, the log and boot images. */
+  static HIDDEN = "•••";
+
+  /** A secret's value, read beneath protect, for the host to hand on. Nothing shows it. */
+  revealed(node: Id): Json | undefined {
+    const address = this.addressOf(node);
+    if (!address) return undefined;
+    return this.bare.read({ agent: "host", address })[0]?.value;
+  }
+
+  #change(change: Change) {
+    // a secret's change is kept with its value hidden
+    const c: Change = change.kind === "write" && this.secret(change.node)
+      ? { ...change, patches: [{ type: "snapshot", value: World.HIDDEN }] }
+      : change.kind === "place" && change.value !== undefined && this.secret(change.id)
+      ? { ...change, value: World.HIDDEN }
+      : change;
     this.#t++;
     this.#byTime.set(c.time, c);
     // a placement with a value made the node it placed: the parent's change and the node's first
@@ -297,7 +449,10 @@ export class World {
         } catch {
           // the graph applied it; a copy that disagrees is the host's own trouble
         }
-        if (!c.process) this.inverses.set(k, { op: "write", node: c.node, value: before });
+        // a secret's old value is not the host's to keep, so its write is not undone
+        if (!c.process && !this.secret(c.node)) {
+          this.inverses.set(k, { op: "write", node: c.node, value: before });
+        }
         break;
       }
       case "place":
@@ -464,6 +619,40 @@ export class World {
     });
   }
 
+  /** Every node the root reaches, by placement after placement, addressed or not. */
+  reachable(): Set<Id> {
+    return this.#keep("reachable", () => {
+      const seen = new Set<Id>();
+      const queue: Id[] = this.made.has(ROOT) ? [ROOT] : [];
+      while (queue.length) {
+        const at = queue.shift()!;
+        if (seen.has(at)) continue;
+        seen.add(at);
+        for (const [, ids] of this.slotsOf(at)) {
+          for (const id of ids) if (this.made.has(id) && !seen.has(id)) queue.push(id);
+        }
+      }
+      return seen;
+    });
+  }
+
+  /** undo and redo may place again what they took out of the root's reach */
+  #reviving = false;
+
+  /**
+   * Checks an id may be placed: one the graph does not have is mounted, and
+   * one the root reaches is placed again. A node nothing reaches is gone, and
+   * is not placed again (CORE.tex): a new node takes a new id.
+   */
+  #placeable(id: Id) {
+    if (this.#reviving || !this.made.has(id) || this.reachable().has(id)) return;
+    throw new Error(
+      `${
+        J(id)
+      } is a node nothing reaches: it is gone, and cannot be placed again (CORE.tex); use another id`,
+    );
+  }
+
   /**
    * An address from the root that reaches the node: the route's names, if
    * they reach it, or else the shortest. Undefined when none does: a node
@@ -567,11 +756,13 @@ export class World {
    * A node's value, read by an address that reaches it: the route's, if it
    * does, or the shortest. A node no address reaches reads as nothing.
    */
-  read(node: Id, route?: readonly Step[]): Reading {
+  read(node: Id, route?: readonly Step[], agent: Json = this.agent): Reading {
+    if (this.secret(node)) return { refused: "nobody may read it" };
     const address = this.addressOf(node, route);
     if (!address) return { items: [] };
     try {
-      const items = this.view.read({ agent: this.agent, address });
+      // the first item is the node the address reaches; the rest are the others in its slot
+      const items = this.view.read({ agent, address }).slice(0, 1);
       return items.length ? { items, value: items[0].value, address } : { items, address };
     } catch (e) {
       return { refused: problem(e).why };
@@ -666,8 +857,9 @@ export class World {
     if (!p) return undefined;
     try {
       const { root, up } = parseAddress(x.address);
-      const base = root ? [] : p.cwd;
-      return walk(this.#view, ROOT, base.slice(0, base.length - up)).node;
+      // each ".." goes back one step the way the place was reached, along its walk
+      if (root) return ROOT;
+      return up > p.cwd.length ? undefined : back(this.#view, ROOT, p.cwd, up);
     } catch {
       return undefined;
     }
@@ -678,12 +870,13 @@ export class World {
    * agent: each step an ordinary read of one slot, nearest first, as the graph
    * makes them, to show what was searched; then the lookup itself.
    */
-  lookup(name: string, route: readonly Step[]): Found {
+  lookup(name: string, route: readonly Step[], agent: Json = this.agent): Found {
     const place = route.slice(0, -1).map((s) => s.name);
-    const as = { agent: this.agent, place };
+    const as = { agent, place };
     const searched: Searched[] = [];
     for (let k = 0; k <= place.length; k++) {
-      const node = walk(this.#view, ROOT, place.slice(0, place.length - k)).node;
+      // the directory the place's walk came through, k steps back
+      const node = back(this.#view, ROOT, place, k);
       const address = Array.from({ length: k }, () => "..");
       try {
         const d = this.view.directory({ ...as, address, name });
@@ -691,7 +884,8 @@ export class World {
         let saw: number | null = null;
         for (const i of items) if (saw === null || i.change.time > saw) saw = i.change.time;
         if (node !== undefined) searched.push({ node, saw });
-        if (items.length) break;
+        // a slot whose ids are all absent is passed over
+        if (items.some((i) => !i.pending)) break;
       } catch (e) {
         if (!(e instanceof Refused)) throw e;
         if (node !== undefined) searched.push({ node, refused: true });
@@ -753,6 +947,10 @@ export class World {
   vocabulary() {
     const api = this.host();
     const has = (id: Id) => this.made.has(id);
+    /** an id with that stem the graph does not have */
+    const fresh = (stem: string) => {
+      for (let i = 2;; i++) if (!has(`${stem}-${i}`)) return `${stem}-${i}`;
+    };
     const at = (node: Id | Address) => this.#need(node);
     const value = (items: ValueItem[]) => items.length ? items[0].value : undefined;
     const words = {
@@ -762,8 +960,10 @@ export class World {
        * change, the parent's and the node's first. An id the graph has is
        * placed once more.
        */
-      make: (parent: Id | Address, name: string, id: Id, value: Json = null) =>
-        made(api, has, at(parent), name, id, value),
+      make: (parent: Id | Address, name: string, id: Id, value: Json = null) => {
+        this.#placeable(id);
+        return made(api, has, at(parent), name, id, value);
+      },
       write: (node: Id | Address, value: Json) =>
         api.write({ address: at(node), patches: [{ type: "snapshot", value }] }),
       patch: (node: Id | Address, ...patches: Patch[]) => api.write({ address: at(node), patches }),
@@ -789,12 +989,14 @@ export class World {
             value === undefined ? { type: "set", path, key } : { type: "set", path, key, value },
           ],
         }),
-      place: (parent: Id | Address, name: string, id: Id, position?: number) =>
-        api.place(
+      place: (parent: Id | Address, name: string, id: Id, position?: number) => {
+        this.#placeable(id);
+        return api.place(
           position === undefined
             ? { address: at(parent), name, id }
             : { address: at(parent), name, id, position },
-        ),
+        );
+      },
       unplace: (parent: Id | Address, name: string, id: Id) =>
         api.unplace({ address: at(parent), name, id }),
       /** A node's value: the first item's; undefined if no address reaches it. */
@@ -818,8 +1020,10 @@ export class World {
       lookup: (name: string, place?: string[]) =>
         api.lookup(place === undefined ? { name } : { name, place }).map((i) => i.id),
       /** A program node, JS source or a list of steps, made in a parent's slot of its name. */
-      program: (parent: Id | Address, id: Id, code: Json) =>
-        made(api, has, at(parent), id, id, code),
+      program: (parent: Id | Address, id: Id, code: Json) => {
+        this.#placeable(id);
+        return made(api, has, at(parent), id, id, code);
+      },
       /**
        * A process: made by placing it in parent's slot name, then its programs
        * in its own slots. A process node the root reaches runs where it sits,
@@ -833,6 +1037,12 @@ export class World {
         id: Id,
         o: { compute: Json; effect?: Json; value?: Json },
       ) => {
+        this.#placeable(id);
+        for (const part of ["compute", "effect"] as const) {
+          const code = o[part];
+          if (typeof code === "string" && this.made.has(code)) this.#placeable(code);
+          else if (code !== undefined) this.#placeable(`${id}.${part}`);
+        }
         api.batch(() => {
           made(api, has, at(parent), name, id, o.value ?? null);
           for (const part of ["compute", "effect"] as const) {
@@ -847,8 +1057,48 @@ export class World {
         });
         return id;
       },
-      start: (id: Id, under: Id | Address = ROOT, name: string = id) =>
-        api.place({ address: at(under), name, id }),
+      /**
+       * A UI that is reactive by construction, for a model too small to write
+       * a compute and an effect: a process in parent's slot name whose compute,
+       * shared, looks up each name in state and watch from where it sits and
+       * reads it, so it runs again when any of them changes; and whose effect,
+       * shared, draws with draw, the source of a function ({ h, state, set }) to
+       * an element. set(name, value) writes that name through a handler, so a
+       * click is credited to whoever clicked. State not found is made beside it.
+       */
+      ui: (
+        parent: Id | Address,
+        name: string,
+        o: { state?: { [name: string]: Json }; watch?: string[]; draw: string; id?: Id },
+      ) => {
+        const id = o.id ?? (has(name) ? fresh(name) : name);
+        const from = at(parent);
+        api.batch(() => {
+          for (const [k, v] of Object.entries(o.state ?? {})) {
+            if (!api.lookup({ name: k, place: from }).length) {
+              made(api, has, from, k, has(k) ? fresh(k) : k, v);
+            }
+          }
+          if (!has("programs")) made(api, has, [], "programs", "programs", {});
+          for (const [part, code] of [["compute", UI_COMPUTE], ["effect", UI_EFFECT]] as const) {
+            if (!has(`ui-${part}`)) {
+              made(api, has, at("programs"), `ui-${part}`, `ui-${part}`, code);
+            }
+          }
+          made(api, has, from, name, id, null);
+          api.place({ address: at(id), name: "compute", id: "ui-compute" });
+          api.place({ address: at(id), name: "effect", id: "ui-effect" });
+          made(api, has, at(id), "watch", `${id}.watch`, [
+            ...new Set([...Object.keys(o.state ?? {}), ...(o.watch ?? [])]),
+          ]);
+          made(api, has, at(id), "draw", `${id}.draw`, o.draw);
+        });
+        return id;
+      },
+      start: (id: Id, under: Id | Address = ROOT, name: string = id) => {
+        this.#placeable(id);
+        return api.place({ address: at(under), name, id });
+      },
       stop: (id: Id, under: Id | Address = ROOT, name: string = id) =>
         api.unplace({ address: at(under), name, id }),
       fire: (process: Id, handler: string, input?: Json) =>
@@ -881,16 +1131,29 @@ export class World {
     return words;
   }
 
-  /** Runs code as a snippet: its changes carry its site. Returns the snippet. */
-  run(code: string, label?: string, kind: "act" | "undo" | "redo" | "boot" = "act"): Snippet {
+  /**
+   * Runs code as a snippet: its changes carry its site. It acts as the
+   * world's agent, unless another is given. Returns the snippet.
+   */
+  run(
+    code: string,
+    label?: string,
+    /** talk: a snippet that keeps a conversation, which undo passes over */
+    kind: "act" | "undo" | "redo" | "boot" | "talk" = "act",
+    agent?: string,
+    /** words besides the vocabulary, for what must not be written into the code, such as a key */
+    more: { [word: string]: unknown } = {},
+  ): Snippet {
     const n = this.snippets.length + 1;
-    const snippet: Snippet = { n, code, label, agent: this.agent, times: [] };
+    const snippet: Snippet = { n, code, label, agent: agent ?? this.agent, times: [] };
     this.snippets.push(snippet);
     this.#push({ t: "snippet", snippet: n });
-    const words = this.vocabulary();
+    const words = { ...this.vocabulary(), ...more };
     const names = Object.keys(words);
     const outer = this.#snippet;
-    this.#snippet = { n };
+    this.#snippet = { n, agent };
+    const reviving = this.#reviving;
+    this.#reviving = reviving || kind === "undo" || kind === "redo";
     try {
       const fn = (0, eval)(
         `(function (${names.join(", ")}) {\n${code}\n})\n//# sourceURL=ermine:snippet-${n}`,
@@ -904,6 +1167,7 @@ export class World {
       this.#push({ t: "error", error: snippet.error, snippet: n });
     } finally {
       this.#snippet = outer;
+      this.#reviving = reviving;
       this.bump();
     }
     // a new act can be undone, and makes what was undone no longer redoable
@@ -915,13 +1179,13 @@ export class World {
   }
 
   /** Runs a snippet whose last expression is its value, as print-it does. */
-  print(code: string, label?: string): Snippet {
+  print(code: string, label?: string, agent?: string): Snippet {
     const lines = code.trimEnd().split("\n");
     const last = lines.pop() ?? "";
     const body = /^\s*(return|const|let|var|if|for|while|function|class)\b/.test(last)
       ? code
       : [...lines, `return (${last.replace(/;\s*$/, "")})`].join("\n");
-    return this.run(body, label);
+    return this.run(body, label, "act", agent);
   }
 
   // --- boot images: the graph as code that rebuilds it ---
@@ -934,7 +1198,7 @@ export class World {
    * What the root does not reach cannot be addressed (CORE.tex), so it is not
    * here. It reads the host's copy of the graph, beneath protect.
    */
-  image(): string {
+  image(from: Id = ROOT, skip: (id: Id) => boolean = () => false): string {
     const lit = (v: Json) => {
       if (typeof v === "string" && v.includes("\n") && !/[`]|\$\{|\\$/.test(v)) {
         return "String.raw`" + v + "`";
@@ -946,17 +1210,18 @@ export class World {
       );
     };
     const lines: string[] = [];
-    // the root's value starts null, as the graph is made
-    const rootValue = this.valueOf(ROOT);
-    if (rootValue !== undefined && rootValue !== null) {
-      lines.push(`write(${J(ROOT)}, ${lit(rootValue)})`);
+    // the root's value starts null, as the graph is made; another node's is written
+    const fromValue = this.valueOf(from);
+    if (fromValue !== undefined && (fromValue !== null || from !== ROOT)) {
+      lines.push(`write(${J(from)}, ${lit(fromValue)})`);
     }
-    const made = new Set<Id>([ROOT]);
-    const queue: Id[] = [ROOT];
+    const made = new Set<Id>([from]);
+    const queue: Id[] = [from];
     while (queue.length) {
       const parent = queue.shift()!;
       for (const [name, ids] of this.slotsOf(parent)) {
         for (const id of ids) {
+          if (skip(id)) continue;
           if (made.has(id) || !this.made.has(id)) {
             lines.push(`place(${J(parent)}, ${J(name)}, ${J(id)})`);
             continue;
@@ -969,7 +1234,9 @@ export class World {
       }
     }
     return [
-      "// a boot image: run in a fresh graph, it makes everything the root reaches",
+      from === ROOT
+        ? "// a boot image: run in a fresh graph, it makes everything the root reaches"
+        : `// everything ${J(from)} reaches, as a boot image would make it`,
       "batch(() => {",
       ...lines.map((l) => "  " + l.replaceAll("\n", "\n  ")),
       "})",
@@ -1008,12 +1275,15 @@ export class World {
   }
 
   /** Fires a handler from the world, such as a click on a screen, as the acting agent. */
-  fireFromWorld(process: Id, handler: string, input?: Json): Fired | undefined {
+  fireFromWorld(
+    process: Id,
+    handler: string,
+    input?: Json,
+    agent: Json = this.agent,
+  ): Fired | undefined {
     try {
       const r = this.driver.fire(
-        input === undefined
-          ? { agent: this.agent, process, handler }
-          : { agent: this.agent, process, handler, input },
+        input === undefined ? { agent, process, handler } : { agent, process, handler, input },
       );
       this.#settled(r);
       if (r.error !== undefined) this.#push({ t: "error", error: problem(r.error) });
@@ -1027,12 +1297,15 @@ export class World {
   #catching<T>(process: Id, part: "compute" | "effect", code: string, run: () => T): T {
     try {
       const v = run();
+      if (this.#previewing) return v;
       const t = this.thrown.get(process);
       if (t?.part === part) this.thrown.delete(process);
       return v;
     } catch (e) {
-      if (!(e instanceof ErmineError)) {
-        const m = (e as Error)?.stack?.match(new RegExp(`ermine:${part}-\\d+:(\\d+):\\d+`));
+      if (!this.#previewing && !(e instanceof ErmineError)) {
+        const m = (e as Error)?.stack?.match(
+          new RegExp(`ermine:${part}-\\d+(?:, <anonymous>)?:(\\d+):\\d+`),
+        );
         this.thrown.set(process, {
           part,
           code,
@@ -1044,141 +1317,101 @@ export class World {
     }
   }
 
-  #compiled = new Map<string, (...args: unknown[]) => unknown>();
+  #compiled = new Map<string, Compute | Effect>();
 
-  #compile(code: string, part: "compute" | "effect", names: string[]) {
+  /**
+   * What a program may import. "ermine" is the library; "demo" is this host:
+   * screen(self), the element a process's effect draws on, h(tag, props,
+   * ...children) to build with, and fire(process, handler, input?), which
+   * fires a handler from the world, as the driver's fire does.
+   */
+  readonly modules: { [name: string]: { [member: string]: unknown } } = {
+    ermine,
+    demo: {
+      h,
+      screen: (process: Id) => this.screenFor(process),
+      fire: (process: Id, handler: string, input?: Json) =>
+        queueMicrotask(() => this.fireFromWorld(process, handler, input)),
+    },
+  };
+
+  /**
+   * A program is a module whose default export is the function the driver
+   * calls, with the context drive gives it and nothing else. The page cannot
+   * import a module synchronously, so the demo links it itself: each import
+   * line takes its names from the module here, and the export is returned.
+   * Lines are kept, so a thrown error's line is the program's.
+   */
+  /** A program that is neither part of a process: a module's default export, as #compile links it. */
+  module(code: string, part: string): unknown {
+    return this.#compile(code, part);
+  }
+
+  #compile(code: string, part: string): Compute | Effect {
     const k = part + "\0" + code;
     let fn = this.#compiled.get(k);
     if (!fn) {
-      fn = (0, eval)(
-        `(function (${
-          names.join(", ")
-        }) {\n${code}\n})\n//# sourceURL=ermine:${part}-${this.#compiled.size}`,
-      ) as (...args: unknown[]) => unknown;
+      const linked = code.replace(
+        // [ \t], not \s, at the ends: a line's newline stays, and the next line with it
+        /^[ \t]*import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["'][ \t]*;?/gm,
+        (_, names: string, from: string) => {
+          if (!(from in this.modules)) {
+            throw new Error(
+              `a program can only import ${
+                Object.keys(this.modules).map((m) => J(m)).join(" or ")
+              }, not ${J(from)}`,
+            );
+          }
+          return `const {${names}} = __modules[${J(from)}];`;
+        },
+      ).replace(/^[ \t]*export\s+default\s+/m, "return ");
+      if (linked === code && !/\bexport\s+default\b/.test(code)) {
+        throw new Error("a program is a module: export default function (ctx) { ... }");
+      }
+      const link = (0, eval)(
+        `(function (__modules) {\n${linked}\n})\n//# sourceURL=ermine:${part}-${this.#compiled.size}`,
+      ) as (modules: unknown) => unknown;
+      const exported = link(this.modules);
+      if (typeof exported !== "function") {
+        throw new Error("a program's default export is a function");
+      }
+      fn = exported as Compute | Effect;
       this.#compiled.set(k, fn);
     }
     return fn;
   }
 
-  /** The host's loader: JS source as a function body, or a list of steps. */
+  /** The host's loader: JS source as a module, or a list of steps. */
   #load: Load = ((code: Json, part: "compute" | "effect") => {
     if (Array.isArray(code)) return steps(code, part as "compute");
     if (typeof code !== "string") {
       throw new Error("a program is JS source, or a list of steps");
     }
+    // linked when first run, so what is wrong with it is shown at its line
     if (part === "compute") {
-      const names = [
-        "ctx",
-        "read",
-        "dir",
-        "lookup",
-        "find",
-        "where",
-        "self",
-        "cwd",
-        "name",
-        "changes",
-        "PENDING",
-      ];
-      const fn = this.#compile(code, part, names);
-      const compute: Compute = (ctx) => {
-        const r = readers(ctx.api);
-        const v = this.#catching(ctx.self, "compute", code, () =>
-          fn(
-            ctx,
-            r.read,
-            r.dir,
-            r.lookup,
-            r.find,
-            r.where,
-            ctx.self,
-            ctx.cwd,
-            ctx.name,
-            ctx.changes,
-            PENDING,
-          ));
-        return v as Json;
-      };
+      const compute: Compute = (ctx) =>
+        this.#catching(
+          ctx.self,
+          "compute",
+          code,
+          () => (this.#compile(code, part) as Compute)(ctx),
+        );
       return compute;
     }
-    const names = [
-      "ctx",
-      "value",
-      "previous",
-      "self",
-      "cwd",
-      "name",
-      "write",
-      "patch",
-      "make",
-      "place",
-      "unplace",
-      "later",
-      "handler",
-      "fire",
-      "screen",
-      "h",
-      "start",
-      "stop",
-    ];
-    const fn = this.#compile(code, part, names);
     const effect: Effect = (ctx) => {
-      const has = (id: Id) => this.made.has(id);
-      const w = writers(ctx.api, has);
-      const later = writers(ctx.lasting, has);
+      // the inspector lists a process's handlers: the host notes each name it is given
       const handler = (name: string, run: (input?: Json) => void) => {
         ctx.handler(name, run);
         const set = this.handlers.get(ctx.self) ?? new Set();
         set.add(name);
         this.handlers.set(ctx.self, set);
       };
-      const fire = (name: string, input?: Json) =>
-        queueMicrotask(() => this.fireFromWorld(ctx.self, name, input));
-      const screen = () => this.screenFor(ctx.self);
-      /** this process's node, from the directory it runs in */
-      const me = [ctx.name];
-      /**
-       * Starts a child process: places it under this one, in slot name, where
-       * it runs. Made the first time, by placing it, then its programs in its
-       * own slots; placed again after that.
-       */
-      const start = (
-        name: string,
-        id: Id,
-        o: { compute: Json; effect?: Json; value?: Json },
-      ) => {
-        if (has(id)) return w.place(me, name, id);
-        const making = w.make(me, name, id, o.value ?? null);
-        for (const part of ["compute", "effect"] as const) {
-          const code = o[part];
-          if (code === undefined) continue;
-          if (typeof code === "string" && has(code)) w.place([...me, name], part, code);
-          else w.make([...me, name], part, `${id}.${part}`, code);
-        }
-        return making;
-      };
-      const stop = (name: string, id: Id) => w.unplace(me, name, id);
-      return this.#catching(ctx.self, "effect", code, () =>
-        fn(
-          ctx,
-          ctx.value,
-          ctx.previous,
-          ctx.self,
-          ctx.cwd,
-          ctx.name,
-          w.write,
-          w.patch,
-          w.make,
-          w.place,
-          w.unplace,
-          later,
-          handler,
-          fire,
-          screen,
-          h,
-          start,
-          stop,
-        )) as void | (() => void);
+      return this.#catching(
+        ctx.self,
+        "effect",
+        code,
+        () => (this.#compile(code, part) as Effect)({ ...ctx, handler }),
+      );
     };
     return effect;
   }) as Load;
@@ -1228,36 +1461,6 @@ function siteHere(): Site {
 }
 
 /**
- * A program's reads, by address from its place: the directory it runs in is
- * [], and its own node is [name]. A read gives the value of its first item.
- */
-function readers(api: Interface) {
-  /** The address a lookup found the name at, which reads straight back: ["..", "theme"]. */
-  const where = (name: string): Address | undefined => {
-    const first = api.lookup({ name })[0];
-    return first && (first.from as PathFrom).path;
-  };
-  const first = (items: ValueItem[]) => items.length ? items[0].value : undefined;
-  return {
-    read: (at: Address) => first(api.read({ address: at })),
-    dir: (at: Address, name?: string) => {
-      const r = api.directory(name === undefined ? { address: at } : { address: at, name });
-      if ("items" in r) return r.items.map((i) => i.id);
-      return Object.fromEntries(r.directory.map(([n, items]) => [n, items.map((i) => i.id)]));
-    },
-    lookup: (name: string) => api.lookup({ name }).map((i) => i.id),
-    /** The address of the nearest node by that name, searching up the place. */
-    where,
-    /** The value of the nearest node by that name, or undefined. */
-    find: (name: string): Json | undefined => {
-      const at = where(name);
-      if (at === undefined) return undefined;
-      return first(api.read({ address: at }));
-    },
-  };
-}
-
-/**
  * Makes a node by placing it with its value: one change. An id the graph has
  * is only placed. Whether it has it is the host's knowledge, since an
  * effect's interface cannot read, and a value for an id the graph has is
@@ -1272,25 +1475,6 @@ function made(
   value: Json,
 ) {
   return api.place(has(id) ? { address: parent, name, id } : { address: parent, name, id, value });
-}
-
-/** A program's writes, by address from its place. */
-function writers(api: Interface, has: (id: Id) => boolean) {
-  return {
-    api,
-    write: (at: Address, value: Json) =>
-      api.write({ address: at, patches: [{ type: "snapshot", value }] }),
-    patch: (at: Address, ...patches: Patch[]) => api.write({ address: at, patches }),
-    make: (parent: Address, name: string, id: Id, value: Json = null) =>
-      made(api, has, parent, name, id, value),
-    place: (parent: Address, name: string, id: Id, position?: number) =>
-      api.place(
-        position === undefined
-          ? { address: parent, name, id }
-          : { address: parent, name, id, position },
-      ),
-    unplace: (parent: Address, name: string, id: Id) => api.unplace({ address: parent, name, id }),
-  };
 }
 
 /** A tiny element builder for effects: h("button", { onclick }, "hop"). */
@@ -1322,3 +1506,47 @@ export function show(v: unknown): string | undefined {
     return String(v);
   }
 }
+
+/** ui()'s compute: each watched name, looked up from where the UI sits, and read. */
+const UI_COMPUTE = `// ui(): looks up each name the UI watches, from where it sits, and reads it;
+// a read marks the process, so it runs again when any of them changes
+export default function ({ api, name }) {
+  const own = (slot) => api.read({ address: [name, slot] })[0]?.value
+  const values = {}, at = {}
+  for (const n of own("watch") ?? []) {
+    const [it] = api.lookup({ name: n })
+    if (!it) continue
+    at[n] = it.from.path
+    values[n] = api.read({ address: it.from.path })[0]?.value ?? null
+  }
+  return { values, at, draw: own("draw") ?? "" }
+}`;
+
+/** ui()'s effect: draws with the UI's draw, and writes what set() is given through a handler. */
+const UI_EFFECT = `// ui(): draws with the UI's draw function. set(name, value) fires the handler
+// "set", which writes through the lasting interface as whoever fired it. The
+// focused element is focused again after a redraw, found by its name attribute
+import { h, screen, fire } from "demo"
+export default function ({ self, value, lasting, handler }) {
+  const el = screen(self)
+  handler("set", (input) => {
+    const at = value.at[input.name]
+    if (at) lasting.write({ address: at, patches: [{ type: "snapshot", value: input.value }] })
+    else lasting.place({ address: [], name: input.name, id: input.name + "-" + Date.now(), value: input.value })
+  })
+  const set = (n, v) => fire(self, "set", { name: n, value: v })
+  const draw = new Function("return (" + value.draw + ")")()
+  const active = document.activeElement
+  const keep = active && el.contains(active) ? active.getAttribute("name") : null
+  const caret = keep && typeof active.selectionStart === "number"
+    ? [active.selectionStart, active.selectionEnd] : null
+  const out = draw({ h, state: value.values, set, self })
+  el.replaceChildren(...(Array.isArray(out) ? out : [out]))
+  if (keep) {
+    const again = el.querySelector('[name="' + keep + '"]')
+    if (again) {
+      again.focus()
+      if (caret && again.setSelectionRange) again.setSelectionRange(caret[0], caret[1])
+    }
+  }
+}`;

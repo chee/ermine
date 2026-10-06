@@ -64,20 +64,31 @@ function makeHere(where: Selection, name: string, value: string, label: string) 
   if (s.ok) made(where, name, id);
 }
 
-const VIEW_COMPUTE = `// a compute only reads. find things by name, nearest first, from here up:
-//   find("name") is the value, where("name") its address, dir(address) a directory.
-// here, the directory it runs in, is the address []
-return Object.keys(dir([]) ?? {})`;
+const VIEW_COMPUTE =
+  `// a compute only reads: it gets { api, self, cwd, name, changes }, and returns
+// the process's value. api.lookup({ name }) finds the nearest slot by that name,
+// from here up; an item's from.path is the address it was found at, which
+// api.read({ address }) reads. here, the directory it runs in, is the address []
+export default function ({ api }) {
+  return api.directory({ address: [] }).directory.map(([name]) => name)
+}`;
 
-const VIEW_EFFECT = `// an effect draws what the compute returned, and can write through later
-screen().replaceChildren(
-  h("div", { class: "label" }, self),
-  h("pre", {}, JSON.stringify(value, null, 1)),
-)`;
+const VIEW_EFFECT =
+  `// an effect draws what the compute returned: it gets { api, lasting, self, cwd,
+// name, value, previous, handler }, and may write through lasting later
+import { h, screen } from "demo"
+export default function ({ self, value }) {
+  screen(self).replaceChildren(
+    h("div", { class: "label" }, self),
+    h("pre", {}, JSON.stringify(value, null, 1)),
+  )
+}`;
 
 const DERIVED = `// a derived value: what this returns is the process's value
-const n = find("n") ?? 0
-return n * 2`;
+export default function ({ api }) {
+  const [n] = api.lookup({ name: "n" })
+  return (n ? api.read({ address: n.from.path })[0].value : 0) * 2
+}`;
 
 const RENDERER = `// a renderer: draws thing into el. h(tag, props, ...kids) makes elements;
 // save(newThing) writes the thing back.
@@ -102,40 +113,65 @@ function processHere(where: Selection, name: string, compute: string, effect?: s
 }
 
 const FOLDER_VIEW = `// what this folder holds, and a child process for each thing in it.
-// it runs in the folder: [] is the folder, and [name] this process's own node
-const me = name
-const here = cwd[cwd.length - 1] ?? "root"
-const items = Object.entries(dir([]) ?? {})
-  .filter(([name]) => !name.startsWith("render-") && !name.startsWith("view") && name !== me)
-  .filter(([name]) => dir([name], "compute").length === 0)
-  .flatMap(([name, ids]) => ids.filter((id) => id !== self).map((id) => ({ name, id })))
-return { here, items, kids: dir([me]) ?? {} }`;
+// it runs in the folder: [] is the folder, and [name] this process's own node.
+// a directory item carries the change that last set its slot, so a thing
+// dragged away and back is a new placement, and gets a new card
+export default function ({ api, self, cwd, name }) {
+  const here = cwd[cwd.length - 1] ?? "root"
+  const items = api.directory({ address: [] }).directory
+    .filter(([slot]) => !slot.startsWith("render-") && !slot.startsWith("view") && slot !== name)
+    .filter(([slot]) => api.directory({ address: [slot], name: "compute" }).items.length === 0)
+    .flatMap(([slot, found]) => found.filter((item) => item.id !== self)
+      .map((item) => ({ name: slot, id: item.id, since: item.change.time })))
+  const kids = Object.fromEntries(
+    api.directory({ address: [name] }).directory.map(([slot, found]) => [slot, found.map((item) => item.id)]))
+  return { here, items, kids }
+}`;
 
-const FOLDER_KIDS = `// start a card for each thing; stop the cards of things that left
-screen().replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.here))
-const want = new Set()
-for (const t of value.items) {
-  const pid = self + ":" + t.id
-  want.add(pid)
-  if ((value.kids[t.name] ?? []).includes(pid)) continue
-  start(t.name, pid, {
-    compute: ${"`"}// it runs in the folder's view, so its thing is in the folder, by its own name
-const at = ["..", name]
-const thing = read(at)
-const type = (thing && typeof thing === "object" && thing["@type"]) || typeof thing
-const r = where("render-" + type)
-return { name, at, thing: thing ?? null, renderer: r ? lookup("render-" + type)[0] : null, code: r ? read(r) : null }${"`"},
-    effect: ${"`"}const el = screen()
-const body = h("div", { class: "thing-body" })
-el.replaceChildren(h("div", { class: "thing-head" }, h("span", { class: "thing-name" }, value.name),
-  h("span", { class: "thing-by" }, value.renderer ? "drawn by " + value.renderer : "no render-" + (typeof value.thing))), body)
-try {
-  new Function("thing", "el", "h", "save", value.code ?? "el.textContent = JSON.stringify(thing)")(value.thing, body, h, (v) => later.write(value.at, v))
-} catch (e) { body.replaceChildren(h("div", { class: "oops" }, e.message)) }${"`"},
-  })
-}
-for (const [name, ids] of Object.entries(value.kids))
-  for (const pid of ids) if (pid.startsWith(self + ":") && !want.has(pid)) stop(name, pid)`;
+const CARD_COMPUTE =
+  `// it runs in the folder's view, so its thing is in the folder, by its own name
+export default function ({ api, name }) {
+  const at = ["..", name]
+  const thing = api.read({ address: at })[0]?.value
+  const type = (thing && typeof thing === "object" && thing["@type"]) || typeof thing
+  const by = api.lookup({ name: "render-" + type })[0]
+  return { name, at, thing: thing ?? null, renderer: by?.id ?? null, code: by ? api.read({ address: by.from.path })[0].value : null }
+}`;
+
+const CARD_EFFECT = `import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const el = screen(self)
+  const body = h("div", { class: "thing-body" })
+  el.replaceChildren(h("div", { class: "thing-head" }, h("span", { class: "thing-name" }, value.name),
+    h("span", { class: "thing-by" }, value.renderer ? "drawn by " + value.renderer : "no render-" + (typeof value.thing))), body)
+  const save = (v) => lasting.write({ address: value.at, patches: [{ type: "snapshot", value: v }] })
+  try {
+    new Function("thing", "el", "h", "save", value.code ?? "el.textContent = JSON.stringify(thing)")(value.thing, body, h, save)
+  } catch (e) { body.replaceChildren(h("div", { class: "oops" }, e.message)) }
+}`;
+
+const FOLDER_KIDS = `// a card for each thing: a process placed under this one, by the thing's
+// name, so it runs here, with its programs in its own slots. cards of things
+// that left are unplaced
+import { h, screen } from "demo"
+export default function ({ api, self, name, value }) {
+  screen(self).replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.here))
+  const want = new Set()
+  for (const t of value.items) {
+    const pid = self + ":" + t.id + "@" + t.since
+    want.add(pid)
+    if ((value.kids[t.name] ?? []).includes(pid)) continue
+    api.place({ address: [name], name: t.name, id: pid, value: null })
+    api.place({ address: [name, t.name], name: "compute", id: pid + ".compute", value: ${
+  J(CARD_COMPUTE)
+} })
+    api.place({ address: [name, t.name], name: "effect", id: pid + ".effect", value: ${
+  J(CARD_EFFECT)
+} })
+  }
+  for (const [slot, ids] of Object.entries(value.kids))
+    for (const pid of ids) if (pid.startsWith(self + ":") && !want.has(pid)) api.unplace({ address: [name], name: slot, id: pid })
+}`;
 
 function commands(where: Selection): Command[] {
   const at = where.id;

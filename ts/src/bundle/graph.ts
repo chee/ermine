@@ -13,6 +13,7 @@ export {
   whole,
 } from "../patch.ts";
 export {
+  back,
   isName,
   members,
   parseAddress,

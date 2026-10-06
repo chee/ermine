@@ -24,7 +24,30 @@ export const explode = signal(false);
 /** Whether the dock takes most of the height, for watching the stage. */
 export const tall = signal(false);
 
-export type DockTab = "workspace" | "stage" | "protect" | "lookup" | "make";
+/** The panels' sizes, in pixels, where they have been dragged; the rest are the stylesheet's. */
+export type Panels = { left?: number; right?: number; dock?: number; why?: number };
+const PANELS = "ermine-panels";
+export const panels = signal<Panels>((() => {
+  try {
+    const p = JSON.parse(localStorage.getItem(PANELS) ?? "{}");
+    return p && typeof p === "object" ? p : {};
+  } catch {
+    return {};
+  }
+})());
+
+/** Sizes a panel, or gives it back its default with undefined. */
+export function size(panel: keyof Panels, px: number | undefined) {
+  const next = { ...panels.value };
+  if (px === undefined) delete next[panel];
+  else next[panel] = px;
+  panels.value = next;
+  try {
+    localStorage.setItem(PANELS, JSON.stringify(next));
+  } catch { /* no storage */ }
+}
+
+export type DockTab = "workspace" | "stage" | "ask" | "protect" | "lookup" | "make";
 export const dock = signal<DockTab>("workspace");
 
 /** Code waiting in the workspace editor. */
@@ -49,40 +72,12 @@ export function select(id: Id, route: Step[] = []) {
   selected.value = { id, route };
 }
 
-/** Runs code in the workspace and shows it there. */
-/** The last act from the ui, shown for a moment with the code it ran. */
-export const toast = signal<
-  { n: number; code: string; label?: string; ok: boolean; why?: string } | undefined
->(
-  undefined,
-);
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
-
-export function act(code: string, label?: string) {
-  const s = world.run(code, label);
-  toast.value = { n: s.n, code, label, ok: s.ok !== false, why: s.error?.why };
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.value = undefined), s.ok === false ? 5000 : 2600);
-  return s;
+/** Runs code in the workspace: the transcript shows it, and what it did. */
+export function act(code: string, label?: string, agent?: string) {
+  return world.run(code, label, "act", agent);
 }
 
-/** Undoes or redoes the last act, as a new change, and shows the code it ran. */
+/** Undoes or redoes the last act, as a new change. */
 export function undo(redo = false) {
-  const s = redo ? world.redo() : world.undo();
-  if (!s) {
-    toast.value = {
-      n: -1,
-      code: redo ? "nothing to redo" : "nothing to undo",
-      label: redo ? "redo" : "undo",
-      ok: true,
-    };
-  } else {toast.value = {
-      n: s.n,
-      code: s.code,
-      label: s.label,
-      ok: s.ok !== false,
-      why: s.error?.why,
-    };}
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toast.value = undefined), 2600);
+  return redo ? world.redo() : world.undo();
 }

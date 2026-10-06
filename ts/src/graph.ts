@@ -1,12 +1,17 @@
 // The bare graph (CORE.tex, The core). It holds nodes, reached by address
 // from the root the host gives; applies changes, sends them to the
-// subscriptions whose address reaches the node or that they switch;
+// subscriptions whose address reaches the node or whose route they change;
 // remembers what each process's runs read, and marks the processes a change
 // touches. It never runs anything, and it never removes a node: one that no
 // place reachable from the root holds cannot be addressed, and placing its id
 // again brings it back as it was.
+//
+// An operation is checked where, then when, then what (PROTOCOL.tex, Errors):
+// its fields first, in the order fields() gives; then its address
+// (above-root, nothing-there); then its time; then the change itself.
 
 import {
+  back,
   isName,
   members,
   parseAddress,
@@ -17,7 +22,7 @@ import {
   type Walked,
 } from "./address.ts";
 import {
-  applyPatches,
+  applyPatch,
   byCodePoint,
   isObject,
   NotJson,
@@ -66,7 +71,6 @@ import {
   type Searched,
   type SlotFrom,
   type SlotItem,
-  type Stamp,
   type Step,
   type SubscribeOp,
   told,
@@ -111,7 +115,11 @@ type Run = {
 /** What a lookup reports to the recording that made it: what it searched, and how far. */
 type Frame = { done: boolean; searched: Searched[]; levels: number };
 
-type Sub = { sub: number; op: Acting; parsed: Parsed; node?: Id; send: (event: Event) => void };
+/** Where an address got to: the node it reaches, and the route it took there. */
+type Located = { node: Id; route: Step[] };
+
+/** A subscription: who made it and where, its address, and where that is now, if anywhere. */
+type Sub = { sub: number; op: Acting; parsed: Parsed; at?: Located; send: (event: Event) => void };
 
 const ENDINGS = new Set(["done", "pending", "failed", "refused"]);
 
@@ -159,15 +167,20 @@ export function graph(root: Id): Interface {
     return { start, names: place.slice(n) };
   }
 
-  /** The node an address starts from: its place, or its start, gone up as it says. */
+  /**
+   * The node an address starts from: "/" starts at the start of the place;
+   * otherwise the address starts at the node the place reaches, and each
+   * ".." goes back one step the way the place was reached, to the node the
+   * place's walk came through, never above its start. Undefined when the
+   * start reaches nothing, or the place's walk does not get that far.
+   */
   function origin(op: Acting, parsed: Parsed, track?: Track): Id | undefined {
     const { start, names } = placeOf(op, track);
-    const base = parsed.root ? [] : names;
-    if (parsed.up > base.length) {
-      throw invalid("above-root", "the address goes up past the start of the place");
+    if (parsed.up > (parsed.root ? 0 : names.length)) {
+      throw invalid("above-root", "the address goes back past the start of the place");
     }
     if (start === undefined) return undefined;
-    return walk(view, start, base.slice(0, base.length - parsed.up), track).node;
+    return parsed.root ? start : back(view, start, names, parsed.up, track);
   }
 
   function resolve(op: Acting, parsed: Parsed, track?: Track): Walked {
@@ -175,7 +188,13 @@ export function graph(root: Id): Interface {
     return from === undefined ? { route: [] } : walk(view, from, parsed.names, track);
   }
 
-  /** The node an address reaches, for a write or a placement: invalid if none. */
+  /** The node an address reaches and the route it took, if it reaches one. */
+  function locate(op: Acting, parsed: Parsed): Located | undefined {
+    const w = resolve(op, parsed);
+    return w.node === undefined ? undefined : { node: w.node, route: w.route };
+  }
+
+  /** The node an address reaches, for a change: invalid if none. */
   function target(op: Acting, parsed: Parsed): { id: Id; node: Node } {
     const id = resolve(op, parsed).node;
     if (id === undefined) throw invalid("nothing-there", "the address reaches nothing");
@@ -184,12 +203,11 @@ export function graph(root: Id): Interface {
 
   // items
 
-  function valueItems(w: Walked): ValueItem[] {
-    if (w.node === undefined) return [];
-    const node = nodes.get(w.node)!;
-    const item: ValueItem = { value: node.value, from: { route: w.route } };
+  function valueItem(m: Located): ValueItem {
+    const node = nodes.get(m.node)!;
+    const item: ValueItem = { value: node.value, from: { route: m.route } };
     if (node.change) item.change = node.change;
-    return [item];
+    return item;
   }
 
   function slotItems(parent: Id, name: string, route: Route): SlotItem[] {
@@ -206,18 +224,22 @@ export function graph(root: Id): Interface {
 
   // reads
 
+  /**
+   * An item for each node the address's last name selects that is here, in
+   * slot order, each with its own value, route and change: the first is the
+   * node the address reaches. An address with no names reads the one node it
+   * starts from; one that reaches nothing reads as none.
+   */
   function read(op: ReadOp): ValueItem[] {
-    acting(op);
-    return valueItems(resolve(op, parseAddress(op.address)));
+    const { parsed } = fields("read", op);
+    const from = origin(op, parsed!);
+    return from === undefined ? [] : members(view, from, parsed!.names).map(valueItem);
   }
 
   function directory(op: DirectoryOp): Listing {
-    acting(op);
-    const parsed = parseAddress(op.address);
-    if (op.name !== undefined && !isName(op.name)) throw wrongField("name", "a name is a string");
-    const from = origin(op, parsed);
-    const all = from === undefined ? [] : members(view, from, parsed.names);
-    const name = op.name;
+    const { parsed, name } = fields("directory", op);
+    const from = origin(op, parsed!);
+    const all = from === undefined ? [] : members(view, from, parsed!.names);
     if (name !== undefined) return { items: all.flatMap((m) => slotItems(m.node, name, m.route)) };
     const names = new Set<string>();
     for (const m of all) for (const n of nodes.get(m.node)!.directory.keys()) names.add(n);
@@ -226,25 +248,26 @@ export function graph(root: Id): Interface {
   }
 
   /**
-   * Searches from the place's directory up to its start, each step an
-   * ordinary read of one slot through the top of the stack, and takes the
-   * nearest slot with the name. A refused step ends the search.
+   * Searches the directories the place's walk went through, from the one it
+   * reaches, ".", back up to its start, each step an ordinary read of one
+   * slot through the top of the stack, at the address of that many "..", and
+   * takes the nearest slot with the name that holds a node that is here: all
+   * its items. A slot whose ids are all absent is passed over. A refused step
+   * ends the search. Where the place's walk did not get, its step reads
+   * nothing.
    */
   function lookup(op: LookupOp): SlotItem[] {
-    acting(op);
-    if (op.name === undefined) throw missing("name");
-    if (!isName(op.name)) throw wrongField("name", "a name is a string");
-    const name = op.name;
+    const name = fields("lookup", op).name!;
     const { start, names } = placeOf(op);
+    const route = start === undefined ? [] : walk(view, start, names).route;
     const as = who(op);
     const searched: Searched[] = [];
     let levels = 0;
     let found: SlotItem[] = [];
     for (let k = 0; k <= names.length; k++) {
       levels = k + 1;
-      const node = start === undefined
-        ? undefined
-        : walk(view, start, names.slice(0, names.length - k)).node;
+      const depth = names.length - k;
+      const node = depth === 0 ? start : route[depth - 1]?.node;
       const address = Array.from({ length: k }, () => "..");
       let listing: Listing;
       try {
@@ -258,7 +281,7 @@ export function graph(root: Id): Interface {
       }
       const items = "items" in listing ? listing.items : [];
       if (node !== undefined) searched.push({ node, saw: latest(items) });
-      if (items.length) {
+      if (items.some((item) => !item.pending)) {
         found = items.map((item) => ({
           ...item,
           from: { path: [...address, name], position: (item.from as SlotFrom).position },
@@ -279,22 +302,21 @@ export function graph(root: Id): Interface {
 
   // changes
 
-  /** A change's time and cause: a cause given, or, from outside any process, its site. */
-  function stamp(op: Acting & Stamp, entry: "write" | "place" | "unplace") {
-    if (op.time === undefined) throw missing("time");
-    if (typeof op.time !== "number" || !Number.isInteger(op.time)) {
-      throw wrongField("time", "a time is a whole number");
-    }
-    let cause: Json | undefined;
-    if (op.cause !== undefined) cause = ownField(op.cause, "cause");
-    else if (op.process === undefined) {
+  /**
+   * The cause of a change that gives none, asked for in the cause's turn: a
+   * process's change has none unless its program gives one; one from outside
+   * any process has its site, captured where it entered the stack.
+   */
+  function causeOf(op: Acting, entry: "write" | "place" | "unplace") {
+    return (): Json | undefined => {
+      if (op.process !== undefined) return undefined;
       const site = capture(up?.[entry]);
       if (!site) throw missing("cause");
-      cause = site;
-    }
-    return { time: op.time, cause };
+      return site;
+    };
   }
 
+  /** A change's time is greater than every time in the graph. */
   function checkTime(time: number) {
     if (time <= last) throw invalid("time", `time ${time} is not after ${last}`, { last });
   }
@@ -315,75 +337,81 @@ export function graph(root: Id): Interface {
     return { change, marked };
   }
 
-  function write(op: WriteOp): Changed {
-    acting(op);
-    const parsed = parseAddress(op.address);
-    if (op.patches === undefined) throw missing("patches");
-    if (!Array.isArray(op.patches)) throw wrongField("patches", "patches are a list");
-    const { time, cause } = stamp(op, "write");
-    const { id, node } = target(op, parsed);
-    const value = applyPatches(node.value, op.patches);
-    const patches = op.patches.map((patch, index) => {
+  /** Applies the patches in order, each checked in turn: invalid, naming the first that fails. */
+  function patched(value: Json, given: readonly unknown[]): { value: Json; patches: Patch[] } {
+    const patches: Patch[] = [];
+    for (let index = 0; index < given.length; index++) {
+      let patch: Patch;
       try {
-        return own(patch) as Patch;
+        patch = own(given[index]) as Patch;
       } catch (e) {
-        if (e instanceof NotJson) throw invalid("not-a-patch", e.message, { index });
+        if (e instanceof NotJson) {
+          throw invalid("not-a-patch", `patch ${index}: ${e.message}`, { index });
+        }
         throw e;
       }
-    });
+      value = applyPatch(value, patch, index);
+      patches.push(patch);
+    }
+    return { value, patches };
+  }
+
+  function write(op: WriteOp): Changed {
+    const f = fields("write", op, causeOf(op, "write"));
+    const time = f.time!;
+    const { id, node } = target(op, f.parsed!);
     checkTime(time);
-    const change: Change = { node: id, time, kind: "write", patches, ...common(op, cause) };
+    const { value, patches } = patched(node.value, f.patches!);
+    const change: Change = { node: id, time, kind: "write", patches, ...common(op, f.cause) };
     node.value = value;
     node.change = change;
     return apply(change);
   }
 
   function place(op: PlaceOp): Changed {
-    acting(op);
-    const parsed = parseAddress(op.address);
-    const { name, id } = slotFields(op);
-    if (op.position !== undefined && !whole(op.position)) {
-      throw wrongField("position", "a position is a whole number");
-    }
-    const making = op.value !== undefined;
-    const value = making ? ownField(op.value, "value") : undefined;
-    const { time, cause } = stamp(op, "place");
-    const { id: at, node: parent } = target(op, parsed);
+    const f = fields("place", op, causeOf(op, "place"));
+    const name = f.name!;
+    const id = f.id!;
+    const time = f.time!;
+    const { id: at, node: parent } = target(op, f.parsed!);
+    checkTime(time);
+    // a value given makes the node; null is a value
+    const making = f.value !== undefined;
     if (making && nodes.has(id)) {
       throw invalid("exists", `the graph has ${JSON.stringify(id)}; a value makes a node`);
     }
     const slot = parent.directory.get(name) ?? [];
-    if (op.position !== undefined && op.position > slot.length) {
-      throw invalid("position", `position ${op.position} is past the slot's ${slot.length}`, {
+    if (f.position !== undefined && f.position > slot.length) {
+      throw invalid("position", `position ${f.position} is past the slot's ${slot.length}`, {
         length: slot.length,
       });
     }
-    checkTime(time);
     const change = { node: at, time, kind: "place", name, id } as Change & {
       position?: number;
       value?: Json;
     };
-    if (op.position !== undefined) change.position = op.position;
-    if (making) change.value = value;
-    Object.assign(change, common(op, cause));
-    if (making) nodes.set(id, { value: value!, change, directory: new Map(), slots: new Map() });
-    parent.directory.set(name, placed(slot, id, op.position));
+    if (f.position !== undefined) change.position = f.position;
+    if (making) change.value = f.value;
+    Object.assign(change, common(op, f.cause));
+    if (making) nodes.set(id, { value: f.value!, change, directory: new Map(), slots: new Map() });
+    // placing an id the slot holds, with no position, leaves the slot as it is, as its last change
+    parent.directory.set(name, placed(slot, id, f.position));
     parent.slots.set(name, change);
     return apply(change);
   }
 
   function unplace(op: UnplaceOp): Changed {
-    acting(op);
-    const parsed = parseAddress(op.address);
-    const { name, id } = slotFields(op);
-    const { time, cause } = stamp(op, "unplace");
-    const { id: at, node: parent } = target(op, parsed);
+    const f = fields("unplace", op, causeOf(op, "unplace"));
+    const name = f.name!;
+    const id = f.id!;
+    const time = f.time!;
+    const { id: at, node: parent } = target(op, f.parsed!);
+    checkTime(time);
     const slot = parent.directory.get(name) ?? [];
     if (!slot.includes(id)) {
       throw invalid("not-in-slot", `${JSON.stringify(id)} is not in slot ${JSON.stringify(name)}`);
     }
-    checkTime(time);
-    const change: Change = { node: at, time, kind: "unplace", name, id, ...common(op, cause) };
+    const change: Change = { node: at, time, kind: "unplace", name, id, ...common(op, f.cause) };
     const next = slot.filter((x) => x !== id);
     if (next.length) parent.directory.set(name, next);
     else parent.directory.delete(name);
@@ -420,34 +448,38 @@ export function graph(root: Id): Interface {
     }
   }
 
-  /** Follows every subscription's address, and sends the change where it reaches or switched. */
+  /**
+   * Follows every subscription's address, and sends it the change if it is
+   * to the node the address reached, or if it changed the address's route,
+   * whether or not the address then reaches another node: to another node,
+   * to nothing, or to the same node another way.
+   */
   function follow(change: Change) {
     const due: Sub[] = [];
     for (const s of subs.values()) {
-      const before = s.node;
-      if (change.kind !== "write") s.node = resolve(s.op, s.parsed).node;
-      if (s.node !== before || change.node === before) due.push(s);
+      const before = s.at;
+      if (change.kind !== "write") s.at = locate(s.op, s.parsed);
+      if (change.node === before?.node || !sameRoute(before, s.at)) due.push(s);
     }
     for (const s of due) send(s, { change });
   }
 
   function subscribe(op: SubscribeOp): { sub: number } {
-    acting(op);
-    const parsed = parseAddress(op.address);
-    if (typeof op.send !== "function") throw wrongField("send", "subscribe needs a send function");
+    const { parsed } = fields("subscribe", op);
     const as = who(op);
     if (as.place) as.place = [...as.place];
-    const node = resolve(as, parsed).node;
+    const at = locate(as, parsed!);
     const sub = nextSub++;
-    subs.set(sub, { sub, op: as, parsed, node, send: op.send });
+    subs.set(sub, { sub, op: as, parsed: parsed!, at, send: op.send });
     return { sub };
   }
 
   function unsubscribe(op: UnsubscribeOp): void {
-    acting(op);
-    if (op.sub === undefined) throw missing("sub");
-    if (!subs.has(op.sub)) throw wrongField("sub", `there is no subscription ${op.sub}`);
-    subs.delete(op.sub);
+    const { sub } = fields("unsubscribe", op);
+    if (typeof sub !== "number" || !subs.has(sub)) {
+      throw wrongField("sub", `there is no subscription ${JSON.stringify(sub) ?? String(sub)}`);
+    }
+    subs.delete(sub);
   }
 
   // binding
@@ -536,8 +568,9 @@ export function graph(root: Id): Interface {
 
   /**
    * Remembers what a read through a recording depends on: every slot each
-   * walk tried, the place's included, and the value or slots it reached.
-   * Gives the route, or undefined if the address reads nothing at all.
+   * walk tried, the place's whole walk included, and the values or slots of
+   * every member it read. Gives the route to the node the address reaches,
+   * or as far as it went, or undefined if the address reads nothing at all.
    */
   function trace(state: Run, kind: "read" | "directory", op: DirectoryOp): Step[] | undefined {
     let parsed: Parsed;
@@ -555,12 +588,11 @@ export function graph(root: Id): Interface {
       return;
     }
     if (from === undefined) return [];
-    if (kind === "read") {
-      const w = walk(view, from, parsed.names, track);
-      if (w.node !== undefined) depend(state, key.value(w.node), w.node, true);
-      return w.route;
-    }
     const all = members(view, from, parsed.names, track);
+    if (kind === "read") {
+      for (const m of all) depend(state, key.value(m.node), m.node, true);
+      return all.length ? all[0].route : walk(view, from, parsed.names).route;
+    }
     for (const m of all) {
       const k = op.name === undefined ? key.directory(m.node) : key.slot(m.node, op.name);
       depend(state, k, m.node);
@@ -568,17 +600,26 @@ export function graph(root: Id): Interface {
     return all[0]?.route ?? [];
   }
 
-  /** Remembers the slots a lookup searched, up to where it stopped. */
+  /**
+   * Remembers what a lookup's search depended on, up to where it stopped:
+   * the place's walk, which decides the directories; the slot of the name in
+   * each directory searched; and whether each id in it is here, which
+   * decides whether the search stopped there.
+   */
   function traceLookup(state: Run, op: LookupOp, frame: Frame) {
     if (!isName(op?.name)) return;
     const at = { ...op, ...state.acting };
     const track = tracker(state);
     const { start, names } = placeOf(at, track);
     if (start === undefined) return;
+    const { route } = walk(view, start, names, track);
     const levels = frame.done ? frame.levels : names.length + 1;
     for (let k = 0; k < levels; k++) {
-      const node = walk(view, start, names.slice(0, names.length - k), track).node;
-      if (node !== undefined) depend(state, key.slot(node, op.name), node);
+      const depth = names.length - k;
+      const node = depth === 0 ? start : route[depth - 1]?.node;
+      if (node === undefined) continue;
+      depend(state, key.slot(node, op.name), node);
+      for (const id of view.slot(node, op.name)) depend(state, key.here(id));
     }
   }
 
@@ -772,7 +813,7 @@ export function graph(root: Id): Interface {
     r.changes = [...state.changes];
     r.ending = ending;
     r.errors = [...state.errors, ...finishing.errors ?? []];
-    for (const s of [...subs.values()]) if (s.node === state.process) send(s, { record: r });
+    for (const s of [...subs.values()]) if (s.at?.node === state.process) send(s, { record: r });
     return r;
   }
 
@@ -833,13 +874,132 @@ function strip<T extends Acting>(op: T): T {
   return rest as T;
 }
 
-/** A placement's name and id: missing or wrong-field before anything else is looked at. */
-function slotFields(op: { name?: unknown; id?: unknown }): { name: string; id: Id } {
-  if (op.name === undefined) throw missing("name");
-  if (!isName(op.name)) throw wrongField("name", 'a name is a string, never ".", ".." or "/"');
-  if (op.id === undefined) throw missing("id");
-  if (typeof op.id !== "string") throw wrongField("id", "an id is a string");
-  return { name: op.name, id: op.id };
+/** The operations whose fields fields() checks. */
+export type Kind =
+  | "read"
+  | "directory"
+  | "lookup"
+  | "write"
+  | "place"
+  | "unplace"
+  | "subscribe"
+  | "unsubscribe";
+
+/** An operation's fields, as fields() gives them once they are checked. */
+export type Fields = {
+  parsed?: Parsed;
+  name?: string;
+  id?: Id;
+  position?: number;
+  value?: Json;
+  patches?: readonly unknown[];
+  cause?: Json;
+  time?: number;
+  sub?: unknown;
+};
+
+/**
+ * The fields each operation takes besides who makes it and where, in the
+ * order they are checked, each required or not. The graph never requires a
+ * cause: a change that gives none is given one, in the cause's turn.
+ */
+const TAKES: { readonly [kind in Kind]: readonly (readonly [string, boolean])[] } = {
+  read: [["address", true]],
+  directory: [["address", true], ["name", false]],
+  lookup: [["name", true]],
+  write: [["address", true], ["patches", true], ["cause", false], ["time", true]],
+  place: [
+    ["address", true],
+    ["name", true],
+    ["id", true],
+    ["position", false],
+    ["value", false],
+    ["cause", false],
+    ["time", true],
+  ],
+  unplace: [["address", true], ["name", true], ["id", true], ["cause", false], ["time", true]],
+  subscribe: [["address", true], ["send", true]],
+  unsubscribe: [["sub", true]],
+};
+
+/**
+ * Checks an operation's fields in the order PROTOCOL.tex gives (Errors):
+ * agent, process, place, chroot, address, name, id, position, value,
+ * patches, cause, time, then those only that operation has. The first that
+ * is missing or of the wrong kind answers, before the graph looks at
+ * anything. A change that gives no cause takes what cause() returns, asked
+ * in the cause's turn; a harness, whose every change from outside carries a
+ * cause, passes one that throws missing. Gives the fields as the graph keeps
+ * them: the address taken apart, the value and cause copied.
+ */
+export function fields(
+  kind: Kind,
+  op: Acting & { readonly [field: string]: unknown },
+  cause?: () => Json | undefined,
+): Fields {
+  acting(op);
+  const out: Fields = {};
+  for (const [field, required] of TAKES[kind]) {
+    const given = op[field];
+    if (field === "send") {
+      if (typeof given !== "function") throw wrongField("send", "subscribe needs a send function");
+      continue;
+    }
+    if (given === undefined) {
+      if (field === "cause") {
+        const c = cause?.();
+        if (c !== undefined) out.cause = c;
+      } else if (required) throw missing(field);
+      continue;
+    }
+    switch (field) {
+      case "address":
+        out.parsed = parseAddress(given);
+        break;
+      case "name":
+        if (!isName(given)) throw wrongField("name", 'a name is a string, never ".", ".." or "/"');
+        out.name = given;
+        break;
+      case "id":
+        if (typeof given !== "string") throw wrongField("id", "an id is a string");
+        out.id = given;
+        break;
+      case "position":
+        if (!whole(given)) throw wrongField("position", "a position is a whole number from 0");
+        out.position = given;
+        break;
+      case "value":
+        out.value = ownField(given, "value");
+        break;
+      case "patches":
+        if (!Array.isArray(given)) throw wrongField("patches", "patches are a list");
+        out.patches = given;
+        break;
+      case "cause":
+        out.cause = ownField(given, "cause");
+        break;
+      case "time":
+        if (!whole(given) || given < 1) throw wrongField("time", "a time is a whole number from 1");
+        out.time = given;
+        break;
+      case "sub":
+        // whether it names a subscription is for the graph to say
+        out.sub = given;
+        break;
+    }
+  }
+  return out;
+}
+
+/** Whether two addresses got to the same node by the same route, or both to nothing. */
+function sameRoute(a: Located | undefined, b: Located | undefined): boolean {
+  if (!a || !b) return a === b;
+  return a.node === b.node && a.route.length === b.route.length &&
+    a.route.every((s, i) => {
+      const t = b.route[i];
+      return s.parent === t.parent && s.name === t.name && s.node === t.node &&
+        s.position === t.position;
+    });
 }
 
 /** The time of the latest change among the items, null if none. */

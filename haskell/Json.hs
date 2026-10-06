@@ -29,6 +29,7 @@ module Json
     -- * reading and writing
   , parseValue
   , decodeLine
+  , lineSeq
   , render
   , encodeLine
   , renderNumber
@@ -166,6 +167,30 @@ decodeLine bytes = case Encoding.decodeUtf8' bytes of
   Left _ -> Left "the line is not UTF-8"
   Right t -> parseValue t
 
+-- | The seq of a line that is not one JSON object (PROTOCOL Lines): a "seq"
+-- key of the line's object holding a whole number, that a parser reading
+-- the line from its start reaches before the line stops being JSON. The
+-- line stops being JSON at its first byte that is not UTF-8, or where the
+-- parser finds what JSON cannot have there; a key's value counts once the
+-- parser has read all of it. The last such "seq" decides, as JSON.parse
+-- keeps a repeated key's last value. Nothing when there is none.
+lineSeq :: BS.ByteString -> Maybe Integer
+lineSeq bytes = case Text.uncons (skipSpace prefix) of
+  Just ('{', rest) -> members (skipSpace rest) Nothing
+  _ -> Nothing
+  where
+    prefix = Encoding.decodeUtf8 (BS.take (fst (Encoding.validateUtf8Chunk bytes)) bytes)
+    members t found = case Text.uncons t of
+      Just ('"', rest)
+        | Right (k, afterKey) <- stringP rest
+        , Right afterColon <- expect ':' (skipSpace afterKey)
+        , Right (v, afterValue) <- value (skipSpace afterColon) ->
+            let found' = if k == "seq" then asWhole v >>= \n -> if n >= 0 then Just n else Nothing else found
+             in case Text.uncons (skipSpace afterValue) of
+                  Just (',', more) -> members (skipSpace more) found'
+                  _ -> found'
+      _ -> found
+
 -- | Exactly one JSON value, with only JSON whitespace around it.
 parseValue :: Text -> Either Text Value
 parseValue input = do
@@ -296,9 +321,13 @@ hex4 t =
 numberP :: Text -> Either Text (Value, Text)
 numberP t = do
   let (neg, afterSign) = maybe (False, t) (\r -> (True, r)) (Text.stripPrefix "-" t)
-      (whole, afterWhole) = Text.span isDigit afterSign
+      -- JSON's int is 0, or digits not starting with 0: after a leading 0
+      -- the number's whole part ends, and what follows must be something
+      -- else, so "01" is the number 0 and then a 1 that cannot follow it
+      (whole, afterWhole) = case Text.stripPrefix "0" afterSign of
+        Just r -> ("0", r)
+        Nothing -> Text.span isDigit afterSign
   if Text.null whole then Left "a number has no digits" else Right ()
-  if Text.length whole > 1 && Text.head whole == '0' then Left "a number has a leading zero" else Right ()
   (frac, afterFrac) <- case Text.stripPrefix "." afterWhole of
     Nothing -> Right ("", afterWhole)
     Just r ->

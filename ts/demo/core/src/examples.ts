@@ -4,6 +4,13 @@
 // Every node is made by placing it, as CORE.tex has it, and programs find what
 // they read by lookup from their place, so everything is in the tree and every
 // dependency shows in a run's record as a search.
+//
+// A program is a module whose default export is the function the driver
+// calls, with what drive gives it and nothing else: a compute gets {api, self,
+// cwd, name, changes}, and its api only reads; an effect gets {api, lasting,
+// self, cwd, name, value, previous, handler}, and its api only writes. A
+// program may import { PENDING } from "ermine", and { h, screen, fire } from
+// "demo", this host: screen(self) is the element an effect draws on.
 
 export type Example = { id: string; title: string; blurb: string; code: string };
 
@@ -15,26 +22,43 @@ const hello = String.raw`
 make("root", "clicks", "clicks", 0)
 
 // A process's place is where it is put, so it finds "clicks" by looking up
-// from there: the root. A compute only reads; with no effect, a process is a
-// derived value.
-process("root", "double", "double", { compute: "return find('clicks') * 2" })
+// from there: the root. A lookup's item says the address it was found at,
+// and a read is a list of items, the first the node the address reaches.
+// A compute only reads; with no effect, a process is a derived value.
+process("root", "double", "double", { compute: ${B}
+export default function ({ api }) {
+  const [clicks] = api.lookup({ name: "clicks" })
+  return api.read({ address: clicks.from.path })[0].value * 2
+}
+${B} })
 
-// The counter learns where it found "clicks", an address, so its effect can
+// The counter keeps the address it found "clicks" at, so its effect can
 // write it. A press writes through the lasting interface, as the counter, so
-// the change names it, and a process is not marked by its own changes: no echo.
-// Like CORE.tex's editor, the screen keeps the count it shows. A write from
-// anyone else marks the counter, and it draws again from what it read.
+// the change names it, and a process is not marked by its own changes: no
+// echo. Like CORE.tex's editor, the screen keeps the count it shows. A write
+// from anyone else marks the counter, and it draws again from what it read.
 process("root", "counter", "counter", {
-  compute: "const at = where('clicks'); return { n: read(at), at }",
+  compute: ${B}
+export default function ({ api }) {
+  const [clicks] = api.lookup({ name: "clicks" })
+  return { n: api.read({ address: clicks.from.path })[0].value, at: clicks.from.path }
+}
+${B},
   effect: ${B}
-let n = value.n
-const big = h("div", { class: "big" }, n)
-handler("press", () => { later.write(value.at, ++n); big.textContent = n })
-screen().replaceChildren(
-  big,
-  h("div", { class: "label" }, "clicks"),
-  h("button", { class: "bun", onclick: () => fire("press") }, "🐇 hop!"),
-)
+import { h, screen, fire } from "demo"
+export default function ({ self, value, lasting, handler }) {
+  let n = value.n
+  const big = h("div", { class: "big" }, n)
+  handler("press", () => {
+    lasting.write({ address: value.at, patches: [{ type: "snapshot", value: ++n }] })
+    big.textContent = n
+  })
+  screen(self).replaceChildren(
+    big,
+    h("div", { class: "label" }, "clicks"),
+    h("button", { class: "bun", onclick: () => fire(self, "press") }, "🐇 hop!"),
+  )
+}
 ${B},
 })
 
@@ -50,33 +74,62 @@ const typing = String.raw`
 make("root", "doc", "doc", "the quick brown ermine hops over the lazy rabbit")
 
 process("root", "editor", "editor", {
-  compute: "const at = where('doc'); return { text: read(at), at }",
+  compute: ${B}
+export default function ({ api }) {
+  const [doc] = api.lookup({ name: "doc" })
+  return { text: api.read({ address: doc.from.path })[0].value, at: doc.from.path }
+}
+${B},
   effect: ${B}
-const s = screen()
-let ta = s.querySelector("textarea")
-if (!ta) {
-  ta = h("textarea", { class: "ed", spellcheck: false })
-  s.replaceChildren(h("div", { class: "label" }, "✎ editor — type here"), ta)
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const s = screen(self)
+  let ta = s.querySelector("textarea")
+  if (!ta) {
+    ta = h("textarea", { class: "ed", spellcheck: false })
+    s.replaceChildren(h("div", { class: "label" }, "✎ editor — type here"), ta)
+  }
+  ta.oninput = () => {
+    const was = [...ta.dataset.was], now = [...ta.value]
+    let a = 0; while (a < was.length && a < now.length && was[a] === now[a]) a++
+    let b = 0; while (b < was.length - a && b < now.length - a && was[was.length-1-b] === now[now.length-1-b]) b++
+    ta.dataset.was = ta.value
+    lasting.write({ address: value.at, patches: [
+      { type: "splice", path: [], range: [a, was.length - b], value: now.slice(a, now.length - b).join("") },
+    ] })
+  }
+  if (ta.value !== value.text) { ta.value = value.text; ta.dataset.was = value.text }
 }
-ta.oninput = () => {
-  const was = [...ta.dataset.was], now = [...ta.value]
-  let a = 0; while (a < was.length && a < now.length && was[a] === now[a]) a++
-  let b = 0; while (b < was.length - a && b < now.length - a && was[was.length-1-b] === now[now.length-1-b]) b++
-  ta.dataset.was = ta.value
-  later.patch(value.at, { type: "splice", path: [], range: [a, was.length - b], value: now.slice(a, now.length - b).join("") })
-}
-if (ta.value !== value.text) { ta.value = value.text; ta.dataset.was = value.text }
 ${B},
 })
 
 process("root", "words", "words", {
-  compute: "const d = find('doc'); return d.trim() ? d.trim().split(/\\s+/).length : 0",
-  effect: "screen().replaceChildren(h('div', { class: 'big' }, value), h('div', { class: 'label' }, 'words'))",
+  compute: ${B}
+export default function ({ api }) {
+  const [doc] = api.lookup({ name: "doc" })
+  const d = api.read({ address: doc.from.path })[0].value
+  return d.trim() ? d.trim().split(/\\s+/).length : 0
+}
+${B},
+  effect: ${B}
+import { h, screen } from "demo"
+export default ({ self, value }) =>
+  screen(self).replaceChildren(h("div", { class: "big" }, value), h("div", { class: "label" }, "words"))
+${B},
 })
 
 process("root", "shout", "shout", {
-  compute: "return find('doc').toUpperCase()",
-  effect: "screen().replaceChildren(h('div', { class: 'label' }, 'shout'), h('p', { class: 'shout' }, value))",
+  compute: ${B}
+export default function ({ api }) {
+  const [doc] = api.lookup({ name: "doc" })
+  return api.read({ address: doc.from.path })[0].value.toUpperCase()
+}
+${B},
+  effect: ${B}
+import { h, screen } from "demo"
+export default ({ self, value }) =>
+  screen(self).replaceChildren(h("div", { class: "label" }, "shout"), h("p", { class: "shout" }, value))
+${B},
 })
 `;
 
@@ -93,13 +146,20 @@ make("docs", "theme", "mint", { bg: "#dcf7ec", fg: "#155c45", name: "mint" })
 // Programs live in the tree too: one card program, run in two places.
 make("root", "programs", "programs", {})
 program("programs", "card", ${B}
-const theme = find("theme") ?? { bg: "#eee", fg: "#333", name: "none" }
-return { text: read([]), theme }
+export default function ({ api }) {
+  const [theme] = api.lookup({ name: "theme" })
+  return {
+    text: api.read({ address: [] })[0].value,
+    theme: theme ? api.read({ address: theme.from.path })[0].value : { bg: "#eee", fg: "#333", name: "none" },
+  }
+}
 ${B})
 program("programs", "draw", ${B}
-const { text, theme } = value
-screen().replaceChildren(h("div", { class: "card", style: { background: theme.bg, color: theme.fg } },
-  h("div", { class: "label" }, "theme: " + theme.name), h("p", {}, text)))
+import { h, screen } from "demo"
+export default function ({ self, value: { text, theme } }) {
+  screen(self).replaceChildren(h("div", { class: "card", style: { background: theme.bg, color: theme.fg } },
+    h("div", { class: "label" }, "theme: " + theme.name), h("p", {}, text)))
+}
 ${B})
 
 // Two processes, each placed in what it shows: a process runs where it sits,
@@ -118,13 +178,25 @@ make("root", "diary", "diary", "dear diary, today i hopped")
 make("root", "public", "public", "hello everyone")
 
 process("root", "reader", "reader", {
-  compute: "return { diary: find('diary'), public: find('public') }",
-  effect: "screen().replaceChildren(h('div', { class: 'label' }, 'reader'), h('pre', {}, JSON.stringify(value, null, 1)))",
+  compute: ${B}
+export default function ({ api }) {
+  const find = (name) => {
+    const [it] = api.lookup({ name })
+    return it && api.read({ address: it.from.path })[0].value
+  }
+  return { diary: find("diary"), public: find("public") }
+}
+${B},
+  effect: ${B}
+import { h, screen } from "demo"
+export default ({ self, value }) =>
+  screen(self).replaceChildren(h("div", { class: "label" }, "reader"), h("pre", {}, JSON.stringify(value, null, 1)))
+${B},
 })
 
 // Now act as bun (the pills at the top) and try:  write("diary", "bun was here")
 // Or start a process as hop, who may not read the diary:
-//   as("hop", () => process("root", "snoop", "snoop", { compute: "return find('diary')" }))
+//   as("hop", () => process("root", "snoop", "snoop", { compute: "export default ({ api }) => api.read({ address: api.lookup({ name: 'diary' })[0].from.path })[0].value" }))
 `;
 
 const guardedRules = [
@@ -138,16 +210,32 @@ const slow = String.raw`
 // "weather" in the root, so it is marked when that name appears, and runs
 // again. Slow work is something that writes later.
 process("root", "forecast", "forecast", {
-  compute: "const w = find('weather'); if (w === undefined) return PENDING; return w",
-  effect: "screen().replaceChildren(h('div', { class: 'big' }, value.sky), h('div', { class: 'label' }, value.temp + '° in ' + value.town))",
+  compute: ${B}
+import { PENDING } from "ermine"
+export default function ({ api }) {
+  const [weather] = api.lookup({ name: "weather" })
+  if (!weather) return PENDING
+  return api.read({ address: weather.from.path })[0].value
+}
+${B},
+  effect: ${B}
+import { h, screen } from "demo"
+export default ({ self, value }) =>
+  screen(self).replaceChildren(h("div", { class: "big" }, value.sky), h("div", { class: "label" }, value.temp + "° in " + value.town))
+${B},
 })
 
 process("root", "fetcher", "fetcher", {
-  compute: "return 'soon'",
+  compute: "export default () => 'soon'",
   effect: ${B}
-const t = setTimeout(() => later.make(["/"], "weather", "weather", { sky: "☁︎ → ☀︎", temp: 19, town: "the burrow" }), 2000)
-screen().replaceChildren(h('div', { class: 'label' }, 'fetching the weather… (2s)'))
-return () => clearTimeout(t)
+import { h, screen } from "demo"
+export default function ({ self, lasting }) {
+  const t = setTimeout(() => lasting.place({
+    address: ["/"], name: "weather", id: "weather", value: { sky: "☁︎ → ☀︎", temp: 19, town: "the burrow" },
+  }), 2000)
+  screen(self).replaceChildren(h("div", { class: "label" }, "fetching the weather… (2s)"))
+  return () => clearTimeout(t)
+}
 ${B},
 })
 `;
@@ -155,9 +243,9 @@ ${B},
 const data = String.raw`
 // Programs as data: the small language of PROTOCOL.tex, which every harness
 // interprets, so one scenario runs in every language. The loader takes a
-// string as JS, and a list as steps. Reads are lists of items: a lookup's
-// item says the path it was found at, which reads straight back, and $value
-// takes the value of a read's first item.
+// string as a module, and a list as steps. Reads are lists of items: a
+// lookup's item says the path it was found at, which reads straight back, and
+// $value takes the value of a read's first item.
 make("root", "a", "a", 20)
 make("root", "b", "b", 22)
 make("root", "programs", "programs", {})
@@ -202,138 +290,183 @@ make("trip", "units", "units-km", "km")
 // the views' programs, kept in the tree like everything else
 make("root", "programs", "programs", {})
 
+// each view finds its inputs by name, nearest first: the value of the first
+// item of reading the address the lookup found it at
+const finding = ${B}
+export default function ({ api }) {
+  const find = (name) => {
+    const [it] = api.lookup({ name })
+    return it && api.read({ address: it.from.path })[0].value
+  }
+${B}
+
 // the outline editor: splices through the lasting interface, no echo
 program("programs", "outline-editor", ${B}
-const s = screen()
-let ta = s.querySelector("textarea")
-if (!ta) {
-  ta = h("textarea", { class: "ed tall", spellcheck: false })
-  s.replaceChildren(h("div", { class: "label" }, "✎ plan — write Day N — Place: note"), ta)
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const s = screen(self)
+  let ta = s.querySelector("textarea")
+  if (!ta) {
+    ta = h("textarea", { class: "ed tall", spellcheck: false })
+    s.replaceChildren(h("div", { class: "label" }, "✎ plan — write Day N — Place: note"), ta)
+  }
+  ta.oninput = () => {
+    const was = [...ta.dataset.was], now = [...ta.value]
+    let a = 0; while (a < was.length && a < now.length && was[a] === now[a]) a++
+    let b = 0; while (b < was.length - a && b < now.length - a && was[was.length-1-b] === now[now.length-1-b]) b++
+    ta.dataset.was = ta.value
+    lasting.write({ address: value.at, patches: [
+      { type: "splice", path: [], range: [a, was.length - b], value: now.slice(a, now.length - b).join("") },
+    ] })
+  }
+  if (ta.value !== value.text) { ta.value = value.text; ta.dataset.was = value.text }
 }
-ta.oninput = () => {
-  const was = [...ta.dataset.was], now = [...ta.value]
-  let a = 0; while (a < was.length && a < now.length && was[a] === now[a]) a++
-  let b = 0; while (b < was.length - a && b < now.length - a && was[was.length-1-b] === now[now.length-1-b]) b++
-  ta.dataset.was = ta.value
-  later.patch(value.at, { type: "splice", path: [], range: [a, was.length - b], value: now.slice(a, now.length - b).join("") })
-}
-if (ta.value !== value.text) { ta.value = value.text; ta.dataset.was = value.text }
 ${B})
 
 // stops: the outline's lines that name a day and a place
-program("programs", "parse-stops", ${B}
-const places = find("places") ?? {}
-const stops = []
-for (const line of String(find("plan") ?? "").split("\\n")) {
-  const m = line.match(/^\\s*day\\s+(\\d+)\\s*[—–-]+\\s*([^:]+?)\\s*(?::\\s*(.*))?$/i)
-  if (!m) continue
-  const at = places[m[2]]
-  stops.push({ day: Number(m[1]), name: m[2], note: m[3] ?? "", ...(at ?? { unknown: true }) })
+program("programs", "parse-stops", finding + ${B}
+  const places = find("places") ?? {}
+  const stops = []
+  for (const line of String(find("plan") ?? "").split("\\n")) {
+    const m = line.match(/^\\s*day\\s+(\\d+)\\s*[—–-]+\\s*([^:]+?)\\s*(?::\\s*(.*))?$/i)
+    if (!m) continue
+    const at = places[m[2]]
+    stops.push({ day: Number(m[1]), name: m[2], note: m[3] ?? "", ...(at ?? { unknown: true }) })
+  }
+  return stops
 }
-return stops
 ${B})
 
 // legs: the distance between each stop and the next, in the units found
-program("programs", "measure-legs", ${B}
-const stops = (find("stops") ?? []).filter((s) => !s.unknown)
-const units = find("units") ?? "km"
-const r = units === "mi" ? 3958.8 : 6371
-const rad = (d) => d * Math.PI / 180
-const legs = []
-for (let i = 1; i < stops.length; i++) {
-  const a = stops[i - 1], b = stops[i]
-  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2
-  legs.push({ from: a.name, to: b.name, d: Math.round(2 * r * Math.asin(Math.sqrt(h))) })
+program("programs", "measure-legs", finding + ${B}
+  const stops = (find("stops") ?? []).filter((s) => !s.unknown)
+  const units = find("units") ?? "km"
+  const r = units === "mi" ? 3958.8 : 6371
+  const rad = (d) => d * Math.PI / 180
+  const legs = []
+  for (let i = 1; i < stops.length; i++) {
+    const a = stops[i - 1], b = stops[i]
+    const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2
+    legs.push({ from: a.name, to: b.name, d: Math.round(2 * r * Math.asin(Math.sqrt(h))) })
+  }
+  return { units, legs, total: legs.reduce((t, l) => t + l.d, 0) }
 }
-return { units, legs, total: legs.reduce((t, l) => t + l.d, 0) }
 ${B})
 
-// forecasts: what is known so far, by place; null is still coming
-program("programs", "read-weather", ${B}
-const folder = where("weather")
-const known = folder ? dir(folder) ?? {} : {}
-const out = {}
-for (const s of find("stops") ?? []) {
-  out[s.name] = known[s.name] ? read([...folder, s.name]) : null
+// forecasts: what is known so far, by place; null is still coming. A read of
+// a name the folder lacks reads as none, and the run is marked when it appears
+program("programs", "read-weather", finding + ${B}
+  const [weather] = api.lookup({ name: "weather" })
+  const out = {}
+  for (const s of find("stops") ?? []) {
+    out[s.name] = weather ? api.read({ address: [...weather.from.path, s.name] })[0]?.value ?? null : null
+  }
+  return out
 }
-return out
 ${B})
 
 // the slow work, in a process of its own: a process is not marked by its own
 // changes, so the one that fetches cannot be the one that waits for the answer
-program("programs", "missing-weather", ${B}
-const folder = where("weather")
-const known = folder ? dir(folder) ?? {} : {}
-const missing = (find("stops") ?? []).filter((s) => !s.unknown && !known[s.name]).map((s) => s.name)
-return { folder, missing }
+program("programs", "missing-weather", finding + ${B}
+  const [weather] = api.lookup({ name: "weather" })
+  const folder = weather?.from.path
+  const known = folder ? api.directory({ address: folder }).directory.map(([name]) => name) : []
+  const missing = (find("stops") ?? []).filter((s) => !s.unknown && !known.includes(s.name)).map((s) => s.name)
+  return { folder, missing }
+}
 ${B})
 program("programs", "fetch-weather", ${B}
-const skies = ["☀︎", "⛅︎", "☁︎", "🌧", "☀︎", "⛅︎"]
-const timers = value.missing.map((name) => {
-  const n = [...name].reduce((h, c) => (h * 31 + c.codePointAt(0)) >>> 0, 7)
-  return setTimeout(() => {
-    later.make(value.folder, name, "wx-" + name, { sky: skies[n % 6], high: 14 + (n % 15) })
-  }, 500 + (n % 9) * 240)
-})
-screen().replaceChildren(h("div", { class: "label" }, value.missing.length
-  ? "fetching weather for " + value.missing.join(", ") + "…" : "weather: all fetched"))
-return () => timers.forEach(clearTimeout)
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const skies = ["☀︎", "⛅︎", "☁︎", "🌧", "☀︎", "⛅︎"]
+  const timers = value.missing.map((name) => {
+    const n = [...name].reduce((h, c) => (h * 31 + c.codePointAt(0)) >>> 0, 7)
+    return setTimeout(() => {
+      lasting.place({ address: value.folder, name, id: "wx-" + name, value: { sky: skies[n % 6], high: 14 + (n % 15) } })
+    }, 500 + (n % 9) * 240)
+  })
+  screen(self).replaceChildren(h("div", { class: "label" }, value.missing.length
+    ? "fetching weather for " + value.missing.join(", ") + "…" : "weather: all fetched"))
+  return () => timers.forEach(clearTimeout)
+}
 ${B})
 
 program("programs", "draw-map", ${B}
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => "&#" + c.charCodeAt(0) + ";")
-const W = 460, H = 330, box = { w: -10.5, e: 6, s: 36.2, n: 46 }
-const x = (lon) => ((lon - box.w) / (box.e - box.w) * W).toFixed(1)
-const y = (lat) => ((box.n - lat) / (box.n - box.s) * H).toFixed(1)
-let svg = '<svg class="map" viewBox="0 0 ' + W + " " + H + '">'
-for (let lon = -10; lon <= 6; lon += 2) svg += '<line class="grat" x1="' + x(lon) + '" x2="' + x(lon) + '" y1="0" y2="' + H + '"/>'
-for (let lat = 37; lat <= 46; lat += 1) svg += '<line class="grat" y1="' + y(lat) + '" y2="' + y(lat) + '" x1="0" x2="' + W + '"/>'
-for (const [n, p] of Object.entries(value.places)) {
-  svg += '<circle class="town" cx="' + x(p.lon) + '" cy="' + y(p.lat) + '" r="2.4"/>'
-  svg += '<text class="town-label" x="' + (+x(p.lon) + 5) + '" y="' + (+y(p.lat) + 3) + '">' + esc(n) + "</text>"
+import { screen } from "demo"
+export default function ({ self, value }) {
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => "&#" + c.charCodeAt(0) + ";")
+  const W = 460, H = 330, box = { w: -10.5, e: 6, s: 36.2, n: 46 }
+  const x = (lon) => ((lon - box.w) / (box.e - box.w) * W).toFixed(1)
+  const y = (lat) => ((box.n - lat) / (box.n - box.s) * H).toFixed(1)
+  let svg = '<svg class="map" viewBox="0 0 ' + W + " " + H + '">'
+  for (let lon = -10; lon <= 6; lon += 2) svg += '<line class="grat" x1="' + x(lon) + '" x2="' + x(lon) + '" y1="0" y2="' + H + '"/>'
+  for (let lat = 37; lat <= 46; lat += 1) svg += '<line class="grat" y1="' + y(lat) + '" y2="' + y(lat) + '" x1="0" x2="' + W + '"/>'
+  for (const [n, p] of Object.entries(value.places)) {
+    svg += '<circle class="town" cx="' + x(p.lon) + '" cy="' + y(p.lat) + '" r="2.4"/>'
+    svg += '<text class="town-label" x="' + (+x(p.lon) + 5) + '" y="' + (+y(p.lat) + 3) + '">' + esc(n) + "</text>"
+  }
+  const pts = value.stops.filter((s) => !s.unknown)
+  svg += '<polyline class="route" points="' + pts.map((s) => x(s.lon) + "," + y(s.lat)).join(" ") + '"/>'
+  pts.forEach((s, i) => {
+    const wx = value.weather[s.name]
+    svg += '<circle class="stop" cx="' + x(s.lon) + '" cy="' + y(s.lat) + '" r="9"/>'
+    svg += '<text class="stop-n" x="' + x(s.lon) + '" y="' + (+y(s.lat) + 3.5) + '">' + (i + 1) + "</text>"
+    svg += '<text class="stop-label" x="' + (+x(s.lon) + 12) + '" y="' + (+y(s.lat) - 8) + '">' + esc(s.name) + " " + (wx ? wx.sky + " " + wx.high + "°" : "…") + "</text>"
+  })
+  svg += "</svg>"
+  const lost = value.stops.filter((s) => s.unknown).map((s) => esc(s.name))
+  screen(self).innerHTML = '<div class="label">map · ' + pts.length + " stops</div>" + svg +
+    (lost.length ? '<div class="lost">not on the map: ' + lost.join(", ") + ' — add it to places</div>' : "")
 }
-const pts = value.stops.filter((s) => !s.unknown)
-svg += '<polyline class="route" points="' + pts.map((s) => x(s.lon) + "," + y(s.lat)).join(" ") + '"/>'
-pts.forEach((s, i) => {
-  const wx = value.weather[s.name]
-  svg += '<circle class="stop" cx="' + x(s.lon) + '" cy="' + y(s.lat) + '" r="9"/>'
-  svg += '<text class="stop-n" x="' + x(s.lon) + '" y="' + (+y(s.lat) + 3.5) + '">' + (i + 1) + "</text>"
-  svg += '<text class="stop-label" x="' + (+x(s.lon) + 12) + '" y="' + (+y(s.lat) - 8) + '">' + esc(s.name) + " " + (wx ? wx.sky + " " + wx.high + "°" : "…") + "</text>"
-})
-svg += "</svg>"
-const lost = value.stops.filter((s) => s.unknown).map((s) => esc(s.name))
-screen().innerHTML = '<div class="label">map · ' + pts.length + " stops</div>" + svg +
-  (lost.length ? '<div class="lost">not on the map: ' + lost.join(", ") + ' — add it to places</div>' : "")
 ${B})
 
 program("programs", "draw-itinerary", ${B}
-const { stops, legs, weather } = value
-const rows = stops.map((s, i) => {
-  const wx = weather[s.name]
-  const leg = legs.legs.find((l) => l.to === s.name)
-  return h("tr", { class: s.unknown ? "unknown" : "" },
-    h("td", { class: "day" }, "day " + s.day),
-    h("td", { class: "place" }, s.name),
-    h("td", { class: "wx" }, s.unknown ? "?" : wx ? wx.sky + " " + wx.high + "°" : h("span", { class: "dots" }, "…")),
-    h("td", { class: "leg" }, leg ? "+" + leg.d + " " + legs.units : ""),
-    h("td", { class: "note" }, s.note))
-})
-screen().replaceChildren(
-  h("div", { class: "label" }, "itinerary · " + legs.total + " " + legs.units + " overland"),
-  h("table", { class: "itin" }, ...rows))
+import { h, screen } from "demo"
+export default function ({ self, value: { stops, legs, weather } }) {
+  const rows = stops.map((s, i) => {
+    const wx = weather[s.name]
+    const leg = legs.legs.find((l) => l.to === s.name)
+    return h("tr", { class: s.unknown ? "unknown" : "" },
+      h("td", { class: "day" }, "day " + s.day),
+      h("td", { class: "place" }, s.name),
+      h("td", { class: "wx" }, s.unknown ? "?" : wx ? wx.sky + " " + wx.high + "°" : h("span", { class: "dots" }, "…")),
+      h("td", { class: "leg" }, leg ? "+" + leg.d + " " + legs.units : ""),
+      h("td", { class: "note" }, s.note))
+  })
+  screen(self).replaceChildren(
+    h("div", { class: "label" }, "itinerary · " + legs.total + " " + legs.units + " overland"),
+    h("table", { class: "itin" }, ...rows))
+}
 ${B})
 
 // the processes: each placed in trip/plan, where it runs and looks up from
 process("plan", "plan-editor", "plan-editor", {
-  compute: "const at = where('plan'); return { text: read(at), at }", effect: "outline-editor" })
+  compute: ${B}
+export default function ({ api }) {
+  const [plan] = api.lookup({ name: "plan" })
+  return { text: api.read({ address: plan.from.path })[0].value, at: plan.from.path }
+}
+${B},
+  effect: "outline-editor",
+})
 process("plan", "stops", "stops", { compute: "parse-stops" })
 process("plan", "legs", "legs", { compute: "measure-legs" })
 process("plan", "forecasts", "forecasts", { compute: "read-weather" })
 process("plan", "weatherman", "weatherman", { compute: "missing-weather", effect: "fetch-weather" })
 process("plan", "map", "map", {
-  compute: "return { places: find('places'), stops: find('stops'), weather: find('forecasts') }", effect: "draw-map" })
+  compute: finding + ${B}
+  return { places: find("places"), stops: find("stops"), weather: find("forecasts") }
+}
+${B},
+  effect: "draw-map",
+})
 process("plan", "itinerary", "itinerary", {
-  compute: "return { stops: find('stops'), legs: find('legs'), weather: find('forecasts') }", effect: "draw-itinerary" })
+  compute: finding + ${B}
+  return { stops: find("stops"), legs: find("legs"), weather: find("forecasts") }
+}
+${B},
+  effect: "draw-itinerary",
+})
 
 // Try: type "Day 12 — Bordeaux" in the plan; the map, legs, weather and itinerary follow.
 //      unplace("trip", "units", "units-km")  — the root's miles show through
@@ -348,32 +481,42 @@ const sheet = String.raw`
 make("root", "programs", "programs", {})
 
 // the grid: reads every cell the sheet holds, by name, and draws it; typing
-// in a plain cell writes it through the lasting interface
+// in a plain cell writes it through the lasting interface. The sheet runs in
+// the root, so its own node is [name], and a cell is [name, "A1"]
 program("programs", "grid", ${B}
-const cells = {}
-for (const [name, ids] of Object.entries(dir([ctx.name]) ?? {})) {
-  if (!/^[A-Z][0-9]+$/.test(name)) continue
-  const id = ids[0]
-  const at = [ctx.name, name]
-  cells[name] = { id, at, v: read(at), formula: dir(at, "compute").length > 0 }
+export default function ({ api, name }) {
+  const cells = {}
+  for (const [cell, items] of api.directory({ address: [name] }).directory) {
+    if (!/^[A-Z][0-9]+$/.test(cell)) continue
+    const at = [name, cell]
+    cells[cell] = {
+      id: items[0].id, at,
+      v: api.read({ address: at })[0]?.value,
+      formula: api.directory({ address: at, name: "compute" }).items.length > 0,
+    }
+  }
+  return cells
 }
-return cells
 ${B})
 program("programs", "draw-grid", ${B}
-const cols = ["A", "B", "C", "D"], rows = [1, 2, 3, 4]
-const head = h("tr", {}, h("th", {}), ...cols.map((c) => h("th", {}, c)))
-const body = rows.map((r) => h("tr", {}, h("th", {}, r), ...cols.map((c) => {
-  const cell = value[c + r]
-  if (!cell) return h("td", { class: "blank" })
-  if (cell.formula) return h("td", { class: "formula", title: cell.id + " is a process" }, String(cell.v ?? "…"))
-  const input = h("input", { value: String(cell.v), class: typeof cell.v === "number" ? "num" : "" })
-  input.onchange = () => {
-    const n = Number(input.value)
-    later.write(cell.at, input.value.trim() !== "" && !isNaN(n) ? n : input.value)
-  }
-  return h("td", {}, input)
-})))
-screen().replaceChildren(h("div", { class: "label" }, "sheet · formulas are processes"), h("table", { class: "sheet-grid" }, head, ...body))
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const cols = ["A", "B", "C", "D"], rows = [1, 2, 3, 4]
+  const head = h("tr", {}, h("th", {}), ...cols.map((c) => h("th", {}, c)))
+  const body = rows.map((r) => h("tr", {}, h("th", {}, r), ...cols.map((c) => {
+    const cell = value[c + r]
+    if (!cell) return h("td", { class: "blank" })
+    if (cell.formula) return h("td", { class: "formula", title: cell.id + " is a process" }, String(cell.v ?? "…"))
+    const input = h("input", { value: String(cell.v), class: typeof cell.v === "number" ? "num" : "" })
+    input.onchange = () => {
+      const n = Number(input.value)
+      const v = input.value.trim() !== "" && !isNaN(n) ? n : input.value
+      lasting.write({ address: cell.at, patches: [{ type: "snapshot", value: v }] })
+    }
+    return h("td", {}, input)
+  })))
+  screen(self).replaceChildren(h("div", { class: "label" }, "sheet · formulas are processes"), h("table", { class: "sheet-grid" }, head, ...body))
+}
 ${B})
 
 // the sheet runs the grid; its directory holds the cells
@@ -385,7 +528,14 @@ cell("A3", "plums");  cell("B3", 20); cell("C3", 0.25)
 
 // a formula is a process placed in the sheet, where it runs; it looks its
 // inputs up from its place there
-const formula = (name, code) => process("sheet", name, "f-" + name, { compute: code })
+const finding = ${B}
+export default function ({ api }) {
+  const find = (name) => {
+    const [it] = api.lookup({ name })
+    return it && api.read({ address: it.from.path })[0].value
+  }
+${B}
+const formula = (name, body) => process("sheet", name, "f-" + name, { compute: finding + "  " + body + "\n}" })
 formula("D1", "return +(find('B1') * find('C1')).toFixed(2)")
 formula("D2", "return +(find('B2') * find('C2')).toFixed(2)")
 formula("D3", "return +(find('B3') * find('C3')).toFixed(2)")
@@ -420,8 +570,9 @@ make("inbox", "steps", "steps", { "@type": "count", n: 7120, of: 10000, unit: "h
 make("archive", "letter", "letter", { "@type": "text",
   text: "dear bun, the burrow is warm and the snow is deep. come home soon." })
 
-// the renderers: plain nodes of code, placed by name. The desk's serve
-// everything on the desk; the archive's text renderer is nearer for its things.
+// the renderers: plain nodes of code, placed by name, which a card runs with
+// thing, el, h and save. The desk's serve everything on the desk; the
+// archive's text renderer is nearer for its things.
 make("desk", "render-text", "text-card", ${B}
 const p = h("p", { class: "r-text", contenteditable: "true", spellcheck: "false" }, thing.text)
 p.onblur = () => p.textContent !== thing.text && save({ ...thing, text: p.textContent })
@@ -493,48 +644,69 @@ ${B})
 // the programs that make the desk go
 make("root", "programs", "programs", {})
 // a folder view: what its folder holds, and a child process for each thing.
-// it runs in its folder, so [] is the folder, and [name] its own node
+// it runs in its folder, so [] is the folder, and [name] its own node. A
+// directory item carries the change that last set its slot: a thing dragged
+// away and back is a new placement, and gets a new card
 program("programs", "folder", ${B}
-const me = name
-const items = Object.entries(dir([]) ?? {})
-  .filter(([name]) => !name.startsWith("render-") && name !== me)
-  .flatMap(([name, ids]) => ids.map((id) => ({ name, id })))
-return { title: cwd[cwd.length - 1], items, kids: dir([me]) ?? {} }
-${B})
-program("programs", "folder-kids", ${B}
-screen().replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.title,
-  h("span", { class: "muted" }, "  " + value.items.length + " things")))
-const want = new Set()
-for (const t of value.items) {
-  const pid = self + ":" + t.id
-  want.add(pid)
-  if ((value.kids[t.name] ?? []).includes(pid)) continue
-  start(t.name, pid, { compute: "thing", effect: "thing-frame" })
+export default function ({ api, cwd, name }) {
+  const items = api.directory({ address: [] }).directory
+    .filter(([slot]) => !slot.startsWith("render-") && slot !== name)
+    .flatMap(([slot, found]) => found.map((item) => ({ name: slot, id: item.id, since: item.change.time })))
+  const kids = Object.fromEntries(
+    api.directory({ address: [name] }).directory.map(([slot, found]) => [slot, found.map((item) => item.id)]))
+  return { title: cwd[cwd.length - 1], items, kids }
 }
-for (const [name, ids] of Object.entries(value.kids)) {
-  for (const pid of ids) if (pid.startsWith(self + ":") && !want.has(pid)) stop(name, pid)
+${B})
+// a card is a process placed under the view, by the thing's name, so it runs
+// there; its programs are placed in its own slots. Cards of things that left
+// are unplaced
+program("programs", "folder-kids", ${B}
+import { h, screen } from "demo"
+export default function ({ api, self, name, value }) {
+  screen(self).replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.title,
+    h("span", { class: "muted" }, "  " + value.items.length + " things")))
+  const want = new Set()
+  for (const t of value.items) {
+    const pid = self + ":" + t.id + "@" + t.since
+    want.add(pid)
+    if ((value.kids[t.name] ?? []).includes(pid)) continue
+    api.place({ address: [name], name: t.name, id: pid, value: null })
+    api.place({ address: [name, t.name], name: "compute", id: "thing" })
+    api.place({ address: [name, t.name], name: "effect", id: "thing-frame" })
+  }
+  for (const [slot, ids] of Object.entries(value.kids)) {
+    for (const pid of ids) {
+      if (pid.startsWith(self + ":") && !want.has(pid)) api.unplace({ address: [name], name: slot, id: pid })
+    }
+  }
 }
 ${B})
 // a thing's card: the thing, and the renderer found for it. A card runs in its
 // folder's view, by the thing's name, so the thing is that name in the folder
 program("programs", "thing", ${B}
-const at = ["..", name]
-const thing = read(at)
-const type = (thing && typeof thing === "object" && thing["@type"]) || "json"
-const r = where("render-" + type) ?? where("render-json")
-const by = lookup("render-" + type)[0] ?? lookup("render-json")[0]
-return { name, at, thing: thing ?? null, type, renderer: by ?? null, code: r ? read(r) : null }
+export default function ({ api, name }) {
+  const at = ["..", name]
+  const thing = api.read({ address: at })[0]?.value
+  const type = (thing && typeof thing === "object" && thing["@type"]) || "json"
+  const by = api.lookup({ name: "render-" + type })[0] ?? api.lookup({ name: "render-json" })[0]
+  return { name, at, thing: thing ?? null, type, renderer: by?.id ?? null,
+    code: by ? api.read({ address: by.from.path })[0].value : null }
+}
 ${B})
 program("programs", "thing-frame", ${B}
-const el = screen()
-const body = h("div", { class: "thing-body" })
-el.replaceChildren(h("div", { class: "thing-head" },
-  h("span", { class: "thing-name" }, value.name),
-  h("span", { class: "thing-by" }, "drawn by " + (value.renderer ?? "nothing"))), body)
-try {
-  new Function("thing", "el", "h", "save", value.code ?? "")(value.thing, body, h, (v) => later.write(value.at, v))
-} catch (e) {
-  body.replaceChildren(h("div", { class: "oops" }, "the renderer threw: " + e.message))
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const el = screen(self)
+  const body = h("div", { class: "thing-body" })
+  el.replaceChildren(h("div", { class: "thing-head" },
+    h("span", { class: "thing-name" }, value.name),
+    h("span", { class: "thing-by" }, "drawn by " + (value.renderer ?? "nothing"))), body)
+  const save = (v) => lasting.write({ address: value.at, patches: [{ type: "snapshot", value: v }] })
+  try {
+    new Function("thing", "el", "h", "save", value.code ?? "")(value.thing, body, h, save)
+  } catch (e) {
+    body.replaceChildren(h("div", { class: "oops" }, "the renderer threw: " + e.message))
+  }
 }
 ${B})
 
@@ -550,10 +722,10 @@ const essays = String.raw`
 // drag one from the library into a document to add it. Each document is drawn
 // in the style it finds nearest.
 //
-// An address reaches only the first node in a slot, so to be read each
-// paragraph is in the library under a name of its own too (CORE.tex: to use
-// one, mount it somewhere under a name of its own); its "sections" slot is to
-// drag from.
+// Reading a document's "sections" slot gives every paragraph in it, but a
+// write reaches only the first, so to be edited each paragraph is in the
+// library under a name of its own too (CORE.tex: to write one, mount it
+// somewhere under a name of its own); its "sections" slot is to drag from.
 make("root", "library", "library", {})
 const para = (id, text) => { make("library", id, id, { "@type": "para", text }); place("library", "sections", id) }
 para("p-intro", "The ermine is a stoat in its winter coat: white all over, but for the black tip of its tail.")
@@ -573,23 +745,37 @@ place("letter", "sections", "p-intro"); place("letter", "sections", "p-bun")
 
 make("root", "programs", "programs", {})
 program("programs", "gather", ${B}
-const doc = read([]) ?? {}
-const ids = dir([], "sections") ?? []
-const lib = where("library") ?? []
-// the document's own style if it has one, else the nearest above it
-const own = dir([], "style")?.[0]
-return { title: doc.title, style: own ? read(["style"]) : find("style"), paras: ids.map((id) => ({ id, at: [...lib, id], text: read([...lib, id])?.text ?? "" })) }
+export default function ({ api }) {
+  const doc = api.read({ address: [] })[0]?.value ?? {}
+  // reading the slot gives an item for each paragraph in it that is here, in order
+  const items = api.read({ address: ["sections"] })
+  const [library] = api.lookup({ name: "library" })
+  const lib = library?.from.path ?? []
+  // nearest first: the document's own style if it has one, else one above it
+  const [style] = api.lookup({ name: "style" })
+  // each item's route ends at its paragraph; a write goes through the library
+  const paras = items.map((item) => {
+    const id = item.from.route.at(-1).node
+    return { id, at: [...lib, id], text: item.value?.text ?? "" }
+  })
+  return { title: doc.title, style: style && api.read({ address: style.from.path })[0].value, paras }
+}
 ${B})
 program("programs", "typeset", ${B}
-const s = value.style ?? {}
-const art = h("article", { class: "doc", style: { fontFamily: s.font, fontSize: s.size + "px", color: s.ink, background: s.paper } },
-  h("h3", {}, value.title),
-  ...value.paras.map((p) => {
-    const el = h("p", { contenteditable: "true", spellcheck: "false", title: p.id }, p.text)
-    el.onblur = () => el.textContent !== p.text && later.write(p.at, { "@type": "para", text: el.textContent })
-    return el
-  }))
-screen().replaceChildren(art)
+import { h, screen } from "demo"
+export default function ({ self, value, lasting }) {
+  const s = value.style ?? {}
+  const art = h("article", { class: "doc", style: { fontFamily: s.font, fontSize: s.size + "px", color: s.ink, background: s.paper } },
+    h("h3", {}, value.title),
+    ...value.paras.map((p) => {
+      const el = h("p", { contenteditable: "true", spellcheck: "false", title: p.id }, p.text)
+      el.onblur = () => el.textContent !== p.text && lasting.write({
+        address: p.at, patches: [{ type: "snapshot", value: { "@type": "para", text: el.textContent } }],
+      })
+      return el
+    }))
+  screen(self).replaceChildren(art)
+}
 ${B})
 process("essay", "read-essay", "read-essay", { compute: "gather", effect: "typeset" })
 process("letter", "read-letter", "read-letter", { compute: "gather", effect: "typeset" })
@@ -622,8 +808,9 @@ make("studio", "sprite", "bunny", [
 ])
 make("studio", "palette", "candy", { w: "#ffffff", p: "#ffb3cf", k: "#2c2231", n: "#e2457c" })
 
-// An address reaches only the first node in a slot, so to be read each filter
-// is in the drawer under a name of its own too; its "filter" slot is to drag from.
+// Reading a slot gives every filter in it, but a write reaches only the first,
+// so to be edited each filter is in the drawer under a name of its own too;
+// its "filter" slot is to drag from. A filter is code the lens runs with g.
 make("root", "drawer", "drawer", {})
 const filter = (id, code) => { make("drawer", id, id, code); place("drawer", "filter", id) }
 filter("mirror", "return g.map((row) => [...row].reverse())")
@@ -644,34 +831,45 @@ place("night", "filter", "mirror")
 
 make("root", "programs", "programs", {})
 program("programs", "develop", ${B}
-const pal = find("palette") ?? {}
-let g = (find("sprite") ?? []).map((row) => [...row].map((ch) => pal[ch] ?? null))
-const stages = [{ name: "sprite", g }]
-const drawer = where("drawer") ?? []
-for (const id of lookup("filter")) {
-  try {
-    g = new Function("g", read([...drawer, id]))(g)
-    stages.push({ name: id, g })
-  } catch (e) {
-    stages.push({ name: id + " ✕", g })
+export default function ({ api }) {
+  const find = (name) => {
+    const [it] = api.lookup({ name })
+    return it && api.read({ address: it.from.path })[0].value
   }
+  const pal = find("palette") ?? {}
+  let g = (find("sprite") ?? []).map((row) => [...row].map((ch) => pal[ch] ?? null))
+  const stages = [{ name: "sprite", g }]
+  // reading the nearest filter slot gives an item for each filter in it that is here, in order
+  const [filter] = api.lookup({ name: "filter" })
+  for (const item of filter ? api.read({ address: filter.from.path }) : []) {
+    const id = item.from.route.at(-1).node
+    try {
+      g = new Function("g", item.value)(g)
+      stages.push({ name: id, g })
+    } catch (e) {
+      stages.push({ name: id + " ✕", g })
+    }
+  }
+  return stages
 }
-return stages
 ${B})
 program("programs", "filmstrip", ${B}
-const paint = (g, px) => {
-  const c = h("canvas", { width: (g[0]?.length ?? 0) * px, height: g.length * px })
-  const cx = c.getContext("2d")
-  g.forEach((row, y) => row.forEach((col, x) => { if (col) { cx.fillStyle = col; cx.fillRect(x * px, y * px, px, px) } }))
-  return c
+import { h, screen } from "demo"
+export default function ({ self, value }) {
+  const paint = (g, px) => {
+    const c = h("canvas", { width: (g[0]?.length ?? 0) * px, height: g.length * px })
+    const cx = c.getContext("2d")
+    g.forEach((row, y) => row.forEach((col, x) => { if (col) { cx.fillStyle = col; cx.fillRect(x * px, y * px, px, px) } }))
+    return c
+  }
+  const strip = []
+  value.forEach((s, i) => {
+    if (i) strip.push(h("span", { class: "px-arrow" }, "→"))
+    strip.push(h("figure", { class: "px-stage" + (i === value.length - 1 ? " last" : "") },
+      paint(s.g, i === value.length - 1 ? 12 : 5), h("figcaption", {}, s.name)))
+  })
+  screen(self).replaceChildren(h("div", { class: "px-strip" }, ...strip))
 }
-const strip = []
-value.forEach((s, i) => {
-  if (i) strip.push(h("span", { class: "px-arrow" }, "→"))
-  strip.push(h("figure", { class: "px-stage" + (i === value.length - 1 ? " last" : "") },
-    paint(s.g, i === value.length - 1 ? 12 : 5), h("figcaption", {}, s.name)))
-})
-screen().replaceChildren(h("div", { class: "px-strip" }, ...strip))
 ${B})
 process("studio", "lens", "lens", { compute: "develop", effect: "filmstrip" })
 process("night", "night-lens", "night-lens", { compute: "develop", effect: "filmstrip" })

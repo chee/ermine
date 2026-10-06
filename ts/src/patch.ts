@@ -230,7 +230,18 @@ export function applyPatches(value: Json, patches: readonly Patch[]): Json {
   return next;
 }
 
-/** Applies one patch; invalid, with the index given, if it does not apply. */
+/**
+ * Applies one patch; invalid, with the index given, if it does not apply
+ * (PROTOCOL.tex, Errors). What the patch is comes first, whatever the value:
+ * not a patch, or of an unknown type, or with a path key, or a set's key,
+ * that is neither a string nor a whole number, is not-a-patch. Then its path
+ * is followed: an object that lacks the key, or a list shorter than the
+ * index, is no-key; a key of the wrong kind for where it leads, a string into
+ * a list or a number into an object, or any key into a string, number,
+ * boolean or null, is wrong-kind. Then the splice or set: a target, range,
+ * splice value or set's key of the wrong kind is wrong-kind, and a range that
+ * is not one, or is outside the value, is range.
+ */
 export function applyPatch(value: Json, patch: Patch, index = 0): Json {
   const fail = (code: string, text: string, details: { [k: string]: Json } = {}) =>
     invalid(code, `patch ${index}: ${text}`, { index, ...details });
@@ -252,8 +263,20 @@ export function applyPatch(value: Json, patch: Patch, index = 0): Json {
     case "splice":
     case "set": {
       if (!Array.isArray(p.path)) throw fail("not-a-patch", "a patch's path is a list");
-      if (p.type === "set" && typeof p.key !== "string") {
-        throw fail("not-a-patch", "a set's key is a string");
+      const bad = p.path.findIndex((key) => typeof key !== "string" && !whole(key));
+      if (bad >= 0) {
+        throw fail(
+          "not-a-patch",
+          `the path's key ${bad} is ${
+            JSON.stringify(p.path[bad]) ?? String(p.path[bad])
+          }, neither a string nor a whole number`,
+        );
+      }
+      if (p.type === "set" && typeof p.key !== "string" && !whole(p.key)) {
+        throw fail(
+          "not-a-patch",
+          "a set's key is neither a string nor a whole number",
+        );
       }
       const v = given ? json(p.value) : undefined;
       return at(
@@ -263,7 +286,7 @@ export function applyPatch(value: Json, patch: Patch, index = 0): Json {
         (target) =>
           p.type === "splice"
             ? splice(target, p.range, v, fail)
-            : set(target, p.key as string, v, fail),
+            : set(target, p.key as string | number, v, fail),
       );
     }
     default:
@@ -274,9 +297,10 @@ export function applyPatch(value: Json, patch: Patch, index = 0): Json {
 type Fail = (code: string, text: string, details?: { [k: string]: Json }) => Invalid;
 
 /**
- * The value with fn applied at the path: each list or object along the path
- * is copied, and the rest is shared. The path is walked down, then the
- * copies are made coming back up, so a long path needs no deep stack.
+ * The value with fn applied at the path, whose keys are strings and whole
+ * numbers: each list or object along the path is copied, and the rest is
+ * shared. The path is walked down, then the copies are made coming back up,
+ * so a long path needs no deep stack.
  */
 function at(
   value: Json,
@@ -289,16 +313,25 @@ function at(
   for (let i = 0; i < path.length; i++) {
     const key = path[i];
     if (Array.isArray(here)) {
-      if (!whole(key) || key >= here.length) {
+      if (typeof key === "string") {
+        throw fail(
+          "wrong-kind",
+          `the string ${JSON.stringify(key)} leads into the list at ${where(path, i)}`,
+        );
+      }
+      if ((key as number) >= here.length) {
         throw fail(
           "no-key",
-          `${JSON.stringify(key)} is not an index of the list at ${where(path, i)}`,
+          `${key} is past the end of the list of ${here.length} at ${where(path, i)}`,
         );
       }
       along.push(here);
-      here = here[key];
+      here = here[key as number];
     } else if (isObject(here)) {
-      if (typeof key !== "string" || !Object.hasOwn(here, key)) {
+      if (typeof key !== "string") {
+        throw fail("wrong-kind", `the number ${key} leads into the object at ${where(path, i)}`);
+      }
+      if (!Object.hasOwn(here, key)) {
         throw fail(
           "no-key",
           `${JSON.stringify(key)} is not a key of the object at ${where(path, i)}`,
@@ -307,7 +340,7 @@ function at(
       along.push(here);
       here = here[key];
     } else {
-      throw fail("no-key", `the path goes into a ${kindOf(here)} at ${where(path, i)}`);
+      throw fail("wrong-kind", `the path goes into a ${kindOf(here)} at ${where(path, i)}`);
     }
   }
   let next = fn(here);
@@ -357,8 +390,9 @@ function splice(target: Json, range: unknown, value: Json | undefined, fail: Fai
   ]);
 }
 
-function set(target: Json, key: string, value: Json | undefined, fail: Fail): Json {
+function set(target: Json, key: string | number, value: Json | undefined, fail: Fail): Json {
   if (!isObject(target)) throw fail("wrong-kind", `a set needs an object, not a ${kindOf(target)}`);
+  if (typeof key !== "string") throw fail("wrong-kind", `the number ${key} leads into an object`);
   const copy = { ...target };
   if (value !== undefined) define(copy, key, value);
   else delete copy[key];

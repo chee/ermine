@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { applyPatches, byCodePoint, equal, NotJson, own } from "../src/patch.ts";
+import { back, type View } from "../src/address.ts";
 import { graph } from "../src/graph.ts";
 import { protect, subject } from "../src/protect.ts";
 import {
@@ -114,11 +115,49 @@ Deno.test("paths are strings into objects and whole numbers into lists", () => {
     applyPatches(value, [{ type: "set", path: ["l", 0], key: "t", value: true }]),
     { l: [{ s: "hi", t: true }] },
   );
-  for (const path of [["l", "0"], ["l", 1], ["l", -1], ["l", 0.5], ["nope"], ["l", 0, "s", 0]]) {
+  for (
+    const [path, expected] of [
+      // a key that is neither a string nor a whole number: not a patch, whatever the value
+      [["l", -1], "not-a-patch"],
+      [["l", 0.5], "not-a-patch"],
+      [["nope", null], "not-a-patch"],
+      [[true], "not-a-patch"],
+      // an object that lacks the key, or a list shorter than the index
+      [["nope"], "no-key"],
+      [["l", 1], "no-key"],
+      // a key of the wrong kind for where it leads, or a key into what is neither
+      [["l", "0"], "wrong-kind"],
+      [[0], "wrong-kind"],
+      [["l", 0, "s", 0], "wrong-kind"],
+      [["l", 0, "s", "x"], "wrong-kind"],
+    ] as [unknown[], string][]
+  ) {
     assertEquals(
-      code(() => applyPatches(value, [{ type: "set", path, key: "k", value: 1 }])),
-      "no-key",
+      code(() => applyPatches(value, [{ type: "set", path: path as never, key: "k", value: 1 }])),
+      expected,
       JSON.stringify(path),
+    );
+  }
+  assertEquals(
+    code(() => applyPatches(1, [{ type: "splice", path: [], range: [0, 0], value: "x" }])),
+    "wrong-kind",
+    "a splice of what is neither a string nor a list",
+  );
+  // a set's key: a number into an object, once the path is followed; one of no kind is not a patch
+  for (
+    const [path, key, expected] of [
+      [[], 0, "wrong-kind"],
+      [["nope"], 0, "no-key"],
+      [["nope"], null, "not-a-patch"],
+      [[], 1.5, "not-a-patch"],
+      [[], true, "not-a-patch"],
+      [["l"], "0", "wrong-kind"],
+    ] as [unknown[], unknown, string][]
+  ) {
+    assertEquals(
+      code(() => applyPatches(value, [{ type: "set", path, key, value: 1 } as never])),
+      expected,
+      JSON.stringify([path, key]),
     );
   }
   assertEquals(value, { l: [{ s: "hi" }] }, "the value given is left as it was");
@@ -337,7 +376,15 @@ Deno.test("a walk takes the first member that is here and has the next name; a d
   g.place([], "u", "ghost");
   g.place([], "u", "m1");
   g.place([], "u", "m2");
-  assertEquals(g.read(["u"]), [1]);
+  // a read gives every member that is here, the node the address reaches first
+  assertEquals(g.read(["u"]), [1, 2]);
+  assertEquals(
+    g.api.read({ agent: "host", address: ["u"] }).map((i) => [i.from.route, i.change?.time]),
+    [
+      [[{ parent: "root", name: "u", node: "m1", position: 1 }], 1],
+      [[{ parent: "root", name: "u", node: "m2", position: 2 }], 2],
+    ],
+  );
   assertEquals(g.read(["u", "y"]), ["y2"]);
   assertEquals(
     g.api.read({ agent: "host", address: ["u", "y"] })[0].from.route.map((
@@ -360,6 +407,208 @@ Deno.test("a walk takes the first member that is here and has the next name; a d
       }]]],
     ],
   );
+});
+
+Deno.test(".. goes back the way the place was reached, and a lookup searches the directories its walk went through", () => {
+  const g = host();
+  g.make([], "m1", "one");
+  g.make([], "m2", "two");
+  g.make(["m2"], "y", "Y");
+  g.place(["m1"], "tool", "t1", { value: "m1's" });
+  g.place(["m2"], "tool", "t2", { value: "m2's" });
+  g.place([], "u", "m1");
+  g.place([], "u", "m2");
+  const at = { agent: "host", place: ["u", "y"] };
+  // the place's walk takes m2 for u, the member that has y
+  assertEquals(g.api.read({ ...at, address: [] }).map((i) => i.value), ["Y"]);
+  assertEquals(g.api.read({ ...at, address: [".."] }).map((i) => [i.value, i.from]), [
+    ["two", { route: [] }],
+  ]);
+  assertEquals(g.api.read({ ...at, address: ["..", ".."] }).map((i) => i.value), [null]);
+  assertEquals(g.api.lookup({ ...at, name: "tool" }).map((i) => [i.id, i.from]), [
+    ["t2", { path: ["..", "tool"], position: 0 }],
+  ]);
+  // writing through .. writes to the node the place's walk came through
+  g.write([], { type: "snapshot", value: 0 });
+  g.api.write({
+    ...at,
+    address: [".."],
+    patches: [{ type: "snapshot", value: 2 }],
+    time: g.next(),
+  });
+  assertEquals(g.read(["m2"]), [2]);
+  assertEquals(g.read(["m1"]), ["one"]);
+  // from a place that reaches nothing, the way back is as far as its walk got
+  g.place(["m2"], "p", "ghost");
+  const lost = { agent: "host", place: ["u", "p"] };
+  assertEquals(g.api.read({ ...lost, address: [] }), []);
+  assertEquals(g.api.read({ ...lost, address: [".."] }).map((i) => i.value), [2]);
+  assertEquals(g.api.lookup({ ...lost, name: "tool" }).map((i) => [i.id, i.from]), [
+    ["t2", { path: ["..", "tool"], position: 0 }],
+  ]);
+  assertEquals(
+    code(() => g.api.write({ ...lost, address: [], patches: [], time: g.next() })),
+    "nothing-there",
+  );
+  g.undo();
+  const short = { agent: "host", place: ["u", "y", "w"] };
+  assertEquals(g.api.read({ ...short, address: [".."] }), []);
+  assertEquals(g.api.read({ ...short, address: ["..", ".."] }).map((i) => i.value), [2]);
+  assertEquals(g.api.read({ ...short, address: ["..", "..", ".."] }).map((i) => i.value), [0]);
+  assertEquals(g.api.lookup({ ...short, name: "tool" }).map((i) => i.from), [
+    { path: ["..", "..", "tool"], position: 0 },
+  ]);
+  assertEquals(g.api.lookup({ ...short, name: "m1" }).map((i) => i.from), [
+    { path: ["..", "..", "..", "m1"], position: 0 },
+  ]);
+});
+
+Deno.test("back takes the walk only as far as it goes back to, each step taking the member with the next name", () => {
+  const slots: { [node: string]: { [name: string]: string[] } } = {
+    root: { u: ["ghost", "m1", "m2"] },
+    m1: { z: ["z1"] },
+    m2: { y: ["y2"], z: ["z2"] },
+    y2: { p: ["ghost"] },
+  };
+  const view: View = {
+    here: (id) => id in slots || id === "z1" || id === "z2",
+    slot: (id, name) => slots[id]?.[name] ?? [],
+  };
+  const names = ["u", "y", "p"];
+  assertEquals([0, 1, 2, 3].map((k) => back(view, "root", names, k)), [
+    undefined, // p holds only an absent id: the place reaches nothing
+    "y2",
+    "m2", // the member of u that has y, not m1, which u reaches
+    "root",
+  ]);
+  assertEquals(back(view, "root", ["u", "q"], 1), undefined, "no member of u has q");
+  assertEquals(back(view, "root", ["u", "q"], 2), "root");
+  assertEquals(back(view, "root", ["u"], 0), "m1");
+});
+
+Deno.test("a subscription is sent each placement that changes its route, and each change to its node", () => {
+  const g = host();
+  g.make([], "d1", 1);
+  g.make([], "d2", 2);
+  g.place([], "doc", "d1");
+  const got: number[] = [];
+  g.api.subscribe({
+    agent: "host",
+    address: ["doc"],
+    send: (e) => "change" in e && got.push(e.change.time),
+  });
+  g.place([], "doc", "ghost", { position: 0 }); // 4: d1 is now at position 1, the same node
+  g.place([], "doc", "d2"); // 5: behind d1, the route is as it was
+  g.place([], "doc", "d1"); // 6: placed again with no position, the slot is as it was
+  g.write(["d2"], { type: "snapshot", value: 3 }); // 7: not the node it reaches
+  g.place(["d1"], "x", "d2"); // 8: a change to d1's directory
+  g.unplace([], "doc", "ghost"); // 9: d1 is back at position 0
+  g.unplace([], "doc", "d1"); // 10: to d2
+  g.unplace([], "doc", "d2"); // 11: to nothing
+  g.place([], "doc", "ghost"); // 12: still nothing
+  g.make([], "ghost", "here"); // 13: ghost is made, so the address reaches it
+  assertEquals(got, [4, 8, 9, 10, 11, 13]);
+});
+
+Deno.test("placing an id again with no position is the slot's last change, and unplacing from nothing is nothing-there", () => {
+  const g = host();
+  g.make([], "p", {});
+  g.place(["p"], "x", "a", { value: 1 });
+  g.place(["p"], "x", "b", { value: 2 });
+  const again = g.place(["p"], "x", "a").change;
+  const listing = g.api.directory({ agent: "host", address: ["p"], name: "x" });
+  assert("items" in listing);
+  assertEquals(listing.items.map((i) => [i.id, i.change]), [["a", again], ["b", again]]);
+  assertEquals(code(() => g.unplace(["nope"], "x", "a")), "nothing-there");
+  g.undo();
+});
+
+Deno.test("fields are checked in order, then the address, then the time, then the change", () => {
+  const g = host();
+  g.make([], "a", { k: 1 });
+  const op = (more: object) => ({ agent: "host", cause: site, ...more });
+  const write = (more: object) => code(() => g.api.write(op(more) as never));
+  const place = (more: object) => code(() => g.api.place(op(more) as never));
+  const unplace = (more: object) => code(() => g.api.unplace(op(more) as never));
+  // the request: agent, process, place, chroot, address, name, id, position, value, patches, cause, time
+  assertEquals(code(() => g.api.write({ process: 5, address: 5 } as never)), "missing");
+  assertEquals(write({ process: 5, address: 5 }), "wrong-field");
+  const field = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      return (e as Invalid).why.field;
+    }
+  };
+  assertEquals(
+    field(() => g.api.place(op({ place: "x", address: 5, name: "." }) as never)),
+    "place",
+  );
+  assertEquals(field(() => g.api.place(op({ address: 5, name: "." }) as never)), "address");
+  assertEquals(field(() => g.api.place(op({ address: [], name: ".", id: 5 }) as never)), "name");
+  assertEquals(
+    field(() => g.api.place(op({ address: [], name: "x", id: 5, position: -1 }) as never)),
+    "id",
+  );
+  assertEquals(
+    field(() =>
+      g.api.place(op({ address: [], name: "x", id: "x", position: -1, time: 0 }) as never)
+    ),
+    "position",
+  );
+  assertEquals(
+    field(() => g.api.place(op({ address: [], name: "x", id: "x", position: 0.5 }) as never)),
+    "position",
+  );
+  assertEquals(
+    field(() => g.api.place(op({ address: [], name: "x", id: "x", value: NaN, time: 0 }) as never)),
+    "value",
+  );
+  assertEquals(
+    field(() => g.api.write(op({ address: [], patches: {}, time: 0 }) as never)),
+    "patches",
+  );
+  assertEquals(
+    field(() => g.api.write(op({ address: [], patches: [], cause: NaN, time: 0 }) as never)),
+    "cause",
+  );
+  for (const time of [0, -1, 1.5, "1", null]) {
+    assertEquals(field(() => g.api.write(op({ address: [], patches: [], time }) as never)), "time");
+  }
+  assertEquals(field(() => g.api.write(op({ address: [], patches: [] }) as never)), "time");
+  // the graph: where, then when, then what
+  const late = 1;
+  const bad = [{ type: "set", path: ["nope"], key: "k" }];
+  assertEquals(write({ address: [".."], patches: bad, time: late }), "above-root");
+  assertEquals(write({ address: ["nope"], patches: bad, time: late }), "nothing-there");
+  assertEquals(write({ address: ["a"], patches: bad, time: late }), "time");
+  assertEquals(
+    place({ address: [], name: "a", id: "a", value: 1, position: 9, time: late }),
+    "time",
+  );
+  assertEquals(unplace({ address: [], name: "zz", id: "a", time: late }), "time");
+  const now = g.next();
+  g.undo();
+  assertEquals(
+    place({ address: [], name: "a", id: "a", value: 1, position: 9, time: now }),
+    "exists",
+  );
+  assertEquals(place({ address: [], name: "a", id: "q", position: 9, time: now }), "position");
+  assertEquals(unplace({ address: [], name: "zz", id: "a", time: now }), "not-in-slot");
+  // patch by patch: the first that does not apply, whatever the later ones are
+  const e = assertThrows(
+    () =>
+      g.api.write(
+        op({
+          address: ["a"],
+          patches: [{ type: "snapshot", value: {} }, { type: "set", path: ["x"], key: "k" }, 5],
+          time: now,
+        }) as never,
+      ),
+    Invalid,
+  );
+  assertEquals([e.why.code, e.why.index], ["no-key", 1]);
+  assertEquals(g.read(["a"]), [{ k: 1 }]);
 });
 
 Deno.test("names are in code point order", () => {
@@ -459,7 +708,7 @@ Deno.test("a lookup searches up from the place's directory, and is marked only b
   const g = host();
   g.make([], "a", {});
   g.make(["a"], "b", {});
-  g.place([], "theme", "t-r");
+  g.place([], "theme", "t-r", { value: "r" });
   const bound = g.api.bind(g.api, {
     agent: "host",
     process: "p",
@@ -475,6 +724,36 @@ Deno.test("a lookup searches up from the place's directory, and is marked only b
   assertEquals(rec.lookups[0].searched.map((s) => s.node), ["b", "a", "root"]);
   assertEquals(g.place([], "font", "f").marked, []);
   assertEquals(g.place(["a"], "theme", "t-a").marked.map((m) => m.process), ["p"]);
+});
+
+Deno.test("a lookup passes over a slot whose ids are all absent, and is marked when one is made", () => {
+  const g = host();
+  g.make([], "a", {});
+  g.place([], "theme", "t-r", { value: "r" });
+  g.place(["a"], "theme", "ghost");
+  const lookup = () => {
+    const bound = g.api.bind(g.api, { agent: "host", process: "p", place: ["a"], writes: false });
+    const rec = g.api.record(bound, []);
+    const found = rec.lookup({ name: "theme" }).map((i) => [i.id, i.from, !!i.pending]);
+    bound.end();
+    g.api.finish(rec, "done");
+    return { found, searched: rec.lookups[0].searched };
+  };
+  const passed = lookup();
+  assertEquals(passed.found, [["t-r", { path: ["..", "theme"], position: 0 }, false]]);
+  assertEquals(passed.searched, [{ node: "a", saw: 3 }, { node: "root", saw: 2 }]);
+  // a slot that holds one node that is here gives all its items, pending ones too
+  const placed = g.place(["a"], "theme", "t-a", { value: "a" });
+  assertEquals(placed.marked.map((m) => m.process), ["p"]);
+  assertEquals(lookup().found, [
+    ["ghost", { path: ["theme"], position: 0 }, true],
+    ["t-a", { path: ["theme"], position: 1 }, false],
+  ]);
+  g.unplace(["a"], "theme", "t-a");
+  lookup();
+  // the search went on past ghost, so ghost's being made marks it
+  assertEquals(g.make([], "ghost", "g").marked.map((m) => m.process), ["p"]);
+  assertEquals(lookup().found.map(([id]) => id), ["ghost"]);
 });
 
 Deno.test("a recording records programs, reads, changes and errors, and sends its record", () => {
@@ -555,7 +834,7 @@ Deno.test("protect asks before every operation, with the node its address reache
   }));
   g.make([], "a", {});
   g.make(["a"], "b", {});
-  g.place([], "theme", "t");
+  g.place([], "theme", "t", { value: "T" });
   asked.length = 0;
   const lookup = (agent: string) =>
     g.api.lookup({ agent, name: "theme", place: ["a", "b"] }).map((i) => i.id);
@@ -716,7 +995,7 @@ Deno.test("each layer is told the top of the stack once, so no holder can point 
   const api = protect(graph("root"), may);
   api.top(api);
   api.place({ agent: "host", address: [], name: "secret", id: "secret", value: 1, time: 1 });
-  api.place({ agent: "host", address: ["secret"], name: "tool", id: "real", time: 2 });
+  api.place({ agent: "host", address: ["secret"], name: "tool", id: "real", value: 1, time: 2 });
   const search = (agent: string) =>
     api.lookup({ agent, name: "tool", place: ["secret"], chroot: 1 }).map((i) => i.id);
   assertEquals(search("alice"), []);

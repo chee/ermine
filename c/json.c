@@ -658,10 +658,15 @@ static void putInto(Open *open, Json *value) {
 	open->key = NULL;
 }
 
+Json *jsonParse(const char *text, size_t length, char **why) {
+	return jsonParseRead(text, length, why, NULL);
+}
+
 // No depth limit and no recursion: a line that is one JSON object is a
 // request, however deep (JSON.parse takes it too), so the lists and objects
 // being parsed are kept on a stack of their own.
-Json *jsonParse(const char *text, size_t length, char **why) {
+Json *jsonParseRead(const char *text, size_t length, char **why, Json **read) {
+	if (read) *read = NULL;
 	Parser parser = { (const unsigned char *)text, length, 0, NULL };
 	Open *opens = NULL;
 	int depth = 0, capacity = 0;
@@ -717,10 +722,12 @@ parsed:
 	}
 	fail(&parser, "trailing characters");
 failed:
-	// the open containers are not yet in each other: each is freed on its own
-	jsonFree(value);
+	// the open containers are not yet in each other: each is freed on its own,
+	// but for the outermost (or the whole value), when what was read is asked for
+	if (read) *read = depth ? opens[0].container : value;
+	if (!read || depth) jsonFree(value);
 	for (int i = 0; i < depth; i++) {
-		jsonFree(opens[i].container);
+		if (!read || i) jsonFree(opens[i].container);
 		free(opens[i].key);
 	}
 	free(opens);

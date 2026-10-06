@@ -127,6 +127,37 @@ Deno.test("the lasting interface works until the process stops; the effect's doe
   assertThrows(() => d.fire({ agent: "host", process: "p", handler: "set" }), Invalid);
 });
 
+Deno.test("a handler acts as the agent of the fire; the lasting interface otherwise as the process's", () => {
+  let lasting: Interface | undefined;
+  const d = setup(show, (ctx) => {
+    lasting = ctx.lasting;
+    ctx.handler("set", (input) => {
+      ctx.lasting.write({ address: ["b"], patches: [{ type: "snapshot", value: input ?? null }] });
+    });
+  });
+  d.place({ ...host, address: [], name: "b", id: "b", value: null });
+  start(d);
+  const fired = d.fire({ agent: "alice", process: "p", handler: "set", input: "hey" });
+  assertEquals(fired.changes.map((c) => [c.node, c.agent, c.process]), [["b", "alice", "p"]]);
+  // the same interface, called later from outside any handler call, as a timer would
+  const later = lasting!.write({ address: ["b"], patches: [{ type: "snapshot", value: "tick" }] });
+  assertEquals([later.change.agent, later.change.process], ["host", "p"]);
+});
+
+Deno.test("protect asks about a handler's operations as the agent that fired it", () => {
+  const may = (agent: Json, _process: unknown, op: string, args: object) =>
+    !(agent === "alice" && op === "write" && subject(op, args) === "b");
+  const d = setup(show, (ctx) => {
+    ctx.handler("set", () => {
+      ctx.lasting.write({ address: ["b"], patches: [{ type: "snapshot", value: 1 }] });
+    });
+  }, protect(graph("init"), may));
+  d.place({ ...host, address: [], name: "b", id: "b", value: null });
+  start(d);
+  assert(d.fire({ agent: "alice", process: "p", handler: "set" }).error instanceof Refused);
+  assert(!("error" in d.fire({ agent: "host", process: "p", handler: "set" })));
+});
+
 Deno.test("protect is asked before every operation a run makes, as its process", () => {
   const asked: string[] = [];
   const d = setup(

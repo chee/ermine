@@ -151,9 +151,9 @@ main = do
   above <- change2 (OpPlace (addr []) "theme" "t2" Nothing (Just (int 0)))
   check "nothing above it was searched" (marks above == [])
 
-  -- ".." takes a name off the place, which is followed afresh from the root:
-  -- with u = [m1, m2] and only m2 holding b, the place u/b reaches m2's b,
-  -- but [".."] reaches m1, the first member of u
+  -- ".." goes back one step the way the place was reached: with u = [m1, m2]
+  -- and only m2 holding b, the place u/b reaches m2's b, and [".."] reaches
+  -- m2, the node its walk came through, not m1, the first member of u
   g3 <- graph "r"
   iSetTop g3 g3
   let change3 o = do
@@ -163,18 +163,96 @@ main = do
       read3 c a = do
         r <- iOp g3 c noStamp (OpRead a)
         pure [v | Right (ResultItems is) <- [r], ItemValue v _ _ <- is]
+      routes3 c a = do
+        r <- iOp g3 c noStamp (OpRead a)
+        pure [route | Right (ResultItems is) <- [r], ItemValue _ (FromRoute route) _ <- is]
+      lookup3 c nm = do
+        r <- iOp g3 c noStamp (OpLookup nm)
+        pure $ case r of
+          Right (ResultFound ss is) -> (map searchedNode ss, [(i, f) | ItemId i f _ _ <- is])
+          _ -> ([], [])
       at3 = host {ctxPlace = ["u", "b"]}
   change3 (OpPlace (addr []) "u" "m1" Nothing (Just "one"))
+  change3 (OpPlace (addr []) "u" "ghost" Nothing Nothing)
   change3 (OpPlace (addr []) "u" "m2" Nothing (Just "two"))
   change3 (OpPlace (addr []) "m2" "m2" Nothing Nothing)
   change3 (OpPlace (addr ["m2"]) "b" "b" Nothing (Just "B"))
   here3 <- read3 at3 (addr [])
   check "the place walks through the member that has its next name" (here3 == ["B"])
   up3 <- read3 at3 (Address False 1 [])
-  check "\"..\" is the shorter place, followed afresh" (up3 == ["one"])
+  check "\"..\" is the node the place's walk came through" (up3 == ["two"])
+  -- a read whose last name selects a union gives every member here, in
+  -- slot order, each from its own route; the first is the node it reaches
+  union3 <- read3 host (addr ["u"])
+  check "a union reads as each member here" (union3 == ["one", "two"])
+  unionRoutes3 <- routes3 host (addr ["u"])
+  check "each member's item is from its own route" (unionRoutes3 == [[Step "r" "u" "m1" 0], [Step "r" "u" "m2" 2]])
+  bare3 <- read3 at3 (Address False 2 [])
+  check "an address of only \"..\" reads the one node it reaches" (bare3 == [JNull])
+  change3 (OpWrite (addr ["u"]) [object [("type", "snapshot"), ("value", "first")]])
+  written3 <- read3 host (addr ["u"])
+  check "a write acts on the first member only" (written3 == ["first", "two"])
+  -- lookup searches the directories the place's walk went through
   change3 (OpPlace (addr ["m2"]) "theme" "t2" Nothing (Just "T2"))
-  found3 <- iOp g3 at3 noStamp (OpLookup "theme")
-  check "lookup searches the shorter places, not the members passed through" (fmap (\r -> case r of ResultFound ss is -> (map searchedNode ss, length is); _ -> ([], 0)) found3 == Right (["b", "m1", "r"], 0))
+  change3 (OpPlace (addr ["u"]) "theme" "t1" Nothing (Just "T1"))
+  found3 <- lookup3 at3 "theme"
+  check "lookup searches back along the place's walk" (found3 == (["b", "m2"], [("t2", FromPath (Address False 1 ["theme"]) 0)]))
+  -- a slot whose ids are all absent is passed over, and the search goes on
+  change3 (OpPlace (addr ["u", "b"]) "theme" "nobody" Nothing Nothing)
+  passed3 <- lookup3 at3 "theme"
+  check "lookup passes over a slot with no node here" (passed3 == (["b", "m2"], [("t2", FromPath (Address False 1 ["theme"]) 0)]))
+  -- but takes a slot with one node here, pending ids and all
+  change3 (OpPlace (addr ["u", "b"]) "theme" "t1" Nothing Nothing)
+  mixed3 <- lookup3 at3 "theme"
+  check "lookup takes a slot with a node here, pending items included" (mixed3 == (["b"], [("nobody", FromPath (Address False 0 ["theme"]) 0), ("t1", FromPath (Address False 0 ["theme"]) 1)]))
+  -- a place whose walk stops on the way reaches nothing, nor does anything
+  -- past where it stopped; the nodes it came through are still there to go
+  -- back to. u/b/kid: b's slot kid holds only a pending id, so the walk
+  -- stops there, having come through m2 and b
+  change3 (OpPlace (addr ["u", "b"]) "kid" "unborn" Nothing Nothing)
+  let lost3 = host {ctxPlace = ["u", "b", "kid"]}
+  dotLost3 <- read3 lost3 (addr [])
+  check "a place whose walk stops on the way reaches nothing" (dotLost3 == [])
+  upLost3 <- read3 lost3 (Address False 1 [])
+  check "\"..\" goes back to the node the walk came through even so" (upLost3 == ["B"])
+  up2Lost3 <- read3 lost3 (Address False 2 [])
+  check "and so does \"..\" \"..\"" (up2Lost3 == ["two"])
+  rootLost3 <- read3 lost3 (Address True 0 [])
+  check "\"/\" is the start" (rootLost3 == [JNull])
+  -- u/nowhere: no member of u has nowhere, so the walk stops at the root
+  let gone3 = host {ctxPlace = ["u", "nowhere"]}
+  upGone3 <- read3 gone3 (Address False 1 [])
+  check "nothing past where the walk stopped" (upGone3 == [])
+  up2Gone3 <- read3 gone3 (Address False 2 [])
+  check "the start, where it stopped" (up2Gone3 == [JNull])
+  foundLost3 <- lookup3 lost3 "theme"
+  check "lookup starts in the nearest directory the walk went through" (foundLost3 == (["b"], [("nobody", FromPath (Address False 1 ["theme"]) 0), ("t1", FromPath (Address False 1 ["theme"]) 1)]))
+  climbLost3 <- lookup3 lost3 "m2"
+  check "and goes back up the walk to its start" (climbLost3 == (["b", "m2", "r"], [("m2", FromPath (Address False 3 ["m2"]) 0)]))
+  -- the start, "/", is the node the hidden names reach on their own: with
+  -- chroot 1, the place u/b starts at m1, the first member of u, which has
+  -- no b, so the place reaches nothing
+  start3 <- read3 at3 {ctxChroot = 1} (Address True 0 [])
+  check "chroot: the hidden names are walked as an address on their own" (start3 == ["first"])
+  nowhere3 <- read3 at3 {ctxChroot = 1} (addr [])
+  check "chroot: the place's names are walked from the start" (nowhere3 == [])
+
+  -- a subscription receives each placement that changes its route, whether
+  -- or not it then reaches another node, and nothing else of the parent
+  sent <- newIORef []
+  _ <- iSubscribe g3 host (addr ["u"]) (\e -> modifyIORef sent (e :))
+  let times3 = do
+        got <- readIORef sent
+        writeIORef sent []
+        pure (reverse [changeTime c | EventChange c <- got])
+  t0 <- readIORef clock
+  change3 (OpPlace (addr []) "u" "ghost2" (Just 0) Nothing)
+  change3 (OpPlace (addr []) "u" "m3" Nothing (Just "three"))
+  change3 (OpPlace (addr []) "other" "m3" Nothing Nothing)
+  change3 (OpWrite (addr ["u"]) [])
+  change3 (OpPlace (addr []) "u" "m1" Nothing Nothing)
+  got3 <- times3
+  check "a subscription follows its route, not only its node" (got3 == [t0 + 1, t0 + 4])
 
   -- patches
   let patched ps v = applyPatches ps v
@@ -182,12 +260,22 @@ main = do
       p t = either (error . show) id (parseValue t)
   check "splice counts code points" (patched [p "{\"type\":\"splice\",\"path\":[],\"range\":[1,2],\"value\":\"x\"}"] "a😀b" == Right "axb")
   check "a path that is not a list is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":\"a\",\"key\":\"k\"}"] (object [])) == "not-a-patch")
-  check "a set key that is not a string is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[],\"key\":1}"] (object [])) == "not-a-patch")
+  check "a set with no key is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[]}"] (object [])) == "not-a-patch")
+  check "a set key that is neither a string nor a whole number is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[],\"key\":null}"] (object [])) == "not-a-patch")
+  check "a set key that is a number leads into an object as the wrong kind" (code (patched [p "{\"type\":\"set\",\"path\":[],\"key\":1}"] (object [])) == "wrong-kind")
   check "a snapshot with no value is not a patch" (code (patched [p "{\"type\":\"snapshot\"}"] JNull) == "not-a-patch")
-  check "a key into a scalar is no key" (code (patched [p "{\"type\":\"set\",\"path\":[\"a\",\"b\"],\"key\":\"k\"}"] (p "{\"a\":1}")) == "no-key")
-  check "a negative index is no key" (code (patched [p "{\"type\":\"set\",\"path\":[-1],\"key\":\"k\"}"] (p "[{}]")) == "no-key")
+  check "a path key that is neither a string nor a whole number is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[true],\"key\":\"k\"}"] (p "[{}]")) == "not-a-patch")
+  check "a negative index is not a whole number, so not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[-1],\"key\":\"k\"}"] (p "[{}]")) == "not-a-patch")
+  check "a fractional index is not a patch" (code (patched [p "{\"type\":\"set\",\"path\":[0.5],\"key\":\"k\"}"] (p "[{}]")) == "not-a-patch")
+  check "what a patch is comes before where its path goes" (code (patched [p "{\"type\":\"set\",\"path\":[\"missing\",null],\"key\":\"k\"}"] (object [])) == "not-a-patch")
+  check "an object that lacks the key is no key" (code (patched [p "{\"type\":\"set\",\"path\":[\"a\"],\"key\":\"k\"}"] (object [])) == "no-key")
+  check "a list shorter than the index is no key" (code (patched [p "{\"type\":\"set\",\"path\":[1],\"key\":\"k\"}"] (p "[{}]")) == "no-key")
+  check "a string into a list is the wrong kind" (code (patched [p "{\"type\":\"set\",\"path\":[\"0\"],\"key\":\"k\"}"] (p "[{}]")) == "wrong-kind")
+  check "a number into an object is the wrong kind" (code (patched [p "{\"type\":\"set\",\"path\":[0],\"key\":\"k\"}"] (p "{\"0\":{}}")) == "wrong-kind")
+  check "a path into a scalar is the wrong kind" (code (patched [p "{\"type\":\"set\",\"path\":[\"a\",\"b\"],\"key\":\"k\"}"] (p "{\"a\":1}")) == "wrong-kind")
+  check "a splice value of the wrong kind is the wrong kind" (code (patched [p "{\"type\":\"splice\",\"path\":[],\"range\":[0,0],\"value\":[1]}"] "abc") == "wrong-kind")
   check "a range is checked after the path" (code (patched [p "{\"type\":\"splice\",\"path\":[\"x\"],\"range\":\"no\"}"] (object [])) == "no-key")
-  check "the first bad patch, in order" (fmap (const ()) (patched [p "{\"type\":\"set\",\"path\":[\"x\"],\"key\":\"k\"}", p "5"] (object [])) == Left (invalid "no-key" [("index", int 0)] "the patch's path is not in the value"))
+  check "the first bad patch, in order" (whyOf (patched [p "{\"type\":\"set\",\"path\":[\"x\"],\"key\":\"k\"}", p "5"] (object [])) == Just (Nothing, "no-key", [("index", int 0)]))
   -- whole numbers have no cap at 2^53: one that large is simply past the list
   check "an index past 2^53 is no key" (code (patched [p "{\"type\":\"set\",\"path\":[9007199254740994],\"key\":\"k\",\"value\":1}"] (p "[{},{}]")) == "no-key")
   check "a range past 2^53 is outside the value" (whyOf (patched [p "{\"type\":\"splice\",\"path\":[],\"range\":[0,9007199254740994]}"] (p "[1,2]")) == Just (Nothing, "range", [("index", int 0), ("length", int 2)]))

@@ -10,6 +10,7 @@ import { lit, select, selected, world } from "./state.ts";
 import { ROOT } from "./world.ts";
 import { dragData, drop, indexIn, readDrag } from "./dnd.ts";
 import { palette } from "./palette.tsx";
+import { askAt } from "./ask.tsx";
 
 function kindOf(
   id: Id,
@@ -21,6 +22,10 @@ function kindOf(
   }
   if (typeof value === "string" && isProgram(id)) return { glyph: "λ", cls: "k-prog" };
   if (Array.isArray(value) && isProgram(id)) return { glyph: "λ", cls: "k-prog" };
+  if (
+    value && typeof value === "object" && !Array.isArray(value) &&
+    (value as { "@type"?: unknown })["@type"] === "llm"
+  ) return { glyph: "✧", cls: "k-llm" };
   if (value === undefined) return { glyph: "·", cls: "k-absent" };
   if (Array.isArray(value)) return { glyph: "[]", cls: "k-list" };
   if (typeof value === "object" && value !== null) return { glyph: "{}", cls: "k-obj" };
@@ -170,6 +175,11 @@ export function Browser() {
           onPointerEnter={() => setTwin(id)}
           onPointerLeave={() => twin === id && setTwin(undefined)}
           onClick={() => select(id, route)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            select(id, route);
+            askAt.value = { id, route, x: e.clientX, y: e.clientY };
+          }}
           title={route.length ? route.map((s) => s.name).join(" / ") : "root"}
           draggable={id !== ROOT}
           onDragStart={(e) => {

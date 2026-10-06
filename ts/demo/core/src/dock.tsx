@@ -1,8 +1,9 @@
 /// <reference lib="dom" />
-// The dock: the workspace (do it, print it), the stage effects draw on, the
-// rules protect asks, the lookup tester, and forms for making things.
+// The dock: the workspace (do it, print it), the stage effects draw on, a
+// model that writes snippets, the rules protect asks, the lookup tester, and forms for making things.
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { Ask, computers } from "./ask.tsx";
 import { Code } from "./editor.tsx";
 import type { Id } from "../../../src/mod.ts";
 import { Agent, Empty, literal, NodeLink } from "./bits.tsx";
@@ -25,6 +26,7 @@ export function Dock() {
   const tabs: [DockTab, string, string][] = [
     ["workspace", "workspace", "✎"],
     ["stage", "stage", "✦"],
+    ["ask", "ask", "✧"],
     ["protect", "protect", "⊘"],
     ["lookup", "lookup", "⌕"],
     ["make", "make", "＋"],
@@ -62,6 +64,7 @@ export function Dock() {
         <div class={`dock-page${dock.value === "stage" ? "" : " hidden"}`}>
           <Stage />
         </div>
+        {dock.value === "ask" ? <Ask /> : null}
         {dock.value === "protect" ? <Protect /> : null}
         {dock.value === "lookup" ? <Lookup /> : null}
         {dock.value === "make" ? <Make /> : null}
@@ -171,8 +174,10 @@ function Stage() {
       {world.screens.size === 0
         ? (
           <Empty>
-            effects draw here. an effect gets <code>screen()</code>, its own element, and{" "}
-            <code>h()</code> to build with. try the <b>hello</b> or <b>typing</b> example.
+            effects draw here: an effect imports <code>screen</code> and <code>h</code> from{" "}
+            <code>"demo"</code>, and draws on <code>screen(self)</code>. try the <b>hello</b> or
+            {" "}
+            <b>typing</b> example.
           </Empty>
         )
         : null}
@@ -323,7 +328,9 @@ function Protect() {
           ))}
         </tbody>
       </table>
-      <datalist id="agents">{world.agents.map((a) => <option key={a} value={a} />)}</datalist>
+      <datalist id="agents">
+        {[...world.agents, ...computers()].map((a) => <option key={a} value={a} />)}
+      </datalist>
       <datalist id="processes">
         {[...world.made.keys()].filter((x) => world.isProcess(x)).map((x) => (
           <option key={x} value={x} />
@@ -381,8 +388,9 @@ function Lookup() {
     <div class="lookup">
       <div class="protect-intro">
         a process finds a node by name by searching the directories along its place, starting in the
-        directory it sits in and going up, taking the nearest slot with that name. the place here is
-        the directory the selected node is in, by the route you took to it in the browser.
+        directory it sits in and going up, taking the nearest slot with that name that holds a node
+        that is here. the place here is the directory the selected node is in, by the route you took
+        to it in the browser.
       </div>
       <div class="lookup-form">
         <span class="muted">place</span>
@@ -439,19 +447,27 @@ function Lookup() {
 
 // --- make ---
 
-const COMPUTE_TEMPLATE = `// a compute only reads. it returns the process's value, or PENDING.
-// you have: find(name), and where(name), the address a lookup found it at,
-// which look up from the process's place; lookup(name), read(address),
-// dir(address, name?), self, cwd, name, changes, ctx.api. an address is a list
-// of names from the directory it runs in, []; its own node is [name]
-return find("clicks")`;
+const COMPUTE_TEMPLATE =
+  `// a compute only reads. it is a module whose default export the driver calls
+// with { api, self, cwd, name, changes }; it returns the process's value, or
+// PENDING, from "ermine". api.lookup({ name }) finds the nearest slot by that
+// name from the process's place; an item's from.path is the address it was
+// found at. an address is a list of names from the directory it runs in, [];
+// its own node is [name]. api.read({ address }) is a list of items
+export default function ({ api }) {
+  const [clicks] = api.lookup({ name: "clicks" })
+  return api.read({ address: clicks.from.path })[0].value
+}`;
 
-const EFFECT_TEMPLATE = `// an effect only writes. it runs when the driver wrote the value.
-// you have: value, previous, self, cwd, name, write(address, v),
-// patch(address, ...patches), make(address, name, id, v), place, unplace,
-// later (the lasting interface), handler(name, fn), fire(name, input),
-// screen() and h(tag, props, ...children). return a cleanup if you like.
-screen().replaceChildren(h("div", { class: "big" }, value))`;
+const EFFECT_TEMPLATE = `// an effect only writes. it runs when the driver wrote the value, with
+// { api, lasting, self, cwd, name, value, previous, handler }: lasting works
+// until the process stops, handler(name, fn) names what fire can run. from
+// "demo", this host: screen(self) to draw on, h(tag, props, ...children) to
+// build with, fire(process, handler, input?). return a cleanup if you like
+import { h, screen } from "demo"
+export default function ({ self, value }) {
+  screen(self).replaceChildren(h("div", { class: "big" }, value))
+}`;
 
 function Make() {
   world.version.value;

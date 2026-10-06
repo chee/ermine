@@ -83,6 +83,21 @@ main = do
   check "decodeLine bad utf8" (either (const True) (const False) (decodeLine (BS.pack [0x22, 0xff, 0x22])))
   check "encodeLine" (encodeLine (JObject [("s", "😀"), ("n", JNumber 6.5)]) == Encoding.encodeUtf8 "{\"s\":\"😀\",\"n\":6.5}")
 
+  -- the seq of a line that is not one JSON object: a "seq" key of its object
+  -- holding a whole number, reached before the line stops being JSON
+  let seqOf t = lineSeq (Encoding.encodeUtf8 t)
+  check "seq of an unclosed object" (seqOf "{\"seq\": 2, \"cmd\": \"read\"" == Just 2)
+  check "seq at the very end" (seqOf "{\"seq\": 12" == Just 12)
+  check "seq before something that is not JSON" (seqOf "{\"seq\":29} trailing" == Just 29)
+  check "seq after another key" (seqOf "{\"a\":[1,{\"b\":2}],\"seq\":30,\"c\":" == Just 30)
+  check "no seq after the line stops being JSON" (seqOf "{\"a\":x,\"seq\":3}" == Nothing)
+  check "a half-read seq is not reached" (seqOf "{\"seq\":1." == Nothing && seqOf "{\"seq\":1e" == Nothing && seqOf "{\"seq\":-" == Nothing)
+  check "a seq read whole before what cannot follow it" (seqOf "{\"seq\":12x" == Just 12 && seqOf "{\"seq\":01}" == Just 0)
+  check "a seq that is not a whole number" (seqOf "{\"seq\":\"7\"" == Nothing && seqOf "{\"seq\":1.5," == Nothing && seqOf "{\"seq\":-1," == Nothing)
+  check "only the object's own seq" (seqOf "{\"a\":{\"seq\":4}," == Nothing)
+  check "not an object" (seqOf "[{\"seq\":1}]" == Nothing && seqOf "42" == Nothing && seqOf "\"seq\"" == Nothing && seqOf "not json" == Nothing)
+  check "the line stops being JSON at a byte that is not UTF-8" (lineSeq (BS.concat [Encoding.encodeUtf8 "{\"seq\":5,\"x\":\"", BS.pack [0xff], Encoding.encodeUtf8 "\",\"seq\":6}"]) == Just 5)
+
   -- value equality ($eq)
   equal "{\"x\":1,\"y\":[1,2]}" "{\"y\":[1,2],\"x\":1}"
   equal "1" "1.0"

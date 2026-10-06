@@ -16,7 +16,8 @@ import {
   SiteLink,
 } from "./bits.tsx";
 import { describe } from "./inspector.tsx";
-import { dock, draft, focus, pointAt, selected, world } from "./state.ts";
+import { Gutter } from "./gutter.tsx";
+import { dock, draft, focus, panels, pointAt, selected, size, world } from "./state.ts";
 import { type Entry, key, siteOf } from "./world.ts";
 
 type Filter = "all" | "changes" | "runs" | "trouble" | "here";
@@ -24,8 +25,20 @@ type Filter = "all" | "changes" | "runs" | "trouble" | "here";
 export function Right() {
   world.version.value;
   return (
-    <aside class="pane right">
+    <aside class={`pane right${panels.value.why !== undefined ? " sized" : ""}`}>
       {focus.value ? <Why /> : null}
+      {focus.value
+        ? (
+          <Gutter
+            axis="y"
+            side="before"
+            min={100}
+            keep={140}
+            set={(px) => size("why", px)}
+            reset={() => size("why", undefined)}
+          />
+        )
+        : null}
       <Transcript />
     </aside>
   );

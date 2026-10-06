@@ -7,7 +7,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Change, Id, Json, Record as Run, Step } from "../../../src/mod.ts";
-import { Agent, Ending, Json as JsonView, peek } from "./bits.tsx";
+import { Agent, codeLike, Ending, Json as JsonView, peek } from "./bits.tsx";
+import { Highlight } from "./editor.tsx";
 import { explode, focus, select, selected, world } from "./state.ts";
 import { type Entry, ROOT } from "./world.ts";
 import { drop } from "./dnd.ts";
@@ -133,6 +134,8 @@ export function Canvas() {
   const [view, setView] = useState({ x: 60, y: 60, k: 0.85 });
   const [pinned, setPinned] = useState<Map<Id, { x: number; y: number }>>(new Map());
   const [hover, setHover] = useState<Id>();
+  /** the card whose detail is open: clicked on the canvas, closed by clicking off it */
+  const [detail, setDetail] = useState<Id>();
   const [layers, setLayers] = useState<Layers>({
     place: true,
     process: true,
@@ -283,7 +286,14 @@ export function Canvas() {
     const d = drag.current;
     drag.current = undefined;
     setDragging(undefined);
-    if (d?.t === "card" && !d.moved) select(d.id, routeTo(d.id));
+    if (d?.t === "card" && !d.moved) {
+      select(d.id, routeTo(d.id));
+      setDetail(d.id);
+    }
+    // a click on the background, not a pan, closes the detail
+    if (d?.t === "pan" && Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 4) {
+      setDetail(undefined);
+    }
     if (d?.t === "card" && d.moved && dropOn) {
       // dropped into another card: a placement, and the card goes back to the layout
       const from = routeTo(d.id).at(-1);
@@ -462,20 +472,30 @@ export function Canvas() {
                   <span class="card-id">{id}</span>
                   {last ? <Ending ending={last.ending} /> : null}
                 </div>
-                <div class="card-peek">
-                  {kind === "program"
-                    ? (typeof v === "string" ? v.trim().split("\n")[0] : "steps")
-                    : kind === "folder"
-                    ? `${world.slotsOf(id).length} names`
-                    : peek(v, 40)}
-                </div>
+                {codeLike(id, v)
+                  ? (
+                    <div class="card-code">
+                      <Highlight code={v.replace(/^\s*\n/, "")} lines={2} />
+                    </div>
+                  )
+                  : (
+                    <div class="card-peek">
+                      {kind === "program"
+                        ? "steps"
+                        : kind === "folder"
+                        ? `${world.slotsOf(id).length} names`
+                        : peek(v, 40)}
+                    </div>
+                  )}
                 <span class="card-time" key={latest}>@{latest}</span>
               </div>
             );
           })}
         </div>
         <Legend />
-        {sel && world.made.has(sel) ? <Detail id={sel} /> : null}
+        {detail && world.made.has(detail)
+          ? <Detail id={detail} close={() => setDetail(undefined)} />
+          : null}
       </div>
     </div>
   );
@@ -526,8 +546,13 @@ function Legend() {
   );
 }
 
-function Detail({ id }: { id: Id }) {
+function Detail({ id, close }: { id: Id; close: () => void }) {
   world.version.value;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [close]);
   const v = world.valueOf(id);
   const runs: Run[] = world.records.get(id) ?? [];
   const last = runs[runs.length - 1];
@@ -540,10 +565,21 @@ function Detail({ id }: { id: Id }) {
       <div class="detail-head">
         <b>{id}</b>
         <span class="muted">{kindOf(id)}</span>
+        <button type="button" class="ghostbtn detail-close" title="close (esc)" onClick={close}>
+          ✕
+        </button>
       </div>
-      <div class="value-view small">
-        <JsonView value={v} />
-      </div>
+      {codeLike(id, v)
+        ? (
+          <div class="value-view small code">
+            <Highlight code={v} />
+          </div>
+        )
+        : (
+          <div class="value-view small">
+            <JsonView value={v} />
+          </div>
+        )}
       {lastChange
         ? (
           <div class="detail-row">

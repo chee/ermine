@@ -191,6 +191,35 @@ int main(void) {
 			free(why);
 		}
 	}
+	{
+		// what a parser reading from the start had read whole before the text stopped being JSON
+		const struct {
+			const char *text, *read;
+		} cases[] = {
+			{ "{\"seq\": 2, \"cmd\": \"read\"", "{\"seq\":2,\"cmd\":\"read\"}" },
+			{ "{\"seq\":3} x", "{\"seq\":3}" },
+			{ "{\"seq\":12", "{\"seq\":12}" },
+			{ "{\"seq\":1x}", "{\"seq\":1}" },
+			{ "{\"a\":[1,{\"seq\":5}", "{}" },
+			{ "{\"seq\":tru", "{}" },
+			{ "{\"seq\":\"x", "{}" },
+			{ "[1,[2", "[1]" },
+			{ "42 x", "42" },
+			{ "not json", NULL },
+			{ "", NULL },
+			{ "{\"seq\":1}", NULL },
+		};
+		for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+			char *why = NULL;
+			Json *read = NULL, *value = jsonParseRead(cases[i].text, strlen(cases[i].text), &why, &read);
+			char *text = read ? jsonPrint(read) : NULL;
+			expectTrue(cases[i].text, (value != NULL) == (why == NULL) && (text ? cases[i].read && strcmp(text, cases[i].read) == 0 : !cases[i].read));
+			free(text);
+			free(why);
+			jsonFree(read);
+			jsonFree(value);
+		}
+	}
 
 	if (failures) {
 		printf("%d failed\n", failures);

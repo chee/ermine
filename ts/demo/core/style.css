@@ -1,32 +1,37 @@
-/* ermine core — warm paper, plum ink, rose. */
+/* ermine core — warm paper, plum ink, rose. Then, by the amounts asked for:
+   chee rabbits 9% (chee.party's lemon page, black lines, cherry, stem, blue),
+   plan 9 3.4% (acme's pale yellow body and pale blue tags); and every corner square,
+   riso paper 2% (cream paper, a hand-drawn roughness on the serif),
+   the 90s 2.5% (a hard bevel on buttons). Each mix is of the old value. */
 
 :root {
-  --paper: #fcf7f2;
-  --panel: #fffdfb;
-  --panel-2: #fbf2f5;
-  --sunk: #f6edf0;
+  --paper: color-mix(in oklab, color-mix(in oklab, #fcf7f2, #ffff88 9%), #fdfaf2 2%);
+  --panel: color-mix(in oklab, #fffdfb, #ffff88 9%);
+  --panel-2: color-mix(in oklab, color-mix(in oklab, #fbf2f5, #ffff88 9%), #eaffff 3.4%);
+  --sunk: color-mix(in oklab, #f6edf0, #ffffea 3.4%);
   --ink: #2c2231;
   --ink-2: #67586d;
   --ink-3: #a4949f;
-  --line: #ecdfe4;
+  --line: color-mix(in oklab, #ecdfe4, #000 9%);
   --line-2: #f3e9ed;
-  --rose: #e2457c;
+  --rose: color-mix(in oklab, #e2457c, #ff2284 9%);
   --rose-2: #c22d62;
   --rose-soft: #ffe2ec;
   --lilac: #7b5ce6;
   --lilac-soft: #ece6ff;
-  --mint: #18936b;
+  --mint: color-mix(in oklab, #18936b, #40dcba 9%);
   --mint-soft: #d8f4e8;
   --butter: #a87d00;
   --butter-soft: #fff1c2;
-  --sky: #2a7fcc;
+  --sky: color-mix(in oklab, #2a7fcc, #2269ff 9%);
   --sky-soft: #ddedfb;
   --peach: #d4622d;
   --peach-soft: #ffe5d6;
   --red: #d33a4c;
   --red-soft: #ffe0e3;
   --shadow: 0 1px 0 rgba(60, 20, 50, 0.04), 0 8px 24px -12px rgba(90, 30, 70, 0.18);
-  --radius: 14px;
+  /* square, all of them */
+  --radius: 0;
   --mono: "Recursive", ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "Recursive", ui-sans-serif, system-ui, sans-serif;
   --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
@@ -34,25 +39,25 @@
 }
 
 :root[data-theme="dark"] {
-  --paper: #151018;
-  --panel: #1c1621;
-  --panel-2: #231b29;
-  --sunk: #120e15;
+  --paper: color-mix(in oklab, color-mix(in oklab, #151018, #2a2700 9%), #1d1a12 2%);
+  --panel: color-mix(in oklab, #1c1621, #2a2700 9%);
+  --panel-2: color-mix(in oklab, color-mix(in oklab, #231b29, #2a2700 9%), #0f2a2a 3.4%);
+  --sunk: color-mix(in oklab, #120e15, #1f1f10 3.4%);
   --ink: #f5ebf3;
   --ink-2: #bfaec5;
   --ink-3: #7c6c84;
-  --line: #33293b;
+  --line: color-mix(in oklab, #33293b, #000 9%);
   --line-2: #2a2131;
-  --rose: #ff6f9f;
+  --rose: color-mix(in oklab, #ff6f9f, #ff2284 9%);
   --rose-2: #ff8fb4;
   --rose-soft: #3d1a2b;
   --lilac: #a78bff;
   --lilac-soft: #2b2247;
-  --mint: #4fd4a4;
+  --mint: color-mix(in oklab, #4fd4a4, #40dcba 9%);
   --mint-soft: #15362c;
   --butter: #f2c94c;
   --butter-soft: #3a3014;
-  --sky: #6bb5f5;
+  --sky: color-mix(in oklab, #6bb5f5, #2269ff 9%);
   --sky-soft: #142c42;
   --peach: #ff9a6a;
   --peach-soft: #3d2116;
@@ -64,6 +69,14 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* every corner is square: pills, cards, dots, the scrollbars, everything */
+*,
+*::before,
+*::after,
+::-webkit-scrollbar-thumb {
+  border-radius: 0 !important;
 }
 
 html,
@@ -141,6 +154,27 @@ a {
     var(--panel);
   position: relative;
   z-index: 5;
+  /* too narrow for one row, it takes two, rather than squeezing each item */
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.top > *,
+.top .agents > *,
+.top .facts > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+@media (max-width: 1200px) {
+  .top {
+    gap: 10px;
+    padding: 8px 12px;
+  }
+  .brand {
+    min-width: 0;
+  }
+  .tagline {
+    display: none;
+  }
 }
 
 .brand {
@@ -339,8 +373,7 @@ a {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 410px;
-  gap: 10px;
+  grid-template-columns: var(--left, 290px) 10px minmax(0, 1fr) 10px var(--right, 410px);
   padding: 10px;
 }
 
@@ -348,8 +381,47 @@ a {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(250px, 40%);
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr) 10px var(--dock, minmax(250px, 40%));
+}
+
+/* --- the gutters between panels: drag to resize --- */
+
+.gutter {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  z-index: 2;
+}
+.gutter.x {
+  cursor: col-resize;
+}
+.gutter.y {
+  cursor: row-resize;
+}
+.gutter::after {
+  content: "";
+  position: absolute;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.gutter.x::after {
+  inset: 12px 3px;
+}
+.gutter.y::after {
+  inset: 3px 12px;
+}
+.gutter:hover::after,
+.gutter.active::after {
+  background: var(--rose);
+}
+body.resizing-x,
+body.resizing-x * {
+  cursor: col-resize !important;
+}
+body.resizing-y,
+body.resizing-y * {
+  cursor: row-resize !important;
 }
 
 .pane {
@@ -1343,40 +1415,6 @@ textarea.program {
   background: var(--sunk);
   overflow: hidden;
 }
-.gutter {
-  flex: none;
-  width: 38px;
-  overflow: hidden;
-  padding: 10px 0;
-  text-align: right;
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.55rem;
-  color: var(--ink-3);
-  user-select: none;
-  border-right: 1px solid var(--line-2);
-}
-.gl {
-  padding-right: 7px;
-  height: calc(12.5px * 1.55);
-  line-height: calc(12.5px * 1.55);
-}
-.gl.hot {
-  background: var(--rose);
-  color: #fff;
-  border-radius: 0 6px 6px 0;
-}
-.ws-text {
-  flex: 1;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  resize: none !important;
-  outline: none !important;
-  white-space: pre;
-  overflow: auto;
-  line-height: calc(12.5px * 1.55) !important;
-}
 .ws-bar {
   display: flex;
   align-items: center;
@@ -1714,6 +1752,10 @@ textarea.program {
 .why {
   flex: 0 1 auto;
   max-height: 64%;
+}
+.right.sized .why {
+  flex: 0 0 var(--why);
+  max-height: none;
   display: flex;
   flex-direction: column;
   border-bottom: 1px solid var(--line);
@@ -2200,11 +2242,8 @@ table.sheet-grid td.blank {
 
 /* --- the exploded canvas --- */
 
-.grid.exploded {
-  grid-template-columns: minmax(0, 1fr) 400px;
-}
 .grid.exploded .center {
-  grid-template-rows: minmax(0, 1fr) minmax(230px, 36%);
+  grid-template-rows: minmax(0, 1fr) 10px var(--dock, minmax(230px, 36%));
 }
 
 .explode-btn {
@@ -2489,6 +2528,61 @@ svg.edges {
   text-overflow: ellipsis;
   margin-top: 3px;
 }
+.card-code {
+  margin-top: 3px;
+  font-size: 9.5px;
+  line-height: 1.3;
+  overflow: hidden;
+  white-space: pre;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+.card-code .hl {
+  font-size: inherit;
+}
+
+/* --- code shown without an editor --- */
+
+.hl {
+  margin: 0;
+  font-family: var(--mono);
+  font-variation-settings: "MONO" 1, "CASL" 0.6;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre;
+  color: var(--ink);
+  tab-size: 2;
+}
+.value-view.code {
+  padding: 8px 10px;
+  max-height: 340px;
+}
+.hl-key {
+  color: var(--lilac);
+  font-weight: 600;
+}
+.hl-str {
+  color: var(--rose-2);
+}
+.hl-num {
+  color: var(--sky);
+}
+.hl-prop {
+  color: var(--mint);
+}
+.hl-fn {
+  color: var(--peach);
+}
+.hl-com {
+  color: var(--ink-3);
+  font-style: italic;
+}
+.hl-op {
+  color: var(--ink-2);
+}
+.hl-def {
+  color: var(--ink);
+  font-weight: 600;
+}
 .card-time {
   position: absolute;
   right: 8px;
@@ -2562,33 +2656,60 @@ svg.edges {
 
 .detail {
   position: absolute;
-  right: 12px;
-  top: 12px;
-  width: 300px;
+  right: 10px;
+  top: 10px;
+  width: 230px;
+  max-height: calc(100% - 20px);
+  overflow: auto;
   background: color-mix(in srgb, var(--panel) 95%, transparent);
   backdrop-filter: blur(8px);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 12px;
-  box-shadow: 0 20px 50px -24px rgba(90, 30, 70, 0.5);
+  border-radius: 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  box-shadow: 0 16px 40px -24px rgba(90, 30, 70, 0.5);
   cursor: default;
   animation: slide 0.18s ease-out;
 }
 .detail-head {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: baseline;
   font-family: var(--mono);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  min-width: 0;
+}
+.detail-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-close {
+  margin-left: auto;
+  padding: 0 4px;
+  font-size: 11px;
+}
+.detail .value-view {
+  max-height: 90px;
+  overflow: auto;
+  font-size: 11px;
 }
 .detail-row {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-2);
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+.detail .row-actions {
+  margin-top: 6px;
+  gap: 4px;
+}
+.detail .row-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
 }
 
 .legend-card {
@@ -2635,47 +2756,6 @@ svg.edges {
   opacity: 0.85;
   z-index: 5;
   box-shadow: 0 20px 40px -16px rgba(90, 30, 70, 0.5);
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 22px;
-  transform: translateX(-50%);
-  z-index: 50;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: 14px;
-  padding: 9px 14px 10px;
-  box-shadow: 0 20px 50px -18px rgba(40, 10, 30, 0.6);
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  max-width: min(720px, 90vw);
-  animation: rise 0.22s ease-out;
-}
-@keyframes rise {
-  from {
-    transform: translate(-50%, 10px);
-    opacity: 0;
-  }
-}
-.toast.bad {
-  background: var(--red);
-  color: #fff;
-}
-.toast pre {
-  margin: 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-}
-.toast .toast-label {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  opacity: 0.7;
-  white-space: nowrap;
-  padding-top: 2px;
 }
 
 /* --- desk, documents, pixels --- */
@@ -2899,7 +2979,7 @@ article.doc p:focus {
 }
 .grid.tall .center,
 .grid.exploded.tall .center {
-  grid-template-rows: minmax(0, 0.55fr) minmax(0, 1.45fr);
+  grid-template-rows: minmax(0, 0.55fr) 10px minmax(0, 1.45fr);
 }
 
 /* --- the browser's grouping --- */
@@ -3191,4 +3271,226 @@ article.doc p:focus {
   font-style: italic;
   font-size: 16px;
   color: var(--ink);
+}
+
+/* --- ask: a model writes snippets --- */
+.ask {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.ask-key {
+  padding: 14px 16px;
+  max-width: 560px;
+}
+.ask-key .inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ask-key input {
+  flex: 1;
+  min-width: 200px;
+}
+.ask-bar,
+.ask-input,
+.ask-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ask-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-2);
+}
+.ask-model {
+  width: 240px;
+}
+.ask-log {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ask-you {
+  align-self: flex-end;
+  max-width: 80%;
+  background: var(--rose-soft);
+  border-radius: 14px 14px 4px 14px;
+  padding: 7px 11px;
+  white-space: pre-wrap;
+}
+.ask-about {
+  display: block;
+  font-size: 11px;
+  color: var(--rose);
+  font-weight: 600;
+}
+.ask-model-turn {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ask-words {
+  white-space: pre-wrap;
+}
+.ask-code {
+  margin: 0;
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 12px;
+}
+.ask-input {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line-2);
+}
+.ask-input textarea {
+  flex: 1;
+  min-width: 200px;
+  resize: vertical;
+}
+.ask-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+.ask-pop {
+  position: fixed;
+  width: 340px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px -20px rgba(60, 10, 40, 0.5);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: rise2 0.12s ease-out;
+}
+.ask-pop textarea {
+  resize: vertical;
+}
+.ask-step {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 4px 10px;
+  background: var(--panel-2);
+  font-size: 12.5px;
+}
+.ask-step > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ask-step > summary .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+}
+.ask-step[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+.ask-glyph {
+  color: var(--lilac);
+  width: 1em;
+  text-align: center;
+}
+.ask-mark {
+  margin-left: auto;
+  color: var(--mint);
+}
+.ask-step.bad .ask-mark {
+  color: var(--red);
+}
+.ask-step.busy {
+  border-style: dashed;
+}
+.ask-code.result {
+  background: var(--panel);
+}
+.ask-undo {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+/* --- the vibes that are not colours --- */
+
+/* the 90s, 2.5%: buttons get a bevel and a hard 1px shadow, at 2.5% of the ink */
+.primary,
+.boot-btn,
+.palette-btn,
+.agent-pill,
+.explode-btn,
+.dock-tab.on {
+  box-shadow:
+    inset 1px 1px 0 color-mix(in srgb, white 2.5%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, var(--ink) 2.5%, transparent),
+    1px 1px 0 color-mix(in srgb, var(--ink) 2.5%, transparent);
+}
+.agent-pill.on {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px currentColor,
+    1px 1px 0 color-mix(in srgb, var(--ink) 2.5%, transparent);
+}
+
+/* riso paper, 2%: the serif is drawn by hand, a little; it boils on hover */
+.wordmark,
+.pane-title {
+  filter: url(#rough-1);
+}
+.brand:hover .wordmark {
+  animation: boil 0.6s steps(1) infinite;
+}
+@keyframes boil {
+  0% {
+    filter: url(#rough-1);
+  }
+  33% {
+    filter: url(#rough-2);
+  }
+  66% {
+    filter: url(#rough-3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand:hover .wordmark {
+    animation: none;
+  }
+}
+.ask-nudge {
+  align-self: center;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.ask-finds {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.ask-finds .bad,
+.ghostbtn.bad {
+  color: var(--red);
+}
+.k-llm {
+  color: var(--lilac);
 }

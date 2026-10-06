@@ -136,6 +136,15 @@ export function Json({ value, depth = 0 }: { value: Json | undefined; depth?: nu
 }
 
 /** A short, one-line look at a value. */
+/** Whether a node's value is code: it is in a program or renderer slot, or reads as code. */
+export function codeLike(id: Id, v: Json | undefined): v is string {
+  if (typeof v !== "string") return false;
+  for (const p of world.placements().get(id) ?? []) {
+    if (p.name === "compute" || p.name === "effect" || p.name.startsWith("render-")) return true;
+  }
+  return /\breturn\b|=>|\bexport default\b|\bconst\b|\bfunction\b/.test(v);
+}
+
 export function peek(v: Json | undefined, max = 32): string {
   if (v === undefined) return "absent";
   const s = typeof v === "string" ? J(v) : JSON.stringify(v);

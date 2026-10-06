@@ -6,22 +6,25 @@ import { useEffect, useState } from "preact/hooks";
 import { Browser } from "./browser.tsx";
 import { Canvas } from "./canvas.tsx";
 import { Dock } from "./dock.tsx";
+import { Gutter } from "./gutter.tsx";
 import { examples, rulesFor } from "./examples.ts";
 import { Inspector } from "./inspector.tsx";
 import {
   draft,
   explode,
   focus,
+  panels,
   select,
   selected,
+  size,
   tall,
   theme,
-  toast,
   undo,
   world,
 } from "./state.ts";
 import { Right } from "./transcript.tsx";
 import { Palette, palette } from "./palette.tsx";
+import { AskPopover } from "./ask.tsx";
 import { current, fresh, last, open, rename, save, savedAt } from "./projects.ts";
 import { ROOT } from "./world.ts";
 
@@ -253,15 +256,14 @@ function TopBar() {
   );
 }
 
-function Toast() {
-  const t = toast.value;
-  if (!t) return null;
-  return (
-    <div class={`toast${t.ok ? "" : " bad"}`} key={t.n}>
-      <span class="toast-label">{t.ok ? `✓ ${t.label ?? "done"}` : "✕ " + (t.why ?? "")}</span>
-      <pre>{t.code}</pre>
-    </div>
-  );
+/** The dragged panels' sizes, as the stylesheet's variables; the rest keep its defaults. */
+function vars(names: { [k in keyof typeof panels.value]: string }) {
+  const out: { [v: string]: string } = {};
+  for (const [k, v] of Object.entries(names)) {
+    const px = panels.value[k as keyof typeof panels.value];
+    if (px !== undefined) out[v] = `${px}px`;
+  }
+  return out;
 }
 
 function App() {
@@ -283,12 +285,6 @@ function App() {
       } else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         save();
-        toast.value = {
-          n: -1,
-          code: `saved ${current.value}, as a boot image`,
-          label: "save",
-          ok: true,
-        };
       } else if (mod && e.key.toLowerCase() === "z" && !typing) {
         e.preventDefault();
         undo(e.shiftKey);
@@ -300,16 +296,49 @@ function App() {
   return (
     <div class="app">
       <TopBar />
-      <div class={`grid${explode.value ? " exploded" : ""}${tall.value ? " tall" : ""}`}>
-        {explode.value ? null : <Browser />}
+      <div
+        class={`grid${explode.value ? " exploded" : ""}${tall.value ? " tall" : ""}`}
+        style={vars({ left: "--left", right: "--right", dock: "--dock", why: "--why" })}
+      >
+        <Browser />
+        <Gutter
+          axis="x"
+          side="before"
+          min={160}
+          keep={660}
+          set={(px) => size("left", px)}
+          reset={() => size("left", undefined)}
+        />
         <div class="center">
           {explode.value ? <Canvas /> : <Inspector />}
+          <Gutter
+            axis="y"
+            side="after"
+            min={120}
+            keep={160}
+            set={(px) => {
+              tall.value = false;
+              size("dock", px);
+            }}
+            reset={() => {
+              tall.value = false;
+              size("dock", undefined);
+            }}
+          />
           <Dock />
         </div>
+        <Gutter
+          axis="x"
+          side="after"
+          min={240}
+          keep={580}
+          set={(px) => size("right", px)}
+          reset={() => size("right", undefined)}
+        />
         <Right />
       </div>
-      <Toast />
       <Palette />
+      <AskPopover />
     </div>
   );
 }

@@ -5,23 +5,31 @@
 --
 -- One JSON object per line each way; every request answered in order with
 -- its seq; nothing else on stdout; exit when stdin closes. A line that is not
--- one JSON object is answered with code not-a-request under seq null.
+-- one JSON object is answered with code not-a-request, of kind invalid,
+-- under the seq a parser reading it from its start reaches before it stops
+-- being JSON ('lineSeq'), and under null when there is none.
 --
 -- * reset with stack "graph" builds graph(root); "protect" and "drive"
 --   answer @{"unsupported": "reset"}@, as do batch and fire.
--- * A request is checked before the stack sees it, its fields in this
---   order: cmd; agent, process, place, chroot; the command's own fields in
---   the order PROTOCOL lists them; then, for a change, cause and time. A
---   field that is not there is @missing@, one of the wrong kind
---   @wrong-field@, with the command as the error's op.
--- * events and unsubscribe of a subscription the session does not have are
---   wrong-field "sub"; unsubscribing keeps what arrived before, for a later
---   events.
--- * Before the first reset, as after it, a cmd the protocol does not have is
---   unknown-command, and batch and fire are unsupported. Any other command
---   then is missing "reset", as C and TS answer it: PROTOCOL does not say
---   which code, only that it is not not-a-request, which is for a line that
---   is not one JSON object (a question for chee, in NOTES.md).
+-- * A request is checked before the stack sees it, its fields in
+--   PROTOCOL's order (Errors): cmd, agent, process, place, chroot, address,
+--   name, id, position, value, patches, cause, time, then any field only
+--   that command has (sub). A field that is not there is @missing@, one of
+--   the wrong kind @wrong-field@, with the command as the error's op. A
+--   time is a whole number from 1, a position one from 0.
+-- * Every request but reset and events carries an agent.
+-- * Subscriptions are numbered from 1 in each session. After unsubscribe,
+--   the next events on that number hands over what arrived before it, once;
+--   after that, and for a number there never was, sub is wrong-field.
+-- * A cmd the protocol does not have is unknown-command, before the first
+--   reset as after it: cmd is checked first. Any other request but reset
+--   before the first reset is missing "reset", batch and fire included,
+--   since there is no stack yet to not have them.
+-- * An error names its command as op when the command is an operation,
+--   session or not: the graph's (CORE Operations) and batch, the driver's
+--   own (DRIVER Outside operations, batches and handlers). events and fire
+--   are the harness's, not operations (PROTOCOL The reference protect), and
+--   reset builds the session: their errors name no op.
 -- * A Haskell exception while answering (a bug) is answered as
 --   @{"error": {"kind": "crash", ...}}@ so the run goes on and the failure
 --   is visible; it is never one of the protocol's kinds.
@@ -42,11 +50,16 @@ import System.IO
 import Types
 
 -- | One harness session: the stack reset built, and each subscription's
--- events since the last "events" (newest first).
+-- queue.
 data Session = Session
   { sessionTop :: Interface
-  , sessionEvents :: IORef (Map.Map Int (IORef [Event]))
+  , sessionEvents :: IORef (Map.Map Int Queue)
   }
+
+-- | What arrived for one subscription since the last "events" (newest
+-- first), and whether it is still subscribed. After unsubscribe, the next
+-- events hands over what is left, once, and the number is gone.
+data Queue = Queue {queueEvents :: IORef [Event], queueOpen :: Bool}
 
 -- | What a request is answered with, before its seq is added.
 data Reply
@@ -105,12 +118,14 @@ ctxOf req = do
   Right (outside agent process place (fromInteger chroot))
 
 -- | A change from outside carries its cause, which stands for its site, and,
--- below drive, its time.
+-- below drive, its time: a whole number from 1 (PROTOCOL The session).
 stampOf :: Value -> Decode Stamp
 stampOf req = do
   cause <- need "cause" anything req
-  time <- need "time" asWhole req
+  time <- need "time" asTime req
   Right (Stamp (Just cause) (Just time))
+  where
+    asTime v = asWhole v >>= \t -> if t >= 1 then Just t else Nothing
 
 -- ===========================================================================
 -- the session
@@ -130,9 +145,10 @@ reset req = case need "stack" asText req of
     | stack == "protect" || stack == "drive" -> pure (Left (ReplyUnsupported "reset"))
     | otherwise -> pure (Left (ReplyError (wrongField "stack")))
 
--- | Answers one request, an object. Whether the protocol has its cmd does not
--- depend on the session, so an unknown one is unknown-command even before
--- the first reset.
+-- | Answers one request, an object. cmd is checked first: whether the
+-- protocol has it does not depend on the session, so an unknown one is
+-- unknown-command even before the first reset. Any other request but reset
+-- before the first reset is missing "reset" (PROTOCOL The session).
 respond :: IORef (Maybe Session) -> Value -> IO Reply
 respond ref req = case field "cmd" req of
   Nothing -> pure (ReplyError (missing "cmd"))
@@ -142,19 +158,23 @@ respond ref req = case field "cmd" req of
       Left reply -> pure reply
       Right s -> writeIORef ref (Just s) >> pure (ReplyOk JNull)
   Just (JString cmd)
-    | cmd == "batch" || cmd == "fire" -> pure (ReplyUnsupported cmd)
-    | cmd `notElem` commands -> pure (ReplyError (unknownCommand cmd))
+    | cmd `notElem` commands && cmd `notElem` driverCommands -> pure (ReplyError (unknownCommand cmd))
     | otherwise -> do
         ms <- readIORef ref
         case ms of
           Nothing -> pure (ReplyError (opOf cmd noSession))
-          Just s -> dispatch s cmd req
+          Just s
+            | cmd `elem` driverCommands -> pure (ReplyUnsupported cmd)
+            | otherwise -> dispatch s cmd req
   Just _ -> pure (ReplyError (wrongField "cmd"))
 
--- | A command before the first reset. Not not-a-request: the line is one
--- JSON object. Which code PROTOCOL wants is open; this is C's and TS's.
+-- | A request before the first reset (PROTOCOL The session).
 noSession :: Err
 noSession = invalid "missing" [("field", "reset")] "there is no session: send reset first"
+
+-- | The commands only drive has, which the graph stack answers unsupported.
+driverCommands :: [Text]
+driverCommands = ["batch", "fire"]
 
 unknownCommand :: Text -> Err
 unknownCommand cmd = invalid "unknown-command" [("cmd", str cmd)] "the protocol has no such command"
@@ -162,16 +182,26 @@ unknownCommand cmd = invalid "unknown-command" [("cmd", str cmd)] "the protocol 
 -- ===========================================================================
 -- commands
 
--- | CORE's operations, which an error answering one names in its op
--- (PROTOCOL Errors).
+-- | CORE's operations, which the graph stack answers.
+graphOperations :: [Text]
+graphOperations = ["read", "directory", "lookup", "write", "place", "unplace", "subscribe", "unsubscribe"]
+
+-- | The operations, which an error answering one names in its op (PROTOCOL
+-- Errors), session or not: the graph's, and batch, the driver's own (DRIVER
+-- Outside operations, batches and handlers). events and fire are the
+-- harness's, not operations (PROTOCOL The reference protect), and reset
+-- builds the session.
 operations :: [Text]
-operations = ["read", "directory", "lookup", "write", "place", "unplace", "subscribe", "unsubscribe"]
+operations = graphOperations ++ ["batch"]
 
--- | What a session answers: the operations, and events, the harness's own,
--- whose errors name no op. reset, batch and fire are answered before.
+-- | What a session answers: the graph's operations, and events, the
+-- harness's own, whose errors name no op. reset, batch and fire are answered
+-- before.
 commands :: [Text]
-commands = operations ++ ["events"]
+commands = graphOperations ++ ["events"]
 
+-- | An error answering the command, with the command as its op when it is
+-- one of the 'operations'.
 opOf :: Text -> Err -> Err
 opOf cmd e = if cmd `elem` operations then withOp cmd e else e
 
@@ -198,18 +228,27 @@ dispatch s cmd req = case cmd of
     case r of
       Left e -> pure (ReplyError e)
       Right n -> do
-        modifyIORef' (sessionEvents s) (Map.insert n queue)
+        modifyIORef' (sessionEvents s) (Map.insert n (Queue queue True))
         pure (ReplyOk (object [("sub", int n)]))
-  "unsubscribe" -> decoded ((,) <$> ctxOf req <*> need "sub" asWhole req) $ \(ctx, n) ->
-    either ReplyError (const (ReplyOk JNull)) <$> iUnsubscribe top ctx (subNumber n)
-  "events" -> case (,) <$> ctxOf req <*> need "sub" asWhole req of
+  "unsubscribe" -> decoded ((,) <$> ctxOf req <*> need "sub" asWhole req) $ \(ctx, n) -> do
+    r <- iUnsubscribe top ctx (subNumber n)
+    case r of
+      Left e -> pure (ReplyError e)
+      Right () -> do
+        -- what arrived before is still handed over, once, by the next events
+        modifyIORef' (sessionEvents s) (Map.adjust (\q -> q {queueOpen = False}) (subNumber n))
+        pure (ReplyOk JNull)
+  -- events is the harness's, not an operation: it needs no agent, and its
+  -- errors name no op
+  "events" -> case need "sub" asWhole req of
     Left e -> pure (ReplyError e)
-    Right (_, n) -> do
+    Right n -> do
       subs <- readIORef (sessionEvents s)
       case Map.lookup (subNumber n) subs of
         Nothing -> pure (ReplyError (invalid "wrong-field" [("field", "sub")] "there is no such subscription"))
         Just queue -> do
-          es <- atomicModifyIORef' queue (\q -> ([], q))
+          es <- atomicModifyIORef' (queueEvents queue) (\q -> ([], q))
+          if queueOpen queue then pure () else modifyIORef' (sessionEvents s) (Map.delete (subNumber n))
           pure (ReplyOk (JArray (map eventJson (reverse es))))
   _ -> pure (ReplyError (unknownCommand cmd))
   where
@@ -256,15 +295,23 @@ eventJson (EventRecord r) = object [("record", recordToJson r)]
 -- ===========================================================================
 -- lines
 
-notARequest :: Text -> Value
-notARequest why = replyToJson JNull (ReplyError (invalid "not-a-request" [] why))
+-- | The answer to a line that is not one JSON object: under the seq that can
+-- be read from it, or null.
+notARequest :: BS.ByteString -> Text -> Value
+notARequest line why = replyToJson (maybe JNull integer (lineSeq line)) (ReplyError (invalid "not-a-request" [] why))
+
+-- | The seq a line's answer goes under.
+seqOf :: BS.ByteString -> Value
+seqOf line = case decodeLine line of
+  Right request@(JObject _) -> fromMaybe JNull (field "seq" request)
+  _ -> maybe JNull integer (lineSeq line)
 
 -- | One line in, one answer out.
 answerLine :: IORef (Maybe Session) -> BS.ByteString -> IO Value
 answerLine ref line = case decodeLine line of
-  Left why -> pure (notARequest why)
+  Left why -> pure (notARequest line why)
   Right request@(JObject _) -> replyToJson (fromMaybe JNull (field "seq" request)) <$> respond ref request
-  Right _ -> pure (notARequest "a request is one JSON object")
+  Right _ -> pure (notARequest line "a request is one JSON object")
 
 -- | The answer's bytes, forced, so that a bug becomes a "crash" answer and
 -- not a dead harness.
@@ -273,12 +320,9 @@ answerBytes ref line = do
   r <- try (answerLine ref line >>= evaluate . encodeLine >>= \b -> BS.length b `seq` pure b)
   case r of
     Right b -> pure b
-    Left e -> do
-      let s = case decodeLine line of
-            Right req -> fromMaybe JNull (field "seq" req)
-            Left _ -> JNull
+    Left e ->
       pure . encodeLine $
-        object [("seq", s), ("error", object [("kind", "crash"), ("why", object [("code", "crash"), ("text", str (Text.pack (show (e :: SomeException))))])])]
+        object [("seq", seqOf line), ("error", object [("kind", "crash"), ("why", object [("code", "crash"), ("text", str (Text.pack (show (e :: SomeException))))])])]
 
 main :: IO ()
 main = do

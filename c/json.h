@@ -129,6 +129,14 @@ bool jsonEqual(const Json *a, const Json *b);
  * fresh C string).
  */
 Json *jsonParse(const char *text, size_t length, char **why);
+/**
+ * jsonParse, and when the bytes are not one JSON value, *read is what a
+ * parser reading them from the start had read whole before they stopped
+ * being JSON: the outermost list or object with the members it had read
+ * whole, or a whole value followed by more; NULL if none. The caller frees
+ * it (jsonFree). On success *read is NULL.
+ */
+Json *jsonParseRead(const char *text, size_t length, char **why, Json **read);
 
 /** the value as JSON.stringify(value) would write it: one line, a fresh C string */
 char *jsonPrint(const Json *value);

@@ -8,7 +8,7 @@
 //   non-empty list of ids with the change that last set it;
 // - the last time in the graph;
 // - subscriptions: the place and address each follows, and the node it
-//   reaches;
+//   reaches and the route of its own names there;
 // - for each process, what its last finished run and its run under way read
 //   through a read-only interface, for marking; and the top of the stack.
 //
@@ -55,6 +55,7 @@ typedef struct Sub {
 	ErmPlace place;
 	ErmAddress address;
 	const char *at; // the node the address reaches; NULL: nothing
+	ErmRoute route; // the route of the address's own names to it; empty when it reaches nothing
 	ErmEventFn fn;
 	void *data;
 	bool live;
@@ -192,26 +193,23 @@ static Node *walk(Graph *graph, const ErmCtx *ctx, const Target *target, int cou
 	return node;
 }
 
-/** the node `count` names reach from `from`, walked as an address on their own */
-static Node *reachNames(Graph *graph, const ErmCtx *ctx, Node *from, const char *const *names, int count) {
-	Target target = { from, names, count };
-	return walk(graph, ctx, &target, count, NULL);
-}
-
 /**
  * CORE Paths: an address's target. The place's start, its "/", is the node
- * its hidden names reach; the place itself, its ".", is the node its other
- * names reach from there, and each ".." drops one of them, never going above
- * the start. A first "/" starts at the start, any other address at the
- * place. Each part of the place is followed afresh, as an address is.
+ * its hidden names reach, walked as an address on their own; the place
+ * itself, its ".", is the node its other names reach from there. Each ".."
+ * goes back one step the way the place was reached, to the node its walk came
+ * through, never above the start: the place's walk taken only that far, each
+ * step taking the member that has the place's next name. A first "/" starts
+ * at the start, any other address at the place. The place is followed afresh
+ * each time, as an address is.
  */
 static ErmErr resolve(Graph *graph, const ErmCtx *ctx, const ErmAddress *address, Target *out) {
 	const ErmPlace *place = &ctx->place;
 	int below = address->fromStart ? 0 : place->names.count - place->chroot;
 	if (address->ups > below) return ermInvalid("above-root");
-	Node *start = reachNames(graph, ctx, graph->root, place->names.items, place->chroot);
-	if (below > address->ups) start = reachNames(graph, ctx, start, place->names.items + place->chroot, below - address->ups);
-	*out = (Target){ start, address->names.items, address->names.count };
+	Target hidden = { graph->root, place->names.items, place->chroot };
+	Target down = { walk(graph, ctx, &hidden, hidden.count, NULL), place->names.items + place->chroot, below };
+	*out = (Target){ walk(graph, ctx, &down, below - address->ups, NULL), address->names.items, address->names.count };
 	return ermOk();
 }
 
@@ -232,9 +230,10 @@ typedef struct Member {
 typedef ERM_LIST(Member) Members;
 
 /**
- * The nodes a directory read of the target lists: the node it starts at when
- * the address has no names; otherwise every node here in the slot its last
- * name selects, in slot order, as ls lists a Plan 9 union.
+ * The nodes a read of the target is of: the node it starts at when the
+ * address has no names; otherwise every node here in the slot its last name
+ * selects, in slot order, as ls lists a Plan 9 union, each with its own
+ * route. The first is the node the address reaches.
  */
 static Members membersOf(Graph *graph, const ErmCtx *ctx, const Target *target) {
 	Members members = { 0 };
@@ -265,23 +264,25 @@ static Members membersOf(Graph *graph, const ErmCtx *ctx, const Target *target) 
 	return members;
 }
 
-/** a slot's items, in slot order, each from the member's route */
-static void slotItems(Graph *graph, const Member *member, const Slot *slot, ErmItems *items) {
+/** a slot's items, in slot order, each from the member's route; an item says pending while its id's node is not here */
+static void slotItems(Graph *graph, const ErmCtx *ctx, const Member *member, const Slot *slot, ErmItems *items) {
 	for (int k = 0; k < slot->ids.count; k++) {
 		const char *id = slot->ids.items[k];
-		ERM_PUSH(*items, ((ErmItem){ .id = id, .pending = !nodeOf(graph, id), .route = member->route, .ups = -1, .position = k, .change = slot->change }));
+		bool pending = !nodeOf(graph, id);
+		if (pending) remember(graph, ctx, READ_ABSENT, id, NULL);
+		ERM_PUSH(*items, ((ErmItem){ .id = id, .pending = pending, .route = member->route, .ups = -1, .position = k, .change = slot->change }));
 	}
 }
 
+/** CORE Reads are lists: an item for each node the address's last name selects that is here, in slot order, each with its own value, route and change */
 static void readValue(Graph *graph, const ErmCtx *ctx, const Target *target, ErmResult *out) {
-	ErmRoute route = { 0 };
-	Node *node = reachOf(graph, ctx, target, &route);
-	if (!node) {
-		free(route.items);
-		return;
+	Members members = membersOf(graph, ctx, target);
+	for (int m = 0; m < members.count; m++) {
+		Node *node = members.items[m].node;
+		remember(graph, ctx, READ_VALUE, node->id, NULL);
+		ERM_PUSH(out->items, ((ErmItem){ .value = node->value, .route = members.items[m].route, .ups = -1, .position = -1, .change = node->change }));
 	}
-	remember(graph, ctx, READ_VALUE, node->id, NULL);
-	ERM_PUSH(out->items, ((ErmItem){ .value = node->value, .route = route, .ups = -1, .position = -1, .change = node->change }));
+	free(members.items);
 }
 
 /** with a name, that slot's items from every member that has it; without, each name with its items from every member */
@@ -293,7 +294,7 @@ static void readDirectory(Graph *graph, const ErmCtx *ctx, const Target *target,
 		if (name) {
 			remember(graph, ctx, READ_SLOT, node->id, name);
 			Slot *slot = slotOf(node, name);
-			if (slot) slotItems(graph, &members.items[m], slot, &out->items);
+			if (slot) slotItems(graph, ctx, &members.items[m], slot, &out->items);
 			continue;
 		}
 		remember(graph, ctx, READ_DIR, node->id, NULL);
@@ -306,7 +307,7 @@ static void readDirectory(Graph *graph, const ErmCtx *ctx, const Target *target,
 		ErmEntry entry = { names.items[n], { 0 } };
 		for (int m = 0; m < members.count; m++) {
 			Slot *slot = slotOf(members.items[m].node, names.items[n]);
-			if (slot) slotItems(graph, &members.items[m], slot, &entry.items);
+			if (slot) slotItems(graph, ctx, &members.items[m], slot, &entry.items);
 		}
 		ERM_PUSH(out->listing, entry);
 	}
@@ -315,23 +316,27 @@ static void readDirectory(Graph *graph, const ErmCtx *ctx, const Target *target,
 }
 
 /**
- * CORE Lookup: searches the directories along the place, from the one it
- * reaches, ".", up to its start, and takes the nearest slot with the name.
- * Each step is an ordinary read of one slot, directory([".." x up], name),
- * through the top of the stack, so a wrapper may refuse it; a refusal ends
- * the search, as if there were no parent, and is not an error.
+ * CORE Lookup: searches the directories the place's walk went through, from
+ * the one it reaches, ".", back up to its start, and takes the nearest slot
+ * with the name that holds a node that is here, all its items; a slot whose
+ * ids are all absent is passed over. Each step is an ordinary read of one
+ * slot, directory([".." x up], name), through the top of the stack, so a
+ * wrapper may refuse it; a refusal ends the search, as if there were no
+ * parent, and is not an error.
  */
 static ErmErr lookup(Graph *graph, const ErmCtx *ctx, const char *name, ErmResult *out) {
 	ErmInterface top = graph->top.vt ? graph->top : graph->self;
 	int below = ctx->place.names.count - ctx->place.chroot;
-	for (int up = 0; up <= below; up++) {
+	for (int up = 0; up <= below && !out->items.count; up++) {
 		ErmOp read = { .kind = ERM_OP_DIRECTORY, .address = { false, up, { 0 } }, .name = name };
 		ErmStamp none = { 0 };
 		ErmResult found = { 0 };
 		ErmErr err = top.vt->op(top.self, ctx, &none, &read, &found);
 		if (err.kind == ERM_REFUSED) break;
 		if (err.kind) return err;
-		for (int i = 0; i < found.items.count; i++) {
+		bool here = false;
+		for (int i = 0; i < found.items.count; i++) here = here || !found.items.items[i].pending;
+		for (int i = 0; here && i < found.items.count; i++) {
 			ErmItem item = found.items.items[i];
 			item.route = (ErmRoute){ 0 };
 			item.ups = up;
@@ -339,7 +344,6 @@ static ErmErr lookup(Graph *graph, const ErmCtx *ctx, const char *name, ErmResul
 			ERM_PUSH(out->items, item);
 		}
 		free(found.items.items);
-		if (out->items.count) break;
 	}
 	return ermOk();
 }
@@ -351,16 +355,29 @@ static ErmErr patchError(const char *code, int index) {
 	return ermDetail(ermInvalid(code), "index", jsonInteger(index));
 }
 
-/** a key of a path: a string, into an object, or a whole number, into a list */
+/** a key: a string, into an object, or a whole number (0, 1, 2 ...), into a list */
 static bool isKey(const Json *key) {
-	return jsonIsString(key) || jsonIsWhole(key, NULL);
+	int64_t index;
+	return jsonIsString(key) || (jsonIsWhole(key, &index) && index >= 0);
 }
 
-/** the member of `value` under `key`; NULL when the path is not there */
-static Json *member(const Json *value, const Json *key) {
+/**
+ * The member of `value` under a path's key, in *out; or why the path is not
+ * there: wrong-kind for a key of the wrong kind for where it leads (a string
+ * into anything but an object, a number into anything but a list), no-key
+ * for an object that lacks the key or a list that does not reach the index.
+ */
+static const char *member(const Json *value, const Json *key, Json **out) {
+	if (jsonIsString(key)) {
+		if (!jsonIsObject(value)) return "wrong-kind";
+		*out = jsonGetOfLength(value, key->string, key->stringLength);
+		return *out ? NULL : "no-key";
+	}
 	int64_t index;
-	if (jsonIsString(key)) return jsonIsObject(value) ? jsonGetOfLength(value, key->string, key->stringLength) : NULL;
-	if (jsonIsArray(value) && jsonIsWhole(key, &index) && index >= 0 && index < value->array.count) return value->array.items[index];
+	jsonIsWhole(key, &index);
+	if (!jsonIsArray(value)) return "wrong-kind";
+	if (index >= value->array.count) return "no-key";
+	*out = value->array.items[index];
 	return NULL;
 }
 
@@ -407,7 +424,8 @@ static ErmErr applyPatch(Json *patch, int index, Json *value, Json **out) {
 	}
 	bool isSplice = strcmp(type, "splice") == 0;
 	Json *path = jsonGet(patch, "path"), *key = jsonGet(patch, "key");
-	if ((!isSplice && strcmp(type, "set") != 0) || !jsonIsArray(path) || (!isSplice && !jsonIsString(key))) {
+	// its form first: a type it has, a path of keys, and for a set a key
+	if ((!isSplice && strcmp(type, "set") != 0) || !jsonIsArray(path) || (!isSplice && !isKey(key))) {
 		return patchError("not-a-patch", index);
 	}
 	int depth = path->array.count;
@@ -419,13 +437,14 @@ static ErmErr applyPatch(Json *patch, int index, Json *value, Json **out) {
 	chain[0] = value;
 	ErmErr err = ermOk();
 	for (int i = 0; i < depth && !err.kind; i++) {
-		chain[i + 1] = member(chain[i], path->array.items[i]);
-		if (!chain[i + 1]) err = patchError("no-key", index);
+		const char *code = member(chain[i], path->array.items[i], &chain[i + 1]);
+		if (code) err = patchError(code, index);
 	}
 	Json *changed = NULL;
 	if (!err.kind && isSplice) {
 		err = splice(patch, index, chain[depth], &changed);
-	} else if (!err.kind && !jsonIsObject(chain[depth])) {
+	} else if (!err.kind && (!jsonIsObject(chain[depth]) || !jsonIsString(key))) {
+		// a set applies to an object, by a string key: a number into an object is the wrong kind
 		err = patchError("wrong-kind", index);
 	} else if (!err.kind) {
 		Json *set = jsonGet(patch, "value");
@@ -459,28 +478,43 @@ static ErmErr applyPatches(Json *patches, Json *value, Json **out) {
 // ===========================================================================
 // changes (CORE Changes, Placement)
 
-/** the id of the node a subscription's address reaches now; NULL: nothing */
-static const char *reach(Graph *graph, const Sub *sub) {
+/**
+ * Follows a subscription's address now: sets what it reaches, and the route
+ * of the address's own names to it, as a read's first item gives it. Returns
+ * whether either changed: another node or none, or another step, member or
+ * position on the way.
+ */
+static bool follow(Graph *graph, Sub *sub) {
 	ErmCtx ctx = { .place = sub->place };
 	Target target;
-	if (resolve(graph, &ctx, &sub->address, &target).kind) return NULL;
-	Node *node = reachOf(graph, NULL, &target, NULL);
-	return node ? node->id : NULL;
+	ErmRoute route = { 0 };
+	Node *node = resolve(graph, &ctx, &sub->address, &target).kind ? NULL : reachOf(graph, NULL, &target, &route);
+	if (!node) route.count = 0;
+	const char *at = node ? node->id : NULL;
+	bool moved = (at && sub->at) ? strcmp(at, sub->at) != 0 : at != sub->at;
+	moved = moved || route.count != sub->route.count;
+	for (int s = 0; !moved && s < route.count; s++) {
+		const ErmStep *a = &route.items[s], *b = &sub->route.items[s];
+		moved = strcmp(a->parent, b->parent) || strcmp(a->name, b->name) || strcmp(a->node, b->node) || a->position != b->position;
+	}
+	free(sub->route.items);
+	sub->at = at;
+	sub->route = route;
+	return moved;
 }
 
 /**
  * CORE subscribe: sends a change to each subscription whose node it changed,
- * or that it switched to another node or to nothing; a placement that makes
- * the node a subscription comes to reach is sent to it once.
+ * and each placement or unplacement that changed the subscription's route,
+ * whether or not it then reaches another node; so a placement that makes the
+ * node a subscription comes to reach is sent to it once.
  */
 static void deliver(Graph *graph, const ErmChange *change) {
 	for (int i = 0; i < graph->subs.count; i++) {
 		Sub *sub = &graph->subs.items[i];
 		if (!sub->live) continue;
-		const char *was = sub->at, *now = reach(graph, sub);
-		sub->at = now;
-		bool switched = was && now ? strcmp(was, now) != 0 : was != now;
-		if (switched || (now && strcmp(now, change->node) == 0)) sub->fn(sub->data, change);
+		bool moved = follow(graph, sub);
+		if (moved || (sub->at && strcmp(sub->at, change->node) == 0)) sub->fn(sub->data, change);
 	}
 }
 
@@ -542,11 +576,11 @@ static ErmErr unplace(Node *parent, const ErmOp *op, ErmChange *change) {
 	return ermOk();
 }
 
-/** write, place or unplace: the time, then the node the address reaches, then the change itself */
+/** write, place or unplace: where (the node the address reaches), then when (the time), then what (the change itself) */
 static ErmErr change(Graph *graph, const ErmCtx *ctx, const ErmStamp *stamp, const ErmOp *op, const Target *target, ErmResult *out) {
-	if (stamp->time <= graph->last) return ermDetail(ermInvalid("time"), "last", jsonNumber(graph->last));
 	Node *node = reachOf(graph, NULL, target, NULL);
 	if (!node) return ermInvalid("nothing-there");
+	if (stamp->time <= graph->last) return ermDetail(ermInvalid("time"), "last", jsonNumber(graph->last));
 	ErmChange *made = allocate(sizeof *made);
 	ErmErr err = ermOk();
 	if (op->kind == ERM_OP_WRITE) {
@@ -602,7 +636,7 @@ static ErmErr graphSubscribe(void *self, const ErmCtx *ctx, const ErmAddress *ad
 	ErmErr err = resolve(graph, ctx, address, &target);
 	if (err.kind) return err;
 	Sub made = { .number = graph->subs.count + 1, .place = ctx->place, .address = *address, .fn = fn, .data = data, .live = true };
-	made.at = reach(graph, &made);
+	follow(graph, &made);
 	ERM_PUSH(graph->subs, made);
 	*sub = made.number;
 	return ermOk();

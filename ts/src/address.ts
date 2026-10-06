@@ -2,7 +2,8 @@
 // "/", then any "..", then names. A walk goes down from a node, name by name:
 // each name selects a slot, and the walk takes the first id in it whose node
 // is here and has the next name, as Plan 9 walks a union directory; for the
-// last name, the first id whose node is here.
+// last name, the first id whose node is here. A ".." goes back one step the
+// way the place was reached: to the node the place's walk came through.
 
 import { type Address, type Id, missing, ours, type Step, wrongField } from "./types.ts";
 
@@ -95,9 +96,30 @@ export function walk(
 }
 
 /**
- * The nodes a directory read of these names lists together: with no names,
- * the node walked from; otherwise every member of the last name's slot that
- * is here, in slot order, each with its route, as ls lists a Plan 9 union.
+ * The node k steps back the way a walk of these names from a node goes: the
+ * node the walk comes through k names before its end, or the node walked
+ * from when k is the number of names. The walk is taken only that far, each
+ * step taking the member that has the next of these names, so it is the node
+ * the whole walk stands on there, if it gets that far, whether or not it
+ * goes on to reach anything. Undefined when it does not get that far. k is
+ * at most the number of names.
+ */
+export function back(
+  view: View,
+  from: Id,
+  names: readonly string[],
+  k: number,
+  track?: Track,
+): Id | undefined {
+  const depth = names.length - k;
+  return walk(view, from, names.slice(0, depth), track, names[depth]).node;
+}
+
+/**
+ * The nodes a read of these names gives together: with no names, the node
+ * walked from; otherwise every member of the last name's slot that is here,
+ * in slot order, each with its route, as ls lists a Plan 9 union. The first
+ * is the node the walk of the names reaches.
  */
 export function members(
   view: View,

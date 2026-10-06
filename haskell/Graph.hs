@@ -13,28 +13,36 @@
 --   that last set it. Nothing is ever removed: a node no reachable place
 --   holds cannot be addressed, and placing its id again brings it back as
 --   it was.
--- * Addresses: a place is names from the root, and its first 'ctxChroot'
---   names reach its start, its "/". An address starts at the start for a
---   first "/", otherwise at the node the place reaches with one name taken
---   off for each "..", never above the start; the place, so shortened, is
---   followed afresh from the root as an address is. The address's names are
---   then walked from that node: each selects a slot, and the walk takes the
---   first id in it whose node is here and, unless it is the last name, has
---   the next name.
--- * A directory read whose last name selects a slot reads the union of every
---   member here, in slot order, each item from its member.
--- * Lookup searches the directories along the place, from "." up to the
---   start, reading the slot of the name in each through the top of the
---   stack; a refused read ends the search.
+-- * Addresses: a place is names from the root. Its first 'ctxChroot' names,
+--   walked from the root as an address on their own, reach its start, its
+--   "/"; its other names are walked from there as an address is, followed
+--   afresh each time: that is the place's walk, and the node it reaches is
+--   ".". An address starts at the start for a first "/"; otherwise at ".",
+--   or, for each "..", one step back along the place's walk, to the node it
+--   came through, never above the start. A place whose walk stopped on the
+--   way has no ".", nor any node past where it stopped; the nodes it came
+--   through before it stopped are still there to go back to. The address's
+--   names are then walked from where it starts: each selects a slot, and the
+--   walk takes the first id in it whose node is here and, unless it is the
+--   last name, has the next name.
+-- * A read whose address's last name selects a slot gives an item for each
+--   member here, in slot order, each with its own value, route and change;
+--   the first is the node the address reaches, which writes and places act
+--   on. An address with no names reads the one node it starts at. A
+--   directory read lists the union of the same members.
+-- * Lookup searches the directories the place's walk went through, from "."
+--   back up to the start, reading the slot of the name in each through the
+--   top of the stack, and takes the nearest slot that holds a node that is
+--   here; a refused read ends the search.
 -- * Changes are checked in this order: the address (above-root,
 --   nothing-there), the time (code time, last), then what the change does
---   (exists, position, not-in-slot, the patches). A failed change uses no
---   time and changes nothing.
+--   (exists, position, not-in-slot, the patches, patch by patch). A failed
+--   change uses no time and changes nothing.
 -- * Subscriptions follow their address: after each change the address is
---   walked again, and a subscription receives the change when it changed
---   the node the address reached, or when the node the address reaches is
---   another one now (the placement that switched it, to a node or to
---   nothing).
+--   walked again. A subscription receives each change to the node its
+--   address reached, and each placement or unplacement that changed its
+--   route (the node it reaches and the route its names take), whether or
+--   not it then reaches another node.
 -- * Marking, which nothing below drive exercises: for a ctx that is
 --   ReadOnly and in its process's current run, every read remembers what it
 --   depended on: each slot its walks looked in, each member they tried that
@@ -83,7 +91,9 @@ data Reads = Reads {readsDone :: Set.Set Dep, readsRun :: Maybe (RunTag, Set.Set
 data Sub = Sub
   { subCtx :: Ctx
   , subAddress :: Address
-  , subReached :: Maybe Id -- ^ the node the address reached after the last change
+  , subReached :: Maybe (Id, Route)
+  -- ^ the node the address reached after the last change, and the route its
+  -- names took there
   , subSend :: Event -> IO ()
   }
 
@@ -133,13 +143,15 @@ graph root = do
 operate :: IORef St -> Interface -> Ctx -> Stamp -> Op -> IO (Either Err Result)
 operate ref top ctx stamp o = case o of
   OpRead a -> reading $ do
+    -- an item for each member here of the slot the last name selects, in
+    -- slot order; the first is the node the address reaches
     s <- readIORef ref
-    case resolve s ctx a of
+    case members s ctx a of
       Left e -> pure (Left e)
-      Right (reached, deps) -> do
-        let found = [(n, route, nd) | Just (n, route) <- [reached], Just nd <- [Map.lookup n (stNodes s)]]
-        remember ref ctx (deps ++ [DValue n | (n, _, _) <- found])
-        pure (Right (ResultItems [ItemValue (nodeValue nd) (FromRoute route) (nodeChange nd) | (_, route, nd) <- found]))
+      Right (ms, deps) -> do
+        let found = [(route, nd) | (m, route) <- ms, Just nd <- [Map.lookup m (stNodes s)]]
+        remember ref ctx (deps ++ [DValue m | (m, _) <- ms])
+        pure (Right (ResultItems [ItemValue (nodeValue nd) (FromRoute route) (nodeChange nd) | (route, nd) <- found]))
   OpDirectory a mname -> reading $ do
     s <- readIORef ref
     case members s ctx a of
@@ -240,39 +252,68 @@ pick s p nm next = case Map.lookup p (stNodes s) >>= Map.lookup nm . nodeDir of
           | Map.member x (nodeDir m) -> (Just (Step p nm i k), DSlot i x : deps)
           | otherwise -> go rest (DSlot i x : deps)
 
--- | Walks names down from a node. The last name's member must have @next@,
--- when given. The node reached and the route, or Nothing.
-walk :: St -> Id -> [Name] -> Maybe Name -> (Maybe (Id, Route), [Dep])
-walk s start names next = go start names [] []
+-- | Walks names down from a node as far as it goes, and does not go back:
+-- the steps it took, whether it walked every name, and what that depended
+-- on. The last name's member must have @next@, when given.
+trace :: St -> Id -> [Name] -> Maybe Name -> (Route, Bool, [Dep])
+trace s start names next = go start names [] []
   where
-    go cur [] route deps = (Just (cur, reverse route), deps)
+    go _ [] route deps = (reverse route, True, deps)
     go cur (nm : rest) route deps =
       let (step, d) = pick s cur nm (maybe next Just (listToMaybe rest))
        in case step of
-            Nothing -> (Nothing, d ++ deps)
+            Nothing -> (reverse route, False, d ++ deps)
             Just st -> go (stepNode st) rest (st : route) (d ++ deps)
+
+-- | Walks names down from a node. The last name's member must have @next@,
+-- when given. The node reached and the route, or Nothing.
+walk :: St -> Id -> [Name] -> Maybe Name -> (Maybe (Id, Route), [Dep])
+walk s start names next = case trace s start names next of
+  (route, True, deps) -> (Just (maybe start (stepNode . snd) (unsnoc route), route), deps)
+  (_, False, deps) -> (Nothing, deps)
+
+-- | How many names of the place are hidden: those its start is reached by.
+hidden :: Ctx -> Int
+hidden ctx = min (length (ctxPlace ctx)) (max 0 (ctxChroot ctx))
 
 -- | How many names of the place are below its start: as many ".." as an
 -- address may have.
 below :: Ctx -> Int
-below ctx = length (ctxPlace ctx) - min (length (ctxPlace ctx)) (max 0 (ctxChroot ctx))
+below ctx = length (ctxPlace ctx) - hidden ctx
 
--- | The node the place reaches with its last @up@ names taken off: its names,
--- so shortened, followed afresh from the root as an address is. Up 0 is the
--- place's own node, its "."; up 'below' is its start, its "/".
-placeAt :: St -> Ctx -> Int -> (Maybe Id, [Dep])
-placeAt s ctx up =
-  let (r, deps) = walk s (stRoot s) (take (length (ctxPlace ctx) - up) (ctxPlace ctx)) Nothing
+-- | The place's start, its "/": the node its hidden names reach from the
+-- root, walked as an address on their own (PROTOCOL The session: "its / is
+-- the node those names reach").
+placeStart :: St -> Ctx -> (Maybe Id, [Dep])
+placeStart s ctx =
+  let (r, deps) = walk s (stRoot s) (take (hidden ctx) (ctxPlace ctx)) Nothing
    in (fst <$> r, deps)
 
+-- | The place's walk (CORE "Place", "Address"): its names below the start,
+-- walked from the start as an address is. The nodes it came through, the
+-- start first: one more than the place has names below its start when it
+-- reaches its ".", fewer when the walk stopped on the way.
+placeWalk :: St -> Ctx -> ([Id], [Dep])
+placeWalk s ctx = case placeStart s ctx of
+  (Nothing, d0) -> ([], d0)
+  (Just t, d0) ->
+    let (route, _, d1) = trace s t (drop (hidden ctx) (ctxPlace ctx)) Nothing
+     in (t : map stepNode route, d0 ++ d1)
+
 -- | The node an address starts from: the place's start for a first "/";
--- otherwise the place, a name shorter for each "..", never above its start.
+-- otherwise the node the place reaches, or, for each "..", one step back
+-- along the place's walk, to the node it came through, never above the
+-- start. Where the walk stopped on the way, there is nothing past where it
+-- stopped, but the nodes it came through are still there to go back to
+-- (a question for chee, in NOTES.md).
 startOf :: St -> Ctx -> Address -> Either Err (Maybe Id, [Dep])
 startOf s ctx a
   | addressRoot a && addressUp a > 0 = Left aboveRoot
   | addressUp a > below ctx = Left aboveRoot
-  | addressRoot a = Right (placeAt s ctx (below ctx))
-  | otherwise = Right (placeAt s ctx (addressUp a))
+  | addressRoot a = Right (placeStart s ctx)
+  | otherwise =
+      let (through, deps) = placeWalk s ctx
+       in Right (listToMaybe (drop (below ctx - addressUp a) through), deps)
 
 -- | The node an address reaches and the route its names took.
 resolve :: St -> Ctx -> Address -> Either Err (Maybe (Id, Route), [Dep])
@@ -282,9 +323,10 @@ resolve s ctx a = do
     Nothing -> (Nothing, d0)
     Just n -> let (r, d1) = walk s n (addressNames a) Nothing in (r, d0 ++ d1)
 
--- | The nodes a directory read lists, each with its route: for an address
--- with names, every member here of the slot its last name selects (a union,
--- in slot order); with none, the node it starts from.
+-- | The nodes a read or a directory read is of, each with its route: for an
+-- address with names, every member here of the slot its last name selects
+-- (a union, in slot order), the first being the node the address reaches;
+-- with none, the node it starts from.
 members :: St -> Ctx -> Address -> Either Err ([(Id, Route)], [Dep])
 members s ctx a = do
   (b, d0) <- startOf s ctx a
@@ -301,25 +343,29 @@ members s ctx a = do
                   ms = [(m, route ++ [Step p final m k]) | (k, m) <- zip [0 ..] ids, isHere m]
                in (ms, d0 ++ d1 ++ DSlot p final : [DHere m | m <- ids, not (isHere m)])
 
--- | The node an address reaches now, if any.
-reach :: St -> Ctx -> Address -> Maybe Id
+-- | The node an address reaches now, if any, and the route its names take.
+reach :: St -> Ctx -> Address -> Maybe (Id, Route)
 reach s ctx a = case resolve s ctx a of
-  Right (Just (n, _), _) -> Just n
-  _ -> Nothing
+  Right (r, _) -> r
+  Left _ -> Nothing
 
 -- ===========================================================================
 -- lookup (CORE "Lookup")
 
--- | Searches the directories along the place, nearest first: its own, then
--- the place a name shorter each time (as ".." reaches it), up to its start.
--- Each step reads the slot of the name there through the top of the stack,
--- as an ordinary read of one slot. The first that gives items is found; a
--- refused read ends the search, and is not an error.
+-- | Searches the directories the place's walk went through, nearest first:
+-- the one the place reaches, ".", then each one back along the walk (as
+-- ".." reaches it), up to its start. Each step reads the slot of the name
+-- there through the top of the stack, as an ordinary read of one slot. The
+-- nearest slot that holds a node that is here is found, all its items; a
+-- slot whose ids are all absent is passed over. A refused read ends the
+-- search, and is not an error.
 search :: IORef St -> Interface -> Ctx -> Name -> IO (Either Err Result)
 search ref top ctx nm = do
   s <- readIORef ref
-  go [(k, fst (placeAt s ctx k)) | k <- [0 .. below ctx]] []
+  go [(k, back s k) | k <- [0 .. below ctx]] []
   where
+    -- the node ".." k times reaches, for the record's searched
+    back s k = either (const Nothing) fst (startOf s ctx (Address False k []))
     go [] acc = pure (Right (ResultFound (reverse acc) []))
     go ((k, n) : rest) acc = do
       r <- iOp top ctx noStamp (OpDirectory (Address False k []) (Just nm))
@@ -332,10 +378,13 @@ search ref top ctx nm = do
           | otherwise -> pure (Left e)
         Right (ResultItems items) ->
           let acc' = [Searched x (latest items) False | Just x <- [n]] ++ acc
-           in if null items
-                then go rest acc'
-                else pure (Right (ResultFound (reverse acc') (map (relabel k) items)))
+           in if any isHere items
+                then pure (Right (ResultFound (reverse acc') (map (relabel k) items)))
+                else go rest acc'
         Right _ -> pure (Left (invalid "nothing-there" [] "a directory read gave something else"))
+    isHere item = case item of
+      ItemId _ _ _ pending -> not pending
+      _ -> False
     relabel k item = case item of
       ItemId i (FromSlot _ pos) c p -> ItemId i (FromPath (Address False k [nm]) pos) c p
       _ -> item
@@ -372,13 +421,20 @@ commit ref ctx stamp n kind apply = do
               sequence_ [send | (Just send, _) <- Map.elems followed]
               pure (Right (ResultApplied (Applied c marked)))
 
--- | A subscription after a change: whether it receives the change, and the
--- node its address reaches now.
+-- | A subscription after a change: whether it receives the change, and what
+-- its address reaches now. It receives each change to the node its address
+-- reached, and each placement or unplacement that changed its route: the
+-- node the address reaches, or the route its names take there, whether or
+-- not it then reaches another node (CORE Operations, subscribe).
 follow :: St -> Change -> Sub -> (Maybe (IO ()), Sub)
 follow s c sub = (if receives then Just (subSend sub (EventChange c)) else Nothing, sub {subReached = now})
   where
     now = reach s (subCtx sub) (subAddress sub)
-    receives = subReached sub == Just (changeNode c) || now /= subReached sub
+    before = subReached sub
+    receives = (fst <$> before) == Just (changeNode c) || (placement && now /= before)
+    placement = case changeKind c of
+      KindWrite _ -> False
+      _ -> True
 
 -- | What a change changed, as reads depend on it (CORE "Changes").
 touched :: Change -> [Dep]
@@ -413,7 +469,7 @@ subscribe ref ctx a send = do
     Left e -> pure (Left (withOp "subscribe" e))
     Right (r, _) -> atomicModifyIORef' ref $ \s' ->
       let k = stNextSub s'
-       in (s' {stSubs = Map.insert k (Sub ctx a (fst <$> r) send) (stSubs s'), stNextSub = k + 1}, Right k)
+       in (s' {stSubs = Map.insert k (Sub ctx a r send) (stSubs s'), stNextSub = k + 1}, Right k)
 
 unsubscribe :: IORef St -> Ctx -> Int -> IO (Either Err ())
 unsubscribe ref _ k = atomicModifyIORef' ref $ \s ->
@@ -489,15 +545,15 @@ finish ref rec ending = do
           _ -> rs
         s' = s {stEnded = Set.insert tag (stEnded s), stReads = Map.adjust settle (recordProcess r) (stReads s)}
      in (s', s')
-  forM_ [subSend sub | sub <- Map.elems (stSubs s), subReached sub == Just (recordProcess r)] ($ EventRecord r)
+  forM_ [subSend sub | sub <- Map.elems (stSubs s), (fst <$> subReached sub) == Just (recordProcess r)] ($ EventRecord r)
   pure r
 
 -- ===========================================================================
 -- patches (CORE "Patches"; PROTOCOL Errors)
 
--- | Applies patches in order. At the first that is not a patch or does not
--- apply, the whole write is invalid: not-a-patch, no-key, range or
--- wrong-kind, with the patch's index.
+-- | Applies patches in order, patch by patch. At the first that is not a
+-- patch or does not apply, the whole write is invalid: not-a-patch, no-key,
+-- range or wrong-kind, with the patch's index.
 applyPatches :: [Value] -> Value -> Either Err Value
 applyPatches ps v0 = foldM one v0 (zip [0 :: Int ..] ps)
   where
@@ -508,21 +564,37 @@ applyPatches ps v0 = foldM one v0 (zip [0 :: Int ..] ps)
 -- | An error's code, its details after the index, and a text.
 type PatchErr = (Text, Fields, Text)
 
+-- | A key of a path, or a set's key: a string, into an object, or a whole
+-- number, into a list.
+data Key = KName Text | KIndex Integer
+
+keyOf :: Value -> Maybe Key
+keyOf v = case v of
+  JString t -> Just (KName t)
+  _ | Just w <- asWhole v, w >= 0 -> Just (KIndex w)
+  _ -> Nothing
+
+-- | One patch. What it is is checked first, from its form alone (an object,
+-- a known type, a snapshot's value, a path that is a list of keys, a set's
+-- key): not-a-patch. Then it is applied: its path (no-key, wrong-kind),
+-- then what it does at the end of it (wrong-kind, range).
 applyPatch :: Value -> Value -> Either PatchErr Value
 applyPatch p v = case p of
   JObject _ -> case field "type" p >>= asText of
     Just "snapshot" -> maybe (notAPatch "a snapshot has a value") Right (field "value" p)
     Just "splice" -> do
-      ks <- keys
+      ks <- path
       at ks v (splice range (field "value" p))
     Just "set" -> do
-      ks <- keys
-      k <- maybe (notAPatch "a set's key is a string") Right (field "key" p >>= asText)
+      ks <- path
+      k <- maybe (notAPatch "a set's key is a string") Right (field "key" p >>= keyOf)
       at ks v (set k (field "value" p))
     _ -> notAPatch "a patch's type is snapshot, splice or set"
   _ -> notAPatch "a patch is an object"
   where
-    keys = maybe (notAPatch "a patch's path is a list of keys") Right (field "path" p >>= asList)
+    path = case field "path" p >>= asList of
+      Nothing -> notAPatch "a patch's path is a list of keys"
+      Just ks -> maybe (notAPatch "a key is a string or a whole number") Right (mapM keyOf ks)
     range = case field "range" p >>= asList of
       Just [x, y] | Just a <- asWhole x, Just b <- asWhole y -> Just (a, b)
       _ -> Nothing
@@ -530,26 +602,35 @@ applyPatch p v = case p of
 notAPatch :: Text -> Either PatchErr a
 notAPatch t = Left ("not-a-patch", [], t)
 
+noKey :: Text -> Either PatchErr a
+noKey t = Left ("no-key", [], t)
+
 wrongKind :: Text -> Either PatchErr a
 wrongKind t = Left ("wrong-kind", [], t)
 
 -- | Changes the value at a path: strings into objects, whole numbers into
--- lists.
-at :: [Value] -> Value -> (Value -> Either PatchErr Value) -> Either PatchErr Value
+-- lists. An object that lacks the key, or a list shorter than the index, is
+-- no-key; a key of the wrong kind for where it leads (a string into a list,
+-- a number into an object), or a path that goes on into a string, number,
+-- boolean or null, where only an object or a list can be gone into, is
+-- wrong-kind.
+at :: [Key] -> Value -> (Value -> Either PatchErr Value) -> Either PatchErr Value
 at [] v f = f v
 at (k : ks) v f = case (k, v) of
-  (JString name, JObject fs)
-    | Just x <- lookup name fs -> do
-        x' <- at ks x f
-        Right (JObject [(n, if n == name then x' else y) | (n, y) <- fs])
-  (_, JArray xs)
-    | Just w <- asWhole k
-    , w >= 0
-    , w < toInteger (length xs) -> do
+  (KName name, JObject fs) -> case lookup name fs of
+    Just x -> do
+      x' <- at ks x f
+      Right (JObject [(n, if n == name then x' else y) | (n, y) <- fs])
+    Nothing -> noKey "the object lacks the key"
+  (KIndex w, JArray xs)
+    | w < toInteger (length xs) -> do
         let i = fromInteger w
         x' <- at ks (xs !! i) f
         Right (JArray (take i xs ++ [x'] ++ drop (i + 1) xs))
-  _ -> Left ("no-key", [], "the patch's path is not in the value")
+    | otherwise -> noKey "the list is shorter than the index"
+  (KName _, JArray _) -> wrongKind "a string leads into a list"
+  (KIndex _, JObject _) -> wrongKind "a number leads into an object"
+  _ -> wrongKind "the path goes on into a string, number, boolean or null"
 
 -- | A splice of the half-open range of a string (in code points) or a list.
 splice :: Maybe (Integer, Integer) -> Maybe Value -> Value -> Either PatchErr Value
@@ -572,12 +653,14 @@ splice range mx target = case target of
       Just (a, b) | 0 <= a, a <= b, b <= toInteger len -> Right (fromInteger a, fromInteger b)
       _ -> Left ("range", [("length", int len)], "the range is not a range inside the value")
 
--- | Sets, adds or (with no value) deletes a key of an object.
-set :: Text -> Maybe Value -> Value -> Either PatchErr Value
-set k mx target = case target of
-  JObject fs -> Right . JObject $ case mx of
+-- | Sets, adds or (with no value) deletes a key of an object. A number
+-- leads into an object as the wrong kind of key.
+set :: Key -> Maybe Value -> Value -> Either PatchErr Value
+set key mx target = case (target, key) of
+  (JObject fs, KName k) -> Right . JObject $ case mx of
     Nothing -> filter ((/= k) . fst) fs
     Just x
       | any ((== k) . fst) fs -> [(k', if k' == k then x else y) | (k', y) <- fs]
       | otherwise -> fs ++ [(k, x)]
+  (JObject _, KIndex _) -> wrongKind "a number leads into an object"
   _ -> wrongKind "a set applies to an object"
