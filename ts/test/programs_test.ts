@@ -23,20 +23,28 @@ function fake(
   const api: Required<Api> = {
     read(node) {
       log.push(["read", node]);
-      return Object.hasOwn(nodes, node) ? nodes[node] : ABSENT;
+      return Object.hasOwn(nodes, node) ? [{ value: nodes[node], from: { node } }] : [];
     },
     directory(node, name) {
       log.push(
         name === undefined ? ["directory", node] : ["directory", node, name],
       );
       const d = dirs[node];
-      if (name !== undefined) return d?.[name] ?? [];
-      if (!d) return ABSENT;
-      return Object.keys(d).sort().map((k) => [k, d[k]]);
+      const items = (n: string) =>
+        (d?.[n] ?? []).map((id, position) => ({
+          id,
+          from: { slot: { parent: node, name: n }, position },
+        }));
+      if (name !== undefined) return items(name);
+      if (!d) return [];
+      return Object.keys(d).sort().map((k) => [k, items(k)]);
     },
     lookup(name) {
       log.push(["lookup", name]);
-      return dirs.root?.[name] ?? [];
+      return (dirs.root?.[name] ?? []).map((id, position) => ({
+        id,
+        from: { slot: { parent: "root", name }, position, up: 0 },
+      }));
     },
     make(op) {
       log.push(["make", op]);
@@ -54,6 +62,10 @@ function fake(
     },
   };
   return { api, log, nodes };
+}
+
+function slot(parent: string, name: string, id: string, position: number): Json {
+  return { id, from: { slot: { parent, name }, position } };
 }
 
 function program(code: Json): Program {
@@ -159,7 +171,7 @@ Deno.test("expressions: the scenario's examples", () => {
     ev({ $get: [{ $quote: { a: { b: [10, 20] } } }, "a", "b", 1] }),
     20,
   );
-  assertEquals(ev({ $absent: { $get: [{ $quote: { a: 1 } }, "z"] } }), true);
+  assertEquals(ev({ $missing: { $get: [{ $quote: { a: 1 } }, "z"] } }), true);
   assertEquals(
     ev({
       $eq: [{ $quote: { x: 1, y: [1, 2] } }, { $quote: { y: [1, 2], x: 1 } }],
@@ -195,16 +207,16 @@ Deno.test("expressions: plain values and objects with more keys are evaluated me
 
 Deno.test("expressions: $get", () => {
   assertEquals(ev({ $get: [{ $quote: [1, 2] }] }), [1, 2]);
-  assertEquals(ev({ $absent: { $get: [[1, 2], 2] } }), true);
-  assertEquals(ev({ $absent: { $get: [[1, 2], -1] } }), true);
-  assertEquals(ev({ $absent: { $get: [[1, 2], 0.5] } }), true);
+  assertEquals(ev({ $missing: { $get: [[1, 2], 2] } }), true);
+  assertEquals(ev({ $missing: { $get: [[1, 2], -1] } }), true);
+  assertEquals(ev({ $missing: { $get: [[1, 2], 0.5] } }), true);
   // once absent, the rest of the keys stay absent
-  assertEquals(ev({ $absent: { $get: [{}, "a", "b", 1] } }), true);
+  assertEquals(ev({ $missing: { $get: [{}, "a", "b", 1] } }), true);
   // a member that is there but null is not absent
   assertEquals(ev({ $get: [{ a: null }, "a"] }), null);
   // not own properties
-  assertEquals(ev({ $absent: { $get: [{}, "toString"] } }), true);
-  assertEquals(ev({ $absent: { $get: [{}, "__proto__"] } }), true);
+  assertEquals(ev({ $missing: { $get: [{}, "toString"] } }), true);
+  assertEquals(ev({ $missing: { $get: [{}, "__proto__"] } }), true);
   failsWith(() => ev({ $get: [1, "a"] }));
   failsWith(() => ev({ $get: [[1], "0"] }));
   failsWith(() => ev({ $get: [{ a: 1 }, 0] }));
@@ -242,7 +254,7 @@ Deno.test("expressions: wrong kinds throw", () => {
   failsWith(() => ev({ $nope: 1 }));
 });
 
-Deno.test("expressions: every operator but $absent throws on absent", () => {
+Deno.test("expressions: every operator but $missing throws on absent", () => {
   const absent = { $get: [{}, "x"] };
   failsWith(() => ev({ $add: [absent, 1] }));
   failsWith(() => ev({ $not: absent }));
@@ -250,8 +262,8 @@ Deno.test("expressions: every operator but $absent throws on absent", () => {
   failsWith(() => ev({ $eq: [absent, null] }));
   failsWith(() => ev({ $concat: [absent] }));
   failsWith(() => ev({ $get: [absent, "a"] }));
-  assertEquals(ev({ $absent: absent }), true);
-  assertEquals(ev({ $absent: null }), false);
+  assertEquals(ev({ $missing: absent }), true);
+  assertEquals(ev({ $missing: null }), false);
   // absent is not a value: not inside a list or object, not returned
   failsWith(() => ev([absent]));
   failsWith(() => ev({ a: absent }));
@@ -358,7 +370,7 @@ Deno.test("compute: pending ends the part", () => {
   );
 });
 
-Deno.test("compute: read gives the value, or absent", () => {
+Deno.test("compute: read gives items, none when absent", () => {
   const { api, log } = fake({ a: 5, n: null });
   assertEquals(
     compute([
@@ -367,12 +379,19 @@ Deno.test("compute: read gives the value, or absent", () => {
       { do: "read", node: { $concat: ["gh", "ost"] }, as: "g" },
       {
         do: "return",
-        value: [{ $: "a" }, { $: "n" }, { $absent: { $: "n" } }, {
-          $absent: { $: "g" },
-        }],
+        value: [
+          { $value: { $: "a" } },
+          { $value: { $: "n" } },
+          {
+            $missing: { $value: { $: "n" } },
+          },
+          { $missing: { $value: { $: "g" } } },
+          { $: "a" },
+          { $: "g" },
+        ],
       },
     ], api),
-    { value: [5, null, false, true] },
+    { value: [5, null, false, true, [{ value: 5, from: { node: "a" } }], []] },
   );
   assertEquals(log, [["read", "a"], ["read", "n"], ["read", "ghost"]]);
 });
@@ -380,8 +399,8 @@ Deno.test("compute: read gives the value, or absent", () => {
 Deno.test("compute: the read-then-pending pattern", () => {
   const code: Json = [
     { do: "read", node: "a", as: "x" },
-    { do: "if", test: { $absent: { $: "x" } }, then: [{ do: "pending" }] },
-    { do: "return", value: { $: "x" } },
+    { do: "if", test: { $missing: { $value: { $: "x" } } }, then: [{ do: "pending" }] },
+    { do: "return", value: { $value: { $: "x" } } },
   ];
   assertEquals(compute(code, fake().api), { pending: true });
   assertEquals(compute(code, fake({ a: 5 }).api), { value: 5 });
@@ -397,12 +416,23 @@ Deno.test("compute: directory, one slot or whole", () => {
       { do: "directory", node: "e", as: "none" },
       {
         do: "return",
-        value: [{ $: "x" }, { $: "g" }, { $: "all" }, {
-          $absent: { $: "none" },
-        }],
+        value: [{ $ids: { $: "x" } }, { $: "g" }, { $: "all" }, {
+          $len: { $: "none" },
+        }, { $: "x" }],
       },
     ], api),
-    { value: [["a", "b"], [], [["x", ["a", "b"]], ["y", ["n1"]]], true] },
+    {
+      value: [
+        ["a", "b"],
+        [],
+        [
+          ["x", [slot("d", "x", "a", 0), slot("d", "x", "b", 1)]],
+          ["y", [slot("d", "y", "n1", 0)]],
+        ],
+        0,
+        [slot("d", "x", "a", 0), slot("d", "x", "b", 1)],
+      ],
+    },
   );
   assertEquals(log, [
     ["directory", "d", "x"],
@@ -429,7 +459,12 @@ Deno.test("compute: lookup", () => {
       do: "return",
       value: { $: "t" },
     }], api),
-    { value: ["dark"] },
+    {
+      value: [{
+        id: "dark",
+        from: { slot: { parent: "root", name: "theme" }, position: 0, up: 0 },
+      }],
+    },
   );
   assertEquals(log, [["lookup", "theme"]]);
 });
@@ -477,7 +512,7 @@ Deno.test("compute: let may hold absent", () => {
   assertEquals(
     compute([
       { do: "let", as: "x", value: { $get: [{}, "a"] } },
-      { do: "return", value: { $absent: { $: "x" } } },
+      { do: "return", value: { $missing: { $: "x" } } },
     ]),
     { value: true },
   );
@@ -614,7 +649,7 @@ Deno.test("effect: variables self, value, previous", () => {
       value: {
         self: { $: "self" },
         v: { $: "value" },
-        first: { $absent: { $: "previous" } },
+        first: { $missing: { $: "previous" } },
       },
     }],
   }];
@@ -786,7 +821,7 @@ Deno.test("handler: input may be absent", () => {
       steps: [{
         do: "write",
         node: "doc",
-        patches: [{ type: "snapshot", value: { $absent: { $: "input" } } }],
+        patches: [{ type: "snapshot", value: { $missing: { $: "input" } } }],
       }],
     },
   ], fake().api);

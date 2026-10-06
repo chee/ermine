@@ -1,25 +1,37 @@
 {
   "tasks": {
     "test": "deno test --allow-read test",
-    "check": "deno check src harness test build.ts",
+    "check": "deno check src harness test build.ts demo",
     "conformance": "cd ../conformance && ERMINE_HARNESS=\"deno run --quiet ../ts/harness/main.ts\" deno task test",
-    "build": "deno run --allow-read --allow-write --allow-run build.ts"
+    "build": "deno run --allow-read --allow-write --allow-run build.ts",
+    "demo": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env demo/core/dev.ts",
+    "demo:build": "deno run --allow-read --allow-write --allow-run --allow-env demo/core/build.ts"
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1"
+    "@std/assert": "jsr:@std/assert@^1",
+    "preact": "npm:preact@^10.29.0",
+    "preact/": "npm:/preact@^10.29.0/",
+    "@preact/signals": "npm:@preact/signals@^2"
   },
   "lint": {
     "exclude": [
-      "dist"
+      "dist",
+      "demo/core/dist"
     ]
   },
   "fmt": {
     "lineWidth": 100,
     "exclude": [
-      "dist"
+      "dist",
+      "demo/core/dist"
     ]
   },
   "exclude": [
-    "dist"
-  ]
+    "dist",
+    "demo/core/dist"
+  ],
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  }
 }

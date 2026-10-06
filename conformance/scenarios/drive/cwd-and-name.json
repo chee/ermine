@@ -1,0 +1,9 @@
+{"name":"a process runs where it sits: cwd is the directory the walk reached it in, name the name it was reached by, and the address [] reaches that directory; one program in two places is two processes","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"docs","id":"docs","value":"D","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["docs"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["docs","ed"],"name":"compute","id":"prog","value":[{"do":"read","address":[],"as":"here"},{"do":"return","value":{"cwd":{"$":"cwd"},"name":{"$":"name"},"self":{"$":"self"},"here":{"$value":{"$":"here"}}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"reads":[{"op":"read","address":[],"saw":1}],"value":{"cwd":["docs"],"name":"ed","self":"p1","here":"D"},"changes":[{"node":"p1","time":4}],"ending":"done"}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"q","id":"p2","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["q"],"name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[{"process":"p2","run":1,"reads":[{"op":"read","address":[]}],"value":{"cwd":[],"name":"q","self":"p2","here":null},"changes":[{"node":"p2","time":7}],"ending":"done"}]}}},
+{"send":{"cmd":"write","agent":"host","address":["docs"],"patches":[{"type":"snapshot","value":"D2"}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"marked":[{"process":"p1","by":{"node":"docs","time":8}}],"runs":[{"process":"p1","run":2,"value":{"cwd":["docs"],"name":"ed","self":"p1","here":"D2"},"changes":[{"node":"p1","time":9}]}]}}}
+]}

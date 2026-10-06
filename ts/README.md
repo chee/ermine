@@ -39,6 +39,18 @@ ERMINE_HARNESS="deno run --quiet $PWD/../ts/harness/main.ts" \
   deno test --allow-run --allow-read --allow-env --filter "graph/"
 ```
 
+## The demo
+
+`deno task demo` builds `demo/core` and serves it at <http://localhost:8317/>, rebuilding when a
+file changes; `deno task demo:build` only builds it, into `demo/core/dist/`. It runs
+`drive(protect(graph(), may), "root", load)` in the page, with a browser, an inspector, a
+transcript, a why pane, a workspace, a stage for effects, rules for protect, a lookup tester, and
+example boot images, among them a trip planner in the spirit of Embark and a spreadsheet whose
+formulas are processes. "explode" lays the whole graph out on a canvas: what holds what, which
+programs a process runs, what each run read and wrote, with sparks when a change marks a process.
+Every act from outside is a workspace snippet, so each change carries the
+site it was made from. Programs are JS function bodies, or lists of steps as in the protocol.
+
 ## Building
 
 `deno task build` writes one self-contained ES module per layer into `dist/`: `graph.js`,

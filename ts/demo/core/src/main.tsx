@@ -1,0 +1,232 @@
+/// <reference lib="dom" />
+// ermine core: a place to play with the graph, protect and drive.
+
+import { render } from "preact";
+import { useEffect, useState } from "preact/hooks";
+import { Browser } from "./browser.tsx";
+import { Canvas } from "./canvas.tsx";
+import { Dock } from "./dock.tsx";
+import { examples, rulesFor } from "./examples.ts";
+import { Inspector } from "./inspector.tsx";
+import {
+  dock,
+  draft,
+  explode,
+  focus,
+  lit,
+  pointAt,
+  select,
+  selected,
+  theme,
+  world,
+} from "./state.ts";
+import { Right } from "./transcript.tsx";
+import { ROOT } from "./world.ts";
+
+function Ermine({ size = 34 }: { size?: number }) {
+  return (
+    <svg class="ermine" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <path
+        class="e-tail"
+        d="M50 44c8-2 11-10 8-17"
+        fill="none"
+        stroke-width="6"
+        stroke-linecap="round"
+      />
+      <path
+        class="e-tip"
+        d="M58 27c1-3 0-6-2-8"
+        fill="none"
+        stroke-width="6"
+        stroke-linecap="round"
+      />
+      <ellipse class="e-body" cx="34" cy="44" rx="18" ry="13" />
+      <circle class="e-ear" cx="17" cy="17" r="6" />
+      <circle class="e-ear" cx="35" cy="15" r="6" />
+      <circle class="e-ear-in" cx="17" cy="17" r="3" />
+      <circle class="e-ear-in" cx="35" cy="15" r="3" />
+      <ellipse class="e-head" cx="26" cy="28" rx="15" ry="13" />
+      <circle class="e-eye" cx="21" cy="27" r="2.2" />
+      <circle class="e-eye" cx="31" cy="27" r="2.2" />
+      <ellipse class="e-nose" cx="26" cy="33" rx="2.4" ry="1.7" />
+      <ellipse class="e-cheek" cx="16" cy="32" rx="3" ry="2" />
+      <ellipse class="e-cheek" cx="36" cy="32" rx="3" ry="2" />
+    </svg>
+  );
+}
+
+function boot(id: string) {
+  const ex = examples.find((e) => e.id === id)!;
+  world.rules = (rulesFor[id] ?? []).map((r) => ({ ...r }));
+  world.agent = "chee";
+  world.reset();
+  focus.value = undefined;
+  lit.value = undefined;
+  pointAt.value = undefined;
+  const s = world.run(ex.code, `boot: ${ex.title}`);
+  draft.value = ex.code;
+  select(ROOT, []);
+  if (world.screens.size) dock.value = "stage";
+  else dock.value = "workspace";
+  return s;
+}
+
+function TopBar() {
+  world.version.value;
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [menu, setMenu] = useState(false);
+  const time = Math.max(0, ...world.latest.values());
+  const running = world.running().size;
+  return (
+    <header class="top">
+      <div class="brand">
+        <Ermine />
+        <div>
+          <div class="wordmark">ermine</div>
+          <div class="tagline">a graph of values that says why</div>
+        </div>
+      </div>
+      <div class="boot">
+        <button type="button" class="boot-btn" onClick={() => setMenu(!menu)}>
+          ✿ examples <span class="caret-down">▾</span>
+        </button>
+        {menu
+          ? (
+            <div class="menu" onMouseLeave={() => setMenu(false)}>
+              {examples.map((e) => (
+                <button
+                  type="button"
+                  class="menu-item"
+                  onClick={() => {
+                    setMenu(false);
+                    boot(e.id);
+                  }}
+                >
+                  <span class="menu-title">{e.title}</span>
+                  <span class="menu-blurb">{e.blurb}</span>
+                </button>
+              ))}
+            </div>
+          )
+          : null}
+      </div>
+      <div class="agents" title="who you act as: every operation carries an agent">
+        <span class="muted">acting as</span>
+        {world.agents.map((a) => (
+          <button
+            type="button"
+            class={`agent-pill c-${world.colorOf(a)}${world.agent === a ? " on" : ""}`}
+            onClick={() => {
+              world.agent = a;
+              world.bump();
+            }}
+          >
+            {a}
+          </button>
+        ))}
+        {adding
+          ? (
+            <input
+              class="code agent-new"
+              autoFocus
+              placeholder="name"
+              value={name}
+              onInput={(e) => setName((e.target as HTMLInputElement).value)}
+              onBlur={() => setAdding(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim()) {
+                  world.agents = [...world.agents, name.trim()];
+                  world.agent = name.trim();
+                  setName("");
+                  setAdding(false);
+                  world.bump();
+                }
+              }}
+            />
+          )
+          : (
+            <button
+              type="button"
+              class="agent-add"
+              onClick={() => setAdding(true)}
+              title="another agent"
+            >
+              ＋
+            </button>
+          )}
+      </div>
+      <button
+        type="button"
+        class={`explode-btn${explode.value ? " on" : ""}`}
+        title="see the whole graph on a canvas"
+        onClick={() => (explode.value = !explode.value)}
+      >
+        {explode.value ? "✕ gather" : "✺ explode"}
+      </button>
+      <div class="facts">
+        <label class="see" title="read beneath protect, as the host that built the stack may">
+          <input
+            type="checkbox"
+            checked={world.seeAll}
+            onChange={() => {
+              world.seeAll = !world.seeAll;
+              world.bump();
+            }}
+          />
+          host's eye
+        </label>
+        <span class="fact">
+          <b>{world.made.size}</b> nodes
+        </span>
+        <span class="fact">
+          <b>{running}</b> running
+        </span>
+        <span class="fact time">
+          t = <b>{time}</b>
+        </span>
+        <button
+          type="button"
+          class="iconbtn"
+          title="light / dark"
+          onClick={() => (theme.value = theme.value === "dark" ? "light" : "dark")}
+        >
+          {theme.value === "dark" ? "☀︎" : "☾"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function App() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme.value;
+    try {
+      localStorage.setItem("ermine-theme", theme.value);
+    } catch { /* no storage */ }
+  }, [theme.value]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") focus.value = undefined;
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div class="app">
+      <TopBar />
+      <div class={`grid${explode.value ? " exploded" : ""}`}>
+        {explode.value ? null : <Browser />}
+        <div class="center">
+          {explode.value ? <Canvas /> : <Inspector />}
+          <Dock />
+        </div>
+        <Right />
+      </div>
+    </div>
+  );
+}
+
+boot("hello");
+if (!selected.value) select(ROOT, []);
+render(<App />, document.getElementById("app")!);

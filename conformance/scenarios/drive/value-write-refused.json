@@ -1,14 +1,9 @@
 {"name":"a refused write of the process's value ends the run refused, and its effect does not run","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"process":"p1","op":"write","node":"p1","allow":false}]}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"eff","value":[{"do":"write","node":"seen","patches":[{"type":"snapshot","value":{"$":"value"}}]}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"seen","value":null,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"runs":[{"process":"p1","run":1,"value":1,"changes":[],"ending":"refused"}]}}},
-{"send":{"cmd":"read","agent":"host","node":"p1"},"expect":{"ok":{"value":null}}},
-{"send":{"cmd":"read","agent":"host","node":"seen"},"expect":{"ok":{"value":null}}}
+{"send":{"cmd":"reset","stack":"drive","root":"root","rules":[{"process":"p1","op":"write","node":"p1","allow":false}]}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"seen","id":"seen","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"effect","id":"eff","value":[{"do":"write","address":["seen"],"patches":[{"type":"snapshot","value":{"$":"value"}}]}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"value":1,"changes":[],"ending":"refused","errors":[{"kind":"refused","op":"write","why":{"code":"rule","rule":0}}]}]}}},
+{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"error":{"kind":"refused","op":"write"},"from":{"process":"p1","run":1}},{"value":null}]}}},
+{"send":{"cmd":"read","agent":"host","address":["seen"]},"expect":{"ok":{"items":[{"value":null}]}}}
 ]}

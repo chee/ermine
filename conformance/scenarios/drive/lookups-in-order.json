@@ -1,10 +1,7 @@
 {"name":"a record's lookups are listed in the order made","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init"}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"zoom","as":"z"},{"do":"lookup","name":"font","as":"f"},{"do":"return","value":{"$":"f"}}]}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[{"parent":"init","name":"ed","node":"p1"}]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"font","id":"mono","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"run","id":"p1","site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"runs":[{"process":"p1","run":1,"lookups":[{"name":"zoom","searched":[{"node":"init","saw":6}],"found":[]},{"name":"font","searched":[{"node":"init","saw":6}],"found":["mono"]}],"value":["mono"],"changes":[{"node":"p1","time":7}],"ending":"done"}]}}}
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"d","id":"d","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"font","id":"mono","value":"mono","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d","ed"],"name":"compute","id":"prog","value":[{"do":"lookup","name":"zoom","as":"z"},{"do":"lookup","name":"font","as":"f"},{"do":"return","value":{"$ids":{"$":"f"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"lookups":[{"name":"zoom","searched":[{"node":"d","saw":null},{"node":"root","saw":null}],"found":[]},{"name":"font","searched":[{"node":"d","saw":2}],"found":["mono"]}],"value":["mono"],"changes":[{"node":"p1","time":5}],"ending":"done"}]}}}
 ]}

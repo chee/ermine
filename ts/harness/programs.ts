@@ -8,11 +8,10 @@
 // stack's interface; loader, at the end, is the loader the harness gives
 // drive:
 //
-//   read(node)                 the node's value, or ABSENT
-//   directory(node, name?)     with a name, the slot's ids ([] if gone);
-//                              without, [[name, [id]]] as in the directory
-//                              answer; ABSENT if the node is absent
-//   lookup(name)               the ids found, a list
+//   read(node)                 the items of the node's value, as in the read answer
+//   directory(node, name?)     with a name, the slot's items ([] if gone); without,
+//                              [[name, [item]]] as in the directory answer
+//   lookup(name)               the items found, as in the lookup answer
 //   make({id, value, data?, cause?})
 //   write({node, patches, cause?})
 //   place({parent, name, id, position?, cause?})
@@ -36,6 +35,7 @@
 
 import { type Compute, type Effect, type Load, PENDING } from "../src/drive.ts";
 import type { Interface, WriteOp } from "../src/types.ts";
+import { listingItems, lookupItems, readItems } from "./items.ts";
 
 export type Json =
   | null
@@ -51,8 +51,8 @@ export type Absent = typeof ABSENT;
 export type Value = Json | Absent;
 
 export type Api = {
-  read?(node: string): Value;
-  directory?(node: string, name?: string): Value;
+  read?(node: string): Json;
+  directory?(node: string, name?: string): Json;
   lookup?(name: string): Json;
   make?(op: { id: string; value: Json; data?: Json; cause?: Json }): unknown;
   write?(op: { node: string; patches: Json; cause?: Json }): unknown;
@@ -290,8 +290,26 @@ function apply(op: string, arg: Json, vars: Vars): Value {
       }
       return !v;
     }
-    case "$absent":
+    case "$missing":
       return evaluate(arg, vars) === ABSENT;
+    case "$value": {
+      const items = list(arg, vars, "$value");
+      if (items.length === 0) return ABSENT;
+      const first = items[0];
+      if (
+        typeof first !== "object" || first === null || Array.isArray(first) || !("value" in first)
+      ) {
+        throw thrown("$value takes items with a value");
+      }
+      return first.value;
+    }
+    case "$ids":
+      return list(arg, vars, "$ids").map((item) => {
+        if (typeof item !== "object" || item === null || Array.isArray(item) || !("id" in item)) {
+          throw thrown("$ids takes items with an id");
+        }
+        return item.id;
+      });
     case "$add": {
       let sum = 0;
       for (const v of list(arg, vars, "$add")) {
@@ -642,16 +660,16 @@ export function runHandler(
 /** The interpreter's interface over a stack's interface. */
 export function adapt(api: Interface): Api {
   return {
-    read(node) {
-      const r = api.read({ node });
-      return "value" in r ? r.value as Json : ABSENT;
-    },
+    read: (node) => readItems(node, api.read({ node })) as Json,
     directory(node, name) {
-      const r = api.directory(name === undefined ? { node } : { node, name });
-      if ("absent" in r) return ABSENT;
-      return "slot" in r ? r.slot : r.directory;
+      const r = listingItems(
+        node,
+        name,
+        api.directory(name === undefined ? { node } : { node, name }),
+      );
+      return (("directory" in r) ? r.directory : r.items) as Json;
     },
-    lookup: (name) => api.lookup({ name }).found,
+    lookup: (name) => lookupItems(name, api.lookup({ name })) as Json,
     make: (op) => api.make(op),
     write: (op) => api.write(op as unknown as WriteOp),
     place: (op) => api.place(op),

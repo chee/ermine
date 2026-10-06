@@ -1,15 +1,10 @@
-{"name":"the driver's walk and its comparison of a process's value read beneath protect","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"process":"p1","allow":true},{"process":"p2","allow":true},{"op":"directory","node":"p1","allow":false},{"op":"read","node":"p2","allow":false}]}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"c1","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"c2","value":[{"do":"return","value":null}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p2","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"c1","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p2","name":"compute","id":"c2","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"kid","id":"p2","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"runs":[],"stopped":[]}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":9},"runs":[{"process":"p1","run":1,"marked":[{"node":"init","time":9}],"value":1,"changes":[{"node":"p1","time":10}],"ending":"done"},{"process":"p2","run":1,"marked":[{"node":"init","time":9}],"value":null,"changes":[],"ending":"done"}]}}},
-{"send":{"cmd":"directory","agent":"host","node":"p1"},"expect":{"error":{"kind":"refused"}}},
-{"send":{"cmd":"read","agent":"host","node":"p2"},"expect":{"error":{"kind":"refused"}}},
-{"send":{"cmd":"unplace","agent":"host","parent":"p1","name":"kid","id":"p2","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":11},"runs":[],"stopped":[{"process":"p2","changes":[]}]}}}
+{"name":"the driver's walk reads beneath protect: it finds and stops a process in a directory no one outside may read","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root","rules":[{"agent":"admin","allow":true},{"op":"directory","node":"p1","allow":false},{"op":"read","node":"p2","allow":false}]}},
+{"send":{"cmd":"place","agent":"admin","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"admin","address":["p1"],"name":"kid","id":"p2","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"admin","address":["p1","kid"],"name":"compute","id":"c2","value":[{"do":"return","value":null}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p2","run":1,"marked":[{"node":"p2","time":3}],"value":null,"changes":[],"ending":"done"}]}}},
+{"send":{"cmd":"place","agent":"admin","address":["p1"],"name":"compute","id":"c1","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"marked":[{"node":"p1","time":4}],"value":1,"changes":[{"node":"p1","time":5}],"ending":"done"}]}}},
+{"send":{"cmd":"directory","agent":"host","address":["p1"]},"expect":{"error":{"kind":"refused","op":"directory","why":{"code":"rule","rule":1}}}},
+{"send":{"cmd":"read","agent":"host","address":["p1","kid"]},"expect":{"error":{"kind":"refused"}}},
+{"send":{"cmd":"unplace","agent":"admin","address":["p1"],"name":"kid","id":"p2","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[],"stopped":[{"process":"p2","changes":[]}]}}}
 ]}

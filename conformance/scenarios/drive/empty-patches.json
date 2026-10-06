@@ -1,11 +1,8 @@
 {"name":"an empty list of patches is a write: a change that marks the node's readers","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init"}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"show","value":[{"do":"read","node":"a","as":"x"},{"do":"return","value":{"$":"x"}}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"show","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"p1","run":1,"value":1,"changes":[{"node":"p1","time":7}]}]}}},
-{"send":{"cmd":"write","agent":"host","node":"a","patches":[],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":8,"kind":"write","patches":[]},"marked":[{"process":"p1","by":{"node":"a","time":8}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"a","time":8}],"value":1,"changes":[],"ending":"done"}]}}},
-{"send":{"cmd":"read","agent":"host","node":"a"},"expect":{"ok":{"value":1}}}
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"show","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","address":["a"],"as":"x"},{"do":"return","value":{"$value":{"$":"x"}}}]},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"value":1,"changes":[{"node":"p1","time":4}]}]}}},
+{"send":{"cmd":"write","agent":"host","address":["a"],"patches":[],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"a","time":5,"kind":"write","patches":[]},"marked":[{"process":"p1","by":{"node":"a","time":5}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"a","time":5}],"value":1,"changes":[],"ending":"done"}]}}},
+{"send":{"cmd":"read","agent":"host","address":["a"]},"expect":{"ok":{"items":[{"value":1,"from":{"route":[{"parent":"root","name":"a","node":"a","position":0}]}}]}}}
 ]}

@@ -1,11 +1,8 @@
-{"name":"a program whose value is not a list of steps fails, and rewriting the program runs it again","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init"}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"prog","value":"hello","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"x","id":"p1","site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"runs":[{"process":"p1","run":1,"changes":[],"ending":"failed"}]}}},
-{"send":{"cmd":"write","agent":"bob","node":"prog","patches":[{"type":"snapshot","value":[{"do":"return","value":1}]}],"site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"marked":[{"process":"p1","by":{"node":"prog","time":6}}],"runs":[{"process":"p1","run":2,"agent":"host","compute":{"node":"prog","saw":6,"slot":["prog"]},"value":1,"changes":[{"node":"p1","time":7}],"ending":"done"}]}}}
+{"name":"a program whose value is not a list of steps fails the run with code not-a-program, and rewriting the program runs it again","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"prog","value":"hello","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"compute":{"node":"prog","saw":2,"slot":["prog"]},"changes":[],"ending":"failed","errors":[{"why":{"code":"not-a-program"}}]}]}}},
+{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"error":{"why":{"code":"not-a-program"}},"from":{"process":"p1","run":1}},{"value":null}]}}},
+{"send":{"cmd":"write","agent":"bob","address":["p1","compute"],"patches":[{"type":"snapshot","value":[{"do":"return","value":1}]}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"prog","time":3},"marked":[{"process":"p1","by":{"node":"prog","time":3}}],"runs":[{"process":"p1","run":2,"agent":"host","marked":[{"node":"prog","time":3}],"compute":{"node":"prog","saw":3,"slot":["prog"]},"value":1,"changes":[{"node":"p1","time":4}],"ending":"done","errors":[]}]}}},
+{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"value":1}]}}}
 ]}

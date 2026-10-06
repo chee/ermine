@@ -1,0 +1,578 @@
+{
+ "name": "fuzz: model on place (ts, seed 175)",
+ "steps": [
+  {
+   "send": {
+    "cmd": "reset",
+    "stack": "drive",
+    "root": "init",
+    "rules": [
+     {
+      "agent": "check",
+      "allow": true
+     },
+     {
+      "allow": false,
+      "agent": "host",
+      "process": "p2"
+     }
+    ]
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "init"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d0"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d5"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "Lq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "s0"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c1b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c2b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c3b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c4b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "cq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "eq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "q1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "q2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "n1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "n2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "ghost"
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "init",
+    "value": {},
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "p2",
+    "value": null,
+    "data": {
+     "path": [
+      {
+       "parent": "init",
+       "name": "k1",
+       "node": "d0"
+      },
+      {
+       "parent": "d0",
+       "name": "kids",
+       "node": "p2"
+      }
+     ]
+    },
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "p3",
+    "value": null,
+    "data": {
+     "path": []
+    },
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "init",
+    "name": "kids",
+    "id": "p3",
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "p3",
+    "name": "run",
+    "id": "p2",
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   },
+   "expect": {
+    "ok": {}
+   }
+  }
+ ],
+ "fuzz": {
+  "seed": 175,
+  "stack": "drive",
+  "profile": "full",
+  "version": 1,
+  "invariant": "model",
+  "key": "place",
+  "harness": "ts",
+  "dialect": "items",
+  "lag": "ts-2026-10",
+  "switches": {
+   "effects": "on-change",
+   "own": "unmarked",
+   "throws": "unlisted",
+   "reads": "every-run",
+   "refused": "dropped"
+  },
+  "message": "{\"cmd\":\"place\",\"parent\":\"p3\",\"name\":\"run\",\"id\":\"p2\",\"agent\":\"host\",\"site\":{\"file\":\"fuzz.ts\",\"line\":1,\"column\":1}} answered {\"seq\":46,\"error\":{\"kind\":\"refused\",\"why\":\"\\\"host\\\" may not bind\"}}; the reference says ok",
+  "answers": {
+   "ts": "{\"seq\":46,\"error\":{\"kind\":\"refused\",\"why\":\"\\\"host\\\" may not bind\"}}"
+  },
+  "session": {
+   "seed": 175,
+   "version": 1,
+   "stack": "drive",
+   "profile": "full",
+   "pool": [
+    "init",
+    "d0",
+    "d1",
+    "d2",
+    "d3",
+    "d4",
+    "d5",
+    "m1",
+    "m2",
+    "m3",
+    "m4",
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "Lq",
+    "s0",
+    "c1",
+    "c1b",
+    "e1",
+    "c2",
+    "c2b",
+    "e2",
+    "c3",
+    "c3b",
+    "e3",
+    "c4",
+    "c4b",
+    "e4",
+    "cq",
+    "eq",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "q1",
+    "q2",
+    "n1",
+    "n2",
+    "ghost"
+   ],
+   "root": "init",
+   "steps": [
+    {
+     "send": {
+      "cmd": "reset",
+      "stack": "drive",
+      "root": "init",
+      "rules": [
+       {
+        "agent": "check",
+        "allow": true
+       },
+       {
+        "allow": false,
+        "agent": "host",
+        "process": "p2"
+       }
+      ]
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "init",
+      "value": {},
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "p2",
+      "value": null,
+      "data": {
+       "path": [
+        {
+         "parent": "init",
+         "name": "k1",
+         "node": "d0"
+        },
+        {
+         "parent": "d0",
+         "name": "kids",
+         "node": "p2"
+        }
+       ]
+      },
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "p3",
+      "value": null,
+      "data": {
+       "path": []
+      },
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "init",
+      "name": "kids",
+      "id": "p3",
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "p3",
+      "name": "run",
+      "id": "p2",
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    }
+   ],
+   "plan": {
+    "processes": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "q1",
+     "q2"
+    ],
+    "mirrors": [],
+    "logs": {},
+    "cyclic": false
+   }
+  }
+ }
+}

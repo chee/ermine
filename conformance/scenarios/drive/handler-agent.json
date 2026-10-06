@@ -1,0 +1,8 @@
+{"name":"a handler acts as the agent of the fire request; its record has the process and that agent, and its changes name the process and mark its readers","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"count","id":"count","value":0,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"effect","id":"eff","value":[{"do":"handler","name":"click","steps":[{"do":"write","address":["count"],"patches":[{"type":"snapshot","value":{"$":"input"}}]}]}],"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"comp","value":[{"do":"read","address":["count"],"as":"x"},{"do":"return","value":{"$value":{"$":"x"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p1","run":1,"agent":"host","value":0,"changes":[{"node":"p1","time":5}],"ending":"done"}]}}},
+{"send":{"cmd":"fire","agent":"alice","process":"p1","handler":"click","input":5},"expect":{"ok":{"handler":{"process":"p1","agent":"alice","changes":[{"node":"count","time":6}],"ending":"done","errors":[]},"changes":[{"node":"count","time":6,"kind":"write","agent":"alice","process":"p1"}],"runs":[{"process":"p1","run":2,"agent":"host","marked":[{"node":"count","time":6}],"value":5,"changes":[{"node":"p1","time":7}],"ending":"done"}],"stopped":[]}}}
+]}

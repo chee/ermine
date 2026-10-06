@@ -1,23 +1,12 @@
-{"name":"a handler writes through the lasting interface as the process, does not echo back, and a throw in it is the fire's error","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init"}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"doc","value":"hi","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"comp","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","node":"doc","as":"d"},{"do":"return","value":{"$":"d"}}]}},
-{"send":{"cmd":"make","agent":"host","id":"eff","site":{"file":"s.js","line":1,"column":1},"value":[
-  {"do":"handler","name":"type","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":{"$":"input"}}]}]},
-  {"do":"handler","name":"boom","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"pre"}]},{"do":"throw","message":"bad"}]}]}},
-{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"ed","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"ed","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"runs":[{"process":"ed","run":1,"value":"hi","changes":[{"node":"ed","time":9}]}]}}},
-{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"hey"},
- "expect":{"ok":{"changes":[{"node":"doc","time":10,"kind":"write","patches":[{"type":"snapshot","value":"hey"}],"agent":"host","process":"ed"}],"runs":[]}}},
-{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"hey"}}},
-{"send":{"cmd":"read","agent":"host","node":"ed"},"expect":{"ok":{"value":"hi"}}},
-{"send":{"cmd":"write","agent":"host","node":"doc","patches":[{"type":"snapshot","value":"x"}],"site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"marked":[{"process":"ed","by":{"node":"doc","time":11}}],"runs":[{"process":"ed","run":2,"value":"x","changes":[{"node":"ed","time":12}]}]}}},
-{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"boom"},
- "expect":{"ok":{"changes":[{"node":"doc","time":13,"process":"ed"}],"runs":[],"stopped":[],"error":{"kind":"thrown","why":"bad"}}}},
-{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"pre"}}}
+{"name":"a handler writes through the lasting interface as the fire's agent and names the process; its change marks the process itself, which runs again; a throw in it is the fire's error","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"doc","id":"doc","value":"hi","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"ed","id":"ed","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["ed"],"name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"handler","name":"type","steps":[{"do":"write","address":["doc"],"patches":[{"type":"snapshot","value":{"$":"input"}}]}]},{"do":"handler","name":"boom","steps":[{"do":"write","address":["doc"],"patches":[{"type":"snapshot","value":"pre"}]},{"do":"throw","message":"bad"}]}]}},
+{"send":{"cmd":"place","agent":"host","address":["ed"],"name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","address":["doc"],"as":"d"},{"do":"return","value":{"$value":{"$":"d"}}}]},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"ed","run":1,"agent":"host","value":"hi","changes":[{"node":"ed","time":5}]}]}}},
+{"send":{"cmd":"fire","agent":"alice","process":"ed","handler":"type","input":"hey"},"expect":{"ok":{"handler":{"process":"ed","agent":"alice"},"changes":[{"node":"doc","time":6,"kind":"write","patches":[{"type":"snapshot","value":"hey"}],"agent":"alice","process":"ed"}],"runs":[{"process":"ed","run":2,"agent":"host","marked":[{"node":"doc","time":6}],"value":"hey","changes":[{"node":"ed","time":7,"agent":"host","process":"ed"}],"ending":"done"}],"stopped":[]}}},
+{"send":{"cmd":"read","agent":"host","address":["doc"]},"expect":{"ok":{"items":[{"value":"hey","from":{"route":[{"parent":"root","name":"doc","node":"doc","position":0}]}}]}}},
+{"send":{"cmd":"read","agent":"host","address":["ed"]},"expect":{"ok":{"items":[{"value":"hey","from":{"route":[{"parent":"root","name":"ed","node":"ed","position":0}]}}]}}},
+{"send":{"cmd":"fire","agent":"alice","process":"ed","handler":"boom"},"expect":{"ok":{"changes":[{"node":"doc","time":8,"agent":"alice","process":"ed"}],"runs":[{"process":"ed","run":3,"marked":[{"node":"doc","time":8}],"value":"pre","changes":[{"node":"ed","time":9}]}],"stopped":[],"error":{"kind":"thrown","why":{"code":"thrown","message":"bad"}}}}},
+{"send":{"cmd":"read","agent":"host","address":["doc"]},"expect":{"ok":{"items":[{"value":"pre","from":{"route":[{"parent":"root","name":"doc","node":"doc","position":0}]}}]}}}
 ]}

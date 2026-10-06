@@ -1,0 +1,10 @@
+{"name":"a process the walk reaches at a different place is marked by the change that moved it and runs at its new place","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"d1","id":"d1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"d2","id":"d2","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d1"],"name":"p","id":"p","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["d1","p"],"name":"compute","id":"prog","value":[{"do":"return","value":{"cwd":{"$":"cwd"},"name":{"$":"name"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"p","run":1,"value":{"cwd":["d1"],"name":"p"},"changes":[{"node":"p","time":5}]}]}}},
+{"send":{"cmd":"place","agent":"host","address":["d2"],"name":"q","id":"p","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"marked":[],"runs":[],"stopped":[]}}},
+{"send":{"cmd":"unplace","agent":"host","address":["d1"],"name":"p","id":"p","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"marked":[{"process":"p","by":{"node":"d1","time":7}}],"runs":[{"process":"p","run":2,"marked":[{"node":"d1","time":7}],"value":{"cwd":["d2"],"name":"q"},"changes":[{"node":"p","time":8}],"ending":"done"}],"stopped":[]}}},
+{"send":{"cmd":"read","agent":"host","address":["d2","q"]},"expect":{"ok":{"items":[{"value":{"cwd":["d2"],"name":"q"}}]}}}
+]}

@@ -7,6 +7,7 @@ import { type May, protect, subject } from "../src/protect.ts";
 import { drive, type Settled } from "../src/drive.ts";
 import { ErmineError, type Event, type Interface, Invalid, type Json } from "../src/types.ts";
 import { errorJson, loader } from "./programs.ts";
+import { dataItems, listingItems, lookupItems, readItems } from "./items.ts";
 
 export type Request = { readonly [key: string]: Json };
 
@@ -78,10 +79,17 @@ export const commands: {
   place: (s, r) =>
     plain(s.api.place(pick(r, ...ACTING, ...STAMP, "parent", "name", "id", "position"))),
   unplace: (s, r) => plain(s.api.unplace(pick(r, ...ACTING, ...STAMP, "parent", "name", "id"))),
-  read: (s, r) => s.api.read(pick(r, ...ACTING, "node")),
-  data: (s, r) => s.api.data(pick(r, ...ACTING, "node")),
-  directory: (s, r) => s.api.directory(pick(r, ...ACTING, "node", "name")),
-  lookup: (s, r) => ({ found: s.api.lookup(pick(r, ...ACTING, "name", "path")).found }),
+  read: (s, r) => ({ items: readItems(r.node as string, s.api.read(pick(r, ...ACTING, "node"))) }),
+  data: (s, r) => ({ items: dataItems(r.node as string, s.api.data(pick(r, ...ACTING, "node"))) }),
+  directory: (s, r) =>
+    listingItems(
+      r.node as string,
+      r.name as string | undefined,
+      s.api.directory(pick(r, ...ACTING, "node", "name")),
+    ),
+  lookup: (s, r) => ({
+    items: lookupItems(r.name as string, s.api.lookup(pick(r, ...ACTING, "name", "path"))),
+  }),
   subscribe: (s, r) => {
     const queue: Event[] = [];
     const { sub } = s.api.subscribe({
@@ -121,6 +129,21 @@ export const commands: {
   },
 };
 
+/** A record's program entry for an absent program node: saw null, not absent. */
+function encoded(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(encoded);
+  if (typeof v !== "object" || v === null) return v;
+  const o = v as { [key: string]: unknown };
+  const out: { [key: string]: unknown } = {};
+  for (const [k, x] of Object.entries(o)) {
+    out[k] = (k === "compute" || k === "effect") && isObject(x as never) &&
+        (x as { absent?: unknown }).absent === true
+      ? (({ absent: _, ...rest }) => ({ ...rest, saw: null }))(x as { absent: true })
+      : encoded(x);
+  }
+  return out;
+}
+
 /** An answer as JSON: a stopped process's cleanup error as {kind, why}. */
 function plain<T>(answer: T): T {
   const stopped = (answer as { stopped?: { error?: unknown }[] })?.stopped;
@@ -139,7 +162,7 @@ export function answer(session: Session | undefined, request: Request): { [key: 
     const command = commands[cmd];
     if (!command) return { unsupported: cmd };
     if (!session) throw new Invalid("no session yet: reset first");
-    return { ok: command(session, request) };
+    return { ok: encoded(command(session, request)) };
   } catch (e) {
     return trouble(e);
   }

@@ -1,11 +1,10 @@
-{"name":"a refused directory read ends a compute's lookup without ending the run","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init","rules":[{"op":"directory","node":"g","allow":false}]}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"g","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"prog","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$":"t"}}]}},
-{"send":{"cmd":"make","agent":"host","id":"p1","value":null,"data":{"path":[{"parent":"init","name":"sub","node":"g"},{"parent":"g","name":"ed","node":"p1"}]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"p1","name":"compute","id":"prog","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"theme","id":"dark","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"run","id":"p1","site":{"file":"s.js","line":1,"column":1}},
- "expect":{"ok":{"runs":[{"process":"p1","run":1,"value":[],"lookups":[{"name":"theme","searched":[{"node":"g","refused":true}],"found":[]}],"ending":"done","errors":[]}]}}}
+{"name":"a refused directory read ends a compute's lookup without ending the run, and still counts: a change to that slot marks the process","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root","rules":[{"process":"p1","op":"directory","node":"g","allow":false}]}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"top","id":"top","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["top"],"name":"g","id":"g","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["top","g"],"name":"sub","id":"sub","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["top"],"name":"theme","id":"dark","value":"dark","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["top","g","sub"],"name":"ed","id":"p1","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["top","g","sub","ed"],"name":"compute","id":"prog","value":[{"do":"lookup","name":"theme","as":"t"},{"do":"return","value":{"$ids":{"$":"t"}}}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[{"process":"p1","run":1,"value":[],"lookups":[{"name":"theme","searched":[{"node":"sub","saw":null},{"node":"g","refused":true}],"found":[]}],"changes":[{"node":"p1","time":7}],"ending":"done","errors":[]}]}}},
+{"send":{"cmd":"place","agent":"host","address":["top","g"],"name":"theme","id":"light","value":"light","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":8},"marked":[{"process":"p1","by":{"node":"g","time":8}}],"runs":[{"process":"p1","run":2,"marked":[{"node":"g","time":8}],"value":[],"lookups":[{"name":"theme","searched":[{"node":"sub","saw":null},{"node":"g","refused":true}],"found":[]}],"changes":[],"ending":"done","errors":[]}]}}}
 ]}

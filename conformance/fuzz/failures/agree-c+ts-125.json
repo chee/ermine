@@ -1,0 +1,1091 @@
+{
+ "name": "fuzz: agree on batch ok.runs[].process (c+ts, seed 125)",
+ "steps": [
+  {
+   "send": {
+    "cmd": "reset",
+    "stack": "drive",
+    "root": "init"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "init"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d0"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "d5"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "m4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "L4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "Lq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "s0"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c1b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c2b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c3b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "c4b"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "e4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "cq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "eq"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p3"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "p4"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "q1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "q2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "n1"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "n2"
+   }
+  },
+  {
+   "send": {
+    "cmd": "subscribe",
+    "agent": "check",
+    "node": "ghost"
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "init",
+    "value": {},
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "d3",
+    "value": 1e-7,
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "m4",
+    "value": null,
+    "agent": "eve",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "c4",
+    "value": [
+     {
+      "do": "read",
+      "node": "d3",
+      "as": "x"
+     },
+     {
+      "do": "return",
+      "value": {
+       "v": {
+        "$value": {
+         "$": "x"
+        }
+       },
+       "t": {
+        "$get": [
+         {
+          "$": "changes"
+         },
+         0,
+         "time"
+        ]
+       }
+      }
+     }
+    ],
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "e4",
+    "value": [
+     {
+      "do": "place",
+      "parent": {
+       "$": "self"
+      },
+      "name": "kids",
+      "id": "q2"
+     },
+     {
+      "do": "cleanup",
+      "steps": [
+       {
+        "do": "unplace",
+        "parent": {
+         "$": "self"
+        },
+        "name": "kids",
+        "id": "q2"
+       }
+      ]
+     }
+    ],
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "cq",
+    "value": [
+     {
+      "do": "read",
+      "node": "d3",
+      "as": "x2"
+     }
+    ],
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "p4",
+    "value": null,
+    "data": {
+     "path": [
+      {
+       "parent": "init",
+       "name": "k1",
+       "node": "p4"
+      }
+     ]
+    },
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "p4",
+    "name": "compute",
+    "id": "c4",
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "p4",
+    "name": "effect",
+    "id": "e4",
+    "agent": "eve",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "make",
+    "id": "q2",
+    "value": null,
+    "data": {
+     "path": []
+    },
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "q2",
+    "name": "compute",
+    "id": "cq",
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "place",
+    "parent": "init",
+    "name": "kids",
+    "id": "p4",
+    "agent": "host",
+    "site": {
+     "file": "fuzz.ts",
+     "line": 1,
+     "column": 1
+    }
+   }
+  },
+  {
+   "send": {
+    "cmd": "batch",
+    "agent": "host",
+    "requests": [
+     {
+      "cmd": "write",
+      "node": "d3",
+      "patches": [
+       {
+        "type": "snapshot",
+        "value": ""
+       },
+       {
+        "type": "splice",
+        "path": [],
+        "range": [
+         0,
+         0
+        ],
+        "value": "hi"
+       }
+      ],
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      },
+      "cause": "why"
+     }
+    ]
+   },
+   "expect": {
+    "ok": {
+     "answers": [
+      {
+       "ok": {
+        "change": {
+         "node": "d3",
+         "time": 15,
+         "kind": "write",
+         "patches": [
+          {
+           "type": "snapshot",
+           "value": ""
+          },
+          {
+           "type": "splice",
+           "path": [],
+           "range": [
+            0,
+            0
+           ],
+           "value": "hi"
+          }
+         ],
+         "agent": "host",
+         "cause": "why",
+         "site": {
+          "file": "fuzz.ts",
+          "line": 1,
+          "column": 1
+         }
+        },
+        "marked": [
+         {
+          "process": "p4",
+          "by": {
+           "node": "d3",
+           "time": 15
+          }
+         },
+         {
+          "process": "q2",
+          "by": {
+           "node": "d3",
+           "time": 15
+          }
+         }
+        ]
+       }
+      }
+     ],
+     "runs": [
+      {
+       "process": "p4",
+       "run": 2,
+       "agent": "host",
+       "marked": [
+        {
+         "node": "d3",
+         "time": 15
+        }
+       ],
+       "compute": {
+        "node": "c4",
+        "saw": 4,
+        "slot": [
+         "c4"
+        ]
+       },
+       "effect": {
+        "node": "e4",
+        "saw": 5,
+        "slot": [
+         "e4"
+        ]
+       },
+       "lookups": [],
+       "reads": [
+        {
+         "node": "d3",
+         "saw": 15
+        }
+       ],
+       "directories": [],
+       "value": {
+        "v": "hi",
+        "t": 15
+       },
+       "cleanup": [
+        {
+         "node": "p4",
+         "time": 17
+        }
+       ],
+       "changes": [
+        {
+         "node": "p4",
+         "time": 16
+        },
+        {
+         "node": "p4",
+         "time": 18
+        }
+       ],
+       "ending": "done",
+       "errors": []
+      },
+      {
+       "process": "q2",
+       "run": 2,
+       "agent": "host",
+       "marked": [
+        {
+         "node": "d3",
+         "time": 15
+        }
+       ],
+       "compute": {
+        "node": "cq",
+        "saw": 6,
+        "slot": [
+         "cq"
+        ]
+       },
+       "lookups": [],
+       "reads": [
+        {
+         "node": "d3",
+         "saw": 15
+        }
+       ],
+       "directories": [],
+       "value": null,
+       "cleanup": [],
+       "changes": [],
+       "ending": "done",
+       "errors": []
+      },
+      {
+       "process": "q2",
+       "run": 3,
+       "agent": "host",
+       "marked": [
+        {
+         "node": "p4",
+         "time": 18
+        }
+       ],
+       "compute": {
+        "node": "cq",
+        "saw": 6,
+        "slot": [
+         "cq"
+        ]
+       },
+       "lookups": [],
+       "reads": [
+        {
+         "node": "d3",
+         "saw": 15
+        }
+       ],
+       "directories": [],
+       "value": null,
+       "cleanup": [],
+       "changes": [],
+       "ending": "done",
+       "errors": []
+      }
+     ],
+     "stopped": [
+      {
+       "process": "q2",
+       "changes": []
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "fuzz": {
+  "seed": 125,
+  "stack": "drive",
+  "profile": "portable",
+  "version": 1,
+  "invariant": "agree",
+  "key": "batch ok.runs[].process",
+  "harness": "c+ts",
+  "dialect": "items",
+  "lag": "ts-2026-10",
+  "switches": {
+   "effects": "on-change",
+   "own": "unmarked",
+   "throws": "unlisted",
+   "reads": "every-run",
+   "refused": "dropped"
+  },
+  "message": "answer 54 to {\"cmd\":\"batch\",\"agent\":\"host\",\"requests\":[{\"cmd\":\"write\",\"node\":\"d3\",\"patches\":[{\"type\":\"snapshot\",\"value\":\"\"},{\"type\":\"splice\",\"path\":[],\"range\":[0,0],\"value\":\"hi\"}],\"agent\":\"host\",\"site\":{\"file\":\"fuzz.ts\",\"line\":1,\"column\":1},\"cause\":\"why\"}]} differs at ok.runs[0].process: c says \"p4\", ts says \"q2\"",
+  "answers": {
+   "c": "{\"seq\":54,\"ok\":{\"answers\":[{\"ok\":{\"change\":{\"node\":\"d3\",\"time\":15,\"kind\":\"write\",\"patches\":[{\"type\":\"snapshot\",\"value\":\"\"},{\"type\":\"splice\",\"path\":[],\"range\":[0,0],\"value\":\"hi\"}],\"agent\":\"host\",\"cause\":\"why\",\"site\":{\"file\":\"fuzz.ts\",\"line\":1,\"column\":1}},\"marked\":[{\"process\":\"p4\",\"by\":{\"node\":\"d3\",\"time\":15}},{\"process\":\"q2\",\"by\":{\"node\":\"d3\",\"time\":15}}],\"runs\":[],\"stopped\":[]}}],\"runs\":[{\"process\":\"p4\",\"run\":2,\"agent\":\"host\",\"marked\":[{\"node\":\"d3\",\"time\":15}],\"compute\":{\"node\":\"c4\",\"saw\":4,\"slot\":[\"c4\"]},\"effect\":{\"node\":\"e4\",\"saw\":5,\"slot\":[\"e4\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":{\"v\":\"hi\",\"t\":15},\"cleanup\":[{\"node\":\"p4\",\"time\":17}],\"changes\":[{\"node\":\"p4\",\"time\":16},{\"node\":\"p4\",\"time\":18}],\"ending\":\"done\",\"errors\":[]},{\"process\":\"q2\",\"run\":2,\"agent\":\"host\",\"marked\":[{\"node\":\"d3\",\"time\":15}],\"compute\":{\"node\":\"cq\",\"saw\":6,\"slot\":[\"cq\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":null,\"cleanup\":[],\"changes\":[],\"ending\":\"done\",\"errors\":[]},{\"process\":\"q2\",\"run\":3,\"agent\":\"host\",\"marked\":[{\"node\":\"p4\",\"time\":18}],\"compute\":{\"node\":\"cq\",\"saw\":6,\"slot\":[\"cq\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":null,\"cleanup\":[],\"changes\":[],\"ending\":\"done\",\"errors\":[]}],\"stopped\":[{\"process\":\"q2\",\"changes\":[]}]}}",
+   "ts": "{\"seq\":54,\"ok\":{\"answers\":[{\"ok\":{\"change\":{\"node\":\"d3\",\"time\":15,\"kind\":\"write\",\"patches\":[{\"type\":\"snapshot\",\"value\":\"\"},{\"type\":\"splice\",\"path\":[],\"range\":[0,0],\"value\":\"hi\"}],\"agent\":\"host\",\"cause\":\"why\",\"site\":{\"file\":\"fuzz.ts\",\"line\":1,\"column\":1}},\"marked\":[{\"process\":\"p4\",\"by\":{\"node\":\"d3\",\"time\":15}},{\"process\":\"q2\",\"by\":{\"node\":\"d3\",\"time\":15}}],\"runs\":[],\"stopped\":[]}}],\"runs\":[{\"process\":\"q2\",\"run\":2,\"agent\":\"host\",\"marked\":[{\"node\":\"d3\",\"time\":15}],\"compute\":{\"node\":\"cq\",\"saw\":6,\"slot\":[\"cq\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":null,\"cleanup\":[],\"changes\":[],\"ending\":\"done\",\"errors\":[]},{\"process\":\"p4\",\"run\":2,\"agent\":\"host\",\"marked\":[{\"node\":\"d3\",\"time\":15}],\"compute\":{\"node\":\"c4\",\"saw\":4,\"slot\":[\"c4\"]},\"effect\":{\"node\":\"e4\",\"saw\":5,\"slot\":[\"e4\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":{\"v\":\"hi\",\"t\":15},\"cleanup\":[{\"node\":\"p4\",\"time\":17}],\"changes\":[{\"node\":\"p4\",\"time\":16},{\"node\":\"p4\",\"time\":18}],\"ending\":\"done\",\"errors\":[]},{\"process\":\"q2\",\"run\":3,\"agent\":\"host\",\"marked\":[{\"node\":\"p4\",\"time\":18}],\"compute\":{\"node\":\"cq\",\"saw\":6,\"slot\":[\"cq\"]},\"lookups\":[],\"reads\":[{\"node\":\"d3\",\"saw\":15}],\"directories\":[],\"value\":null,\"cleanup\":[],\"changes\":[],\"ending\":\"done\",\"errors\":[]}],\"stopped\":[{\"process\":\"q2\",\"changes\":[]}]}}"
+  },
+  "session": {
+   "seed": 125,
+   "version": 1,
+   "stack": "drive",
+   "profile": "portable",
+   "pool": [
+    "init",
+    "d0",
+    "d1",
+    "d2",
+    "d3",
+    "d4",
+    "d5",
+    "m1",
+    "m2",
+    "m3",
+    "m4",
+    "L1",
+    "L2",
+    "L3",
+    "L4",
+    "Lq",
+    "s0",
+    "c1",
+    "c1b",
+    "e1",
+    "c2",
+    "c2b",
+    "e2",
+    "c3",
+    "c3b",
+    "e3",
+    "c4",
+    "c4b",
+    "e4",
+    "cq",
+    "eq",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "q1",
+    "q2",
+    "n1",
+    "n2",
+    "ghost"
+   ],
+   "root": "init",
+   "steps": [
+    {
+     "send": {
+      "cmd": "reset",
+      "stack": "drive",
+      "root": "init"
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "init",
+      "value": {},
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "d3",
+      "value": 1e-7,
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "m4",
+      "value": null,
+      "agent": "eve",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "c4",
+      "value": [
+       {
+        "do": "read",
+        "node": "d3",
+        "as": "x"
+       },
+       {
+        "do": "return",
+        "value": {
+         "v": {
+          "$value": {
+           "$": "x"
+          }
+         },
+         "t": {
+          "$get": [
+           {
+            "$": "changes"
+           },
+           0,
+           "time"
+          ]
+         }
+        }
+       }
+      ],
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "e4",
+      "value": [
+       {
+        "do": "place",
+        "parent": {
+         "$": "self"
+        },
+        "name": "kids",
+        "id": "q2"
+       },
+       {
+        "do": "cleanup",
+        "steps": [
+         {
+          "do": "unplace",
+          "parent": {
+           "$": "self"
+          },
+          "name": "kids",
+          "id": "q2"
+         }
+        ]
+       }
+      ],
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "cq",
+      "value": [
+       {
+        "do": "read",
+        "node": "d3",
+        "as": "x2"
+       }
+      ],
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "p4",
+      "value": null,
+      "data": {
+       "path": [
+        {
+         "parent": "init",
+         "name": "k1",
+         "node": "p4"
+        }
+       ]
+      },
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "p4",
+      "name": "compute",
+      "id": "c4",
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "p4",
+      "name": "effect",
+      "id": "e4",
+      "agent": "eve",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "make",
+      "id": "q2",
+      "value": null,
+      "data": {
+       "path": []
+      },
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "q2",
+      "name": "compute",
+      "id": "cq",
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "place",
+      "parent": "init",
+      "name": "kids",
+      "id": "p4",
+      "agent": "host",
+      "site": {
+       "file": "fuzz.ts",
+       "line": 1,
+       "column": 1
+      }
+     }
+    },
+    {
+     "send": {
+      "cmd": "batch",
+      "agent": "host",
+      "requests": [
+       {
+        "cmd": "write",
+        "node": "d3",
+        "patches": [
+         {
+          "type": "snapshot",
+          "value": ""
+         },
+         {
+          "type": "splice",
+          "path": [],
+          "range": [
+           0,
+           0
+          ],
+          "value": "hi"
+         }
+        ],
+        "agent": "host",
+        "site": {
+         "file": "fuzz.ts",
+         "line": 1,
+         "column": 1
+        },
+        "cause": "why"
+       }
+      ]
+     }
+    }
+   ],
+   "plan": {
+    "processes": [
+     "p1",
+     "p2",
+     "p3",
+     "p4",
+     "q1",
+     "q2"
+    ],
+    "mirrors": [
+     {
+      "process": "p4",
+      "src": "d3",
+      "dst": "m4"
+     }
+    ],
+    "logs": {
+     "p1": "L1",
+     "p2": "L2"
+    },
+    "cyclic": false
+   }
+  }
+ }
+}

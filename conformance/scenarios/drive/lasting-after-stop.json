@@ -1,18 +1,14 @@
-{"name":"once a process has stopped, every operation through its lasting interface is invalid, and its handlers no longer fire","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"init"}},
-{"send":{"cmd":"make","agent":"host","id":"init","value":{},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"doc","value":"hi","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"eff","value":[{"do":"handler","name":"leave","steps":[{"do":"unplace","parent":"init","name":"ed","id":{"$":"self"}},{"do":"write","node":"doc","patches":[{"type":"snapshot","value":"after"}]}]},{"do":"handler","name":"type","steps":[{"do":"write","node":"doc","patches":[{"type":"snapshot","value":{"$":"input"}}]}]}],"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"make","agent":"host","id":"ed","value":null,"data":{"path":[]},"site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"ed","name":"compute","id":"comp","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"ed","name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[{"process":"ed","run":1,"value":1,"changes":[{"node":"ed","time":9}]}]}}},
-{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"leave"},"expect":{"ok":{"changes":[{"node":"init","time":10,"kind":"unplace","name":"ed","id":"ed","agent":"host","process":"ed"}],"runs":[],"stopped":[{"process":"ed","changes":[]}],"error":{"kind":"invalid","op":"write"}}}},
-{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"hi"}}},
-{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"x"},"expect":{"error":{"kind":"invalid"}}},
-{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"hi"}}},
-{"send":{"cmd":"place","agent":"host","parent":"init","name":"ed","id":"ed","site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":11},"runs":[{"process":"ed","run":2,"value":1,"changes":[],"ending":"done"}]}}},
-{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"y"},"expect":{"ok":{"changes":[{"node":"doc","time":12,"process":"ed"}],"runs":[],"stopped":[]}}},
-{"send":{"cmd":"read","agent":"host","node":"doc"},"expect":{"ok":{"value":"y"}}}
+{"name":"once a process has stopped, every operation through its lasting interface is invalid and its handlers no longer fire; started again, its effect starts from nothing","steps":[
+{"send":{"cmd":"reset","stack":"drive","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"doc","id":"doc","value":"hi","site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"ed","id":"ed","value":null,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["ed"],"name":"effect","id":"eff","site":{"file":"s.js","line":1,"column":1},"value":[{"do":"handler","name":"leave","steps":[{"do":"unplace","address":["ed"],"name":"compute","id":"comp"},{"do":"write","address":["doc"],"patches":[{"type":"snapshot","value":"after"}]}]},{"do":"handler","name":"type","steps":[{"do":"write","address":["doc"],"patches":[{"type":"snapshot","value":{"$":"input"}}]}]}]}},
+{"send":{"cmd":"place","agent":"host","address":["ed"],"name":"compute","id":"comp","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":4},"runs":[{"process":"ed","run":1,"value":1,"changes":[{"node":"ed","time":5}]}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"leave"},"expect":{"ok":{"changes":[{"node":"ed","time":6,"kind":"unplace","name":"compute","id":"comp","agent":"host","process":"ed"}],"runs":[],"stopped":[{"process":"ed","changes":[],"errors":[]}],"error":{"kind":"invalid","op":"write","why":{"code":"stopped"}}}}},
+{"send":{"cmd":"read","agent":"host","address":["doc"]},"expect":{"ok":{"items":[{"value":"hi","from":{"route":[{"parent":"root","name":"doc","node":"doc","position":0}]}}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"x"},"expect":{"error":{"kind":"invalid","why":{"code":"stopped"}}}},
+{"send":{"cmd":"read","agent":"host","address":["doc"]},"expect":{"ok":{"items":[{"value":"hi","from":{"route":[{"parent":"root","name":"doc","node":"doc","position":0}]}}]}}},
+{"send":{"cmd":"place","agent":"host","address":["ed"],"name":"compute","id":"comp2","value":[{"do":"return","value":1}],"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":7},"runs":[{"process":"ed","run":2,"marked":[{"node":"ed","time":7}],"value":1,"changes":[],"ending":"done"}]}}},
+{"send":{"cmd":"fire","agent":"host","process":"ed","handler":"type","input":"y"},"expect":{"ok":{"changes":[{"node":"doc","time":8,"process":"ed"}],"runs":[],"stopped":[]}}},
+{"send":{"cmd":"read","agent":"host","address":["doc"]},"expect":{"ok":{"items":[{"value":"y","from":{"route":[{"parent":"root","name":"doc","node":"doc","position":0}]}}]}}}
 ]}
