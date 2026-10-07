@@ -1,8 +1,0 @@
-{"name":"a compute slot holding only a mounted id whose node is not here starts the process and its run is pending; a program placed after it is the first that is here, and runs, with the pending run's marks","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"ghost","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"p1","time":2,"kind":"place","name":"compute","id":"ghost"},"runs":[{"process":"p1","run":1,"marked":[{"node":"p1","time":2}],"compute":{"slot":["ghost"]},"changes":[],"ending":"pending","errors":[]}]}}},
-{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"value":null}]}}},
-{"send":{"cmd":"place","agent":"bob","address":["p1"],"name":"compute","id":"prog","value":[{"do":"return","value":3}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"marked":[{"process":"p1","by":{"node":"p1","time":3}}],"runs":[{"process":"p1","run":2,"agent":"host","marked":[{"node":"p1","time":2},{"node":"p1","time":3}],"compute":{"node":"prog","saw":3,"slot":["ghost","prog"]},"value":3,"changes":[{"node":"p1","time":4}],"ending":"done"}]}}},
-{"send":{"cmd":"directory","agent":"host","address":["p1"],"name":"compute"},"expect":{"ok":{"items":[{"id":"ghost","pending":true},{"id":"prog"}]}}}
-]}

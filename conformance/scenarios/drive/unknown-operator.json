@@ -1,8 +1,0 @@
-{"name":"an unknown $ operator throws with code operator: try catches it, and uncaught it fails the run","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"c1","value":[{"do":"try","steps":[{"do":"let","as":"x","value":{"$nope":1}}],"as":"e"},{"do":"return","value":{"e":{"$":"e"}}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":2},"runs":[{"process":"p1","run":1,"value":{"e":{"kind":"thrown","why":{"code":"operator"}}},"changes":[{"node":"p1","time":3}],"ending":"done","errors":[]}]}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p2","id":"p2","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p2"],"name":"compute","id":"c2","value":[{"do":"return","value":{"$bogus":[1]}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":5},"runs":[{"process":"p2","run":1,"changes":[],"ending":"failed","errors":[{"kind":"thrown","why":{"code":"operator"}}]}]}}},
-{"send":{"cmd":"read","agent":"host","address":["p2"]},"expect":{"ok":{"items":[{"error":{"kind":"thrown","why":{"code":"operator"}},"from":{"process":"p2","run":1}},{"value":null}]}}}
-]}

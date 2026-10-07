@@ -1,14 +1,21 @@
 // The conformance harness (PROTOCOL.tex): one JSON request per line on stdin,
-// one JSON answer per line on stdout. Each reset builds a fresh graph. The
-// protect and drive stacks are being redesigned, so a reset asking for one is
-// answered unsupported, and so are batch and fire.
+// one JSON answer per line on stdout. Each reset builds a fresh stack: the
+// graph, protect over it, or the reference scheduler over both, with the one
+// loader "steps", which runs programs given as data.
 //
-// A request is checked before the stack sees it, field by field in the order
-// PROTOCOL.tex gives (Errors), so the first field missing or of the wrong
-// kind answers; then the stack checks the rest.
+// A request's values are read from their JSON forms first (forms.ts); one
+// that is malformed is held as a mark that is no value, so the field is
+// wrong-field in its own turn. Then the request is checked before the stack
+// sees it, field by field in the order PROTOCOL.tex gives (Errors), so the
+// first field missing or of the wrong kind answers; then the stack checks the
+// rest.
 
-import { isObject, whole } from "../src/patch.ts";
-import { fields, graph, type Kind } from "../src/graph.ts";
+import { equal, isObject, whole } from "../src/patch.ts";
+import { fields, type Graph, graph, type Kind } from "../src/graph.ts";
+import { type May, protect } from "../src/protect.ts";
+import { type FireOp, schedule, type Scheduler } from "../src/schedule.ts";
+import { steps } from "../src/steps.ts";
+import type { StartOp } from "../src/loaders.ts";
 import {
   ErmineError,
   type Event,
@@ -18,6 +25,7 @@ import {
   missing,
   wrongField,
 } from "../src/types.ts";
+import { binary, decode, Malformed, number, Stand } from "./forms.ts";
 
 export type Request = { readonly [key: string]: Json };
 
@@ -28,20 +36,114 @@ export type Request = { readonly [key: string]: Json };
  */
 export type Queue = { events: Event[]; open: boolean };
 
-/** One session: the stack, and the queue of each subscription, by its number. */
-export type Session = { api: Interface; queues: Map<number, Queue> };
+/**
+ * One session: the stack, the graph beneath it, the scheduler when the stack
+ * has one, and each subscription by the number the harness gave it, from 1
+ * in each session: the stack's own number for it, and its queue. The
+ * scheduler subscribes beneath the wrappers for its own bookkeeping, so the
+ * stack's numbers are not the session's.
+ */
+export type Session = {
+  api: Interface;
+  graph: Graph;
+  scheduler?: Scheduler;
+  subs: Map<number, { sub: number; queue: Queue }>;
+  next: number;
+};
 
 /** Answers what the harness does not do. */
 export class Unsupported {
   constructor(readonly cmd: string) {}
 }
 
-/** The stacks a reset can ask for; those left out are answered unsupported. */
-export const stacks: { [stack: string]: ((root: string) => Interface) | undefined } = {
-  graph: (root) => built(graph(root)),
-  protect: undefined,
-  drive: undefined,
+/** The stacks a reset can ask for, each built over its graph; undefined is answered unsupported. */
+export const stacks: {
+  [stack: string]: ((g: Graph, request: Request) => Interface) | undefined;
+} = {
+  graph: (g) => built(g),
+  protect: (g, r) => built(protect(g, rules(r.rules))),
+  schedule: (g, r) => {
+    const budget = r.budget;
+    if (budget !== undefined && (!whole(budget) || budget < 1)) {
+      throw wrongField("budget", "a budget is a whole number from 1");
+    }
+    const loaders = { steps: steps({ live: (kind) => new Stand(kind) as unknown as Json }) };
+    return built(
+      schedule(protect(g, rules(r.rules)), loaders, {
+        graph: g,
+        ...(budget === undefined ? {} : { budget }),
+      }),
+    );
+  },
 };
+
+/**
+ * The harness's may (PROTECT.tex, Rules): the first rule whose given fields
+ * all equal the operation's wins, and a refusal names it; none allows. A
+ * rule's agent is matched against the agent's actor when it has one, and its
+ * process against the last step of the agent's code when it has one.
+ */
+export function rules(list: Json | undefined): May {
+  if (list === undefined) return () => true;
+  if (!Array.isArray(list) || !list.every(isObject)) {
+    throw wrongField("rules", "rules are a list of maps");
+  }
+  const all = list as { readonly [key: string]: Json }[];
+  return (agent, process, op, args) => {
+    const { node, id } = args as { node?: unknown; id?: unknown };
+    const actor = isObject(agent) && Object.hasOwn(agent, "actor") ? agent.actor : agent;
+    const code = isObject(agent) && Array.isArray(agent.code) ? agent.code : undefined;
+    const last = code?.[code.length - 1];
+    const by = code ? (isObject(last) ? last.process : undefined) : process;
+    for (let rule = 0; rule < all.length; rule++) {
+      const r = all[rule];
+      const has = (field: string) => Object.hasOwn(r, field);
+      if (has("agent") && !equal(r.agent, actor)) continue;
+      if (has("process") && (by === undefined || r.process !== by)) continue;
+      if (has("op") && r.op !== op) continue;
+      if (has("node") && (node === undefined || r.node !== node)) continue;
+      if (has("id") && (id === undefined || r.id !== id)) continue;
+      return r.allow === true || { rule };
+    }
+    return true;
+  };
+}
+
+/** Where a value field was malformed: a mark that is no value, so the field is wrong-field in its turn. */
+const MALFORMED = Symbol("malformed");
+
+/**
+ * The request with its values read from their JSON forms: agent, cause,
+ * value, and each patch. A live value is taken only as the whole value of a
+ * placement making an ephemeral node, or of a snapshot.
+ */
+function decoded(r: Request): Request {
+  const out: { [key: string]: unknown } = { ...r };
+  const take = (field: string, read: (x: unknown) => unknown) => {
+    if (!Object.hasOwn(r, field)) return;
+    try {
+      out[field] = read(r[field]);
+    } catch (e) {
+      if (!(e instanceof Malformed)) throw e;
+      out[field] = MALFORMED;
+    }
+  };
+  take("agent", (x) => decode(x));
+  take("cause", (x) => decode(x));
+  take("value", (x) => decode(x, r.ephemeral === true));
+  take("patches", (x) => Array.isArray(x) ? x.map(patch) : x);
+  return out as Request;
+}
+
+/** A patch's members read from their forms; its value may be live only in a snapshot. */
+function patch(p: unknown): unknown {
+  if (!isObject(p) || (Object.keys(p).length === 1 && Object.hasOwn(p, "/"))) return decode(p);
+  const out: { [key: string]: unknown } = {};
+  for (const key of Object.keys(p)) {
+    out[key] = decode(p[key], key === "value" && p.type === "snapshot");
+  }
+  return out;
+}
 
 /** Tells the outermost layer it is the top, so no holder can tell it otherwise. */
 function built<T extends Interface>(api: T): T {
@@ -63,10 +165,11 @@ const STAMP = ["time", "cause"];
 /**
  * The commands that are operations, which an error answering one names in its
  * op (PROTOCOL.tex, Errors): the graph's (CORE.tex, Operations) and batch, the
- * driver's own (DRIVER.tex). events and fire are the harness's, and reset
+ * scheduler's own. events, reload and fire are the harness's, and reset
  * builds the stack as a host does, so an error answering one has no op.
  */
 const OPERATIONS = new Set([
+  "start",
   "read",
   "directory",
   "lookup",
@@ -79,13 +182,15 @@ const OPERATIONS = new Set([
 ]);
 
 /**
- * Every request from outside that makes a change carries a cause, even one
- * acting as a process: it stands for the site a host captures, which the
- * harness cannot (PROTOCOL.tex, Time and cause). Below drive it carries a
- * time too.
+ * Every request that makes a change carries a cause, unless it acts as a
+ * process, which may leave it out: it stands for the site a host captures,
+ * which the harness cannot (PROTOCOL.tex, Time and cause). Below the
+ * scheduler it carries a time too.
  */
-function outside(): never {
-  throw missing("cause");
+function outside(op: { process?: unknown }) {
+  return (): undefined => {
+    if (op.process === undefined) throw missing("cause");
+  };
 }
 
 /**
@@ -94,9 +199,26 @@ function outside(): never {
  * or of the wrong kind answers.
  */
 function checked(kind: Kind, r: Request, ...keys: string[]) {
-  const op = pick(r, ...ACTING, ...keys);
-  fields(kind, op, outside);
+  const op = pick(decoded(r), ...ACTING, ...keys);
+  fields(kind, op, outside(op));
   return op;
+}
+
+/**
+ * As checked, for a stack with a scheduler, whose clock gives every time: a
+ * time in the request is ignored.
+ */
+function stamped(s: Session, kind: Kind, r: Request, ...keys: string[]) {
+  if (!s.scheduler) return checked(kind, r, ...STAMP, ...keys);
+  const op = pick(decoded(r), ...ACTING, "cause", ...keys);
+  fields(kind, { ...op, time: s.scheduler.time + 1 }, outside(op));
+  return op;
+}
+
+/** What only a stack with a scheduler does: unsupported below it. */
+function scheduled(s: Session, cmd: string): Scheduler {
+  if (!s.scheduler) throw new Unsupported(cmd);
+  return s.scheduler;
 }
 
 /** The commands, each given the session and the request, returning the ok result. */
@@ -104,41 +226,86 @@ export const commands: { [cmd: string]: (s: Session, r: Request) => unknown } = 
   read: (s, r) => ({ items: s.api.read(checked("read", r, "address")) }),
   directory: (s, r) => s.api.directory(checked("directory", r, "address", "name")),
   lookup: (s, r) => ({ items: s.api.lookup(checked("lookup", r, "name")) }),
-  write: (s, r) => s.api.write(checked("write", r, ...STAMP, "address", "patches")),
+  write: (s, r) => s.api.write(stamped(s, "write", r, "address", "patches")),
   place: (s, r) =>
-    s.api.place(checked("place", r, ...STAMP, "address", "name", "id", "position", "value")),
-  unplace: (s, r) => s.api.unplace(checked("unplace", r, ...STAMP, "address", "name", "id")),
+    s.api.place(
+      stamped(s, "place", r, "address", "name", "id", "position", "value", "ephemeral"),
+    ),
+  unplace: (s, r) => s.api.unplace(stamped(s, "unplace", r, "address", "name", "id")),
   subscribe: (s, r) => {
     const queue: Queue = { events: [], open: true };
     const op = {
-      ...pick(r, ...ACTING, "address"),
+      ...pick(decoded(r), ...ACTING, "address"),
       send: (event: Event) => queue.events.push(event),
     };
-    fields("subscribe", op, outside);
+    fields("subscribe", op);
     const { sub } = s.api.subscribe(op);
-    s.queues.set(sub, queue);
-    return { sub };
+    const n = s.next++;
+    s.subs.set(n, { sub, queue });
+    return { sub: n };
   },
   unsubscribe: (s, r) => {
-    s.api.unsubscribe(checked("unsubscribe", r, "sub"));
-    const queue = s.queues.get(r.sub as number);
-    if (queue) queue.open = false;
+    const op = checked("unsubscribe", r, "sub");
+    const held = whole(op.sub) ? s.subs.get(op.sub) : undefined;
+    // a number the session never gave is no subscription of the stack's either
+    s.api.unsubscribe({ ...op, sub: held ? held.sub : whole(op.sub) ? 0 : op.sub });
+    if (held) held.queue.open = false;
     return null;
   },
   // not an operation: it needs no agent (PROTOCOL.tex, Acting as someone; Commands)
   events: (s, r) => {
     if (!Object.hasOwn(r, "sub")) throw missing("sub");
-    const queue = whole(r.sub) ? s.queues.get(r.sub) : undefined;
-    if (!queue) throw wrongField("sub", `there is no subscription ${JSON.stringify(r.sub)}`);
-    if (!queue.open) s.queues.delete(r.sub as number);
-    return queue.events.splice(0);
+    const held = whole(r.sub) ? s.subs.get(r.sub) : undefined;
+    if (!held) throw wrongField("sub", `there is no subscription ${JSON.stringify(r.sub)}`);
+    if (!held.queue.open) s.subs.delete(r.sub as number);
+    return held.queue.events.splice(0);
   },
-  // drive's own operations
-  batch: () => {
-    throw new Unsupported("batch");
+  // not an operation: no agent, not a change (PROTOCOL.tex, Commands)
+  reload: (s) => {
+    s.graph.reload();
+    s.scheduler?.restart();
+    s.subs.clear();
+    return null;
   },
-  fire: () => {
-    throw new Unsupported("fire");
+  // the scheduler's
+  start: (s, r) => {
+    const scheduler = scheduled(s, "start");
+    const op = pick(decoded(r), ...ACTING, "address", "value", "cause", "program");
+    // the request's fields in PROTOCOL.tex's order, as a placement's; then the program
+    fields("place", { ...op, name: "start", id: "start", time: 1 }, outside(op));
+    return scheduler.start(op as StartOp);
+  },
+  batch: (s, r) => {
+    const scheduler = scheduled(s, "batch");
+    fields("read", { ...pick(decoded(r), ...ACTING), address: [] });
+    const requests = r.requests;
+    if (requests === undefined) throw missing("requests");
+    if (!Array.isArray(requests) || !requests.every(isObject)) {
+      throw wrongField("requests", "a batch's requests are a list of requests");
+    }
+    const answers: { [key: string]: unknown }[] = [];
+    const settled = scheduler.batch(() => {
+      for (const inner of requests as Request[]) {
+        const a = answer(s, inner);
+        answers.push(a);
+        // a request that fails ends the batch
+        if (!Object.hasOwn(a, "ok")) break;
+      }
+    });
+    return { answers, runs: settled.runs, stopped: settled.stopped };
+  },
+  fire: (s, r) => {
+    const scheduler = scheduled(s, "fire");
+    const op: { [key: string]: unknown } = pick(decoded(r), ...ACTING, "handler");
+    if (Object.hasOwn(r, "input")) {
+      try {
+        op.input = decode(r.input);
+      } catch (e) {
+        if (!(e instanceof Malformed)) throw e;
+        throw wrongField("input", "input is a value");
+      }
+    }
+    return scheduler.fire(op as FireOp);
   },
 };
 
@@ -235,7 +402,15 @@ export class Harness {
       if (!build) return { unsupported: "reset" };
       if (request.root === undefined) throw missing("root");
       if (typeof request.root !== "string") throw wrongField("root", "the root is an id, a string");
-      this.session = { api: build(request.root), queues: new Map() };
+      const g = graph(request.root);
+      const api = build(g, request);
+      this.session = {
+        api,
+        graph: g,
+        ...(stack === "schedule" ? { scheduler: api as Scheduler } : {}),
+        subs: new Map(),
+        next: 1,
+      };
       return { ok: null };
     } catch (e) {
       // reset is not an operation: its errors name none
@@ -450,8 +625,10 @@ export function encode(value: unknown): string {
     }
     if (v === null || skipped(v)) out.push("null");
     else if (typeof v === "boolean") out.push(v ? "true" : "false");
-    else if (typeof v === "number" || typeof v === "string") out.push(JSON.stringify(v));
+    else if (typeof v === "number") out.push(number(v));
+    else if (typeof v === "string") out.push(JSON.stringify(v));
     else if (typeof v !== "object") throw new TypeError(`a ${typeof v} is not JSON`);
+    else if (binary(v) !== undefined) out.push(binary(v)!);
     else if (open.has(v)) throw new TypeError("a value that holds itself is not JSON");
     else if (Array.isArray(v)) {
       open.add(v);
@@ -471,6 +648,11 @@ export function encode(value: unknown): string {
       for (const key of Object.keys(v)) {
         const member = prepare((v as { [key: string]: unknown })[key], key);
         if (!skipped(member)) kept.push([key, member]);
+      }
+      // a map whose only key is "/" is data, written in its own form
+      if (kept.length === 1 && kept[0][0] === "/") {
+        out.push('"/":{"map":{');
+        text("}}");
       }
       for (let i = kept.length - 1; i >= 0; i--) {
         json(kept[i][1]);

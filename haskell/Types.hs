@@ -25,9 +25,13 @@
 -- BIND. CORE's @bind(api, {agent, process, place, reads, writes})@ is pairing
 -- an 'Interface' with a 'Ctx': 'bind'. The holder of an 'Api' acts as its ctx.
 --
+-- RELOAD / FORGET. 'iReload' leaves the graph as keeping it and loading it
+-- again would (PROTOCOL Commands, reload); 'iForget' is CORE's
+-- @forget(id)@. Wrappers pass both on.
+--
 -- RECORD / FINISH. 'iRecord' wraps a bound 'Api' into a 'Recording' for one
 -- run; 'iFinish' ends it and returns the 'Record'. The graph implements both;
--- wrappers pass them on. Nothing in the graph stack uses them: below drive no
+-- wrappers pass them on. Nothing in the graph stack uses them: below schedule no
 -- process runs, so no process has reads and "marked" is always [].
 module Types
   ( -- * names
@@ -49,14 +53,13 @@ module Types
     -- * changes
   , ChangeKind (..)
   , Change (..)
-  , ChangeRef (..)
-  , refOf
   , changeToJson
-  , changeRefToJson
+  , changeHeader
     -- * items (CORE "Reads are lists")
   , Item (..)
   , itemToJson
   , itemChange
+  , itemEphemeral
     -- * errors (PROTOCOL Errors)
   , ErrKind (..)
   , Err (..)
@@ -185,6 +188,8 @@ data ChangeKind
   | KindUnplace Name Id
   deriving (Eq, Show)
 
+-- | A change. Its time alone names it in this graph: that is a change
+-- reference (CORE Changes).
 data Change = Change
   { changeNode :: Id -- ^ the node changed; for a placement, the parent
   , changeTime :: Time
@@ -192,55 +197,76 @@ data Change = Change
   , changeAgent :: Value
   , changeProcess :: Maybe Id
   , changeCause :: Maybe Value -- ^ Just JNull is a cause of null
+  , changeEphemeral :: Bool
+  -- ^ it changes an ephemeral node, or places or unplaces one (CORE
+  -- Ephemeral nodes)
   }
   deriving (Eq, Show)
 
--- | A node and a time name one change in this graph.
-data ChangeRef = ChangeRef {refNode :: Id, refTime :: Time}
-  deriving (Eq, Ord, Show)
-
-refOf :: Change -> ChangeRef
-refOf c = ChangeRef (changeNode c) (changeTime c)
-
-changeRefToJson :: ChangeRef -> Value
-changeRefToJson (ChangeRef n t) = object [("node", str n), ("time", integer t)]
-
 changeToJson :: Change -> Value
-changeToJson c =
+changeToJson = changeJson True
+
+-- | The change's header, as an item carries it: never its patches, nor the
+-- value a placement made a node with.
+changeHeader :: Change -> Value
+changeHeader = changeJson False
+
+changeJson :: Bool -> Change -> Value
+changeJson whole c =
   object $
     [("node", str (changeNode c)), ("time", integer (changeTime c))]
       ++ kind
       ++ [("agent", changeAgent c)]
       ++ optional "process" (str <$> changeProcess c)
       ++ optional "cause" (changeCause c)
+      ++ [("ephemeral", JBool True) | changeEphemeral c]
   where
     kind = case changeKind c of
-      KindWrite ps -> [("kind", "write"), ("patches", JArray ps)]
+      KindWrite ps -> [("kind", "write")] ++ [("patches", JArray ps) | whole]
       KindPlace n i pos v ->
-        [("kind", "place"), ("name", str n), ("id", str i)] ++ optional "position" (integer <$> pos) ++ optional "value" v
+        [("kind", "place"), ("name", str n), ("id", str i)]
+          ++ optional "position" (integer <$> pos)
+          ++ (if whole then optional "value" v else [])
       KindUnplace n i -> [("kind", "unplace"), ("name", str n), ("id", str i)]
 
 -- ===========================================================================
 -- items (CORE "Reads are lists"; PROTOCOL Encodings, item)
 
 data Item
-  = -- | a value, why the reader got it, and the change that last set it
-    -- (Nothing only for the root's first value)
-    ItemValue Value From (Maybe Change)
-  | -- | an id in a slot, why, the change that last set the slot, and whether
-    -- the id's node is not here yet (pending)
-    ItemId Id From Change Bool
+  = -- | a value, why the reader got it, the change that last set it
+    -- (Nothing only for the root's first value), and whether its node is
+    -- ephemeral
+    ItemValue Value From (Maybe Change) Bool
+  | -- | an id in a slot, why, the slot's last change that is not ephemeral
+    -- (Nothing when every change to it was), whether the id's node is not
+    -- here yet (pending), and whether it is here and ephemeral
+    ItemId Id From (Maybe Change) Bool Bool
+  | -- | last in a lookup a refused directory read ended: the path to that
+    -- directory
+    ItemRefused Address
   deriving (Eq, Show)
 
 itemChange :: Item -> Maybe Change
-itemChange (ItemValue _ _ c) = c
-itemChange (ItemId _ _ c _) = Just c
+itemChange i = case i of
+  ItemValue _ _ c _ -> c
+  ItemId _ _ c _ _ -> c
+  ItemRefused _ -> Nothing
+
+itemEphemeral :: Item -> Bool
+itemEphemeral i = case i of
+  ItemValue _ _ _ e -> e
+  ItemId _ _ _ _ e -> e
+  ItemRefused _ -> False
 
 itemToJson :: Item -> Value
 itemToJson i = case i of
-  ItemValue v f c -> object ([("value", v), ("from", fromToJson f)] ++ optional "change" (changeToJson <$> c))
-  ItemId x f c pending ->
-    object ([("id", str x), ("from", fromToJson f), ("change", changeToJson c)] ++ [("pending", JBool True) | pending])
+  ItemValue v f c e -> object ([("value", v), ("from", fromToJson f)] ++ header c ++ ephemeral e)
+  ItemId x f c pending e ->
+    object ([("id", str x), ("from", fromToJson f)] ++ header c ++ [("pending", JBool True) | pending] ++ ephemeral e)
+  ItemRefused a -> object [("refused", JBool True), ("from", object [("path", addressToJson a)])]
+  where
+    header c = optional "change" (changeHeader <$> c)
+    ephemeral e = [("ephemeral", JBool True) | e]
 
 -- ===========================================================================
 -- errors (PROTOCOL Errors: {"kind", "op"?, "why": {"code", ...details, "text"?}})
@@ -336,8 +362,9 @@ data Op
   | OpLookup Name
   | -- | address, patches
     OpWrite Address [Value]
-  | -- | address, name, id, position, value
-    OpPlace Address Name Id (Maybe Integer) (Maybe Value)
+  | -- | address, name, id, position, value, and whether a node it makes
+    -- is ephemeral
+    OpPlace Address Name Id (Maybe Integer) (Maybe Value) Bool
   | -- | address, name, id
     OpUnplace Address Name Id
   deriving (Eq, Show)
@@ -369,14 +396,17 @@ data Result
 data Searched = Searched {searchedNode :: Id, searchedSaw :: Maybe Time, searchedRefused :: Bool}
   deriving (Eq, Show)
 
--- | A change and the processes it marked, in code point order of their ids,
--- the change's own process included (CORE Operations).
-data Applied = Applied {appliedChange :: Change, appliedMarked :: [Id]}
+-- | A change; the processes it marked, in code point order of their ids,
+-- the change's own process included (CORE Operations), each with the time
+-- of the first change that marked it, its own or one its letting go made;
+-- and the ephemeral nodes it let go, in the order they went.
+data Applied = Applied {appliedChange :: Change, appliedMarked :: [(Id, Time)], appliedGone :: [Id]}
   deriving (Eq, Show)
 
 -- | What a subscriber receives: each change to the node its address reaches,
--- and the placement that switched it; and each record of a process there.
-data Event = EventChange Change | EventRecord Record
+-- and each change to its route, with what reading the address now gives;
+-- and each record of a process there.
+data Event = EventChange Change (Maybe [Item]) | EventRecord Record
   deriving (Eq, Show)
 
 -- ===========================================================================
@@ -408,26 +438,26 @@ data LookupEntry = LookupEntry {lookupName :: Name, lookupSearched :: [Searched]
   deriving (Eq, Show)
 
 -- | All lists are in the order things happened (oldest first). 'recordCompute'
--- and 'recordEffect' are the driver's to fill, as it encodes them.
+-- and 'recordEffect' are the scheduler's to fill, as it encodes them.
 data Record = Record
   { recordProcess :: Id
   , recordRun :: Int
   , recordAgent :: Value
-  , recordMarked :: [ChangeRef]
+  , recordMarked :: [Time]
   , recordCompute :: Maybe Value
   , recordEffect :: Maybe Value
   , recordLookups :: [LookupEntry]
   , recordReads :: [ReadEntry]
   , recordValue :: Maybe Value
-  , recordCleanup :: [ChangeRef]
-  , recordChanges :: [ChangeRef]
+  , recordCleanup :: [Time]
+  , recordChanges :: [Time]
   , recordEnding :: Ending
   , recordErrors :: [Err]
   }
   deriving (Eq, Show)
 
 -- | process, run, agent, marked; everything else empty, ending Done.
-emptyRecord :: Id -> Int -> Value -> [ChangeRef] -> Record
+emptyRecord :: Id -> Int -> Value -> [Time] -> Record
 emptyRecord p n a m = Record p n a m Nothing Nothing [] [] Nothing [] [] Done []
 
 recordToJson :: Record -> Value
@@ -436,7 +466,7 @@ recordToJson r =
     [ ("process", str (recordProcess r))
     , ("run", int (recordRun r))
     , ("agent", recordAgent r)
-    , ("marked", JArray (map changeRefToJson (recordMarked r)))
+    , ("marked", JArray (map integer (recordMarked r)))
     ]
       ++ optional "compute" (recordCompute r)
       ++ optional "effect" (recordEffect r)
@@ -444,8 +474,8 @@ recordToJson r =
          , ("reads", JArray (map readJson (recordReads r)))
          ]
       ++ optional "value" (recordValue r)
-      ++ [ ("cleanup", JArray (map changeRefToJson (recordCleanup r)))
-         , ("changes", JArray (map changeRefToJson (recordChanges r)))
+      ++ [ ("cleanup", JArray (map integer (recordCleanup r)))
+         , ("changes", JArray (map integer (recordChanges r)))
          , ("ending", str (endingText (recordEnding r)))
          , ("errors", JArray (map errToJson (recordErrors r)))
          ]
@@ -464,7 +494,7 @@ recordToJson r =
 
 -- | What a run's record starts with: its run number and the changes that
 -- marked it, oldest first.
-data RecordStart = RecordStart {startRun :: Int, startMarked :: [ChangeRef]}
+data RecordStart = RecordStart {startRun :: Int, startMarked :: [Time]}
   deriving (Eq, Show)
 
 -- | One run being recorded. Made by 'iRecord' (graph), ended by 'iFinish'.
@@ -474,7 +504,7 @@ data RecordStart = RecordStart {startRun :: Int, startMarked :: [ChangeRef]}
 -- 'recordReads', lookups in 'recordLookups', changes in 'recordChanges', and
 -- every error in 'recordErrors'. Operations through 'recordingQuiet' are
 -- remembered for marking but logged nowhere. The rest of the record is the
--- driver's to set with 'recordingModify'. After 'iFinish', operations
+-- scheduler's to set with 'recordingModify'. After 'iFinish', operations
 -- through any of these apis are invalid (code stopped).
 --
 -- A recording whose api is ReadOnly starts a new run of reads for its
@@ -506,6 +536,11 @@ data Interface = Interface
   , iFinish :: Recording -> Ending -> IO Record
   -- ^ sets the ending, ends the recording, sends the record to the
   -- subscribers whose address reaches the process node, and returns it
+  , iReload :: IO ()
+  -- ^ the graph as keeping it and loading it again would leave it: every
+  -- ephemeral node and change dropped, and every subscription and kept read
+  , iForget :: Id -> IO ()
+  -- ^ drops the reads kept for the id, so nothing marks it any more
   , iSetTop :: Interface -> IO ()
   -- ^ told the top of the stack once it is built; pass it on below
   }

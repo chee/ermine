@@ -14,9 +14,16 @@ import {
   type Json,
   type Patch,
   Refused,
+  type SlotItem,
 } from "../src/types.ts";
 
 const site = { file: "graph_test.ts", line: 1, column: 1 };
+
+/** A change as an item carries it: without its patches or a placement's value. */
+function header(change: Change) {
+  const { patches: _p, value: _v, ...rest } = change as Change & { patches?: Json; value?: Json };
+  return rest;
+}
 
 /** A bare graph with a clock, as a host below drive would hold it. */
 function host(api: Interface = graph("root")) {
@@ -207,7 +214,9 @@ Deno.test("values held are frozen copies", () => {
   assert(Object.isFrozen((item.value as { list: number[] }).list));
   assert(Object.isFrozen(item.change));
   assertThrows(() => own({ f: () => 1 }), NotJson);
-  assertThrows(() => own(NaN), NotJson);
+  assert(Number.isNaN(own(NaN)));
+  assert(Object.is(own(-0), -0));
+  assertEquals(own(-Infinity), -Infinity);
   assertEquals(own({ a: 1, b: undefined }), { a: 1 });
   const holds: { [key: string]: unknown } = { a: [1] };
   (holds.a as unknown[]).push(holds);
@@ -267,12 +276,12 @@ Deno.test("the root is null, has no change, and every read is a list of items wi
   assertEquals(item, {
     value: 1,
     from: { route: [{ parent: "root", name: "a", node: "a", position: 0 }] },
-    change: made,
+    change: header(made),
   });
   const written = g.write(["a"], { type: "snapshot", value: 2 }).change;
-  assertEquals(g.api.read({ agent: "host", address: ["a"] })[0].change, written);
+  assertEquals(g.api.read({ agent: "host", address: ["a"] })[0].change, header(written));
   assertEquals(g.api.directory({ agent: "host", address: [], name: "a" }), {
-    items: [{ id: "a", from: { route: [], position: 0 }, change: made }],
+    items: [{ id: "a", from: { route: [], position: 0 }, change: header(made) }],
   });
   assertEquals(g.api.read({ agent: "host", address: ["ghost"] }), []);
   assertEquals(g.api.directory({ agent: "host", address: ["ghost"] }), { directory: [] });
@@ -425,7 +434,7 @@ Deno.test(".. goes back the way the place was reached, and a lookup searches the
     ["two", { route: [] }],
   ]);
   assertEquals(g.api.read({ ...at, address: ["..", ".."] }).map((i) => i.value), [null]);
-  assertEquals(g.api.lookup({ ...at, name: "tool" }).map((i) => [i.id, i.from]), [
+  assertEquals(g.api.lookup({ ...at, name: "tool" }).map((i) => [(i as SlotItem).id, i.from]), [
     ["t2", { path: ["..", "tool"], position: 0 }],
   ]);
   // writing through .. writes to the node the place's walk came through
@@ -443,7 +452,7 @@ Deno.test(".. goes back the way the place was reached, and a lookup searches the
   const lost = { agent: "host", place: ["u", "p"] };
   assertEquals(g.api.read({ ...lost, address: [] }), []);
   assertEquals(g.api.read({ ...lost, address: [".."] }).map((i) => i.value), [2]);
-  assertEquals(g.api.lookup({ ...lost, name: "tool" }).map((i) => [i.id, i.from]), [
+  assertEquals(g.api.lookup({ ...lost, name: "tool" }).map((i) => [(i as SlotItem).id, i.from]), [
     ["t2", { path: ["..", "tool"], position: 0 }],
   ]);
   assertEquals(
@@ -561,7 +570,9 @@ Deno.test("fields are checked in order, then the address, then the time, then th
     "position",
   );
   assertEquals(
-    field(() => g.api.place(op({ address: [], name: "x", id: "x", value: NaN, time: 0 }) as never)),
+    field(() =>
+      g.api.place(op({ address: [], name: "x", id: "x", value: [new Map()], time: 0 }) as never)
+    ),
     "value",
   );
   assertEquals(
@@ -569,7 +580,9 @@ Deno.test("fields are checked in order, then the address, then the time, then th
     "patches",
   );
   assertEquals(
-    field(() => g.api.write(op({ address: [], patches: [], cause: NaN, time: 0 }) as never)),
+    field(() =>
+      g.api.write(op({ address: [], patches: [], cause: [new Map()], time: 0 }) as never)
+    ),
     "cause",
   );
   for (const time of [0, -1, 1.5, "1", null]) {
@@ -666,8 +679,8 @@ Deno.test("a change marks the processes whose last run read what it changed", ()
   assertEquals(marked(g.place(["d"], "y", "n")), ["p3"]);
   const both = g.place(["d"], "x", "n");
   assertEquals(both.marked, [
-    { process: "p2", by: { node: "d", time: both.change.time } },
-    { process: "p3", by: { node: "d", time: both.change.time } },
+    { process: "p2", by: both.change.time },
+    { process: "p3", by: both.change.time },
   ]);
   assertEquals(marked(g.place(["a"], "x", "n")), [], "a placement does not mark value readers");
   assertEquals(marked(g.make([], "ghost", 0)), ["p3"], "a read that reached nothing is marked");
@@ -717,7 +730,7 @@ Deno.test("a lookup searches up from the place's directory, and is marked only b
   });
   assertEquals(bound.cwd, ["a", "b"]);
   const rec = g.api.record(bound, []);
-  assertEquals(rec.lookup({ name: "theme" }).map((i) => [i.id, i.from]), [
+  assertEquals(rec.lookup({ name: "theme" }).map((i) => [(i as SlotItem).id, i.from]), [
     ["t-r", { path: ["..", "..", "theme"], position: 0 }],
   ]);
   g.api.finish(rec, "done");
@@ -734,7 +747,9 @@ Deno.test("a lookup passes over a slot whose ids are all absent, and is marked w
   const lookup = () => {
     const bound = g.api.bind(g.api, { agent: "host", process: "p", place: ["a"], writes: false });
     const rec = g.api.record(bound, []);
-    const found = rec.lookup({ name: "theme" }).map((i) => [i.id, i.from, !!i.pending]);
+    const found = rec.lookup({ name: "theme" }).map((
+      i,
+    ) => [(i as SlotItem).id, i.from, !!(i as SlotItem).pending]);
     bound.end();
     g.api.finish(rec, "done");
     return { found, searched: rec.lookups[0].searched };
@@ -765,7 +780,7 @@ Deno.test("a recording records programs, reads, changes and errors, and sends it
   g.api.subscribe({ agent: "host", address: ["p1"], send: (e) => events.push(e) });
 
   const bound = g.api.bind(g.api, { agent: "alice", process: "p1", writes: false });
-  const rec = g.api.record(bound, [{ node: "p1", time: 3 }]);
+  const rec = g.api.record(bound, [3]);
   const compute = rec.program("compute", ["p1"]);
   assertEquals([compute?.node, compute?.slot, compute?.items.map((i) => i.value)], [
     "prog",
@@ -788,13 +803,13 @@ Deno.test("a recording records programs, reads, changes and errors, and sends it
     process: "p1",
     run: 1,
     agent: "alice",
-    marked: [{ node: "p1", time: 3 }],
+    marked: [3],
     compute: { node: "prog", saw: 1, slot: ["prog"] },
     lookups: [],
     reads: [],
     value: 1,
     cleanup: [],
-    changes: [{ node: "p1", time: 5 }],
+    changes: [5],
     ending: "failed",
     errors: [
       ["invalid", "write", "read-only"],
@@ -837,14 +852,18 @@ Deno.test("protect asks before every operation, with the node its address reache
   g.place([], "theme", "t", { value: "T" });
   asked.length = 0;
   const lookup = (agent: string) =>
-    g.api.lookup({ agent, name: "theme", place: ["a", "b"] }).map((i) => i.id);
+    g.api.lookup({ agent, name: "theme", place: ["a", "b"] }).map((i) => "id" in i && i.id);
   assertEquals(lookup("host"), ["t"]);
   assertEquals(asked, ["lookup", "directory b", "directory a", "directory root"]);
-  assertEquals(lookup("eve"), []);
+  // a refused directory ends the search, and the lookup says so, from the path to it
+  assertEquals(g.api.lookup({ agent: "eve", name: "theme", place: ["a", "b"] }), [
+    { refused: true, from: { path: [".."] } },
+  ]);
   assertThrows(() => g.api.directory({ agent: "eve", address: ["a"] }), Refused);
   asked.length = 0;
   g.place(["a"], "x", "n");
-  assertEquals(asked, ["place a"]);
+  // the operation, then each directory its address's walk reads
+  assertEquals(asked, ["place a", "directory root"]);
 });
 
 Deno.test("a change that is invalid in its agent, cause or value changes nothing", () => {
@@ -855,13 +874,15 @@ Deno.test("a change that is invalid in its agent, cause or value changes nothing
   const snapshot: Patch = { type: "snapshot", value: 2 };
   assertEquals(
     code(() =>
-      g.api.write({ agent: "host", ...at, address: ["a"], patches: [snapshot], cause: NaN })
+      g.api.write({ agent: "host", ...at, address: ["a"], patches: [snapshot], cause: [new Map()] })
     ),
     "wrong-field",
   );
   assertEquals(g.read(["a"]), [1]);
   assertEquals(
-    code(() => g.api.place({ agent: Infinity, ...at, address: [], name: "c", id: "c", value: 1 })),
+    code(() =>
+      g.api.place({ agent: [new Map()], ...at, address: [], name: "c", id: "c", value: 1 })
+    ),
     "wrong-field",
   );
   assertEquals(g.read(["c"]), []);
@@ -895,7 +916,7 @@ Deno.test("a bound interface binds only as itself, and cannot record or finish r
 
   const mb = g.api.bind(g.api, { agent: "mallory", process: "m", writes: false });
   const fake = mb.bind(mb, { agent: "eve", process: "victim", writes: true });
-  assertThrows(() => mb.record(fake, [{ node: "x", time: 2 }]), Invalid);
+  assertThrows(() => mb.record(fake, [2]), Invalid);
   assertThrows(() => fake.record(fake, []), Invalid);
   // what the holder bound acts as the holder, and does no more than it does
   assertEquals(
@@ -997,11 +1018,12 @@ Deno.test("each layer is told the top of the stack once, so no holder can point 
   api.place({ agent: "host", address: [], name: "secret", id: "secret", value: 1, time: 1 });
   api.place({ agent: "host", address: ["secret"], name: "tool", id: "real", value: 1, time: 2 });
   const search = (agent: string) =>
-    api.lookup({ agent, name: "tool", place: ["secret"], chroot: 1 }).map((i) => i.id);
-  assertEquals(search("alice"), []);
+    api.lookup({ agent, name: "tool", place: ["secret"], chroot: 1 })
+      .map((i) => "id" in i ? i.id : "refused");
+  assertEquals(search("alice"), ["refused"]);
   const planted: Interface = { ...api, directory: () => ({ items: [] }) };
   assertThrows(() => api.top(planted), Invalid);
-  assertEquals(search("alice"), []);
+  assertEquals(search("alice"), ["refused"]);
   assertEquals(search("bob"), ["real"]);
   // a layer below, already told by protect, is told no more by anyone else
   const g = graph("root");
@@ -1026,4 +1048,317 @@ Deno.test("errors are known by their mark, so a copy from another bundle counts"
   Object.defineProperty(copy, Symbol.for("ermine.error"), { value: true });
   assert(copy instanceof ErmineError && copy instanceof Refused && !(copy instanceof Invalid));
   assert(!(new Error("no") instanceof ErmineError));
+});
+
+Deno.test("bytes and typed arrays are held as buffers, copied in, compared and spliced", () => {
+  const bytes = new Uint8Array([1, 2, 3]).buffer;
+  const owned = own(bytes) as ArrayBuffer;
+  new Uint8Array(bytes)[0] = 9;
+  assertEquals([...new Uint8Array(owned)], [1, 2, 3]);
+  assert(equal(own(new Int16Array([1, -2])), new Int16Array([1, -2])));
+  assert(!equal(new Int16Array([1]), new Uint16Array([1])), "only of the same kind");
+  assert(!equal(new Uint8Array([104]), new Uint8Array([104]).buffer), "a uint8 array is not bytes");
+  assert(!equal([1], new Float64Array([1])), "a typed array never equals a list");
+  assert(
+    !equal(0, -0) && equal(NaN, NaN) && equal(new Float32Array([NaN]), new Float32Array([NaN])),
+  );
+  assert(!equal(new Float64Array([0]), new Float64Array([-0])));
+  assertThrows(() => own(new DataView(bytes)), NotJson);
+  assertThrows(() => own([new Uint8ClampedArray(1)]), NotJson);
+  const splice = (range: [number, number], value?: Json): Patch =>
+    value === undefined
+      ? { type: "splice", path: [], range }
+      : { type: "splice", path: [], range, value };
+  const out = applyPatches(owned, [splice([3, 3], new Uint8Array([4]).buffer), splice([0, 1])]);
+  assertEquals([...new Uint8Array(out as ArrayBuffer)], [2, 3, 4]);
+  const typed = applyPatches(new BigInt64Array([1n, 2n]), [
+    splice([1, 1], new BigInt64Array([7n])),
+  ]);
+  assertEquals([...(typed as BigInt64Array)], [1n, 7n, 2n]);
+  // path first, then kind, then range
+  assertEquals(code(() => applyPatches(owned, [splice([0, 99], "x")])), "wrong-kind");
+  assertEquals(
+    code(() => applyPatches(new Int8Array(2), [splice([0, 99], new Uint8Array(1))])),
+    "wrong-kind",
+  );
+  assertEquals(code(() => applyPatches(new Int8Array(2), [splice([0, 3])])), "range");
+  assertEquals(
+    code(() => applyPatches({ b: owned }, [{ type: "splice", path: ["b", 0], range: [0, 0] }])),
+    "wrong-kind",
+  );
+  assertEquals(
+    code(() => applyPatches({ b: owned }, [{ type: "set", path: ["b"], key: "k", value: 1 }])),
+    "wrong-kind",
+  );
+});
+
+Deno.test("a live value is only ever an ephemeral node's whole value", () => {
+  const g = host();
+  const canvas = new (class Canvas {})();
+  assertEquals(code(() => g.make([], "a", canvas as Json)), "wrong-field");
+  g.undo();
+  const at = { agent: "host", cause: site };
+  const live = g.api.place({
+    ...at,
+    time: g.next(),
+    address: [],
+    name: "c",
+    id: "c",
+    value: canvas,
+    ephemeral: true,
+  });
+  assertEquals(live.change.ephemeral, true);
+  const [item] = g.api.read({ agent: "host", address: ["c"] });
+  assert(item.value === canvas && item.ephemeral);
+  assertEquals(
+    code(() => g.write(["c"], { type: "set", path: [], key: "k", value: 1 })),
+    "wrong-kind",
+  );
+  g.undo();
+  assertEquals(
+    code(() =>
+      g.api.place({
+        ...at,
+        time: g.next(),
+        address: [],
+        name: "d",
+        id: "d",
+        value: [canvas],
+        ephemeral: true,
+      })
+    ),
+    "wrong-field",
+  );
+  g.undo();
+  g.make([], "o", 1);
+  assertEquals(
+    code(() => g.write(["o"], { type: "snapshot", value: canvas as Json })),
+    "wrong-field",
+  );
+  g.undo();
+  assertEquals(
+    code(() =>
+      g.api.place({ ...at, time: g.next(), address: [], name: "e", id: "e", ephemeral: true })
+    ),
+    "missing",
+  );
+  g.undo();
+  // an ordinary node is never made inside an ephemeral one
+  assertEquals(code(() => g.make(["c"], "x", 1)), "ephemeral-parent");
+});
+
+Deno.test("an ephemeral node is in one slot, the one it was made in, and moves only within it", () => {
+  const g = host();
+  const at = { agent: "host", cause: site };
+  const eph = (address: Address, name: string, id: string) =>
+    g.api.place({ ...at, time: g.next(), address, name, id, value: id, ephemeral: true });
+  g.make([], "o", {});
+  eph([], "top", "E");
+  eph([], "top", "F");
+  // a second slot, of another node or of the same one, is one-place; so is mounting it
+  assertEquals(code(() => g.place(["o"], "s", "E")), "one-place");
+  g.undo();
+  assertEquals(code(() => g.place([], "other", "E")), "one-place");
+  g.undo();
+  assertEquals(code(() => g.place(["top"], "s", "E")), "one-place");
+  g.undo();
+  // within its slot it moves, an ephemeral change
+  const moved = g.place([], "top", "E", { position: 2 });
+  assertEquals(moved.change.ephemeral, true);
+  assertEquals(g.slot([], "top"), ["F", "E"]);
+  // a value for an id the graph has is exists, before one-place
+  assertEquals(code(() => eph(["o"], "s", "E")), "exists");
+  g.undo();
+  // making an ephemeral node with an id a slot holds, a pending mount included, is one-place
+  g.place(["o"], "w", "P");
+  assertEquals(code(() => eph(["o"], "w", "P")), "one-place");
+  g.undo();
+  assertEquals(code(() => eph([], "elsewhere", "P")), "one-place");
+  g.undo();
+  // an ordinary node still fills the mount
+  g.place(["o"], "w", "P", { value: "filled" });
+  assertEquals(g.read(["o", "w"]), ["filled"]);
+  assertEquals(g.slot([], "elsewhere"), []);
+});
+
+Deno.test("an ephemeral node goes as soon as it is unplaced, what it held that was ephemeral first", () => {
+  const g = host();
+  const at = { agent: "host", cause: site };
+  const eph = (address: Address, name: string, id: string) =>
+    g.api.place({ ...at, time: g.next(), address, name, id, value: id, ephemeral: true });
+  eph([], "top", "E");
+  eph(["top"], "b", "B");
+  eph(["top"], "a", "A");
+  eph(["top", "a"], "k", "K");
+  g.make([], "o", "kept");
+  g.place(["top"], "c", "o");
+  g.place(["top", "b"], "m", "o");
+  // a reader of a slot that will be taken apart, by a walk through root's top
+  run(g.api, "p", (r) => r.directory({ address: ["top", "a"], name: "k" }));
+  const time = g.next();
+  const answer = g.api.unplace({ ...at, process: "x", time, address: [], name: "top", id: "E" });
+  assertEquals(answer.change.ephemeral, true);
+  // children before parents: slots by name, ids in slot order, each ephemeral one taken apart first
+  assertEquals(answer.gone, ["K", "A", "B", "E"]);
+  assertEquals(answer.marked, [{ process: "p", by: time }]);
+  // each taking-out an unplacement of its own, the next time, ephemeral, as the first was made
+  const made = answer.made!.map((m) => m.change);
+  assertEquals(made.map((c) => [c.time, c.node, c.kind, c.kind === "write" ? "" : c.id]), [
+    [time, "root", "unplace", "E"],
+    [time + 1, "E", "unplace", "A"],
+    [time + 2, "A", "unplace", "K"],
+    [time + 3, "E", "unplace", "B"],
+    [time + 4, "B", "unplace", "o"],
+    [time + 5, "E", "unplace", "o"],
+  ]);
+  for (const c of made) {
+    assertEquals([c.agent, c.process, c.cause, c.ephemeral], ["host", "x", site, true]);
+  }
+  assertEquals(code(() => g.write(["o"], { type: "snapshot", value: 1 })), "time");
+  for (let i = 0; i < 5; i++) g.next();
+  // the ordinary node only the ephemeral ones held stays, here but unreachable
+  g.place([], "back", "o");
+  assertEquals(g.read(["back"]), ["kept"]);
+  assertEquals(g.slot([], "top"), []);
+  // a gone node's id names nothing: placing it again mounts a node that is not here
+  g.place([], "again", "A");
+  assertEquals(g.read(["again"]), []);
+  const listing = g.api.directory({ agent: "host", address: [], name: "again" });
+  assert("items" in listing);
+  assertEquals(listing.items.map((i) => [i.id, i.pending]), [["A", true]]);
+});
+
+Deno.test("unplacing an ordinary node from an ephemeral one lets nothing go", () => {
+  const g = host();
+  const at = { agent: "host", cause: site };
+  g.api.place({
+    ...at,
+    time: g.next(),
+    address: [],
+    name: "e",
+    id: "E",
+    value: 1,
+    ephemeral: true,
+  });
+  g.make([], "o", 2);
+  g.place(["e"], "x", "o");
+  const answer = g.unplace(["e"], "x", "o");
+  assertEquals(answer.gone, undefined);
+  assertEquals(answer.change.ephemeral, true);
+  assertEquals(g.read(["e"]), [1]);
+  assertEquals(g.read(["o"]), [2]);
+});
+
+Deno.test("release unplaces an ephemeral node from its one slot by its id, reachable or not", () => {
+  const g = host();
+  const api = g.api as ReturnType<typeof graph>;
+  const at = { agent: "host", cause: site };
+  g.make([], "o", {});
+  g.api.place({
+    ...at,
+    time: g.next(),
+    address: ["o"],
+    name: "s",
+    id: "E",
+    value: 1,
+    ephemeral: true,
+  });
+  g.api.place({
+    ...at,
+    time: g.next(),
+    address: ["o", "s"],
+    name: "k",
+    id: "K",
+    value: 2,
+    ephemeral: true,
+  });
+  // its parent unplaced, nothing reaches it: it is still let go
+  g.unplace([], "o", "o");
+  const time = g.next();
+  const cause = { killed: "@1-babab", by: time - 1 };
+  const answer = api.release({ agent: "killer", process: "@2-cabab", id: "E", cause, time });
+  assertEquals(answer.gone, ["K", "E"]);
+  assertEquals(answer.change.kind === "unplace" && [answer.change.node, answer.change.name], [
+    "o",
+    "s",
+  ]);
+  assertEquals(answer.made!.map((m) => [m.change.time, m.change.cause, m.change.process]), [
+    [time, cause, "@2-cabab"],
+    [time + 1, cause, "@2-cabab"],
+  ]);
+  g.next();
+  // gone, or ordinary, or never made: nothing there
+  assertEquals(code(() => api.release({ ...at, id: "E", time: g.next() })), "nothing-there");
+  assertEquals(code(() => api.release({ ...at, id: "o", time: g.next() })), "nothing-there");
+  assertEquals(code(() => api.release({ ...at, id: "nope", time: g.next() })), "nothing-there");
+  // protect does not pass it on
+  assertEquals(protect(api, () => true).release, undefined);
+});
+
+Deno.test("an ephemeral change never becomes a slot's last change, and reload keeps only ordinary ones", () => {
+  const g = host();
+  const at = { agent: "host", cause: site };
+  g.make([], "p", {});
+  const first = g.place(["p"], "x", "a", { value: 1 }).change;
+  // a gone ephemeral node's id, mounted again: an ordinary change, pending
+  g.api.place({
+    ...at,
+    time: g.next(),
+    address: [],
+    name: "z",
+    id: "ghost",
+    value: 2,
+    ephemeral: true,
+  });
+  g.unplace([], "z", "ghost");
+  g.place(["p"], "y", "ghost");
+  g.api.place({
+    ...at,
+    time: g.next(),
+    address: ["p"],
+    name: "x",
+    id: "e",
+    value: 3,
+    ephemeral: true,
+  });
+  const listing = g.api.directory({ agent: "host", address: ["p"], name: "x" });
+  assert("items" in listing);
+  assertEquals(listing.items.map((i) => [i.id, i.change, !!i.ephemeral]), [
+    ["a", header(first), false],
+    ["e", header(first), true],
+  ]);
+  assertEquals(g.read(["p", "y"]), []);
+  const events: Event[] = [];
+  g.api.subscribe({ agent: "host", address: ["p"], send: (e) => events.push(e) });
+  run(g.api, "q", (r) => r.read({ address: ["p"] }));
+  (g.api as ReturnType<typeof graph>).reload();
+  assertEquals(g.slot(["p"], "x"), ["a"]);
+  // the mount, an ordinary change, holds the id still, pending again
+  assertEquals(g.slot(["p"], "y"), ["ghost"]);
+  assertEquals(g.read(["p", "y"]), []);
+  assertEquals(g.read(["z"]), []);
+  // subscriptions and kept reads are gone; the highest time stays
+  assertEquals(g.write(["p"], { type: "snapshot", value: {} }).marked, []);
+  assertEquals(events, []);
+  assertEquals(code(() => g.api.write({ ...at, time: 1, address: ["p"], patches: [] })), "time");
+});
+
+Deno.test("a mounted node arriving marks every slot that holds it, and a subscription is told what it reaches", () => {
+  const g = host();
+  g.make([], "d", {});
+  g.place(["d"], "x", "n");
+  run(g.api, "p", (r) => r.directory({ address: ["d"], name: "x" }));
+  const events: Event[] = [];
+  g.api.subscribe({ agent: "host", address: ["d", "x"], send: (e) => events.push(e) });
+  const made = g.make([], "n", 5);
+  assertEquals(made.marked, [{ process: "p", by: made.change.time }]);
+  assertEquals(events.length, 1);
+  const [event] = events;
+  assert("change" in event);
+  assertEquals(event.change, made.change);
+  assertEquals(event.reaches?.map((i) => i.value), [5]);
+  // forget drops what the graph keeps for it
+  g.api.forget({ agent: "host", id: "p" });
+  assertEquals(g.write(["d", "x"], { type: "snapshot", value: 6 }).marked, []);
+  assertEquals(g.place(["d"], "x", "m").marked, []);
 });

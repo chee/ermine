@@ -235,6 +235,11 @@ export class World {
     this.#guarded = protect(this.bare, may);
     this.driver = drive(this.#guarded, ROOT, this.#load);
     this.driver.top(this.driver);
+    // shown to the ermine devtools panel, as the host sees it: beneath protect
+    const shown =
+      ((globalThis as { __ermine?: { name: string; api: Interface }[] }).__ermine ??= []);
+    const at = shown.findIndex((g) => g.name === "demo");
+    shown.splice(at < 0 ? shown.length : at, at < 0 ? 0 : 1, { name: "demo", api: this.bare });
     this.bump();
   }
 

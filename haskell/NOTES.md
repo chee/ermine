@@ -18,108 +18,85 @@ see the PATH that `~/.ghc-wasm/env` sets.
 
 Unit checks (from `haskell/`), each `wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/X.wasm tests/X.hs && wasmtime run build/X.wasm`:
 
-- `tests/JsonTest.hs`: the parser, the printer (numbers as JSON.stringify prints them), `$eq`,
-  `asWhole` (no cap at 2^53), and the seq of a line that is not one JSON object (`lineSeq`).
-- `tests/TypesTest.hs`: addresses, and the encodings of changes, items, froms, errors and records.
+- `tests/JsonTest.hs`: the parser, the printer (numbers as JSON.stringify prints them, -0 as `-0`),
+  the `"/"` forms both ways (bytes, typed arrays, live, number, map) and the malformed ones,
+  value equality (CORE Values), `asWhole`, and the seq of a line that is not one JSON object (`lineSeq`).
+- `tests/TypesTest.hs`: addresses, and the encodings of changes, change headers, items (the
+  refused one included), froms, errors and records.
 - `tests/GraphTest.hs`: what the graph stack's scenarios cannot reach: which
-  processes a change marks, recordings, read-only and write-only interfaces,
-  patch error codes, and times, positions, indexes and ranges past 2^53; and
-  union reads, `..` along the place's walk (one that stopped on the way
-  included), a chroot's start, lookup passing over a slot of pending ids,
-  and subscriptions following their route.
+  processes a change marks (a node becoming here, letting go, the first change as `by`),
+  one-place (a second slot, a mount, making with a held id, moving within its slot), the
+  order a letting go takes things apart in and the ordinary node it leaves here,
+  `forget` and `reload` dropping kept reads, recordings, read-only and write-only interfaces,
+  the refused lookup item, patch error codes, times and positions past 2^53 at the graph; and
+  union reads, `..` along the place's walk (one that stopped on the way included), a chroot's
+  start, lookup passing over a slot of pending ids, and subscriptions following their route.
 
 Boot libraries only: base, containers, text, bytestring, mtl, transformers.
 
-## Status (2026-10-06)
+## Status (2026-10-07, ephemeral nodes unique)
 
-The graph stack matches CORE.tex and PROTOCOL.tex as of commit 643061e:
+The graph stack matches CORE.tex and PROTOCOL.tex as revised on 2026-10-07:
 
-- reads answer lists of items, each with its `from` and the `change` that last
-  set its value or slot (none for the root's first value); an address that
-  reaches nothing reads as `[]`;
-- a read whose last name selects a slot gives an item for each member here,
-  in slot order, each with its own value, route (ending at that member and
-  its position) and change; the first is the node the address reaches, the
-  one writes, placements and longer walks use. No names, or only `..`: the
-  one node. A directory read of the same address lists the same union;
-- a place is names from the root. Its first `chroot` names, walked on their
-  own as an address, reach its `/` (PROTOCOL: "its / is the node those names
-  reach"); its other names are walked from there: that is the place's walk.
-  `..` goes back one step along it, to the node it came through, so in a
-  union it stays in the member the place went through;
-- lookup searches the directories the place's walk went through, from `.`
-  back up to the start, each step a read of one slot through the top of the
-  stack, and takes the nearest slot holding a node that is here: a slot whose
-  ids are all pending is passed over;
-- a subscription receives each change to the node its address reaches, and
-  each placement or unplacement that changes its route (the node reached and
-  the route of the address's names), whether or not it then reaches another
-  node;
-- placing makes (with a value), mounts (an absent id, no value: a pending
-  item), places again, or moves (a position is a gap, 0 to the slot's length);
-  placing an id already there with no position leaves the slot as it is, but
-  is its last change, which its items carry; nothing is ever removed;
-- errors are `{"kind", "op"?, "why": {"code", ...details, "text"?}}` with
-  PROTOCOL's codes. A request's fields are checked in PROTOCOL's order (cmd,
-  agent, process, place, chroot, address, name, id, position, value, patches,
-  cause, time, then sub); then the graph's: the address (`above-root`,
-  `nothing-there`, unplace included), the time (`time`), then the change
-  (`exists`, `position`, `not-in-slot`, the patches patch by patch);
-- a time is a whole number from 1, a position one from 0, else `wrong-field`.
-  Whole numbers have no upper bound: any whole binary64 is one, held exactly
-  as an `Integer` (`asWhole`); a time of 1e21 prints `1e+21`, a position that
-  large is code `position`, an index that large `no-key`, a range `range`;
-- patch codes: a path key that is neither a string nor a whole number is
-  `not-a-patch` (checked before the patch is applied); an object that lacks
-  the key or a list shorter than the index, `no-key`; a string into a list or
-  a number into an object, `wrong-kind`; a splice value of the wrong kind,
-  `wrong-kind`;
-- every request but `reset` and `events` carries an agent. Subscriptions are
-  numbered from 1 in each session; after `unsubscribe` the next `events` on
-  that number hands over what arrived before, once, and after that it is
-  `wrong-field` `sub`, as is a number there never was;
-- a request before the first reset is `missing` `{"field": "reset"}`,
-  `batch` and `fire` included. `cmd` is checked first, so an unknown one is
-  `unknown-command` even then;
-- an error names its command as `op` when the command is an operation,
-  session or not (chee's ruling, pinned in `lines_test.ts`). The operations
-  are the graph's (CORE's table) and `batch`, "the driver's own operation"
-  (DRIVER, Outside operations, batches and handlers). `events` and `fire` are
-  "the harness's, not operations" (PROTOCOL, The reference protect), and
-  `reset` builds the session: their errors name no op, nor do faults in
-  `cmd`. So before the first reset `batch` is `missing` `reset` with `op`
-  `batch`, and `fire` and `events` have none;
-- a line that is not one JSON object is `not-a-request`, kind `invalid`, under
-  the seq a parser reading it from its start reaches (`Json.lineSeq`), or
-  `null`;
-- in a session, reset with stack `protect` or `drive`, `batch` and `fire`
-  answer `unsupported`.
+- values beyond JSON: bytes and typed arrays held as buffers (`JBytes`, `JTyped` with the
+  elements little-endian), numbers as `Double` with NaN, the infinities and -0; live values
+  as stand-ins (`JLive kind n`), each a new one per request that gives one. Requests read
+  values from their JSON forms (`Json.fromForms`), answers write them (`Json.render`): -0 as
+  `-0`, NaN and the infinities under `{"/": {"number": ...}}`, int64 and uint64 elements as
+  decimal strings, float32 elements shortest, a map whose only key is `"/"` escaped. A
+  malformed form is `wrong-field` of the field holding it. Equality (`Eq Value`) is CORE's:
+  `Object.is` for numbers, typed arrays only of one kind, element by element;
+- patches on bytes (octets) and typed arrays (elements of the same kind); a path never goes
+  into bytes, a typed array or a live value; checked path, then kind, then range;
+- ephemeral nodes: `"ephemeral": true` makes one (without a value: `missing` `value`); its
+  changes, and placements and unplacements of it, are ephemeral and never a slot's last
+  change; making an ordinary node in one is `ephemeral-parent` (after `exists`, before
+  `position`); a live value is only an ephemeral node's whole value, else `wrong-field`
+  (a snapshot into an ordinary node is found by the graph, after the address and time);
+  an ephemeral node is unique: in the one slot it was made in (`nodeHome`), moving only
+  within it; a second placement or a mount of its id is `one-place`, and so is making an
+  ephemeral node with an id any slot holds (after `exists` and `ephemeral-parent`, before
+  `position`, as the fuzz model orders them; PROTOCOL's graph order does not list
+  `one-place`); unplaced from its slot it goes at once, taken apart children first
+  (`Graph.letGo`; no holder counting, no cycles), each member taken out an ephemeral
+  unplacement at the next time, made by the agent and process of the change that let the
+  first one go and for its cause; an ordinary node it held stays; the change answer lists
+  `gone`; each slot keeps the ids ordinary changes put there (`slotKept`) for reload;
+- `reload` (`iReload`): ephemeral nodes and changes dropped, slots keep their kept ids
+  (a mount of a gone ephemeral node's id, made by an ordinary change, stays, pending), subscriptions and their
+  queues dropped, subscription numbers and the highest time kept;
+- marking: a change that makes an id's node here marks the readers of every slot holding
+  the id; `marked` gives each process with `by`, the time of the first change that marked
+  it, its own or one its letting go made; `forget` (`iForget`) drops a process's reads;
+- change references are times (`marked`'s `by`, records' `marked`, `cleanup`, `changes`);
+  items carry the change's header (no patches, no placement value, `ephemeral` when so);
+- subscriptions: a change to the route comes with `reaches`, the items reading the address
+  then gives; a lookup a refused read ended gives `{"refused": true, "from": {"path": p}}`;
+- times are whole numbers from 1 to 2^53-1 at the request (`wrong-field` otherwise); the
+  graph itself holds `Integer` times; lines are UTF-8, ending at 0x0a only;
+- a request acting as a process may leave its cause out; fields are checked in PROTOCOL's
+  order, `ephemeral` after `value`; `reload` and `events` carry no agent and name no op;
+  stacks `protect` and `schedule`, and `batch`, `start` and `fire`, answer `unsupported`.
 
-Builds with `-Wall`, no warnings. Unit checks pass. Conformance suite with
-`ERMINE_REQUIRE=graph`: 322 passed, 4 failed, 104 ignored (the 88 drive and
-15 protect scenarios and the one drive encoding test, whose reset is answered
-`unsupported`). All 53 graph scenarios pass, and every lines and encoding
-test, `an error names its command as op ...` included. The 4 failures are
-not the harness's: `fuzz/model_test.ts` runs the model over the graph
-scenarios, and its `DISPUTES` list still names steps of `mount.json`,
-`routes.json`, `union-walk.json` and `time-zero-invalid.json` that the
-scenarios have since been corrected in ("a listed dispute no longer differs:
-take it off DISPUTES"). Fuzz (graph stack, no save): invariants 20 seeds;
-agree with c, ts and the model 20 seeds; determinism 10 seeds; all ok.
+Builds with `-Wall`, no warnings. Unit checks pass. Conformance (`conformance_test.ts`,
+`ERMINE_REQUIRE=graph`): 108 passed, 0 failed, 110 ignored (protect and schedule
+scenarios, whose reset is answered `unsupported`). `lines_test.ts` and `encoding_test.ts`:
+three fail on the same stale expectation, an item's change carrying a placement's `value`,
+which PROTOCOL now leaves out of an item's change header.
 
-Protect, the driver and the program interpreter are gone (they were written
-for the earlier spec; see git, f3b65b1). The graph keeps CORE's marking:
-`iRecord`/`iFinish`, remembered reads and marks, which nothing below drive
-uses: `marked` is always `[]`.
+Protect, the scheduler and the program interpreter are gone (they were written
+for an earlier spec; see git, f3b65b1). The graph keeps CORE's marking:
+`iRecord`/`iFinish`, kept reads and marks, which nothing below schedule uses: `marked` is
+always `[]`.
 
 ## Files
 
 | file | what |
 |---|---|
-| Json.hs | `Value`, parser, printer that matches JS, `Eq` = `$eq` |
-| Types.hs | ids, addresses, routes, froms, changes, items, errors, `Ctx`, `Op`, `Result`, records, `Interface` |
+| Json.hs | `Value` (JSON, bytes, typed arrays, live), parser, the `"/"` forms, printer, `Eq` = CORE's equality |
+| Types.hs | ids, addresses, routes, froms, changes and headers, items, errors, `Ctx`, `Op`, `Result`, records, `Interface` |
 | Graph.hs | `graph :: Id -> IO Interface`, `applyPatches` |
-| Main.hs | the line loop, request decoding, answers |
+| Main.hs | the line loop, request decoding, live stand-ins, answers |
 
 ## The interface
 
@@ -130,28 +107,31 @@ data Interface = Interface
   , iUnsubscribe :: Ctx -> Int -> IO (Either Err ())
   , iRecord      :: Api -> RecordStart -> IO Recording
   , iFinish      :: Recording -> Ending -> IO Record
+  , iReload      :: IO ()
+  , iForget      :: Id -> IO ()
   , iSetTop      :: Interface -> IO () }
 
 data Ctx = Ctx { ctxAgent :: Value, ctxProcess :: Maybe Id, ctxPlace :: [Name], ctxChroot :: Int, ctxMode :: Mode, ctxRun :: Maybe RunTag }
 data Op  = OpRead Address | OpDirectory Address (Maybe Name) | OpLookup Name
-         | OpWrite Address [Value] | OpPlace Address Name Id (Maybe Integer) (Maybe Value) | OpUnplace Address Name Id
+         | OpWrite Address [Value] | OpPlace Address Name Id (Maybe Integer) (Maybe Value) Bool | OpUnplace Address Name Id
 ```
 
 Arguments are decoded by whoever makes the request (PROTOCOL Errors: the
-request is checked first, for `missing` and `wrong-field`); patches stay raw,
-since whether each is a patch is the graph's to say. A wrapper overrides
-`iOp` and passes `iSetTop` on; Main calls `iSetTop top top` once.
+request is checked first, for `missing` and `wrong-field`); patches keep only a
+patch's fields, their values read from their forms, since whether each is a
+patch is the graph's to say. A wrapper overrides `iOp` and passes `iSetTop`,
+`iReload` and `iForget` on; Main calls `iSetTop top top` once.
 
 ## Marking (kept, not exercised)
 
 A read through a ctx that is `ReadOnly` and in its process's current run
-remembers what it depended on: each slot its walks looked in, each member they
-tried that was not here, the slot looked for in each member that was, the
-value, slot or directory it read, and each pending id it listed. A run's
-reads count alongside its process's last finished run's and replace them when
-it finishes. A change marks every process whose reads it touched, its own
+keeps what it depended on: each slot its walks looked in, the slot looked for
+in each member that was here, and the value, slot or directory it read. A
+run's reads count alongside its process's last finished run's and replace them
+when it finishes. A change marks every process whose reads it touched, its own
 included: a write the value's readers; a place or unplace the slot's and the
-directory's; a placement that makes a node also those that passed over its id.
+directory's; a placement that makes a node also the readers of every slot that
+holds its id. Each unplacement a letting go makes marks as any change does.
 
 ## Choices where the papers are open (questions for chee)
 
@@ -173,17 +153,20 @@ directory's; a placement that makes a node also those that passed over its id.
   starts at the same node, is not sent. C, TS and the model harness do the
   same (the fuzz model's oracle leaves it open); no scenario moves only the
   place's walk.
-- Patch codes the papers do not name: a path that goes on into a string,
-  number, boolean or null is `wrong-kind` (a key needs an object or a list
-  and found another kind; `no-key` lists only an object lacking the key and
-  a list shorter than the index); a set's key that is a whole number is
-  `wrong-kind` (a number into an object), one of no kind (null, a boolean, a
+- Patch codes the papers do not name: a set's key that is a whole number is
+  `wrong-kind` (a number into a map), one of no kind (null, a boolean, a
   negative or fractional number) `not-a-patch`; a negative or fractional
   path index is not a whole number, so `not-a-patch`; within one patch, what
   it is comes first (`not-a-patch`, before its path is followed); a
   snapshot without a value, a set without a key, a path that is not a list:
   `not-a-patch`; a splice range that is missing or malformed: `range`, with
-  the target's length, checked before the splice value's kind.
+  the target's length, after the splice value's kind (PROTOCOL: path, then
+  kind, then range).
+- A float32 element is written from the shortest digits that read back as
+  the same float32 (`floatToDigits` on the `Float`), printed as JavaScript
+  prints a number. A float element's NaN is held as the one quiet NaN.
+- A reset with a stack the protocol does not have, `"drive"` included, is
+  `wrong-field` `stack`.
 - A chroot past the place's length, or not a whole number from 0:
   `wrong-field`.
 - Where the first reset is checked among a request's fields. PROTOCOL: "A

@@ -58,13 +58,19 @@ const trouble = signal<string | undefined>(undefined);
 /** The model an LLM is placed with, when one is placed. */
 const placing = signal(MODELS[0]);
 /** What the LLM is saying, before it is said: it goes into the graph when the step ends. */
-const live = signal<{ llm: Id; text: string } | undefined>(undefined);
+const live = signal<{ llm: Id; text: string; status?: string } | undefined>(undefined);
 let stop: AbortController | undefined;
 
 // --- the LLM in the graph ---
 
 /** model: only in graphs from before the model was a node of its own. */
-type Llm = { "@type": "llm"; model?: string; tools?: string[] };
+type Llm = {
+  "@type": "llm";
+  model?: string;
+  tools?: string[];
+  /** how much of the graph it is shown, in characters, if not 24000: less for a small context */
+  budget?: number;
+};
 
 /** One thing said in a talk: a node in the LLM's slot "talk". */
 type Said =
@@ -157,17 +163,37 @@ function around(name: string, node: Id, agent: string): Id | undefined {
   }
 }
 
-/** The node an LLM sits in: its first slot named "llm", or its first slot. */
-function seat(llm: Id): Id | undefined {
+/** Where an LLM sits: its first slot named "llm", or named for it, or its first slot. */
+function placeOf(llm: Id): { parent: Id; name: string } | undefined {
   const ps = world.placements().get(llm) ?? [];
-  return (ps.find((p) => p.name === "llm") ?? ps[0])?.parent;
+  return ps.find((p) => p.name === "llm" || p.name === llm) ?? ps[0];
 }
 
-/** The LLM nearest a node: in its slot "llm", or up from it. */
+/** The node an LLM sits in. */
+function seat(llm: Id): Id | undefined {
+  return placeOf(llm)?.parent;
+}
+
+/**
+ * The slot an LLM takes in a node: "llm", or, when another LLM has it, one
+ * named for it. Two in one slot would be one address, and each would look up
+ * from the union of both.
+ */
+function slotFor(parent: Id, llm: Id): string {
+  const there = world.slotOf(parent, "llm");
+  return there.length === 0 || (there.length === 1 && there[0] === llm) ? "llm" : llm;
+}
+
+/** The LLM nearest a node: one in its own slots, "llm" first, or in a node up its route. */
 function nearest(route: Step[] | undefined): Id | undefined {
-  const node = route?.at(-1)?.node ?? ROOT;
-  const found = around("llm", node, world.agent);
-  return found && llmOf(found) ? found : undefined;
+  const up = [route?.at(-1)?.node ?? ROOT, ...(route ?? []).map((s) => s.parent).reverse()];
+  for (const node of up) {
+    const slots = world.slotsOf(node).sort(([a], [b]) => (a === "llm" ? -1 : b === "llm" ? 1 : 0));
+    for (const [, ids] of slots) {
+      const found = ids.find((id) => llmOf(id) && world.addressOf(id));
+      if (found) return found;
+    }
+  }
 }
 
 /** The LLM the pane talks to: the one picked, or the one nearest the selection, or any. */
@@ -186,43 +212,64 @@ function free(stem: string): Id {
  * Places an LLM in a node, as the acting agent: the node, its model, its
  * prompt, and, if no "api" is found from there, the OpenRouter api in the root.
  */
-export function placeLlm(parent: Id = ROOT, model = MODELS[0]): Id | undefined {
-  const id = free(model.includes("claude") ? "claude" : "llm");
-  const tiny = small(model);
-  const value: Llm = tiny ? { "@type": "llm", tools: SMALL_TOOLS } : { "@type": "llm" };
-  const needsApi = !around("api", parent, world.agent);
+export function placeLlm(
+  parent: Id = ROOT,
+  model = MODELS[0],
+  /** what runs it in this browser, if something does: it gets an api of its own */
+  runs?: "webllm" | "transformers",
+): Id | undefined {
+  const id = free(
+    model.includes("claude")
+      ? "claude"
+      : runs
+      ? model.split("/").pop()!.split("-").slice(0, 2).join("-").toLowerCase()
+      : "llm",
+  );
+  const tiny = runs !== undefined || small(model);
+  // one in the browser has a small context, so it is shown less of the graph
+  const value: Llm = runs
+    ? { "@type": "llm", tools: SMALL_TOOLS, budget: 6000 }
+    : tiny
+    ? { "@type": "llm", tools: SMALL_TOOLS }
+    : { "@type": "llm" };
+  const needsApi = !runs && !around("api", parent, world.agent);
   const s = world.run(
     [
       "batch(() => {",
-      `  make(${J(parent)}, "llm", ${J(id)}, ${J(value)})`,
+      `  make(${J(parent)}, ${J(slotFor(parent, id))}, ${J(id)}, ${J(value)})`,
       `  make(${J(id)}, "model", ${J(id + ".model")}, ${J(model)})`,
       `  make(${J(id)}, "prompt", ${J(id + ".prompt")}, prompt)`,
+      // one in the browser has an api of its own, which it finds before the root's
+      ...(runs ? [`  make(${J(id)}, "api", ${J(id + "." + runs)}, local)`] : []),
       ...(needsApi ? [`  make("root", "api", ${J(free("openrouter"))}, api)`] : []),
       "})",
     ].join("\n"),
     `ask: an LLM in ${parent}`,
     "act",
     undefined,
-    { prompt: tiny ? SMALL : SYSTEM, api: OPENROUTER },
+    {
+      prompt: tiny ? SMALL : SYSTEM,
+      api: OPENROUTER,
+      local: runs === "transformers" ? TRANSFORMERS : WEBLLM,
+    },
   );
   if (!s.ok) return undefined;
   picked.value = id;
   // the key this browser kept is placed with it, so it is not typed again
   const api = around("api", id, world.agent);
-  if (api && !around("key", api, world.agent) && stored(KEY)) keepKey(id, stored(KEY));
+  if (!runs && api && !around("key", api, world.agent) && stored(KEY)) keepKey(id, stored(KEY));
   return id;
 }
 
-/** Moves an LLM into a node's slot "llm", as the acting agent. */
+/** Moves an LLM into a node, in its slot "llm" or one named for it, as the acting agent. */
 export function moveLlm(llm: Id, to: Id) {
-  const from = seat(llm);
-  if (from === to) return;
+  const from = placeOf(llm);
+  if (from?.parent === to) return;
+  const here = `place(${J(to)}, ${J(slotFor(to, llm))}, ${J(llm)})`;
   act(
     from === undefined
-      ? `place(${J(to)}, "llm", ${J(llm)})`
-      : `batch(() => {\n  place(${J(to)}, "llm", ${J(llm)})\n  unplace(${J(from)}, "llm", ${
-        J(llm)
-      })\n})`,
+      ? here
+      : `batch(() => {\n  ${here}\n  unplace(${J(from.parent)}, ${J(from.name)}, ${J(llm)})\n})`,
     `ask: move ${llm}`,
   );
 }
@@ -466,6 +513,7 @@ draws again at once. When it works, say what you made in one sentence, and call 
 const OPENROUTER = `// an api for an LLM node, found by looking up "api" from it. The host calls it
 // with the key it finds by looking up "key" from here, which nobody can read
 export default async function ({ key, model, messages, tools, signal, onText }) {
+  if (!key) throw new Error("no key around this api: keep one in the ask tab")
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     signal,
@@ -505,12 +553,196 @@ export default async function ({ key, model, messages, tools, signal, onText }) 
   return { text, calls: calls.filter(Boolean) }
 }`;
 
+/**
+ * What both in-browser apis share, as source: a small model calls tools in
+ * text, so the api tells it how, turns past tool calls into text and results
+ * into the person's turn, and reads a call back out of the reply. It keeps
+ * the talk short enough for a small context, dropping the oldest turns first.
+ */
+const TEXT_TOOLS = String
+  .raw`// a small model calls tools in text: a fenced block of code to run, a line LOOK,
+// or a line INSPECT and an id. These turn calls into text and back
+const FENCE = "\u0060\u0060\u0060"
+const HOW = "\n\nTo use a tool, end your reply with exactly one of these, and nothing after it:\n" +
+  FENCE + "run\n(a snippet)\n" + FENCE + "   runs the snippet, and tells you what happened\n" +
+  "LOOK   shows you what the stage shows\n" +
+  "INSPECT id   shows you a node: its value, its slots, and what it threw\n" +
+  "Use one tool per reply. When the work is done and checked, reply without one."
+
+function asText(messages) {
+  const out = []
+  for (const m of messages) {
+    let msg
+    if (m.role === "system") msg = { role: "system", content: m.content + HOW }
+    else if (m.role === "assistant") {
+      const calls = (m.tool_calls ?? []).map((c) => {
+        const a = JSON.parse(c.function.arguments || "{}")
+        if (c.function.name === "run") return FENCE + "run\n" + a.code + "\n" + FENCE
+        if (c.function.name === "look") return "LOOK"
+        if (c.function.name === "inspect") return "INSPECT " + a.node
+        return ""
+      })
+      msg = { role: "assistant", content: [m.content ?? "", ...calls].filter(Boolean).join("\n") }
+    } else if (m.role === "tool") msg = { role: "user", content: "What happened:\n" + m.content }
+    else msg = { role: "user", content: m.content }
+    // two turns of one role in a row become one, for chat templates that alternate
+    const last = out[out.length - 1]
+    if (last && last.role === msg.role) last.content += "\n\n" + msg.content
+    else out.push(msg)
+  }
+  return out
+}
+
+/** The oldest turns go first, keeping the system prompt; then the newest is cut in the middle. */
+function fit(messages, budget) {
+  let ms = messages.slice()
+  const size = (list) => list.reduce((n, m) => n + m.content.length, 0)
+  while (size(ms) > budget && ms.length > 2) ms.splice(1, 1)
+  while (ms.length > 2 && ms[1].role !== "user") ms.splice(1, 1)
+  if (size(ms) > budget) {
+    const last = ms[ms.length - 1]
+    const keep = Math.max(2000, budget - (size(ms) - last.content.length))
+    last.content = last.content.slice(0, keep / 2) + "\n…\n" + last.content.slice(-keep / 2)
+  }
+  return ms
+}
+
+let made = 0
+const call = (name, args) => ({
+  id: "text-" + Date.now() + "-" + made++,
+  type: "function",
+  function: { name, arguments: JSON.stringify(args) },
+})
+
+/** The words before a call, and the call: a fenced block runs, LOOK looks, INSPECT inspects. */
+function parse(text) {
+  const run = text.match(new RegExp(FENCE + "(?:run|js|javascript)?[ \\t]*\\n([\\s\\S]*?)" + FENCE))
+  if (run) return { text: text.slice(0, run.index).trim(), calls: [call("run", { code: run[1].trim() })] }
+  const look = text.match(/^\s*LOOK\s*$/m)
+  if (look) return { text: text.slice(0, look.index).trim(), calls: [call("look", {})] }
+  const inspect = text.match(/^\s*INSPECT\s+(\S+)\s*$/m)
+  if (inspect) return { text: text.slice(0, inspect.index).trim(), calls: [call("inspect", { node: inspect[1] })] }
+  return { text: text.trim(), calls: [] }
+}
+`;
+
+/**
+ * An api that runs a model in this browser with WebLLM, on WebGPU. The first
+ * call downloads the model, which the browser keeps; one model is loaded at
+ * a time, for a machine with little memory.
+ */
+const WEBLLM =
+  String.raw`// an api that runs the model in this browser, with WebLLM on WebGPU. The first
+// call downloads the model (1.5 to 2.5 GB), which the browser then keeps
+` + TEXT_TOOLS + String.raw`
+export default async function ({ model, messages, signal, onText, onStatus }) {
+  if (!navigator.gpu) throw new Error("this browser has no WebGPU: try Chrome, or Safari 26")
+  const engines = globalThis.ermineWebllm ??= new Map()
+  // one model at a time: another is unloaded first
+  for (const [m, e] of engines) {
+    if (m !== model) (engines.delete(m), e.then((x) => x.unload()).catch(() => {}))
+  }
+  if (!engines.has(model)) {
+    const webllm = await import("https://esm.run/@mlc-ai/web-llm@0.2.85")
+    engines.set(model, webllm.CreateMLCEngine(model, {
+      initProgressCallback: (p) => onStatus?.(p.text),
+    }, { context_window_size: 8192 }).catch((e) => (engines.delete(model), Promise.reject(e))))
+  }
+  const engine = await engines.get(model)
+  onStatus?.(undefined)
+  signal.addEventListener("abort", () => engine.interruptGenerate())
+  const chunks = await engine.chat.completions.create({
+    messages: fit(asText(messages), 20000),
+    stream: true,
+    temperature: 0.2,
+    max_tokens: 1500,
+  })
+  let text = ""
+  for await (const c of chunks) {
+    const piece = c.choices[0]?.delta?.content ?? ""
+    text += piece
+    onText(piece)
+  }
+  if (signal.aborted) throw new DOMException("stopped", "AbortError")
+  return parse(text)
+}`;
+
+/** An api that runs a model in this browser with transformers.js, on WebGPU. */
+const TRANSFORMERS =
+  String.raw`// an api that runs the model in this browser, with transformers.js on WebGPU.
+// The first call downloads the model, which the browser then keeps
+` + TEXT_TOOLS + String.raw`
+export default async function ({ model, messages, signal, onText, onStatus }) {
+  if (!navigator.gpu) throw new Error("this browser has no WebGPU: try Chrome, or Safari 26")
+  const tf = globalThis.ermineTransformersLib ??=
+    await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1")
+  const loaded = globalThis.ermineTransformers ??= new Map()
+  for (const [m, g] of loaded) {
+    if (m !== model) (loaded.delete(m), g.then((x) => x.dispose?.()).catch(() => {}))
+  }
+  if (!loaded.has(model)) {
+    loaded.set(model, tf.pipeline("text-generation", model, {
+      device: "webgpu",
+      dtype: "q4f16",
+      progress_callback: (p) =>
+        onStatus?.(p.status + (p.file ? " " + p.file : "") + (p.progress ? " " + Math.round(p.progress) + "%" : "")),
+    }).catch((e) => (loaded.delete(model), Promise.reject(e))))
+  }
+  const generate = await loaded.get(model)
+  onStatus?.(undefined)
+  const stopper = new tf.InterruptableStoppingCriteria()
+  signal.addEventListener("abort", () => stopper.interrupt())
+  const streamer = new tf.TextStreamer(generate.tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: true,
+    callback_function: (piece) => onText(piece),
+  })
+  const out = await generate(fit(asText(messages), 20000), {
+    max_new_tokens: 1500,
+    do_sample: false,
+    streamer,
+    stopping_criteria: stopper,
+  })
+  if (signal.aborted) throw new DOMException("stopped", "AbortError")
+  return parse(out[0].generated_text.at(-1).content)
+}`;
+
+/** Models small enough for a machine with 8 GB, run in the browser, and what runs them. */
+const LOCAL: { label: string; model: string; api: "webllm" | "transformers" }[] = [
+  {
+    label: "Qwen2.5 Coder 3B · WebLLM · 2.5 GB",
+    model: "Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC",
+    api: "webllm",
+  },
+  {
+    label: "Qwen2.5 Coder 1.5B · WebLLM · 1.6 GB",
+    model: "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC",
+    api: "webllm",
+  },
+  {
+    label: "Llama 3.2 3B · WebLLM · 2.3 GB",
+    model: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
+    api: "webllm",
+  },
+  {
+    label: "Qwen2.5 Coder 3B · transformers.js",
+    model: "onnx-community/Qwen2.5-Coder-3B-Instruct",
+    api: "transformers",
+  },
+  {
+    label: "Qwen2.5 Coder 1.5B · transformers.js",
+    model: "onnx-community/Qwen2.5-Coder-1.5B-Instruct",
+    api: "transformers",
+  },
+];
+
 /** What an LLM sees as it is asked: where it sits, and the graph from there down. */
 function context(llm: Id, about?: Id, route?: readonly Step[]): string {
   const agent = agentOf(llm);
   const at = seat(llm) ?? ROOT;
+  const budget = llmOf(llm)?.budget ?? 24000;
   let image = world.image(at, (id) => llmOf(id) !== undefined);
-  if (image.length > 24000) image = image.slice(0, 24000) + "\n// … the rest is left out";
+  if (image.length > budget) image = image.slice(0, budget) + "\n// … the rest is left out";
   const sel = selected.value;
   const where = (id: Id, r?: readonly Step[]) => {
     const a = world.addressOf(id, r);
@@ -518,9 +750,9 @@ function context(llm: Id, about?: Id, route?: readonly Step[]): string {
   };
   const thrown = [...world.thrown].map(([p, t]) => `${p}'s ${t.part} threw: ${t.message}`);
   return [
-    `You are ${J(llm)}, a node in the graph, in ${where(at)}'s slot "llm". You act as ${
-      J(agent)
-    }, an agent of your own; the person asking acts as ${J(world.agent)}.`,
+    `You are ${J(llm)}, a node in the graph, in ${where(at)}'s slot ${
+      J(placeOf(llm)?.name ?? "llm")
+    }. You act as ${J(agent)}, an agent of your own; the person asking acts as ${J(world.agent)}.`,
     `You sit in ${J(at)}: build there unless asked otherwise. You see the graph from there down; ` +
     `the graph tool with { "whole": true } shows all of it.`,
     sel && sel.id !== ROOT && !about ? `Selected: ${where(sel.id, sel.route)}.` : "",
@@ -753,12 +985,15 @@ async function use(
 
 /** What the api program is called with, and what it gives back. */
 type Api = (o: {
-  key: string;
+  /** the key found around the api; an api that never mentions a key is given none */
+  key?: string;
   model: string;
   messages: unknown[];
   tools: unknown[];
   signal: AbortSignal;
   onText: (piece: string) => void;
+  /** how loading goes, such as a model downloading; undefined when it is done */
+  onStatus?: (status: string | undefined) => void;
 }) => Promise<
   { text: string; calls: { id: string; function: { name: string; arguments: string } }[] }
 >;
@@ -811,7 +1046,7 @@ const STEPS = 30;
 const LOOKERS = new Set(["look", "inspect", "print", "graph"]);
 
 /** What an LLM needs, found around it; or why it cannot be asked. */
-function needs(llm: Id): { api: Api; prompt: string; key: string } | string {
+function needs(llm: Id): { api: Api; prompt: string; key?: string } | string {
   if (modelNode(llm) === undefined && !llmOf(llm)?.model) {
     return `${llm} finds no "model" around it`;
   }
@@ -824,21 +1059,23 @@ function needs(llm: Id): { api: Api; prompt: string; key: string } | string {
   if (!apiAt) return `${llm} finds no "api" around it`;
   const code = world.read(apiAt, undefined, agent);
   if ("refused" in code) return `${llm} may not read its api, ${apiAt}: ${code.refused}`;
-  let key = keyFor(apiAt, agent);
+  // an api in this browser, which never mentions a key, needs none
+  const keyed = /\bkey\b/.test(String(code.value));
+  let key = keyed ? keyFor(apiAt, agent) : undefined;
   // a key this browser kept is placed for the api, so it is not typed again
-  if (!key && stored(KEY)) {
+  if (keyed && !key && stored(KEY)) {
     const why = keepKey(llm, stored(KEY));
     if (why) return why;
     key = keyFor(apiAt, agent);
   }
-  if (!key) return `${apiAt} finds no key around it`;
+  if (keyed && !key) return `${apiAt} finds no key around it`;
   let api: Api;
   try {
     api = world.module(String(code.value), "api") as Api;
   } catch (e) {
     return `${apiAt} does not load: ${(e as Error).message}`;
   }
-  return { api, prompt: String(prompt.value ?? ""), key };
+  return { api, prompt: String(prompt.value ?? ""), ...(key ? { key } : {}) };
 }
 
 /**
@@ -874,16 +1111,19 @@ export async function ask(
   let unchecked = false;
   let nudged = 0;
   let worked = false;
+  /** the last call, and how many times in a row it was made: a small model can loop */
+  let same = { call: "", times: 0 };
   try {
     for (let n = 0; n < STEPS; n++) {
       live.value = { llm, text: "" };
       const reply = await need.api({
-        key: need.key,
+        ...(need.key ? { key: need.key } : {}),
         model,
         messages: messagesOf(llm, need.prompt),
         tools,
         signal: stop.signal,
         onText: (piece) => (live.value = { llm, text: (live.value?.text ?? "") + piece }),
+        onStatus: (status) => (live.value = { llm, text: live.value?.text ?? "", status }),
       });
       live.value = undefined;
       const calls = reply.calls.map((c) => ({
@@ -905,6 +1145,16 @@ export async function ask(
           }, "host");
           continue;
         }
+        break;
+      }
+      const sig = J(calls.map((c) => [c.name, c.arguments]));
+      same = sig === same.call ? { call: sig, times: same.times + 1 } : { call: sig, times: 1 };
+      if (same.times >= 3) {
+        say(llm, {
+          role: "assistant",
+          text: "(it made the same call three times in a row, so it was stopped)",
+          error: true,
+        }, "host");
         break;
       }
       for (const c of calls) {
@@ -1085,6 +1335,22 @@ export function Ask() {
             </>
           )}
         <datalist id="ask-models">{MODELS.map((m) => <option key={m} value={m} />)}</datalist>
+        <select
+          class="ask-local"
+          value=""
+          title="a model that runs in this browser, on WebGPU, small enough for 8 GB"
+          onChange={(e) => {
+            const pick = LOCAL[Number((e.target as HTMLSelectElement).value)];
+            (e.target as HTMLSelectElement).value = "";
+            const into = selected.value && world.made.has(selected.value.id)
+              ? selected.value.id
+              : ROOT;
+            if (pick) placeLlm(into, pick.model, pick.api);
+          }}
+        >
+          <option value="">＋ in-browser LLM…</option>
+          {LOCAL.map((l, i) => <option key={l.model} value={i}>{l.label}</option>)}
+        </select>
       </div>
       {keyOpen && llm
         ? (
@@ -1139,6 +1405,9 @@ export function Ask() {
             ? <div class={`ask-words${s.error ? " muted" : ""}`} key={id}>{s.text}</div>
             : null
         )}
+        {live.value?.llm === llm && live.value?.status
+          ? <div class="ask-status">{live.value.status}</div>
+          : null}
         {said !== undefined
           ? <div class="ask-words">{said || <span class="muted">…</span>}</div>
           : null}
@@ -1346,7 +1615,7 @@ export function AskPopover() {
                   if (id) {
                     select(id, [...at.route, {
                       parent: at.id,
-                      name: "llm",
+                      name: placeOf(id)?.name ?? "llm",
                       node: id,
                       position: 0,
                     }]);

@@ -99,7 +99,7 @@ int main(void) {
 	roundTrip("\"\\ud83d\\ude00\"", "\"\xf0\x9f\x98\x80\"");
 	roundTrip("\"\\ud800x\\udc00\"", "\"\\ud800x\\udc00\"");
 	roundTrip("\"\\u0000\"", "\"\\u0000\"");
-	roundTrip(" {\"a\" : [1, 2.50, -0, 1E3, true, false, null], \"b\": {}} \r", "{\"a\":[1,2.5,0,1000,true,false,null],\"b\":{}}");
+	roundTrip(" {\"a\" : [1, 2.50, -0, 1E3, true, false, null], \"b\": {}} \r", "{\"a\":[1,2.5,-0,1000,true,false,null],\"b\":{}}");
 	roundTrip("{\"a\":1,\"a\":2}", "{\"a\":2}");
 
 	// failures
@@ -124,7 +124,7 @@ int main(void) {
 
 	// equality
 	expectTrue("objects in any order", jsonEqual(parse("{\"a\":1,\"b\":[1,{\"c\":null}]}"), parse("{\"b\":[1.0,{\"c\":null}],\"a\":1e0}")));
-	expectTrue("-0 is 0", jsonEqual(parse("-0"), parse("0")));
+	expectTrue("-0 is not 0", !jsonEqual(parse("-0"), parse("0")));
 	expectTrue("lists in order", !jsonEqual(parse("[1,2]"), parse("[2,1]")));
 	expectTrue("more keys", !jsonEqual(parse("{\"a\":1}"), parse("{\"a\":1,\"b\":2}")));
 	expectTrue("types", !jsonEqual(parse("1"), parse("\"1\"")) && !jsonEqual(parse("null"), parse("false")));
@@ -219,6 +219,62 @@ int main(void) {
 			jsonFree(read);
 			jsonFree(value);
 		}
+	}
+
+	{
+		// PROTOCOL Values in JSON: each form read and written back as given
+		const char *forms[] = {
+			"{\"/\":{\"bytes\":\"aGVsbG8\"}}",
+			"{\"/\":{\"bytes\":\"+/8\"}}",
+			"{\"/\":{\"bytes\":\"\"}}",
+			"[{\"/\":{\"float64\":[-0,\"NaN\",\"Infinity\",\"-Infinity\",1.5,1e+300]}}]",
+			"{\"/\":{\"float32\":[0.1,-0,\"NaN\",3.4028235e+38]}}",
+			"{\"/\":{\"int64\":[\"-9223372036854775808\",\"9007199254740993\",\"9223372036854775807\"]}}",
+			"{\"/\":{\"uint64\":[\"0\",\"18446744073709551615\"]}}",
+			"{\"/\":{\"int8\":[-128,127]}}",
+			"{\"/\":{\"uint32\":[0,4294967295]}}",
+			"{\"/\":{\"map\":{\"/\":{\"/\":{\"map\":{\"/\":null}}}}}}",
+			"{\"k\":{\"/\":{\"number\":\"-Infinity\"}},\"/\":1}",
+			"{\"/\":{\"number\":\"NaN\"}}",
+		};
+		for (size_t i = 0; i < sizeof forms / sizeof *forms; i++) {
+			Json *value = parse(forms[i]);
+			expectTrue(forms[i], jsonDecode(&value, false));
+			char *text = jsonPrint(value);
+			expectText("form round trip", text, forms[i]);
+			free(text);
+		}
+		Json *shortest = parse("{\"/\":{\"float32\":[3.141592653589793,16777217,123456.789]}}");
+		expectTrue("float32 decodes", jsonDecode(&shortest, false));
+		char *text = jsonPrint(shortest);
+		expectText("float32 shortest", text, "{\"/\":{\"float32\":[3.1415927,16777216,123456.79]}}");
+		free(text);
+		const char *malformed[] = {
+			"{\"/\":{\"bytes\":\"aGk=\"}}", "{\"/\":{\"bytes\":\"aGVsb\"}}", "{\"/\":{\"bytes\":\"aGl\"}}", "{\"/\":{\"bytes\":\"-_8\"}}",
+			"{\"/\":{\"int8\":[128]}}", "{\"/\":{\"uint8\":[0.5]}}", "{\"/\":{\"int64\":[1]}}", "{\"/\":{\"int64\":[\"01\"]}}",
+			"{\"/\":{\"uint64\":[\"18446744073709551616\"]}}", "{\"/\":{\"int64\":[\"9223372036854775808\"]}}", "{\"/\":{\"float32\":[1e39]}}",
+			"{\"/\":{\"float64\":[\"nan\"]}}", "{\"/\":{\"number\":\"-0\"}}", "{\"/\":{}}", "{\"/\":1}", "{\"/\":{\"map\":{\"/\":1,\"x\":2}}}",
+			"{\"/\":{\"bytes\":\"aGk\",\"int8\":[]}}", "[{\"/\":{\"live\":\"canvas\"}}]", "{\"/\":{\"live\":\"canvas\"}}",
+		};
+		for (size_t i = 0; i < sizeof malformed / sizeof *malformed; i++) {
+			Json *value = parse(malformed[i]);
+			expectTrue(malformed[i], !jsonDecode(&value, false));
+		}
+		Json *live = parse("{\"/\":{\"live\":\"canvas\"}}"), *again = parse("{\"/\":{\"live\":\"canvas\"}}");
+		expectTrue("a whole live value", jsonDecode(&live, true) && jsonDecode(&again, true) && live->type == JSON_LIVE);
+		expectTrue("live values are equal only to themselves", jsonEqual(live, live) && !jsonEqual(live, again));
+		Json *nested = parse("[{\"/\":{\"live\":\"canvas\"}}]");
+		expectTrue("a live value only as the whole value", !jsonDecode(&nested, true));
+		// CORE Values: equality
+		Json *values[] = { parse("{\"/\":{\"number\":\"NaN\"}}"), parse("{\"/\":{\"float32\":[\"NaN\",0]}}"), parse("{\"/\":{\"float32\":[\"NaN\",-0]}}"),
+			parse("{\"/\":{\"float64\":[\"NaN\",0]}}"), parse("{\"/\":{\"bytes\":\"AQI\"}}"), parse("{\"/\":{\"uint8\":[1,2]}}"), parse("[1,2]") };
+		for (size_t i = 0; i < sizeof values / sizeof *values; i++) jsonDecode(&values[i], false);
+		expectTrue("NaN equals NaN", jsonEqual(values[0], jsonNumber(-values[0]->number)) && !jsonEqual(parse("0"), parse("-0")));
+		Json *same = parse("{\"/\":{\"float32\":[\"NaN\",0]}}");
+		jsonDecode(&same, false);
+		expectTrue("typed arrays element by element", jsonEqual(values[1], same) && !jsonEqual(values[1], values[2]));
+		expectTrue("typed arrays only of the same kind", !jsonEqual(values[1], values[3]));
+		expectTrue("bytes, a typed array and a list differ", !jsonEqual(values[4], values[5]) && !jsonEqual(values[5], values[6]) && !jsonEqual(values[4], values[6]));
 	}
 
 	if (failures) {

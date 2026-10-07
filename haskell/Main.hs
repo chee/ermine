@@ -9,15 +9,20 @@
 -- under the seq a parser reading it from its start reaches before it stops
 -- being JSON ('lineSeq'), and under null when there is none.
 --
--- * reset with stack "graph" builds graph(root); "protect" and "drive"
---   answer @{"unsupported": "reset"}@, as do batch and fire.
+-- * reset with stack "graph" builds graph(root); "protect" and "schedule"
+--   answer @{"unsupported": "reset"}@, as do batch, start and fire.
 -- * A request is checked before the stack sees it, its fields in
 --   PROTOCOL's order (Errors): cmd, agent, process, place, chroot, address,
---   name, id, position, value, patches, cause, time, then any field only
---   that command has (sub). A field that is not there is @missing@, one of
---   the wrong kind @wrong-field@, with the command as the error's op. A
---   time is a whole number from 1, a position one from 0.
--- * Every request but reset and events carries an agent.
+--   name, id, position, value, ephemeral, patches, cause, time, then any
+--   field only that command has (sub). A field that is not there is
+--   @missing@, one of the wrong kind @wrong-field@, with the command as the
+--   error's op. A time is a whole number from 1 to 2^53-1, a position one
+--   from 0. A value is read from its JSON form ('fromForms'): a live value
+--   only as the value of a placement making an ephemeral node or of a
+--   snapshot, each a new stand-in; whether the snapshot's node may take it
+--   is the graph's to say. A request acting as a process may leave its
+--   cause out.
+-- * Every request but reset, reload and events carries an agent.
 -- * Subscriptions are numbered from 1 in each session. After unsubscribe,
 --   the next events on that number hands over what arrived before it, once;
 --   after that, and for a number there never was, sub is wrong-field.
@@ -26,8 +31,8 @@
 --   before the first reset is missing "reset", batch and fire included,
 --   since there is no stack yet to not have them.
 -- * An error names its command as op when the command is an operation,
---   session or not: the graph's (CORE Operations) and batch, the driver's
---   own (DRIVER Outside operations, batches and handlers). events and fire
+--   session or not: the graph's (CORE Operations), and batch and start, the
+--   scheduler's (SCHEDULER.tex). events, fire and reload
 --   are the harness's, not operations (PROTOCOL The reference protect), and
 --   reset builds the session: their errors name no op.
 -- * A Haskell exception while answering (a bug) is answered as
@@ -54,6 +59,7 @@ import Types
 data Session = Session
   { sessionTop :: Interface
   , sessionEvents :: IORef (Map.Map Int Queue)
+  , sessionLive :: IORef Int -- ^ the last live stand-in given
   }
 
 -- | What arrived for one subscription since the last "events" (newest
@@ -96,9 +102,6 @@ maybeField k decode req = case field k req of
   Nothing -> Right Nothing
   Just v -> maybe (Left (wrongField k)) (Right . Just) (decode v)
 
-anything :: Value -> Maybe Value
-anything = Just
-
 asName :: Value -> Maybe Name
 asName v = asText v >>= \t -> if isName t then Just t else Nothing
 
@@ -106,26 +109,46 @@ asName v = asText v >>= \t -> if isName t then Just t else Nothing
 asPosition :: Value -> Maybe Integer
 asPosition v = asWhole v >>= \k -> if k >= 0 then Just k else Nothing
 
+-- | A value in its JSON form, with no live value in it.
+asValue :: Value -> Maybe Value
+asValue = fromForms False
+
 -- | The acting context: agent, process, place (names from the root) and
 -- chroot (how many of them are hidden, 0 to the place's length).
 ctxOf :: Value -> Decode Ctx
 ctxOf req = do
-  agent <- need "agent" anything req
+  agent <- need "agent" asValue req
   process <- maybeField "process" asText req
   place <- fromMaybe [] <$> maybeField "place" (\v -> asList v >>= mapM asName) req
   chroot <- fromMaybe 0 <$> maybeField "chroot" asWhole req
   when (chroot < 0 || chroot > toInteger (length place)) (Left (wrongField "chroot"))
   Right (outside agent process place (fromInteger chroot))
 
--- | A change from outside carries its cause, which stands for its site, and,
--- below drive, its time: a whole number from 1 (PROTOCOL The session).
+-- | A change from outside carries its cause, which stands for its site; one
+-- acting as a process may leave it out, as a process's change has a cause
+-- only if its program gives one. Below schedule it carries its time: a
+-- whole number from 1 to 2^53-1 (PROTOCOL Encodings, The session).
 stampOf :: Value -> Decode Stamp
 stampOf req = do
-  cause <- need "cause" anything req
+  cause <- maybe (Just <$> need "cause" asValue req) (const (maybeField "cause" asValue req)) (field "process" req)
   time <- need "time" asTime req
-  Right (Stamp (Just cause) (Just time))
+  Right (Stamp cause (Just time))
   where
-    asTime v = asWhole v >>= \t -> if t >= 1 then Just t else Nothing
+    asTime v = asWhole v >>= \t -> if t >= 1 && t <= 2 ^ (53 :: Int) - 1 then Just t else Nothing
+
+-- | A write's patches: a list, each patch's value read from its JSON form,
+-- a live value only as a snapshot's whole value. A patch keeps only the
+-- fields a patch has; what is not a map stays as it is, for the graph to
+-- find it is not a patch.
+asPatches :: Value -> Maybe [Value]
+asPatches v = asList v >>= mapM patch
+  where
+    patch p = case p of
+      JObject fs -> do
+        let live = lookup "type" fs == Just "snapshot"
+        value <- mapM (fromForms live) (lookup "value" fs)
+        Just (JObject ([(k, x) | (k, x) <- fs, k `elem` ["type", "path", "range", "key"]] ++ optional "value" value))
+      _ -> Just p
 
 -- ===========================================================================
 -- the session
@@ -140,9 +163,10 @@ reset req = case need "stack" asText req of
       top <- Graph.graph root
       iSetTop top top
       events <- newIORef Map.empty
-      pure (Right (Session top events))
+      live <- newIORef 0
+      pure (Right (Session top events live))
   Right stack
-    | stack == "protect" || stack == "drive" -> pure (Left (ReplyUnsupported "reset"))
+    | stack `elem` ["protect", "schedule"] -> pure (Left (ReplyUnsupported "reset"))
     | otherwise -> pure (Left (ReplyError (wrongField "stack")))
 
 -- | Answers one request, an object. cmd is checked first: whether the
@@ -158,13 +182,13 @@ respond ref req = case field "cmd" req of
       Left reply -> pure reply
       Right s -> writeIORef ref (Just s) >> pure (ReplyOk JNull)
   Just (JString cmd)
-    | cmd `notElem` commands && cmd `notElem` driverCommands -> pure (ReplyError (unknownCommand cmd))
+    | cmd `notElem` commands && cmd `notElem` scheduleCommands -> pure (ReplyError (unknownCommand cmd))
     | otherwise -> do
         ms <- readIORef ref
         case ms of
           Nothing -> pure (ReplyError (opOf cmd noSession))
           Just s
-            | cmd `elem` driverCommands -> pure (ReplyUnsupported cmd)
+            | cmd `elem` scheduleCommands -> pure (ReplyUnsupported cmd)
             | otherwise -> dispatch s cmd req
   Just _ -> pure (ReplyError (wrongField "cmd"))
 
@@ -172,9 +196,10 @@ respond ref req = case field "cmd" req of
 noSession :: Err
 noSession = invalid "missing" [("field", "reset")] "there is no session: send reset first"
 
--- | The commands only drive has, which the graph stack answers unsupported.
-driverCommands :: [Text]
-driverCommands = ["batch", "fire"]
+-- | The commands only schedule has, which the graph stack answers
+-- unsupported.
+scheduleCommands :: [Text]
+scheduleCommands = ["batch", "start", "fire"]
 
 unknownCommand :: Text -> Err
 unknownCommand cmd = invalid "unknown-command" [("cmd", str cmd)] "the protocol has no such command"
@@ -187,18 +212,17 @@ graphOperations :: [Text]
 graphOperations = ["read", "directory", "lookup", "write", "place", "unplace", "subscribe", "unsubscribe"]
 
 -- | The operations, which an error answering one names in its op (PROTOCOL
--- Errors), session or not: the graph's, and batch, the driver's own (DRIVER
--- Outside operations, batches and handlers). events and fire are the
--- harness's, not operations (PROTOCOL The reference protect), and reset
--- builds the session.
+-- Errors), session or not: the graph's, and batch and start, the
+-- scheduler's. events, fire and reload are the harness's, not operations
+-- (PROTOCOL The reference protect, Commands), and reset builds the session.
 operations :: [Text]
-operations = graphOperations ++ ["batch"]
+operations = graphOperations ++ ["batch", "start"]
 
--- | What a session answers: the graph's operations, and events, the
--- harness's own, whose errors name no op. reset, batch and fire are answered
--- before.
+-- | What a session answers: the graph's operations, and events and reload,
+-- the harness's own, whose errors name no op. reset, batch, start and fire
+-- are answered before.
 commands :: [Text]
-commands = graphOperations ++ ["events"]
+commands = graphOperations ++ ["events", "reload"]
 
 -- | An error answering the command, with the command as its op when it is
 -- one of the 'operations'.
@@ -211,16 +235,19 @@ dispatch s cmd req = case cmd of
   "read" -> query (OpRead <$> address)
   "directory" -> query (OpDirectory <$> address <*> maybeField "name" asName req)
   "lookup" -> query (OpLookup <$> need "name" asName req)
-  "write" -> change (OpWrite <$> address <*> need "patches" asList req)
+  "write" -> change (OpWrite <$> address <*> need "patches" asPatches req)
   "place" ->
-    change
-      ( OpPlace
-          <$> address
-          <*> need "name" asName req
-          <*> need "id" asText req
-          <*> maybeField "position" asPosition req
-          <*> maybeField "value" anything req
-      )
+    change $ do
+      a <- address
+      nm <- need "name" asName req
+      i <- need "id" asText req
+      pos <- maybeField "position" asPosition req
+      -- "ephemeral": true makes the node ephemeral, and needs a value; a
+      -- live value is only the whole value of such a node
+      let making = field "ephemeral" req == Just (JBool True)
+      value <- if making then Just <$> need "value" (fromForms True) req else maybeField "value" asValue req
+      eph <- fromMaybe False <$> maybeField "ephemeral" asBool req
+      Right (OpPlace a nm i pos value eph)
   "unplace" -> change (OpUnplace <$> address <*> need "name" asName req <*> need "id" asText req)
   "subscribe" -> decoded ((,) <$> ctxOf req <*> address) $ \(ctx, a) -> do
     queue <- newIORef []
@@ -240,6 +267,11 @@ dispatch s cmd req = case cmd of
         pure (ReplyOk JNull)
   -- events is the harness's, not an operation: it needs no agent, and its
   -- errors name no op
+  -- reload is the harness's: it carries no agent and is not a change
+  "reload" -> do
+    iReload top
+    writeIORef (sessionEvents s) Map.empty
+    pure (ReplyOk JNull)
   "events" -> case need "sub" asWhole req of
     Left e -> pure (ReplyError e)
     Right n -> do
@@ -259,7 +291,8 @@ dispatch s cmd req = case cmd of
     decoded :: Decode a -> (a -> IO Reply) -> IO Reply
     decoded d k = either (pure . ReplyError . withOp cmd) k d
 
-    change dop = decoded ((,,) <$> ctxOf req <*> dop <*> stampOf req) $ \(ctx, op, stamp) -> do
+    change dop = decoded ((,,) <$> ctxOf req <*> dop <*> stampOf req) $ \(ctx, op0, stamp) -> do
+      op <- standIns op0
       r <- iOp top ctx stamp op
       pure $ case r of
         Left e -> ReplyError e
@@ -272,6 +305,17 @@ dispatch s cmd req = case cmd of
         Left e -> ReplyError e
         Right res -> ReplyOk (resultJson res)
 
+    -- each live value a request gives is a new stand-in
+    standIns op = case op of
+      OpPlace a nm i pos (Just v) eph -> (\v' -> OpPlace a nm i pos (Just v') eph) <$> stand v
+      OpWrite a ps -> OpWrite a <$> mapM (\p -> maybe (pure p) (fmap (\v -> setField "value" v p) . stand) (field "value" p)) ps
+      _ -> pure op
+    stand v = case v of
+      JLive k _ -> JLive k <$> atomicModifyIORef' (sessionLive s) (\n -> (n + 1, n + 1))
+      _ -> pure v
+    setField k v (JObject fs) = JObject [(k', if k' == k then v else x) | (k', x) <- fs]
+    setField _ _ p = p
+
 -- | read, directory and lookup answers.
 resultJson :: Result -> Value
 resultJson r = case r of
@@ -280,16 +324,17 @@ resultJson r = case r of
   ResultDirectory listing -> object [("directory", JArray [JArray [str n, JArray (map itemToJson is)] | (n, is) <- listing])]
   ResultApplied a -> changeAnswer a
 
--- | @{"change": c, "marked": [{"process": id, "by": ref}]}@.
+-- | @{"change": c, "marked": [{"process": id, "by": t}], "gone": [id]?}@.
 changeAnswer :: Applied -> Value
-changeAnswer (Applied c marked) =
-  object
+changeAnswer (Applied c marked gone) =
+  object $
     [ ("change", changeToJson c)
-    , ("marked", JArray [object [("process", str p), ("by", changeRefToJson (refOf c))] | p <- marked])
+    , ("marked", JArray [object [("process", str p), ("by", integer t)] | (p, t) <- marked])
     ]
+      ++ [("gone", JArray (map str gone)) | not (null gone)]
 
 eventJson :: Event -> Value
-eventJson (EventChange c) = object [("change", changeToJson c)]
+eventJson (EventChange c reaches) = object ([("change", changeToJson c)] ++ optional "reaches" (JArray . map itemToJson <$> reaches))
 eventJson (EventRecord r) = object [("record", recordToJson r)]
 
 -- ===========================================================================

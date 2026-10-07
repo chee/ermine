@@ -2,13 +2,39 @@
 // changes, items, records, errors, and the interface every layer of a stack
 // offers.
 
+/**
+ * A value (CORE.tex, Values): null, a boolean, a number (NaN, the infinities
+ * and -0 included), a string, a list, a map, bytes (an ArrayBuffer), or a
+ * typed array of one of the ten kinds; and, only as an ephemeral node's whole
+ * value, a live value: anything else the host holds, which the graph never
+ * looks inside. The name is older than the values.
+ */
 export type Json =
   | null
   | boolean
   | number
   | string
   | readonly Json[]
-  | { readonly [key: string]: Json };
+  | { readonly [key: string]: Json }
+  | ArrayBuffer
+  | Typed
+  | Live;
+
+/** A typed array of one of CORE.tex's kinds, held as the machine holds it. */
+export type Typed =
+  | Int8Array
+  | Uint8Array
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | BigInt64Array
+  | BigUint64Array
+  | Float32Array
+  | Float64Array;
+
+/** Something only its host holds, such as a canvas or a socket: an object of its own class. */
+export type Live = object;
 
 /** A node's id. The core only compares ids, and uses them only for mounting. */
 export type Id = string;
@@ -36,18 +62,18 @@ export type Patch =
   | { type: "splice"; path: readonly Key[]; range: readonly [number, number]; value?: Json }
   | { type: "set"; path: readonly Key[]; key: string; value?: Json };
 
-/** A node and a time name one change in a graph. */
-export type ChangeRef = { node: Id; time: number };
+/** A change reference: its time, which alone names a change in a graph. */
+export type ChangeRef = number;
 
-/** What every change carries besides its kind. */
-export type Common = { agent: Json; process?: Id; cause?: Json };
+/** What every change carries besides its kind; ephemeral when it is (CORE.tex, Ephemeral nodes). */
+export type Common = { agent: Json; process?: Id; cause?: Json; ephemeral?: true };
 
 /**
  * A change. A placement's node is the parent. A placement with a value made
  * the node it placed: it is both the parent's change and the new node's first.
  */
 export type Change =
-  & ChangeRef
+  & { node: Id; time: number }
   & (
     | { kind: "write"; patches: readonly Patch[] }
     | { kind: "place"; name: string; id: Id; position?: number; value?: Json }
@@ -62,11 +88,33 @@ export type SlotFrom = { route: Route; position: number };
 /** Why a lookup gave an id: the path from the place to the slot, and its position there. */
 export type PathFrom = { path: Address; position: number };
 
+/** A change's header, as an item carries it: the change without its patches or a placement's value. */
+export type Header = {
+  node: Id;
+  time: number;
+  kind: Change["kind"];
+  name?: string;
+  id?: Id;
+  position?: number;
+} & Common;
+
 /** A node's value, and the change that last set it (none for the root's first value). */
-export type ValueItem = { value: Json; from: RouteFrom; change?: Change };
-/** An id in a slot, the change that last set the slot, and pending when its node is not here. */
-export type SlotItem = { id: Id; from: SlotFrom | PathFrom; change: Change; pending?: true };
-export type Item = ValueItem | SlotItem;
+export type ValueItem = { value: Json; from: RouteFrom; change?: Header; ephemeral?: true };
+/**
+ * An id in a slot, the last change to the slot that was not ephemeral (none
+ * if every change was), pending when its node is not here, ephemeral when it
+ * is here and ephemeral.
+ */
+export type SlotItem = {
+  id: Id;
+  from: SlotFrom | PathFrom;
+  change?: Header;
+  pending?: true;
+  ephemeral?: true;
+};
+/** Last in a lookup whose search a refused directory read ended: the path to that directory. */
+export type RefusedItem = { refused: true; from: { path: Address } };
+export type Item = ValueItem | SlotItem | RefusedItem;
 
 /** A directory read: with a name, that slot's items; without, each name with its slot's items. */
 export type Listing = { items: SlotItem[] } | { directory: [string, SlotItem[]][] };
@@ -109,6 +157,8 @@ export type Record = {
   process: Id;
   run: number;
   agent: Json;
+  /** the identity of the program the process kept at its start, when a scheduler gives it */
+  program?: Json;
   marked: ChangeRef[];
   compute?: ProgramEntry;
   effect?: ProgramEntry;
@@ -121,8 +171,11 @@ export type Record = {
   errors: RecordError[];
 };
 
-/** What a subscriber receives. */
-export type Event = { change: Change } | { record: Record };
+/**
+ * What a subscriber receives: each change, with what reading the address now
+ * gives when the change changed its route; and records of the process it reaches.
+ */
+export type Event = { change: Change; reaches?: ValueItem[] } | { record: Record };
 
 // Operations. Every operation carries an agent and may carry a process, and
 // a place: names from the graph's root, the first chroot of which are hidden,
@@ -150,16 +203,38 @@ export type PlaceOp = Acting & Stamp & {
   id: Id;
   position?: number;
   value?: Json;
+  /** makes the node ephemeral; needs a value */
+  ephemeral?: boolean;
 };
 export type UnplaceOp = Acting & Stamp & { address: Address; name: string; id: Id };
+/** An ephemeral node, by its id, to unplace from its one slot. */
+export type ReleaseOp = Acting & Stamp & { id: Id };
 export type SubscribeOp = Acting & { address: Address; send: (event: Event) => void };
 export type UnsubscribeOp = Acting & { sub: number };
+export type ForgetOp = Acting & { id: Id };
 
-/** A process a change marked, and the change. */
+/** A process a change marked, and the change that first marked it. */
 export type Marked = { process: Id; by: ChangeRef };
 
-/** What a change returns. Wrappers may add to it (drive adds runs, stopped). */
-export type Changed = { change: Change; marked: Marked[] };
+/**
+ * What a change returns: the change, the processes it or its letting go
+ * marked, and the ephemeral nodes it let go, in the order they went.
+ * Wrappers may add to it.
+ */
+export type Changed = {
+  change: Change;
+  marked: Marked[];
+  gone?: Id[];
+  /**
+   * Not in the answer's JSON: every change the operation made, its letting
+   * go's included, in order, each with the processes it marked, in code point
+   * order. Set by the graph; a wrapper that builds its own answer drops it.
+   */
+  readonly made?: readonly Made[];
+};
+
+/** One change an operation made, and the processes that change marked. */
+export type Made = { change: Change; marked: Id[] };
 
 /** What bind fixes. writes: false is read-only; reads: false is write-only. */
 export type Binding = {
@@ -172,7 +247,13 @@ export type Binding = {
 };
 
 /** What a driver adds to a record when it finishes it. */
-export type Finishing = { value?: Json; cleanup?: ChangeRef[]; errors?: RecordError[] };
+export type Finishing = {
+  /** the program the process kept, as the scheduler names it */
+  program?: Json;
+  value?: Json;
+  cleanup?: ChangeRef[];
+  errors?: RecordError[];
+};
 
 /**
  * The operations of CORE.tex's table. A wrapper takes one and returns one,
@@ -189,7 +270,7 @@ export interface Interface {
   /** The items of one slot, or every name with its slot's items; of a union's members together. */
   directory(op: DirectoryOp): Listing;
   /** The items of the nearest slot with the name, searching up the place. */
-  lookup(op: LookupOp): SlotItem[];
+  lookup(op: LookupOp): (SlotItem | RefusedItem)[];
   write(op: WriteOp): Changed;
   place(op: PlaceOp): Changed;
   unplace(op: UnplaceOp): Changed;
@@ -200,6 +281,8 @@ export interface Interface {
    */
   subscribe(op: SubscribeOp): { sub: number };
   unsubscribe(op: UnsubscribeOp): void;
+  /** Drops the reads the graph keeps for that id, so nothing marks it any more. */
+  forget(op: ForgetOp): void;
   /** An interface acting as that agent and process, at that place. */
   bind(api: Interface, binding: Binding): Bound;
   /** An interface passing everything to a bound api and recording it, for one run. */
@@ -216,11 +299,22 @@ export interface Interface {
   /** The path of the directory this interface's place reaches, its ".", below its "/". */
   readonly cwd: readonly string[];
   /**
-   * The id of the node an operation's address reaches, if it reaches one,
-   * for a wrapper deciding about it, as protect does. Not an operation:
-   * nothing is read, recorded or asked. Bound interfaces leave it out.
+   * The node an operation's address reaches, if it reaches one, and the
+   * nodes whose directories the walk of its own names read, in order, for a
+   * wrapper deciding about it, as protect does. Not an operation: nothing is
+   * read, recorded or asked. Bound interfaces leave it out.
    */
-  reach?(op: Acting & { address: Address }): Id | undefined;
+  reach?(op: Acting & { address: Address }): { node?: Id; read: Id[] };
+  /**
+   * Unplaces an ephemeral node from its one slot, found by its id, not by an
+   * address (CORE.tex, Ephemeral nodes), as unplace does: one change, and
+   * the letting go that follows. For a scheduler's bookkeeping beneath the
+   * wrappers when it kills a process (SCHEDULER.tex, Ephemeral nodes): the
+   * bare graph has it, and a layer that only keeps track, as keep does,
+   * passes it on; protect does not, and bound interfaces leave it out. Invalid, nothing-there, when the id's node is not here or
+   * is not ephemeral.
+   */
+  release?(op: ReleaseOp): Changed;
 }
 
 /** Tells a layer the top of the stack again. */

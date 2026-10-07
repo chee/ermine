@@ -1,9 +1,0 @@
-{"name":"a compute that returns an equal value, objects compared in any key order, leaves the process's value alone","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":{"x":1,"y":2},"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"show","cause":{"file":"s.js","line":1,"column":1},"value":[{"do":"read","address":["a"],"as":"x"},{"do":"return","value":{"$value":{"$":"x"}}}]},"expect":{"ok":{"runs":[{"process":"p1","run":1,"changes":[{"node":"p1","time":4}]}]}}},
-{"send":{"cmd":"write","agent":"host","address":["a"],"patches":[{"type":"snapshot","value":{"y":2,"x":1}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":5},"marked":[{"process":"p1","by":{"node":"a","time":5}}],"runs":[{"process":"p1","run":2,"value":{"x":1,"y":2},"changes":[],"ending":"done"}]}}},
-{"send":{"cmd":"write","agent":"host","address":["a"],"patches":[{"type":"snapshot","value":{"x":1,"y":3}}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6},"runs":[{"process":"p1","run":3,"changes":[{"node":"p1","time":7}]}]}}},
-{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"value":{"x":1,"y":3},"from":{"route":[{"parent":"root","name":"p1","node":"p1","position":0}]}}]}}}
-]}

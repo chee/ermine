@@ -453,7 +453,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   function compute(p: Process, marks: Change[]) {
     const bound = binding(p.agent, p);
     const reader = top.bind(top, { ...bound, writes: false });
-    const rec = top.record(reader, marks);
+    const rec = top.record(reader, marks.map((c) => c.time));
     const run: Run = { rec, errors: [], before: known.get(p.id)?.value ?? null };
     p.run = run;
     const at = [p.name];
@@ -568,7 +568,7 @@ export function drive(api: Interface, root: Id, load: Load): Driver {
   /** Finishes a run, by default the process's open one, and reports its record. */
   function finish(p: Process, run = p.run!, cleanup: Change[] = []) {
     if (p.run === run) p.run = undefined;
-    const finishing: Finishing = { cleanup, errors: run.errors };
+    const finishing: Finishing = { cleanup: cleanup.map((c) => c.time), errors: run.errors };
     if (run.result) finishing.value = run.result.value;
     out!.runs.push(top.finish(run.rec, run.ending ?? "done", finishing));
   }

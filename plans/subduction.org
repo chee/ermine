@@ -1,0 +1,184 @@
+#+title: ermine over Subduction: a design study
+
+Nothing here is decided. Sync is not built, and no rule in the papers
+should be argued from this file.
+
+* What Subduction gives
+
+- *Sedimentree*: one content-addressed DAG of commits per
+  =SedimentreeId= (32 bytes, "the document"). A =LooseCommit= is
+  {issuer key, sedimentree id, parents (digests), blob digest, blob
+  size}, signed with Ed25519. The blob is the application's bytes;
+  Subduction never looks inside.
+- *Fragments*: a commit whose hash has leading zero bytes closes a
+  range, compacted into one fragment whose blob the application writes.
+  Peers diff fingerprints and send only what is missing; receiving twice,
+  or in any order, is safe.
+- *Subscriptions*: per sedimentree, to authorised peers.
+- *Ephemeral messages*: signed, per 32-byte topic, never stored.
+- *Keyhive*: access per group or document, each named by a key:
+  =Relay < Read < Edit < Admin=. Relay may store ciphertext but not read
+  it. Delegations and revocations are a CRDT; ops whose authority was
+  later revoked are kept but "whited out".
+
+It needs from ermine: a sedimentree id per unit of sharing, a blob and
+parents per commit, fragment blobs, and a merge story.
+
+* How ermine could map onto it
+
+** A change is a commit
+(chee: "changes fr sure".) The blob is the change in deterministic CBOR:
+its header (kind, node, name, id, position, agent, process, cause) and
+its patches or placed value. CORE already encodes values as deterministic
+CBOR, so the digest is stable everywhere.
+
+** Parents are the last changes CORE already keeps
+CORE (Paths; What the graph holds) keeps, for each value and each slot,
+the one change that last set it. Those are exactly the heads to cite: a
+write's parent is its node's value's last change; a placement's parent
+is that slot's last change. Two devices writing one node at once give
+two heads, and "reads are lists" already has a place for them: an item
+per head, in an order every device agrees on, as IDEAS (History and
+sync) says. A write over them is a commit with both as parents: a change
+that says who chose. A wrapper, not the graph, keeps the head digests.
+
+** Who and why travel; nothing else is needed
+(chee: "whoever did it, why it happened. that's where and why.") A change
+from elsewhere keeps its agent, process and cause. Its =process= names a
+process on another device, which runs nothing here; its cause may be a
+site in code on another device. Both are just data. The commit's
+issuer key is the device that signed it; the agent's =actor= may be a
+person. No extra "came by peer X" field. But =protect='s rules match
+=process= ids (PROTECT, Rules), which a remote change could claim
+falsely unless the issuer key is checked (SCHEDULER, Open: Agents
+across hosts).
+
+** Unit of sharing
+- (a) One sedimentree per node; mounting by id = subscribing. Many
+  trees and Keyhive documents.
+- (b) One per shared subtree (a "document"), each commit chained to its
+  own node's heads; Keyhive access per subtree. Like Patchwork documents.
+- (c) One per device graph. Simple; no partial sharing.
+
+** Ephemeral nodes and changes
+Ephemeral changes are never kept (CORE, Ephemeral nodes), so they are
+never commits: they go as ephemeral messages, topic = the ephemeral
+node's id hashed to 32 bytes. Nodes never become ephemeral (CORE: "No
+node becomes ephemeral after it is made"), so a node's tier is known
+from its first change and a receiver can tell from the first message
+which channel it lives on.
+
+** Processes and the scheduler are local
+SCHEDULER (Processes): unique and local; a node from elsewhere is not
+started. Sync shares nodes only.
+
+** protect vs Keyhive
+=protect= asks, per operation and per agent, on this device. Keyhive
+asks, per document, whether a device may receive and decrypt. IDEAS
+already puts receiving under Keyhive. Changes from elsewhere enter
+beneath the wrappers, so =protect= never sees them; it still governs
+who here may read them.
+
+** Mounting another device's tree
+CORE (Placement) already has the shape: placing an id with no value
+mounts a node that is not here yet; it reads as pending, and when the
+node arrives every slot that waited is filled. A sync wrapper sees
+pending mounts, asks peers for that id's tree, and makes the node here
+when its history arrives.
+
+* Tensions
+
+** 1. Time is one local clock (CORE, Changes)
+"Greater than every earlier time, so that a time alone names a change."
+A change from elsewhere has its own time from another clock, possibly
+lower than every time here.
+- (a) Give it a time here on arrival, as IDEAS says; keep the origin's
+  digest beside it. Records name local times, so two devices' records of
+  the same change differ.
+- (b) Make the change reference the commit digest; time becomes only
+  local arrival order. A core change; records become comparable across
+  devices.
+
+** 2. Same changes, same order, same value (CORE, Changes)
+True per device, but concurrent changes arrive in different orders, and
+patches are positional: a splice at [3, 5) means different text on a
+different base.
+- (a) No merging: concurrent heads stay as separate items until someone
+  writes over them (above). Plain, visible, fits reads-are-lists; text
+  editing together is painful.
+- (b) Values that merge are foreign things (IDEAS, Foreign things): an
+  Automerge document wrapped in a node; ermine syncs only the wrapper.
+
+** 3. The graph keeps no log (CORE, What the graph holds)
+Keyhive whites out a revoked agent's changes after the fact. The value
+then has to be recomputed from history the graph does not have.
+- (a) The keeper (a wrapper below the graph) replays history and writes
+  the corrected value as a new change, caused by the revocation.
+- (b) Accept no retroactive revocation: a revoked change stays, and only
+  later changes are refused.
+
+** 4. One change, two nodes (CORE, Changes)
+"A placement that makes a node is both the parent's change and the new
+node's first." Under (a) or (b) above, the parent and child may be in
+different trees.
+- (a) Two commits, one per tree, the child's citing the parent's digest
+  in its blob.
+- (b) Making a node shared is placing an ordinary node first, then
+  mounting it into the shared tree: never make a node across trees.
+- (c) One tree per graph (unit (c)), and the problem goes away.
+
+** 5. What makes a mounted node here (CORE, Placement; Changes)
+A node arriving "comes as the placement that made it". That placement is
+a change of a parent on the other device that is not here.
+- (a) The arrival is a local change, made by the sync wrapper, its cause
+  naming the origin's commit.
+- (b) The origin's making placement is delivered as the node's first
+  change and the parent part is ignored.
+
+** 6. Ephemeral nodes in two slots (CORE, Ephemeral nodes; next.org)
+An ephemeral node is counted by how many slots hold it. Across devices
+the count has no single owner: a peer's cursor placed here and in a
+shared layer there.
+- (a) Make ephemeral nodes unique, placed in one slot only: one topic,
+  one place, one going. (This is chee's open question; sync is one
+  more reason for it.)
+- (b) Each device counts only its own slots; a remote ephemeral node is
+  gone here when no slot here holds it, or when its messages stop
+  (IDEAS, Presence that expires).
+
+** 7. Who may make ephemeral nodes (SCHEDULER, Processes: Ephemeral nodes)
+"Only processes make and place ephemeral nodes", and they go when the
+process is killed. A remote peer's cursor is made by no local process.
+- (a) A local sync process holds every remote ephemeral node; killing it
+  drops them all.
+- (b) The sync wrapper writes beneath the scheduler, as bookkeeping does,
+  and times them out.
+
+** 8. Ids (CORE, Nodes)
+Ids are strings, only compared. Shared ids must not collide between
+devices; pids =@42-xovat= would, but processes are not shared. Process
+nodes are ordinary and kept, though.
+- (a) Ids of shared nodes are random 32 bytes (or Keyhive keys); local
+  ids stay free.
+- (b) Process nodes are never in a shared tree.
+
+* Smallest first experiment
+No network, no Subduction library, no core change. In the TS stack:
+
+1. A wrapper =share(api)= that, for each non-ephemeral write to one
+   node's value, makes {parents: that value's head digests, blob: CBOR
+   of the change}, digest = BLAKE3 of the blob, and keeps the heads.
+2. Two graphs in one Deno process. Pass commits by hand, in either
+   order. The receiving side writes them beneath the wrappers with a
+   fresh local time (tension 1a), agent and cause kept.
+3. Write concurrently on both; exchange; read. Expect two items, in the
+   same order on both. Write over them; expect one item, parents both.
+4. Check: readers are marked by arriving changes; records name the local
+   times; both graphs end with equal values.
+
+Values of one node only. Slots, mounts, =sedimentree_wasm=, then a
+cursor over ephemeral messages, come after.
+
+* Open
+- Is a node's tier (kept / held / ephemeral) fixed at making, like
+  ephemeral? IDEAS's "held" tier has no place in CORE yet.

@@ -2,9 +2,11 @@
 // from the root the host gives; applies changes, sends them to the
 // subscriptions whose address reaches the node or whose route they change;
 // remembers what each process's runs read, and marks the processes a change
-// touches. It never runs anything, and it never removes a node: one that no
-// place reachable from the root holds cannot be addressed, and placing its id
-// again brings it back as it was.
+// touches. It never runs anything, and it never removes an ordinary node: one
+// that no place reachable from the root holds cannot be addressed, and placing
+// its id again brings it back as it was. An ephemeral node is in one slot,
+// the one it was made in, and goes as soon as it is unplaced from it, the
+// ephemeral nodes it held going first (CORE.tex, Ephemeral nodes).
 //
 // An operation is checked where, then when, then what (PROTOCOL.tex, Errors):
 // its fields first, in the order fields() gives; then its address
@@ -24,6 +26,7 @@ import {
 import {
   applyPatch,
   byCodePoint,
+  isLive,
   isObject,
   NotJson,
   own,
@@ -46,6 +49,8 @@ import {
   ErmineError,
   type Event,
   type Finishing,
+  type ForgetOp,
+  type Header,
   type Id,
   type Interface,
   invalid,
@@ -53,6 +58,7 @@ import {
   type Listing,
   type Lookup,
   type LookupOp,
+  type Made,
   type Marked,
   missing,
   naming,
@@ -67,6 +73,8 @@ import {
   type RecordError,
   type Recording,
   Refused,
+  type RefusedItem,
+  type ReleaseOp,
   type Route,
   type Searched,
   type SlotFrom,
@@ -85,12 +93,18 @@ ours(import.meta.url);
 
 type Node = {
   value: Json;
-  /** the change that last set the value: the placement that made it, or a write; none for the root's first */
-  change?: Change;
+  /** made so by the placement that made it; it stays so */
+  ephemeral?: true;
+  /** an ephemeral node's one slot, the one it was made in: its parent and the slot's name */
+  home?: { node: Id; name: string };
+  /** the header of the change that last set the value: the placement that made it, or a write; none for the root's first */
+  change?: Header;
   /** name to slot; a slot with no ids is gone */
   directory: Map<string, Id[]>;
-  /** the change that last set each slot */
-  slots: Map<string, Change>;
+  /** the header of the last change to each slot that was not ephemeral */
+  slots: Map<string, Header>;
+  /** the ids in each slot that an ephemeral change put there: what keeping the graph drops */
+  fleeting: Map<string, Set<Id>>;
 };
 
 /** One run being recorded. */
@@ -131,12 +145,77 @@ const key = {
   here: (node: Id) => JSON.stringify(["h", node]),
 };
 
-/** A graph made with one node, its root, whose value is null. */
-export function graph(root: Id): Interface {
+/** The bare graph: the interface, and what only whoever holds it can do. */
+export type Graph = Interface & {
+  /**
+   * The graph as keeping it and loading it again would leave it
+   * (PROTOCOL.tex, reload): every ordinary node with its value, its slots
+   * without the ids ephemeral changes put there, and their last changes;
+   * no ephemeral node, subscription or kept read. The highest time stays.
+   */
+  reload(): void;
+  /** Unplaces an ephemeral node from its one slot, by its id (Interface.release). */
+  release(op: ReleaseOp): Changed;
+};
+
+const node = (value: Json, change?: Header, ephemeral?: boolean): Node => ({
+  value,
+  ...(ephemeral ? { ephemeral: true as const } : {}),
+  ...(change ? { change } : {}),
+  directory: new Map(),
+  slots: new Map(),
+  fleeting: new Map(),
+});
+
+/** The largest time: 2^53 - 1. */
+const LATEST = Number.MAX_SAFE_INTEGER;
+
+/**
+ * What whoever keeps the graph keeps (CORE.tex, What the graph holds): its
+ * ordinary nodes, each with its value, its slots without the ids ephemeral
+ * changes put there, and their last changes; and the highest time.
+ */
+export type Kept = {
+  root: Id;
+  time: number;
+  nodes: ReadonlyMap<Id, KeptNode>;
+};
+export type KeptNode = {
+  value: Json;
+  change?: Header;
+  directory: ReadonlyMap<string, readonly Id[]>;
+  slots: ReadonlyMap<string, Header>;
+};
+
+/**
+ * A graph made with one node, its root, whose value is null; or, given what
+ * was kept, the graph as loading it leaves it: those nodes, and times after
+ * its highest. Only whoever makes the graph gives it.
+ */
+export function graph(root: Id, kept?: Kept): Graph {
   if (typeof root !== "string") throw wrongField("root", "the root is an id, a string");
   const nodes = new Map<Id, Node>();
-  nodes.set(root, { value: null, directory: new Map(), slots: new Map() });
+  nodes.set(root, node(null));
   let last = 0;
+  /** for every id in any slot, the slots that hold it, by their reader keys: found, not walked */
+  const holders = new Map<Id, Set<string>>();
+  if (kept !== undefined) {
+    if (kept.root !== root || !kept.nodes.has(root)) {
+      throw wrongField("kept", "what was kept is of a graph with another root");
+    }
+    for (const [id, k] of kept.nodes) {
+      const n = node(k.value, k.change);
+      for (const [name, ids] of k.directory) {
+        if (!ids.length) continue;
+        n.directory.set(name, [...ids]);
+        for (const held of ids) add(holders, held, key.slot(id, name));
+        const change = k.slots.get(name);
+        if (change) n.slots.set(name, change);
+      }
+      nodes.set(id, n);
+    }
+    last = kept.time;
+  }
 
   const view: View = {
     here: (id) => nodes.has(id),
@@ -207,6 +286,7 @@ export function graph(root: Id): Interface {
     const node = nodes.get(m.node)!;
     const item: ValueItem = { value: node.value, from: { route: m.route } };
     if (node.change) item.change = node.change;
+    if (node.ephemeral) item.ephemeral = true;
     return item;
   }
 
@@ -214,15 +294,29 @@ export function graph(root: Id): Interface {
     const node = nodes.get(parent)!;
     const slot = node.directory.get(name);
     if (!slot) return [];
-    const change = node.slots.get(name)!;
+    const change = node.slots.get(name);
     return slot.map((id, position) => {
-      const item: SlotItem = { id, from: { route, position }, change };
-      if (!nodes.has(id)) item.pending = true;
+      const item: SlotItem = { id, from: { route, position } };
+      if (change) item.change = change;
+      const here = nodes.get(id);
+      if (!here) item.pending = true;
+      else if (here.ephemeral) item.ephemeral = true;
       return item;
     });
   }
 
   // reads
+
+  /** What reading an address gives, with no checks: for a subscription's rows. */
+  function reading(op: Acting, parsed: Parsed): ValueItem[] {
+    let from: Id | undefined;
+    try {
+      from = origin(op, parsed);
+    } catch {
+      return [];
+    }
+    return from === undefined ? [] : members(view, from, parsed.names).map(valueItem);
+  }
 
   /**
    * An item for each node the address's last name selects that is here, in
@@ -253,17 +347,18 @@ export function graph(root: Id): Interface {
    * slot through the top of the stack, at the address of that many "..", and
    * takes the nearest slot with the name that holds a node that is here: all
    * its items. A slot whose ids are all absent is passed over. A refused step
-   * ends the search. Where the place's walk did not get, its step reads
+   * ends the search, which then gives one item saying so, from the path to
+   * that directory. Where the place's walk did not get, its step reads
    * nothing.
    */
-  function lookup(op: LookupOp): SlotItem[] {
+  function lookup(op: LookupOp): (SlotItem | RefusedItem)[] {
     const name = fields("lookup", op).name!;
     const { start, names } = placeOf(op);
     const route = start === undefined ? [] : walk(view, start, names).route;
     const as = who(op);
     const searched: Searched[] = [];
     let levels = 0;
-    let found: SlotItem[] = [];
+    let found: (SlotItem | RefusedItem)[] = [];
     for (let k = 0; k <= names.length; k++) {
       levels = k + 1;
       const depth = names.length - k;
@@ -275,6 +370,7 @@ export function graph(root: Id): Interface {
       } catch (e) {
         if (e instanceof Refused) {
           if (node !== undefined) searched.push({ node, refused: true });
+          found = [{ refused: true, from: { path: address } }];
           break;
         }
         throw e;
@@ -294,10 +390,25 @@ export function graph(root: Id): Interface {
     return found;
   }
 
-  /** The node an address reaches, for a wrapper deciding about an operation. */
-  function reach(op: Acting & { address: Address }): Id | undefined {
+  /**
+   * The node an address reaches, and the nodes whose directories the walk of
+   * its own names read, for a wrapper deciding about an operation. Following
+   * the place to where the address starts is not part of it.
+   */
+  function reach(op: Acting & { address: Address }): { node?: Id; read: Id[] } {
     acting(op);
-    return resolve(op, parseAddress(op.address)).node;
+    const parsed = parseAddress(op.address);
+    const from = origin(op, parsed);
+    const read: Id[] = [];
+    if (from === undefined) return { read };
+    const track: Track = {
+      slot: (node) => {
+        if (!read.includes(node)) read.push(node);
+      },
+      here: () => {},
+    };
+    const node = parsed.names.length ? members(view, from, parsed.names, track)[0]?.node : from;
+    return node === undefined ? { read } : { node, read };
   }
 
   // changes
@@ -329,28 +440,68 @@ export function graph(root: Id): Interface {
     return c;
   }
 
-  function apply(change: Change): Changed {
+  /** The change as an item carries it: without its patches or a placement's value. */
+  function header(change: Change): Header {
+    const { patches: _p, value: _v, ...rest } = change as Change & {
+      patches?: unknown;
+      value?: unknown;
+    };
+    return Object.freeze(rest) as Header;
+  }
+
+  /**
+   * What one operation marked so far, each process with the first change
+   * that marked it; and each change it made, with the processes that change
+   * marked, for a scheduler that keeps every change that marks a process.
+   */
+  type Marking = Map<Id, number> & { made?: Made[] };
+
+  /** Applies a change made: freezes it, marks its readers, sends it to subscribers. */
+  function apply(change: Change, marking: Marking, here: Id[] = []) {
     last = change.time;
     Object.freeze(change);
-    const marked = marks(change);
+    marks(change, marking, here);
     follow(change);
-    return { change, marked };
+  }
+
+  /** The answer to an operation: its change, what it and its letting go marked, what went. */
+  function answer(change: Change, marking: Marking, gone: Id[] = []): Changed {
+    const marked: Marked[] = [...marking.keys()].sort(byCodePoint)
+      .map((process) => ({ process, by: marking.get(process)! }));
+    const out: Changed = gone.length ? { change, marked, gone } : { change, marked };
+    // not part of the answer's JSON: every change, its letting go's included, in order
+    Object.defineProperty(out, "made", { value: marking.made ?? [] });
+    return out;
+  }
+
+  /**
+   * Changes a slot, keeping track of the slots that hold each id. The slot's
+   * last change is set only by a change that is not ephemeral; a slot left
+   * with no ids is gone.
+   */
+  function setSlot(at: Id, parent: Node, name: string, ids: Id[]) {
+    const k = key.slot(at, name);
+    const before = parent.directory.get(name) ?? [];
+    for (const id of before) if (!ids.includes(id)) drop(holders, id, k);
+    for (const id of ids) add(holders, id, k);
+    if (ids.length) parent.directory.set(name, ids);
+    else {
+      parent.directory.delete(name);
+      parent.slots.delete(name);
+      parent.fleeting.delete(name);
+    }
   }
 
   /** Applies the patches in order, each checked in turn: invalid, naming the first that fails. */
-  function patched(value: Json, given: readonly unknown[]): { value: Json; patches: Patch[] } {
+  function patched(
+    value: Json,
+    given: readonly unknown[],
+    live: boolean,
+  ): { value: Json; patches: Patch[] } {
     const patches: Patch[] = [];
     for (let index = 0; index < given.length; index++) {
-      let patch: Patch;
-      try {
-        patch = own(given[index]) as Patch;
-      } catch (e) {
-        if (e instanceof NotJson) {
-          throw invalid("not-a-patch", `patch ${index}: ${e.message}`, { index });
-        }
-        throw e;
-      }
-      value = applyPatch(value, patch, index);
+      const patch = given[index] as Patch;
+      value = applyPatch(value, patch, index, live);
       patches.push(patch);
     }
     return { value, patches };
@@ -360,12 +511,18 @@ export function graph(root: Id): Interface {
     const f = fields("write", op, causeOf(op, "write"));
     const time = f.time!;
     const { id, node } = target(op, f.parsed!);
+    if (!node.ephemeral && f.patches!.some(livens)) {
+      throw wrongField("patches", "only an ephemeral node's value may be live");
+    }
     checkTime(time);
-    const { value, patches } = patched(node.value, f.patches!);
+    const { value, patches } = patched(node.value, f.patches!, !!node.ephemeral);
     const change: Change = { node: id, time, kind: "write", patches, ...common(op, f.cause) };
+    if (node.ephemeral) change.ephemeral = true;
     node.value = value;
-    node.change = change;
-    return apply(change);
+    node.change = header(change);
+    const marking: Marking = new Map();
+    apply(change, marking);
+    return answer(change, marking);
   }
 
   function place(op: PlaceOp): Changed {
@@ -380,6 +537,16 @@ export function graph(root: Id): Interface {
     if (making && nodes.has(id)) {
       throw invalid("exists", `the graph has ${JSON.stringify(id)}; a value makes a node`);
     }
+    if (making && parent.ephemeral && !f.ephemeral) {
+      throw invalid("ephemeral-parent", "an ordinary node cannot be made in an ephemeral one");
+    }
+    // an ephemeral node is in one slot, the one it was made in, and moves only within it
+    const home = making ? undefined : nodes.get(id)?.home;
+    if (
+      making ? f.ephemeral && holders.has(id) : home && (home.node !== at || home.name !== name)
+    ) {
+      throw invalid("one-place", `${JSON.stringify(id)} would be ephemeral in a second slot`);
+    }
     const slot = parent.directory.get(name) ?? [];
     if (f.position !== undefined && f.position > slot.length) {
       throw invalid("position", `position ${f.position} is past the slot's ${slot.length}`, {
@@ -393,11 +560,28 @@ export function graph(root: Id): Interface {
     if (f.position !== undefined) change.position = f.position;
     if (making) change.value = f.value;
     Object.assign(change, common(op, f.cause));
-    if (making) nodes.set(id, { value: f.value!, change, directory: new Map(), slots: new Map() });
+    const ephemeral = !!parent.ephemeral ||
+      (making ? !!f.ephemeral : !!nodes.get(id)?.ephemeral);
+    if (ephemeral) change.ephemeral = true;
+    if (making) {
+      const made = node(f.value!, header(change), f.ephemeral);
+      if (made.ephemeral) made.home = { node: at, name };
+      nodes.set(id, made);
+    }
     // placing an id the slot holds, with no position, leaves the slot as it is, as its last change
-    parent.directory.set(name, placed(slot, id, f.position));
-    parent.slots.set(name, change);
-    return apply(change);
+    const was = slot.includes(id);
+    setSlot(at, parent, name, placed(slot, id, f.position));
+    if (!ephemeral) {
+      parent.slots.set(name, header(change));
+      parent.fleeting.get(name)?.delete(id);
+    } else if (!was) {
+      let fleeting = parent.fleeting.get(name);
+      if (!fleeting) parent.fleeting.set(name, fleeting = new Set());
+      fleeting.add(id);
+    }
+    const marking: Marking = new Map();
+    apply(change, marking, making ? [id] : []);
+    return answer(change, marking);
   }
 
   function unplace(op: UnplaceOp): Changed {
@@ -411,27 +595,126 @@ export function graph(root: Id): Interface {
     if (!slot.includes(id)) {
       throw invalid("not-in-slot", `${JSON.stringify(id)} is not in slot ${JSON.stringify(name)}`);
     }
-    const change: Change = { node: at, time, kind: "unplace", name, id, ...common(op, f.cause) };
-    const next = slot.filter((x) => x !== id);
-    if (next.length) parent.directory.set(name, next);
-    else parent.directory.delete(name);
-    parent.slots.set(name, change);
-    return apply(change);
+    return taken(at, name, id, common(op, f.cause), time);
+  }
+
+  /**
+   * Unplaces an ephemeral node from its one slot, found by its id: as
+   * unplace does, with no address, so nothing above can keep it from going.
+   */
+  function release(op: ReleaseOp): Changed {
+    acting(op);
+    const id = (op as { id?: unknown }).id;
+    if (id === undefined) throw missing("id");
+    if (typeof id !== "string") throw wrongField("id", "an id is a string");
+    const cause = op.cause === undefined ? undefined : ownField(op.cause, "cause");
+    const time = op.time;
+    if (time === undefined) throw missing("time");
+    if (!whole(time) || time < 1 || time > LATEST) {
+      throw wrongField("time", "a time is a whole number from 1");
+    }
+    const home = nodes.get(id)?.home;
+    if (!home) {
+      throw invalid("nothing-there", `${JSON.stringify(id)} is not an ephemeral node here`);
+    }
+    checkTime(time);
+    return taken(home.node, home.name, id, common(op, cause), time);
+  }
+
+  /** Takes an id out of a slot and lets go what that lets go: the answer to an unplacement. */
+  function taken(at: Id, name: string, id: Id, c: Common, time: number): Changed {
+    const marking: Marking = new Map();
+    const gone: Id[] = [];
+    const change = out(at, name, id, c, time, marking);
+    letGo(id, change, marking, gone);
+    return answer(change, marking, gone);
+  }
+
+  /**
+   * Takes an id out of a slot, as one change at that time, ephemeral when
+   * the parent or the id's node is, and applies it.
+   */
+  function out(at: Id, name: string, id: Id, c: Common, time: number, marking: Marking): Change {
+    const parent = nodes.get(at)!;
+    const change: Change = { node: at, time, kind: "unplace", name, id, ...c };
+    const ephemeral = !!parent.ephemeral || !!nodes.get(id)?.ephemeral;
+    if (ephemeral) change.ephemeral = true;
+    parent.fleeting.get(name)?.delete(id);
+    setSlot(at, parent, name, parent.directory.get(name)!.filter((x) => x !== id));
+    if (!ephemeral && parent.directory.has(name)) parent.slots.set(name, header(change));
+    apply(change, marking);
+    return change;
+  }
+
+  /**
+   * Lets an ephemeral node go, just unplaced from its one slot (CORE.tex,
+   * Ephemeral nodes): its slots are taken apart, by name in code point order,
+   * the ids of each in slot order, each taking-out a change of its own with
+   * the next time, made as the change that let it go was; each ephemeral
+   * member, whose one slot that was, is taken apart the same way before the
+   * next, and goes after what it held. An ordinary member stays, here but
+   * unreachable. An ephemeral node has one parent, so there is no cycle to
+   * meet. Keeps its own stack, so a deep tree needs no deep one.
+   */
+  function letGo(id: Id, by: Change, marking: Marking, gone: Id[]) {
+    if (!nodes.get(id)?.ephemeral) return;
+    const { agent, process, cause } = by;
+    const c: Common = { agent };
+    if (process !== undefined) c.process = process;
+    if (cause !== undefined) c.cause = cause;
+    const stack: { id: Id; names: string[]; at: number }[] = [];
+    const open = (id: Id) =>
+      stack.push({ id, names: [...nodes.get(id)!.directory.keys()].sort(byCodePoint), at: 0 });
+    open(id);
+    while (stack.length) {
+      const frame = stack[stack.length - 1];
+      const going = nodes.get(frame.id)!;
+      const name = frame.names[frame.at];
+      if (name === undefined) {
+        stack.pop();
+        nodes.delete(frame.id);
+        gone.push(frame.id);
+        continue;
+      }
+      const slot = going.directory.get(name);
+      if (!slot?.length) {
+        frame.at++;
+        continue;
+      }
+      const child = slot[0];
+      out(frame.id, name, child, c, last + 1, marking);
+      if (nodes.get(child)?.ephemeral) open(child);
+    }
   }
 
   // marking
 
-  function marks(change: Change): Marked[] {
-    const found = new Set<Id>();
-    const take = (k: string) => readers.get(k)?.forEach((p) => found.add(p));
+  /**
+   * Adds the processes a change marks: a write marks the readers of the
+   * node's value; a placement or an unplacement the readers of that slot and
+   * of the whole directory. A change that makes an id's node here marks the
+   * readers of every slot that holds that id.
+   */
+  function marks(change: Change, marking: Marking, here: readonly Id[]) {
+    const hit = new Set<Id>();
+    const take = (k: string) =>
+      readers.get(k)?.forEach((p) => {
+        hit.add(p);
+        if (!marking.has(p)) marking.set(p, change.time);
+      });
     if (change.kind === "write") take(key.value(change.node));
     else {
       take(key.slot(change.node, change.name));
       take(key.directory(change.node));
-      if (change.kind === "place" && change.value !== undefined) take(key.here(change.id));
     }
-    const by = { node: change.node, time: change.time };
-    return [...found].sort(byCodePoint).map((process) => ({ process, by }));
+    for (const id of here) {
+      take(key.here(id));
+      for (const k of holders.get(id) ?? []) {
+        take(k);
+        take(key.directory((JSON.parse(k) as string[])[1]));
+      }
+    }
+    (marking.made ??= []).push({ change, marked: [...hit].sort(byCodePoint) });
   }
 
   // subscriptions
@@ -449,19 +732,21 @@ export function graph(root: Id): Interface {
   }
 
   /**
-   * Follows every subscription's address, and sends it the change if it is
-   * to the node the address reached, or if it changed the address's route,
-   * whether or not the address then reaches another node: to another node,
-   * to nothing, or to the same node another way.
+   * Follows every subscription's address, and sends it the change if it
+   * changed the address's route, whether or not the address then reaches
+   * another node, with what reading the address now gives; or if it is to
+   * the node the address reached.
    */
   function follow(change: Change) {
-    const due: Sub[] = [];
+    const due: [Sub, Event][] = [];
     for (const s of subs.values()) {
       const before = s.at;
       if (change.kind !== "write") s.at = locate(s.op, s.parsed);
-      if (change.node === before?.node || !sameRoute(before, s.at)) due.push(s);
+      if (!sameRoute(before, s.at)) {
+        due.push([s, { change, reaches: reading(s.op, s.parsed) }]);
+      } else if (change.node === before?.node) due.push([s, { change }]);
     }
-    for (const s of due) send(s, { change });
+    for (const [s, event] of due) send(s, event);
   }
 
   function subscribe(op: SubscribeOp): { sub: number } {
@@ -480,6 +765,16 @@ export function graph(root: Id): Interface {
       throw wrongField("sub", `there is no subscription ${JSON.stringify(sub) ?? String(sub)}`);
     }
     subs.delete(sub);
+  }
+
+  /** Drops the reads kept for an id, so nothing marks it any more. */
+  function forget(op: ForgetOp): void {
+    acting(op);
+    const id = (op as { id?: unknown }).id;
+    if (id === undefined) throw missing("id");
+    if (typeof id !== "string") throw wrongField("id", "an id is a string");
+    for (const k of memory.get(id) ?? []) drop(readers, k, id);
+    memory.delete(id);
   }
 
   // binding
@@ -505,7 +800,7 @@ export function graph(root: Id): Interface {
     };
     const fix = <T extends Acting>(op: T): T => ({ ...strip(op), ...as });
     const none = (op: string) => () => {
-      throw fail("wrong-part", `a bound interface cannot ${op} runs`, op);
+      throw fail("wrong-part", `a bound interface cannot ${op}`, op);
     };
     const bound: Bound = {
       write: (op) => (open("write", "writes"), api.write(fix(op))),
@@ -516,6 +811,8 @@ export function graph(root: Id): Interface {
       lookup: (op) => (open("lookup", "reads"), api.lookup(fix(op))),
       subscribe: (op) => (open("subscribe"), api.subscribe(fix(op))),
       unsubscribe: (op) => (open("unsubscribe"), api.unsubscribe(fix(op))),
+      // what the graph keeps for a process is for whoever runs it
+      forget: none("forget"),
       // the holder cannot change the agent, process or place, nor do more than this does
       bind: (inner, b) => {
         open("bind");
@@ -638,7 +935,7 @@ export function graph(root: Id): Interface {
       process,
       acting: as,
       open: true,
-      marked: marked.map((c) => ({ node: c.node, time: c.time })),
+      marked: marked.map((c) => typeof c === "number" ? c : (c as { time: number }).time),
       lookups: [],
       reads: [],
       changes: [],
@@ -664,7 +961,7 @@ export function graph(root: Id): Interface {
       }
     };
     const changed = (answer: Changed) => {
-      state.changes.push({ node: answer.change.node, time: answer.change.time });
+      state.changes.push(answer.change.time);
       return answer;
     };
     /** A read through a recording: recorded, and remembered, if it read or was refused. */
@@ -709,7 +1006,7 @@ export function graph(root: Id): Interface {
         attempt("lookup", () => {
           const frame: Frame = { done: false, searched: [], levels: 0 };
           tracing.push(frame);
-          let found: SlotItem[] | undefined;
+          let found: (SlotItem | RefusedItem)[] | undefined;
           let refused = false;
           try {
             found = inner.lookup(op);
@@ -723,12 +1020,13 @@ export function graph(root: Id): Interface {
           state.lookups.push({
             name: op.name,
             searched: frame.searched,
-            found: found!.map((i) => i.id),
+            found: found!.flatMap((i) => "id" in i ? [i.id] : []),
           });
           return found!;
         }),
       subscribe: (op) => attempt("subscribe", () => inner.subscribe(op)),
       unsubscribe: (op) => attempt("unsubscribe", () => inner.unsubscribe(op)),
+      forget: (op) => attempt("forget", () => inner.forget(op)),
       bind: (a, b) => attempt("bind", () => inner.bind(a, b)),
       record: (a, m) => attempt("record", () => inner.record(a, m)),
       finish: (r, ending, f) => attempt("finish", () => inner.finish(r, ending, f)),
@@ -808,8 +1106,11 @@ export function graph(root: Id): Interface {
     if (state.effect) r.effect = state.effect;
     r.lookups = [...state.lookups];
     r.reads = [...state.reads];
+    if (finishing.program !== undefined) r.program = own(finishing.program);
     if (finishing.value !== undefined) r.value = own(finishing.value);
-    r.cleanup = (finishing.cleanup ?? []).map((c) => ({ node: c.node, time: c.time }));
+    r.cleanup = (finishing.cleanup ?? []).map((c) =>
+      typeof c === "number" ? c : (c as { time: number }).time
+    );
     r.changes = [...state.changes];
     r.ending = ending;
     r.errors = [...state.errors, ...finishing.errors ?? []];
@@ -817,7 +1118,30 @@ export function graph(root: Id): Interface {
     return r;
   }
 
-  const api: Interface = {
+  /** Keeps the ordinary nodes and the highest time, and drops the rest, as storing and loading would. */
+  function reload() {
+    for (const [id, n] of nodes) if (n.ephemeral) nodes.delete(id);
+    holders.clear();
+    for (const [at, n] of nodes) {
+      for (const [name, slot] of n.directory) {
+        const fleeting = n.fleeting.get(name);
+        const kept = fleeting ? slot.filter((id) => !fleeting.has(id)) : slot;
+        n.fleeting.delete(name);
+        if (kept.length) n.directory.set(name, kept);
+        else {
+          n.directory.delete(name);
+          n.slots.delete(name);
+        }
+        for (const id of kept) add(holders, id, key.slot(at, name));
+      }
+    }
+    subs.clear();
+    memory.clear();
+    readers.clear();
+    runs.clear();
+  }
+
+  const api: Graph = {
     read: naming("read", read),
     directory: naming("directory", directory),
     lookup: naming("lookup", lookup),
@@ -826,6 +1150,7 @@ export function graph(root: Id): Interface {
     unplace: naming("unplace", unplace),
     subscribe: naming("subscribe", subscribe),
     unsubscribe: naming("unsubscribe", unsubscribe),
+    forget: naming("forget", forget),
     bind: naming("bind", bind),
     record: naming("record", record),
     finish: naming("finish", finish),
@@ -834,6 +1159,8 @@ export function graph(root: Id): Interface {
     }),
     cwd: Object.freeze([]),
     reach: naming("reach", reach),
+    release: naming("unplace", release),
+    reload,
   };
   up = api;
   return api;
@@ -892,6 +1219,7 @@ export type Fields = {
   id?: Id;
   position?: number;
   value?: Json;
+  ephemeral?: boolean;
   patches?: readonly unknown[];
   cause?: Json;
   time?: number;
@@ -914,6 +1242,7 @@ const TAKES: { readonly [kind in Kind]: readonly (readonly [string, boolean])[] 
     ["id", true],
     ["position", false],
     ["value", false],
+    ["ephemeral", false],
     ["cause", false],
     ["time", true],
   ],
@@ -946,6 +1275,7 @@ export function fields(
       continue;
     }
     if (given === undefined) {
+      if (field === "value" && op.ephemeral === true) throw missing("value");
       if (field === "cause") {
         const c = cause?.();
         if (c !== undefined) out.cause = c;
@@ -969,17 +1299,24 @@ export function fields(
         out.position = given;
         break;
       case "value":
-        out.value = ownField(given, "value");
+        // a live value only as the whole value of an ephemeral node
+        out.value = ownField(given, "value", op.ephemeral === true);
+        break;
+      case "ephemeral":
+        if (typeof given !== "boolean") throw wrongField("ephemeral", "ephemeral is a boolean");
+        out.ephemeral = given;
         break;
       case "patches":
         if (!Array.isArray(given)) throw wrongField("patches", "patches are a list");
-        out.patches = given;
+        out.patches = given.map(ownPatch);
         break;
       case "cause":
         out.cause = ownField(given, "cause");
         break;
       case "time":
-        if (!whole(given) || given < 1) throw wrongField("time", "a time is a whole number from 1");
+        if (!whole(given) || given < 1 || given > LATEST) {
+          throw wrongField("time", "a time is a whole number from 1 to 2^53 - 1");
+        }
         out.time = given;
         break;
       case "sub":
@@ -989,6 +1326,33 @@ export function fields(
     }
   }
   return out;
+}
+
+/**
+ * A patch as the graph keeps it: its value a copy, which may be live only as
+ * a snapshot's whole value; a value that is not one is wrong-field. What is
+ * not a patch is left for the patch's own checks, in its turn.
+ */
+function ownPatch(patch: unknown): unknown {
+  if (!isObject(patch)) return patch;
+  const { value, ...rest } = patch as { value?: unknown };
+  let kept: Json;
+  try {
+    kept = own(rest);
+  } catch (e) {
+    if (e instanceof NotJson) return patch;
+    throw e;
+  }
+  if (value === undefined) return kept;
+  return Object.freeze({
+    ...(kept as object),
+    value: ownField(value, "patches", (rest as { type?: unknown }).type === "snapshot"),
+  });
+}
+
+/** Whether a patch makes a value live: a snapshot to a live value. */
+function livens(patch: unknown): boolean {
+  return isObject(patch) && patch.type === "snapshot" && isLive(patch.value);
 }
 
 /** Whether two addresses got to the same node by the same route, or both to nothing. */
@@ -1003,7 +1367,7 @@ function sameRoute(a: Located | undefined, b: Located | undefined): boolean {
 }
 
 /** The time of the latest change among the items, null if none. */
-function latest(items: readonly { change?: Change }[]): number | null {
+function latest(items: readonly { change?: { time: number } }[]): number | null {
   let t: number | null = null;
   for (const item of items) {
     const time = item.change?.time;

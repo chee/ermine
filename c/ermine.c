@@ -82,9 +82,17 @@ static Json *routeToJson(const ErmRoute *route) {
 	return list;
 }
 
-/** {"value": v, "from", "change"?} or {"id", "from", "change"?, "pending"?} */
+/** {"value": v, "from", "change"?, "ephemeral"?}, {"id", "from", "change"?, "pending"?, "ephemeral"?} or {"refused": true, "from": {"path"}} */
 static Json *itemToJson(const ErmItem *item) {
 	Json *object = jsonObject();
+	if (item->refused) {
+		Json *from = jsonObject(), *path = jsonArray();
+		for (int i = 0; i < item->ups; i++) jsonPush(path, jsonString(".."));
+		jsonAdd(from, "path", path);
+		jsonAdd(object, "refused", jsonBoolean(true));
+		jsonAdd(object, "from", from);
+		return object;
+	}
 	if (item->value) jsonAdd(object, "value", item->value);
 	else jsonAdd(object, "id", jsonString(item->id));
 	Json *from = jsonObject();
@@ -98,8 +106,9 @@ static Json *itemToJson(const ErmItem *item) {
 	}
 	if (item->position >= 0) jsonAdd(from, "position", jsonInteger(item->position));
 	jsonAdd(object, "from", from);
-	if (item->change) jsonAdd(object, "change", ermChangeToJson(item->change));
+	if (item->change) jsonAdd(object, "change", ermChangeToJson(item->change, true));
 	if (item->pending) jsonAdd(object, "pending", jsonBoolean(true));
+	if (item->ephemeral) jsonAdd(object, "ephemeral", jsonBoolean(true));
 	return object;
 }
 
@@ -120,44 +129,43 @@ Json *ermListingToJson(const ErmListing *listing) {
 	return list;
 }
 
-Json *ermChangeToJson(const ErmChange *change) {
+Json *ermChangeToJson(const ErmChange *change, bool header) {
 	static const char *const kinds[] = { "write", "place", "unplace" };
 	Json *object = jsonObject();
 	jsonAdd(object, "node", jsonString(change->node));
 	jsonAdd(object, "time", jsonNumber(change->time));
 	jsonAdd(object, "kind", jsonString(kinds[change->kind]));
 	if (change->kind == ERM_WRITE) {
-		jsonAdd(object, "patches", change->patches);
+		if (!header) jsonAdd(object, "patches", change->patches);
 	} else {
 		jsonAdd(object, "name", jsonString(change->name));
 		jsonAdd(object, "id", jsonString(change->id));
 		if (change->hasPosition) jsonAdd(object, "position", jsonInteger(change->position));
-		if (change->value) jsonAdd(object, "value", change->value);
+		if (change->value && !header) jsonAdd(object, "value", change->value);
 	}
 	jsonAdd(object, "agent", change->agent);
 	if (change->process) jsonAdd(object, "process", jsonString(change->process));
 	if (change->cause) jsonAdd(object, "cause", change->cause);
-	return object;
-}
-
-Json *ermRefToJson(ErmRef ref) {
-	Json *object = jsonObject();
-	jsonAdd(object, "node", jsonString(ref.node));
-	jsonAdd(object, "time", jsonNumber(ref.time));
+	if (change->ephemeral) jsonAdd(object, "ephemeral", jsonBoolean(true));
 	return object;
 }
 
 Json *ermChangeAnswer(const ErmResult *result) {
 	Json *object = jsonObject();
-	jsonAdd(object, "change", ermChangeToJson(result->change));
+	jsonAdd(object, "change", ermChangeToJson(result->change, false));
 	Json *marked = jsonArray();
 	for (int i = 0; i < result->marked.count; i++) {
 		Json *mark = jsonObject();
-		jsonAdd(mark, "process", jsonString(result->marked.items[i]));
-		jsonAdd(mark, "by", ermRefToJson((ErmRef){ result->change->node, result->change->time }));
+		jsonAdd(mark, "process", jsonString(result->marked.items[i].process));
+		jsonAdd(mark, "by", jsonNumber(result->marked.items[i].by));
 		jsonPush(marked, mark);
 	}
 	jsonAdd(object, "marked", marked);
+	if (result->gone.count) {
+		Json *gone = jsonArray();
+		for (int i = 0; i < result->gone.count; i++) jsonPush(gone, jsonString(result->gone.items[i]));
+		jsonAdd(object, "gone", gone);
+	}
 	return object;
 }
 

@@ -1,5 +1,16 @@
-// json.h: a JSON value, its parser and printer, value equality, and the
-// code point helpers every other file uses. Nothing here knows about graphs.
+// json.h: a value (CORE Values), its parser and printer, value equality, and
+// the code point helpers every other file uses. Nothing here knows about
+// graphs.
+//
+// VALUES BEYOND JSON. A value is also bytes, a typed array or a live value,
+// each held as the machine holds it: bytes and typed arrays in a buffer of
+// their own, never as strings or lists of numbers. A number is any binary64,
+// NaN, the infinities and -0 included. The parser reads plain JSON;
+// jsonDecode turns PROTOCOL's "/" forms in a value read from a line into these
+// kinds, and the printer writes every value in its JSON form (PROTOCOL Values
+// in JSON): -0 as -0, NaN and the infinities, bytes, typed arrays and live
+// values under "/", and a map whose only key is "/" escaped as {"/": {"map":
+// ...}}.
 //
 // VALUES ARE IMMUTABLE AND NEVER FREED (see NOTES.md, Memory). A Json that
 // has been handed to another function, stored, or returned is shared: no one
@@ -32,7 +43,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef enum { JSON_NULL, JSON_BOOLEAN, JSON_NUMBER, JSON_STRING, JSON_ARRAY, JSON_OBJECT } JsonType;
+typedef enum { JSON_NULL, JSON_BOOLEAN, JSON_NUMBER, JSON_STRING, JSON_ARRAY, JSON_OBJECT, JSON_BYTES, JSON_TYPED, JSON_LIVE } JsonType;
+
+/** a typed array's kind (CORE Values), in PROTOCOL's order; each held as its C type */
+typedef enum { JSON_INT8, JSON_UINT8, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON_INT64, JSON_UINT64, JSON_FLOAT32, JSON_FLOAT64, JSON_KINDS } JsonKind;
 
 typedef struct Json Json;
 
@@ -49,9 +63,18 @@ struct Json {
 		bool boolean;
 		double number;
 		struct {
-			char *string; // UTF-8 (WTF-8 for lone surrogates), NUL-terminated, `stringLength` bytes
+			char *string; // UTF-8 (WTF-8 for lone surrogates), NUL-terminated, `stringLength` bytes; a live value's kind
 			size_t stringLength;
 		};
+		struct {
+			unsigned char *data;
+			size_t length;
+		} bytes;
+		struct {
+			JsonKind kind;
+			void *data; // `count` elements of the kind's C type: int8_t ... uint64_t, float, double
+			size_t count;
+		} typed;
 		struct {
 			Json **items;
 			int count;
@@ -79,6 +102,14 @@ Json *jsonString(const char *text);
 Json *jsonStringOfLength(const char *text, size_t length);
 Json *jsonArray(void);
 Json *jsonObject(void);
+/** bytes: copies `length` octets */
+Json *jsonBytes(const void *data, size_t length);
+/** a typed array: copies `count` elements of the kind's C type */
+Json *jsonTyped(JsonKind kind, const void *data, size_t count);
+/** a live value's stand-in, of a kind: a thing of its own, equal only to itself */
+Json *jsonLive(const char *kind);
+/** the size of one element of a kind */
+size_t jsonKindSize(JsonKind kind);
 /** appends to an array; takes the item */
 void jsonPush(Json *array, Json *item);
 /** appends a key to an object, without checking for one already there; takes the value; copies the key */
@@ -112,13 +143,17 @@ const char *jsonText(const Json *value);
  */
 bool jsonIsWhole(const Json *value, int64_t *out);
 /**
- * Value equality, the relation of $eq and of the driver's comparison: null,
- * booleans, strings (byte for byte) and numbers by value (0 equals -0),
- * lists element by element in order, objects with the same keys holding
- * equal values in any key order. Two NULLs (absent) are equal; NULL and a
- * value are not.
+ * Value equality (CORE Values): of the same kind with equal parts. Numbers as
+ * JavaScript's Object.is tells them apart (0 and -0 differ, NaN equals NaN);
+ * strings and bytes byte for byte; typed arrays only of the same kind,
+ * element by element as numbers are; lists element by element in order;
+ * objects with the same keys holding equal values in any key order; live
+ * values only when they are the same thing. Two NULLs (absent) are equal;
+ * NULL and a value are not.
  */
 bool jsonEqual(const Json *a, const Json *b);
+/** whether two numbers are the same as Object.is has it */
+bool jsonSameNumber(double a, double b);
 
 // text -------------------------------------------------------------------------
 
@@ -138,7 +173,17 @@ Json *jsonParse(const char *text, size_t length, char **why);
  */
 Json *jsonParseRead(const char *text, size_t length, char **why, Json **read);
 
-/** the value as JSON.stringify(value) would write it: one line, a fresh C string */
+/**
+ * PROTOCOL Values in JSON: turns the "/" forms in a value read from a line
+ * into the values they stand for, in place (the value must be fresh, not yet
+ * shared): bytes, typed arrays, numbers JSON cannot write, a map whose only
+ * key is "/", and, only where `live` says (the whole value), a live value's
+ * new stand-in. False when a form is malformed, or a live value is anywhere
+ * else: wrong-field. *value may be replaced.
+ */
+bool jsonDecode(Json **value, bool live);
+
+/** the value in its JSON form (PROTOCOL Values in JSON), as JSON.stringify writes the rest: one line, a fresh C string */
 char *jsonPrint(const Json *value);
 
 /**

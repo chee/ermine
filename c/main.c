@@ -4,11 +4,13 @@
 // One JSON object per line each way: every request is answered in order
 // under its seq, nothing else goes to stdout, and the harness exits when
 // stdin closes. Only the graph stack is built: a reset with stack "protect"
-// or "drive" is unsupported, and so are batch and fire. A request is checked
-// field by field, in PROTOCOL's order (cmd, agent, process, place, chroot,
-// address, name, id, position, value, patches, cause, time, then the
-// command's own), and the first problem answers (missing, wrong-field); then
-// the graph checks it. The readings the protocol leaves open are in NOTES.md.
+// or "schedule" is unsupported, and so are batch, start and fire. A request
+// is checked field by field, in PROTOCOL's order (cmd, agent, process, place,
+// chroot, address, name, id, position, value, ephemeral, patches, cause,
+// time, then the command's own), and the first problem answers (missing,
+// wrong-field); values (agent, value, the patches' values, cause) are read
+// from their JSON forms as they are checked. Then the graph checks it. The
+// readings the protocol leaves open are in NOTES.md.
 //
 // Requests are never freed (the graph keeps parts of them); each printed
 // answer is.
@@ -96,18 +98,49 @@ static bool whole(Request *request, const char *key, bool required, int64_t leas
 	return false;
 }
 
-/** a time: a whole number from 1, of any size, kept as given; whether it is late enough is for the graph (code time) */
+/** a time: a whole number from 1 to 2^53-1; whether it is late enough is for the graph (code time) */
 static ErmTime timeOf(Request *request) {
 	Json *value = field(request, "time", true);
 	if (!value) return 0;
-	if (jsonIsWhole(value, NULL) && value->number >= 1) return value->number;
+	if (jsonIsWhole(value, NULL) && value->number >= 1 && value->number <= ERM_LAST_TIME) return value->number;
 	problem(request, "wrong-field", "time");
 	return 0;
 }
 
+/**
+ * a value field read from its JSON form (PROTOCOL Values in JSON), a live
+ * value only where `live` lets one be, the whole value; wrong-field when a
+ * form is malformed
+ */
+static Json *valueOf(Request *request, const char *key, bool required, bool live) {
+	Json *value = field(request, key, required);
+	if (!value) return NULL;
+	if (jsonDecode(&value, live)) {
+		jsonSet(request->json, key, strlen(key), value);
+		return value;
+	}
+	problem(request, "wrong-field", key);
+	return NULL;
+}
+
+/** patches: a list, each value in it read from its JSON form, a live value only as a snapshot's whole value */
+static Json *patchesOf(Request *request) {
+	Json *patches = field(request, "patches", true);
+	if (!patches) return NULL;
+	bool ok = jsonIsArray(patches);
+	for (int i = 0; ok && i < patches->array.count; i++) {
+		Json *patch = patches->array.items[i], *value = jsonGet(patch, "value");
+		const char *type = jsonText(jsonGet(patch, "type"));
+		ok = !value || jsonDecode(&value, type && strcmp(type, "snapshot") == 0);
+		if (ok && value) jsonSet(patch, "value", 5, value);
+	}
+	if (!ok) problem(request, "wrong-field", "patches");
+	return patches;
+}
+
 /** PROTOCOL Acting as someone: agent, process?, place?, chroot? */
 static ErmCtx ctxOf(Request *request) {
-	ErmCtx ctx = { .agent = field(request, "agent", true) };
+	ErmCtx ctx = { .agent = valueOf(request, "agent", true, false) };
 	ctx.process = text(request, "process", false, false);
 	Json *place = field(request, "place", false);
 	if (place && !ermNamesFrom(place, &ctx.place.names)) problem(request, "wrong-field", "place");
@@ -131,7 +164,7 @@ static ErmAddress addressOf(Request *request) {
 /** PROTOCOL The session: reset {stack, root} */
 static Reply reset(Session *session, Request *request) {
 	const char *stack = text(request, "stack", true, false);
-	if (stack && (strcmp(stack, "protect") == 0 || strcmp(stack, "drive") == 0)) return (Reply){ NULL, ermOk(), "reset" };
+	if (stack && (strcmp(stack, "protect") == 0 || strcmp(stack, "schedule") == 0)) return (Reply){ NULL, ermOk(), "reset" };
 	if (stack && strcmp(stack, "graph") != 0) problem(request, "wrong-field", "stack");
 	const char *root = text(request, "root", true, false);
 	if (request->err.kind) return replyError(request->err);
@@ -140,9 +173,12 @@ static Reply reset(Session *session, Request *request) {
 	return replyOk(jsonNull());
 }
 
-static void queueChange(void *data, const ErmChange *change) {
+/** a subscription's row: {"change": c}, with "reaches" for a change to its route */
+static void queueChange(void *data, const ErmChange *change, const ErmItems *reaches) {
 	Queue *queue = data;
-	ERM_PUSH(queue->events, keyed("change", ermChangeToJson(change)));
+	Json *row = keyed("change", ermChangeToJson(change, false));
+	if (reaches) jsonAdd(row, "reaches", ermItemsToJson(reaches));
+	ERM_PUSH(queue->events, row);
 }
 
 /**
@@ -178,7 +214,21 @@ static Reply events(Session *session, Request *request) {
 	return replyOk(list);
 }
 
-/** PROTOCOL Commands, below drive: CORE's operations */
+/**
+ * PROTOCOL Commands: reload {}, not an operation and not a change, so it
+ * carries no agent: the graph as storing and loading it would leave it, with
+ * every subscription dropped, and what was queued for it.
+ */
+static Reply reload(Session *session) {
+	session->top.vt->reload(session->top.self);
+	for (int i = 0; i < session->queues.count; i++) {
+		session->queues.items[i]->events.count = 0;
+		session->queues.items[i]->gone = true;
+	}
+	return replyOk(jsonNull());
+}
+
+/** PROTOCOL Commands, below schedule: CORE's operations */
 static Reply command(Session *session, Request *request) {
 	const char *cmd = request->cmd;
 	ErmCtx ctx = ctxOf(request);
@@ -211,17 +261,19 @@ static Reply command(Session *session, Request *request) {
 	if (op.kind == ERM_OP_DIRECTORY || op.kind == ERM_OP_LOOKUP || slot) op.name = text(request, "name", op.kind != ERM_OP_DIRECTORY, true);
 	if (slot) op.id = text(request, "id", true, false);
 	if (op.kind == ERM_OP_PLACE) {
+		// "ephemeral": true makes the node ephemeral: it needs a value, which may be live
+		Json *ephemeral = jsonGet(request->json, "ephemeral");
+		bool making = ephemeral && ephemeral->type == JSON_BOOLEAN && ephemeral->boolean;
 		op.hasPosition = whole(request, "position", false, 0, &op.position);
-		op.value = field(request, "value", false);
+		op.value = valueOf(request, "value", making, making);
+		if (ephemeral && ephemeral->type != JSON_BOOLEAN) problem(request, "wrong-field", "ephemeral");
+		op.ephemeral = making;
 	}
-	if (op.kind == ERM_OP_WRITE) {
-		op.patches = field(request, "patches", true);
-		if (op.patches && !jsonIsArray(op.patches)) problem(request, "wrong-field", "patches");
-	}
+	if (op.kind == ERM_OP_WRITE) op.patches = patchesOf(request);
 	bool changes = ermOpIsChange(op.kind);
 	if (changes) {
-		// below drive every change carries its time; from outside, its cause, which stands for its site
-		stamp.cause = field(request, "cause", true);
+		// below schedule every change carries its time; from outside any process, its cause, which stands for its site
+		stamp.cause = valueOf(request, "cause", !ctx.process, false);
 		stamp.time = timeOf(request);
 	}
 	if (request->err.kind) return replyError(request->err);
@@ -236,12 +288,13 @@ static Reply command(Session *session, Request *request) {
 static Reply respond(Session *session, Request *request) {
 	const char *cmd = request->cmd;
 	// An error names its command as op when the command is an operation, session or not (PROTOCOL Errors):
-	// CORE's operations, and batch, the driver's own (DRIVER Outside operations, batches and handlers).
-	// reset, events and fire are the harness's, so their errors name no op.
-	bool operation = strcmp(cmd, "subscribe") == 0 || strcmp(cmd, "unsubscribe") == 0 || strcmp(cmd, "batch") == 0;
+	// CORE's operations, and batch and start, the scheduler's own (SCHEDULER Processes; Outside operations,
+	// batches and handlers). reset, reload, events and fire are the harness's, so their errors name no op.
+	bool scheduler = strcmp(cmd, "batch") == 0 || strcmp(cmd, "start") == 0 || strcmp(cmd, "fire") == 0; // only with schedule
+	bool operation = strcmp(cmd, "subscribe") == 0 || strcmp(cmd, "unsubscribe") == 0 || (scheduler && strcmp(cmd, "fire") != 0);
 	for (int kind = ERM_OP_READ; kind <= ERM_OP_UNPLACE; kind++) operation = operation || strcmp(cmd, ermOpName(kind)) == 0;
-	bool drive = strcmp(cmd, "batch") == 0 || strcmp(cmd, "fire") == 0; // only with drive
-	if (!operation && !drive && strcmp(cmd, "reset") != 0 && strcmp(cmd, "events") != 0) {
+	bool harness = strcmp(cmd, "reset") == 0 || strcmp(cmd, "events") == 0 || strcmp(cmd, "reload") == 0;
+	if (!operation && !scheduler && !harness) {
 		return replyError(ermDetail(ermInvalid("unknown-command"), "cmd", jsonString(cmd)));
 	}
 	Reply reply;
@@ -250,10 +303,12 @@ static Reply respond(Session *session, Request *request) {
 	} else if (!session->started) {
 		problem(request, "missing", "reset");
 		reply = replyError(ermDetail(request->err, "text", jsonString("no session: send reset first")));
-	} else if (drive) {
+	} else if (scheduler) {
 		reply = (Reply){ NULL, ermOk(), cmd };
 	} else if (strcmp(cmd, "events") == 0) {
 		reply = events(session, request);
+	} else if (strcmp(cmd, "reload") == 0) {
+		reply = reload(session);
 	} else {
 		reply = command(session, request);
 	}

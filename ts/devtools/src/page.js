@@ -56,7 +56,14 @@
         } catch { /* the old graph may be gone */ }
       }
     }
-    s = { api: entry.api, subs: new Map(), events: [], seen: new Set(), n: 0, gen: (s?.gen ?? 0) + 1 };
+    s = {
+      api: entry.api,
+      subs: new Map(),
+      events: [],
+      seen: new Set(),
+      n: 0,
+      gen: (s?.gen ?? 0) + 1,
+    };
     graphs.set(name, s);
     version++;
     return s;

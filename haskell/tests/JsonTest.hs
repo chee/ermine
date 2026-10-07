@@ -34,7 +34,8 @@ main = do
   -- numbers as JSON.stringify prints them
   roundTrip "3" "3"
   roundTrip "6.5" "6.5"
-  roundTrip "-0" "0"
+  roundTrip "-0" "-0"
+  roundTrip "[-0,0,{\"k\":-0}]" "[-0,0,{\"k\":-0}]"
   roundTrip "1e21" "1e+21"
   roundTrip "1E21" "1e+21"
   roundTrip "1e20" "100000000000000000000"
@@ -101,7 +102,7 @@ main = do
   -- value equality ($eq)
   equal "{\"x\":1,\"y\":[1,2]}" "{\"y\":[1,2],\"x\":1}"
   equal "1" "1.0"
-  equal "0" "-0"
+  unequal "0" "-0"
   equal "{\"a\":{\"b\":1,\"c\":2}}" "{\"a\":{\"c\":2,\"b\":1}}"
   unequal "[1,2]" "[2,1]"
   unequal "{\"a\":1}" "{\"a\":1,\"b\":2}"
@@ -109,6 +110,80 @@ main = do
   unequal "\"1\"" "1"
   unequal "[]" "{}"
   check "0.5+0.5 = 1" (JNumber (0.5 + 0.5) == JNumber 1)
+
+  -- values beyond JSON, read from their forms and written back the same
+  let form t = fromForms False (parsed t)
+      liveForm t = fromForms True (parsed t)
+      forms t = check ("form " <> Text.unpack t) (fmap render (form t) == Just t)
+      malformed t = check ("malformed " <> Text.unpack t) (form t == Nothing)
+  mapM_
+    forms
+    [ "{\"/\":{\"bytes\":\"aGVsbG8\"}}"
+    , "{\"/\":{\"bytes\":\"+/8\"}}"
+    , "{\"/\":{\"bytes\":\"\"}}"
+    , "{\"/\":{\"number\":\"NaN\"}}"
+    , "[{\"/\":{\"number\":\"Infinity\"}},{\"/\":{\"number\":\"-Infinity\"}},-0]"
+    , "{\"/\":{\"map\":{\"/\":1}}}"
+    , "{\"/\":{\"map\":{\"/\":{\"/\":{\"map\":{\"/\":null}}}}}}"
+    , "{\"/\":1,\"x\":2}"
+    , "{\"/\":{\"int8\":[-128,0,127]}}"
+    , "{\"/\":{\"uint32\":[0,4294967295]}}"
+    , "{\"/\":{\"int64\":[\"-9223372036854775808\",\"9007199254740993\",\"9223372036854775807\"]}}"
+    , "{\"/\":{\"uint64\":[\"18446744073709551615\"]}}"
+    , "{\"/\":{\"float64\":[1.5,-0,\"NaN\",\"Infinity\",\"-Infinity\",0.1,1e+300,-2.5e-300]}}"
+    , "{\"/\":{\"float32\":[-2.5,-0,\"NaN\",0.5]}}"
+    , "{\"/\":{\"int16\":[]}}"
+    ]
+  check "a float32 is written shortest" (fmap render (form "{\"/\":{\"float32\":[0.1,3.141592653589793,16777217,123456.789]}}") == Just "{\"/\":{\"float32\":[0.1,3.1415927,16777216,123456.79]}}")
+  check "a string that looks like base64 stays a string" (form "\"aGk\"" == Just (JString "aGk"))
+  check "a live value only where one may be" (liveForm "{\"/\":{\"live\":\"canvas\"}}" == Just (JLive "canvas" 0) && form "{\"/\":{\"live\":\"canvas\"}}" == Nothing)
+  check "a live value is never inside a list or map" (liveForm "[{\"/\":{\"live\":\"canvas\"}}]" == Nothing && liveForm "{\"a\":{\"/\":{\"live\":\"canvas\"}}}" == Nothing)
+  check "a live value is written as its kind" (render (JLive "canvas" 3) == "{\"/\":{\"live\":\"canvas\"}}")
+  mapM_
+    malformed
+    [ "{\"/\":{\"bytes\":\"aGVsbG8=\"}}"
+    , "{\"/\":{\"bytes\":\"aGVsb\"}}"
+    , "{\"/\":{\"bytes\":\"-_8\"}}"
+    , "{\"/\":{\"bytes\":\"aGl=\"}}"
+    , "{\"/\":{\"bytes\":\"aGm\"}}"
+    , "{\"/\":{\"bytes\":5}}"
+    , "{\"/\":{\"number\":\"nan\"}}"
+    , "{\"/\":{\"number\":\"-0\"}}"
+    , "{\"/\":{\"number\":5}}"
+    , "{\"/\":\"x\"}"
+    , "{\"/\":{}}"
+    , "{\"/\":{\"blob\":1}}"
+    , "{\"/\":{\"bytes\":\"aGk\",\"int8\":[1]}}"
+    , "{\"/\":{\"map\":5}}"
+    , "{\"/\":{\"map\":{\"/\":{\"/\":{}}}}}"
+    , "{\"/\":{\"int8\":[128]}}"
+    , "{\"/\":{\"uint8\":[-1]}}"
+    , "{\"/\":{\"int32\":[1.5]}}"
+    , "{\"/\":{\"int8\":[\"NaN\"]}}"
+    , "{\"/\":{\"int64\":[5]}}"
+    , "{\"/\":{\"int64\":[\"9223372036854775808\"]}}"
+    , "{\"/\":{\"int64\":[\"01\"]}}"
+    , "{\"/\":{\"uint64\":[\"-1\"]}}"
+    , "{\"/\":{\"float32\":[1e39]}}"
+    , "{\"/\":{\"float64\":[\"inf\"]}}"
+    , "{\"/\":{\"float16\":[1]}}"
+    , "{\"/\":{\"int8\":\"AQI\"}}"
+    , "{\"k\":[{\"/\":{\"uint8\":[1,256]}}]}"
+    ]
+
+  -- value equality as CORE Values has it
+  let v t = either (error . Text.unpack) id (parseValue t >>= maybe (Left "malformed") Right . fromForms False)
+      same a b = check (Text.unpack a <> " = " <> Text.unpack b) (v a == v b)
+      differ a b = check (Text.unpack a <> " /= " <> Text.unpack b) (v a /= v b)
+  same "{\"/\":{\"number\":\"NaN\"}}" "{\"/\":{\"number\":\"NaN\"}}"
+  same "{\"/\":{\"float32\":[\"NaN\",0]}}" "{\"/\":{\"float32\":[\"NaN\",0]}}"
+  differ "{\"/\":{\"float32\":[-0]}}" "{\"/\":{\"float32\":[0]}}"
+  differ "{\"/\":{\"int8\":[1]}}" "{\"/\":{\"uint8\":[1]}}"
+  differ "{\"/\":{\"uint8\":[104,105]}}" "{\"/\":{\"bytes\":\"aGk\"}}"
+  differ "{\"/\":{\"int8\":[1]}}" "[1]"
+  differ "{\"/\":{\"bytes\":\"aGk\"}}" "\"aGk\""
+  same "{\"/\":{\"bytes\":\"aGk\"}}" "{\"/\":{\"bytes\":\"aGk\"}}"
+  check "live values are equal only when the same stand-in" (JLive "c" 1 == JLive "c" 1 && JLive "c" 1 /= JLive "c" 2)
 
   -- helpers
   check "asWhole 3" (asWhole (JNumber 3) == Just 3)

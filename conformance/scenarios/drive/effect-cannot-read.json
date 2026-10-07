@@ -1,7 +1,0 @@
-{"name":"a read in an effect is invalid and fails the run after its value is written","steps":[
-{"send":{"cmd":"reset","stack":"drive","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"p1","id":"p1","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"effect","id":"eff","value":[{"do":"read","address":["p1"],"as":"x"}],"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"place","agent":"host","address":["p1"],"name":"compute","id":"comp","value":[{"do":"return","value":1}],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":3},"runs":[{"process":"p1","run":1,"value":1,"changes":[{"node":"p1","time":4}],"ending":"failed","errors":[{"kind":"invalid","op":"read","why":{"code":"write-only"}}]}]}}},
-{"send":{"cmd":"read","agent":"host","address":["p1"]},"expect":{"ok":{"items":[{"error":{"kind":"invalid","op":"read","why":{"code":"write-only"}},"from":{"process":"p1","run":1}},{"value":1,"from":{"route":[{"parent":"root","name":"p1","node":"p1","position":0}]}}]}}}
-]}

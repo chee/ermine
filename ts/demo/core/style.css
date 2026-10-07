@@ -3494,3 +3494,15 @@ article.doc p:focus {
 .k-llm {
   color: var(--lilac);
 }
+.ask-local {
+  margin-left: auto;
+  max-width: 220px;
+}
+.ask-status {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--sunk);
+  padding: 4px 8px;
+  white-space: pre-wrap;
+}

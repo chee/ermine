@@ -1,0 +1,302 @@
+:root {
+  --bg: #fdfbf7;
+  --fg: #2c2231;
+  --dim: #8a7f8e;
+  --line: #e7e1d8;
+  --hover: #f3eee6;
+  --sel: #f6dbe6;
+  --accent: #e2457c;
+  --id: #6a5acd;
+  --ok: #2e8b57;
+  --bad: #c0392b;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1f1b22;
+    --fg: #ece6ef;
+    --dim: #9a8fa0;
+    --line: #3a3340;
+    --hover: #2a242e;
+    --sel: #4a2a3a;
+    --accent: #ff7aa8;
+    --id: #b4a7ff;
+    --ok: #6fd39b;
+    --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1f1b22;
+  --fg: #ece6ef;
+  --dim: #9a8fa0;
+  --line: #3a3340;
+  --hover: #2a242e;
+  --sel: #4a2a3a;
+  --accent: #ff7aa8;
+  --id: #b4a7ff;
+  --ok: #6fd39b;
+  --bad: #ff8a80;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 12px/1.45 system-ui, sans-serif;
+}
+pre, .id, .route, .value, .time, input {
+  font-family: var(--mono);
+}
+pre {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+button, select, input {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+button {
+  cursor: pointer;
+}
+a {
+  color: var(--accent);
+  cursor: pointer;
+}
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+header strong {
+  color: var(--accent);
+}
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.left {
+  width: 45%;
+  min-width: 220px;
+  overflow: auto;
+  border-right: 1px solid var(--line);
+  padding: 4px 0;
+}
+.right {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 12px;
+}
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: 14px;
+}
+.left > .tree {
+  padding-left: 8px;
+}
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 6px;
+  white-space: nowrap;
+  cursor: default;
+}
+.row:hover {
+  background: var(--hover);
+}
+.row.selected {
+  background: var(--sel);
+}
+.twisty {
+  border: 0;
+  background: none;
+  padding: 0;
+  width: 12px;
+  color: var(--dim);
+}
+.row .name {
+  font-weight: 600;
+}
+.ids {
+  display: inline-flex;
+  gap: 4px;
+}
+.id {
+  color: var(--id);
+}
+.pending {
+  opacity: 0.5;
+  text-decoration: line-through dotted;
+}
+.preview {
+  color: var(--dim);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.empty {
+  color: var(--dim);
+  font-style: italic;
+}
+.err {
+  color: var(--bad);
+}
+h2 {
+  font: 600 13px var(--mono);
+  margin: 6px 0;
+}
+h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  margin: 14px 0 4px;
+}
+.item {
+  border-left: 2px solid var(--line);
+  padding: 2px 8px;
+  margin: 4px 0;
+}
+.item.first {
+  border-left-color: var(--accent);
+}
+.value {
+  background: var(--hover);
+  padding: 4px 6px;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow: auto;
+}
+.meta, .from {
+  color: var(--dim);
+}
+.route .name {
+  color: var(--fg);
+}
+.route .sep {
+  color: var(--dim);
+}
+.change {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.change .time {
+  color: var(--dim);
+}
+.change .agent {
+  color: var(--ok);
+}
+.change .process, .change .cause {
+  color: var(--dim);
+}
+table.dir {
+  border-collapse: collapse;
+  width: 100%;
+}
+table.dir td {
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+table.dir td.pos {
+  color: var(--dim);
+  text-align: right;
+}
+.lookup {
+  display: flex;
+  gap: 6px;
+}
+.log {
+  height: 38%;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+.bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.bar input {
+  flex: 1;
+  max-width: 300px;
+}
+.count {
+  color: var(--dim);
+}
+.log-list {
+  flex: 1;
+  overflow: auto;
+}
+.entry {
+  border-bottom: 1px solid var(--line);
+  padding: 2px 8px;
+}
+.entry .head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.entry .head:hover {
+  background: var(--hover);
+}
+.tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--dim);
+  width: 44px;
+}
+.entry .node {
+  font-family: var(--mono);
+  color: var(--id);
+}
+.record-entry .ending {
+  font-weight: 600;
+}
+.record-entry.done .ending {
+  color: var(--ok);
+}
+.record-entry.failed .ending, .record-entry.refused .ending {
+  color: var(--bad);
+}
+.record-entry.pending .ending {
+  color: var(--dim);
+}
+.counts {
+  color: var(--dim);
+}
+.none {
+  padding: 24px;
+  color: var(--dim);
+}
+.none pre {
+  color: var(--fg);
+}

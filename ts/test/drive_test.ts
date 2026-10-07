@@ -52,7 +52,7 @@ Deno.test("drive gives each change the next time, and runs what a write marked",
   const started = start(d);
   assertEquals(started.change.time, 4);
   assertEquals(started.runs.map((r) => [r.run, r.value, r.changes]), [
-    [1, 1, [{ node: "p", time: 5 }]],
+    [1, 1, [5]],
   ]);
   const written = d.write({ ...host, address: ["a"], patches: [{ type: "snapshot", value: 2 }] });
   assertEquals(written.change.time, 6);
@@ -171,17 +171,23 @@ Deno.test("protect is asked before every operation a run makes, as its process",
   start(d);
   // binding the lasting and reading interfaces, recording the run, the program
   // slot and node, the effect slot, the compute's read, the driver's write of
-  // the value, and finishing the run
+  // the value, and finishing the run; each with the directories its walk reads
   assertEquals(asked, [
     "bind undefined",
     "bind undefined",
     "record undefined",
     "directory p",
+    "directory init",
     "read show",
+    "directory init",
     "directory p",
+    "directory p",
+    "directory init",
     "read a",
+    "directory init",
     "bind undefined",
     "write p",
+    "directory init",
     "finish undefined",
   ]);
 });
@@ -308,7 +314,7 @@ Deno.test("a process a cleanup makes reachable is marked by the change that made
   const [, placed] = answer.stopped[0].changes;
   assertEquals(placed.kind, "place");
   const run = answer.runs.find((r) => r.process === "x")!;
-  assertEquals(run.marked, [{ node: "init", time: placed.time }]);
+  assertEquals(run.marked, [placed.time]);
 });
 
 Deno.test("an effect raises a process whose compute read the program node it changed", () => {

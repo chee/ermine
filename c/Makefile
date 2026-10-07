@@ -5,7 +5,7 @@
 #
 #   make            c/ermine
 #   make asan       c/ermine-asan, with -fsanitize=address,undefined
-#   make check      the json unit test (json_test.c)
+#   make check      the json, cbor and graph unit tests (json_test.c, cbor_test.c, graph_test.c)
 #   make clean
 
 CC ?= cc
@@ -27,10 +27,18 @@ asan: ermine-asan
 json_test: json_test.c json.c json.h
 	$(CC) $(SANITIZE) -o $@ json_test.c json.c $(LDLIBS)
 
-check: json_test
+cbor_test: cbor_test.c cbor.c cbor.h json.c json.h
+	$(CC) $(SANITIZE) -o $@ cbor_test.c cbor.c json.c $(LDLIBS)
+
+graph_test: graph_test.c $(SOURCES) $(HEADERS)
+	$(CC) $(SANITIZE) -o $@ graph_test.c json.c ermine.c graph.c $(LDLIBS)
+
+check: json_test cbor_test graph_test
 	./json_test
+	./cbor_test
+	./graph_test
 
 clean:
-	rm -rf ermine ermine-asan json_test *.dSYM
+	rm -rf ermine ermine-asan json_test cbor_test graph_test *.dSYM
 
 .PHONY: asan check clean

@@ -38,36 +38,53 @@ main = do
 
   -- changes
   let site = parsed "{\"file\":\"s.js\",\"line\":1,\"column\":1}"
-      change k = Change "a" 3 k "host" Nothing (Just site)
+      change k = Change "a" 3 k "host" Nothing (Just site) False
   renders
     "a mount: no position, no value"
     (changeToJson (change (KindPlace "x" "b" Nothing Nothing)))
     "{\"node\":\"a\",\"time\":3,\"kind\":\"place\",\"name\":\"x\",\"id\":\"b\",\"agent\":\"host\",\"cause\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}"
   renders
     "a making with a position, by a process, with a null cause"
-    (changeToJson (Change "a" 3 (KindPlace "x" "b" (Just 0) (Just JNull)) (int 7) (Just "p") (Just JNull)))
+    (changeToJson (Change "a" 3 (KindPlace "x" "b" (Just 0) (Just JNull)) (int 7) (Just "p") (Just JNull) False))
     "{\"node\":\"a\",\"time\":3,\"kind\":\"place\",\"name\":\"x\",\"id\":\"b\",\"position\":0,\"value\":null,\"agent\":7,\"process\":\"p\",\"cause\":null}"
   renders
     "a write without a cause"
-    (changeToJson (Change "a" 4 (KindWrite [parsed "{\"type\":\"snapshot\",\"value\":1}"]) "host" Nothing Nothing))
+    (changeToJson (Change "a" 4 (KindWrite [parsed "{\"type\":\"snapshot\",\"value\":1}"]) "host" Nothing Nothing False))
     "{\"node\":\"a\",\"time\":4,\"kind\":\"write\",\"patches\":[{\"type\":\"snapshot\",\"value\":1}],\"agent\":\"host\"}"
   renders
     "an unplace"
     (changeToJson (change (KindUnplace "x" "b")))
     "{\"node\":\"a\",\"time\":3,\"kind\":\"unplace\",\"name\":\"x\",\"id\":\"b\",\"agent\":\"host\",\"cause\":{\"file\":\"s.js\",\"line\":1,\"column\":1}}"
 
-  -- items and froms
+  renders
+    "an ephemeral change says so"
+    (changeToJson (Change "e" 5 (KindWrite []) "host" Nothing Nothing True))
+    "{\"node\":\"e\",\"time\":5,\"kind\":\"write\",\"patches\":[],\"agent\":\"host\",\"ephemeral\":true}"
+
+  -- items and froms: an item carries the change's header, never its
+  -- patches nor a placement's value
   let step = Step "root" "a" "a" 0
-      made = Change "root" 1 (KindPlace "a" "a" Nothing (Just (int 1))) "host" Nothing Nothing
+      made = Change "root" 1 (KindPlace "a" "a" Nothing (Just (int 1))) "host" Nothing Nothing False
+      header = "{\"node\":\"root\",\"time\":1,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"agent\":\"host\"}"
   renders
     "a value item"
-    (itemToJson (ItemValue (int 1) (FromRoute [step]) (Just made)))
-    "{\"value\":1,\"from\":{\"route\":[{\"parent\":\"root\",\"name\":\"a\",\"node\":\"a\",\"position\":0}]},\"change\":{\"node\":\"root\",\"time\":1,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"value\":1,\"agent\":\"host\"}}"
-  renders "the root's first value has no change" (itemToJson (ItemValue JNull (FromRoute []) Nothing)) "{\"value\":null,\"from\":{\"route\":[]}}"
+    (itemToJson (ItemValue (int 1) (FromRoute [step]) (Just made) False))
+    ("{\"value\":1,\"from\":{\"route\":[{\"parent\":\"root\",\"name\":\"a\",\"node\":\"a\",\"position\":0}]},\"change\":" <> header <> "}")
+  renders
+    "a write's header has no patches"
+    (changeHeader (Change "a" 2 (KindWrite [parsed "{\"type\":\"snapshot\",\"value\":1}"]) "host" Nothing Nothing True))
+    "{\"node\":\"a\",\"time\":2,\"kind\":\"write\",\"agent\":\"host\",\"ephemeral\":true}"
+  renders "the root's first value has no change" (itemToJson (ItemValue JNull (FromRoute []) Nothing False)) "{\"value\":null,\"from\":{\"route\":[]}}"
   check
     "a pending slot item"
-    (itemToJson (ItemId "g" (FromSlot [] 2) made True) == parsed "{\"id\":\"g\",\"from\":{\"route\":[],\"position\":2},\"change\":{\"node\":\"root\",\"time\":1,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"value\":1,\"agent\":\"host\"},\"pending\":true}")
-  check "a slot item here says nothing of pending" (field "pending" (itemToJson (ItemId "g" (FromSlot [] 0) made False)) == Nothing)
+    (itemToJson (ItemId "g" (FromSlot [] 2) (Just made) True False) == parsed ("{\"id\":\"g\",\"from\":{\"route\":[],\"position\":2},\"change\":" <> header <> ",\"pending\":true}"))
+  check "a slot item here says nothing of pending" (field "pending" (itemToJson (ItemId "g" (FromSlot [] 0) (Just made) False False)) == Nothing)
+  check
+    "an ephemeral slot item, of a slot whose every change was ephemeral"
+    (itemToJson (ItemId "e" (FromSlot [] 0) Nothing False True) == parsed "{\"id\":\"e\",\"from\":{\"route\":[],\"position\":0},\"ephemeral\":true}")
+  check
+    "a lookup's refused item"
+    (itemToJson (ItemRefused (Address False 2 [])) == parsed "{\"refused\":true,\"from\":{\"path\":[\"..\",\"..\"]}}")
   check
     "a lookup's from"
     (fromToJson (FromPath (Address False 1 ["theme"]) 0) == parsed "{\"path\":[\"..\",\"theme\"],\"position\":0}")
@@ -89,18 +106,18 @@ main = do
 
   -- records
   let r =
-        (emptyRecord "p1" 1 "host" [ChangeRef "init" 6])
+        (emptyRecord "p1" 1 "host" [6])
           { recordLookups = [LookupEntry "theme" [Searched "g" (Just 1) False, Searched "h" Nothing True] []]
           , recordReads = [ReadEntry "read" (Address False 0 ["a"]) Nothing [Step "r" "a" "a" 0] (Just 2), ReadEntry "directory" (Address True 0 []) (Just "x") [] Nothing]
           , recordValue = Just (JNumber 1)
-          , recordChanges = [ChangeRef "p1" 7]
+          , recordChanges = [7]
           , recordErrors = [withOp "read" (invalid "write-only" [] "")]
           }
   check
     "record"
     ( recordToJson r
         == parsed
-          "{\"process\":\"p1\",\"run\":1,\"agent\":\"host\",\"marked\":[{\"node\":\"init\",\"time\":6}],\"lookups\":[{\"name\":\"theme\",\"searched\":[{\"node\":\"g\",\"saw\":1},{\"node\":\"h\",\"refused\":true}],\"found\":[]}],\"reads\":[{\"op\":\"read\",\"address\":[\"a\"],\"route\":[{\"parent\":\"r\",\"name\":\"a\",\"node\":\"a\",\"position\":0}],\"saw\":2},{\"op\":\"directory\",\"address\":[\"/\"],\"name\":\"x\",\"route\":[],\"saw\":null}],\"value\":1,\"cleanup\":[],\"changes\":[{\"node\":\"p1\",\"time\":7}],\"ending\":\"done\",\"errors\":[{\"kind\":\"invalid\",\"op\":\"read\",\"why\":{\"code\":\"write-only\"}}]}"
+          "{\"process\":\"p1\",\"run\":1,\"agent\":\"host\",\"marked\":[6],\"lookups\":[{\"name\":\"theme\",\"searched\":[{\"node\":\"g\",\"saw\":1},{\"node\":\"h\",\"refused\":true}],\"found\":[]}],\"reads\":[{\"op\":\"read\",\"address\":[\"a\"],\"route\":[{\"parent\":\"r\",\"name\":\"a\",\"node\":\"a\",\"position\":0}],\"saw\":2},{\"op\":\"directory\",\"address\":[\"/\"],\"name\":\"x\",\"route\":[],\"saw\":null}],\"value\":1,\"cleanup\":[],\"changes\":[7],\"ending\":\"done\",\"errors\":[{\"kind\":\"invalid\",\"op\":\"read\",\"why\":{\"code\":\"write-only\"}}]}"
     )
   check "op names" (map opName [OpRead (Address False 0 []), OpLookup "x", OpUnplace (Address False 0 []) "x" "y"] == ["read", "lookup", "unplace"])
 

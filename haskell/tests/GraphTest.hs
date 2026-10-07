@@ -1,12 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- Graph.hs checks for what the graph stack's scenarios cannot reach: what a
--- run's reads depend on and which processes a change marks, recordings, and
+-- run's reads depend on and which processes a change marks, letting go and
+-- forget and reload included, recordings, the refused lookup item, and
 -- read-only and write-only interfaces. From haskell/:
 --   wasm32-wasi-ghc -O1 -Wall -i. -outputdir build/tests -o build/GraphTest.wasm tests/GraphTest.hs && wasmtime run build/GraphTest.wasm
 module Main (main) where
 
 import Control.Monad (unless, void)
+import Data.Either (isRight)
 import Data.IORef
 import Data.Text (Text)
 import Graph
@@ -34,9 +36,9 @@ main = do
         case r of
           Right (ResultApplied a) -> pure a
           other -> error ("a change failed: " <> show other)
-      place p n i v = change host (OpPlace (addr p) n i Nothing v)
+      place p n i v = change host (OpPlace (addr p) n i Nothing v False)
       write p v = change host (OpWrite (addr p) [object [("type", "snapshot"), ("value", v)]])
-      marks a = appliedMarked a
+      marks a = map fst (appliedMarked a)
       items r = case r of
         Right (ResultItems is) -> is
         Right (ResultFound _ is) -> is
@@ -45,7 +47,7 @@ main = do
   -- r: a=1, d={}, u=[m1 m2], m2/y=c, w=[ghost real], kids/kids
   mapM_ (\(n, i) -> place [] n i (Just (int 0))) [("a", "a"), ("d", "d"), ("u", "m1"), ("u", "m2"), ("kids", "k1")]
   void (place ["u"] "z" "z" (Just (int 0)))
-  void (change host (OpPlace (addr []) "m2" "m2" Nothing Nothing))
+  void (change host (OpPlace (addr []) "m2" "m2" Nothing Nothing False))
   void (place ["m2"] "y" "c" (Just "C"))
   void (place [] "w" "ghost" Nothing)
   void (place [] "w" "real" (Just "R"))
@@ -53,7 +55,7 @@ main = do
 
   -- a run of process p, at the place kids/kids
   let pctx = Ctx "alice" (Just "p") ["kids", "kids"] 0 ReadOnly Nothing
-  rec1 <- iRecord g (bind g pctx) (RecordStart 1 [ChangeRef "a" 1])
+  rec1 <- iRecord g (bind g pctx) (RecordStart 1 [1])
   let api = recordingApi rec1
       run o = apiOp api noStamp o
   ra <- run (OpRead (Address True 0 ["a"]))
@@ -139,16 +141,17 @@ main = do
           Right (ResultApplied a) -> pure a
           other -> error ("a change failed: " <> show other)
   iSetTop refusing refusing
-  void (change2 (OpPlace (addr []) "kids" "k1" Nothing (Just (int 0))))
-  void (change2 (OpPlace (addr ["kids"]) "kids" "k2" Nothing (Just (int 0))))
+  void (change2 (OpPlace (addr []) "kids" "k1" Nothing (Just (int 0)) False))
+  void (change2 (OpPlace (addr ["kids"]) "kids" "k2" Nothing (Just (int 0)) False))
   rec3 <- iRecord refusing (bind refusing pctx) (RecordStart 1 [])
   found <- apiOp (recordingApi rec3) noStamp (OpLookup "theme")
   check "a refused read ends the search" (fmap (\r -> case r of ResultFound ss _ -> map (\x -> (searchedNode x, searchedRefused x)) ss; _ -> []) found == Right [("k2", False), ("k1", True)])
+  check "and the lookup gives one item saying so, from the path to that directory" (fmap (\r -> case r of ResultFound _ is -> map itemToJson is; _ -> []) found == Right [object [("refused", JBool True), ("from", object [("path", JArray [".."])])]])
   r3 <- recordingCurrent rec3
   check "and is not an error" (null (recordErrors r3) && length (recordLookups r3) == 1)
-  atRefused <- change2 (OpPlace (addr ["kids"]) "theme" "t1" Nothing (Just (int 0)))
+  atRefused <- change2 (OpPlace (addr ["kids"]) "theme" "t1" Nothing (Just (int 0)) False)
   check "the refused read still counts" (marks atRefused == ["p"])
-  above <- change2 (OpPlace (addr []) "theme" "t2" Nothing (Just (int 0)))
+  above <- change2 (OpPlace (addr []) "theme" "t2" Nothing (Just (int 0)) False)
   check "nothing above it was searched" (marks above == [])
 
   -- ".." goes back one step the way the place was reached: with u = [m1, m2]
@@ -162,21 +165,21 @@ main = do
         either (error . show) (const (pure ())) r
       read3 c a = do
         r <- iOp g3 c noStamp (OpRead a)
-        pure [v | Right (ResultItems is) <- [r], ItemValue v _ _ <- is]
+        pure [v | Right (ResultItems is) <- [r], ItemValue v _ _ _ <- is]
       routes3 c a = do
         r <- iOp g3 c noStamp (OpRead a)
-        pure [route | Right (ResultItems is) <- [r], ItemValue _ (FromRoute route) _ <- is]
+        pure [route | Right (ResultItems is) <- [r], ItemValue _ (FromRoute route) _ _ <- is]
       lookup3 c nm = do
         r <- iOp g3 c noStamp (OpLookup nm)
         pure $ case r of
-          Right (ResultFound ss is) -> (map searchedNode ss, [(i, f) | ItemId i f _ _ <- is])
+          Right (ResultFound ss is) -> (map searchedNode ss, [(i, f) | ItemId i f _ _ _ <- is])
           _ -> ([], [])
       at3 = host {ctxPlace = ["u", "b"]}
-  change3 (OpPlace (addr []) "u" "m1" Nothing (Just "one"))
-  change3 (OpPlace (addr []) "u" "ghost" Nothing Nothing)
-  change3 (OpPlace (addr []) "u" "m2" Nothing (Just "two"))
-  change3 (OpPlace (addr []) "m2" "m2" Nothing Nothing)
-  change3 (OpPlace (addr ["m2"]) "b" "b" Nothing (Just "B"))
+  change3 (OpPlace (addr []) "u" "m1" Nothing (Just "one") False)
+  change3 (OpPlace (addr []) "u" "ghost" Nothing Nothing False)
+  change3 (OpPlace (addr []) "u" "m2" Nothing (Just "two") False)
+  change3 (OpPlace (addr []) "m2" "m2" Nothing Nothing False)
+  change3 (OpPlace (addr ["m2"]) "b" "b" Nothing (Just "B") False)
   here3 <- read3 at3 (addr [])
   check "the place walks through the member that has its next name" (here3 == ["B"])
   up3 <- read3 at3 (Address False 1 [])
@@ -193,23 +196,23 @@ main = do
   written3 <- read3 host (addr ["u"])
   check "a write acts on the first member only" (written3 == ["first", "two"])
   -- lookup searches the directories the place's walk went through
-  change3 (OpPlace (addr ["m2"]) "theme" "t2" Nothing (Just "T2"))
-  change3 (OpPlace (addr ["u"]) "theme" "t1" Nothing (Just "T1"))
+  change3 (OpPlace (addr ["m2"]) "theme" "t2" Nothing (Just "T2") False)
+  change3 (OpPlace (addr ["u"]) "theme" "t1" Nothing (Just "T1") False)
   found3 <- lookup3 at3 "theme"
   check "lookup searches back along the place's walk" (found3 == (["b", "m2"], [("t2", FromPath (Address False 1 ["theme"]) 0)]))
   -- a slot whose ids are all absent is passed over, and the search goes on
-  change3 (OpPlace (addr ["u", "b"]) "theme" "nobody" Nothing Nothing)
+  change3 (OpPlace (addr ["u", "b"]) "theme" "nobody" Nothing Nothing False)
   passed3 <- lookup3 at3 "theme"
   check "lookup passes over a slot with no node here" (passed3 == (["b", "m2"], [("t2", FromPath (Address False 1 ["theme"]) 0)]))
   -- but takes a slot with one node here, pending ids and all
-  change3 (OpPlace (addr ["u", "b"]) "theme" "t1" Nothing Nothing)
+  change3 (OpPlace (addr ["u", "b"]) "theme" "t1" Nothing Nothing False)
   mixed3 <- lookup3 at3 "theme"
   check "lookup takes a slot with a node here, pending items included" (mixed3 == (["b"], [("nobody", FromPath (Address False 0 ["theme"]) 0), ("t1", FromPath (Address False 0 ["theme"]) 1)]))
   -- a place whose walk stops on the way reaches nothing, nor does anything
   -- past where it stopped; the nodes it came through are still there to go
   -- back to. u/b/kid: b's slot kid holds only a pending id, so the walk
   -- stops there, having come through m2 and b
-  change3 (OpPlace (addr ["u", "b"]) "kid" "unborn" Nothing Nothing)
+  change3 (OpPlace (addr ["u", "b"]) "kid" "unborn" Nothing Nothing False)
   let lost3 = host {ctxPlace = ["u", "b", "kid"]}
   dotLost3 <- read3 lost3 (addr [])
   check "a place whose walk stops on the way reaches nothing" (dotLost3 == [])
@@ -244,13 +247,13 @@ main = do
   let times3 = do
         got <- readIORef sent
         writeIORef sent []
-        pure (reverse [changeTime c | EventChange c <- got])
+        pure (reverse [changeTime c | EventChange c _ <- got])
   t0 <- readIORef clock
-  change3 (OpPlace (addr []) "u" "ghost2" (Just 0) Nothing)
-  change3 (OpPlace (addr []) "u" "m3" Nothing (Just "three"))
-  change3 (OpPlace (addr []) "other" "m3" Nothing Nothing)
+  change3 (OpPlace (addr []) "u" "ghost2" (Just 0) Nothing False)
+  change3 (OpPlace (addr []) "u" "m3" Nothing (Just "three") False)
+  change3 (OpPlace (addr []) "other" "m3" Nothing Nothing False)
   change3 (OpWrite (addr ["u"]) [])
-  change3 (OpPlace (addr []) "u" "m1" Nothing Nothing)
+  change3 (OpPlace (addr []) "u" "m1" Nothing Nothing False)
   got3 <- times3
   check "a subscription follows its route, not only its node" (got3 == [t0 + 1, t0 + 4])
 
@@ -286,20 +289,108 @@ main = do
   iSetTop g4 g4
   let at4 t o = iOp g4 host (Stamp (Just JNull) (Just t)) o
       big = 9007199254740994 :: Time
-  made4 <- at4 big (OpPlace (addr []) "a" "a" Nothing (Just (p "[1,2]")))
+  made4 <- at4 big (OpPlace (addr []) "a" "a" Nothing (Just (p "[1,2]")) False)
   check "a time past 2^53 is a time" (fmap (\r -> case r of ResultApplied a -> render (changeToJson (appliedChange a)); _ -> "") made4 == Right "{\"node\":\"r\",\"time\":9007199254740994,\"kind\":\"place\",\"name\":\"a\",\"id\":\"a\",\"value\":[1,2],\"agent\":\"host\",\"cause\":null}")
-  past4 <- at4 (10 ^ (21 :: Int)) (OpPlace (addr []) "a" "b" (Just big) Nothing)
+  past4 <- at4 (10 ^ (21 :: Int)) (OpPlace (addr []) "a" "b" (Just big) Nothing False)
   check "a position past 2^53 is past the slot" (whyOf past4 == Just (Just "place", "position", [("length", int 1)]))
   same4 <- at4 big (OpWrite (addr ["a"]) [])
   check "a time past 2^53 is compared exactly" (whyOf same4 == Just (Just "write", "time", [("last", integer big)]))
   next4 <- at4 (10 ^ (21 :: Int)) (OpWrite (addr ["a"]) [])
-  check "1e21 is a time" (fmap (\r -> case r of ResultApplied a -> render (changeRefToJson (refOf (appliedChange a))); _ -> "") next4 == Right "{\"node\":\"a\",\"time\":1e+21}")
+  check "1e21 is a time" (fmap (\r -> case r of ResultApplied a -> changeTime (appliedChange a); _ -> 0) next4 == Right (10 ^ (21 :: Int)))
+
+  -- letting an ephemeral node go: each member taken out is a change of its
+  -- own, at the next time, made by whoever let the first node go and for
+  -- the same cause, which marks the readers of that slot; the first change
+  -- that marked a process is its "by"
+  g5 <- graph "r"
+  iSetTop g5 g5
+  let at5 c o = do
+        t <- tick
+        r <- iOp g5 c (Stamp (Just "why") (Just t)) o
+        case r of
+          Right (ResultApplied a) -> pure a
+          other -> error ("a change failed: " <> show other)
+      eph5 ns n i = at5 host (OpPlace (addr ns) n i Nothing (Just (int 0)) True)
+  void (eph5 [] "e" "e")
+  void (eph5 ["e"] "k" "k")
+  void (eph5 ["e", "k"] "j" "j")
+  let qctx = Ctx "bob" (Just "q") [] 0 ReadOnly Nothing
+  rec5 <- iRecord g5 (bind g5 qctx) (RecordStart 1 [])
+  void (apiOp (recordingApi rec5) noStamp (OpDirectory (addr ["e", "k"]) (Just "j")))
+  void (iFinish g5 rec5 Done)
+  events5 <- newIORef []
+  _ <- iSubscribe g5 host (addr ["e", "k"]) (\e -> modifyIORef events5 (e :))
+  gone5 <- at5 host {ctxAgent = "carol"} (OpUnplace (addr []) "e" "e")
+  let t5 = changeTime (appliedChange gone5)
+  check "letting go: what went, in order" (appliedGone gone5 == ["j", "k", "e"])
+  -- q's walk went through the root's slot e, so the first change marks it
+  check "a process is marked once, by the first change that marked it" (appliedMarked gone5 == [("q", t5)])
+  sent5 <- reverse <$> readIORef events5
+  check
+    "the change that switched the route is sent with what the address reaches; the rest reach nothing that was reached"
+    ([(changeTime c, changeAgent c, changeCause c, fmap length r) | EventChange c r <- sent5] == [(t5, "carol", Just "why", Just 0)])
+  stale5 <- iOp g5 host (Stamp (Just "why") (Just (t5 + 2))) (OpWrite (addr []) [])
+  check "the unplacements took the next times" (whyOf stale5 == Just (Just "write", "time", [("last", integer (t5 + 2))]))
+  writeIORef clock (t5 + 2)
+  void (at5 host (OpPlace (addr []) "x" "x" Nothing (Just (int 0)) False))
+  -- an ephemeral node is unique: in the one slot it was made in
+  let try5 o = do
+        t <- tick
+        r <- iOp g5 host (Stamp (Just "why") (Just t)) o
+        either (const (writeIORef clock (t - 1))) (const (pure ())) r
+        pure r
+      codeOf r = (\(_, c, _) -> c) <$> whyOf r
+  void (eph5 [] "f" "f")
+  twice5 <- try5 (OpPlace (addr []) "g" "f" Nothing Nothing False)
+  check "a second slot is one-place" (codeOf twice5 == Just "one-place")
+  mount5 <- try5 (OpPlace (addr ["x"]) "f" "f" (Just 0) Nothing False)
+  check "a mount elsewhere is one-place" (codeOf mount5 == Just "one-place")
+  void (at5 host (OpPlace (addr []) "f" "f2" Nothing Nothing False))
+  move5 <- try5 (OpPlace (addr []) "f" "f" (Just 2) Nothing False)
+  check "it moves within its slot" (isRight move5)
+  held5 <- try5 (OpPlace (addr ["f"]) "k" "f2" Nothing (Just (int 0)) True)
+  check "making an ephemeral node with an id a slot holds is one-place" (codeOf held5 == Just "one-place")
+  -- taken apart children first, slots by name, ids in slot order; an
+  -- ordinary node it held stays, here but unreachable
+  void (eph5 ["f"] "b" "b1")
+  void (at5 host (OpPlace (addr ["f"]) "b" "o" Nothing Nothing False))
+  void (at5 host (OpPlace (addr []) "keep" "o" Nothing (Just (int 7)) False))
+  void (eph5 ["f"] "b" "b2")
+  void (eph5 ["f"] "a" "a1")
+  void (eph5 ["f", "a"] "z" "a2")
+  out8 <- at5 host (OpUnplace (addr []) "f" "f")
+  let t8 = changeTime (appliedChange out8)
+  check "what went, in the order it went" (appliedGone out8 == ["a2", "a1", "b1", "b2", "f"])
+  late8 <- iOp g5 host (Stamp (Just "why") (Just (t8 + 5))) (OpWrite (addr []) [])
+  check "five unplacements took the next times" (whyOf late8 == Just (Just "write", "time", [("last", integer (t8 + 5))]))
+  writeIORef clock (t8 + 5)
+  void (at5 host (OpUnplace (addr []) "keep" "o"))
+  void (at5 host (OpPlace (addr []) "back" "o" Nothing Nothing False))
+  back8 <- iOp g5 host noStamp (OpRead (addr ["back"]))
+  check "the ordinary node stayed" (fmap (\r -> case r of ResultItems is -> [v | ItemValue v _ _ _ <- is]; _ -> []) back8 == Right [int 7])
+  again8 <- try5 (OpPlace (addr []) "g" "a1" Nothing Nothing False)
+  check "a gone id mounts a node that is not here" (isRight again8)
+  -- forget drops a process's reads; so does reload
+  rec6 <- iRecord g5 (bind g5 qctx) (RecordStart 2 [])
+  void (apiOp (recordingApi rec6) noStamp (OpRead (addr ["x"])))
+  void (iFinish g5 rec6 Done)
+  w6 <- at5 host (OpWrite (addr ["x"]) [])
+  check "a reader is marked" (marks w6 == ["q"])
+  iForget g5 "q"
+  f6 <- at5 host (OpWrite (addr ["x"]) [])
+  check "forget: nothing marks it any more" (marks f6 == [])
+  rec7 <- iRecord g5 (bind g5 qctx) (RecordStart 3 [])
+  void (apiOp (recordingApi rec7) noStamp (OpRead (addr ["x"])))
+  void (iFinish g5 rec7 Done)
+  iReload g5
+  r7 <- at5 host (OpWrite (addr ["x"]) [])
+  check "reload drops every reader's kept reads" (marks r7 == [])
 
   n <- readIORef bad
   if n == 0 then putStrLn "graph: all passed" else do putStrLn (show n <> " failed"); exitFailure
   where
     itemValue :: Item -> Maybe Value
-    itemValue (ItemValue v _ _) = Just v
+    itemValue (ItemValue v _ _ _) = Just v
     itemValue _ = Nothing
     -- an error's op, code and details, which are compared (its text is not)
     whyOf :: Either Err a -> Maybe (Maybe Text, Text, Fields)

@@ -43,10 +43,12 @@
 		(list).items[(list).count++] = (item); \
 	} while (0)
 
-// A change's time: a whole number from 1, of any size a binary64 holds
-// (PROTOCOL Encodings sets no upper bound, so 1e21 is a time); 0: none.
-// Times are only stored, compared and printed, all exact for whole doubles.
+// A change's time: a whole number from 1 to 2^53-1 (PROTOCOL Encodings),
+// held exactly in a double; 0: none. A time alone names a change in a graph:
+// it is the change's reference (CORE Changes).
 typedef double ErmTime;
+
+#define ERM_LAST_TIME 9007199254740991.0 // 2^53-1
 
 /** ids or names */
 typedef ERM_LIST(const char *) ErmIds;
@@ -109,16 +111,18 @@ typedef ERM_LIST(ErmStep) ErmRoute;
 
 typedef struct ErmChange ErmChange;
 
-/** a value, or an id in a slot or found by a lookup, and why the reader got it */
+/** a value, or an id in a slot or found by a lookup, and why the reader got it; or a lookup's refused search */
 typedef struct ErmItem {
 	Json *value;             // a value's item; NULL for an id's
 	const char *id;          // an id's item
 	bool pending;            // the id's node is not here yet
+	bool ephemeral;          // its node is here and ephemeral
+	bool refused;            // last in a lookup a refused directory read ended: from.path is `ups` ".."
 	ErmRoute route;          // from.route: the walk that reached it (not a lookup's)
 	int ups;                 // a lookup's: from.path is `ups` "..", then `name`; -1 for any other
 	const char *name;        // a lookup's: the name it looked up
 	int position;            // from.position: its place in its slot; -1 for a value's
-	const ErmChange *change; // the change that last set that value or slot; NULL: none (the root's first value)
+	const ErmChange *change; // the change that last set that value, or the last that was not ephemeral to that slot; NULL: none
 } ErmItem;
 
 typedef ERM_LIST(ErmItem) ErmItems;
@@ -153,20 +157,17 @@ struct ErmChange {
 	Json *agent;         // any value
 	const char *process; // NULL: made from outside any process
 	Json *cause;         // NULL: none (a JSON null is a cause)
+	bool ephemeral;      // it changes an ephemeral node, or places or unplaces one
 };
 
-/** a node and a time name one change in this graph */
-typedef struct ErmRef {
-	const char *node;
-	ErmTime time;
-} ErmRef;
+/** change references: their times */
+typedef ERM_LIST(ErmTime) ErmTimes;
 
-typedef ERM_LIST(ErmRef) ErmRefs;
-
-/** {"node","time","kind",...the kind's fields,"agent","process"?,"cause"?} */
-Json *ermChangeToJson(const ErmChange *change);
-/** {"node","time"} */
-Json *ermRefToJson(ErmRef ref);
+/**
+ * {"node","time","kind",...the kind's fields,"agent","process"?,"cause"?,"ephemeral"?};
+ * an item's header has no patches and no placement's value
+ */
+Json *ermChangeToJson(const ErmChange *change, bool header);
 
 // acting (CORE Operations, bind) -----------------------------------------------
 
@@ -211,6 +212,7 @@ typedef struct ErmOp {
 	bool hasPosition;   // place
 	int64_t position;   // place: a gap in the slot, from 0
 	Json *value;        // place: NULL when none was given
+	bool ephemeral;     // place with a value: the node it makes is ephemeral
 	Json *patches;      // write: a list
 } ErmOp;
 
@@ -218,21 +220,34 @@ typedef struct ErmOp {
 const char *ermOpName(ErmOpKind kind);
 bool ermOpIsChange(ErmOpKind kind);
 
+/** a process a change marked, and the first change that marked it: the change's own, or one its letting go made */
+typedef struct ErmMark {
+	const char *process;
+	ErmTime by;
+} ErmMark;
+
+typedef ERM_LIST(ErmMark) ErmMarks;
+
 /** what an operation answers: zero it first; filled only on ERM_OK */
 typedef struct ErmResult {
 	ErmItems items;     // read, lookup, directory with a name
 	ErmListing listing; // directory without a name
 	ErmChange *change;  // write, place, unplace
-	ErmIds marked;      // write, place, unplace: the processes it marked, in code point order
+	ErmMarks marked;    // write, place, unplace: the processes it marked, in code point order, each once
+	ErmIds gone;        // write, place, unplace: the ephemeral nodes it let go, in the order they went
 } ErmResult;
 
-/** {"change": c, "marked": [{"process": id, "by": ref}]} */
+/** {"change": c, "marked": [{"process": id, "by": t}], "gone": [id]?} */
 Json *ermChangeAnswer(const ErmResult *result);
 
 // the interface (CORE Running and wrapping) --------------------------------------
 
-/** called with each change to what a subscription follows, as it applies */
-typedef void (*ErmEventFn)(void *data, const ErmChange *change);
+/**
+ * called with each change a subscription receives, as it applies: `reaches`
+ * is what reading its address gives just after a change to its route, and
+ * NULL for a change to the node it reaches
+ */
+typedef void (*ErmEventFn)(void *data, const ErmChange *change, const ErmItems *reaches);
 
 typedef struct ErmVtable ErmVtable;
 
@@ -259,8 +274,12 @@ struct ErmVtable {
 	/** follows the address from the ctx's place; *sub numbers the subscription, from 1 */
 	ErmErr (*subscribe)(void *self, const ErmCtx *ctx, const ErmAddress *address, ErmEventFn fn, void *data, int64_t *sub);
 	ErmErr (*unsubscribe)(void *self, const ErmCtx *ctx, int64_t sub);
+	/** CORE forget(id): drops the reads kept for that process, so nothing marks it any more */
+	void (*forget)(void *self, const char *process);
+	/** the graph as storing it and loading it again would leave it (PROTOCOL reload): ephemeral nodes and changes, subscriptions and kept reads dropped */
+	void (*reload)(void *self);
 	/** CORE record(api, changes): an api that passes everything to `api` and logs it, for one run marked by `marked` */
-	ErmRecording *(*record)(void *self, ErmApi api, const ErmRefs *marked);
+	ErmRecording *(*record)(void *self, ErmApi api, const ErmTimes *marked);
 	/** CORE finish: ends the run; its reads replace the process's last run's */
 	ErmRecord *(*finish)(void *self, ErmRecording *recording, ErmEnding ending);
 	/** told the top of the stack once it is built; keep it, and pass it on below */
@@ -278,7 +297,7 @@ typedef struct ErmLogged {
 struct ErmRecord {
 	const char *process;
 	Json *agent;
-	ErmRefs marked;
+	ErmTimes marked;
 	ERM_LIST(ErmLogged) log;
 	ErmEnding ending;
 };
@@ -295,6 +314,15 @@ ErmErr ermApiOp(ErmApi api, const ErmStamp *stamp, const ErmOp *op, ErmResult *o
 
 /** graph.c: a graph made with its root, whose value is null */
 ErmInterface ermGraph(const char *root);
+/** graph.c, for a host holding the bare graph ermGraph made: the latest time in it, 0 for none (CORE What the graph holds) */
+ErmTime ermGraphLast(ErmInterface graph);
+/**
+ * graph.c, for a scheduler's bookkeeping beneath the wrappers (SCHEDULER
+ * Ephemeral nodes): unplaces the ephemeral node `id` from its one slot,
+ * needing no address, as an unplace op at its parent would, letting it go;
+ * nothing-there when no ephemeral node of that id is here
+ */
+ErmErr ermGraphLetGo(ErmInterface graph, const ErmCtx *ctx, const ErmStamp *stamp, const char *id, ErmResult *out);
 
 // a string map ---------------------------------------------------------------------
 // Keys are copied; values are yours. Entries 0..count-1 are in insertion

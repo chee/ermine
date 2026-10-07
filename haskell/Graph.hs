@@ -1,18 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | The bare graph: CORE.tex "The core" (Nodes, Paths, Patches, Changes,
--- Placement, Runs and lookup, Operations, Records); PROTOCOL.tex Encodings
--- and Commands below drive.
+-- | The bare graph: CORE.tex "The core" (Nodes, Values, Ephemeral nodes,
+-- Paths, Patches, Changes, Placement, Runs and lookup, Operations, Records,
+-- What the graph holds); PROTOCOL.tex Encodings and Commands below schedule.
 --
 -- State: one IORef 'St' made in 'graph' (the root, the nodes, the last time,
--- each process's remembered reads, subscriptions, run tags), and an IORef
--- holding the top of the stack. The returned Interface closes over both.
+-- each process's kept reads, subscriptions, run tags), and an IORef holding
+-- the top of the stack. The returned Interface closes over both.
 --
 -- * Nodes: id -> value, the change that last set it (none for the root's
---   first value), and a directory of non-empty slots, each with the change
---   that last set it. Nothing is ever removed: a node no reachable place
---   holds cannot be addressed, and placing its id again brings it back as
---   it was.
+--   first value), whether it is ephemeral, and a directory of non-empty
+--   slots. A slot keeps its last change that is not ephemeral (none while
+--   every change to it was), and the ids put in it by changes that were not
+--   ephemeral: what keeping the graph keeps of it. An ordinary node is never
+--   removed: one no reachable place holds cannot be addressed, and placing
+--   its id again brings it back as it was. An ephemeral node is unique: it
+--   is in one slot, the one it was made in ('nodeHome'), and moves only
+--   within it. Unplaced from it, it is gone at once ('letGo'), its id
+--   naming nothing.
 -- * Addresses: a place is names from the root. Its first 'ctxChroot' names,
 --   walked from the root as an address on their own, reach its start, its
 --   "/"; its other names are walked from there as an address is, followed
@@ -33,31 +38,36 @@
 -- * Lookup searches the directories the place's walk went through, from "."
 --   back up to the start, reading the slot of the name in each through the
 --   top of the stack, and takes the nearest slot that holds a node that is
---   here; a refused read ends the search.
+--   here; a refused read ends the search, with an item saying so.
 -- * Changes are checked in this order: the address (above-root,
 --   nothing-there), the time (code time, last), then what the change does
---   (exists, position, not-in-slot, the patches, patch by patch). A failed
---   change uses no time and changes nothing.
+--   (exists, ephemeral-parent, one-place, position, not-in-slot, a live
+--   value for an ordinary node, the patches, patch by patch). A failed change uses no
+--   time and changes nothing. An unplacement that lets an ephemeral node go
+--   is followed by the unplacements that take it apart, each a change of its
+--   own at the next time.
 -- * Subscriptions follow their address: after each change the address is
 --   walked again. A subscription receives each change to the node its
---   address reached, and each placement or unplacement that changed its
---   route (the node it reaches and the route its names take), whether or
---   not it then reaches another node.
--- * Marking, which nothing below drive exercises: for a ctx that is
---   ReadOnly and in its process's current run, every read remembers what it
---   depended on: each slot its walks looked in, each member they tried that
---   was not here, the slot looked for in each member that was, the value or
---   slot or directory it read, and each pending id it listed. A change marks
---   every process whose last finished run or current run depended on what it
---   changed, its own process included. Marked ids are in code point order.
+--   address reached, and each change that changed its route (the node it
+--   reaches and the route its names take), whether or not it then reaches
+--   another node, with what reading the address then gives.
+-- * Marking, which nothing below schedule exercises: for a ctx that is
+--   ReadOnly and in its process's current run, every read keeps what it
+--   depended on: each slot its walks looked in, the slot looked for in each
+--   member they tried, and the value, slot or directory it read. A change
+--   marks every process whose last finished run or current run depended on
+--   what it changed, its own process included; one that makes an id's node
+--   here also marks the readers of every slot holding the id. Marked ids are
+--   in code point order. 'iForget' drops a process's reads.
 module Graph
   ( graph
   , applyPatches
   ) where
 
 import Control.Monad (foldM, forM_)
+import qualified Data.ByteString as BS
 import Data.IORef
-import Data.List (unsnoc)
+import Data.List (mapAccumL, unsnoc)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import qualified Data.Set as Set
@@ -69,12 +79,18 @@ import Types
 -- ===========================================================================
 -- state
 
-data Slot = Slot {slotIds :: [Id], slotChange :: Change}
+data Slot = Slot
+  { slotIds :: [Id]
+  , slotChange :: Maybe Change -- ^ the last change to it that is not ephemeral
+  , slotKept :: Set.Set Id -- ^ the ids changes that were not ephemeral put here
+  }
 
 data Node = Node
   { nodeValue :: Value
   , nodeChange :: Maybe Change -- ^ the change that last set the value
+  , nodeEphemeral :: Bool
   , nodeDir :: Map.Map Name Slot -- ^ slots are never empty
+  , nodeHome :: Maybe (Id, Name) -- ^ an ephemeral node's one slot, the one it was made in
   }
 
 -- | What a read depended on.
@@ -82,7 +98,6 @@ data Dep
   = DValue Id -- ^ the node's value
   | DSlot Id Name -- ^ one slot of the node, there or not
   | DDir Id -- ^ the node's whole directory
-  | DHere Id -- ^ whether the id's node is here
   deriving (Eq, Ord, Show)
 
 -- | One process's reads: its last finished run's, and its current run's.
@@ -118,7 +133,7 @@ graph root = do
     newIORef
       St
         { stRoot = root
-        , stNodes = Map.singleton root (Node JNull Nothing Map.empty)
+        , stNodes = Map.singleton root (Node JNull Nothing False Map.empty Nothing)
         , stLast = 0
         , stReads = Map.empty
         , stSubs = Map.empty
@@ -136,9 +151,20 @@ graph root = do
           , iUnsubscribe = unsubscribe ref
           , iRecord = record ref
           , iFinish = finish ref
+          , iReload = modifyIORef' ref reload
+          , iForget = \p -> modifyIORef' ref (\s -> s {stReads = Map.delete p (stReads s)})
           , iSetTop = writeIORef topRef . Just
           }
   pure self
+
+-- | Whether the id's node is here and ephemeral.
+ephemeral :: St -> Id -> Bool
+ephemeral s i = maybe False nodeEphemeral (Map.lookup i (stNodes s))
+
+-- | The slots that hold an id, whether or not their nodes can be reached.
+-- An ephemeral node's is only its home.
+holders :: St -> Id -> [(Id, Name)]
+holders s i = [(p, nm) | (p, nd) <- Map.toList (stNodes s), (nm, sl) <- Map.toList (nodeDir nd), i `elem` slotIds sl]
 
 operate :: IORef St -> Interface -> Ctx -> Stamp -> Op -> IO (Either Err Result)
 operate ref top ctx stamp o = case o of
@@ -149,59 +175,81 @@ operate ref top ctx stamp o = case o of
     case members s ctx a of
       Left e -> pure (Left e)
       Right (ms, deps) -> do
-        let found = [(route, nd) | (m, route) <- ms, Just nd <- [Map.lookup m (stNodes s)]]
         remember ref ctx (deps ++ [DValue m | (m, _) <- ms])
-        pure (Right (ResultItems [ItemValue (nodeValue nd) (FromRoute route) (nodeChange nd) | (route, nd) <- found]))
+        pure (Right (ResultItems (valueItems s ms)))
   OpDirectory a mname -> reading $ do
     s <- readIORef ref
     case members s ctx a of
       Left e -> pure (Left e)
       Right (ms, deps) -> case mname of
         Just nm -> do
-          let items = concat [slotItems s m route nm | (m, route) <- ms]
-          remember ref ctx (deps ++ [DSlot m nm | (m, _) <- ms] ++ pendingDeps items)
-          pure (Right (ResultItems items))
+          remember ref ctx (deps ++ [DSlot m nm | (m, _) <- ms])
+          pure (Right (ResultItems (concat [slotItems s m route nm | (m, route) <- ms])))
         Nothing -> do
           let names = Set.toAscList (Set.unions [Map.keysSet (nodeDir nd) | (m, _) <- ms, Just nd <- [Map.lookup m (stNodes s)]])
               listing = [(nm, concat [slotItems s m route nm | (m, route) <- ms]) | nm <- names]
-          remember ref ctx (deps ++ [DDir m | (m, _) <- ms] ++ pendingDeps (concatMap snd listing))
+          remember ref ctx (deps ++ [DDir m | (m, _) <- ms])
           pure (Right (ResultDirectory listing))
   OpLookup nm -> reading (search ref top ctx nm)
   OpWrite a ps -> changing . target a $ \n ->
-    commit ref ctx stamp n (KindWrite ps) $ \c s -> do
+    commit ref ctx stamp n (KindWrite ps) (`ephemeral` n) $ \c s -> do
       nd <- node s n
+      -- a live value is only an ephemeral node's (CORE Ephemeral nodes)
+      if not (nodeEphemeral nd) && any snapshotsLive ps
+        then Left (invalid "wrong-field" [("field", "patches")] "a live value is only an ephemeral node's")
+        else Right ()
       v <- applyPatches ps (nodeValue nd)
       Right s {stNodes = Map.insert n nd {nodeValue = v, nodeChange = Just c} (stNodes s)}
-  OpPlace a nm i mpos mvalue -> changing . target a $ \p ->
-    commit ref ctx stamp p (KindPlace nm i mpos mvalue) $ \c s -> do
-      nodes <- case mvalue of
-        Just v
-          | Map.member i (stNodes s) -> Left (invalid "exists" [] ("this graph already has " <> i))
-          | otherwise -> Right (Map.insert i (Node v (Just c) Map.empty) (stNodes s))
-        Nothing -> Right (stNodes s)
-      pn <- node s p
-      let ids = maybe [] slotIds (Map.lookup nm (nodeDir pn))
-      ids' <- case mpos of
-        Nothing
-          | i `elem` ids -> Right ids
-          | otherwise -> Right (ids ++ [i])
-        Just k
-          | k > toInteger (length ids) ->
-              Left (invalid "position" [("length", int (length ids))] "the position is past the slot's length")
-          | otherwise ->
-              -- put in at the gap, then take its old place out
-              let (before, after) = splitAt (fromInteger k) ids in Right (filter (/= i) before ++ [i] ++ filter (/= i) after)
-      Right s {stNodes = Map.insert p pn {nodeDir = Map.insert nm (Slot ids' c) (nodeDir pn)} nodes}
+  OpPlace a nm i mpos mvalue eph -> changing . target a $ \p ->
+    let isEph s = ephemeral s p || (if isJust mvalue then eph else ephemeral s i)
+     in commit ref ctx stamp p (KindPlace nm i mpos mvalue) isEph $ \c s -> do
+          pn <- node s p
+          nodes <- case mvalue of
+            Just v
+              | Map.member i (stNodes s) -> Left (invalid "exists" [] ("this graph already has " <> i))
+              | nodeEphemeral pn && not eph ->
+                  Left (invalid "ephemeral-parent" [] "an ordinary node cannot be made inside an ephemeral one")
+              -- an ephemeral node is unique: made only with an id no slot holds
+              | eph && not (null (holders s i)) ->
+                  Left (invalid "one-place" [] ("a slot already holds " <> i))
+              | otherwise -> Right (Map.insert i (Node v (Just c) eph Map.empty (if eph then Just (p, nm) else Nothing)) (stNodes s))
+            Nothing -> case Map.lookup i (stNodes s) of
+              -- and placed again only in its own slot, to move it there
+              Just nd
+                | nodeEphemeral nd && nodeHome nd /= Just (p, nm) ->
+                    Left (invalid "one-place" [] (i <> " is ephemeral and in another slot"))
+              _ -> Right (stNodes s)
+          let old = Map.lookup nm (nodeDir pn)
+              ids = maybe [] slotIds old
+          ids' <- case mpos of
+            Nothing
+              | i `elem` ids -> Right ids
+              | otherwise -> Right (ids ++ [i])
+            Just k
+              | k > toInteger (length ids) ->
+                  Left (invalid "position" [("length", int (length ids))] "the position is past the slot's length")
+              | otherwise ->
+                  -- put in at the gap, then take its old place out
+                  let (before, after) = splitAt (fromInteger k) ids in Right (filter (/= i) before ++ [i] ++ filter (/= i) after)
+          -- an ephemeral change never becomes the slot's last change, and
+          -- keeping the graph keeps only what ordinary changes put there
+          let sl = case old of
+                Just o' | changeEphemeral c -> o' {slotIds = ids'}
+                Just o' -> Slot ids' (Just c) (Set.insert i (slotKept o'))
+                Nothing | changeEphemeral c -> Slot ids' Nothing Set.empty
+                Nothing -> Slot ids' (Just c) (Set.singleton i)
+          Right s {stNodes = Map.insert p pn {nodeDir = Map.insert nm sl (nodeDir pn)} nodes}
   OpUnplace a nm i -> changing . target a $ \p ->
-    commit ref ctx stamp p (KindUnplace nm i) $ \c s -> do
+    commit ref ctx stamp p (KindUnplace nm i) (\s -> ephemeral s p || ephemeral s i) $ \c s -> do
       pn <- node s p
       case Map.lookup nm (nodeDir pn) of
         Just sl
           | i `elem` slotIds sl ->
-              let ids' = filter (/= i) (slotIds sl)
+              let sl' = sl {slotIds = filter (/= i) (slotIds sl), slotKept = Set.delete i (slotKept sl)}
                   dir'
-                    | null ids' = Map.delete nm (nodeDir pn)
-                    | otherwise = Map.insert nm (Slot ids' c) (nodeDir pn)
+                    | null (slotIds sl') = Map.delete nm (nodeDir pn)
+                    | changeEphemeral c = Map.insert nm sl' (nodeDir pn)
+                    | otherwise = Map.insert nm sl' {slotChange = Just c} (nodeDir pn)
                in Right s {stNodes = Map.insert p pn {nodeDir = dir'} (stNodes s)}
         _ -> Left (invalid "not-in-slot" [] ("the slot " <> nm <> " does not hold " <> i))
   where
@@ -218,7 +266,12 @@ operate ref top ctx stamp o = case o of
         Right (Just (n, _), _) -> k n
         Right (Nothing, _) -> pure (Left nothingThere)
     node s n = maybe (Left nothingThere) Right (Map.lookup n (stNodes s))
-    pendingDeps items = [DHere i | ItemId i _ _ True <- items]
+
+-- | Whether a patch is a snapshot to a live value.
+snapshotsLive :: Value -> Bool
+snapshotsLive p = case (field "type" p, field "value" p) of
+  (Just "snapshot", Just (JLive _ _)) -> True
+  _ -> False
 
 nothingThere :: Err
 nothingThere = invalid "nothing-there" [] "the address reaches nothing"
@@ -226,11 +279,15 @@ nothingThere = invalid "nothing-there" [] "the address reaches nothing"
 aboveRoot :: Err
 aboveRoot = invalid "above-root" [] "the address goes up past the start of the place"
 
+-- | The value items of some members, each from its route.
+valueItems :: St -> [(Id, Route)] -> [Item]
+valueItems s ms = [ItemValue (nodeValue nd) (FromRoute route) (nodeChange nd) (nodeEphemeral nd) | (m, route) <- ms, Just nd <- [Map.lookup m (stNodes s)]]
+
 -- | The items of one slot of a node, each from the route to the node.
 slotItems :: St -> Id -> Route -> Name -> [Item]
 slotItems s m route nm = case Map.lookup m (stNodes s) >>= Map.lookup nm . nodeDir of
   Nothing -> []
-  Just sl -> [ItemId i (FromSlot route k) (slotChange sl) (not (Map.member i (stNodes s))) | (k, i) <- zip [0 ..] (slotIds sl)]
+  Just sl -> [ItemId i (FromSlot route k) (slotChange sl) (not (Map.member i (stNodes s))) (ephemeral s i) | (k, i) <- zip [0 ..] (slotIds sl)]
 
 -- ===========================================================================
 -- walking
@@ -245,7 +302,7 @@ pick s p nm next = case Map.lookup p (stNodes s) >>= Map.lookup nm . nodeDir of
   where
     go [] deps = (Nothing, deps)
     go ((k, i) : rest) deps = case Map.lookup i (stNodes s) of
-      Nothing -> go rest (DHere i : deps)
+      Nothing -> go rest deps
       Just m -> case next of
         Nothing -> (Just (Step p nm i k), deps)
         Just x
@@ -341,7 +398,7 @@ members s ctx a = do
               let ids = maybe [] slotIds (Map.lookup p (stNodes s) >>= Map.lookup final . nodeDir)
                   isHere m = Map.member m (stNodes s)
                   ms = [(m, route ++ [Step p final m k]) | (k, m) <- zip [0 ..] ids, isHere m]
-               in (ms, d0 ++ d1 ++ DSlot p final : [DHere m | m <- ids, not (isHere m)])
+               in (ms, d0 ++ d1 ++ [DSlot p final])
 
 -- | The node an address reaches now, if any, and the route its names take.
 reach :: St -> Ctx -> Address -> Maybe (Id, Route)
@@ -358,7 +415,8 @@ reach s ctx a = case resolve s ctx a of
 -- there through the top of the stack, as an ordinary read of one slot. The
 -- nearest slot that holds a node that is here is found, all its items; a
 -- slot whose ids are all absent is passed over. A refused read ends the
--- search, and is not an error.
+-- search, and is not an error: the lookup finds nothing, and gives one item
+-- saying it was refused there, from the path to that directory.
 search :: IORef St -> Interface -> Ctx -> Name -> IO (Either Err Result)
 search ref top ctx nm = do
   s <- readIORef ref
@@ -374,7 +432,7 @@ search ref top ctx nm = do
           | errKind e == Refused -> do
               -- the refused read still counts: a change to that slot marks
               remember ref ctx [DSlot x nm | Just x <- [n]]
-              pure (Right (ResultFound (reverse ([Searched x Nothing True | Just x <- [n]] ++ acc)) []))
+              pure (Right (ResultFound (reverse ([Searched x Nothing True | Just x <- [n]] ++ acc)) [ItemRefused (Address False k [])]))
           | otherwise -> pure (Left e)
         Right (ResultItems items) ->
           let acc' = [Searched x (latest items) False | Just x <- [n]] ++ acc
@@ -383,10 +441,10 @@ search ref top ctx nm = do
                 else go rest acc'
         Right _ -> pure (Left (invalid "nothing-there" [] "a directory read gave something else"))
     isHere item = case item of
-      ItemId _ _ _ pending -> not pending
+      ItemId _ _ _ pending _ -> not pending
       _ -> False
     relabel k item = case item of
-      ItemId i (FromSlot _ pos) c p -> ItemId i (FromPath (Address False k [nm]) pos) c p
+      ItemId i (FromSlot _ pos) c p e -> ItemId i (FromPath (Address False k [nm]) pos) c p e
       _ -> item
 
 -- | The time of the latest change among some items.
@@ -398,11 +456,13 @@ latest items = case [changeTime c | Just c <- map itemChange items] of
 -- ===========================================================================
 -- changes
 
--- | Applies one change to node @n@: checks the time, makes the change, lets
--- @apply@ build the new state (Left: invalid, nothing changes), marks, and
--- sends it to the subscriptions it concerns.
-commit :: IORef St -> Ctx -> Stamp -> Id -> ChangeKind -> (Change -> St -> Either Err St) -> IO (Either Err Result)
-commit ref ctx stamp n kind apply = do
+-- | Applies one change to node @n@: checks the time, makes the change (with
+-- @isEph@ saying, from the graph before it, whether it is ephemeral), lets
+-- @apply@ build the new state (Left: invalid, nothing changes), lets go any
+-- ephemeral node it leaves unheld, marks, and sends each change it and its
+-- letting go made to the subscriptions it concerns.
+commit :: IORef St -> Ctx -> Stamp -> Id -> ChangeKind -> (St -> Bool) -> (Change -> St -> Either Err St) -> IO (Either Err Result)
+commit ref ctx stamp n kind isEph apply = do
   s <- readIORef ref
   case stampTime stamp of
     Nothing -> pure (Left (invalid "missing" [("field", "time")] "a change needs a time"))
@@ -410,37 +470,74 @@ commit ref ctx stamp n kind apply = do
       | t <= stLast s ->
           pure (Left (invalid "time" [("last", integer (stLast s))] "the time is not greater than every time in the graph"))
       | otherwise -> do
-          let c = Change n t kind (ctxAgent ctx) (ctxProcess ctx) (stampCause stamp)
+          let c = Change n t kind (ctxAgent ctx) (ctxProcess ctx) (stampCause stamp) (isEph s)
           case apply c s of
             Left e -> pure (Left e)
-            Right s1 -> do
-              let marked = [p | (p, rs) <- Map.toAscList (stReads s), any (readBy rs) (touched c)]
-                  s2 = s1 {stLast = t}
-                  followed = Map.map (follow s2 c) (stSubs s2)
-              writeIORef ref s2 {stSubs = Map.map snd followed}
-              sequence_ [send | (Just send, _) <- Map.elems followed]
-              pure (Right (ResultApplied (Applied c marked)))
+            Right s0 -> do
+              let s1 = s0 {stLast = t}
+                  (rest, gone, sEnd) = case kind of
+                    KindUnplace _ i | ephemeral s1 i -> letGo c i s1
+                    _ -> ([], [], s1)
+                  steps = (c, s1) : rest
+                  marked =
+                    Map.toAscList . Map.fromListWith (\_ first -> first) $
+                      [(p, changeTime ci) | (ci, si) <- steps, (p, rs) <- Map.toList (stReads s), any (readBy rs) (touched si ci)]
+                  (subs, sends) = unzip [(sub', ss) | sub <- Map.elems (stSubs sEnd), let (sub', ss) = mapAccumL follow sub steps]
+              writeIORef ref sEnd {stSubs = Map.fromList (zip (Map.keys (stSubs sEnd)) subs)}
+              sequence_ (concat (concat sends))
+              pure (Right (ResultApplied (Applied c marked gone)))
 
--- | A subscription after a change: whether it receives the change, and what
--- its address reaches now. It receives each change to the node its address
--- reached, and each placement or unplacement that changed its route: the
--- node the address reaches, or the route its names take there, whether or
--- not it then reaches another node (CORE Operations, subscribe).
-follow :: St -> Change -> Sub -> (Maybe (IO ()), Sub)
-follow s c sub = (if receives then Just (subSend sub (EventChange c)) else Nothing, sub {subReached = now})
+-- | An ephemeral node unplaced from its one slot goes (CORE Ephemeral
+-- nodes): its slots are taken apart, by name in code point order, the ids
+-- of each in slot order, each ephemeral node among them (in no other slot,
+-- since it is unique) taken apart the same way before the next; it goes
+-- after what it held. An ordinary node it held stays, here but unreachable.
+-- Taking a member out is an unplacement of its own, ephemeral, at the next
+-- time, made by whoever made @by@, the change that let the first node go,
+-- and for the same cause. The changes with the graph after each, the ids that went in the
+-- order they went, and the graph after all of it.
+letGo :: Change -> Id -> St -> ([(Change, St)], [Id], St)
+letGo by x s0 = (steps, gone ++ [x], sEnd {stNodes = Map.delete x (stNodes sEnd)})
+  where
+    kids = [(nm, i) | Just nd <- [Map.lookup x (stNodes s0)], (nm, sl) <- Map.toAscList (nodeDir nd), i <- slotIds sl]
+    (steps, gone, sEnd) = foldl step ([], [], s0) kids
+    step (acc, g, s) (nm, i) =
+      let t = stLast s + 1
+          c = by {changeNode = x, changeTime = t, changeKind = KindUnplace nm i, changeEphemeral = True}
+          s1 = (takeOut s nm i) {stLast = t}
+          (more, g', s2)
+            | ephemeral s1 i = letGo by i s1
+            | otherwise = ([], [], s1)
+       in (acc ++ [(c, s1)] ++ more, g ++ g', s2)
+    takeOut s nm i = s {stNodes = Map.adjust (\nd -> nd {nodeDir = Map.update (out i) nm (nodeDir nd)}) x (stNodes s)}
+    out i sl = case filter (/= i) (slotIds sl) of
+      [] -> Nothing
+      ids -> Just sl {slotIds = ids, slotKept = Set.delete i (slotKept sl)}
+
+-- | A subscription after one change, with the graph after it: what it is
+-- sent, and what its address reaches now. It is sent each change that
+-- changed its route (the node the address reaches, or the route its names
+-- take there), whether or not it then reaches another node, with what
+-- reading the address now gives; and each other change to the node its
+-- address reached (CORE Operations, subscribe).
+follow :: Sub -> (Change, St) -> (Sub, [IO ()])
+follow sub (c, s) = (sub {subReached = now}, sent)
   where
     now = reach s (subCtx sub) (subAddress sub)
     before = subReached sub
-    receives = (fst <$> before) == Just (changeNode c) || (placement && now /= before)
-    placement = case changeKind c of
-      KindWrite _ -> False
-      _ -> True
+    sent
+      | now /= before = [subSend sub (EventChange c (Just (either (const []) (valueItems s . fst) (members s (subCtx sub) (subAddress sub)))))]
+      | (fst <$> before) == Just (changeNode c) = [subSend sub (EventChange c Nothing)]
+      | otherwise = []
 
--- | What a change changed, as reads depend on it (CORE "Changes").
-touched :: Change -> [Dep]
-touched c = case changeKind c of
+-- | What a change changed, as reads depend on it, with the graph after it
+-- (CORE Changes): a write the node's value; a placement or unplacement the
+-- slot and the directory; and one that makes an id's node here every slot
+-- that holds the id.
+touched :: St -> Change -> [Dep]
+touched s c = case changeKind c of
   KindWrite _ -> [DValue n]
-  KindPlace nm i _ made -> [DSlot n nm, DDir n] ++ [DHere i | isJust made]
+  KindPlace nm i _ made -> [DSlot n nm, DDir n] ++ concat [[DSlot p m, DDir p] | isJust made, (p, m) <- holders s i]
   KindUnplace nm _ -> [DSlot n nm, DDir n]
   where
     n = changeNode c
@@ -458,6 +555,19 @@ remember ref ctx deps = case (ctxMode ctx, ctxProcess ctx, ctxRun ctx) of
           s {stReads = Map.insert p rs {readsRun = Just (t, Set.union run (Set.fromList deps))} (stReads s)}
     _ -> s
   _ -> pure ()
+
+-- | The graph as keeping it and loading it again leaves it (PROTOCOL
+-- Commands, reload): every ephemeral node dropped, each slot left with the
+-- ids ordinary changes put there and its last change, which is already one
+-- that is not ephemeral, and a slot left with none gone. Subscriptions and
+-- kept reads are dropped; the highest time is kept.
+reload :: St -> St
+reload s = s {stNodes = Map.map keep (Map.filter (not . nodeEphemeral) (stNodes s)), stReads = Map.empty, stSubs = Map.empty}
+  where
+    keep nd = nd {nodeDir = Map.mapMaybe kept (nodeDir nd)}
+    kept sl = case filter (`Set.member` slotKept sl) (slotIds sl) of
+      [] -> Nothing
+      ids -> Just sl {slotIds = ids}
 
 -- ===========================================================================
 -- subscriptions
@@ -522,14 +632,14 @@ logOp o r rec = case r of
     (OpDirectory a nm, ResultItems items) -> entry "directory" a nm items
     (OpDirectory a nm, ResultDirectory listing) -> entry "directory" a nm (concatMap snd listing)
     (OpLookup nm, ResultFound searched items) ->
-      rec {recordLookups = recordLookups rec ++ [LookupEntry nm searched [i | ItemId i _ _ _ <- items]]}
-    (_, ResultApplied ap) -> rec {recordChanges = recordChanges rec ++ [refOf (appliedChange ap)]}
+      rec {recordLookups = recordLookups rec ++ [LookupEntry nm searched [i | ItemId i _ _ _ _ <- items]]}
+    (_, ResultApplied ap) -> rec {recordChanges = recordChanges rec ++ [changeTime (appliedChange ap)]}
     _ -> rec
   where
     entry op a nm items = rec {recordReads = recordReads rec ++ [ReadEntry op a nm (routeOf items) (latest items)]}
     routeOf items = case items of
-      ItemValue _ (FromRoute route) _ : _ -> route
-      ItemId _ (FromSlot route _) _ _ : _ -> route
+      ItemValue _ (FromRoute route) _ _ : _ -> route
+      ItemId _ (FromSlot route _) _ _ _ : _ -> route
       _ -> []
 
 -- | Ends a run: its reads replace its process's last finished run's, and its
@@ -632,26 +742,32 @@ at (k : ks) v f = case (k, v) of
   (KIndex _, JObject _) -> wrongKind "a number leads into an object"
   _ -> wrongKind "the path goes on into a string, number, boolean or null"
 
--- | A splice of the half-open range of a string (in code points) or a list.
+-- | A splice of the half-open range of a string (in code points) with a
+-- string, of a list with a list, of bytes (in octets) with bytes, or of a
+-- typed array (in elements) with a typed array of the same kind; with no
+-- value it deletes the range. The kind is checked before the range.
 splice :: Maybe (Integer, Integer) -> Maybe Value -> Value -> Either PatchErr Value
-splice range mx target = case target of
-  JString s -> do
-    (a, b) <- within (Text.length s)
-    case mx of
-      Nothing -> Right (JString (Text.take a s <> Text.drop b s))
-      Just (JString r) -> Right (JString (Text.take a s <> r <> Text.drop b s))
-      Just _ -> wrongKind "a splice of a string takes a string"
-  JArray xs -> do
-    (a, b) <- within (length xs)
-    case mx of
-      Nothing -> Right (JArray (take a xs ++ drop b xs))
-      Just (JArray ys) -> Right (JArray (take a xs ++ ys ++ drop b xs))
-      Just _ -> wrongKind "a splice of a list takes a list"
-  _ -> wrongKind "a splice applies to a string or a list"
+splice range mx target = case (target, mx) of
+  (JString t, Nothing) -> cut (Text.length t) $ \a b -> JString (Text.take a t <> Text.drop b t)
+  (JString t, Just (JString r)) -> cut (Text.length t) $ \a b -> JString (Text.take a t <> r <> Text.drop b t)
+  (JArray xs, Nothing) -> cut (length xs) $ \a b -> JArray (take a xs ++ drop b xs)
+  (JArray xs, Just (JArray ys)) -> cut (length xs) $ \a b -> JArray (take a xs ++ ys ++ drop b xs)
+  (JBytes bs, Nothing) -> cut (BS.length bs) $ \a b -> JBytes (octets 1 bs a b BS.empty)
+  (JBytes bs, Just (JBytes r)) -> cut (BS.length bs) $ \a b -> JBytes (octets 1 bs a b r)
+  (JTyped k bs, Nothing) -> typed k bs BS.empty
+  (JTyped k bs, Just (JTyped k' r)) | k == k' -> typed k bs r
+  (JString _, _) -> wrongKind "a splice of a string takes a string"
+  (JArray _, _) -> wrongKind "a splice of a list takes a list"
+  (JBytes _, _) -> wrongKind "a splice of bytes takes bytes"
+  (JTyped _ _, _) -> wrongKind "a splice of a typed array takes a typed array of its kind"
+  _ -> wrongKind "a splice applies to a string, a list, bytes or a typed array"
   where
-    within len = case range of
-      Just (a, b) | 0 <= a, a <= b, b <= toInteger len -> Right (fromInteger a, fromInteger b)
+    cut len f = case range of
+      Just (a, b) | 0 <= a, a <= b, b <= toInteger len -> Right (f (fromInteger a) (fromInteger b))
       _ -> Left ("range", [("length", int len)], "the range is not a range inside the value")
+    -- elements of n octets: those before a, then r, then those from b
+    octets n bs a b r = BS.take (n * a) bs <> r <> BS.drop (n * b) bs
+    typed k bs r = let n = kindSize k in cut (BS.length bs `div` n) $ \a b -> JTyped k (octets n bs a b r)
 
 -- | Sets, adds or (with no value) deletes a key of an object. A number
 -- leads into an object as the wrong kind of key.

@@ -259,21 +259,97 @@ Deno.test("a value nests as deep as it likes: placed, written, read and sent bac
   assertEquals(JSON.stringify(cause.ok.change.cause), deep("3"));
 });
 
-Deno.test("an answer is written as JSON.stringify writes it, frozen lists however deep included", () => {
+Deno.test("an answer is written as JSON.stringify writes it, but for values JSON has no word for", () => {
   let list: Json = 1;
   for (let i = 0; i < 100_000; i++) list = Object.freeze([list]);
   assertEquals(encode(list), "[".repeat(100_000) + "1" + "]".repeat(100_000));
   const shared = { a: 1 };
   const plain = {
     s: 'a"\\\n 😀\ud800',
-    n: [0, -0, 1.5, 1e21, -2e-7, NaN, Infinity],
+    n: [0, 1.5, 1e21, -2e-7],
     o: { u: undefined, f: () => 1, k: Symbol("k"), x: [undefined, () => 1, null] },
     shared: [shared, shared],
     error: invalid("time", "time 1 is not after 2", { last: 2 }),
     ["__proto__"]: [true, false],
   };
   assertEquals(encode(plain), JSON.stringify(plain));
+  // numbers JSON cannot write, -0, buffers, and a map whose only key is "/"
+  assertEquals(
+    encode([-0, NaN, Infinity, -Infinity, { "/": 1 }]),
+    '[-0,{"/":{"number":"NaN"}},{"/":{"number":"Infinity"}},{"/":{"number":"-Infinity"}},' +
+      '{"/":{"map":{"/":1}}}]',
+  );
+  assertEquals(
+    encode([new Uint8Array([104, 105]).buffer, new Float32Array([0.1, -0, NaN])]),
+    '[{"/":{"bytes":"aGk"}},{"/":{"float32":[0.1,-0,"NaN"]}}]',
+  );
+  assertEquals(
+    encode(new BigInt64Array([-(2n ** 63n)])),
+    '{"/":{"int64":["-9223372036854775808"]}}',
+  );
   const holds: { self?: unknown } = {};
   holds.self = holds;
   assertThrows(() => encode(holds), TypeError);
+});
+
+Deno.test("with schedule, the session numbers subscriptions from 1, whatever the scheduler holds", () => {
+  const cause = { file: "t", line: 1, column: 1 };
+  const [, , , , , , subscribed, events] = answers(
+    { cmd: "reset", stack: "schedule", root: "root" },
+    {
+      cmd: "place",
+      agent: "host",
+      address: [],
+      name: "loaders",
+      id: "loaders",
+      value: null,
+      cause,
+    },
+    {
+      cmd: "place",
+      agent: "host",
+      address: ["loaders"],
+      name: "steps",
+      id: "steps",
+      value: { loader: "steps" },
+      cause,
+    },
+    {
+      cmd: "place",
+      agent: "host",
+      address: [],
+      name: "programs",
+      id: "programs",
+      value: null,
+      cause,
+    },
+    {
+      cmd: "place",
+      agent: "host",
+      address: ["programs"],
+      name: "p",
+      id: "p",
+      value: { kind: "steps", compute: [{ do: "return", value: 1 }] },
+      cause,
+    },
+    { cmd: "start", agent: "host", address: [], program: ["programs", "p"], cause },
+    { cmd: "subscribe", agent: "host", address: ["@6-jabab"] },
+    { cmd: "events", sub: 1 },
+  );
+  assertEquals(subscribed, { ok: { sub: 1 } });
+  assertEquals(events, { ok: [] });
+});
+
+Deno.test("start, batch and fire are the scheduler's: unsupported below it", () => {
+  const [, start, batch, fire] = answers(
+    reset,
+    { cmd: "start", agent: "host", address: [], program: ["p"] },
+    { cmd: "batch", agent: "host", requests: [] },
+    { cmd: "fire", agent: "host", process: "p", handler: "h" },
+  );
+  assertEquals([start, batch, fire], [
+    { unsupported: "start" },
+    { unsupported: "batch" },
+    { unsupported: "fire" },
+  ]);
 });

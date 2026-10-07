@@ -12,6 +12,7 @@
     "npm:@lezer/highlight@1": "1.2.5",
     "npm:@preact/signals@2": "2.11.3_preact@10.29.8",
     "npm:codemirror@6": "6.0.2",
+    "npm:fake-indexeddb@6": "6.2.5",
     "npm:linkedom@*": "0.18.13",
     "npm:preact@^10.29.0": "10.29.8"
   },
@@ -243,6 +244,9 @@
     "entities@8.1.0": {
       "integrity": "sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA=="
     },
+    "fake-indexeddb@6.2.5": {
+      "integrity": "sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w=="
+    },
     "html-escaper@3.0.3": {
       "integrity": "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ=="
     },
@@ -296,6 +300,7 @@
       "npm:@lezer/highlight@1",
       "npm:@preact/signals@2",
       "npm:codemirror@6",
+      "npm:fake-indexeddb@6",
       "npm:preact@^10.29.0"
     ]
   }
