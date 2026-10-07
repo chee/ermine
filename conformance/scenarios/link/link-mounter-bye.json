@@ -1,0 +1,10 @@
+{"name":"link.org, The link: a side that ends says bye; a mounter that unmounts is no longer among the owner's peers, with no time passing","steps":[
+{"send":{"cmd":"reset","stack":"link","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":0,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"serve","as":"O","place":["a"]},"expect":{"ok":null}},
+{"send":{"cmd":"mount","as":"M"},"expect":{"ok":{"owner":"O"}}},
+{"send":{"cmd":"mount","as":"N"},"expect":{"ok":{"owner":"O"}}},
+{"send":{"cmd":"links"},"expect":{"ok":{"owners":{"O":["M","N"]}}}},
+{"send":{"cmd":"unmount","via":"M"},"expect":{"ok":null}},
+{"send":{"cmd":"links"},"expect":{"ok":{"owners":{"O":["N"]},"mounts":{"M":{"owner":"O","open":false},"N":{"owner":"O","open":true}}}}}
+]}

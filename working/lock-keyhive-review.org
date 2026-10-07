@@ -1,0 +1,301 @@
+#+title: LOCK and KEYHIVE review, 2026-10-07 (five lenses, synthesized)
+
+# Review synthesis: LOCK.tex and KEYHIVE.tex (five lenses: security, keyhive, subduction, small, agency)
+
+## 1. Findings, deduplicated and ranked
+
+**S1. A revocation has no cut a receiver can check** (serious; security, keyhive, agency)
+- **Where:** SYNC Taking in (fragment "vouched for by the fragment's maker"), SYNC Revocation, SYNC Items "revoked"; KEYHIVE Revocation l.246-249; LOCK `may`.
+- **Problem:** a revoked or stolen device D keeps writing during the propagation window to a peer P that hasn't heard of the revocation. P stores the writes and makes a fragment, and every device takes them in. A colluding editor can do the same directly. After that, D's later work can't be told apart from its earlier work.
+  - `revoked: true` is computed from today's `may`. So it also marks writers who were only demoted, and signers who never had access.
+  - Keyline's `retain` watermark and its "no live route" state can't pass through a yes/no `may`.
+- **Evidence:** KEYHIVE admits content heads "cannot say which commits came before it". The `issuer may edit at receipt` gate applies to loose commits only.
+- **Suggestion:** a revocation carries a cut signed by the revoker (the revoked key's heads). Show each signer's change as one of: before cut, after cut, or level-only. Use the same states instead of one revoked flag. Let the lock say why a key has no access (revoked with a watermark, or no live route).
+
+**S2. The put policy "author may edit now" makes the document unreadable for devices that join after a revocation** (serious; subduction, plus security and agency)
+- **Where:** SYNC 90-94, 555-562, 955-961; KEYHIVE 56-62.
+- **Problem:** a new device refuses the revoked writer's earlier loose commits. Every honest descendant of those commits then waits forever ("Stuck spreads"). Fragments exist only at depth ≥1, about 1 in 256, so the recent tail stays loose.
+- **Evidence:** subduction_keyhive policy.rs:367-405 compares current transitive_members against Edit and ignores the requestor. ingest.rs:121-139 and handler/sync.rs:584 apply it on every batch and push.
+- **Suggestion:** see Q2.
+
+**S3. A change or fragment can be shadowed under its own CommitId or head** (serious; subduction, security, small)
+- **Where:** SYNC 537-541 and 449-461 (fragments); LOCK 84-86; Keyhive `open`.
+- **Problem:** Sedimentree keeps one item per CommitId and one fragment per head, and the lower digest wins. Fingerprints cover causal identity only.
+  - Anyone who passes the put policy can grind a junk blob under a real name. Names are visible to relays. The real item is then never fetched.
+  - The same works with a bad fragment over the same head and boundary, and `minimize` then prunes the covered loose commits.
+  - Keyhive's `open` ignores `name` and `parents`: the key comes from the `content_ref` inside the ciphertext, with no associated data. So nothing ties a fragment's list to its envelope.
+  - A relay under the small lock that holds no lists accepts anything.
+- **Evidence:** sedimentree.rs:278-311; design/sedimentree.md:99; document.rs decrypt path; Taking in step 2 checks loose commits only.
+- **Suggestion:**
+  - See Q3.
+  - In the Keyhive lock's `open`, check `content_ref == name` and the predecessor digest against `parents`.
+  - Check a fragment's opened list: the head is in it, the boundary and checkpoints match what `CommitStore::fragment` would give, and the names match.
+  - Never drop loose commits for a fragment that hasn't been checked.
+  - Say that SYNC's "cannot block the real one" fails one layer below ermine.
+
+**S4. The small lock cannot open any fragment** (serious; small)
+- **Where:** LOCK 84-86, 157-161; LOCK Open 205-206.
+- **Problem:** the associated data includes the name `h`, which is BLAKE3 of the plaintext list. The receiver learns `h` only after decrypting, so every fragment fails its tag check.
+- **Suggestion:** seal fragments under (doc, head, boundary sorted bytewise), all taken from Subduction's envelope. Check `h` after opening.
+
+**S5. Admin all the way down, and the making device keeps Admin** (serious; security, keyhive, agency)
+- **Where:** KEYHIVE 146-170, 208-211, 219-221.
+- **Problem:**
+  - An Edit member of a folder becomes Admin of what they make there. They can revoke the folder's group from it and lock out the folder's admins.
+  - A stolen or retired device keeps Admin on everything it made.
+  - Under Keyline, admin reach is permanent and only grows. So "a child may be narrower" cannot hold, and every past folder admin can permanently break any document below the folder.
+- **Evidence:** generate_doc's founding delegations; Keyline README "Admin Reach" and "Root Edges"; patterns.md:79, 107, 114.
+- **Suggestion:** see Q5.
+
+**S6. Lock messages have no durable, ordered carrier** (serious; subduction, small, agency)
+- **Where:** LOCK 77-78, 98-103, 162-172; KEYHIVE 144, 186-189.
+- **Problem:**
+  - Keyhive frames go point to point, unstored, through a single handler. The small lock and Keyhive can't both use it.
+  - The Keyhive protocol is pull-based, served from an event cache refreshed every 2 s, so "sent before the commit" is false.
+  - The small lock's grants and handoffs are lost while a reader or relay is offline, and devices that join later never see them.
+  - `take` has no sender and returns nothing, so Keyhive ingest's pending and unrecoverable events go unseen.
+  - There's no outbox ack, so a crash between `outbox()` and the send loses the message.
+- **Evidence:** subduction_wasm subduction.rs:1456-1490; subduction_keyhive protocol.rs:410-470, cache.rs:104-129, runtime.rs:96.
+- **Suggestion:** see Q7. Make outbox peek-and-ack. `take(from, bytes)` returns taken, wait (with what's missing) or refused (with why).
+
+**S7. Small-lock lists and handoffs can be forged and replayed, and have no founding** (serious; security, small)
+- **Where:** LOCK 151-172.
+- **Problem:**
+  - A key handed on is sealed but not signed, so a key can be substituted. The attacker then reads the victim's writes.
+  - List messages have no document binding, sequence, parents or merge rule, so an old grant can be replayed after a removal.
+  - `make` writes no founding entry, so the first signer of a fresh id claims it.
+  - Groups have no admins, so an editor can add themselves to person P's group and pass P's actor checks.
+- **Suggestion:** use Keyline's order-independent certificate set (Relay<Read<Edit<Admin, synchronous, no_std).
+  - A founding certificate signed by the maker names the document id, the parent id and the maker's Admin. This also fixes the missing parent link.
+  - Groups get admins the same way.
+  - A handoff is signed and names the document, the recipient and the ephemeral key.
+
+**S8. A document's lock is learned from inside the document, which allows a downgrade** (serious; security, subduction)
+- **Where:** SYNC 186-191; LOCK Open "Codes".
+- **Problem:**
+  - Any editor can make a parentless commit (a new slot chain or a second root) that names `none` or `small`. A device seeing it first adopts that lock and refuses the real commits. Its own writes are then sealed in plaintext, and they leak to relays.
+  - Subduction's single policy sees only (requestor, author, id), not blobs. It refuses unknown documents (DocumentNotFound), so the change that would name the lock is never stored.
+- **Evidence:** powerbox.rs (one policy); policy/storage.rs:28-49; subduction_keyhive policy.rs:388-390.
+- **Suggestion:** see Q4.
+
+**S9. Confused deputy: protect asks with the device key** (serious; security)
+- **Where:** LOCK `may` and Open "An agent's key"; PROTECT start/loader.
+- **Problem:** a program a collaborator wrote into shared folder F runs with all of my rights. It can copy my private document G into F, or place G's id under F, and the commits are signed as me.
+- **Suggestion:** see Q6.
+
+**S10. A reader passes `may` but can never open, and "wait" can be pinned forever** (serious; keyhive, security, agency)
+- **Where:** KEYHIVE 75-77, 157-164, Open "open's wait"; LOCK `open`.
+- **Problem:**
+  - In 0.6, `add_member` updates the encryption trees of local documents only, and `receive_delegation` never touches a tree. So a reader added concurrently with a child's making is never in the child's tree.
+  - Every CGKA failure becomes KeyNotFound. So "a key is coming", "you were removed" and "a forged epoch hash" all look alike.
+  - Any editor can store a commit naming a random PCS key, and it waits forever.
+  - A malicious Read member can post a bad BeeKEM update.
+  - KEYHIVE l.75's claim that every device "can derive it" is false.
+- **Evidence:** keyhive.rs ~489-525 (`other_relevant_docs` TODO), ~1809; document.rs:581-589; beekem cgka.rs:549-555.
+- **Suggestion:**
+  - The lock reconciles: on each `changed`, add every Read-or-higher individual missing from the trees of the documents it holds.
+  - Bound `wait`: after events settle, or after a host timeout, the answer becomes "unopenable" with its issuer.
+  - `open`'s wait carries what is missing, and the access node shows whether this device still has read.
+
+**S11. `may` answers only yes or no** (serious; agency, plus keyhive's async point)
+- **Where:** LOCK l.67, l.131; KEYHIVE 124-125, 270-276.
+- **Problem:**
+  - A fresh invitee's writes are refused at once with "need edit", when the real state is "not known yet".
+  - Every keyhive_core query is async. Nothing says who fills the per-document cache, or what `may` answers before it is filled or after the cache is dropped.
+  - Keyline used through keyhive_core stays async. Only reading the Keyline set directly is synchronous.
+- **Suggestion:**
+  - `may` answers yes, no or wait, and protect's refusal says which it was.
+  - The cache is filled asynchronously after `take` and at start; until then the answer is wait.
+  - Say where synchronous answers come from.
+
+**S12. The two-part split breaks "those who may read can decrypt"** (real; security, keyhive)
+- **Where:** LOCK 72, 88-94, 151.
+- **Problem:**
+  - A revoke in the authorization part leaves the small lock's keys with the reader.
+  - A grant has no key, so `open` waits forever.
+  - `make` sits in encryption, but under Keyline a document id is an authorization subject (an Ed25519 key), so the small lock's 32 random bytes can't pair with Keyline.
+  - The two parts have no channel between them.
+- **Suggestion:** see Q8.
+
+**S13. The small lock can't re-key and can't narrow** (real; security, agency)
+- **Where:** LOCK 157-161, 175.
+- **Problem:**
+  - Ciphertexts carry no key id or epoch.
+  - Child keys are a fixed function of the parent key and the public child id, so a reader who ever held a folder key can derive later children's keys.
+  - A child can never be narrower than its folder, so switching locks silently changes the sharing rules.
+- **Suggestion:**
+  - Put a key epoch or id and the lock name and version in the bytes and the associated data.
+  - Revoking a reader means new keys for the whole subtree.
+  - LOCK says whether a lock can narrow, and the effective-access view comes from `may`.
+
+**S14. `member` has no level and no rule for unknown groups** (real; keyhive, security, agency)
+- **Where:** LOCK 68, 107-117; KEYHIVE 125.
+- **Problem:**
+  - `reachable_members` "at any access" lets a Relay or Read member pass as the actor.
+  - Keyline's `members()` of an unknown id is simply empty, so "wait" needs a "heard of" set the lock keeps itself.
+  - If `member` never says no, a forged `{"keyhive": k}` actor stalls its chain forever, and the person can't tell it from a slow invite.
+- **Suggestion:**
+  - `member(key, group, level)`, and the actor rule asks for edit.
+  - Wait means "no certificate names this group yet".
+  - Show how long a change has waited and who signed it, and let the host drop it.
+
+**S15. A refused put is retried only at the next batch sync** (real; subduction; this is the mechanism of earlier finding 11)
+- **Where:** SYNC 90-94, 545-549.
+- **Evidence:** handler/sync.rs:584-595; ingest.rs:126-139.
+- **Suggestion:** when `changed()` names a document, sync calls `sync_with_all_peers` for it.
+
+**S16. A relay under the small lock can't answer fetch or put** (real; subduction, small)
+- **Where:** LOCK 173-180; SYNC 90-92.
+- **Problem:** without the lists, a relay must either serve everything (leaking names, parents and sizes) or serve nothing, and it accepts junk puts (see S3).
+- **Suggestion:** relays hold the lists as public certificates (follows from Q7 and S7), or the policy is stated explicitly as open.
+
+**S17. Ephemeral messages bypass the lock** (real; security)
+- **Where:** SYNC "Ephemeral messages".
+- **Problem:** anyone who knows a document id, including a revoked reader or an outsider, can read and inject ephemeral nodes that reach programs.
+- **Suggestion:** add a `may` for ephemeral topics, used as Subduction's ephemeral policy, and seal payloads under a per-document key. Until then, say in LOCK that they are outside the lock.
+
+**S18. The small lock's bytes, secrets and randomness are unspecified** (real; small, security)
+- **Where:** LOCK 46-50, 140-172.
+- **Problem:**
+  - Unpinned: nonce/tag order, associated-data encoding, `derive_key` input order, the handoff's key derivation, nonce and plaintext, the version byte, and the lock's own name.
+  - No context string binding both public keys in the handoff.
+  - The strict Monocypher Ed25519 checks are asserted, not shown.
+  - Nothing says how a lock gets the device's sign and DH capabilities, or a CSPRNG. `esp_random` is weak while the radio is off.
+- **Suggestion:**
+  - Layout: `0x00 || nonce[24] || tag[16] || ct`, with associated data `CBOR [doc, name, sorted parents]`, under XChaCha20-Poly1305.
+  - Handoff: `derive_key("ermine/v0/small/handoff", ss || epk || rpk)`.
+  - The lock is built from `{pub, sign, dh, random}`.
+  - Name the lock `small`, then write the test vectors.
+
+**S19. No C ABI** (real; small)
+- **Problem:** buffer ownership and in-place operation, how `changed` returns an unbounded set, and reentrancy are all unsaid. Subduction's policies call `may` from the Rust crate's thread while the host loop calls `close` and `open`.
+- **Suggestion:** a `lock_*` ABI sketch (in small finding 6); either a single-threaded lock with policy calls posted to the host loop, or only `may` safe from any thread.
+
+**S20. `state()` is one whole blob** (real; small)
+- **Problem:** flash wear and torn writes on an ESP32, unbounded growth, and plaintext keys at rest.
+- **Suggestion:** keyed records per document, derived keys recomputed rather than stored, and the state encrypted at rest.
+
+**S21. Failure answers are incomplete** (real; small, agency; extends earlier finding 13)
+- **Problem:**
+  - `close` has no NOKEY answer.
+  - `changed` doesn't name documents whose key just arrived.
+  - The small lock's `member` wait for an unknown group is never stated.
+
+**S22. The revoke cascade is hidden** (real; agency)
+- **Problem:** `retain_all_other_members` defaults to cascading: removing Alice removes everyone she invited, unshown.
+- **Suggestion:** an explicit choice, with a list of who loses access before and after. Revoking a device never keeps those it let in (security).
+
+**S23. Offline writes may reach no one, unseen** (real; agency)
+- **Problem:** local commits look shared even when no peer stored them.
+- **Suggestion:** show, per local head, which peers hold it.
+
+**N1. Domain separation is one-sided** (nitpick; security, keyhive)
+- **Problem:** keyhive 0.6 signs raw bincode with no prefix and verifies non-strictly. Ermine's contexts lack Keyline's NUL terminator, so they aren't prefix-free.
+
+**N2. Wrong citations and descriptions** (nitpick; keyhive, subduction)
+- Wrong keyhive 0.6.0 line numbers.
+- The 2 s cache is described as an access cache.
+- SYNC says ConnectionPolicy decides fetches.
+- The microcontroller claim omits the clock requirement (within 60 s), a transport and an executor.
+
+**N3. Vocabulary** (nitpick; agency)
+- Answers come in three shapes. The codes `downgrade`, `lock` and `no-document` are poor names. "pool" and "ready documents" name one thing.
+- The empty-pool refusal doesn't say that refilling is local or when it will finish.
+
+## 2. Mechanical fixes (no decision needed)
+
+**KEYHIVE.tex**
+- Re-cite against keyhive_core 0.6.0 only: reachable_members :931, best_access_for_doc :2814, try_encrypt_content :653, revoke_member :558; :529 and :1933 point at closing braces. Drop "commit b7968be".
+- Reword the cache: "subduction_keyhive caches which events each peer may receive, rebuilt every 2 s; its policy walks transitive_members on each call."
+- Correct l.75-77 and 157-164: in 0.6, adding a member updates only the trees of documents the adding device holds, and `receive_delegation` updates none.
+- Add to the facts:
+  - The causal envelope (`try_encrypt_content_in_envelope`) is cfg(test), so a reader added later can't read earlier epochs.
+  - All CGKA errors become KeyNotFound.
+  - The insider BeeKEM case.
+  - No domain separator, and non-strict verify.
+  - Ingest returns pending events.
+- Keyline section:
+  - It is a wire-format break (no proof, after_revocations or after_content; delegate becomes audience), so documents and pool entries need a migration story.
+  - Mention `retain`.
+  - Synchronous answers come only from reading the Keyline set directly.
+- Say that revoking a device never keeps those it let in.
+
+**SYNC.tex**
+- Connections are open. Fetch and `filter_authorized_fetch` ask `may` at relay. Put asks the storage policy.
+- Say that a shadowed or refused item can't be recovered under the same Subduction identity.
+- `changed()` on a document triggers a resync with peers.
+
+**LOCK.tex**
+- Drop "sent before the commit".
+- `changed` also names documents whose open-wait may now succeed.
+- `close` gains a NOKEY answer.
+- Ephemeral messages are outside the lock (for now).
+- The small lock cannot narrow a child or re-key; say so in "gives up", and drop the implication that re-keying works.
+- Microcontroller requirements: a set clock within 60 s, a transport, an executor, and a seeded CSPRNG.
+- Seal small-lock fragments under (doc, head, boundary) and check `h` after opening.
+- Pin the small lock's byte layout and handoff key derivation as (proposed), per S18, and name the lock `small`.
+- Use Keyline's context form: context, then NUL, with no NUL inside a context.
+- Keyhive lock `open`: check `content_ref` and the predecessor digest against `name` and `parents`.
+
+## 3. Questions for chee
+
+**Q1. A device is stolen and revoked; meanwhile it pushes commits to a peer that hasn't heard yet. What does a receiver do with its changes?**
+- (a) Keep today's single revoked flag. The thief's work stays indistinguishable from the owner's real history.
+- (b) The revocation carries a signed cut, and changes outside it are shown as "after revocation". Nothing is refused, so the host or person decides.
+- (c) As (b), but changes outside the cut are refused. This loses honest concurrent work that the cut missed.
+- **Recommend (b).** It follows show-don't-decide and matches Keyline's `retain`.
+
+**Q2. Bob is revoked. Carol's device joins later. What does its Subduction storage policy accept from Bob?**
+- (a) "Edit now". The document is unreadable for Carol, because Bob's descendants wait forever.
+- (b) "Ever had edit". This needs a lock that can answer "ever"; Keyline can.
+- (c) Store whatever a peer who may relay sends, and let ermine's taking-in judge and show.
+- **Recommend (c).** Policy becomes transport-level and judging stays in one place. The cost is relays storing more junk.
+
+**Q3. An editor publishes junk under a real change's CommitId. Subduction keeps one, and the lower digest wins.**
+- (a) The CommitId becomes a hash over (name, signer, signature). A shadow gets a different id, but "depth follows the name" must change to follow the new id.
+- (b) Ask upstream to keep both items on conflict. This needs no ermine change but depends on Subduction.
+- **Recommend (a)** now, and file (b) upstream.
+
+**Q4. A malicious editor makes a parentless commit naming lock `none`. Where does a device learn a document's lock?**
+- (a) The first change, as now. Downgrade is possible, and the policy can't see it.
+- (b) The signed placement in the parent, inheriting the parent's lock by default.
+- (c) Bound into the id, e.g. a lock tag, or id = H(lockname || lock's id).
+- **Recommend (c)**, plus refusing a second root of the value chain, and lockless mode only with a per-document host setting. (c) is the only option Subduction's id-only policy can use.
+
+**Q5. Eve has Edit on folder F and makes child N. Is Eve Admin of N?**
+- Today: yes, via generate_doc, and permanently under Keyline.
+- Alternative: root N at Edit in N's own role, supply F's role into it at Edit, give Admin only to individuals in N's roster, and revoke the device's direct Admin once the parent group is in.
+- **Recommend the alternative.** Consequence: folder admins no longer administer children through the folder, and narrowing a child becomes a rotation of the child's role.
+
+**Q6. A collaborator's program in shared folder F runs on my device. Whose rights does it act with?**
+- (a) The device key, as now. Confused deputy.
+- (b) The narrower of the device and a per-program grant, or the folder it was loaded from. `place` also needs read on the placed id.
+- **Recommend (b).** Rule: "code loaded from a folder acts with at most the folder's rights".
+
+**Q7. An admin grants Dana while Dana and every relay are offline. How do lock messages travel?**
+- (a) Direct frames through outbox, as now. The grant is lost, and devices that join later never see it.
+- (b) A lock's messages are items in a sedimentree (per document or per lock): stored, forwarded and checked by policy. For the small lock these are Keyline-shaped certificates, with a founding certificate naming the maker and the parent.
+- **Recommend (b).** `outbox` gives either "to peer" or "into tree"; `take(from, bytes)` answers taken, wait or refused. This also gives relays the lists (S16).
+
+**Q8. Can authorization and encryption come from different libraries?**
+- (a) No: one lock.
+- (b) Yes, under a contract. Encryption's reader set is fed by authorization (readers of the document, by key, updated on `changed`), and `make` moves to authorization or the shared part. Every read revocation re-keys.
+- **Recommend (b)**, with the small lock's id made an Ed25519 public key so it can pair with Keyline later. If you don't want the contract, choose (a).
+
+## 4. Earlier findings: status
+
+| # | Finding | Status |
+|---|---|---|
+| 1 | Reader added later can't decrypt earlier content | Still present; the causal envelope is test-only |
+| 2 | Making device keeps Admin | Still present; now S5 |
+| 3 | Async Keyhive calls used synchronously | Still present; the pool covers `make` only |
+| 4 | outbox/take carry no peer | Partly fixed: outbox names doc/peer; `take` has no sender and Subduction needs one |
+| 5 | Revocation access node not on readers' routes | Looks fixed (security, small, agency); open whether it appears in each item's `from` |
+| 6 | Local writes skip receiver checks | Still present; Subduction's `local_putter` confirms "the node trusts itself" |
+| 7 | Actors judged differently by locks | Still present (LOCK 113-114) |
+| 8 | `member` counts Relay/Read members | Still present; now S14 |
+| 9 | Small lock: no rights for the maker, no parent link | Still present; now S7 |
+| 10 | `changed` doesn't cover open's wait | Still present |
+| 11 | Commit dropped when its grant isn't known yet | Still present; a delay until the next batch sync rather than a loss (S15) |
+| 12 | Fragment's opened list not checked | Still present; worse under Subduction (S3) |
+| 13 | `close` has no failure answer | Still present (S21) |

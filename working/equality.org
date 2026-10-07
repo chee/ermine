@@ -1,0 +1,41 @@
+#+title: Where equality matters (survey, 2026-10-07)
+
+One definition: GRAPH Values (patch.ts equal); canonical CBOR agrees, so
+hash equality and value equality line up (except live values).
+
+| place                 | compares                    | equal means              | who decides  |
+|-----------------------+-----------------------------+--------------------------+--------------|
+| graph write           | nothing                     | (every change marks)     | graph        |
+| scheduler compute     | GRAPH equality vs node      | no write, readers unmarked | scheduler  |
+| effects               | nothing (runs every time)   | open question            | scheduler    |
+| error items           | GRAPH equality of {kind,why}| item and its run stay    | scheduler    |
+| newer item            | node+time, then GRAPH eq    | no write                 | scheduler    |
+| signals s(v)          | nothing                     | (always writes)          | library      |
+| dom bindings          | strings at the DOM edge     | DOM not touched          | library      |
+| sync sides            | commit identity only        | (equal sides stay two)   | sync         |
+| sync names            | bytes (nonce: never equal)  | same name                | sync         |
+| cache                 | BLAKE3 of answers, values/whole | hit, code doesn't run | library     |
+| relay coalescing      | nothing (later replaces)    | replaced changes' reasons lost | link   |
+| mirror                | owner times and ids         | (reapplies equal values) | link         |
+| protect rules         | GRAPH eq (agent, peer), === | rule matches             | protect      |
+| harness               | GRAPH eq; programs.ts has its own | scenario passes    | harness      |
+
+Disagreements and bugs found:
+- drive.ts (the old driver, still exported) runs effects only when the
+  value changed; schedule.ts always runs them.
+- harness/programs.ts has its own equal (bytes by identity).
+- dom renders maps with JSON.stringify, so equal maps can render
+  differently; -0 and 0 render the same but mark.
+- relay coalescing drops the replaced changes' agents and causes.
+- An error whose message holds a timestamp never compares equal, so a
+  process that reads itself and keeps failing loops to the budget.
+- Converting ArrayBuffer and Uint8Array makes a "new" value every time:
+  marks, error churn, cache misses, new sync names.
+
+Possible policies (not chosen):
+1. Always GRAPH equality wherever anything compares.
+2. No comparison in the core; programs compare previous themselves.
+3. Per program: the program declares its comparison (Solid's equals).
+4. Per node: set when the node is made, like the eg-walker merge mode.
+5. Per call: a write says ifChanged or always.
+6. Per layer, as now, but each layer's paper states its rule.

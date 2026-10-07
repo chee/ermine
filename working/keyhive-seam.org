@@ -1,0 +1,40 @@
+#+title: The seam between Subduction and Keyhive (report, 2026-10-07)
+
+A reviewer's report, not decided. Summary:
+- Subduction already has the seam. subduction_core needs only
+  sedimentree_core and subduction_crypto, all no_std; authorization goes
+  through ConnectionPolicy and StoragePolicy traits (OpenPolicy by
+  default); Keyhive rides a generic Handler. subduction_keyhive depends on
+  core, never the reverse. Subduction's own security README calls content
+  encryption the application's job.
+- In SYNC.tex, Keyhive is woven through about 25 places: ids, the actor
+  check, local refusal, groups per node, encryption and the envelope,
+  making documents, revocation, records, restart and C.
+- Proposed interface (working name "lock"):
+    make(parent?) -> doc
+    close(doc, name, parents, bytes) -> bytes
+    open(doc, name, parents, bytes) -> bytes | wait | refused
+    may(key, doc, level)        level: relay | read | edit | admin
+    member(key, group)
+    changed -> {docs}
+    outbox / take               opaque control frames
+    state -> bytes
+  Signing stays sync's own (an Ed25519 Signer from the host). Actor
+  {"<system>": k} is checked by the lock for that system. open's "wait"
+  holds a change like a missing parent; "refused" is a new code, open.
+- Split: SYNC.tex names no Keyhive call; layers/keyhive/KEYHIVE.tex holds
+  everything Keyhive; the interface's one home is its own short paper
+  (layers/lock/LOCK.tex) with vectors, or a section of PROTECT.tex.
+- Minimal lock without Keyhive: Monocypher (XChaCha20-Poly1305, Ed25519,
+  X25519) and BLAKE3; random doc ids; keys derived from the parent's key
+  (reading a folder reads everything under it); flat lists for may and
+  member. It gives up: read revocation without re-keying, groups and
+  delegation, post-compromise security, and write checks on relays without
+  the list. It keeps: confidentiality from relays, signatures, integrity,
+  offline use, and it builds on a microcontroller.
+- Another sync can carry the same sealed changes if the format doesn't
+  assume Subduction's envelope, Subduction having filtered revoked writers
+  (sync must show revoked however a change came), fragments, one scheme per
+  deployment (the outer bytes should name their lock), or hidden metadata.
+  ermine:// + 32 bytes stays neutral; whether the id names its scheme is
+  open.

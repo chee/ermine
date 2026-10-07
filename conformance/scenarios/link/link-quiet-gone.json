@@ -1,0 +1,15 @@
+{"name":"link.org, The link: 20 s quiet is gone. A mounter cut off is dropped from the owner's peers; once the owner is cut off, the mounter's pending request fails and its link closes","steps":[
+{"send":{"cmd":"reset","stack":"link","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":0,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"serve","as":"O","place":["a"]},"expect":{"ok":null}},
+{"send":{"cmd":"mount","as":"M"},"expect":{"ok":{"owner":"O"}}},
+{"send":{"cmd":"mount","as":"N"},"expect":{"ok":{"owner":"O"}}},
+{"send":{"cmd":"cut","host":"N"},"expect":{"ok":null}},
+{"send":{"cmd":"tick","ms":30000},"expect":{"ok":null}},
+{"send":{"cmd":"links"},"expect":{"ok":{"owners":{"O":["M"]},"mounts":{"M":{"owner":"O","open":true}}}}},
+{"send":{"cmd":"cut","host":"O"},"expect":{"ok":null}},
+{"send":{"cmd":"send","via":"M","request":{"cmd":"read","agent":"me","address":[]}},"expect":{"ok":{"waiting":true}}},
+{"send":{"cmd":"tick","ms":30000},"expect":{"ok":null}},
+{"send":{"cmd":"answers","via":"M"},"expect":{"ok":{"answers":[],"gone":[10]}}},
+{"send":{"cmd":"links"},"expect":{"ok":{"mounts":{"M":{"owner":"O","open":false}}}}}
+]}

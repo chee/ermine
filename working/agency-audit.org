@@ -1,0 +1,119 @@
+#+title: Agency audit, 2026-10-07
+#+date: 2026-10-07
+
+Where the design or the code decides something a person, host or app
+should decide ("show, don't decide"). Four reviewers looked at the graph and
+protect papers, the scheduler and loaders papers, the sync paper with
+PROTOCOL and the link notes, and the code. Nothing has been changed yet.
+
+* A. Overriding people's work silently
+1. SYNC Values: a write made over several sides settles all of them, on the
+   first side, even when the writer only read one. Suggestion: a write names
+   the sides it settles, the others stay standing, and the answer lists what
+   was settled.
+2. SYNC Slots, Elements: when a node is moved twice at once, only the first
+   position counts and the other is hidden, against "concurrent values read
+   as sides". Suggestion: show an item for each position.
+3. SYNC Making and mounting: the sync wrapper swaps the id a program gave
+   for a new document's. Suggestion: keep the id given, or refuse it with a
+   code; never put in a different id.
+4. link.org, kept copies: the owner's value wins after a reload, and a
+   refused edit disappears. Now a proof of concept (poc/), so it's moot
+   unless kept.ts comes back.
+
+* B. Hidden state
+5. SCHEDULER: no ps. The process table, parents and children, what's due,
+   the budget and each process's state are private; a paused, unreachable
+   process can't be seen by anyone. Suggestion: the scheduler keeps a
+   readable table (towards "everything in the graph").
+6. GRAPH Records: "who sees it is the scheduler's business". Suggestion:
+   records can be read (also next.org: records that can be read later).
+7. GRAPH Lookup and SCHEDULER program search: the nearest wins and what it
+   shadows isn't shown, against Paths' "the others are read too, so they can
+   be seen". Suggestion: shadowed slots and candidates as later items.
+8. GRAPH Paths: reading by address hides a pending mount; reading the slot
+   shows it. Suggestion: show pending items in address reads.
+9. SCHEDULER Children: a stopped process's error item goes. Suggestion:
+   keep it beside stopped.
+10. GRAPH Ephemeral: an ephemeral placement never becomes the slot's last
+    change, so a reader sees an older, unrelated header. Minor.
+11. GRAPH Nodes: unplaced ordinary nodes are saved but nothing can list
+    them. Minor; the host could.
+
+* C. Control taken away
+12. SCHEDULER: a person can't pause, resume or stop a process; it only
+    pauses by accident of routing, and only a kill stops it. Suggestion:
+    pause, resume and stop as operations, beside switch.
+13. SCHEDULER Children: children die with their parent wherever they are
+    placed, with no opt-out. Suggestion: the kill lists what it will take,
+    and the killer may let them stand.
+14. SCHEDULER switch: it only goes to what the search finds now.
+    Suggestion: switch(address, program?, loader?), defaulting to newer.
+15. SCHEDULER Processes: the caller can't choose a process's name or id.
+    Suggestion: start takes an optional name and id, defaulting to the pid.
+16. SCHEDULER Rounds against GRAPH Changes: the scheduler skips equal
+    values, but GRAPH says the process decides whether an equal value
+    matters. The papers disagree. This is the open "does an effect run on an
+    unchanged value" question.
+17. SCHEDULER Ephemeral nodes: only processes may make ephemeral nodes;
+    host code or a REPL can't. Minor.
+18. PROTECT Rules: rules see only the code that made the operation, not the
+    chain of who started it. Suggestion: give the whole chain in args, for a
+    rule to use if the person wants.
+19. GRAPH Changes: from outside a process, the site is the cause, so the
+    caller can't also say why. Suggestion: the site plus an optional cause.
+    Minor.
+
+* D. Sync's authority
+20. SYNC: keyhiveprotect takes the place of the host's protect, "one
+    authority". Suggestion: they stack (see the Keyhive/Subduction seam).
+    (Superseded 2026-10-07: there is no keyhiveprotect; Keyhive is a lock,
+    giving sync its document operations and protect a may;
+    layers/lock/LOCK.tex, layers/keyhive/KEYHIVE.tex.)
+21. SYNC Documents: the parent's group is an Admin member of every child,
+    so a child can't have narrower access. Suggestion: allow it, and show
+    each node's effective access.
+22. SYNC Taking in: every ermine:// id placed anywhere is fetched; a host
+    can't hold one without syncing it (offline, or on a metered link).
+    Suggestion: follow by default; the host chooses which ids.
+23. SYNC Who is who: a change that arrives before its membership is refused
+    for good. (Already question 9: it should wait.)
+24. GRAPH Operations: a refused read doesn't track. (Already question 5.)
+
+* E. Fixed numbers and silent drops
+Each is to become a setting with its default shown, and each drop or error
+counted or listed where a host can see it.
+- Papers: SYNC's ephemeral messages (parts dropped after 5 s, early held
+  1 s, beats 5 s, stand-ins 20 s, progress once a second, dropped messages
+  not listed); SYNC's pool of ready documents (refused when empty, size
+  unseen); link.org's rates and timers (60 a second, 256 kB, gap 5 s,
+  beats 5 s, quiet 20 s).
+- schedule.ts: reaching the budget records a cut run as done and skips
+  owed effects without saying so; they should read as waiting.
+- mount.ts and bridge.ts: early events past 4096 are dropped with no trace.
+- term (erminex.c, wm.c): fixed MAX_FDS stalls processes and truncates
+  windows without a word.
+- Swallowed errors: host.c release at kill, schedule.ts loader.killed and
+  handler-record subscribers, dom/track.ts cleanups.
+- windows.ts: a failed key write loses the keystroke (console only).
+- wire.ts: limit breaches only go to the console; the first owner to answer
+  wins and the others aren't shown.
+- term pty.c and speak.c: fixed 60 a second and 32 KiB.
+- relay: snapshot coalescing can't be turned off (it is counted).
+- share.ts: the refused, stuck and dropped lists are trimmed without a
+  count.
+- relay: lines go through JSON.parse and stringify, so -0 isn't kept (a
+  bug).
+- drive.ts: the old driver swallows patch errors; retire it, since
+  SCHEDULER replaced it.
+
+* Fine as is (the reviewers' reasons)
+Union writes go to the first member (reads show all of them). Only the first
+objecting wrapper answers. protect allows everything by default (a catch-all
+deny is the user's). Times increase, and a bad patch changes nothing.
+Compute can't write. Programs can't set agent steps. Run order is
+deterministic and shown. After a restart, saved process nodes read as
+stopped. Hot reload shows newer. Revocation shows revoked and undoes
+nothing. Sides keep the agreed order and all are shown. Sites are trimmed by
+roots the host gives. Signatures are strict. The budget is the host's. The
+cache's eviction (it's a cache).

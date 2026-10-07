@@ -1,0 +1,12 @@
+{"name":"a child killed with its parent whose node is still in the tree stays there, stopped, and keeps its error item beside the stopped item, so why it last failed stays visible","steps":[
+{"send":{"cmd":"reset","stack":"schedule","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"loaders","id":"loaders","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["loaders"],"name":"steps","id":"steps","value":{"loader":"steps"},"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"programs","id":"programs","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["programs"],"name":"kid","id":"kid","value":{"kind":"steps","compute":[{"do":"throw","message":"boom"}]},"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["programs"],"name":"par","id":"par","value":{"kind":"steps","compute":[{"do":"return","value":"p"}],"effect":[{"do":"start","address":[],"program":["programs","kid"]}]},"cause":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"start","agent":"host","address":[],"program":["programs","par"],"cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"time":6,"id":"@6-jabab"},"runs":[{"process":"@6-jabab","run":1,"changes":[7,8],"ending":"done"},{"process":"@8-labab","run":1,"ending":"failed","errors":[{"kind":"thrown","why":{"code":"thrown","message":"boom"}}]}]}}},
+{"send":{"cmd":"read","agent":"host","address":["@8-labab"]},"expect":{"ok":{"items":[{"error":{"kind":"thrown","why":{"code":"thrown","message":"boom"}},"from":{"process":"@8-labab","run":1}},{"value":null}]}}},
+{"send":{"cmd":"unplace","agent":"host","address":[],"name":"@6-jabab","id":"@6-jabab","cause":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"runs":[],"stopped":[{"process":"@8-labab"},{"process":"@6-jabab"}]}}},
+{"send":{"cmd":"read","agent":"host","address":["@8-labab"]},"expect":{"ok":{"items":[{"stopped":true,"from":{"process":"@8-labab"}},{"error":{"kind":"thrown","why":{"code":"thrown","message":"boom"}},"from":{"process":"@8-labab","run":1}},{"value":null}]}}}
+]}

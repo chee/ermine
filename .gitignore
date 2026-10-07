@@ -13,8 +13,8 @@ core/zig/.zig-cache/
 demos/core-web/dist/
 
 # C build outputs and the agents' scratch runs (generated, hundreds of MB)
-c/ermine
-c/ermine-asan
-c/json_test
+core/graph/c/ermine
+core/graph/c/ermine-asan
+core/graph/c/json_test
 *.dSYM/
-c/scratch/
+core/graph/c/scratch/
