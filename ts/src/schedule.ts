@@ -19,9 +19,13 @@ import {
   type Identity,
   type Loaded,
   type Loader,
+  type MakeScope,
   PENDING,
   type Program,
   type Running,
+  type Scope,
+  type ScopeCompute,
+  type ScopeEffect,
   type StartOp,
   Thrown,
 } from "./loaders.ts";
@@ -149,6 +153,42 @@ type Open = {
   value: Json;
 };
 
+/**
+ * A scope: a light child of a process, or of another scope, with no node and
+ * no pid (ts/demo/dom.org, Scopes). Its compute is recorded under its id, so
+ * the graph marks it as it marks a process; its effect applies what the
+ * compute returned. Its first run is at once, when it is made; later runs
+ * are in rounds, by height, as a process's are.
+ */
+type Sc = {
+  id: Id;
+  n: number;
+  p: Proc;
+  parent?: Sc;
+  children: Sc[];
+  /** what its last done run made, kept while a new run computes: a run that is not done keeps it */
+  old?: Sc[];
+  /** the run whose children are live, whose maker still works */
+  owns: number;
+  compute: ScopeCompute<unknown>;
+  effect: ScopeEffect<unknown>;
+  height: number;
+  runs: number;
+  kept: Change[];
+  computing: boolean;
+  values: ReadonlySet<Id>;
+  nodes: ReadonlySet<Id>;
+  hasPrevious: boolean;
+  previous?: unknown;
+  cleanup?: () => unknown;
+  dead: boolean;
+  last?: Record;
+  open?: ScOpen;
+};
+
+/** A scope's run whose compute returned a value, waiting for its effect. */
+type ScOpen = { sc: Sc; rec: Recording; n: number; given: Change[]; value: unknown };
+
 /** Where a process's lasting interface is being used for the scheduler: a handler call or a cleanup. */
 type Context = { agent: Agent; log: Log; kill?: true };
 
@@ -205,6 +245,10 @@ type Proc = {
   info: Running;
   /** the process node's own address, from the start of its place, for the scheduler's bookkeeping */
   self: Acting & { address: Address };
+  /** its scopes made by its effects, not by another scope, in the order made */
+  scopes: Sc[];
+  /** how many scopes it has made: the n of "<pid>#<n>" */
+  scopeCount: number;
 };
 
 /** Marks an operation as a start made through an interface whose place is the only way in. */
@@ -258,6 +302,8 @@ export function schedule(
   let up: Interface;
 
   const procs = new Map<Id, Proc>();
+  /** every scope that has not been disposed, by its id */
+  const scopes = new Map<Id, Sc>();
   /** pids of processes killed and gone, so fire on one is stopped */
   const killed = new Set<Id>();
   /** the due list: each process with the time of its first mark */
@@ -278,8 +324,9 @@ export function schedule(
   let depth = 0;
   let req: Settled & { count: number } | undefined;
   let draining = false;
-  let roundOpen: Open[] = [];
-  let inRound = false;
+  let roundOpen: (Open | ScOpen)[] = [];
+  /** whether a compute's own code is running: a change from anywhere then is read-only */
+  let reading = false;
 
   // bookkeeping beneath the wrappers
 
@@ -318,7 +365,14 @@ export function schedule(
     for (const m of made) {
       for (const pid of m.marked) {
         const p = procs.get(pid);
-        if (!p || p.state !== "running") continue;
+        if (!p) {
+          const sc = scopes.get(pid);
+          if (!sc || sc.dead || sc.p.state !== "running") continue;
+          if (!sc.kept.some((c) => c.time === m.change.time)) sc.kept.push(m.change);
+          if (!due.has(pid)) due.set(pid, m.change.time);
+          continue;
+        }
+        if (p.state !== "running") continue;
         if (!p.kept.some((c) => c.time === m.change.time)) p.kept.push(m.change);
         if (!due.has(pid)) due.set(pid, m.change.time);
       }
@@ -483,6 +537,7 @@ export function schedule(
     due.delete(p.id);
     for (let i = kills.length - 1; i >= 0; i--) if (kills[i].p === p) kills.splice(i, 1);
     for (const c of [...p.children].reverse()) if (c.state === "running") kill(c, by, true);
+    for (const sc of [...p.scopes].reverse()) disposeScope(sc);
     const changes: Change[] = [];
     const errors: ErrorJson[] = [];
     if (p.cleanup) {
@@ -818,17 +873,43 @@ export function schedule(
     const error = (ending === "failed" || ending === "refused") && extra.error
       ? { error: extra.error, run: n }
       : undefined;
-    if (!equal((error ?? null) as Json, (p.error ?? null) as Json)) {
+    // the item changes only when the error does: an equal error leaves it, and
+    // the run it names, as it is, so nothing is written, as for an equal value
+    if (!equal((error?.error ?? null) as Json, (p.error?.error ?? null) as Json)) {
       p.error = error;
       item(p, "error");
     }
   }
 
-  /** Raises the height of each other process whose last compute read anything in nodes. */
-  function raise(p: Proc, read: (q: Proc) => boolean) {
+  /** Raises the height of each other process, and each scope, whose last compute read anything in nodes. */
+  function raise(
+    p: Proc,
+    read: (q: { values: ReadonlySet<Id>; nodes: ReadonlySet<Id> }) => boolean,
+  ) {
     for (const q of procs.values()) {
       if (q === p || q.state !== "running" || !read(q)) continue;
       if (q.height <= p.height) q.height = p.height + 1;
+    }
+    for (const sc of scopes.values()) {
+      if (!sc.dead && read(sc)) lift(sc, p.height + 1);
+    }
+  }
+
+  /** Raises a scope to at least height, and its scopes above it: an owner runs before what it made. */
+  function lift(sc: Sc, height: number) {
+    if (sc.height >= height) return;
+    sc.height = height;
+    for (const c of [...sc.children, ...sc.old ?? []]) lift(c, height + 1);
+  }
+
+  /** Runs fn as the scheduler's own work, or as a compute's code when code is true. */
+  function as<T>(code: boolean, fn: () => T): T {
+    const was = reading;
+    reading = code;
+    try {
+      return fn();
+    } finally {
+      reading = was;
     }
   }
 
@@ -873,15 +954,17 @@ export function schedule(
       }
       if (fn) {
         try {
-          const v = fn(
-            {
-              api: view,
-              self: p.id,
-              cwd: p.cwd,
-              name: p.id,
-              changes: given,
-              pending: PENDING,
-            } as unknown as Parameters<Loaded>[0],
+          const v = as(true, () =>
+            fn!(
+              {
+                api: view,
+                self: p.id,
+                cwd: p.cwd,
+                name: p.id,
+                changes: given,
+                pending: PENDING,
+              } as unknown as Parameters<Loaded>[0],
+            )
           );
           outcome = v === PENDING ? { pending: true } : { value: v };
         } catch (e) {
@@ -991,6 +1074,8 @@ export function schedule(
               value,
               ...(p.hasPrevious ? { previous: p.previous } : {}),
               lasting,
+              scope: (compute: ScopeCompute<unknown>, effect: ScopeEffect<unknown>) =>
+                makeScope(p, undefined, compute, effect),
               handler: (name: string, f: Handler) => {
                 if (!alive) return;
                 if (typeof name !== "string" || typeof f !== "function") {
@@ -1028,13 +1113,274 @@ export function schedule(
     drain();
   }
 
-  /** The process due next: the lowest height, then the oldest first mark, then the lowest id. */
-  function pick(): Proc {
-    let best: Proc | undefined;
+  // scopes (ts/demo/dom.org, Scopes)
+
+  /**
+   * Makes a scope owned by p, or by parent, and runs it at once: its compute,
+   * then its effect. A scope is made only while its process runs.
+   */
+  function makeScope(
+    p: Proc,
+    parent: Sc | undefined,
+    compute: ScopeCompute<unknown>,
+    effect: ScopeEffect<unknown>,
+  ): Scope {
+    if (typeof compute !== "function" || typeof effect !== "function") {
+      throw wrongField("scope", "a scope is a compute and an effect, both functions");
+    }
+    if (p.state !== "running" || parent?.dead) {
+      throw invalid("stopped", "scope: its owner has been killed or disposed");
+    }
+    const n = ++p.scopeCount;
+    const sc: Sc = {
+      id: `${p.id}#${n}`,
+      n,
+      p,
+      ...(parent ? { parent } : {}),
+      children: [],
+      owns: 0,
+      compute,
+      effect,
+      // after its owner: an owner that runs again disposes it first
+      height: parent ? parent.height + 1 : 0,
+      runs: 0,
+      kept: [],
+      computing: false,
+      values: new Set(),
+      nodes: new Set(),
+      hasPrevious: false,
+      dead: false,
+    };
+    scopes.set(sc.id, sc);
+    (parent ? parent.children : p.scopes).push(sc);
+    // the scheduler's own work, even inside its owner's compute: its effect may write
+    as(false, () => computeScope(sc, true));
+    const dispose = (() => disposeScope(sc)) as Scope;
+    Object.defineProperties(dispose, {
+      id: { value: sc.id, enumerable: true },
+      record: { get: () => sc.last, enumerable: true },
+      disposed: { get: () => sc.dead, enumerable: true },
+    });
+    return dispose;
+  }
+
+  /**
+   * A scope's compute, recorded under its id. What it makes is kept only if
+   * it ends done: then what its last run made is disposed; a run that fails
+   * or is pending has what it made disposed, and the last run's stays, as
+   * Solid's owners do. On its first run the effect follows at once; later,
+   * at its turn in the round.
+   */
+  function computeScope(sc: Sc, first: boolean) {
+    if (req && req.count >= budget) throw new Budget();
+    if (req) req.count++;
+    const p = sc.p;
+    if (sc.open) {
+      // an earlier run in this round: finished now, with no effect
+      const early = sc.open;
+      roundOpen = roundOpen.filter((r) => r !== early);
+      finishScope(early, "done", []);
+    }
+    // every process due first, as in a round; so too for a first run made inside an effect
+    for (let q = pick("procs"); q; q = pick("procs")) computeRun(q as Proc);
+    due.delete(sc.id);
+    const old = sc.old = sc.children;
+    sc.children = [];
+    /** Gives back what this run made, and the last run's children again. */
+    const undo = () => {
+      const made = sc.children;
+      sc.children = old;
+      sc.old = undefined;
+      for (const c of [...made].reverse()) disposeScope(c);
+    };
+    const n = ++sc.runs;
+    const agent = agentOf(p, { scope: sc.n, run: n });
+    const base = graph.bind(up, {
+      agent,
+      process: sc.id,
+      place: p.place,
+      chroot: p.chroot,
+      reads: true,
+      writes: true,
+    });
+    const given = [...sc.kept];
+    const rec = graph.record(base, given.map((c) => c.time));
+    const seen = new WeakSet<object>();
+    let alive = true;
+    const view = gated(rec.through(readOnly(base)), () => alive, seen);
+    // its children's maker: while this run computes, then while its children are live
+    const make = ((c: ScopeCompute<unknown>, e: ScopeEffect<unknown>) => {
+      if (sc.computing ? sc.runs !== n : sc.owns !== n) {
+        const e = invalid("stopped", "scope: the run that made this maker is over");
+        e.op = "scope";
+        throw e;
+      }
+      return makeScope(p, sc, c, e);
+    }) as MakeScope;
+    sc.computing = true;
+    p.busy++;
+    let outcome: { value: unknown } | { pending: true } | { error: unknown; errors: ErrorJson[] };
+    try {
+      const v = as(true, () => sc.compute({ api: view, id: sc.id, pending: PENDING, scope: make }));
+      outcome = v === PENDING ? { pending: true } : { value: v };
+    } catch (e) {
+      if (e instanceof Budget) {
+        alive = false;
+        sc.computing = false;
+        p.busy--;
+        graph.finish(rec, "done", { program: p.program });
+        if (!sc.dead) undo();
+        if (!due.has(sc.id)) due.set(sc.id, given[0]?.time ?? clock);
+        throw e;
+      }
+      outcome = { error: e, errors: e instanceof Object && seen.has(e) ? [] : [errorJson(e)] };
+    } finally {
+      if (sc.computing) {
+        alive = false;
+        sc.computing = false;
+        p.busy--;
+      }
+    }
+    sc.values = new Set(rec.values);
+    sc.nodes = new Set(rec.nodes);
+    const open: ScOpen = { sc, rec, n, given, value: undefined };
+    if (sc.dead) {
+      // disposed while it computed: finished, and forgotten again, since finishing keeps its reads
+      sc.old = undefined;
+      finishScope(open, "done", []);
+      graph.forget({ agent: p.actor ?? null, id: sc.id });
+      drain();
+      return;
+    }
+    if ("value" in outcome) {
+      sc.old = undefined;
+      sc.owns = n;
+      for (const c of [...old].reverse()) disposeScope(c);
+    } else undo();
+    // after every process whose value it read, and what it made after it
+    for (const id of sc.values) {
+      const q = procs.get(id);
+      if (q) lift(sc, q.height + 1);
+    }
+    if ("pending" in outcome) finishScope(open, "pending", []);
+    else if ("error" in outcome) {
+      finishScope(open, outcome.error instanceof Refused ? "refused" : "failed", outcome.errors);
+    } else {
+      open.value = outcome.value;
+      sc.open = open;
+      if (first) scopeTurn(open);
+      else roundOpen.push(open);
+    }
+    drain();
+  }
+
+  /**
+   * A scope's effect: its last cleanup, then the effect with the value and
+   * the previous one, holding its process as a part does, so a kill waits.
+   * A scope disposed during its effect has the cleanup that effect returns
+   * run at once.
+   */
+  function scopeTurn(open: ScOpen) {
+    const { sc, value } = open;
+    if (sc.open === open) sc.open = undefined;
+    if (sc.dead || sc.p.state !== "running") return finishScope(open, "done", []);
+    const errors: ErrorJson[] = [];
+    let error: unknown;
+    const run = (f: () => unknown) => {
+      try {
+        return f();
+      } catch (e) {
+        if (e instanceof Budget) throw e;
+        errors.push(errorJson(e));
+        error ??= e;
+      }
+    };
+    const p = sc.p;
+    p.busy++;
+    try {
+      const last = sc.cleanup;
+      sc.cleanup = undefined;
+      if (last) run(last);
+      const out = sc.dead ? undefined : run(() => sc.effect(value, sc.hasPrevious ? sc.previous : undefined));
+      if (typeof out === "function") {
+        if (sc.dead) run(out as () => unknown);
+        else sc.cleanup = out as () => unknown;
+      }
+    } finally {
+      p.busy--;
+    }
+    sc.hasPrevious = true;
+    sc.previous = value;
+    sc.kept = sc.kept.filter((c) => !open.given.includes(c));
+    finishScope(
+      open,
+      error === undefined ? "done" : error instanceof Refused ? "refused" : "failed",
+      errors,
+    );
+    // disposed during it: finishing keeps its reads, so they are forgotten again
+    if (sc.dead) graph.forget({ agent: p.actor ?? null, id: sc.id });
+    drain();
+  }
+
+  /** Finishes a scope's record, and sends it to its process's subscribers. */
+  function finishScope(
+    open: ScOpen,
+    ending: "done" | "pending" | "failed" | "refused",
+    errors: ErrorJson[],
+  ) {
+    const { sc, rec } = open;
+    const record = graph.finish(rec, ending, { program: sc.p.program, errors });
+    if (sc.open === open) sc.open = undefined;
+    sc.last = record;
+    req?.runs.push(record);
+    send(sc.p.id, record);
+  }
+
+  /**
+   * Disposes a scope: its children first, most recently made first, then its
+   * cleanup; the graph forgets its reads, so nothing marks it any more.
+   */
+  function disposeScope(sc: Sc) {
+    if (sc.dead) return;
+    sc.dead = true;
+    for (const c of [...sc.old ?? [], ...sc.children].reverse()) disposeScope(c);
+    due.delete(sc.id);
+    if (sc.open) {
+      const open = sc.open;
+      roundOpen = roundOpen.filter((r) => r !== open);
+      finishScope(open, "done", []);
+    }
+    const f = sc.cleanup;
+    sc.cleanup = undefined;
+    try {
+      f?.();
+    } catch {
+      // a scope's cleanup's trouble does not stop its disposal
+    }
+    // finishing a run that is still computing keeps its reads: forgotten when it returns
+    graph.forget({ agent: sc.p.actor ?? null, id: sc.id });
+    scopes.delete(sc.id);
+    const owner = sc.parent;
+    for (const list of owner ? [owner.children, owner.old ?? []] : [sc.p.scopes]) {
+      const i = list.indexOf(sc);
+      if (i >= 0) list.splice(i, 1);
+    }
+  }
+
+  /**
+   * The process due next: the lowest height, then the oldest first mark, then
+   * the lowest id. Every process goes before every scope: nothing reads a
+   * scope, so a scope's compute never pulls a process into its own.
+   */
+  function pick(only?: "procs"): Proc | Sc | undefined {
+    let best: Proc | Sc | undefined;
     let bestMark = 0;
     for (const [id, mark] of due) {
-      const p = procs.get(id)!;
+      const p = procs.get(id) ?? scopes.get(id)!;
+      if (best && "busy" in best && "p" in p) continue;
+      if (only && "p" in p) continue;
       if (
+        (best && "p" in best && "busy" in p) ||
         !best || p.height < best.height ||
         (p.height === best.height &&
           (mark < bestMark || (mark === bestMark && byCodePoint(p.id, best.id) < 0)))
@@ -1043,35 +1389,43 @@ export function schedule(
         bestMark = mark;
       }
     }
-    return best!;
+    return best;
   }
 
   function round() {
-    inRound = true;
-    roundOpen = [];
+    // runs a compute pulled before the round, as a first scope run's read may, waits here too
     try {
       while (due.size) {
-        computeRun(pick());
+        const next = pick()!;
+        if ("p" in next) computeScope(next, false);
+        else computeRun(next);
         drain();
       }
       while (roundOpen.length) {
-        finishAtTurn(roundOpen.shift()!);
+        const run = roundOpen.shift()!;
+        if ("sc" in run) scopeTurn(run);
+        else finishAtTurn(run);
         drain();
       }
     } catch (e) {
       if (!(e instanceof Budget)) throw e;
       // what is still due stays due; the runs waiting for their turn end here, letting nothing go
-      for (const run of roundOpen) finishRun(run, "done", { value: run.value });
+      for (const run of roundOpen) {
+        if ("sc" in run) finishScope(run, "done", []);
+        else finishRun(run, "done", { value: run.value });
+      }
       roundOpen = [];
       throw invalid("budget", `the request caused ${budget} runs`, { budget });
-    } finally {
-      inRound = false;
     }
   }
 
   /** Runs rounds while anything is due. */
   function settle() {
-    for (const p of [...due.keys()]) if (procs.get(p)?.state !== "running") due.delete(p);
+    for (const id of [...due.keys()]) {
+      const p = procs.get(id);
+      const sc = p ? undefined : scopes.get(id);
+      if (p ? p.state !== "running" : !sc || sc.dead || sc.p.state !== "running") due.delete(id);
+    }
     while (due.size) round();
   }
 
@@ -1097,6 +1451,14 @@ export function schedule(
   }
 
   // operations
+
+  /** A change while a compute's code runs, through any interface: read-only, as through its api. */
+  function only(name: string) {
+    if (!reading) return;
+    const e = invalid("read-only", `${name}: a compute only reads`);
+    e.op = name;
+    throw e;
+  }
 
   /** A change through the scheduler: stamped with the clock, checked, made, and noted. */
   function change<O extends Acting & { address: Address }>(
@@ -1261,6 +1623,8 @@ export function schedule(
       hasPrevious: false,
       handlers: new Map(),
       ephemerals: [],
+      scopes: [],
+      scopeCount: 0,
       state: "running",
       watching: [],
       info: undefined as unknown as Running,
@@ -1276,6 +1640,8 @@ export function schedule(
       name: pid,
       cwd: Object.freeze([...p.cwd]),
       program: p.program,
+      // the program it kept, so a loader can load both parts before the first run
+      code: p.code,
       reads: bindAs(p, agentOf(p, { lasting: 0 }), true, false),
       lasting: lastingFor(p, () => p.runs),
     };
@@ -1369,8 +1735,8 @@ export function schedule(
     });
   }
 
-  /** Sends a handler record to whatever is subscribed to the process. */
-  function send(pid: Id, record: HandlerRecord) {
+  /** Sends a handler record, or a scope's record, to whatever is subscribed to the process. */
+  function send(pid: Id, record: HandlerRecord | Record) {
     for (const s of subs.values()) {
       if (reach(s.op) !== pid) continue;
       try {
@@ -1383,26 +1749,28 @@ export function schedule(
 
   const scheduler: Scheduler = {
     read(op) {
-      const reader = op?.process === undefined ? undefined : procs.get(op.process);
-      if (reader?.computing && inRound && op?.address !== undefined) {
+      const reader = op?.process === undefined
+        ? undefined
+        : procs.get(op.process) ?? scopes.get(op.process);
+      if (reader && "busy" in reader && reader.computing && op?.address !== undefined) {
         // a compute reading a due process runs that process's compute first
         const node = reach(op);
         const q = node === undefined ? undefined : procs.get(node);
         if (q && q !== reader && q.state === "running" && due.has(q.id) && !q.computing) {
-          computeRun(q);
+          as(false, () => computeRun(q));
         }
       }
       return dress(op, below.read(op));
     },
     directory: (op: DirectoryOp) => below.directory(op),
     lookup: (op: LookupOp) => below.lookup(op),
-    write: (op) => request(() => change("write", op)),
+    write: (op) => (only("write"), request(() => change("write", op))),
     place: (op) =>
       START in op
-        ? request(() => doStart(op as unknown as StartOp))
-        : request(() => change("place", op)),
-    unplace: (op) => request(() => change("unplace", op)),
-    start: (op) => request(() => doStart(op)),
+        ? (only("start"), request(() => doStart(op as unknown as StartOp)))
+        : (only("place"), request(() => change("place", op))),
+    unplace: (op) => (only("unplace"), request(() => change("unplace", op))),
+    start: (op) => (only("start"), request(() => doStart(op))),
     subscribe(op: SubscribeOp) {
       const answer = below.subscribe(op);
       const { send: _s, ...kept } = op;
@@ -1439,7 +1807,11 @@ export function schedule(
     },
     fire,
     restart() {
+      // each scope disposed, so its cleanup takes out what it drew; its run is not finished
+      for (const sc of scopes.values()) sc.open = undefined;
+      for (const p of procs.values()) for (const sc of [...p.scopes].reverse()) disposeScope(sc);
       procs.clear();
+      scopes.clear();
       killed.clear();
       due.clear();
       ephemeral.clear();

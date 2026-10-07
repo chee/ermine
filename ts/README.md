@@ -107,7 +107,9 @@ uses the graph's own operations as the agent `"devtools"`: directories and reads
 lookup from the selected address, and a subscription to every address it has listed, so it hears the
 changes and records there. It never writes. `cd devtools && deno task build` writes `dist/chrome`,
 `dist/firefox` (and an `.xpi`) and `dist/safari`; `deno task install` also builds the Safari app,
-which needs Xcode.
+which needs Xcode; `.github/workflows/devtools.yml` builds it on GitHub as an artifact. The panel is
+on Solid 2.0 rc.8: the newest compiler on npm still puts handlers at `$$click`, which later runtimes
+no longer read.
 
 ## Building
 

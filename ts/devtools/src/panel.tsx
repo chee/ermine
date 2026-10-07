@@ -11,9 +11,11 @@ import type {
   Change,
   ErrorJson,
   Event,
+  Header,
   Id,
   Json,
   Record as Run,
+  RefusedItem,
   Route,
   SlotItem,
   ValueItem,
@@ -25,7 +27,10 @@ type Listing = {
   read: Attempt<ValueItem[]>;
   directory: Attempt<[string, SlotItem[]][]>;
 };
-type Status = { version: number; graphs: { name: string; gen: number; events: number }[] };
+type Status = {
+  version: number;
+  graphs: { name: string; gen: number; events: number }[];
+};
 type Heard = Event & { n: number; key: string };
 
 const POLL = 250;
@@ -42,7 +47,9 @@ const [listings, setListings] = createStore<{ [k: string]: Listing }>({});
 const [events, setEvents] = createSignal<Heard[]>([]);
 const [filter, setFilter] = createSignal("");
 const [paused, setPaused] = createSignal(false);
-const [looked, setLooked] = createSignal<{ name: string; result: Attempt<SlotItem[]> }>();
+const [looked, setLooked] = createSignal<
+  { name: string; result: Attempt<(SlotItem | RefusedItem)[]> }
+>();
 
 /** Where each id was last seen in a listing, so a change can be followed to its node. */
 const where = new Map<Id, Address>();
@@ -110,7 +117,11 @@ async function refresh() {
       for (const item of items) where.set(item.id, [...JSON.parse(k), slot]);
     }
   }
-  const r = await call<{ gen: number; events: Heard[] } | { gone: true }>("events", name, after);
+  const r = await call<{ gen: number; events: Heard[] } | { gone: true }>(
+    "events",
+    name,
+    after,
+  );
   if ("gone" in r) return;
   if (r.gen !== gen) {
     gen = r.gen;
@@ -121,7 +132,8 @@ async function refresh() {
   if (r.events.length) {
     after = r.events[r.events.length - 1].n;
     const log = document.querySelector(".log-list");
-    const bottom = !log || log.scrollHeight - log.scrollTop - log.clientHeight < 8;
+    const bottom = !log ||
+      log.scrollHeight - log.scrollTop - log.clientHeight < 8;
     setEvents((es) => [...es, ...r.events].slice(-5000));
     flush();
     if (log && bottom) log.scrollTop = log.scrollHeight;
@@ -150,23 +162,27 @@ function select(a: Address) {
 // ---- words for things
 
 function site(cause: Json | undefined): string | undefined {
-  if (cause === null || typeof cause !== "object" || Array.isArray(cause)) return;
+  if (cause === null || typeof cause !== "object" || Array.isArray(cause)) {
+    return;
+  }
   const { file, line, column } = cause as { [k: string]: Json };
   if (typeof file !== "string" || typeof line !== "number") return;
   return `${file}:${line}:${column}`;
 }
 
-function cause(c: Change): string {
+function cause(c: Change | Header): string {
   if (c.cause === undefined) return "";
   return site(c.cause) ?? J(c.cause);
 }
 
-function what(c: Change): string {
+/** A change, or the header an item carries: a change without its patches or value. */
+function what(c: Change | Header): string {
   switch (c.kind) {
     case "write":
+      if (!("patches" in c)) return "write";
       return `write ${c.patches.length} patch${c.patches.length === 1 ? "" : "es"}`;
     case "place":
-      return `place ${c.name} ← ${c.id}${c.value !== undefined ? " (made)" : ""}`;
+      return `place ${c.name} ← ${c.id}${"value" in c && c.value !== undefined ? " (made)" : ""}`;
     case "unplace":
       return `unplace ${c.name} ✕ ${c.id}`;
   }
@@ -180,7 +196,7 @@ function errorText(e: ErrorJson): string {
 
 // ---- views
 
-function ChangeLine(props: { change: Change }) {
+function ChangeLine(props: { change: Change | Header }) {
   return (
     <span class="change">
       <span class="time">t{props.change.time}</span>
@@ -226,12 +242,20 @@ function Tree(props: { address: Address; above: Id[] }) {
         {(d) => (
           <Show
             when={ok(d())}
-            fallback={<li class="err">{errorText((d() as { error: ErrorJson }).error)}</li>}
+            fallback={
+              <li class="err">
+                {errorText((d() as { error: ErrorJson }).error)}
+              </li>
+            }
           >
             {(slots) => (
               <For each={slots()} fallback={<li class="empty">empty</li>}>
                 {([slot, items]) => (
-                  <Row address={[...props.address, slot]} items={items} above={props.above} />
+                  <Row
+                    address={[...props.address, slot]}
+                    items={items}
+                    above={props.above}
+                  />
                 )}
               </For>
             )}
@@ -295,7 +319,12 @@ function Inspector() {
     e.preventDefault();
     const name = input.value.trim();
     if (!name || graph() === undefined) return;
-    const result = await call<Attempt<SlotItem[]>>("lookup", graph(), selected(), name);
+    const result = await call<Attempt<(SlotItem | RefusedItem)[]>>(
+      "lookup",
+      graph(),
+      selected(),
+      name,
+    );
     setLooked({ name, result });
   };
   return (
@@ -307,20 +336,27 @@ function Inspector() {
             <h3>read</h3>
             <Show
               when={ok(l().read)}
-              fallback={<p class="err">{errorText((l().read as { error: ErrorJson }).error)}</p>}
+              fallback={
+                <p class="err">
+                  {errorText((l().read as { error: ErrorJson }).error)}
+                </p>
+              }
             >
               {(items) => (
-                <For each={items()} fallback={<p class="empty">reaches nothing</p>}>
+                <For
+                  each={items()}
+                  fallback={<p class="empty">reaches nothing</p>}
+                >
                   {(item, i) => (
                     <div class={`item${i() === 0 ? " first" : ""}`}>
                       <div class="from">
                         <RouteLine route={item.from.route} />
                       </div>
                       <pre class="value">{pretty(item.value)}</pre>
-                      <Show
-                        when={item.change}
-                        fallback={<div class="meta">the root's first value</div>}
-                      >
+                      <Show when={item.ephemeral}>
+                        <div class="meta">ephemeral</div>
+                      </Show>
+                      <Show when={item.change} fallback={<div class="meta">no change</div>}>
                         {(c) => (
                           <div class="meta">
                             <ChangeLine change={c()} />
@@ -336,7 +372,9 @@ function Inspector() {
             <Show
               when={ok(l().directory)}
               fallback={
-                <p class="err">{errorText((l().directory as { error: ErrorJson }).error)}</p>
+                <p class="err">
+                  {errorText((l().directory as { error: ErrorJson }).error)}
+                </p>
               }
             >
               {(slots) => (
@@ -356,7 +394,11 @@ function Inspector() {
                             <tr>
                               <td class="name">
                                 <Show when={i() === 0}>
-                                  <a onClick={() => select([...selected(), slot])}>{slot}</a>
+                                  <a
+                                    onClick={() => select([...selected(), slot])}
+                                  >
+                                    {slot}
+                                  </a>
                                 </Show>
                               </td>
                               <td class="pos">
@@ -367,7 +409,8 @@ function Inspector() {
                                 {item.pending ? " (pending)" : ""}
                               </td>
                               <td>
-                                <ChangeLine change={item.change} />
+                                {item.ephemeral ? "ephemeral " : ""}
+                                <Show when={item.change}>{(c) => <ChangeLine change={c()} />}</Show>
                               </td>
                             </tr>
                           )}
@@ -388,20 +431,32 @@ function Inspector() {
                 <Show
                   when={ok(lk().result)}
                   fallback={
-                    <p class="err">{errorText((lk().result as { error: ErrorJson }).error)}</p>
+                    <p class="err">
+                      {errorText((lk().result as { error: ErrorJson }).error)}
+                    </p>
                   }
                 >
                   {(items) => (
-                    <For each={items()} fallback={<p class="empty">{lk().name}: nothing</p>}>
-                      {(item) => (
-                        <div class="item">
-                          <span class="id">{item.id}</span>{" "}
-                          <span class="route">
-                            {"path" in item.from ? addressText(item.from.path) : ""}
-                          </span>{" "}
-                          <ChangeLine change={item.change} />
-                        </div>
-                      )}
+                    <For
+                      each={items()}
+                      fallback={<p class="empty">{lk().name}: nothing</p>}
+                    >
+                      {(item) =>
+                        "refused" in item
+                          ? (
+                            <div class="item err">
+                              refused reading {addressText(item.from.path)}
+                            </div>
+                          )
+                          : (
+                            <div class="item">
+                              <span class="id">{item.id}</span>{" "}
+                              <span class="route">
+                                {"path" in item.from ? addressText(item.from.path) : ""}
+                              </span>{" "}
+                              <Show when={item.change}>{(c) => <ChangeLine change={c()} />}</Show>
+                            </div>
+                          )}
                     </For>
                   )}
                 </Show>
@@ -503,8 +558,13 @@ function App() {
       <header>
         <strong>ermine</strong>
         <Show when={(status()?.graphs.length ?? 0) > 0}>
-          <select value={graph()} onChange={(e) => reset(e.currentTarget.value)}>
-            <For each={status()!.graphs}>{(g) => <option value={g.name}>{g.name}</option>}</For>
+          <select
+            value={graph()}
+            onChange={(e) => reset(e.currentTarget.value)}
+          >
+            <For each={status()!.graphs}>
+              {(g) => <option value={g.name}>{g.name}</option>}
+            </For>
           </select>
         </Show>
         <Show when={problem()}>{(p) => <span class="err">{p()}</span>}</Show>
@@ -514,7 +574,9 @@ function App() {
         fallback={
           <div class="none">
             <p>No graph on this page.</p>
-            <p>A host shows its graph to devtools by pushing it onto a global:</p>
+            <p>
+              A host shows its graph to devtools by pushing it onto a global:
+            </p>
             <pre>(globalThis.__ermine ??= []).push(&#123; name: "app", api &#125;);</pre>
           </div>
         }

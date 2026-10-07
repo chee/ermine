@@ -62,7 +62,9 @@ export function isLive(value: unknown): boolean {
   if (typeof value === "function") return true;
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   if (isObject(value) || ArrayBuffer.isView(value)) return false;
-  return !isBytes(value) && !(value instanceof SharedArrayBuffer);
+  // a page that is not cross-origin isolated has no SharedArrayBuffer at all
+  return !isBytes(value) &&
+    !(typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer);
 }
 
 /** Thrown by own() for what is not a value; callers say which field it was. */
@@ -172,8 +174,8 @@ export function ownField(value: unknown, field: string, live = false): Json {
   }
 }
 
-// a plain assignment of "__proto__" would set the prototype
-function define(object: { [key: string]: Json }, key: string, value: Json) {
+/** Sets an own key: a plain assignment of "__proto__" would set the prototype. */
+export function define(object: { [key: string]: Json }, key: string, value: Json) {
   Object.defineProperty(object, key, {
     value,
     enumerable: true,

@@ -10,6 +10,13 @@
 // may read, by protect, and only chee may write; the host reads it beneath
 // protect to hand it on, and never shows it.
 //
+// The asking is a process: programs/llm, running in the LLM's node as its
+// agent. Its compute reads the talk and returns the request when the talk
+// wants an answer; its effect calls the api, streaming the words into an
+// ephemeral reply node, and says the answer into the talk. An api in this
+// browser keeps its loaded model in an ephemeral engine node beside it. The
+// host only runs the tools the answer calls, and says what they found.
+//
 // The LLM's tools run snippets like any other, undone with ⌘Z, as an agent of
 // its own named for its model, "computer/claude-opus-5.5". It checks its work
 // after it changes the graph, and goes on until it is right. A small model
@@ -57,9 +64,6 @@ export const busy = signal(false);
 const trouble = signal<string | undefined>(undefined);
 /** The model an LLM is placed with, when one is placed. */
 const placing = signal(MODELS[0]);
-/** What the LLM is saying, before it is said: it goes into the graph when the step ends. */
-const live = signal<{ llm: Id; text: string; status?: string } | undefined>(undefined);
-let stop: AbortController | undefined;
 
 // --- the LLM in the graph ---
 
@@ -358,10 +362,13 @@ splice(id, path, from, to, v?)  splice the list at path
 place(parent, name, id, pos?)   place an existing node in another slot too (a node may be in many)
 unplace(parent, name, id)       take it out of that slot
 read(id) · dir(id, name?) · lookup(name, place?)
-program(parent, id, code)       a program node, made in parent's slot named id
+program(parent, name, compute, effect?)
+                                a program node, made in parent's slot name: start finds it under programs/
+start(parent, name, value?)     starts the program programs/name in parent, where it runs; returns its pid
 process(parent, name, id, { compute, effect?, value? })
-                                a process: placed in parent's slot name, it runs there. compute and effect
-                                are program source, or the id of a program node to share
+                                a program, id, made in the root's programs/, and a process running it,
+                                started in parent, where it runs; returns the process's pid
+replace(pid)                    starts a process's program again where it was, and unplaces the old one
 batch(fn)                       several changes as one, so nothing runs until they are all there
 ui(parent, name, { state, watch?, draw })
                                 an app on the stage that is reactive by construction: see below
@@ -369,9 +376,9 @@ ui(parent, name, { state, watch?, draw })
 The graph: every node has a JSON value and a directory of named slots, each an ordered list of ids.
 The root is "root". Anything the root does not reach cannot be addressed.
 
-A process runs where it sits: placed in node X, the address [] is X, [name] is the process's own
-node, [".."] is X's parent, ["a", "b"] is X's slot a, then that node's slot b. Its programs are
-modules whose default export the driver calls with a context:
+A process runs where it is started: started in node X, it is placed in X under its pid, the address
+[] is X, [name] is the process's own node, [".."] is X's parent, ["a", "b"] is X's slot a, then that
+node's slot b. Its program's parts are modules whose default export the scheduler calls with a context:
 
 compute: export default function ({ api, self, cwd, name, changes }) { ... return value }
   It only reads, and returns the process's value (JSON), or PENDING (import { PENDING } from "ermine").
@@ -381,7 +388,7 @@ compute: export default function ({ api, self, cwd, name, changes }) { ... retur
   api.lookup({ name })             → [{ id, from: { path } }]: the nearest slot by that name, searching
                                      from [] up; read it with api.read({ address: item.from.path })
   Every read marks the process: when what it read changes, it computes again, and its effect runs.
-  Skip the slots named compute and effect, and the process's own slot (its name), when walking [].
+  Skip the slots of processes, named "@" and more (its own among them), when walking [].
 
 effect: export default function ({ api, lasting, self, cwd, name, value, previous, handler }) { ... }
   It only writes. value is what compute returned. lasting works until the process stops, for code
@@ -447,9 +454,8 @@ fire a handler to try a click, and print an expression to read the graph. If any
 looks poor, fix it and check again. A failed snippet may have made some of its nodes: inspect, and
 change or unplace what is there rather than making it again. Choose ids the graph does not have yet,
 unless you mean to place or change an existing node.
-An effect runs when its process starts, and after that only when the compute's value changes: after
-changing a running process's programs, restart it, by unplace(parent, name, id) and then
-place(parent, name, id), as two statements, not in one batch.
+An effect runs after each run whose compute returned a value. A process keeps the program it started
+with: after changing a program, replace(pid) starts it again, as a new process with a new pid.
 When it works and looks right, end with one or two sentences saying what you made, and call no tool.`;
 
 /** The tools a small model is given. */
@@ -505,13 +511,13 @@ If something is wrong, fix it: write(id + ".draw", newSource) changes how an app
 draws again at once. When it works, say what you made in one sentence, and call no tool.`;
 
 /**
- * The api the root has at first: a program the host calls with the key, the
- * model, the messages and the tools. It asks OpenRouter, streaming, telling
+ * The api the root has at first: a module the LLM's process calls with the
+ * key, the model, the messages and the tools. It asks OpenRouter, streaming, telling
  * onText each piece of words, and gives back the words and the tool calls.
  * Place another "api" nearer an LLM to change how it talks.
  */
-const OPENROUTER = `// an api for an LLM node, found by looking up "api" from it. The host calls it
-// with the key it finds by looking up "key" from here, which nobody can read
+const OPENROUTER = `// an api for an LLM node, found by looking up "api" from it. Its process calls
+// it with the key the host finds by looking up "key" from here, which nobody can read
 export default async function ({ key, model, messages, tools, signal, onText }) {
   if (!key) throw new Error("no key around this api: keep one in the ask tab")
   const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -555,40 +561,72 @@ export default async function ({ key, model, messages, tools, signal, onText }) 
 
 /**
  * What both in-browser apis share, as source: a small model calls tools in
- * text, so the api tells it how, turns past tool calls into text and results
- * into the person's turn, and reads a call back out of the reply. It keeps
- * the talk short enough for a small context, dropping the oldest turns first.
+ * text, as Qwen and Hermes models are taught to, so the api tells it how,
+ * gives it past calls and results in the shape its chat template knows, or
+ * as words when the template knows none, and reads a call back out of the
+ * reply. It keeps the talk short enough for a small context, dropping the
+ * oldest turns first.
  */
 const TEXT_TOOLS = String
-  .raw`// a small model calls tools in text: a fenced block of code to run, a line LOOK,
-// or a line INSPECT and an id. These turn calls into text and back
+  .raw`// a small model calls tools in text, as Qwen and Hermes models are taught to:
+// <tool_call>{"name": "look", "arguments": {}}</tool_call>. Code goes badly into
+// JSON, so a snippet to run may come in a fenced block instead
 const FENCE = "\u0060\u0060\u0060"
-const HOW = "\n\nTo use a tool, end your reply with exactly one of these, and nothing after it:\n" +
-  FENCE + "run\n(a snippet)\n" + FENCE + "   runs the snippet, and tells you what happened\n" +
-  "LOOK   shows you what the stage shows\n" +
-  "INSPECT id   shows you a node: its value, its slots, and what it threw\n" +
-  "Use one tool per reply. When the work is done and checked, reply without one."
 
-function asText(messages) {
+/** How to call tools, for the system prompt; a template that lists the tools itself is told less. */
+function how(tools, listed) {
+  const args = (t) => Object.entries(t.function.parameters?.properties ?? {})
+    .map(([k, v]) => k + (v.type ? ": " + v.type : "")).join(", ")
+  return "\n\n" + [
+    ...(listed ? [] : [
+      "To call a tool, end your reply with a tool call, JSON in tags, exactly like this:",
+      '<tool_call>{"name": "look", "arguments": {}}</tool_call>',
+      "The tools:",
+      ...tools.map((t) => "- " + t.function.name + "(" + args(t) + "): " + t.function.description),
+    ]),
+    "To run a snippet, end your reply with it in a fenced block instead, and nothing after it:",
+    FENCE + "run\n(the snippet)\n" + FENCE,
+    "Use one tool per reply, and wait for what it gives back. When the work is done and checked, reply without one.",
+  ].join("\n")
+}
+
+const argsOf = (c) => {
+  try { return JSON.parse(c.function.arguments || "{}") } catch { return {} }
+}
+
+/**
+ * The talk in a shape a small model knows. When its chat template lists the
+ * tools, past calls and results go as tool_calls and tool turns, which the
+ * template writes as the model was taught; otherwise all of it is words. A
+ * snippet that ran is shown as the fence it may come in, either way.
+ */
+function asText(messages, tools, listed) {
   const out = []
   for (const m of messages) {
     let msg
-    if (m.role === "system") msg = { role: "system", content: m.content + HOW }
+    if (m.role === "system") msg = { role: "system", content: m.content + how(tools, listed) }
     else if (m.role === "assistant") {
-      const calls = (m.tool_calls ?? []).map((c) => {
-        const a = JSON.parse(c.function.arguments || "{}")
-        if (c.function.name === "run") return FENCE + "run\n" + a.code + "\n" + FENCE
-        if (c.function.name === "look") return "LOOK"
-        if (c.function.name === "inspect") return "INSPECT " + a.node
-        return ""
-      })
-      msg = { role: "assistant", content: [m.content ?? "", ...calls].filter(Boolean).join("\n") }
-    } else if (m.role === "tool") msg = { role: "user", content: "What happened:\n" + m.content }
-    else msg = { role: "user", content: m.content }
-    // two turns of one role in a row become one, for chat templates that alternate
+      const calls = m.tool_calls ?? []
+      const runs = calls.filter((c) => c.function.name === "run")
+        .map((c) => FENCE + "run\n" + argsOf(c).code + "\n" + FENCE)
+      const others = calls.filter((c) => c.function.name !== "run")
+      const written = listed ? [] : others.map((c) =>
+        "<tool_call>" + JSON.stringify({ name: c.function.name, arguments: argsOf(c) }) + "</tool_call>")
+      msg = { role: "assistant", content: [m.content ?? "", ...runs, ...written].filter(Boolean).join("\n") }
+      if (listed && others.length) {
+        msg.tool_calls = others.map((c) => ({ type: "function", function: { name: c.function.name, arguments: argsOf(c) } }))
+      }
+    } else if (m.role === "tool") {
+      msg = listed
+        ? { role: "tool", content: m.content }
+        : { role: "user", content: "<tool_response>\n" + m.content + "\n</tool_response>" }
+    } else msg = { role: "user", content: m.content }
+    // two turns of one role in a row become one, for chat templates that alternate;
+    // tool turns the template groups itself
     const last = out[out.length - 1]
-    if (last && last.role === msg.role) last.content += "\n\n" + msg.content
-    else out.push(msg)
+    if (last && last.role === msg.role && msg.role !== "tool" && !last.tool_calls && !msg.tool_calls) {
+      last.content += "\n\n" + msg.content
+    } else out.push(msg)
   }
   return out
 }
@@ -596,7 +634,8 @@ function asText(messages) {
 /** The oldest turns go first, keeping the system prompt; then the newest is cut in the middle. */
 function fit(messages, budget) {
   let ms = messages.slice()
-  const size = (list) => list.reduce((n, m) => n + m.content.length, 0)
+  const one = (m) => m.content.length + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0)
+  const size = (list) => list.reduce((n, m) => n + one(m), 0)
   while (size(ms) > budget && ms.length > 2) ms.splice(1, 1)
   while (ms.length > 2 && ms[1].role !== "user") ms.splice(1, 1)
   if (size(ms) > budget) {
@@ -608,34 +647,116 @@ function fit(messages, budget) {
 }
 
 let made = 0
+/** A call as the host takes it. Arguments that are not JSON go as they are, and the host says what is wrong. */
 const call = (name, args) => ({
   id: "text-" + Date.now() + "-" + made++,
   type: "function",
-  function: { name, arguments: JSON.stringify(args) },
+  function: { name, arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}) },
 })
 
-/** The words before a call, and the call: a fenced block runs, LOOK looks, INSPECT inspects. */
-function parse(text) {
-  const run = text.match(new RegExp(FENCE + "(?:run|js|javascript)?[ \\t]*\\n([\\s\\S]*?)" + FENCE))
-  if (run) return { text: text.slice(0, run.index).trim(), calls: [call("run", { code: run[1].trim() })] }
-  const look = text.match(/^\s*LOOK\s*$/m)
-  if (look) return { text: text.slice(0, look.index).trim(), calls: [call("look", {})] }
-  const inspect = text.match(/^\s*INSPECT\s+(\S+)\s*$/m)
-  if (inspect) return { text: text.slice(0, inspect.index).trim(), calls: [call("inspect", { node: inspect[1] })] }
+/** JSON as a small model writes it, with lines and tabs left raw inside its strings. */
+function loose(body) {
+  try {
+    return JSON.parse(body)
+  } catch {
+    let out = "", quoted = false, escaped = false
+    for (const ch of body) {
+      if (quoted && !escaped && ch === "\n") out += "\\n"
+      else if (quoted && !escaped && ch === "\r") out += "\\r"
+      else if (quoted && !escaped && ch === "\t") out += "\\t"
+      else out += ch
+      if (escaped) escaped = false
+      else if (ch === "\\") escaped = true
+      else if (ch === '"') quoted = !quoted
+    }
+    return JSON.parse(out)
+  }
+}
+
+/** A call written as JSON: {name, arguments}, or args, or parameters, as Llama writes it. */
+function json(body) {
+  try {
+    const o = loose(body)
+    const name = o.name ?? o.tool ?? o.function?.name
+    if (typeof name === "string") return call(name, o.arguments ?? o.args ?? o.parameters ?? o.function?.arguments ?? {})
+  } catch { /* below */ }
+  // not JSON: its name, if it has one, and the words as they are, so the host says it does not parse
+  const name = body.match(/"name"\s*:\s*"([^"]+)"/)
+  return name ? call(name[1], body) : undefined
+}
+
+/** What is inside a <tool_call>: JSON, or <function=name><parameter=key>value</parameter>, as Qwen3 Coder writes it. */
+function inside(body) {
+  const fn = body.match(/<function=([^>\s]+)>([\s\S]*?)(?:<\/function>|$)/)
+  if (!fn) return json(body)
+  const args = {}
+  for (const p of fn[2].matchAll(/<parameter=([^>\s]+)>\n?([\s\S]*?)\n?<\/parameter>/g)) {
+    let v = p[2]
+    try { v = JSON.parse(v) } catch { /* a string, as it is */ }
+    args[p[1]] = v
+  }
+  return call(fn[1], args)
+}
+
+/** A call left bare at the end of a reply, as JSON, named for a tool there is. */
+function bare(text, names) {
+  const end = text.lastIndexOf("}")
+  if (end === -1 || text.slice(end + 1).replace(FENCE, "").trim()) return undefined
+  for (let i = text.indexOf("{"); i !== -1 && i < end; i = text.indexOf("{", i + 1)) {
+    try {
+      const o = JSON.parse(text.slice(i, end + 1))
+      const name = o.name ?? o.tool ?? o.function?.name
+      if (names.has(name)) {
+        return { at: i, call: call(name, o.arguments ?? o.args ?? o.parameters ?? {}) }
+      }
+    } catch { /* not from here */ }
+  }
+}
+
+/**
+ * The words before a call, and the call: the first fenced block or <tool_call>,
+ * or JSON naming a tool at the very end. What a model thought, in <think>, is
+ * not its reply.
+ */
+function parse(text, tools) {
+  const thought = text.lastIndexOf("</think>")
+  if (thought !== -1) text = text.slice(thought + "</think>".length)
+  const fence = text.match(new RegExp(FENCE + "(?:run|js|javascript)?[ \\t]*\\n([\\s\\S]*?)" + FENCE))
+  const tag = text.match(/<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/)
+  const first = [fence, tag].filter(Boolean).sort((a, b) => a.index - b.index)[0]
+  if (first) {
+    const c = first === fence ? call("run", { code: fence[1].trim() }) : inside(tag[1].trim())
+    if (c) return { text: text.slice(0, first.index).trim(), calls: [c] }
+  }
+  const found = bare(text, new Set(tools.map((t) => t.function.name)))
+  if (found) {
+    return { text: text.slice(0, found.at).replace(new RegExp(FENCE + "\\w*\\s*$"), "").trim(), calls: [found.call] }
+  }
   return { text: text.trim(), calls: [] }
+}
+
+/** Says how long the model has been reading the prompt, until it says its first words. */
+function reading(onStatus) {
+  const began = Date.now()
+  let tick = setInterval(() =>
+    onStatus?.("reading the prompt, " + Math.round((Date.now() - began) / 1000) + "s"), 1000)
+  return () => {
+    if (tick) (clearInterval(tick), tick = 0, onStatus?.(undefined))
+  }
 }
 `;
 
 /**
  * An api that runs a model in this browser with WebLLM, on WebGPU. The first
  * call downloads the model, which the browser keeps; one model is loaded at
- * a time, for a machine with little memory.
+ * a time, for a machine with little memory. WebLLM writes the talk with a
+ * template of its own, which knows no tools, so they are told in words.
  */
 const WEBLLM =
   String.raw`// an api that runs the model in this browser, with WebLLM on WebGPU. The first
-// call downloads the model (1.5 to 2.5 GB), which the browser then keeps
+// call downloads the model (2 to 3.5 GB), which the browser then keeps
 ` + TEXT_TOOLS + String.raw`
-export default async function ({ model, messages, signal, onText, onStatus }) {
+export default async function ({ model, messages, tools, signal, onText, onStatus }) {
   if (!navigator.gpu) throw new Error("this browser has no WebGPU: try Chrome, or Safari 26")
   const engines = globalThis.ermineWebllm ??= new Map()
   // one model at a time: another is unloaded first
@@ -651,28 +772,42 @@ export default async function ({ model, messages, signal, onText, onStatus }) {
   const engine = await engines.get(model)
   onStatus?.(undefined)
   signal.addEventListener("abort", () => engine.interruptGenerate())
-  const chunks = await engine.chat.completions.create({
-    messages: fit(asText(messages), 20000),
-    stream: true,
-    temperature: 0.2,
-    max_tokens: 1500,
-  })
+  const heard = reading(onStatus)
   let text = ""
-  for await (const c of chunks) {
-    const piece = c.choices[0]?.delta?.content ?? ""
-    text += piece
-    onText(piece)
+  try {
+    const chunks = await engine.chat.completions.create({
+      messages: fit(asText(messages, tools, false), 20000),
+      stream: true,
+      temperature: 0.2,
+      max_tokens: 1500,
+      // Qwen3 thinks first unless told not to, and has too few words to spare.
+      // WebLLM writes an empty thought for any model told so, so only Qwen3 is
+      ...(/qwen3/i.test(model) ? { extra_body: { enable_thinking: false } } : {}),
+    })
+    for await (const c of chunks) {
+      const piece = c.choices[0]?.delta?.content ?? ""
+      if (!piece) continue
+      heard()
+      text += piece
+      onText(piece)
+    }
+  } finally {
+    heard()
   }
   if (signal.aborted) throw new DOMException("stopped", "AbortError")
-  return parse(text)
+  return parse(text, tools)
 }`;
 
-/** An api that runs a model in this browser with transformers.js, on WebGPU. */
+/**
+ * An api that runs a model in this browser with transformers.js, on WebGPU.
+ * The model's own chat template writes the talk: one that knows tools lists
+ * them, and past calls and results, as the model was taught.
+ */
 const TRANSFORMERS =
   String.raw`// an api that runs the model in this browser, with transformers.js on WebGPU.
 // The first call downloads the model, which the browser then keeps
 ` + TEXT_TOOLS + String.raw`
-export default async function ({ model, messages, signal, onText, onStatus }) {
+export default async function ({ model, messages, tools, signal, onText, onStatus }) {
   if (!navigator.gpu) throw new Error("this browser has no WebGPU: try Chrome, or Safari 26")
   const tf = globalThis.ermineTransformersLib ??=
     await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1")
@@ -690,48 +825,65 @@ export default async function ({ model, messages, signal, onText, onStatus }) {
   }
   const generate = await loaded.get(model)
   onStatus?.(undefined)
+  // Qwen3 thinks first unless told not to, and has too few words to spare; other templates never ask
+  const kwargs = { enable_thinking: false }
+  // the template lists the tools if writing it with them changes what it writes
+  let listed = false
+  try {
+    const hi = [{ role: "user", content: "hi" }]
+    const write = (o) => generate.tokenizer.apply_chat_template(hi, { tokenize: false, add_generation_prompt: true, ...kwargs, ...o })
+    listed = tools.length > 0 && write({ tools }) !== write({})
+  } catch { /* a template that cannot take tools is told them in words */ }
   const stopper = new tf.InterruptableStoppingCriteria()
   signal.addEventListener("abort", () => stopper.interrupt())
+  const heard = reading(onStatus)
   const streamer = new tf.TextStreamer(generate.tokenizer, {
     skip_prompt: true,
     skip_special_tokens: true,
-    callback_function: (piece) => onText(piece),
+    callback_function: (piece) => (heard(), onText(piece)),
   })
-  const out = await generate(fit(asText(messages), 20000), {
-    max_new_tokens: 1500,
-    do_sample: false,
-    streamer,
-    stopping_criteria: stopper,
-  })
+  let out
+  try {
+    out = await generate(fit(asText(messages, tools, listed), 20000), {
+      ...(listed ? { tools } : {}),
+      tokenizer_encode_kwargs: kwargs,
+      max_new_tokens: 1500,
+      do_sample: false,
+      streamer,
+      stopping_criteria: stopper,
+    })
+  } finally {
+    heard()
+  }
   if (signal.aborted) throw new DOMException("stopped", "AbortError")
-  return parse(out[0].generated_text.at(-1).content)
+  return parse(out[0].generated_text.at(-1).content, tools)
 }`;
 
 /** Models small enough for a machine with 8 GB, run in the browser, and what runs them. */
 const LOCAL: { label: string; model: string; api: "webllm" | "transformers" }[] = [
+  {
+    label: "Qwen3 4B · WebLLM · 3.4 GB",
+    model: "Qwen3-4B-q4f16_1-MLC",
+    api: "webllm",
+  },
+  {
+    label: "Qwen3 1.7B · WebLLM · 2 GB",
+    model: "Qwen3-1.7B-q4f16_1-MLC",
+    api: "webllm",
+  },
   {
     label: "Qwen2.5 Coder 3B · WebLLM · 2.5 GB",
     model: "Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC",
     api: "webllm",
   },
   {
-    label: "Qwen2.5 Coder 1.5B · WebLLM · 1.6 GB",
-    model: "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC",
-    api: "webllm",
-  },
-  {
-    label: "Llama 3.2 3B · WebLLM · 2.3 GB",
-    model: "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-    api: "webllm",
-  },
-  {
-    label: "Qwen2.5 Coder 3B · transformers.js",
-    model: "onnx-community/Qwen2.5-Coder-3B-Instruct",
+    label: "Qwen3 4B · transformers.js",
+    model: "onnx-community/Qwen3-4B-ONNX",
     api: "transformers",
   },
   {
-    label: "Qwen2.5 Coder 1.5B · transformers.js",
-    model: "onnx-community/Qwen2.5-Coder-1.5B-Instruct",
+    label: "Qwen3 1.7B · transformers.js",
+    model: "onnx-community/Qwen3-1.7B-ONNX",
     api: "transformers",
   },
 ];
@@ -741,7 +893,7 @@ function context(llm: Id, about?: Id, route?: readonly Step[]): string {
   const agent = agentOf(llm);
   const at = seat(llm) ?? ROOT;
   const budget = llmOf(llm)?.budget ?? 24000;
-  let image = world.image(at, (id) => llmOf(id) !== undefined);
+  let image = world.image(at, unseen);
   if (image.length > budget) image = image.slice(0, budget) + "\n// … the rest is left out";
   const sel = selected.value;
   const where = (id: Id, r?: readonly Step[]) => {
@@ -973,7 +1125,7 @@ async function use(
     case "graph":
       return {
         result: cut(
-          world.image(args.whole ? ROOT : seat(llm) ?? ROOT, (id) => llmOf(id) !== undefined),
+          world.image(args.whole ? ROOT : seat(llm) ?? ROOT, unseen),
           24000,
         ),
       };
@@ -981,72 +1133,237 @@ async function use(
   return { result: `no tool ${J(name)}` };
 }
 
-// --- talking ---
-
-/** What the api program is called with, and what it gives back. */
-type Api = (o: {
-  /** the key found around the api; an api that never mentions a key is given none */
-  key?: string;
-  model: string;
-  messages: unknown[];
-  tools: unknown[];
-  signal: AbortSignal;
-  onText: (piece: string) => void;
-  /** how loading goes, such as a model downloading; undefined when it is done */
-  onStatus?: (status: string | undefined) => void;
-}) => Promise<
-  { text: string; calls: { id: string; function: { name: string; arguments: string } }[] }
->;
+// --- the LLM, as a process ---
 
 /**
- * The talk as messages for the api. The newest question goes with the graph as
- * it was asked; earlier ones keep only their words. A reply whose tool calls
- * were not all answered, as when it was stopped, goes without them.
+ * The program an LLM runs as, programs/llm, in a process placed in the LLM's
+ * node, so [] is the LLM, acting as the LLM's agent. Its compute reads the
+ * talk, and looks up "model", "prompt" and "api" around it; when the last
+ * thing said wants an answer, it returns what goes to the model, so the
+ * process's value is the request. Its effect asks: it makes an ephemeral node,
+ * reply, in its own node, writes the words into it as they come, says the
+ * answer into the talk, and lets the reply go. The reply holds its request,
+ * live, in reply/job: letting the reply go stops it, and so does killing the
+ * process. An api in this browser keeps the model it loaded beside the reply,
+ * in an ephemeral node of its own (LOCAL_ENGINE).
  */
-function messagesOf(llm: Id, prompt: string): unknown[] {
-  const talk = talkOf(llm).map((t) => t.said);
-  const newest = talk.findLastIndex((s) => s.role === "user" && !s.nudge);
-  const answered = new Set(talk.flatMap((s) => (s.role === "tool" ? [s.call] : [])));
-  const sent = new Set<string>();
-  const out: unknown[] = [{ role: "system", content: prompt }];
+const LLM_COMPUTE =
+  String.raw`// the LLM, as a process in its node: [] is the LLM. It reads the talk, and,
+// when the last thing said wants an answer, returns what goes to the model:
+// the messages, the tools, the model, and the api it finds by looking up "api"
+const TOOLS = ` + J(TOOLS) + String.raw`
+const MODEL = ` + J(MODELS[0]) + String.raw`
+
+const value = (items) => items.find((i) => "value" in i)?.value
+
+/** Whether the talk wants an answer: a question, or a result for every call of the last reply. */
+function wants(talk) {
+  const last = talk.at(-1)?.said
+  if (!last) return false
+  if (last.role === "user") return true
+  if (last.role !== "tool") return false
+  const i = talk.findLastIndex((t) => t.said.role === "assistant")
+  if (i < 0) return false
+  const answered = new Set(talk.slice(i + 1).map((t) => t.said.call))
+  return (talk[i].said.calls ?? []).every((c) => answered.has(c.id))
+}
+
+// The talk as messages. The newest question goes with the graph as it was
+// asked; earlier ones keep only their words. A reply whose tool calls were not
+// all answered, as when it was stopped, goes without them
+function messagesOf(talk, prompt) {
+  const newest = talk.findLastIndex((s) => s.role === "user" && !s.nudge)
+  const answered = new Set(talk.flatMap((s) => (s.role === "tool" ? [s.call] : [])))
+  const sent = new Set()
+  const out = [{ role: "system", content: prompt }]
   talk.forEach((s, i) => {
     if (s.role === "user") {
-      out.push({
-        role: "user",
-        content: i === newest && s.context ? s.context + "\n\n" + s.text : s.text,
-      });
+      out.push({ role: "user", content: i === newest && s.context ? s.context + "\n\n" + s.text : s.text })
     } else if (s.role === "assistant") {
-      if (s.error) return;
-      const calls = (s.calls ?? []).every((c) => answered.has(c.id)) ? s.calls ?? [] : [];
-      for (const c of calls) sent.add(c.id);
-      if (!s.text && !calls.length) return;
+      if (s.error) return
+      const calls = (s.calls ?? []).every((c) => answered.has(c.id)) ? s.calls ?? [] : []
+      for (const c of calls) sent.add(c.id)
+      if (!s.text && !calls.length) return
       out.push({
         role: "assistant",
         content: s.text || null,
         ...(calls.length
-          ? {
-            tool_calls: calls.map((c) => ({
-              id: c.id,
-              type: "function",
-              function: { name: c.name, arguments: c.arguments },
-            })),
-          }
+          ? { tool_calls: calls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } })) }
           : {}),
-      });
+      })
     } else if (sent.has(s.call)) {
-      out.push({ role: "tool", tool_call_id: s.call, content: s.result });
+      out.push({ role: "tool", tool_call_id: s.call, content: s.result })
     }
-  });
-  return out;
+  })
+  return out
 }
+
+export default function ({ api }) {
+  const me = value(api.read({ address: [] })) ?? {}
+  const talk = api.read({ address: ["talk"] }).flatMap((i) =>
+    i.value && typeof i.value === "object" ? [{ id: i.from.route.at(-1).node, said: i.value }] : []
+  )
+  if (!wants(talk)) return { idle: true }
+  const around = (name) => {
+    const [it] = api.lookup({ name })
+    return it?.from.path ? { at: it.from.path, value: value(api.read({ address: it.from.path })) } : undefined
+  }
+  const prompt = around("prompt"), code = around("api")
+  if (!prompt) return { missing: "prompt" }
+  if (!code) return { missing: "api" }
+  return {
+    for: talk.at(-1).id,
+    model: around("model")?.value || me.model || MODEL,
+    api: code.at,
+    code: String(code.value),
+    tools: me.tools ? TOOLS.filter((t) => me.tools.includes(t.function.name)) : TOOLS,
+    messages: messagesOf(talk.map((t) => t.said), String(prompt.value ?? "")),
+  }
+}`;
+
+const LLM_EFFECT = String
+  .raw`// asks the model when the talk wants an answer. The reply is an ephemeral
+// node in this process's node, the words written into it as they come; its
+// job, live, is the request, and letting the reply go stops it. A reply to
+// what is still the last thing said is left to go on. key(self) is the key the
+// host hands this process, for an api that mentions one; load(code) loads the api
+import { key, load } from "demo"
+
+class Job {
+  constructor() { this.stop = new AbortController() }
+  [Symbol.dispose]() { this.stop.abort() }
+}
+
+export default function ({ self, name, value, lasting }) {
+  const here = [name], at = [name, "reply"]
+  const now = lasting.read({ address: at }).find((i) => "value" in i)
+  if (now && value.for !== undefined && now.value?.for === value.for) return
+  if (now) lasting.unplace({ address: here, name: "reply", id: now.from.route.at(-1).node })
+  const say = (said) => {
+    try {
+      lasting.place({ address: [], name: "talk", id: self + "." + Date.now().toString(36), value: said })
+    } catch { /* the process is gone */ }
+  }
+  if (value.missing) {
+    return say({ role: "assistant", text: "✕ it finds no " + JSON.stringify(value.missing) + " around it", error: true })
+  }
+  if (value.for === undefined) return
+  const id = self + ".reply." + Date.now().toString(36)
+  const job = new Job()
+  let shown = { for: value.for, text: "" }, timer
+  lasting.place({ address: here, name: "reply", id, value: shown, ephemeral: true })
+  lasting.place({ address: at, name: "job", id: id + ".job", value: job, ephemeral: true })
+  const flush = () => {
+    timer = undefined
+    if (job.stop.signal.aborted) return
+    try { lasting.write({ address: at, patches: [{ type: "snapshot", value: shown }] }) } catch { /* gone */ }
+  }
+  const show = (more) => {
+    shown = { ...shown, ...more }
+    timer ??= setTimeout(flush, 150)
+  }
+  const ask = async () => {
+    const keyed = /\bkey\b/.test(value.code)
+    const k = keyed ? key(self) : undefined
+    if (keyed && !k) throw new Error(JSON.stringify(value.api.at(-1)) + " finds no key around it: keep one in the ask tab")
+    const reply = await load(value.code)({
+      ...(k ? { key: k } : {}),
+      model: value.model,
+      messages: value.messages,
+      tools: value.tools,
+      signal: job.stop.signal,
+      onText: (piece) => show({ text: shown.text + piece }),
+      onStatus: (status) => show({ status }),
+      // where an api keeps what outlives a reply, such as a model it loaded: this process's node
+      lasting,
+      at: here,
+    })
+    const calls = reply.calls.map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments }))
+    return { role: "assistant", text: reply.text, ...(calls.length ? { calls } : {}) }
+  }
+  ask().then(
+    (said) => job.stop.signal.aborted || say(said),
+    (e) => job.stop.signal.aborted || say({ role: "assistant", text: "✕ " + (e?.message ?? String(e)), error: true }),
+  ).finally(() => {
+    clearTimeout(timer)
+    try { lasting.unplace({ address: here, name: "reply", id }) } catch { /* it went already */ }
+  })
+}`;
+
+/** The program, as the host makes it in programs/llm. */
+const LLM_PROGRAM = { kind: "js", compute: LLM_COMPUTE, effect: LLM_EFFECT };
+
+/** What an LLM is not shown of the graph: LLMs, and the program they run as. */
+const unseen = (id: Id) => llmOf(id) !== undefined || J(world.valueOf(id)) === J(LLM_PROGRAM);
+
+/** The process an LLM runs as: one running programs/llm in its node, if there is one. */
+function processOf(llm: Id): Id | undefined {
+  for (const p of world.procs.values()) {
+    if (
+      p.state === "running" && p.parent === llm && p.path?.join("/") === "programs/llm" &&
+      world.addressOf(p.pid)
+    ) return p.pid;
+  }
+}
+
+/**
+ * Starts the process an LLM runs as, as the LLM's agent, unless one runs the
+ * host's program already: programs/llm is made in the root, or written if it
+ * is older, and a process running an older one is replaced. Answers with its
+ * pid, or why it could not start.
+ */
+function running(llm: Id): { pid: Id } | { why: string } {
+  const old = processOf(llm);
+  if (old && J(world.procs.get(old)!.code) === J(LLM_PROGRAM)) return { pid: old };
+  const lines: string[] = [];
+  let loaders = world.slotOf(ROOT, "loaders")[0];
+  if (!loaders) {
+    loaders = free("loaders");
+    lines.push(`  make("root", "loaders", ${J(loaders)}, {})`);
+  }
+  if (!world.slotOf(loaders, "js").length) {
+    lines.push(`  make(${J(loaders)}, "js", ${J(free("loader-js"))}, { loader: "same-thread" })`);
+  }
+  let programs = world.slotOf(ROOT, "programs")[0];
+  if (!programs) {
+    programs = free("programs");
+    lines.push(`  make("root", "programs", ${J(programs)}, {})`);
+  }
+  const at = world.slotOf(programs, "llm")[0];
+  if (!at) lines.push(`  make(${J(programs)}, "llm", ${J(free("llm-program"))}, program)`);
+  else if (J(world.valueOf(at)) !== J(LLM_PROGRAM)) lines.push(`  write(${J(at)}, program)`);
+  lines.push(`  start(${J(llm)}, "llm")`);
+  if (old) lines.push(`  unplace(${J(llm)}, ${J(old)}, ${J(old)})`);
+  const s = world.run(
+    ["batch(() => {", ...lines, "})"].join("\n"),
+    `ask: ${llm} runs`,
+    "talk",
+    agentOf(llm),
+    { program: LLM_PROGRAM },
+  );
+  const pid = processOf(llm);
+  return s.ok && pid ? { pid } : { why: s.error?.why ?? `${llm}'s process did not start` };
+}
+
+/** What an LLM is saying, before it is said: its process's reply node, while there is one. */
+function replyOf(llm: Id): { text: string; status?: string } | undefined {
+  const pid = processOf(llm);
+  const at = pid && world.slotOf(pid, "reply")[0];
+  const v = at ? world.valueOf(at) : undefined;
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? v as unknown as { text: string; status?: string }
+    : undefined;
+}
+
+// --- talking ---
 
 /** The longest a question goes on before it stops to ask. */
 const STEPS = 30;
 
 const LOOKERS = new Set(["look", "inspect", "print", "graph"]);
 
-/** What an LLM needs, found around it; or why it cannot be asked. */
-function needs(llm: Id): { api: Api; prompt: string; key?: string } | string {
+/** Why an LLM cannot be asked, if it cannot: what its process will look for, found or not. */
+function unready(llm: Id): string | undefined {
   if (modelNode(llm) === undefined && !llmOf(llm)?.model) {
     return `${llm} finds no "model" around it`;
   }
@@ -1060,29 +1377,74 @@ function needs(llm: Id): { api: Api; prompt: string; key?: string } | string {
   const code = world.read(apiAt, undefined, agent);
   if ("refused" in code) return `${llm} may not read its api, ${apiAt}: ${code.refused}`;
   // an api in this browser, which never mentions a key, needs none
-  const keyed = /\bkey\b/.test(String(code.value));
-  let key = keyed ? keyFor(apiAt, agent) : undefined;
+  if (!/\bkey\b/.test(String(code.value))) return;
   // a key this browser kept is placed for the api, so it is not typed again
-  if (keyed && !key && stored(KEY)) {
+  if (!keyFor(apiAt, agent) && stored(KEY)) {
     const why = keepKey(llm, stored(KEY));
     if (why) return why;
-    key = keyFor(apiAt, agent);
   }
-  if (keyed && !key) return `${apiAt} finds no key around it`;
-  let api: Api;
-  try {
-    api = world.module(String(code.value), "api") as Api;
-  } catch (e) {
-    return `${apiAt} does not load: ${(e as Error).message}`;
-  }
-  return { api, prompt: String(prompt.value ?? ""), ...(key ? { key } : {}) };
+  if (!keyFor(apiAt, agent)) return `${apiAt} finds no key around it`;
 }
 
 /**
- * Asks an LLM, and lets it work: each tool it calls runs, and what it found
- * goes back, until it answers without one. If it changed the graph since it
- * last looked, it is told to check before it may stop. Everything said goes
- * into its talk, as whoever said it.
+ * The key "demo"'s key(self) hands a process: only one running the host's
+ * programs/llm, and only the key its LLM's api finds around itself.
+ */
+world.keyFor = (pid) => {
+  const p = world.procs.get(pid);
+  if (!p || p.state !== "running" || p.path?.join("/") !== "programs/llm") return;
+  if (J(p.code) !== J(LLM_PROGRAM) || !llmOf(p.parent)) return;
+  const agent = agentOf(p.parent);
+  const api = around("api", p.parent, agent);
+  return api ? keyFor(api, agent) : undefined;
+};
+
+/** The LLM being asked, and whether it was told to stop. */
+let asking: { llm: Id; halted: boolean } | undefined;
+
+/**
+ * The next thing the LLM says, after the talk was n long: its process's reply,
+ * once it is in the talk. If the process stops, or its run fails, the host
+ * says so instead, so the talk says why it ended.
+ */
+function answer(llm: Id, pid: Id, n: number): Promise<Said & { role: "assistant" }> {
+  return new Promise((resolve) => {
+    let done = false;
+    const end = (said: Said & { role: "assistant" }) => {
+      done = true;
+      resolve(said);
+    };
+    const check = () => {
+      const talk = talkOf(llm);
+      const last = talk.at(-1)?.said;
+      if (talk.length > n && last?.role === "assistant") return end(last);
+      const failed = world.front(pid).find((i) => "error" in i) as
+        | { error: { message?: string } }
+        | undefined;
+      const why = !processOf(llm)
+        ? `(${pid} stopped)`
+        : failed
+        ? `✕ ${pid} failed: ${failed.error.message ?? J(failed.error)}`
+        : undefined;
+      if (!why) return;
+      const said = { role: "assistant" as const, text: why, error: true as const };
+      end(said);
+      say(llm, said, "host");
+    };
+    // the first call is made at once, before un is there: it lets go after
+    const un = world.version.subscribe(() => {
+      if (!done) check();
+      if (done) queueMicrotask(() => un());
+    });
+  });
+}
+
+/**
+ * Asks an LLM, and lets it work. Its process answers whatever wants an
+ * answer in its talk; the host runs each tool the answer calls, and says what
+ * it found, which wants an answer again, until it answers without one. If it
+ * changed the graph since it last looked, it is told to check before it may
+ * stop. Everything said goes into its talk, as whoever said it.
  */
 export async function ask(
   text: string,
@@ -1092,50 +1454,39 @@ export async function ask(
   // it defaults to the root
   const llm = o.llm ?? current() ?? placeLlm(ROOT, placing.value);
   if (!llm) return (trouble.value = "no LLM could be placed");
-  const need = needs(llm);
-  if (typeof need === "string") return (trouble.value = need);
+  const why = unready(llm);
+  if (why) return (trouble.value = why);
+  const proc = running(llm);
+  if ("why" in proc) return (trouble.value = proc.why);
   trouble.value = undefined;
   const agent = agentOf(llm);
-  const model = modelOf(llm);
-  const allowed = llmOf(llm)!.tools;
-  const tools = allowed ? TOOLS.filter((t) => allowed.includes(t.function.name)) : TOOLS;
-  say(llm, {
-    role: "user",
-    text,
-    by: world.agent,
-    ...(o.about ? { about: o.about.id } : {}),
-    context: context(llm, o.about?.id, o.about?.route),
-  }, world.agent);
   busy.value = true;
-  stop = new AbortController();
+  const me = asking = { llm, halted: false };
   let unchecked = false;
   let nudged = 0;
   let worked = false;
   /** the last call, and how many times in a row it was made: a small model can loop */
   let same = { call: "", times: 0 };
+  /** says something, as the host or the person, and waits for the answer */
+  const turn = (said: Said, by: string) => {
+    const n = talkOf(llm).length + 1;
+    say(llm, said, by);
+    return answer(llm, proc.pid, n);
+  };
   try {
-    for (let n = 0; n < STEPS; n++) {
-      live.value = { llm, text: "" };
-      const reply = await need.api({
-        ...(need.key ? { key: need.key } : {}),
-        model,
-        messages: messagesOf(llm, need.prompt),
-        tools,
-        signal: stop.signal,
-        onText: (piece) => (live.value = { llm, text: (live.value?.text ?? "") + piece }),
-        onStatus: (status) => (live.value = { llm, text: live.value?.text ?? "", status }),
-      });
-      live.value = undefined;
-      const calls = reply.calls.map((c) => ({
-        id: c.id,
-        name: c.function.name,
-        arguments: c.function.arguments,
-      }));
-      say(llm, { role: "assistant", text: reply.text, ...(calls.length ? { calls } : {}) }, agent);
+    let reply = await turn({
+      role: "user",
+      text,
+      by: world.agent,
+      ...(o.about ? { about: o.about.id } : {}),
+      context: context(llm, o.about?.id, o.about?.route),
+    }, world.agent);
+    for (let n = 0; n < STEPS && !me.halted && !reply.error; n++) {
+      const calls = reply.calls ?? [];
       if (!calls.length) {
         if (unchecked && nudged < 2) {
           nudged++;
-          say(llm, {
+          reply = await turn({
             role: "user",
             by: "host",
             nudge: true,
@@ -1157,6 +1508,16 @@ export async function ask(
         }, "host");
         break;
       }
+      if (n === STEPS - 1) {
+        say(llm, {
+          role: "assistant",
+          text: `(it stopped after ${STEPS} steps: ask it to go on)`,
+          error: true,
+        }, "host");
+        break;
+      }
+      // the last result is said as the answer is waited for, since it is what wants the answer
+      const results: Said[] = [];
       for (const c of calls) {
         let args: { [k: string]: unknown } = {};
         let done: { result: string; snippet?: number; changed?: boolean };
@@ -1166,39 +1527,36 @@ export async function ask(
         } catch (e) {
           done = { result: `the tool failed: ${(e as Error).message}` };
         }
+        if (me.halted) break;
         const ok = !/"ok":false|^failed|"ending":"(failed|refused)"|"threw"|"error"|the tool failed/
           .test(done.result);
-        say(llm, { role: "tool", call: c.id, name: c.name, args, ok, ...done }, agent);
+        results.push({ role: "tool", call: c.id, name: c.name, args, ok, ...done });
         if (c.name === "run" || c.name === "fire") {
           unchecked = true;
           if (c.name === "run" && ok) worked = true;
         } else if (LOOKERS.has(c.name)) unchecked = false;
       }
-      if (n === STEPS - 1) {
-        say(llm, {
-          role: "assistant",
-          text: `(it stopped after ${STEPS} steps: ask it to go on)`,
-          error: true,
-        }, "host");
-      }
+      if (me.halted) break;
+      for (const r of results.slice(0, -1)) say(llm, r, agent);
+      reply = await turn(results.at(-1)!, agent);
     }
   } catch (e) {
-    const aborted = (e as Error).name === "AbortError";
-    say(llm, {
-      role: "assistant",
-      text: aborted ? "(stopped)" : "✕ " + (e as Error).message,
-      error: true,
-    }, "host");
+    say(llm, { role: "assistant", text: "✕ " + (e as Error).message, error: true }, "host");
   } finally {
-    live.value = undefined;
     busy.value = false;
-    stop = undefined;
+    if (asking === me) asking = undefined;
   }
   if (worked && o.about) dock.value = "stage";
 }
 
+/**
+ * Stops the LLM being asked: the host says so in its talk, which then wants
+ * no answer, so its process lets its reply go, and the request with it.
+ */
 export function halt() {
-  stop?.abort();
+  if (!asking || asking.halted) return;
+  asking.halted = true;
+  say(asking.llm, { role: "assistant", text: "(stopped)", error: true }, "host");
 }
 
 /** The snippets that changed the graph in answer to the question at i, by number. */
@@ -1229,7 +1587,9 @@ export function Ask() {
   const log = useRef<HTMLDivElement>(null);
   const llm = current();
   const talk = llm ? talkOf(llm) : [];
-  const said = live.value?.llm === llm ? live.value?.text : undefined;
+  // what it is saying, before it is said: its process's reply node
+  const reply = llm ? replyOf(llm) : undefined;
+  const said = reply?.text;
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight });
   }, [talk.length, said]);
@@ -1405,9 +1765,7 @@ export function Ask() {
             ? <div class={`ask-words${s.error ? " muted" : ""}`} key={id}>{s.text}</div>
             : null
         )}
-        {live.value?.llm === llm && live.value?.status
-          ? <div class="ask-status">{live.value.status}</div>
-          : null}
+        {reply?.status ? <div class="ask-status">{reply.status}</div> : null}
         {said !== undefined
           ? <div class="ask-words">{said || <span class="muted">…</span>}</div>
           : null}

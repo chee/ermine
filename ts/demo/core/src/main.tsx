@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-// ermine core: a place to play with the graph, protect and drive.
+// ermine core: a place to play with the graph, protect and the scheduler.
 
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -10,6 +10,7 @@ import { Gutter } from "./gutter.tsx";
 import { examples, rulesFor } from "./examples.ts";
 import { Inspector } from "./inspector.tsx";
 import {
+  consoleOpen,
   draft,
   explode,
   focus,
@@ -25,7 +26,9 @@ import {
 import { Right } from "./transcript.tsx";
 import { Palette, palette } from "./palette.tsx";
 import { AskPopover } from "./ask.tsx";
-import { current, fresh, last, open, rename, save, savedAt } from "./projects.ts";
+import { LinkButton } from "./link.tsx";
+import { ConsolePanel } from "./shell.tsx";
+import { current, forget, fresh, last, open, rename, reopen, save, savedAt } from "./projects.ts";
 import { ROOT } from "./world.ts";
 
 function Ermine({ size = 34 }: { size?: number }) {
@@ -169,6 +172,15 @@ function TopBar() {
           )
           : null}
       </div>
+      <LinkButton />
+      <button
+        type="button"
+        class={`console-open${consoleOpen.value ? " on" : ""}`}
+        title="the console: walk and change the graph by path (⌘J, or `)"
+        onClick={() => (consoleOpen.value = !consoleOpen.value)}
+      >
+        › console <kbd>⌘J</kbd>
+      </button>
       <div class="agents" title="who you act as: every operation carries an agent">
         <span class="muted">acting as</span>
         {world.agents.map((a) => (
@@ -243,6 +255,28 @@ function TopBar() {
         <span class="fact time">
           t = <b>{time}</b>
         </span>
+        <span
+          class="fact"
+          title={world.kept
+            ? `this page loaded the graph this browser kept, as it was at t = ${world.kept.time}: ${world.kept.nodes} nodes. processes are not kept: the boot image started them again`
+            : "this browser keeps the graph, in IndexedDB, as CORE.tex says: not its ephemeral nodes or changes, nor its processes. a reload loads it, and starts the processes again"}
+        >
+          {world.kept
+            ? (
+              <>
+                kept · <b>reloaded</b>
+              </>
+            )
+            : "kept"}
+        </span>
+        <button
+          type="button"
+          class="iconbtn"
+          title="forget the graph this browser kept, and build it again from the boot image"
+          onClick={() => forget()}
+        >
+          ⟲
+        </button>
         <button
           type="button"
           class="iconbtn"
@@ -282,6 +316,12 @@ function App() {
       if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault();
         palette.value = palette.value ? undefined : {};
+      } else if (mod && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        consoleOpen.value = !consoleOpen.value;
+      } else if (e.key === "`" && !mod && !typing) {
+        e.preventDefault();
+        consoleOpen.value = !consoleOpen.value;
       } else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         save();
@@ -337,15 +377,17 @@ function App() {
         />
         <Right />
       </div>
+      <ConsolePanel />
       <Palette />
       <AskPopover />
     </div>
   );
 }
 
-// open the project last open here, or a fresh one with just the root
+// open the project last open here, from the graph this browser kept if it
+// kept it, or a fresh one with just the root
 const was = last();
-open(was ?? { name: "untitled", image: "" }, "open");
+await reopen(was);
 if (!was) palette.value = { only: "examples" };
 if (!selected.value) select(ROOT, []);
 render(<App />, document.getElementById("app")!);

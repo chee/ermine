@@ -1,7 +1,9 @@
 #+title: ermine over Subduction: a design study
 
-Nothing here is decided. Sync is not built, and no rule in the papers
-should be argued from this file.
+The study. Nothing in it is decided, and no rule in the papers should be
+argued from it: the rules, formats and decisions are in SUBDUCTION_SYNC.tex,
+which wins wherever this file differs. The decisions below are kept as chee
+gave them, for the record.
 
 * What Subduction gives
 
@@ -18,8 +20,11 @@ should be argued from this file.
 - *Ephemeral messages*: signed, per 32-byte topic, never stored.
 - *Keyhive*: access per group or document, each named by a key:
   =Relay < Read < Edit < Admin=. Relay may store ciphertext but not read
-  it. Delegations and revocations are a CRDT; ops whose authority was
-  later revoked are kept but "whited out".
+  it. Delegations and revocations are a CRDT. Keyhive's design says ops
+  whose authority was later revoked are kept but "whited out" (not
+  materialised), but keyhive_core (b7968be) implements none of that: it
+  holds access and keys, never content, so whiteout would be the
+  application's (SUBDUCTION_SYNC.tex, Revocation).
 
 It needs from ermine: a sedimentree id per unit of sharing, a blob and
 parents per commit, fragment blobs, and a merge story.
@@ -62,8 +67,8 @@ across hosts).
 
 ** Ephemeral nodes and changes
 Ephemeral changes are never kept (CORE, Ephemeral nodes), so they are
-never commits: they go as ephemeral messages, topic = the ephemeral
-node's id hashed to 32 bytes. Nodes never become ephemeral (CORE: "No
+never commits: they go as ephemeral messages (topics and payloads:
+SUBDUCTION_SYNC.tex, Ephemeral messages). Nodes never become ephemeral (CORE: "No
 node becomes ephemeral after it is made"), so a node's tier is known
 from its first change and a receiver can tell from the first message
 which channel it lives on.
@@ -110,8 +115,9 @@ different base.
   Automerge document wrapped in a node; ermine syncs only the wrapper.
 
 ** 3. The graph keeps no log (CORE, What the graph holds)
-Keyhive whites out a revoked agent's changes after the fact. The value
-then has to be recomputed from history the graph does not have.
+Keyhive's design whites out a revoked agent's changes after the fact
+(keyhive_core does not do it; the application would). The value then has to
+be recomputed from history the graph does not have.
 - (a) The keeper (a wrapper below the graph) replays history and writes
   the corrected value as a new change, caused by the revocation.
 - (b) Accept no retroactive revocation: a revoked change stays, and only
@@ -182,3 +188,76 @@ cursor over ephemeral messages, come after.
 * Open
 - Is a node's tier (kept / held / ephemeral) fixed at making, like
   ephemeral? IDEAS's "held" tier has no place in CORE yet.
+
+* Decisions, chee 2026-10-07 (as given; the rules are SUBDUCTION_SYNC.tex's)
+- A Subduction document is one node: its value's and directory's changes are
+  one history. Sharing a folder is sharing those documents, recursively.
+  Mounting a remote node is subscribing to its document; it reads pending
+  until its history arrives.
+- Concurrent values: sides as items ("the most erminesque"). Concurrent
+  snapshots, or anything not merged, read as one item per side in an order
+  every device agrees on; a write over both settles it. An eg-walker version
+  (patches rebased past concurrent ones) to be built later, separately.
+- Concurrent placements in a slot: a list CRDT of ids (RGA/Fugue-style), so
+  concurrent placements interleave in one agreed order.
+- Change identity: a change's name is its commit hash; a Lamport number
+  (one more than its parents' highest) gives every device the same order for
+  sides, ties broken by hash; local time stays as this graph's own arrival
+  order for runs, heights and marks. Records name what they read by hash
+  too, so they mean the same thing everywhere (Build Systems a la Carte's
+  verifying traces), which is also the key for shared caching.
+- Writers: every change is signed by its device's key; keyhiveprotect checks,
+  for local writes and on arrival, that the signer may write that node. An
+  agent's actor is a Keyhive identity, so "who did it" can be checked.
+- On the wire: ordinary changes as commits; ephemeral changes as ephemeral
+  messages; records; process nodes' values (results, readable without
+  running the program, saying who computed them).
+- Arrival: pending with progress. While a mounted node hasn't arrived, the
+  sync process keeps a small ephemeral node per arriving id,
+  {"arriving": {"from": [peers], "have": n, "of": m}}, shown by its wrapper as
+  an item in front of the pending mount; readers are marked as it changes;
+  "from": [] says nobody has it. It goes when the node arrives.
+- A placement that makes a node touches two documents: transactions. And
+  transactions belong in the scheduler, not Subduction, so that one day a
+  transaction can span Automerge, Yjs, a Google Sheet and the graph.
+- Revocation: make it visible and let the person choose (undo the revoked
+  writer's changes, or keep them), rather than deciding for everyone.
+- Ephemeral routing: a node's ephemeral changes go to its document id as
+  the topic. Also wanted: a channel node to talk on, named by any word, its
+  topic derived the same everywhere (e.g. a hash of the word). Throughput of
+  Subduction ephemeral messages vs a direct connection: being measured
+  (plans/throughput.org).
+- CORE: say time is local and a change may also carry its hash; chee wonders
+  whether a change should get another field for it.
+- The colourless mount (a local copy kept in step, optimistic writes as an
+  ephemeral layer): yes, being built in the demo.
+- Review answers, chee 2026-10-07:
+  - Arrivals are written beneath the wrappers, as their makers (agent,
+    process, cause intact); the wrapper knows they're arrivals and doesn't
+    commit or send them again.
+  - An ordinary write while a value has sides settles everything (takes every
+    head as parent) — acceptable "as long as we eventually have a way of
+    moving into time machine mode and rolling back and seeing everything".
+  - A placement that makes a node in a shared folder: the parent's placement
+    applies alone and the child reads as a pending mount until it arrives
+    (with arriving progress); no transaction needed for this.
+  - Ids in shared folders: the sync wrapper picks a fresh document key as the
+    id; programs choose names. Process nodes are never shared. chee: "i feel
+    like they probably shouldnt be picking ids, they can choose names" — a
+    bigger question for later: should programs ever pick ids at all?
+- chee 2026-10-07: keyhiveprotect REPLACES protect on a host that syncs (one
+  authority, not two layers). apply(id, change) is now in CORE.tex and
+  arrive(id, change) in SCHEDULER.tex.
+- chee on the DOM: there's no way to hold a node in ermine, on purpose; a
+  library handle (an interface + a path, callable like a shift signal) gives
+  <button>{count}</button>. Being built as ts/src/dom/ after @shift/dom.
+- chee 2026-10-07, answers to the review's open four:
+  - Records name all the heads a read saw (a list of names), so a record with
+    sides means the same thing everywhere.
+  - Shared ids are prefixed `ermine://` (ermine://<64 hex>), to tell them from
+    Automerge's and others'. Any mount of an ermine:// id, in any slot, makes
+    the sync process follow that document.
+  - Arrival progress marks readers by writing the small ephemeral node the
+    arriving item is read from, never by re-placing the pending id (which
+    would be a kept change and overwrite who placed it).
+  - The group per shared node: explained; awaiting chee's yes.

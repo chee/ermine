@@ -2,10 +2,16 @@
 // Projects: a graph kept as a boot image, with its rules and agents, in this
 // browser's storage. A boot image rebuilds the state, not the history: opening
 // a project starts a new history from it. Saving is automatic.
+//
+// The graph itself is kept too, by the keeper, in IndexedDB: one graph, the
+// project's last open. A page that finds the current project's graph kept
+// loads it, takes out the process nodes it kept, which nothing runs any more,
+// and runs the boot image only for its starts (World.reopen).
 
-import { signal } from "@preact/signals";
+import type { Kept } from "../../../src/mod.ts";
 import { dock, draft, focus, lit, pointAt, select, world } from "./state.ts";
 import { ROOT, type Rule } from "./world.ts";
+import { signal } from "@preact/signals";
 
 export type Project = {
   name: string;
@@ -17,6 +23,8 @@ export type Project = {
 
 const KEY = "ermine-projects";
 const CURRENT = "ermine-current";
+/** which project the kept graph is */
+const KEPT = "ermine-kept";
 
 export const current = signal<string>("untitled");
 export const savedAt = signal<string | undefined>(undefined);
@@ -33,6 +41,21 @@ function store(projects: Record<string, Project>) {
   try {
     localStorage.setItem(KEY, JSON.stringify(projects));
   } catch { /* storage is full or blocked; the project lives on in the page */ }
+}
+
+/** The project whose graph is kept, if one is. */
+export function keptFor(): string | undefined {
+  try {
+    return localStorage.getItem(KEPT) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function markKept(name: string | undefined) {
+  try {
+    name === undefined ? localStorage.removeItem(KEPT) : localStorage.setItem(KEPT, name);
+  } catch { /* fine */ }
 }
 
 export function projects(): Project[] {
@@ -57,26 +80,58 @@ export function save(name = current.value) {
   store(ps);
   current.value = name;
   savedAt.value = p.saved;
+  // the graph kept is this one's, whatever it is called now
+  if (world.keeper) markKept(name);
   try {
     localStorage.setItem(CURRENT, name);
   } catch { /* fine */ }
 }
 
-/** Starts a fresh graph from a boot image, as a project of that name. */
-export function open(p: Pick<Project, "name" | "image"> & Partial<Project>, label = "open") {
+/**
+ * Starts a graph from a boot image, as a project of that name. With kept, the
+ * graph is the one kept, and the image is run only for its starts.
+ */
+export function open(
+  p: Pick<Project, "name" | "image"> & Partial<Project>,
+  label = "open",
+  kept?: Kept,
+) {
   world.rules = (p.rules ?? []).map((r) => ({ ...r }));
   if (p.agents?.length) world.agents = [...p.agents];
   world.agent = world.agents[0] ?? "chee";
-  world.reset();
+  world.reset({ keep: true, ...(kept ? { kept } : {}) });
+  markKept(p.name);
   focus.value = undefined;
   lit.value = undefined;
   pointAt.value = undefined;
-  if (p.image.trim()) world.run(p.image, `${label}: ${p.name}`, "boot");
+  if (kept) world.reopen(p.image, `reopen: ${p.name}`);
+  else if (p.image.trim()) world.run(p.image, `${label}: ${p.name}`, "boot");
   current.value = p.name;
   draft.value = "";
   select(ROOT, []);
-  dock.value = world.screens.size ? "stage" : "workspace";
+  dock.value = world.running().size ? "stage" : "workspace";
   save(p.name);
+}
+
+/**
+ * The project last open here, from what this browser kept of its graph if it
+ * kept the graph, or else from its boot image.
+ */
+export async function reopen(p: Project | undefined) {
+  const name = p?.name ?? "untitled";
+  const kept = p && keptFor() === name ? await world.loadKept() : undefined;
+  open(p ?? { name, image: "" }, "open", kept);
+}
+
+/**
+ * Forgets the graph this browser kept, and opens the project again from its
+ * boot image: a fresh graph, kept from then on.
+ */
+export async function forget() {
+  const p = all()[current.value] ?? snapshot();
+  await world.forgetKept();
+  markKept(undefined);
+  open(p, "start over");
 }
 
 export function remove(name: string) {
@@ -149,7 +204,9 @@ export async function importFile(file: File) {
   }, "import");
 }
 
-// keep the current project saved, a moment after anything happens
+// keep the current project saved, a moment after anything happens, and as the
+// page goes, so the boot image a reload reopens with has every start the kept graph has
+addEventListener("pagehide", () => save());
 let timer: ReturnType<typeof setTimeout> | undefined;
 let seen = -1;
 world.version.subscribe((v) => {

@@ -1,0 +1,230 @@
+#+title: ermine's first link: mount another host's subtree over Subduction
+
+Not sync. One graph OWNS a subtree and SERVES it; another host MOUNTS it
+and sends the owner its operations. The owner's stack stamps every change;
+nothing merges; one writer. The messages are PROTOCOL.tex's lines, carried
+as Subduction ephemeral messages. Code: =ts/src/link/=, =ts/deno/link.ts=;
+tests: =ts/test/link_test.ts=, =ts/test/link_live_test.ts=.
+
+* What Subduction offers (repo at 2566cbf, npm =@automerge/subduction@0.23.0=)
+- Client from TS: =new Subduction({signer, storage, onEphemeral})=, with
+  =MemorySigner.generate()= and =new MemoryStorage()=;
+  =connectDiscover(new URL("wss://galaxy.observer"), serviceName?)= (service
+  name defaults to the URL's host; =connect(url, peerId)= pins the server's
+  key instead). Same package in Deno (=npm:= import, the wasm read from the
+  cache, so =--allow-read=) and the browser (its "browser" export is the
+  bundler's build). Source: =subduction_wasm/src/subduction.rs=,
+  =subduction_wasm/e2e/ephemeral.spec.ts=.
+- Ephemeral: =subscribeEphemeral([Topic])=, =publishEphemeral(topic, bytes)=,
+  =onEphemeral(topic, sender, payload)=. A topic is any 32 bytes, not tied to
+  a document. Publishing reaches the server only for a topic you subscribe
+  to. Each message is signed (Ed25519) with issuer, topic, nonce and
+  timestamp; =sender= is the verified originator's key. Never echoed to its
+  sender. Source: =design/ephemeral.md=.
+- Limits (=subduction_ephemeral/src/config.rs=): payload 65536 bytes, bigger
+  is dropped silently (seen: a local WARN); messages older or newer than 30 s
+  by the receiver's clock are dropped; nonce dedup 30 s windows; inbound
+  channel of 1024, overflow dropped.
+- Auth: the wasm's default ephemeral policy is open. galaxy.observer let
+  fresh keys connect, subscribe and publish with no grant; whoever knows a
+  topic can read and write it. So the channel name is the capability.
+
+* What galaxy.observer did (2026-10-07, a handful of connections)
+- =https://= serves a "hello starlight" page; =wss://galaxy.observer/=
+  upgrades. Server peer id =b73d1432…7566=. Connect ~120–230 ms from London.
+- Two clients on one topic: a round trip ~100 ms.
+- *Order is not kept*: 40 one-byte messages, published one after another
+  and awaited, arrived as =0,1,3,7,2,8,4,6,5,9,…=.
+- *Bursts stall*: after ~130–160 kB sent at once (8×16 kB, or
+  1+10+30+60+60 kB), the rest arrived ~29.6 s later. Twice, same shape. Cause
+  unknown (server, WebSocket backpressure?). Near the 30 s age limit, so a
+  longer stall would drop them.
+- 60000 bytes delivered; 66000 dropped.
+
+* The link (ts/src/link)
+- =wire.ts=: a =Transport= (send bytes to every other peer, receive with the
+  sender's id, =max= payload) and conversations over it. A mounter says
+  ={"hello":"mount"}= to ="*"= until an owner answers; it pins the first
+  owner that does. Frames are numbered per sender and receiver and put back
+  in order; a missing frame for =gap= (5 s) breaks the link (no resend). A
+  message over =max= goes in pieces. Beats every 5 s when idle; 20 s quiet is
+  gone; a side that ends says bye. =hub()= is the in-memory transport, with
+  =shuffle= to reorder like Subduction.
+- =subduction.ts=: the transport; channel = 32 random bytes in hex = the
+  topic. Max payload 60000.
+- =serve(api, place, transport, {time?})=: answers each mounter's
+  lines with the TS harness's own =answer= (harness/main.ts), the request's
+  place put below =place= and chrooted there (chroot = place's length + the
+  request's), so =/= and =..= never leave the served subtree; routes in
+  answers start at the served place. The mounter's =time= is dropped; a
+  scheduler stamps, or =time()= for a bare graph. Requests carrying =process=
+  are wrong-field. The owner says who (decided 2026-10-07): every request's
+  agent becomes ={"actor": claimed, "peer": key}=, the claimed agent as the
+  mounter sent it (a ="peer"= it put there stays inside =actor=) and =key=
+  the verified sender of its frames (=Conn.peer=, from the wire: Subduction's
+  signer key in hex; the hub's peer id). Its cause (its site) is as sent.
+  Only read, directory, lookup, write, place, unplace,
+  subscribe, unsubscribe; reset, reload, events, start, batch, fire answer
+  =unsupported=. Events are pushed: ={"sub": n, "event": e}= per event.
+- Wire messages: ={"id": k, "text": line}= request and answer (the line as
+  its exact text, so =-0=, forms and bad JSON pass untouched; the typed
+  client's =seq= equals =id=), ={"text": line}= pushed.
+- =mount(transport)= gives a =Remote=: the operations, each a promise. A
+  write without a cause gets this host's site (=capture=). Owner leaves or
+  goes quiet: pending fail with =Gone=, subscriptions' =ended(why)= called.
+- *The sync Interface*: Remote is not an Interface. Every method is async,
+  so it cannot be wrapped by =protect=, bound, recorded, or read by a
+  compute. Bridged by not bridging: a host awaits. A remote mount inside a
+  local graph (a pending slot filled when the answer comes) is the next
+  question, not done.
+- =bridge.ts= + =ts/deno/link.ts=: =link.ts serve [channel]= serves a fresh
+  graph (the harness's =schedule= stack, root "root") whole;
+  =link.ts mount <channel>= is PROTOCOL lines on stdin/stdout, =events=
+  answered from what was pushed, so the C terminal can link by a pipe.
+  (In =ts/deno/=, not =src/link/=: a test says nothing under src uses Deno.)
+
+* Two C terminals linked (2026-10-07)
+Code: =ts/src/link/lines.ts=, =relay.ts=, =windows.ts=; =ts/deno/link.ts host=
+and =link.ts mirror=; =c/term= (=programs/share=, =programs/mount=, =C-g s=,
+=C-g m=). Details in =c/term/NOTES.md=, Sharing and mounting.
+- =lines.ts=: a host spoken to in lines from a program it runs: requests in
+  order, answers matched first in first out, pushed ={"sub":n,"event":e}=
+  lines handed to whoever listens (kept until someone does).
+- =relay(lines, transport)=: serve.ts for a program in a host. A mounter's
+  request goes to the host as a line with =place= below the program's own
+  (the C speaker chroots it there: a host detail added for this); =process=
+  refused, =time= dropped, =events= etc. unsupported; subs renumbered per
+  mounter; the host's pushed events sent on. The agent is stamped as serve
+  stamps it, ={"actor": claimed, "peer": key}=, and the C host keeps it for
+  a program flagged ="relay": true= (programs/share), under the share
+  process's code: ={"actor", "peer", "code": [..., share's step]}=, process
+  share's (2026-10-07; c/term/NOTES.md, Acting for others). =options.place=
+  serves less than the program's place (one window).
+- =mirror(lines, remote)=: keeps each remote window as ephemeral nodes in
+  the local =/windows= (made by the mount process, so they go when it is
+  killed); a screen is read once, then each pushed change is written as the
+  same patches; a key the person writes into a kept =keys= node is written
+  to the remote one. Windows follow the remote =/windows= subscription, plus
+  a listing every 5 s.
+- Push: the C ermine loader pushes events to a program whose value says
+  ="push": true= (PROTOCOL allows it, does not say how one asks).
+- Tested headless through galaxy.observer: A shares, a =link.ts mount=
+  process and then a second ermine-term B mount it; keys typed in B's copy of
+  A's counter count in A; B's copy follows. Not tested by a person.
+- Not done: the remote window's size is not sent; lines pass through
+  JSON.parse/stringify in relay, so =-0= and the like are not kept exactly.
+  (Done since: a mounted shell takes keys through its =keys= node; relay sends
+  each mounter's events at most 60 a second, coalescing snapshots, and holds
+  them while more than 256 kB is unsent; windows.ts mirrors screens at most 60
+  a second; subduction.ts paces big sends and nudges after a burst, against
+  Deno's WebSocket stall.)
+
+* Names and places (2026-10-07)
+- A channel may be given as a name anywhere (=name.ts=: hex of
+  sha256("ermine channel:" + name); 64 hex digits stand for themselves):
+  =link.ts new [name]=, =serve=, =mount=, =host=, =mirror=; the C terminal's
+  =C-g s= (whole =/windows= or the focused window, then a name, a channel,
+  or nothing for fresh), =C-g m=, =ERMINE_SHARE=, =ERMINE_MOUNT=. The C side
+  never hashes; it hands the name to link.ts.
+- Nothing in the terminal's link code fixes where a mount lives: =host= and
+  =mirror= take ={"channel", "place"}=, the place below the program's own
+  (what to share; where to keep the windows). A mirror of one shared window
+  keeps it as one window, named by the name.
+- Tested headless through galaxy.observer: A shares by name, B joins by the
+  name, B's keys count in A's counter; A's change's agent is
+  ={"actor": {"actor": "chee", "code": []}, "peer": B's key, "code": [share's step]}=.
+
+* Two kinds of mount (2026-10-07)
+- *live only* (=mirror.ts=, programs/mirror): above. Copy in ephemeral nodes
+  the mount process makes; a wrapper on top of the stack catches writes;
+  refusals listed in the status node; the copy goes with the process or the
+  owner.
+- *keep a copy* (=kept.ts=, programs/mirror-kept, same value
+  ={"channel", "name"}=): the copy is ordinary nodes, so the keeper keeps
+  it, anyone may place in it, and killing the mount unplaces its root. The
+  copy of the owner's node =o= is ="<place of the copy>:o"= (e.g.
+  =mounts/92d99c44:doc=), or =o= itself for a node made here and sent; one
+  node here per owner node. Local changes are seen by ordinary subscriptions
+  (as the mount process) on each copy node's address; no wrapper. A copy
+  change is the mount process's (its own agent), its cause
+  ={"owner": {node, time, agent, process?, cause?}}=. A write shows as an
+  ephemeral layer first in the slot (the copy node goes back to the owner's
+  value; later writes reach the layer and are sent too); the layer goes when
+  every write on it is answered. A refusal makes the compute throw: an error
+  item on the mount process, until the owner next takes something. The
+  owner going leaves the copy as last seen.
+- Reload with a kept copy: the copy is there at once; the boot image starts
+  the mount again with the same value and place, so the same ids; it
+  reconciles: a copy node already in its slot is kept (written only if the
+  owner's value differs), what the owner no longer has is unplaced, nothing
+  is made twice. Local edits made while it was not running are overwritten
+  by the owner's value (owner wins); a node someone made there that the owner
+  never had is left alone and not sent.
+- Tests: =ts/test/kept_test.ts=; the demo's =demo/core/link_test.ts=
+  (kept mount over a reload).
+- The demo: the link menu has a "live only" / "keep a copy" toggle for new
+  mounts, and a picker for what to share (the whole workspace, the selected
+  node, each folder in the root); a mount shows its kind.
+
+* Sharing
+Nothing is refused for sharing too much (chee: "everything is permissable.
+just make it possible to share less"). Sharing the root shares programs/,
+loaders/, shares/ and all; a mounter writes anything there. Kept: the guard
+against placing, by id, a node from outside the share into it (escaping
+what was shared), and the demo refusing to mount its own channel where the
+copy would land inside what that share serves (it would copy itself
+forever), wherever that is.
+- The demo (2026-10-07; chee: "whole workspace shares are whole workspace
+  shares. let's make the UIs ask what you want to share. (/mounts also isn't
+  special ... mounts can be anywhere.)"): sharing always asks what first (the
+  whole workspace, the selected node, a folder in the root), then on what (a
+  fresh channel, or a name: =src/link/name.ts=); mounting asks where the copy
+  goes (default the selected node, or the root) and takes a channel or a
+  name. Nothing treats mounts/ specially; a mount's process sits beside its
+  copy. A share's and a mount's start value carries ="named"= when a name
+  was given, so the UI shows it beside the channel.
+
+* The C terminal's windows in the demo (2026-10-07)
+chee saw a demo mount of a C terminal's /windows show the window nodes but
+not their screen, keys and size. Not reproduced: a real ermine-term (headless
+in a pty, its shell, counter, clock and share, through galaxy.observer),
+mounted from a Deno =World= (live only) as the page does, gives each window
+copy its keys, screen and size, and a window started after the mount comes
+with them; a TS owner whose window processes make ephemeral children is in
+=mirror_test.ts= and =kept_test.ts=. So the C host's answers and both mirrors
+are right in Deno; what differs in the browser is not known (the bundle,
+Subduction's browser build, or the ~30 s burst stall above, which would hold
+the children's reads after the windows' own).
+
+* Unclear
+- The ~30 s stall after ~150 kB.
+- No resend: one lost frame ends the link after 5 s. None lost in tests.
+- Anyone with the channel can mount, write, and see others' traffic on it
+  (all frames go to every subscriber; only addressing hides them).
+- =src/link/serve.ts= imports =harness/main.ts= (answer, encode).
+
+* Questions for chee
+1. (decided 2026-10-07: the owner stamps ={"actor": claimed, "peer": key}=.)
+   Open: should a rule (protect) match the claimed actor, as the harness's
+   and the demo's do now, or only the peer, since the actor is only claimed?
+2. Mounters are refused =process=, so on a scheduler stack they cannot make
+   ephemeral nodes (cursors). Should the owner make one process per mount to
+   hold them, killed when the mount goes?
+3. A broken link answers pending lines with a new code, =gone=, kind
+   invalid. Name and kind ok, or does it want its own kind?
+4. Pin the owner by key in the channel name (=topic@ownerkey=) instead of
+   first to answer?
+5. (done 2026-10-07: the C host keeps the stamped actor and peer for a
+   program flagged ="relay": true=, with the share process as the last code
+   step.)
+6. Typing into a mounted window: B writes A's =keys= node through the share
+   process, not as A's person. Is that the right actor for a key typed on
+   another device?
+7. Two devices each sharing their whole workspace and each mounting the
+   other's copy each other's mounts/ ever deeper (A's copy of B holds B's
+   copy of A, which holds…). Nothing refuses it; is sharing less (a share
+   that leaves out mounts/) the answer, or is it fine as it is?
+8. A kept copy after a reload: the owner's value wins over a local edit made
+   while the mount was not running, and a node made there then is left
+   alone and never sent. Right, or should the mount send what changed while
+   it was away?

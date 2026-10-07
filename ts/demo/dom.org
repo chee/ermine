@@ -1,0 +1,280 @@
+#+title: ermine/dom: JSX over handles, and the way back
+#+date: 2026-10-07
+
+Low priority. This is for playing with demos, not at the level of the
+scheduler or sync; it will be shared out later. Nothing here goes into the
+papers until then.
+
+Code: =ts/src/dom/=. Tests: =ts/test/dom_test.tsx=. Example: =ts/demo/dom-example/=.
+
+* The shape: @shift/dom's
+#+begin_src tsx
+const count = node(api, "count")   // a handle: an interface and a path
+render(() => <button onClick={() => count(count() + 1)}>{count}</button>, document.body)
+#+end_src
+- JSX makes real DOM at once. Components run once, untracked.
+- A child or an attribute value that is a *handle*, or an accessor (a function
+  of no arguments), is bound. Everything else is static.
+- =onX= with a function is a listener. It runs untracked.
+- When a bound part's reads change, only that part is patched: one text
+  node's data, or one attribute.
+
+* Handles (=handle.ts=)
+The core has no node handles, on purpose. A handle is library sugar: an
+interface and an address, callable. It holds no id and no value, and follows
+its path afresh on every call.
+| =h()=                         | the value of the first item that has one; tracked     |
+| =h(v)=                        | snapshot write through the interface, as its agent    |
+| =h.items()=                   | the whole read: items in front, each member's value   |
+| =h.slot()=, =h.names()=       | the slot's ids (pending ones included), the dir's names |
+| =h.at(path)=                  | a handle on a path from this one ("..", "/x", "a/b")  |
+| =h.write/place/unplace=       | the other changes                                     |
+Paths are written as in the console: a first "/" starts at "/", "." is
+skipped, ".." goes back. A name with "/" in it takes the array form.
+A process is a handle like any node: =node(api, pid)= reads its value, with
+the scheduler's items in front.
+
+* Who reads: scopes (superseded 2026-10-07)
+This section described a library-side tracker: one CORE =subscribe= per bound
+handle, scopes marked by events, redrawn in a microtask or at =flush()=.
+That is gone. Each bound part is now a scheduler scope (below, Scopes): its
+reads are recorded and marked by the graph, it runs in the scheduler's
+rounds, and its record says what it read. =flush=, =batch=, =effect= and
+=cleanup= are no longer exported; =scope= is.
+
+*Derived handles*, two ways, as before:
+- an accessor, =() => count() * 2=: its reads join the same scope;
+- a process, =node(api, pid)=: its compute reads, the scheduler orders and
+  marks it, and a scope reading it runs after it in the same round.
+
+* The way back (=why.ts=)
+Each DOM node a bound part made is kept in a WeakMap beside the DOM, with the
+scope that made it and the item it shows. Each element that holds a bound
+part, or a bound attribute, is kept with its scopes. =why(target)= walks up
+from the target to the nearest such node. For each value that node's scope's
+last record read (its =read= entries), it gives:
+- the path, and every item the read gave;
+- the item shown;
+- =node=: the route's last id, which is only for mounting;
+- the route;
+- the change that last set the value: agent, process, cause (site) and time;
+- =by=: the last step of that change's agent: process, program, and =run=,
+  =handler= or =lasting=.
+
+It survives re-renders. A text node is kept, and its data rewritten. Each run
+replaces what the scope read, so the same node answers with the newer change.
+A mark (waiting, error, …) answers with the item it shows.
+
+d2's approach, the live element in an ephemeral node, puts the element in the
+graph. Here it is the other way: the DOM points into the graph. Holding every
+bound text node as a node would cost a placement per node. And only a
+process can make one, while =render= also runs from host code.
+
+* Ids
+- The graveyard's "crappy @shift/dom" (=graveyard/demos/core-web/app.js=,
+  =h=, =toDom=, =paintPage=, the only JSX/DOM library there) rendered ids
+  into the DOM.
+  - A view process wrote its element tree as plain data into a node.
+  - The host repainted everything after each flush (=replaceChildren=).
+  - =bind= put the *node id* in =data-bind=, which the host used after each
+    repaint to find the input again and give back focus and caret.
+  - =onclick= was a write named as data, ={node: id, ops}=.
+- Here, no ids or paths go in the DOM. Nothing is repainted, so focus and
+  caret stay put without being looked up. An id is only in =why=, from the
+  route, for whoever wants to mount the node elsewhere (CORE: ids are for
+  mounting).
+- Slot ids are unique within a slot, so they are the natural key for keyed
+  rows. =each= is not keyed yet (questions).
+
+* Writing back, with sites
+A handler writes through a handle. A write from outside any process gets its
+cause from the graph, which captures the site where the call entered the
+stack (CORE, Running and wrapping). Every file in =src/dom= registers itself
+with =ours()=, so the site is the handler's own line: the JSX line.
+
+Tested: the change says =agent: "alice"= and
+=cause: {file: …/dom_test.tsx, line: <the button's line>}=. Inside a
+program, a write through =lasting= is the process's: its agent ends in
+={process, program, lasting: n}=. That is also tested.
+
+* What a handle renders as
+- In front: one mark per item a scheduler puts before the value. Each is a
+  =<span class="ermine-KIND" title="…">=, for waiting (…), stopped (■),
+  error (✕ code, its text as the title) and newer (↑).
+- Then each member's value as a text node, in slot order. A union is a list.
+- A mounted member that is not here yet is an =ermine-pending= mark.
+- A value that is a DOM node, such as an ephemeral node's live element, is
+  put in as it is.
+- Other values: strings as they are, numbers, JSON, "N bytes", "float64 × N".
+- =each(h, (child, name) => row)= gives one row per name in a directory, each
+  with a handle on it.
+
+* Taken from @shift/dom, and why
+- Its API, nearly line for line: h/jsx/jsxs/Fragment, render(code, container)
+  returning an undo, nullary function = accessor, a function with parameters
+  = value, onX = listener, components run untracked.
+- A segment is an empty text marker plus the nodes before it, reconciled in
+  place (=render-dom.ts= / =@shift/render= =insert= and =reconcile=). Text
+  nodes are reused, and their data written only when it differs.
+- applyProp: class/style/value/checked handled specially, everything else as
+  an attribute; SVG tags in their namespace.
+- Ownership as in its =dom= feature: scopes own the scopes made in them;
+  untracked code still owns (Solid's =untrack= vs =createRoot=).
+- Not taken: @shift/core, directives/namespaces (on:, attr:, bind:), For,
+  Show and Switch, the hook pipeline.
+
+* Taken from the graveyard library
+Nothing was copied. What it showed:
+- a view's handler should write as the person, not as the view;
+- an input must not lose focus when what it shows is written.
+Both follow here from not repainting.
+
+* Questions for chee
+1. Handlers inside programs. Through =lasting= a click carries ={lasting: n}=.
+   SCHEDULER says the world calls *handlers* via =fire=, so the step says
+   ={handler: name}=, with an actor the host vouches for. Should =render= in
+   an effect register each =onX= with =handler()=? Then one host listener
+   (as in d2's =data-fire=) would fire it.
+2. Sites for handler writes from inside a process. The core captures a site
+   only for changes from outside any process. Should a handle over =lasting=
+   add the JSX line as its cause itself? That is easy: capture at =jsx()=.
+3. A handle on a slot of several members renders all of them. Is that right,
+   or should a plain handle render only the winner, with lists only through
+   =each=?
+4. =each= is not keyed: when a name comes or goes, its rows are made again.
+   Should rows be keyed by name, or by the slot's id?
+5. Timing. Answered by scopes: every write through the scheduler redraws
+   before it returns.
+6. Should the library export a live-element helper: a process that holds
+   the element =render= draws into, in an ephemeral node, so the graph knows
+   where each view is drawn (d2's screen)?
+
+* Scopes
+"JSX is an effect scope", as in Solid. Every dynamic JSX expression is a
+*scope* the scheduler runs, not a subscription the library keeps.
+
+** What a scope is
+- A light child of a process, or of another scope. No node, no pid.
+- Its id is ="<pid>#<n>"=, n counting the process's scopes from 1.
+- A *compute*: a function of reads. It reads through a recording made under
+  the scope's id (=record= / =finish=), read-only, as a process's compute does.
+  So the graph's marks reach it, like any reader.
+- An *effect*: applies the compute's value. It is given the value and the
+  previous one, and may return a cleanup. It has no interface: it touches the
+  world outside (the DOM), never the graph.
+- The value can be anything: it is never written, so it need not be JSON.
+- A record per run. It is sent to the owning process's subscribers and is in
+  =Settled.runs=. It has no =value=. Its agent is the process's, last step
+  ={process, program, scope: n, run: k}=. It ends done, pending, failed or
+  refused, as a run does. Pending or failed: no effect, DOM left as it was.
+
+** When it runs
+- First run: at once, when made, compute then effect. So =render= returns
+  real DOM, and nested JSX is built while the outer JSX is.
+- Later runs: in the scheduler's rounds, as a process's. Computes by height,
+  then effects in compute order.
+- Heights: a scope is above every process whose value it read (=raise= and
+  its own reads). A child starts one above its owner. So a scope reading a
+  process runs after it in the same round and never sees a waiting item. A
+  scope's compute reading a due process pulls that compute first, as a
+  process's does.
+- A scope's compute running again first disposes the scopes it made (Solid's
+  owner rule): nested JSX is rebuilt, not leaked.
+
+** Ending
+- =dispose()= ends it: children first (newest first), then its cleanup, then
+  =forget(id)=, so its reads stop marking.
+- A process's kill disposes all its scopes (after its child processes, before
+  its own cleanup).
+- An effect running again does not dispose them. Scopes belong to the
+  process, not to one effect run. So a view drawn once stays, and a click
+  patches one text node while the process's effect runs again around it.
+
+** The interface
+#+begin_src ts
+effect(ctx) {
+  const s = ctx.scope(
+    ({ api, scope, pending }) => api.read({ address: ["count"] })[0]?.value, // tracked
+    (value, previous) => { text.data = String(value) },                    // applied
+  )
+  s.id; s.record; s.disposed; s()   // s() disposes
+}
+#+end_src
+- =ctx.scope(compute, effect)= in an effect's map. Works while the process
+  runs (also after the effect returned, as =lasting= does).
+- The compute's map: =api= (read-only, recorded), =id=, =pending=, and
+  =scope= for children.
+
+** The DOM library on it
+- =render(fn, el, ctx?)=: one root scope whose compute runs =fn= untracked
+  (components run once) and whose effect puts the result in =el=; its
+  cleanup takes it out. The owner is =ctx=, or the scope being computed now.
+- Each dynamic child or attribute (a handle, or a nullary function) is a
+  child scope. Compute: read it (handles read through the scope's
+  recording). Effect: patch the DOM (reconcile text nodes, set the attribute).
+- Nested JSX inside a scope's output is built in its compute, so its own
+  dynamic parts are that scope's children.
+- A handle read inside a compute goes through the compute's =api=. Its
+  address is made absolute from the handle's interface's =cwd= when the two
+  places differ. Outside a compute (=untracked=, handlers), it reads through
+  its own interface, recording nothing.
+- Writes always go through the handle's own interface (=lasting=, a bound
+  host interface). The scheduler settles them before returning, so the page
+  is current when a click handler returns. No microtasks, no =flush=.
+- =why(node)= answers from the scope's last record: each =read= entry's
+  address, route and =saw=. The change header is the one on the item the
+  compute was given whose change time is =saw=.
+- signals' =show(ctx, el, fn)= = =render(fn, el, ctx)= once per element and
+  process. Later effect runs leave it. The pause/resume route is gone.
+
+** SCHEDULER.tex sentences this needs (for chee; not applied)
+In "A program is a compute and an effect", after the effect's map:
+#+begin_quote
+An effect is also given \code{scope(compute, effect)}, which makes a
+\emph{scope}: a child of the process with no node and no pid, whose id is
+\code{<pid>\#<n>}, n counting the process's scopes from 1. Its compute is
+given a read-only interface recorded under that id, the id, \code{pending},
+and its own \code{scope}, for children; it returns any value, which is never
+written, or pending. Its effect is given that value and the value its last
+effect was given, and may return a cleanup; it is given no interface. A
+scope runs once when it is made, its compute and then its effect; after
+that, whenever the graph marks its id, in the rounds, as a process does. Its
+record's agent is the process's, the last step
+\code{\{"process": id, "program": p, "scope": n, "run": k\}}; it has no
+value, and is sent to whatever is subscribed to the process. Calling what
+\code{scope} returns disposes the scope: its scopes first, most recently made
+first, then its cleanup, then \code{forget} of its id. A scope's compute
+running again first disposes the scopes it made. A process's effect running
+again leaves its scopes; its kill disposes them, after its child processes
+and before its cleanup.
+#+end_quote
+In "Marks": "A process the graph marked" becomes "A process or scope the
+graph marked"; a scope's kept changes are let go when its effect runs.
+In "Order", add: "A scope starts one above the scope that made it, or at 0,
+and after each of its computes rises above every process whose value it
+read."
+In "What the scheduler holds", add: "for each scope: its owner, its scopes,
+its height, its count of runs, the reads of its last run, the changes kept
+for it, the value its last effect was given, and its cleanup."
+
+** Questions for chee (scopes)
+1. Host rendering. =render= now needs an owner (an effect's ctx). Host code
+   with no process cannot render; =ts/demo/dom-example/main.tsx= still type
+   checks but throws at runtime (not edited: demo is off limits). Should the
+   scheduler give host code a scope maker too (owner: no process), or should
+   a host start a view process?
+2. Ids in =marked=. A change's answer lists scope ids (="<pid>#<n>"=) among
+   =marked=, and =Settled.runs= holds scope records. Keep them visible, or
+   filter scopes out of answers and send their records only to subscribers?
+3. Owner of a scope made by an effect: the process (it survives later effect
+   runs, so views are not redrawn) rather than the run. Is that the rule, or
+   should an effect running again dispose the scopes its last run made, as
+   Solid's owner rule would, with =show= keeping its view some other way?
+4. A handle over another place's interface (alice at "/") read inside a
+   scope is read by an absolute address from the scope's place. This assumes
+   both have the same chroot. Fine, or should a handle over a foreign
+   interface refuse to be tracked?
+5. Should a scope's record carry a =value= when its value is JSON (a text
+   part's string)? Now it has none, since DOM parts are not values.
+6. Should =scope= be on =lasting= too, so code the world calls later (a
+   timer) can make scopes without keeping the effect's ctx?

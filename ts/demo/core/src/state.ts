@@ -2,10 +2,34 @@
 // What the panes share: the world, what is selected, what is being explained.
 
 import { signal } from "@preact/signals";
-import type { ChangeRef, Id, Step } from "../../../src/mod.ts";
+import type { Id, Step } from "../../../src/mod.ts";
 import { World } from "./world.ts";
+import { Console } from "./console.ts";
 
 export const world = new World();
+
+const HISTORY = "ermine-console-history";
+
+/** The console: its commands act on the world as the acting agent, through the page's stack. */
+export const shell = new Console(world, {
+  history: (() => {
+    try {
+      const h = JSON.parse(localStorage.getItem(HISTORY) ?? "[]");
+      return Array.isArray(h) ? h.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  })(),
+  saved: (history) => {
+    try {
+      localStorage.setItem(HISTORY, JSON.stringify(history.slice(-200)));
+    } catch { /* no storage */ }
+  },
+});
+
+/** Whether the console is open; and the line to show, when a site names one. */
+export const consoleOpen = signal(false);
+export const consoleAt = signal<number | undefined>(undefined);
 
 /** A node, and the route it was reached by, which is a path for lookups. */
 export type Selection = { id: Id; route: Step[] };
@@ -13,8 +37,9 @@ export const selected = signal<Selection | undefined>(undefined);
 
 /** What the why pane explains. */
 export type Focus =
-  | { t: "change"; ref: ChangeRef }
+  | { t: "change"; ref: number }
   | { t: "record"; process: Id; run: number }
+  | { t: "handler"; n: number }
   | { t: "snippet"; n: number; line?: number };
 export const focus = signal<Focus | undefined>(undefined);
 

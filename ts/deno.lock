@@ -1,8 +1,10 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "npm:@automerge/subduction@0.23.0": "0.23.0",
     "npm:@codemirror/commands@6": "6.11.1",
     "npm:@codemirror/lang-javascript@6": "6.2.5",
     "npm:@codemirror/lang-json@6": "6.0.2",
@@ -10,6 +12,7 @@
     "npm:@codemirror/state@6": "6.7.6",
     "npm:@codemirror/view@6": "6.43.13",
     "npm:@lezer/highlight@1": "1.2.5",
+    "npm:@noble/hashes@1.8.0": "1.8.0",
     "npm:@preact/signals@2": "2.11.3_preact@10.29.8",
     "npm:codemirror@6": "6.0.2",
     "npm:fake-indexeddb@6": "6.2.5",
@@ -28,6 +31,9 @@
     }
   },
   "npm": {
+    "@automerge/subduction@0.23.0": {
+      "integrity": "sha512-daTtDStLmrUbt1R9yqzBr4B+Hn5PcKUzqQ3eScR0cwMQ2dZS9OxLZ5TyRYHU+685nEKlXEzRgxOZxQPUg+GsTA=="
+    },
     "@codemirror/autocomplete@6.20.3": {
       "integrity": "sha512-tlosUqb+3BbxCxZdu4tKeRghPFC+QM7q4X5YhKV2eCmPG+1r2F3f4AaSz5sCrFqUtX4Jh20VFTKecl16MgiV9g==",
       "dependencies": [
@@ -140,6 +146,9 @@
     },
     "@marijn/find-cluster-break@1.0.4": {
       "integrity": "sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ=="
+    },
+    "@noble/hashes@1.8.0": {
+      "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="
     },
     "@preact/signals-core@1.14.4": {
       "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA=="

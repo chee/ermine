@@ -3506,3 +3506,394 @@ article.doc p:focus {
   padding: 4px 8px;
   white-space: pre-wrap;
 }
+
+/* --- the console and links (2026-10-07): a calm REPL docked at the foot of
+   the page, and the link menu's share picker. Its own section, after
+   everything else, so it changes nothing above. --- */
+
+.console-open {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 5px 12px;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.console-open:hover,
+.console-open.on {
+  border-color: var(--lilac);
+  color: var(--lilac);
+}
+.console-open kbd {
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+.console {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: min(42vh, 440px);
+  min-height: 140px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in oklab, var(--panel) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(18px);
+  -webkit-backdrop-filter: saturate(1.4) blur(18px);
+  border: 1px solid color-mix(in oklab, var(--line) 80%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, white 30%, transparent) inset,
+    0 24px 60px -24px rgba(40, 20, 50, 0.35),
+    0 2px 8px -4px rgba(40, 20, 50, 0.12);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  animation: console-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes console-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .console {
+    animation: none;
+  }
+}
+
+.console-grip {
+  position: absolute;
+  top: -5px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  cursor: ns-resize;
+}
+.console-grip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 36px;
+  height: 3px;
+  margin-left: -18px;
+  background: var(--line);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.console:hover .console-grip::after {
+  opacity: 1;
+}
+
+.console-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line-2);
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.console-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.console-where {
+  font-family: var(--mono);
+  color: var(--lilac);
+}
+.console-as {
+  color: var(--ink-3);
+}
+.console-grow {
+  flex: 1;
+}
+.console-btn,
+.console-chip {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.console-btn:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+.console-chip {
+  color: var(--mint);
+  border-color: color-mix(in oklab, var(--mint) 35%, transparent);
+  background: var(--mint-soft);
+}
+
+.console-log {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 14px 6px;
+  scroll-behavior: smooth;
+}
+
+.console-hello {
+  max-width: 64ch;
+  margin: 8px 0;
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.console-hello-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.console-hello code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--lilac);
+}
+
+.c-entry {
+  padding: 3px 0 6px;
+}
+.c-entry + .c-entry,
+.c-event + .c-entry {
+  border-top: 1px solid color-mix(in oklab, var(--line-2) 70%, transparent);
+}
+.c-entry.lit {
+  background: color-mix(in oklab, var(--butter-soft) 70%, transparent);
+  box-shadow: -14px 0 0 0 color-mix(in oklab, var(--butter-soft) 70%, transparent),
+    14px 0 0 0 color-mix(in oklab, var(--butter-soft) 70%, transparent);
+}
+.c-cmd {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.c-where {
+  color: var(--ink-3);
+  white-space: nowrap;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-caret {
+  color: var(--rose);
+  font-weight: 600;
+}
+.c-text {
+  flex: 1;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.c-n {
+  color: var(--ink-3);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.c-entry:hover .c-n,
+.c-entry.lit .c-n {
+  opacity: 1;
+}
+.c-out {
+  padding: 2px 0 0 2ch;
+}
+.c-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.6em;
+}
+.c-event {
+  padding: 1px 0 1px 2ch;
+  border-left: 2px solid color-mix(in oklab, var(--mint) 45%, transparent);
+  margin-left: 2px;
+  background: color-mix(in oklab, var(--mint-soft) 35%, transparent);
+}
+
+.c-span.c-dim {
+  color: var(--ink-3);
+}
+.c-span.c-strong {
+  font-weight: 600;
+}
+.c-span.c-ok {
+  color: var(--mint);
+}
+.c-span.c-bad {
+  color: var(--red);
+}
+.c-span.c-warn {
+  color: var(--butter);
+}
+.c-span.c-path {
+  color: var(--lilac);
+}
+.c-span.c-folder {
+  color: var(--lilac);
+  font-weight: 600;
+}
+.c-span.c-proc {
+  color: var(--rose-2);
+}
+.c-span.c-id,
+.c-span.c-site {
+  color: var(--sky);
+}
+.c-span.c-agent {
+  color: var(--peach);
+}
+.c-span.c-num,
+.c-span.c-json {
+  color: var(--ink-2);
+}
+.c-span.c-str {
+  color: var(--ink);
+}
+.c-span.c-ref {
+  color: var(--ink-3);
+}
+.c-span.c-code {
+  color: var(--ink-2);
+  font-style: italic;
+}
+.c-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: pre;
+}
+.c-link:hover {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.console-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line-2);
+  color: var(--ink-2);
+  max-height: 30%;
+  overflow: auto;
+}
+.console-option {
+  white-space: pre;
+}
+
+.console-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px 11px;
+  border-top: 1px solid var(--line-2);
+  cursor: text;
+}
+.console-field {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  caret-color: var(--rose);
+  padding: 0;
+}
+.console-field::placeholder {
+  color: var(--ink-3);
+  opacity: 0.6;
+}
+
+/* the link menu: share asks what, then on what; mount asks where */
+.menu.link-menu {
+  width: 400px;
+  padding: 12px;
+}
+.link-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+.link-step-n {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.link-pick {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-2);
+  max-height: 180px;
+  overflow: auto;
+}
+.link-choice {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
+  text-align: left;
+  color: var(--ink);
+}
+.link-choice + .link-choice {
+  border-top: 1px solid var(--line-2);
+}
+.link-choice:hover {
+  background: var(--panel-2);
+}
+.link-choice.on {
+  background: var(--rose-soft);
+}
+.link-choice .pick-dot {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--ink-3);
+  flex: none;
+  align-self: center;
+}
+.link-choice.on .pick-dot {
+  background: var(--rose);
+  border-color: var(--rose);
+}
+.link-choice-label {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.link-choice .muted {
+  margin-left: auto;
+  font-size: 11px;
+}
+.channel-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.channel-word {
+  color: var(--rose-2);
+  font-weight: 600;
+}

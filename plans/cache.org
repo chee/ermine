@@ -1,0 +1,137 @@
+#+title: a local cache of compute results, by hashes of what was read
+
+One device first; sharing later through sync. IDEAS.tex's "Sharing what
+processes produce", built: constructive traces (Build Systems a la Carte),
+a tree keyed by the code's hash, then by the hash of each read's answer,
+lookups included. Code: =ts/src/cache/mod.ts=. Tests: =ts/test/cache_test.ts=
+(13, passing). No ts/src file changed, no hook added.
+
+* Where it sits
+A loader wrapper: =cached(inner, {store, key?, budget?, onhit?})= is a
+=Loader=. It wraps the function the inner loader gives for a compute.
+- Before calling it, it walks the tree: the entry at the current key names
+  the next step; it makes that step through the run's own =api=, so the read
+  is recorded and kept like any other run's. It hashes the answer and moves
+  to the child.
+- At a leaf it returns the leaf's value. The code never runs.
+- Where no child matches, it runs the code. It serves the code the steps it
+  already made, in order, and does not read them again, so the record holds
+  each read once. After the code returns, it records the trace.
+- The scheduler cannot tell a hit from a run: same reads, same marks, same
+  heights, same value write and comparison.
+
+A program opts in by its kind: =loaders/<kind>= names the cached loader. The
+cache adds no new mechanism.
+
+* Keys
+- root = BLAKE3(CBOR(["ermine-cache", key(code)])). =key= says what the code
+  /is/. By default nothing has a key: the cache cannot tell whether a string
+  is source or a builtin's name, and a name is an address, not content. For
+  the same-thread loader the host passes =source=, which keys a string by its
+  text (={"import": url}= stays unkeyed). Source that imports by address is
+  only partly in its key, like any read behind the interface's back. A host
+  that knows what is there passes its own =key=, as the test does for its
+  fixed builtin table. Loaders sharing one store need keys that differ.
+- child = BLAKE3(CBOR([parent, hash of the step's answer])). The tree is
+  stored flat, one entry per key: ={step, mode}= or ={leaf, from}=.
+- A step is =["read"|"directory"|"lookup", op]=, or =["given", field]= for
+  the first use of =self=, =name=, =cwd=, =changes= or =api.cwd=. So a
+  compute that uses its pid is keyed by it, and one that never does is
+  shared across processes. =api= and =pending= are free.
+- What counts in an answer: each item's value, id, pending, ephemeral and
+  refused flags, and whether it has a =from= and a =change= (code sees that
+  with =in= or =Object.keys= without touching them: the root's first value
+  has no change). =from= and =change= themselves count only if a run touched
+  them. The mode is in each answer's hash too. The
+  cache hands the code copies whose =from= and =change= are getters, and
+  reading either marks the step "whole". That is sound because the code only
+  observed what was hashed. The result is early cutoff: a new change with old
+  contents (A, B, A; undo; another graph with the same contents) hits.
+- A step later found to need "whole" is upgraded. Its older "values" children
+  become unreachable and age out.
+- A read that throws (refused, invalid) is an answer too, hashed by its error
+  JSON. The compute gets the same error object.
+- A frozen value never changes, so its hash is memoized by the value itself
+  (a WeakMap); graph values are frozen. Replay then hashes each value once,
+  not once per run. Not by =node@time=: one cache can serve several graphs,
+  where the same ids at the same times hold other values.
+
+* What is not cached (the run goes on and nothing is kept)
+- programs with an effect, or when the scheduler leaves =Running.code= out.
+  This is a rule, not taste: a hit would skip the inner loader's module
+  gating, so an effect could be called before its module has loaded, fail,
+  and never be marked again. Derived values are what this is for anyway.
+- the effect part, always (IDEAS: never shared)
+- code with no key (above)
+- pending, and errors the code throws. Both are cheap to redo, and errors
+  usually mean the code is about to change.
+- a run whose answer cannot be hashed: a live value. Ephemeral nodes with
+  plain values are fine locally.
+- a run that makes any operation other than read/directory/lookup through
+  =api=
+- a run that /diverged/: the code asked for something other than the next
+  replayed step, or stopped before using them all. This catches some code
+  that reads behind the interface's back (clock, randomness, module state). It
+  cannot catch all of it: such code is wrong to put under a cached kind, and
+  only the host knows.
+
+* Persistence and eviction
+- Its own store: =await store(backend?)= takes the keeper's =Backend=
+  (=memory()=, =indexeddb()=) as a separate instance, one record per entry,
+  CBOR. Writes are batched per microtask; =flush()= waits for them. An entry
+  that does not decode is dropped, because a cache is not the truth.
+- Each entry has =used=, a clock bumped once per hit or store. Past =budget=
+  (64 MiB by default) the least-used entries go until the store is under 90%.
+- A hit's stamps live in memory only and reach the backend when the entry is
+  next written. That avoids a write per hit, but the eviction order after a
+  reload is approximate.
+
+* Honest records, and where they over-read
+- A hit's record holds exactly the reads the code would make, so its marks are
+  the code's.
+- A miss after a partial replay that /diverges/ keeps the replayed reads the
+  code did not ask for in its record. That marks the process more than the
+  code would (extra runs, never stale ones). The same happens while the
+  same-thread loader's module is still loading: the replay reads, then the
+  loader reads its answer node and returns pending.
+- A hit skips the inner loader, so a module that would now fail to load (an
+  import gone) still gives the value its source gave before.
+
+* How a hit shows
+The record of a hit is honest about what happened (the replayed reads, the
+value) but silent about the code not running. Today the cache tells
+=onhit({process, marked, leaf, from, steps})=, where =from= is
+={process, marked, at}= of the run that made the leaf. A viewer matches it
+to the record by process and marks. =stats= counts hits, misses, stored,
+diverged, unkeyed and evicted. Making the record itself say so needs a field
+the loader can fill; see Ask.
+
+* When it pays
+A hit costs the k reads it replays, plus hashing each answer (memoized per
+change), plus one CBOR decode of the value. A miss costs all of that plus the
+code, the trace hashes and a store write.
+- It pays for computes much heavier than their reads: parsing, layout,
+  highlighting, search, a solver.
+- It pays when contents come back: A, B, A edits, undo, switching branches,
+  several processes on the same inputs, and above all a reload. A hit needs
+  no module, so derived values show before their code has imported.
+- It does not pay for cheap computes, or for inputs that are new every time,
+  which always miss after replaying a prefix. In one session the scheduler
+  only reruns a compute when something it read changed, so a hit needs
+  contents seen before.
+- The host decides by kind.
+
+* Later, for sharing
+Keys hold node ids, plus routes and change headers in whole mode, which only
+mean the same across devices through sync. Leaves are the shareable part, and
+=from= says who made them. Who may read a leaf waits on access (Keyhive), as
+IDEAS says.
+
+* Ask
+- Should a record say a value came from the cache? For example, a PROTOCOL
+  records field ={"cached": {"leaf": hash, "from": {process, marked}}}=,
+  filled through a way for a loader to add to =Finishing=. That is a
+  scheduler/protocol change, so it is yours to decide.
+- Should items' =from= and =change= ever be left out of a key (the getter
+  trick above), or always kept? Always kept is simpler, but then hits come
+  only from the same changes: reloads and second processes, not A, B, A.

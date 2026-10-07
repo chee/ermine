@@ -28,7 +28,7 @@ export {
   walk,
 } from "./address.ts";
 export { type Graph, graph, type Kept, type KeptNode } from "./graph.ts";
-export { type May, protect, subject } from "./protect.ts";
+export { facts, matches, type May, protect, type Rule, rules, subject } from "./protect.ts";
 // the reference scheduler and its loaders; its Fired, FireOp, Settled, Handler
 // and PENDING are its own modules', apart from drive's of the same names
 export {

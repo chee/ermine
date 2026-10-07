@@ -3,7 +3,8 @@
 // why pane: a change or a run explained, back to the line of code it came from.
 
 import { useState } from "preact/hooks";
-import type { Change, ChangeRef, Record as Run } from "../../../src/mod.ts";
+import type { Change, Header, Record as Run } from "../../../src/mod.ts";
+import type { HandlerRecord } from "../../../src/schedule.ts";
 import {
   Agent,
   Empty,
@@ -18,7 +19,7 @@ import {
 import { describe } from "./inspector.tsx";
 import { Gutter } from "./gutter.tsx";
 import { dock, draft, focus, panels, pointAt, selected, size, world } from "./state.ts";
-import { type Entry, key, siteOf } from "./world.ts";
+import { type Entry, siteOf } from "./world.ts";
 
 type Filter = "all" | "changes" | "runs" | "trouble" | "here";
 
@@ -55,14 +56,15 @@ function Transcript() {
       case "changes":
         return e.t === "change";
       case "runs":
-        return e.t === "record" || e.t === "stopped";
+        return e.t === "record" || e.t === "stopped" || e.t === "handler";
       case "trouble":
         return e.t === "error" ||
-          (e.t === "record" && (e.record.ending === "failed" || e.record.ending === "refused"));
+          ((e.t === "record" || e.t === "handler") &&
+            (e.record.ending === "failed" || e.record.ending === "refused"));
       case "here":
         return (e.t === "change" && (e.change.node === here ||
           (e.change.kind === "place" && e.change.value !== undefined && e.change.id === here))) ||
-          (e.t === "record" && e.record.process === here) ||
+          ((e.t === "record" || e.t === "handler") && e.record.process === here) ||
           (e.t === "stopped" && e.process === here);
     }
   };
@@ -97,20 +99,25 @@ function EntryRow({ e }: { e: Entry }) {
   switch (e.t) {
     case "change": {
       const c = e.change;
-      const sel = f?.t === "change" && f.ref.node === c.node && f.ref.time === c.time;
+      const sel = f?.t === "change" && f.ref === c.time;
       return (
         <div
           class={`entry ch${sel ? " sel" : ""}`}
-          onClick={() => (focus.value = { t: "change", ref: c })}
+          onClick={() => (focus.value = { t: "change", ref: c.time })}
         >
           <span class="t">@{c.time}</span>
           <span class={`kind-tag kt-${c.kind}`}>{c.kind}</span>
+          {c.ephemeral
+            ? <span class="kind-tag kt-make" title="ephemeral: nobody keeps it">~</span>
+            : null}
           <span class="entry-node">{c.node}</span>
           <span class="entry-what">{describe(c)}</span>
           <span class="entry-who">
             <Agent agent={c.agent} />
             {c.process ? <span class="via">◉ {c.process}</span> : null}
-            {siteOf(c.cause)
+            {world.linked.has(c.time)
+              ? <span class="via" title="a mounter made it, through a share">⇄ a mounter's</span>
+              : siteOf(c.cause)
               ? <span class="via">✎ {siteOf(c.cause)!.file}:{siteOf(c.cause)!.line}</span>
               : null}
           </span>
@@ -132,8 +139,33 @@ function EntryRow({ e }: { e: Entry }) {
           <span class="entry-what">{"value" in r ? peek(r.value, 26) : ""}</span>
           <span class="entry-who">
             {r.marked.length
-              ? <span class="via">← {r.marked.map((m) => `${m.node}@${m.time}`).join(" ")}</span>
+              ? (
+                <span class="via">
+                  ← {r.marked.map((t) => `${world.header(t)?.node ?? "?"}@${t}`).join(" ")}
+                </span>
+              )
               : null}
+          </span>
+        </div>
+      );
+    }
+    case "handler": {
+      const r = e.record;
+      const sel = f?.t === "handler" && f.n === e.n;
+      return (
+        <div
+          class={`entry rec e-${r.ending}${sel ? " sel" : ""}`}
+          onClick={() => (focus.value = { t: "handler", n: e.n })}
+        >
+          <span class="t">↯</span>
+          <span class="entry-node">{r.process}</span>
+          <span class="muted">{handlerOf(r)}</span>
+          <Ending ending={r.ending} />
+          <span class="entry-what">
+            {r.changes.length ? r.changes.map((t) => `@${t}`).join(" ") : "no changes"}
+          </span>
+          <span class="entry-who">
+            <Agent agent={r.agent} />
           </span>
         </div>
       );
@@ -190,48 +222,65 @@ function Why() {
       <div class="why-body">
         {f.t === "change" ? <WhyChange r={f.ref} /> : null}
         {f.t === "record" ? <WhyRun process={f.process} run={f.run} /> : null}
+        {f.t === "handler" ? <WhyHandler n={f.n} /> : null}
         {f.t === "snippet" ? <WhySnippet n={f.n} line={f.line} /> : null}
       </div>
     </div>
   );
 }
 
+/** The handler a handler record's agent says it was. */
+function handlerOf(r: HandlerRecord): string {
+  const code = (r.agent as { code?: { handler?: string }[] })?.code;
+  return code?.[code.length - 1]?.handler ?? "handler";
+}
+
 /** From a change back to where it came from: runs that made it, and what marked them. */
-function chain(r: ChangeRef): { change?: Change; ref: ChangeRef; run?: Run }[] {
-  const out: { change?: Change; ref: ChangeRef; run?: Run }[] = [];
-  const seen = new Set<string>();
-  let cur: ChangeRef | undefined = r;
-  while (cur && !seen.has(key(cur)) && out.length < 24) {
-    seen.add(key(cur));
-    const change = world.changes.get(key(cur));
-    const run: Run | undefined = change?.process ? world.producedBy.get(key(cur)) : undefined;
+function chain(r: number): { change?: Change | Header; ref: number; run?: Run | HandlerRecord }[] {
+  const out: { change?: Change | Header; ref: number; run?: Run | HandlerRecord }[] = [];
+  const seen = new Set<number>();
+  let cur: number | undefined = r;
+  while (cur !== undefined && !seen.has(cur) && out.length < 24) {
+    seen.add(cur);
+    const change = world.header(cur);
+    const run: Run | HandlerRecord | undefined = change?.process
+      ? world.producedBy.get(cur)
+      : undefined;
     out.push({ change, ref: cur, run });
-    cur = run?.marked[0];
+    cur = run && "marked" in run ? run.marked[0] : undefined;
   }
   return out;
 }
 
-function WhyChange({ r }: { r: ChangeRef }) {
+function WhyChange({ r }: { r: number }) {
   world.version.value;
-  const c = world.changes.get(key(r));
-  if (!c) return <Empty>no change {r.node}@{r.time} in this graph.</Empty>;
+  const c = world.at(r);
+  const h = c ?? world.header(r);
+  if (!h) return <Empty>no change @{r} in this graph.</Empty>;
   const links = chain(r);
-  const marked = world.marked.get(key(r)) ?? [];
+  const marked = world.marked.get(r) ?? [];
   return (
     <div class="why-change">
       <div class="why-title">
-        <span class={`kind-tag kt-${c.kind}`}>{c.kind}</span> <NodeLink id={c.node} />
-        <span class="at">@{c.time}</span>
+        <span class={`kind-tag kt-${h.kind}`}>{h.kind}</span> <NodeLink id={h.node} />
+        <span class="at">@{h.time}</span>
+        {h.ephemeral
+          ? <span class="kind-tag kt-make" title="nobody keeps an ephemeral change">ephemeral</span>
+          : null}
       </div>
-      <div class="why-what">{describe(c)}</div>
-      {c.kind === "write"
+      {c ? <div class="why-what">{describe(c)}</div> : (
+        <div class="why-what muted">
+          kept from before this page: an item carries a change's header, not its patches
+        </div>
+      )}
+      {c?.kind === "write"
         ? (
           <div class="value-view small">
             <JsonView value={c.patches as never} />
           </div>
         )
         : null}
-      {c.kind === "place" && c.value !== undefined
+      {c?.kind === "place" && c.value !== undefined
         ? (
           <div class="kv">
             <span class="k">made</span>
@@ -241,12 +290,12 @@ function WhyChange({ r }: { r: ChangeRef }) {
           </div>
         )
         : null}
-      {"cause" in c && !siteOf(c.cause)
+      {"cause" in h && !siteOf(h.cause)
         ? (
           <div class="kv">
             <span class="k">cause</span>
             <span class="v">
-              <JsonView value={c.cause} />
+              <JsonView value={h.cause} />
             </span>
           </div>
         )
@@ -260,7 +309,10 @@ function WhyChange({ r }: { r: ChangeRef }) {
               <div class="link-body">
                 {i > 0 ? <div class="link-why">because it was marked by</div> : null}
                 <div>
-                  <Ref r={l.ref} /> {ch ? <span class="muted">{describe(ch)}</span> : null}
+                  <Ref r={l.ref} />{" "}
+                  {ch && "patches" in ch || ch && "value" in ch || ch?.kind === "unplace"
+                    ? <span class="muted">{describe(ch as Change)}</span>
+                    : null}
                 </div>
                 {ch
                   ? (
@@ -270,7 +322,7 @@ function WhyChange({ r }: { r: ChangeRef }) {
                         ? (
                           <>
                             {" "}as process <NodeLink id={ch.process} />
-                            {l.run
+                            {l.run && "run" in l.run
                               ? (
                                 <button
                                   type="button"
@@ -278,12 +330,14 @@ function WhyChange({ r }: { r: ChangeRef }) {
                                   onClick={() => (focus.value = {
                                     t: "record",
                                     process: l.run!.process,
-                                    run: l.run!.run,
+                                    run: (l.run as Run).run,
                                   })}
                                 >
                                   run #{l.run.run}
                                 </button>
                               )
+                              : l.run
+                              ? <span class="muted">(in a handler call)</span>
                               : (
                                 <span class="muted">
                                   (through its lasting interface, outside any run)
@@ -298,8 +352,8 @@ function WhyChange({ r }: { r: ChangeRef }) {
                 {siteOf(ch?.cause)
                   ? (
                     <div class="origin">
-                      <SiteLink site={siteOf(ch?.cause)!} />
-                      {siteLine(siteOf(ch?.cause)!)
+                      <SiteLink site={siteOf(ch?.cause)!} remote={world.linked.has(l.ref)} />
+                      {!world.linked.has(l.ref) && siteLine(siteOf(ch?.cause)!)
                         ? <pre class="code-line">{siteLine(siteOf(ch?.cause)!)!.trim()}</pre>
                         : null}
                     </div>
@@ -326,6 +380,71 @@ function WhyChange({ r }: { r: ChangeRef }) {
   );
 }
 
+/** A handler call: who it acted as, what it read, and what it changed. */
+function WhyHandler({ n }: { n: number }) {
+  world.version.value;
+  const e = world.log.find((x) => x.n === n);
+  if (!e || e.t !== "handler") return <Empty>no handler call here.</Empty>;
+  const r = e.record;
+  return (
+    <div class="why-run">
+      <div class="why-title">
+        <NodeLink id={r.process} /> <span class="muted">↯ {handlerOf(r)}</span>{" "}
+        <Ending ending={r.ending} />
+      </div>
+      <div class="kv">
+        <span class="k">as</span>
+        <span class="v">
+          <Agent agent={r.agent} />
+        </span>
+      </div>
+      <div class="kv">
+        <span class="k">program</span>
+        <span class="v">
+          <NodeLink id={r.program.node} /> <span class="at">@{r.program.time}</span>
+        </span>
+      </div>
+      <div class="hint">
+        a handler is called by the world, outside any run: it reads and writes through its process's
+        lasting interface, and its reads mark nothing
+      </div>
+      {r.reads.length
+        ? (
+          <>
+            <div class="sub-title">read</div>
+            {r.reads.map((x) => (
+              <div class="read-row">
+                <code class="muted">{x.address.join("/") || "."}</code>
+                {x.refused ? <span class="refused">🔒 refused</span> : null}
+                {x.saw === null ? <span class="muted">no items</span> : <Ref r={x.saw} />}
+              </div>
+            ))}
+          </>
+        )
+        : null}
+      <div class="sub-title">changes it made</div>
+      <div class="chips">
+        {r.changes.length
+          ? r.changes.map((t) => <Ref key={t} r={t} />)
+          : <span class="muted">none</span>}
+      </div>
+      {r.errors.length
+        ? (
+          <>
+            <div class="sub-title">errors</div>
+            {r.errors.map((e) => (
+              <div class="error-line">
+                <span class={`kind-tag kt-${e.kind}`}>{e.kind}</span> <b>{e.op}</b> {e.why.code}
+                {e.why.text ? `: ${e.why.text}` : ""}
+              </div>
+            ))}
+          </>
+        )
+        : null}
+    </div>
+  );
+}
+
 function WhyRun({ process, run }: { process: string; run: number }) {
   world.version.value;
   const r = (world.records.get(process) ?? []).find((x) => x.run === run);
@@ -339,23 +458,7 @@ function WhyRun({ process, run }: { process: string; run: number }) {
     const latest = world.latest.get(node);
     return latest !== undefined && (saw === null || latest > saw) ? latest : undefined;
   };
-  const prog = (label: string, p: Run["compute"]) =>
-    p
-      ? (
-        <div class="kv">
-          <span class="k">{label}</span>
-          <span class="v">
-            <NodeLink id={p.node} />
-            {"saw" in p && p.saw !== null ? <span class="at">saw @{p.saw}</span> : null}
-            {"saw" in p && p.saw === null ? <span class="muted">no items</span> : null}
-            {"refused" in p ? <span class="refused">🔒 refused</span> : null}
-            {p.slot.length > 1
-              ? <span class="muted">(also in the slot: {p.slot.slice(1).join(", ")})</span>
-              : null}
-          </span>
-        </div>
-      )
-      : null;
+  const program = r.program as { node: string; time: number } | undefined;
   return (
     <div class="why-run">
       <div class="why-title">
@@ -371,11 +474,20 @@ function WhyRun({ process, run }: { process: string; run: number }) {
       <div class="sub-title">marked by</div>
       <div class="chips">
         {r.marked.length
-          ? r.marked.map((m) => <Ref key={`${m.node}@${m.time}`} r={m} />)
+          ? r.marked.map((t) => <Ref key={t} r={t} />)
           : <span class="muted">nothing</span>}
       </div>
-      {prog("compute", r.compute)}
-      {prog("effect", r.effect)}
+      {program
+        ? (
+          <div class="kv">
+            <span class="k">program</span>
+            <span class="v">
+              <NodeLink id={program.node} /> <span class="at">@{program.time}</span>
+              <span class="muted">the program the process kept when it started</span>
+            </span>
+          </div>
+        )
+        : null}
       {"value" in r
         ? (
           <>
@@ -422,16 +534,11 @@ function WhyRun({ process, run }: { process: string; run: number }) {
                 {node ? <NodeLink id={node} /> : <span class="muted">nothing</span>}
                 <code class="muted">{x.address.join("/") || "."}</code>
                 {x.refused ? <span class="refused">🔒 refused</span> : null}
-                {x.saw === null
-                  ? <span class="muted">no items</span>
-                  : <Ref r={world.at(x.saw) ?? { node: node ?? "", time: x.saw }} />}
+                {x.saw === null ? <span class="muted">no items</span> : <Ref r={x.saw} />}
                 {node && since(node, x.saw)
                   ? (
                     <span class="since" title="the node has changed since this run read it">
-                      changed since{" "}
-                      <Ref
-                        r={world.at(since(node, x.saw)!) ?? { node, time: since(node, x.saw)! }}
-                      />
+                      changed since <Ref r={since(node, x.saw)!} />
                     </span>
                   )
                   : null}
@@ -462,7 +569,7 @@ function WhyRun({ process, run }: { process: string; run: number }) {
           <>
             <div class="sub-title">its last cleanup made</div>
             <div class="chips">
-              {r.cleanup.map((c) => <Ref key={`${c.node}@${c.time}`} r={c} />)}
+              {r.cleanup.map((t) => <Ref key={t} r={t} />)}
             </div>
           </>
         )
@@ -470,7 +577,7 @@ function WhyRun({ process, run }: { process: string; run: number }) {
       <div class="sub-title">changes it made</div>
       <div class="chips">
         {r.changes.length
-          ? r.changes.map((c) => <Ref key={`${c.node}@${c.time}`} r={c} />)
+          ? r.changes.map((t) => <Ref key={t} r={t} />)
           : <span class="muted">none</span>}
       </div>
       {r.errors.length
@@ -517,10 +624,7 @@ function WhySnippet({ n, line }: { n: number; line?: number }) {
       <div class="sub-title">changes made from it</div>
       <div class="chips">
         {s.times.length
-          ? s.times.map((t) => {
-            const c = [...world.changes.values()].find((x) => x.time === t);
-            return c ? <Ref key={t} r={c} /> : null;
-          })
+          ? s.times.map((t) => <Ref key={t} r={t} />)
           : <span class="muted">none</span>}
       </div>
       <div class="row-actions">

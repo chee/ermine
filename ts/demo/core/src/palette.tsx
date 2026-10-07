@@ -10,6 +10,7 @@ import { examples, rulesFor } from "./examples.ts";
 import {
   current,
   exportFile,
+  forget,
   fresh,
   importFile,
   open,
@@ -32,6 +33,7 @@ import {
   world,
 } from "./state.ts";
 import { J, ROOT } from "./world.ts";
+import { linkCommands } from "./link.tsx";
 
 export const palette = signal<{ context?: Selection; only?: string } | undefined>(undefined);
 
@@ -65,8 +67,8 @@ function makeHere(where: Selection, name: string, value: string, label: string) 
 }
 
 const VIEW_COMPUTE =
-  `// a compute only reads: it gets { api, self, cwd, name, changes }, and returns
-// the process's value. api.lookup({ name }) finds the nearest slot by that name,
+  `// a compute only reads: it gets { api, self, cwd, name, changes, pending }, and
+// returns the process's value. api.lookup({ name }) finds the nearest slot by that name,
 // from here up; an item's from.path is the address it was found at, which
 // api.read({ address }) reads. here, the directory it runs in, is the address []
 export default function ({ api }) {
@@ -94,44 +96,58 @@ const RENDERER = `// a renderer: draws thing into el. h(tag, props, ...kids) mak
 // save(newThing) writes the thing back.
 el.replaceChildren(h("pre", {}, JSON.stringify(thing, null, 1)))`;
 
-/** A process that lives in the folder it works on: it runs there, and its lookups search there. */
-function processHere(where: Selection, name: string, compute: string, effect?: string) {
-  const id = freshId(name);
+/**
+ * A process that lives in the folder it works on: it runs there, and its
+ * lookups search there. Its program goes in the root's programs/; the program
+ * is selected, to edit.
+ */
+function processHere(
+  where: Selection,
+  name: string,
+  compute: string,
+  effect?: string,
+  also: string[] = [],
+) {
   const code = [
-    `// it lives in ${where.id}, so it runs there, and its lookups search there first`,
-    `process(${J(where.id)}, ${J(name)}, ${J(id)}, {`,
+    `// it is started in ${where.id}, so it runs there, and its lookups search there first`,
+    ...(also.length ? ["batch(() => {"] : []),
+    `process(${J(where.id)}, ${J(name)}, {`,
     `  compute: ${J(compute)},`,
     ...(effect ? [`  effect: ${J(effect)},`] : []),
     `})`,
+    ...also,
+    ...(also.length ? ["})"] : []),
   ];
+  const before = new Set(world.procs.keys());
   const s = act(code.join("\n"), "make: process");
-  if (s.ok) {
-    const path: Step[] = [...where.route, world.step(where.id, name, id)];
-    select(`${id}.compute`, [...path, world.step(id, "compute", `${id}.compute`)]);
+  const pid = [...world.procs.keys()].find((p) => !before.has(p) && !world.procs.get(p)!.by);
+  if (s.ok && pid) {
+    const program = world.procs.get(pid)!.program.node;
+    select(program, routeOf(program));
     dock.value = "stage";
   }
 }
 
-const FOLDER_VIEW = `// what this folder holds, and a child process for each thing in it.
+const FOLDER_VIEW = `// what this folder holds, and a card for each thing in it.
 // it runs in the folder: [] is the folder, and [name] this process's own node.
 // a directory item carries the change that last set its slot, so a thing
 // dragged away and back is a new placement, and gets a new card
-export default function ({ api, self, cwd, name }) {
+export default function ({ api, cwd, name }) {
   const here = cwd[cwd.length - 1] ?? "root"
+  const skip = (slot) => slot.startsWith("render-") || slot.startsWith("@") || slot === "programs" || slot === "loaders"
   const items = api.directory({ address: [] }).directory
-    .filter(([slot]) => !slot.startsWith("render-") && !slot.startsWith("view") && slot !== name)
-    .filter(([slot]) => api.directory({ address: [slot], name: "compute" }).items.length === 0)
-    .flatMap(([slot, found]) => found.filter((item) => item.id !== self)
-      .map((item) => ({ name: slot, id: item.id, since: item.change.time })))
+    .filter(([slot]) => !skip(slot))
+    .flatMap(([slot, found]) => found.map((item) => ({ name: slot, id: item.id, since: item.change?.time ?? 0 })))
   const kids = Object.fromEntries(
     api.directory({ address: [name] }).directory.map(([slot, found]) => [slot, found.map((item) => item.id)]))
   return { here, items, kids }
 }`;
 
 const CARD_COMPUTE =
-  `// it runs in the folder's view, so its thing is in the folder, by its own name
-export default function ({ api, name }) {
-  const at = ["..", name]
+  `// it runs in its thing's node, in the folder's view: its thing is in the folder, by that name
+export default function ({ api, cwd }) {
+  const name = cwd[cwd.length - 1]
+  const at = ["..", "..", name]
   const thing = api.read({ address: at })[0]?.value
   const type = (thing && typeof thing === "object" && thing["@type"]) || typeof thing
   const by = api.lookup({ name: "render-" + type })[0]
@@ -150,27 +166,22 @@ export default function ({ self, value, lasting }) {
   } catch (e) { body.replaceChildren(h("div", { class: "oops" }, e.message)) }
 }`;
 
-const FOLDER_KIDS = `// a card for each thing: a process placed under this one, by the thing's
-// name, so it runs here, with its programs in its own slots. cards of things
-// that left are unplaced
+const FOLDER_KIDS = `// a card for each thing: a node for it in this process's own node, by the
+// thing's name, and a process started in it, running programs/thing-card.
+// a card for a thing that left goes with its node: a process whose address
+// reaches nothing is killed
 import { h, screen } from "demo"
 export default function ({ api, self, name, value }) {
   screen(self).replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.here))
-  const want = new Set()
-  for (const t of value.items) {
-    const pid = self + ":" + t.id + "@" + t.since
-    want.add(pid)
-    if ((value.kids[t.name] ?? []).includes(pid)) continue
-    api.place({ address: [name], name: t.name, id: pid, value: null })
-    api.place({ address: [name, t.name], name: "compute", id: pid + ".compute", value: ${
-  J(CARD_COMPUTE)
-} })
-    api.place({ address: [name, t.name], name: "effect", id: pid + ".effect", value: ${
-  J(CARD_EFFECT)
-} })
-  }
+  const want = new Set(value.items.map((t) => self + ":" + t.id + "@" + t.since))
   for (const [slot, ids] of Object.entries(value.kids))
-    for (const pid of ids) if (pid.startsWith(self + ":") && !want.has(pid)) api.unplace({ address: [name], name: slot, id: pid })
+    for (const id of ids) if (id.startsWith(self + ":") && !want.has(id)) api.unplace({ address: [name], name: slot, id })
+  for (const t of value.items) {
+    const id = self + ":" + t.id + "@" + t.since
+    if ((value.kids[t.name] ?? []).includes(id)) continue
+    api.place({ address: [name], name: t.name, id, value: t.id })
+    api.start({ address: [name, t.name], program: ["programs", "thing-card"] })
+  }
 }`;
 
 function commands(where: Selection): Command[] {
@@ -196,7 +207,12 @@ function commands(where: Selection): Command[] {
     J({ "@type": "list", title: "todo", items: [] }),
     "todo",
   );
-  mk("program", "code: a compute or an effect", J("return null"), "program");
+  mk(
+    "program",
+    "a node of code: {kind, compute, effect?}, for start to find under programs/",
+    J({ kind: "js", compute: "export default () => null" }),
+    "program",
+  );
   cmds.push({
     group: `make in ${at}`,
     title: "renderer",
@@ -223,7 +239,12 @@ function commands(where: Selection): Command[] {
     title: "process: show this folder",
     hint: "a card for each thing here, each drawn by the renderer it finds",
     ask: { prompt: "a name for the process", initial: "view" },
-    run: (n) => n && processHere(where, n, FOLDER_VIEW, FOLDER_KIDS),
+    run: (n) =>
+      n && processHere(where, n, FOLDER_VIEW, FOLDER_KIDS, [
+        `if (!dir("programs", "thing-card")?.length) program("programs", "thing-card", ${
+          J(CARD_COMPUTE)
+        }, ${J(CARD_EFFECT)})`,
+      ]),
   });
 
   if (step) {
@@ -297,6 +318,7 @@ function commands(where: Selection): Command[] {
       },
     });
   }
+  cmds.push(...linkCommands(where));
   cmds.push(
     {
       group: "edit",
@@ -360,6 +382,12 @@ function commands(where: Selection): Command[] {
         input.onchange = () => input.files?.[0] && importFile(input.files[0]);
         input.click();
       },
+    },
+    {
+      group: "project",
+      title: "start over from the boot image",
+      hint: "forget the graph this browser kept, and build it again from the boot image",
+      run: () => forget(),
     },
     {
       group: "project",

@@ -5,46 +5,65 @@
 // they read by lookup from their place, so everything is in the tree and every
 // dependency shows in a run's record as a search.
 //
-// A program is a module whose default export is the function the driver
-// calls, with what drive gives it and nothing else: a compute gets {api, self,
-// cwd, name, changes}, and its api only reads; an effect gets {api, lasting,
-// self, cwd, name, value, previous, handler}, and its api only writes. A
-// program may import { PENDING } from "ermine", and { h, screen, fire } from
-// "demo", this host: screen(self) is the element an effect draws on.
+// Programs are nodes too (SCHEDULER.tex, Programs): {kind, compute, effect?},
+// under programs/. Each kind is run by the loader found under loaders/, by its
+// name (LOADERS.tex): "js" by the same-thread loader, "steps" by the steps
+// loader. start(where, program) places a process in the node where reaches,
+// under a pid the scheduler picks, and runs there the program found by
+// searching up from it, such as programs/editor.
+//
+// A JS part is a module whose default export is the function the scheduler
+// calls, with what it gives and nothing else: a compute gets {api, self, cwd,
+// name, changes, pending}, and its api only reads; an effect gets {api,
+// lasting, self, cwd, name, value, previous, handler}, and its api only
+// writes. A module imports what it uses: { h, screen, fire } from "demo",
+// this host, where screen(self) is the element an effect draws on.
 
 export type Example = { id: string; title: string; blurb: string; code: string };
 
 const B = "`";
+
+/** The runtime every example places first: the loaders, and the folder programs are found in. */
+const runtime = String.raw`
+// The loaders a process finds, by its program's kind, searching up from where
+// it runs; and the folder programs are found in, the same way.
+make("root", "loaders", "loaders", {})
+make("loaders", "js", "loader-js", { loader: "same-thread" })
+make("loaders", "steps", "loader-steps", { loader: "steps" })
+make("root", "programs", "programs", {})
+`;
 
 const hello = String.raw`
 // The host gave the root. Every other node is made by placing it somewhere:
 // make(parent, name, id, value).
 make("root", "clicks", "clicks", 0)
 
-// A process's place is where it is put, so it finds "clicks" by looking up
-// from there: the root. A lookup's item says the address it was found at,
-// and a read is a list of items, the first the node the address reaches.
-// A compute only reads; with no effect, a process is a derived value.
-process("root", "double", "double", { compute: ${B}
+// A program is a node: its kind, which names the loader that runs it, and a
+// compute, which only reads. A lookup's item says the address it was found
+// at, and a read is a list of items, the first the node the address reaches.
+// With no effect, a process running it is a derived value.
+program("programs", "double", ${B}
 export default function ({ api }) {
   const [clicks] = api.lookup({ name: "clicks" })
   return api.read({ address: clicks.from.path })[0].value * 2
 }
-${B} })
+${B})
+
+// start places a process in the root, under a pid the scheduler picks, and
+// runs it there: it looks "clicks" up from the root.
+start("root", "double")
 
 // The counter keeps the address it found "clicks" at, so its effect can
-// write it. A press writes through the lasting interface, as the counter, so
-// the change names it, and a process is not marked by its own changes: no
-// echo. Like CORE.tex's editor, the screen keeps the count it shows. A write
-// from anyone else marks the counter, and it draws again from what it read.
-process("root", "counter", "counter", {
-  compute: ${B}
+// write it. A press is a handler call, as whoever pressed. Its write marks the
+// counter too, since the counter read clicks, and the counter draws again
+// what it read: the number its screen already shows. Like SCHEDULER.tex's
+// editor, nothing echoes. A write from anyone else draws the new number.
+program("programs", "counter", ${B}
 export default function ({ api }) {
   const [clicks] = api.lookup({ name: "clicks" })
   return { n: api.read({ address: clicks.from.path })[0].value, at: clicks.from.path }
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen, fire } from "demo"
 export default function ({ self, value, lasting, handler }) {
   let n = value.n
@@ -59,28 +78,30 @@ export default function ({ self, value, lasting, handler }) {
     h("button", { class: "bun", onclick: () => fire(self, "press") }, "🐇 hop!"),
   )
 }
-${B},
-})
+${B})
+start("root", "counter")
 
-// Placing a process under the root started it. Then try, in the workspace:
+// Then try, in the workspace:
 //   write("clicks", 41)
+// or edit the counter program in the inspector: the process shows newer, and
+// replace starts the new one where the old one was.
 `;
 
 const typing = String.raw`
-// CORE.tex's editor. The editor's compute finds the document and returns it;
-// its effect makes a textarea once, and later puts new values into it. Typing
-// writes splices through the lasting interface. Those changes name the editor,
-// so they do not mark it: no echo. Everyone else who read doc runs.
+// SCHEDULER.tex's editor. The editor's compute finds the document and returns
+// it; its effect makes a textarea once, and later puts new values into it.
+// Typing writes splices through the lasting interface. Those changes name the
+// editor, and mark it, since it read doc: it runs again, finds the textarea
+// already shows the document, and leaves it alone, so nothing echoes back.
+// Everyone else who read doc runs too.
 make("root", "doc", "doc", "the quick brown ermine hops over the lazy rabbit")
 
-process("root", "editor", "editor", {
-  compute: ${B}
+program("programs", "editor", ${B}
 export default function ({ api }) {
   const [doc] = api.lookup({ name: "doc" })
   return { text: api.read({ address: doc.from.path })[0].value, at: doc.from.path }
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const s = screen(self)
@@ -100,37 +121,34 @@ export default function ({ self, value, lasting }) {
   }
   if (ta.value !== value.text) { ta.value = value.text; ta.dataset.was = value.text }
 }
-${B},
-})
+${B})
 
-process("root", "words", "words", {
-  compute: ${B}
+program("programs", "words", ${B}
 export default function ({ api }) {
   const [doc] = api.lookup({ name: "doc" })
   const d = api.read({ address: doc.from.path })[0].value
   return d.trim() ? d.trim().split(/\\s+/).length : 0
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default ({ self, value }) =>
   screen(self).replaceChildren(h("div", { class: "big" }, value), h("div", { class: "label" }, "words"))
-${B},
-})
+${B})
 
-process("root", "shout", "shout", {
-  compute: ${B}
+program("programs", "shout", ${B}
 export default function ({ api }) {
   const [doc] = api.lookup({ name: "doc" })
   return api.read({ address: doc.from.path })[0].value.toUpperCase()
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default ({ self, value }) =>
   screen(self).replaceChildren(h("div", { class: "label" }, "shout"), h("p", { class: "shout" }, value))
-${B},
-})
+${B})
+
+start("root", "editor")
+start("root", "words")
+start("root", "shout")
 `;
 
 const themes = String.raw`
@@ -143,8 +161,7 @@ make("docs", "readme", "readme", "the readme, deep in docs")
 make("home", "theme", "pink", { bg: "#ffe3ef", fg: "#7a1f4b", name: "pink" })
 make("docs", "theme", "mint", { bg: "#dcf7ec", fg: "#155c45", name: "mint" })
 
-// Programs live in the tree too: one card program, run in two places.
-make("root", "programs", "programs", {})
+// One card program, in the tree like everything else, run in two places.
 program("programs", "card", ${B}
 export default function ({ api }) {
   const [theme] = api.lookup({ name: "theme" })
@@ -153,8 +170,7 @@ export default function ({ api }) {
     theme: theme ? api.read({ address: theme.from.path })[0].value : { bg: "#eee", fg: "#333", name: "none" },
   }
 }
-${B})
-program("programs", "draw", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value: { text, theme } }) {
   screen(self).replaceChildren(h("div", { class: "card", style: { background: theme.bg, color: theme.fg } },
@@ -162,10 +178,11 @@ export default function ({ self, value: { text, theme } }) {
 }
 ${B})
 
-// Two processes, each placed in what it shows: a process runs where it sits,
-// so that node is its ".", the address [], and lookups search from there.
-process("note", "show-note", "show-note", { compute: "card", effect: "draw" })
-process("readme", "show-readme", "show-readme", { compute: "card", effect: "draw" })
+// Two processes, each started in what it shows: a process runs where it is
+// placed, so that node is its ".", the address [], and lookups search from
+// there. Each finds programs/card by searching up, as it finds the theme.
+start("note", "card")
+start("readme", "card")
 
 // Try: unplace("docs", "theme", "mint")   — the readme falls back to pink
 //      place("docs", "theme", "mint")     — and back
@@ -177,8 +194,7 @@ const guarded = String.raw`
 make("root", "diary", "diary", "dear diary, today i hopped")
 make("root", "public", "public", "hello everyone")
 
-process("root", "reader", "reader", {
-  compute: ${B}
+program("programs", "reader", ${B}
 export default function ({ api }) {
   const find = (name) => {
     const [it] = api.lookup({ name })
@@ -186,17 +202,17 @@ export default function ({ api }) {
   }
   return { diary: find("diary"), public: find("public") }
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default ({ self, value }) =>
   screen(self).replaceChildren(h("div", { class: "label" }, "reader"), h("pre", {}, JSON.stringify(value, null, 1)))
-${B},
-})
+${B})
+start("root", "reader")
 
 // Now act as bun (the pills at the top) and try:  write("diary", "bun was here")
-// Or start a process as hop, who may not read the diary:
-//   as("hop", () => process("root", "snoop", "snoop", { compute: "export default ({ api }) => api.read({ address: api.lookup({ name: 'diary' })[0].from.path })[0].value" }))
+// Or start a process as hop, who may not read the diary: a process acts for
+// whoever started it, and its run is refused, and says so.
+//   as("hop", () => process("root", "snoop", { compute: "export default ({ api }) => api.read({ address: api.lookup({ name: 'diary' })[0].from.path })[0].value" }))
 `;
 
 const guardedRules = [
@@ -205,50 +221,54 @@ const guardedRules = [
 ];
 
 const slow = String.raw`
-// A compute that found nothing yet returns PENDING. It wrote nothing, so its
-// effect does not run and nothing needs undoing. Its lookup read the slot
-// "weather" in the root, so it is marked when that name appears, and runs
-// again. Slow work is something that writes later.
-process("root", "forecast", "forecast", {
-  compute: ${B}
-import { PENDING } from "ermine"
-export default function ({ api }) {
+// A compute that found nothing yet returns pending, which it is given. It
+// wrote nothing, so its effect does not run and nothing needs undoing; the
+// process reads as waiting. Its lookup read the slot "weather" in the root,
+// so it is marked when that name appears, and runs again. Slow work is
+// something that writes later.
+program("programs", "forecast", ${B}
+export default function ({ api, pending }) {
   const [weather] = api.lookup({ name: "weather" })
-  if (!weather) return PENDING
+  if (!weather) return pending
   return api.read({ address: weather.from.path })[0].value
 }
-${B},
-  effect: ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default ({ self, value }) =>
   screen(self).replaceChildren(h("div", { class: "big" }, value.sky), h("div", { class: "label" }, value.temp + "° in " + value.town))
-${B},
-})
+${B})
 
-process("root", "fetcher", "fetcher", {
-  compute: "export default () => 'soon'",
-  effect: ${B}
+// The fetcher's effect sets a timer; when it fires, it writes through the
+// lasting interface, as the fetcher. Its cleanup stops the timer if the
+// fetcher is killed first.
+program("programs", "fetcher", ${B}
+export default () => "soon"
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, lasting }) {
-  const t = setTimeout(() => lasting.place({
-    address: ["/"], name: "weather", id: "weather", value: { sky: "☁︎ → ☀︎", temp: 19, town: "the burrow" },
-  }), 2000)
+  const weather = { sky: "☁︎ → ☀︎", temp: 19, town: "the burrow" }
+  const t = setTimeout(() => {
+    if (lasting.read({ address: ["/", "weather"] }).length) {
+      lasting.write({ address: ["/", "weather"], patches: [{ type: "snapshot", value: weather }] })
+    } else lasting.place({ address: ["/"], name: "weather", id: "weather", value: weather })
+  }, 2000)
   screen(self).replaceChildren(h("div", { class: "label" }, "fetching the weather… (2s)"))
   return () => clearTimeout(t)
 }
-${B},
-})
+${B})
+
+start("root", "forecast")
+start("root", "fetcher")
 `;
 
 const data = String.raw`
 // Programs as data: the small language of PROTOCOL.tex, which every harness
-// interprets, so one scenario runs in every language. The loader takes a
-// string as a module, and a list as steps. Reads are lists of items: a
+// interprets, so one scenario runs in every language. A program of kind
+// "steps" is run by the loader at loaders/steps. Reads are lists of items: a
 // lookup's item says the path it was found at, which reads straight back, and
 // $value takes the value of a read's first item.
 make("root", "a", "a", 20)
 make("root", "b", "b", 22)
-make("root", "programs", "programs", {})
 program("programs", "sum", [
   { do: "lookup", name: "a", as: "la" },
   { do: "lookup", name: "b", as: "lb" },
@@ -256,14 +276,15 @@ program("programs", "sum", [
   { do: "read", address: { $get: [{ $: "lb" }, 0, "from", "path"] }, as: "y" },
   { do: "return", value: { $add: [{ $value: { $: "x" } }, { $value: { $: "y" } }] } },
 ])
-process("root", "adder", "adder", { compute: "sum" })
-// write("a", 100) and watch adder's value in the inspector.
+start("root", "sum")
+// write("a", 100) and watch the process's value in the inspector.
 `;
 
 const embark = String.raw`
 // A trip planner in the spirit of Ink & Switch's Embark: one outline that you
-// write, and views computed from it. Each view is a process that looks up what
-// it needs from its place, trip/plan, so nearer settings shadow farther ones.
+// write, and views computed from it. Each view is a process started in
+// trip/plan, where it looks up what it needs, so nearer settings shadow
+// farther ones.
 make("root", "trip", "trip", {})
 make("trip", "plan", "plan", [
   "iberia, slowly",
@@ -287,8 +308,13 @@ make("trip", "weather", "weather", {})
 make("root", "units", "units-mi", "mi")
 make("trip", "units", "units-km", "km")
 
-// the views' programs, kept in the tree like everything else
-make("root", "programs", "programs", {})
+// What the views work out from the plan, and read from each other, by name. A
+// process is placed under its pid, and nothing can place it under another
+// name, so a derived value others look up is a node its process writes: the
+// process's effect writes what its compute returned, when it changed.
+make("plan", "stops", "stops", [])
+make("plan", "legs", "legs", { units: "km", legs: [], total: 0 })
+make("plan", "forecasts", "forecasts", {})
 
 // each view finds its inputs by name, nearest first: the value of the first
 // item of reading the address the lookup found it at
@@ -299,9 +325,18 @@ export default function ({ api }) {
     return it && api.read({ address: it.from.path })[0].value
   }
 ${B}
+// an effect that writes the process's value into the node of a name, in the plan
+const publish = (name) => "export default function ({ api, value, previous }) {\n" +
+  "  if (JSON.stringify(value) !== JSON.stringify(previous))\n" +
+  "    api.write({ address: [" + JSON.stringify(name) + "], patches: [{ type: \"snapshot\", value }] })\n}"
 
 // the outline editor: splices through the lasting interface, no echo
-program("programs", "outline-editor", ${B}
+program("programs", "plan-editor", ${B}
+export default function ({ api }) {
+  const [plan] = api.lookup({ name: "plan" })
+  return { text: api.read({ address: plan.from.path })[0].value, at: plan.from.path }
+}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const s = screen(self)
@@ -335,7 +370,7 @@ program("programs", "parse-stops", finding + ${B}
   }
   return stops
 }
-${B})
+${B}, publish("stops"))
 
 // legs: the distance between each stop and the next, in the units found
 program("programs", "measure-legs", finding + ${B}
@@ -351,7 +386,7 @@ program("programs", "measure-legs", finding + ${B}
   }
   return { units, legs, total: legs.reduce((t, l) => t + l.d, 0) }
 }
-${B})
+${B}, publish("legs"))
 
 // forecasts: what is known so far, by place; null is still coming. A read of
 // a name the folder lacks reads as none, and the run is marked when it appears
@@ -363,19 +398,18 @@ program("programs", "read-weather", finding + ${B}
   }
   return out
 }
-${B})
+${B}, publish("forecasts"))
 
-// the slow work, in a process of its own: a process is not marked by its own
-// changes, so the one that fetches cannot be the one that waits for the answer
-program("programs", "missing-weather", finding + ${B}
+// the slow work, in a process of its own: what it fetches is placed later,
+// through its lasting interface, and marks whoever looked for it
+program("programs", "fetch-weather", finding + ${B}
   const [weather] = api.lookup({ name: "weather" })
   const folder = weather?.from.path
   const known = folder ? api.directory({ address: folder }).directory.map(([name]) => name) : []
   const missing = (find("stops") ?? []).filter((s) => !s.unknown && !known.includes(s.name)).map((s) => s.name)
   return { folder, missing }
 }
-${B})
-program("programs", "fetch-weather", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const skies = ["☀︎", "⛅︎", "☁︎", "🌧", "☀︎", "⛅︎"]
@@ -391,7 +425,10 @@ export default function ({ self, value, lasting }) {
 }
 ${B})
 
-program("programs", "draw-map", ${B}
+program("programs", "map", finding + ${B}
+  return { places: find("places"), stops: find("stops"), weather: find("forecasts") }
+}
+${B}, ${B}
 import { screen } from "demo"
 export default function ({ self, value }) {
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => "&#" + c.charCodeAt(0) + ";")
@@ -420,7 +457,10 @@ export default function ({ self, value }) {
 }
 ${B})
 
-program("programs", "draw-itinerary", ${B}
+program("programs", "itinerary", finding + ${B}
+  return { stops: find("stops"), legs: find("legs"), weather: find("forecasts") }
+}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value: { stops, legs, weather } }) {
   const rows = stops.map((s, i) => {
@@ -439,34 +479,14 @@ export default function ({ self, value: { stops, legs, weather } }) {
 }
 ${B})
 
-// the processes: each placed in trip/plan, where it runs and looks up from
-process("plan", "plan-editor", "plan-editor", {
-  compute: ${B}
-export default function ({ api }) {
-  const [plan] = api.lookup({ name: "plan" })
-  return { text: api.read({ address: plan.from.path })[0].value, at: plan.from.path }
-}
-${B},
-  effect: "outline-editor",
-})
-process("plan", "stops", "stops", { compute: "parse-stops" })
-process("plan", "legs", "legs", { compute: "measure-legs" })
-process("plan", "forecasts", "forecasts", { compute: "read-weather" })
-process("plan", "weatherman", "weatherman", { compute: "missing-weather", effect: "fetch-weather" })
-process("plan", "map", "map", {
-  compute: finding + ${B}
-  return { places: find("places"), stops: find("stops"), weather: find("forecasts") }
-}
-${B},
-  effect: "draw-map",
-})
-process("plan", "itinerary", "itinerary", {
-  compute: finding + ${B}
-  return { stops: find("stops"), legs: find("legs"), weather: find("forecasts") }
-}
-${B},
-  effect: "draw-itinerary",
-})
+// the processes: each started in trip/plan, where it runs and looks up from
+start("plan", "plan-editor")
+start("plan", "parse-stops")
+start("plan", "measure-legs")
+start("plan", "read-weather")
+start("plan", "fetch-weather")
+start("plan", "map")
+start("plan", "itinerary")
 
 // Try: type "Day 12 — Bordeaux" in the plan; the map, legs, weather and itinerary follow.
 //      unplace("trip", "units", "units-km")  — the root's miles show through
@@ -475,30 +495,31 @@ ${B},
 `;
 
 const sheet = String.raw`
-// A spreadsheet: cells are nodes, formulas are processes. The sheet is a
-// process too; cells live in its directory, and formula processes placed there
-// are started by it. A formula looks its inputs up from its place in the sheet.
-make("root", "programs", "programs", {})
+// A spreadsheet: cells are nodes, formulas are processes. Each formula is a
+// process started in the sheet, where it looks its inputs up, and its effect
+// writes what it works out into its own cell. The grid is a process too: it
+// reads every cell, and a cell whose value a process wrote is a formula, as
+// the change that last set it says.
+make("root", "sheet", "sheet", {})
+const cell = (name, v) => make("sheet", name, "cell-" + name, v)
+cell("A1", "apples"); cell("B1", 12); cell("C1", 0.5)
+cell("A2", "pears");  cell("B2", 7);  cell("C2", 0.8)
+cell("A3", "plums");  cell("B3", 20); cell("C3", 0.25)
 
-// the grid: reads every cell the sheet holds, by name, and draws it; typing
-// in a plain cell writes it through the lasting interface. The sheet runs in
-// the root, so its own node is [name], and a cell is [name, "A1"]
+// the grid: reads every cell the sheet holds, by name, and draws it; typing in
+// a plain cell writes it through the lasting interface. It runs in the sheet,
+// so [] is the sheet, and a cell is ["A1"]
 program("programs", "grid", ${B}
-export default function ({ api, name }) {
+export default function ({ api }) {
   const cells = {}
-  for (const [cell, items] of api.directory({ address: [name] }).directory) {
+  for (const [cell, items] of api.directory({ address: [] }).directory) {
     if (!/^[A-Z][0-9]+$/.test(cell)) continue
-    const at = [name, cell]
-    cells[cell] = {
-      id: items[0].id, at,
-      v: api.read({ address: at })[0]?.value,
-      formula: api.directory({ address: at, name: "compute" }).items.length > 0,
-    }
+    const [it] = api.read({ address: [cell] }).filter((i) => "value" in i)
+    cells[cell] = { id: items[0].id, at: [cell], v: it?.value, by: it?.change?.process ?? null }
   }
   return cells
 }
-${B})
-program("programs", "draw-grid", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const cols = ["A", "B", "C", "D"], rows = [1, 2, 3, 4]
@@ -506,8 +527,8 @@ export default function ({ self, value, lasting }) {
   const body = rows.map((r) => h("tr", {}, h("th", {}, r), ...cols.map((c) => {
     const cell = value[c + r]
     if (!cell) return h("td", { class: "blank" })
-    if (cell.formula) return h("td", { class: "formula", title: cell.id + " is a process" }, String(cell.v ?? "…"))
-    const input = h("input", { value: String(cell.v), class: typeof cell.v === "number" ? "num" : "" })
+    if (cell.by) return h("td", { class: "formula", title: "written by the process " + cell.by }, String(cell.v ?? "…"))
+    const input = h("input", { value: String(cell.v ?? ""), class: typeof cell.v === "number" ? "num" : "" })
     input.onchange = () => {
       const n = Number(input.value)
       const v = input.value.trim() !== "" && !isNaN(n) ? n : input.value
@@ -518,24 +539,24 @@ export default function ({ self, value, lasting }) {
   screen(self).replaceChildren(h("div", { class: "label" }, "sheet · formulas are processes"), h("table", { class: "sheet-grid" }, head, ...body))
 }
 ${B})
+start("sheet", "grid")
 
-// the sheet runs the grid; its directory holds the cells
-process("root", "sheet", "sheet", { compute: "grid", effect: "draw-grid" })
-const cell = (name, v) => make("sheet", name, "cell-" + name, v)
-cell("A1", "apples"); cell("B1", 12); cell("C1", 0.5)
-cell("A2", "pears");  cell("B2", 7);  cell("C2", 0.8)
-cell("A3", "plums");  cell("B3", 20); cell("C3", 0.25)
-
-// a formula is a process placed in the sheet, where it runs; it looks its
-// inputs up from its place there
+// a formula is a program, and a process started in the sheet; its cell is a
+// node it writes, so the grid and other formulas find it by name
 const finding = ${B}
 export default function ({ api }) {
   const find = (name) => {
     const [it] = api.lookup({ name })
-    return it && api.read({ address: it.from.path })[0].value
+    return it && api.read({ address: it.from.path }).find((i) => "value" in i)?.value
   }
 ${B}
-const formula = (name, body) => process("sheet", name, "f-" + name, { compute: finding + "  " + body + "\n}" })
+const formula = (name, body) => {
+  cell(name, null)
+  program("programs", "f-" + name, finding + "  " + body + "\n}",
+    "export default function ({ api, value, previous }) {\n" +
+    "  if (value !== previous) api.write({ address: [" + JSON.stringify(name) + "], patches: [{ type: \"snapshot\", value }] })\n}")
+  start("sheet", "f-" + name)
+}
 formula("D1", "return +(find('B1') * find('C1')).toFixed(2)")
 formula("D2", "return +(find('B2') * find('C2')).toFixed(2)")
 formula("D3", "return +(find('B3') * find('C3')).toFixed(2)")
@@ -641,59 +662,52 @@ make("drawer", "render-text", "shouty", ${B}
 el.replaceChildren(h("p", { class: "r-shouty" }, thing.text.toUpperCase() + "!!"))
 ${B})
 
-// the programs that make the desk go
-make("root", "programs", "programs", {})
-// a folder view: what its folder holds, and a child process for each thing.
-// it runs in its folder, so [] is the folder, and [name] its own node. A
-// directory item carries the change that last set its slot: a thing dragged
-// away and back is a new placement, and gets a new card
+// a folder view: what its folder holds, and a card for each thing. It runs in
+// its folder, so [] is the folder, and [name] its own node. A directory item
+// carries the change that last set its slot: a thing dragged away and back is
+// a new placement, and gets a new card. Each card runs in a node of its own,
+// made in the view's node by the thing's name, so the card's place says which
+// thing it draws; a card for a thing that left goes with its node, since a
+// process whose address reaches nothing is killed
 program("programs", "folder", ${B}
 export default function ({ api, cwd, name }) {
   const items = api.directory({ address: [] }).directory
-    .filter(([slot]) => !slot.startsWith("render-") && slot !== name)
-    .flatMap(([slot, found]) => found.map((item) => ({ name: slot, id: item.id, since: item.change.time })))
+    .filter(([slot]) => !slot.startsWith("render-") && !slot.startsWith("@"))
+    .flatMap(([slot, found]) => found.map((item) => ({ name: slot, id: item.id, since: item.change?.time ?? 0 })))
   const kids = Object.fromEntries(
     api.directory({ address: [name] }).directory.map(([slot, found]) => [slot, found.map((item) => item.id)]))
   return { title: cwd[cwd.length - 1], items, kids }
 }
-${B})
-// a card is a process placed under the view, by the thing's name, so it runs
-// there; its programs are placed in its own slots. Cards of things that left
-// are unplaced
-program("programs", "folder-kids", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ api, self, name, value }) {
   screen(self).replaceChildren(h("div", { class: "folder-title" }, "▤ " + value.title,
     h("span", { class: "muted" }, "  " + value.items.length + " things")))
-  const want = new Set()
-  for (const t of value.items) {
-    const pid = self + ":" + t.id + "@" + t.since
-    want.add(pid)
-    if ((value.kids[t.name] ?? []).includes(pid)) continue
-    api.place({ address: [name], name: t.name, id: pid, value: null })
-    api.place({ address: [name, t.name], name: "compute", id: "thing" })
-    api.place({ address: [name, t.name], name: "effect", id: "thing-frame" })
-  }
+  const want = new Set(value.items.map((t) => self + ":" + t.id + "@" + t.since))
   for (const [slot, ids] of Object.entries(value.kids)) {
-    for (const pid of ids) {
-      if (pid.startsWith(self + ":") && !want.has(pid)) api.unplace({ address: [name], name: slot, id: pid })
-    }
+    for (const id of ids) if (id.startsWith(self + ":") && !want.has(id)) api.unplace({ address: [name], name: slot, id })
+  }
+  for (const t of value.items) {
+    const id = self + ":" + t.id + "@" + t.since
+    if ((value.kids[t.name] ?? []).includes(id)) continue
+    api.place({ address: [name], name: t.name, id, value: t.id })
+    api.start({ address: [name, t.name], program: ["programs", "card"] })
   }
 }
 ${B})
-// a thing's card: the thing, and the renderer found for it. A card runs in its
-// folder's view, by the thing's name, so the thing is that name in the folder
-program("programs", "thing", ${B}
-export default function ({ api, name }) {
-  const at = ["..", name]
+// a thing's card: the thing, and the renderer found for it. It runs in its
+// node, in the view, in the folder, so the thing is ["..", "..", its name]
+program("programs", "card", ${B}
+export default function ({ api, cwd }) {
+  const name = cwd[cwd.length - 1]
+  const at = ["..", "..", name]
   const thing = api.read({ address: at })[0]?.value
   const type = (thing && typeof thing === "object" && thing["@type"]) || "json"
   const by = api.lookup({ name: "render-" + type })[0] ?? api.lookup({ name: "render-json" })[0]
   return { name, at, thing: thing ?? null, type, renderer: by?.id ?? null,
     code: by ? api.read({ address: by.from.path })[0].value : null }
 }
-${B})
-program("programs", "thing-frame", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const el = screen(self)
@@ -710,8 +724,8 @@ export default function ({ self, value, lasting }) {
 }
 ${B})
 
-process("inbox", "inbox-view", "inbox-view", { compute: "folder", effect: "folder-kids" })
-process("archive", "archive-view", "archive-view", { compute: "folder", effect: "folder-kids" })
+start("inbox", "folder")
+start("archive", "folder")
 `;
 
 const essays = String.raw`
@@ -743,8 +757,7 @@ make("root", "letter", "letter", { title: "a letter to bun" })
 make("letter", "style", "note-style", { font: "var(--mono)", size: 13, ink: "#7a1f4b", paper: "#fff3f8" })
 place("letter", "sections", "p-intro"); place("letter", "sections", "p-bun")
 
-make("root", "programs", "programs", {})
-program("programs", "gather", ${B}
+program("programs", "typeset", ${B}
 export default function ({ api }) {
   const doc = api.read({ address: [] })[0]?.value ?? {}
   // reading the slot gives an item for each paragraph in it that is here, in order
@@ -760,8 +773,7 @@ export default function ({ api }) {
   })
   return { title: doc.title, style: style && api.read({ address: style.from.path })[0].value, paras }
 }
-${B})
-program("programs", "typeset", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value, lasting }) {
   const s = value.style ?? {}
@@ -777,8 +789,8 @@ export default function ({ self, value, lasting }) {
   screen(self).replaceChildren(art)
 }
 ${B})
-process("essay", "read-essay", "read-essay", { compute: "gather", effect: "typeset" })
-process("letter", "read-letter", "read-letter", { compute: "gather", effect: "typeset" })
+start("essay", "typeset")
+start("letter", "typeset")
 
 // Try: drag p-bun from the library into the essay; drag p-snow above p-tail.
 //      edit the intro in the letter, and watch the essay.
@@ -829,8 +841,7 @@ make("studio", "night", "night", {})
 make("night", "palette", "dusk", { w: "#c9c2ff", p: "#7b5ce6", k: "#fdf6fa", n: "#ff7aa8" })
 place("night", "filter", "mirror")
 
-make("root", "programs", "programs", {})
-program("programs", "develop", ${B}
+program("programs", "lens", ${B}
 export default function ({ api }) {
   const find = (name) => {
     const [it] = api.lookup({ name })
@@ -852,8 +863,7 @@ export default function ({ api }) {
   }
   return stages
 }
-${B})
-program("programs", "filmstrip", ${B}
+${B}, ${B}
 import { h, screen } from "demo"
 export default function ({ self, value }) {
   const paint = (g, px) => {
@@ -871,8 +881,8 @@ export default function ({ self, value }) {
   screen(self).replaceChildren(h("div", { class: "px-strip" }, ...strip))
 }
 ${B})
-process("studio", "lens", "lens", { compute: "develop", effect: "filmstrip" })
-process("night", "night-lens", "night-lens", { compute: "develop", effect: "filmstrip" })
+start("studio", "lens")
+start("night", "lens")
 
 // Try: drag "invert" from the drawer onto the studio's filter slot (drop on
 // the edge of "outline" or "frame" to choose where). Drag "frame" above
@@ -880,77 +890,127 @@ process("night", "night-lens", "night-lens", { compute: "develop", effect: "film
 // pipeline shows through.
 `;
 
+const values = String.raw`
+// Values are more than JSON (CORE.tex, Values): bytes, as a file or an image
+// holds them, and typed arrays, as samples are held, never as strings or
+// lists of numbers. bytes(base64) and typed(kind, elements) make them here.
+make("root", "sprite", "sprite-png", bytes("iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAARUlEQVR42mNggIL/m8//Z8ABMORAAmCARRNWOdprAEsQACQpxtAEE9BRMsRQhCyG04ZHrjVgTJGzsEcQOYrxsbEqJsQHAEiVQEhLVgYYAAAAAElFTkSuQmCC"))
+make("root", "samples", "samples", typed("float32", Array.from({ length: 64 }, (_, i) =>
+  Math.round(Math.sin(i / 5) * 1000) / 1000)))
+
+// a process reads both: a typed array stays one in a compute, and a value it
+// returns may hold one, as the process's value does
+program("programs", "scope", ${B}
+export default function ({ api }) {
+  const find = (name) => {
+    const [it] = api.lookup({ name })
+    return it && api.read({ address: it.from.path })[0].value
+  }
+  const s = find("samples")
+  let lo = Infinity, hi = -Infinity, sum = 0
+  for (const x of s) { lo = Math.min(lo, x); hi = Math.max(hi, x); sum += x * x }
+  return { n: s.length, lo, hi, rms: Math.sqrt(sum / s.length), samples: s, png: find("sprite") }
+}
+${B}, ${B}
+import { h, screen } from "demo"
+export default function ({ self, value }) {
+  const w = 240, ht = 60
+  const pts = Array.from(value.samples, (x, i) => (i * w / (value.n - 1)).toFixed(1) + "," + ((1 - (x - value.lo) / (value.hi - value.lo || 1)) * ht).toFixed(1))
+  const svg = '<svg viewBox="0 0 ' + w + " " + ht + '" width="' + w + '" height="' + ht + '"><polyline fill="none" stroke="var(--rose)" stroke-width="2" points="' + pts.join(" ") + '"/></svg>'
+  const img = h("img", { src: URL.createObjectURL(new Blob([value.png], { type: "image/png" })), width: 96, height: 96, style: { imageRendering: "pixelated" } })
+  const line = h("div", {})
+  line.innerHTML = svg
+  screen(self).replaceChildren(img, line,
+    h("div", { class: "label" }, value.n + " float32 samples · rms " + value.rms.toFixed(3)))
+}
+${B})
+start("root", "scope")
+
+// Try: set("samples", [], ...) cannot go into a typed array, but a splice can:
+//   splice("samples", [], 0, 8, typed("float32", [1, 1, 1, 1, 1, 1, 1, 1]))
+`;
+
 const blank = String.raw`
 // The host gave the root. Make something by placing it:
 //   make("root", "hello", "hello", "world")
+// process(parent, name, { compute, effect? }) makes the loaders and the
+// programs folder if the root has none, a program, and a process running it.
 `;
+
+const withRuntime = (code: string) => (runtime + code).trim();
 
 export const examples: Example[] = [
   {
     id: "hello",
     title: "hello, ermine",
     blurb: "a node, a derived value, a counter with a button",
-    code: hello.trim(),
+    code: withRuntime(hello),
   },
   {
     id: "typing",
     title: "typing",
-    blurb: "core.tex's editor: splices through the lasting interface, no echo",
-    code: typing.trim(),
+    blurb: "scheduler.tex's editor: splices through the lasting interface, no echo",
+    code: withRuntime(typing),
   },
   {
     id: "themes",
     title: "configuration is placement",
     blurb: "lookup searches up the place; nearer names shadow farther ones",
-    code: themes.trim(),
+    code: withRuntime(themes),
   },
   {
     id: "guarded",
     title: "protect",
     blurb: "rules ask may() before every operation; refusals are recorded",
-    code: guarded.trim(),
+    code: withRuntime(guarded),
   },
   {
     id: "slow",
     title: "pending",
     blurb: "a compute waits for a name that slow work places later",
-    code: slow.trim(),
+    code: withRuntime(slow),
   },
   {
     id: "data",
     title: "programs as data",
     blurb: "the steps language of the conformance protocol",
-    code: data.trim(),
+    code: withRuntime(data),
   },
   {
     id: "embark",
     title: "a trip, à la embark",
     blurb: "an outline you write; a map, distances, weather and an itinerary follow",
-    code: embark.trim(),
+    code: withRuntime(embark),
   },
   {
     id: "sheet",
     title: "a spreadsheet",
     blurb: "cells are nodes, formulas are processes, the grid reads them all",
-    code: sheet.trim(),
+    code: withRuntime(sheet),
   },
   {
     id: "desk",
     title: "a desk of things",
     blurb: "drag things between folders; renderers are found by lookup",
-    code: desk.trim(),
+    code: withRuntime(desk),
   },
   {
     id: "essays",
     title: "one paragraph, two documents",
     blurb: "a node placed in two slots: edit once, both change; drag to reorder",
-    code: essays.trim(),
+    code: withRuntime(essays),
   },
   {
     id: "pixels",
     title: "a pipeline is a slot",
     blurb: "drop filters into a slot, drag them to reorder, shadow it nearer",
-    code: pixels.trim(),
+    code: withRuntime(pixels),
+  },
+  {
+    id: "values",
+    title: "bytes and typed arrays",
+    blurb: "an image's bytes and float32 samples, held as the machine holds them",
+    code: withRuntime(values),
   },
   { id: "blank", title: "blank", blurb: "just the root", code: blank.trim() },
 ];

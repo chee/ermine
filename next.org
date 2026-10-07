@@ -81,6 +81,9 @@ IDEAS.tex instead.
   (e.g. a last step {"kill": pid}), so a kill can't be spoofed by a cause.
 - A handler call keeps the process's actor, and records the person who acted
   beside it, not as the actor.
+  Make clear whether the host could vouch for it: in JS, the event's
+  isTrusted (a real input event, not one made by code) is recorded with the
+  person.
 - Ids in shared untrusted systems will be keys; squatting on predicted ids is
   not the graph's job.
 - Done: ephemeral nodes are unique (one slot), cheap, and belong to a process.
@@ -124,3 +127,73 @@ IDEAS.tex instead.
    it and sends reads and writes to the owner over PROTOCOL's own lines (a
    Deno relay between the page's WebSocket and TCP). The owner's clock stamps
    everything; nothing merges.
+- Terminal (c/term) follow-ups, decided 2026-10-07: start's scope (window
+  programs chrooted at their own process node), pushed events, the
+  "external": true step, {"exited": status} in the cause when a program
+  exits; keys and size both written as the person (a resize is the person's doing);
+  rename ermGraphLetGo to ermGraphRelease.
+
+* From the demo move and the console (2026-10-07)
+- A process can't be found by name: it sits under its pid, so a value other
+  processes look up has to be copied by its effect into a named node, a round
+  later. A process has no parameters but its first value.
+- Dead process nodes pile up across reloads: processes are kept as ordinary
+  nodes, nothing restarts them, nothing deletes them.
+- start can't place a process inside an ephemeral node (ephemeral-parent), so
+  per-card nodes are ordinary and kept, unreachable, after a reload.
+- The host can't learn a process's program path (replace needs it) except by
+  watching start; Running could carry the path.
+- The host hears of kills only through loader.killed; a kill caused by a
+  lasting write from a timer reports to the program, not the host.
+- Every JS process gets an ephemeral `loaded` node and a pending first run.
+- Effects run after every run, even when the value is unchanged, so effects
+  that write derived values must compare with previous.
+- read(...)[0] is no longer a process's value: items come first.
+- Process records you can read through the graph: nothing lists processes or
+  says which run set a value, so a console's ps and why lean on the host's own
+  tables. IDEAS.tex's "records that can be read later", now needed.
+- Through the stack you can't tell whether a slot member has slots, or
+  whether an id is free.
+- protect trusts a peer field from any agent; only links stamp it. Trust it
+  only when a link put it there.
+- start searches for the whole program path, so `start counter` doesn't find
+  programs/counter.
+
+* Decided 2026-10-07 (Decide list, first batch) — write into SCHEDULER.tex
+- Hot reload: no mode. chee: "i want the visualizability of something being
+  new that a host/user/app can use". The scheduler shows newer (as today) and
+  offers a way to switch a process to the newer program in place, at its next
+  run, with a handover (old cleanup, new effect with the previous value);
+  whether and when to use it is the host's, user's or app's.
+- Placed and running come apart: a placed process is running, paused or
+  stopped, shown as an item in front of its value. Unplacing still kills.
+  After a restart, kept process nodes read as stopped, and a host may start
+  them again.
+- Only unplacing the process node itself kills it. If its address stops
+  reaching it some other way (a folder above unplaced, shadowed in a union),
+  it is paused and reads as unreachable, and resumes if reached again.
+- Ids: maybe an id minter at the root (chee): programs name things, and ids
+  come from a minter the host places at the root (fresh keys when shared).
+  Undecided in detail.
+
+* Decided 2026-10-07 (open questions, second batch)
+- A cleanup is told why it runs: ={killed: true}= at a kill, otherwise
+  before the next effect. SCHEDULER.tex (the effect's cleanup), then the
+  signals library.
+- A run's record says when a value came from the cache. The cache plan's
+  record field; PROTOCOL.tex Records when the cache is written up.
+- eg-walker: the merge mode is set when the node is made, not on every
+  commit (plans/eg-walker.org, question 1).
+- The fuzzer's drive stack is now schedule (done: code, DESIGN.md, saved
+  failures; 172 fuzz tests pass).
+- Open: does an effect run when its compute's value is unchanged? Asked for
+  all effects, not only the signals library.
+
+* Direction, chee 2026-10-07: everything in the graph
+- A refused read doesn't track, for now. Doing this right needs protect,
+  keyhiveprotect, the scheduler and sync to be in the graph, as nodes. Some
+  things will always look at /protect (or around themselves) rather than
+  search: a running scheduler looks around itself, as any node in context
+  does. That is reasonable.
+- The Keyhive group per shared node is decided (SUBDUCTION_SYNC.tex).
+- Screens over a link: 60 a second, not 15 (relay.ts, windows.ts defaults).

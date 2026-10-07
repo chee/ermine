@@ -1012,7 +1012,7 @@ ErmTime ermGraphLast(ErmInterface graph) {
 	return ((Graph *)graph.self)->last;
 }
 
-ErmErr ermGraphLetGo(ErmInterface graph, const ErmCtx *ctx, const ErmStamp *stamp, const char *id, ErmResult *out) {
+ErmErr ermGraphRelease(ErmInterface graph, const ErmCtx *ctx, const ErmStamp *stamp, const char *id, ErmResult *out) {
 	Graph *self = graph.self;
 	Node *node = nodeOf(self, id);
 	if (!node || !node->ephemeral) return ermInvalid("nothing-there");

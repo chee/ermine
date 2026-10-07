@@ -18,6 +18,7 @@ import {
   invalid,
   type Json,
   ours,
+  type Record,
   type Why,
 } from "./types.ts";
 
@@ -85,7 +86,40 @@ export type EffectGiven = {
   lasting: Acts;
   /** registers a handler of that name, replacing one the process has */
   handler(name: string, f: Handler): void;
+  /**
+   * Makes a scope owned by the process, and runs it at once (ts/demo/dom.org,
+   * Scopes). It lasts until disposed or the process is killed. A scheduler
+   * that has no scopes leaves it out.
+   */
+  scope?: MakeScope;
 };
+
+/** What a scope's compute is given: a read-only recorded interface, its id, pending, and a way to make children. */
+export type ScopeGiven = {
+  /** reads only, recorded under the scope's id, bound at its process's place */
+  api: Acts;
+  /** "<pid>#<n>" */
+  id: Id;
+  pending: Pending;
+  /** makes a scope owned by this one: disposed when this one runs again, or is disposed */
+  scope: MakeScope;
+};
+
+/** A scope's compute: a function of reads; it returns a value, of any kind, or pending. */
+export type ScopeCompute<T> = (given: ScopeGiven) => T | Pending;
+
+/** A scope's effect: applies the value; previous is what its last effect was given. May return a cleanup. */
+export type ScopeEffect<T> = (value: T, previous: T | undefined) => unknown;
+
+/** A scope, as its maker gets it: calling it disposes it. */
+export type Scope = (() => void) & {
+  readonly id: Id;
+  /** its last finished run's record */
+  readonly record: Record | undefined;
+  readonly disposed: boolean;
+};
+
+export type MakeScope = <T>(compute: ScopeCompute<T>, effect: ScopeEffect<T>) => Scope;
 
 /** A part as a function: a compute's returns a value or pending; an effect's may return a cleanup. */
 export type Loaded = (given: ComputeGiven & EffectGiven) => unknown;
@@ -100,6 +134,12 @@ export type Running = {
   readonly name: string;
   readonly cwd: readonly string[];
   readonly program: Identity;
+  /**
+   * The program it kept, its value as the search found it (SCHEDULER.tex, A
+   * process keeps the program it started with), so a loader can load both
+   * parts before the first runs. A scheduler may leave it out.
+   */
+  readonly code?: Program;
   readonly reads: Interface;
   readonly lasting: Acts;
 };
@@ -141,13 +181,32 @@ export function cannotLoad(text: string) {
   return invalid("not-a-program", text);
 }
 
-// The same-thread loader. A part's code is a module, given as its source or
-// its address. Importing is slow, so until the module has loaded a compute
-// reads the process's answer node and returns pending; once it has loaded,
-// the loader places that node, through the process's lasting interface, so
-// the run that read it is marked and the process runs again. A part is the
-// module's export named after it, compute or effect, or else its default
-// export; two parts of one program from one module share what it holds.
+// The same-thread loader. A part's code is a module:
+//
+//   "..."                  a string is always the module's source;
+//   {"import": address}    the module at that address: a URL, or a specifier
+//                          the importer resolves (jsr:, npm:, or a path
+//                          relative to the importer).
+//
+// So a part's code says it is an address by its shape, never by what its
+// text starts with: source beginning with a comment, "//", is source.
+//
+// Importing is slow, so until a process's modules have loaded its compute
+// reads the process's answer node, [pid, "loaded"], and returns pending
+// (LOADERS.tex, The loader interface). When a module loads, or fails to, the
+// loader writes that node through each waiting process's lasting interface:
+// it places it the first time and writes it after, so the run that read it
+// is marked and the process runs again, however many times it is told.
+//
+// When the scheduler gives the program (Running.code), the compute waits for
+// both parts' modules, so the effect is never asked for before its module is
+// there. When it does not, the compute reads the answer node in every run, so
+// an effect whose module was still loading, which fails its run, is run again
+// once it has loaded.
+//
+// A part is the module's export named after it, compute or effect, or else
+// its default export; two parts of one program from one module share what it
+// holds.
 
 type Module = {
   state: "loading" | "loaded" | "failed";
@@ -158,32 +217,48 @@ type Module = {
 /** The answer node's name under the process node. */
 const LOADED = "loaded";
 
-/** Whether code names a module rather than holding its source. */
-function isAddress(code: string): boolean {
-  return /^(https?:|file:|data:|blob:|jsr:|npm:|\.{0,2}\/)/.test(code);
+/** A part's code as the same-thread loader reads it: the module's key, and the URL to import. */
+type Code = { key: string; url: string };
+
+/** A part's code: a string is source; {"import": address} names a module. */
+export function moduleOf(code: Json | undefined): Code {
+  if (typeof code === "string") {
+    return {
+      key: `source:${code}`,
+      url: `data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`,
+    };
+  }
+  if (
+    typeof code === "object" && code !== null && Object.getPrototypeOf(code) === Object.prototype
+  ) {
+    const keys = Object.keys(code);
+    const address = (code as { [key: string]: Json }).import;
+    if (keys.length === 1 && typeof address === "string") {
+      return { key: `import:${address}`, url: address };
+    }
+  }
+  throw cannotLoad("a part's code is a module's source, a string, or {\"import\": address}");
 }
 
 /**
  * The same-thread loader: it runs a program's JavaScript in the scheduler's
- * own thread. importer imports a module by its address, import() by default.
+ * own thread. importer imports a module by its URL, import() by default.
  */
 export function sameThread(
   importer: (url: string) => Promise<unknown> = (url) => import(url),
 ): Loader {
   const modules = new Map<string, Module>();
   // the processes waiting for each module, to be told when it has loaded
-  const waiting = new Map<string, Set<Running>>();
+  // by pid, not by the Running object, which a wrapping loader may copy
+  const waiting = new Map<string, Map<Id, Running>>();
 
-  const fetch = (code: string): Module => {
-    let m = modules.get(code);
+  const fetch = (code: Code): Module => {
+    let m = modules.get(code.key);
     if (m) return m;
     m = { state: "loading" };
-    modules.set(code, m);
-    const url = isAddress(code)
-      ? code
-      : `data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`;
+    modules.set(code.key, m);
     const held = m;
-    importer(url).then(
+    importer(code.url).then(
       (exports) => {
         held.state = "loaded";
         held.exports = exports as { [name: string]: unknown };
@@ -193,52 +268,90 @@ export function sameThread(
         held.error = error;
       },
     ).finally(() => {
-      const told = waiting.get(code);
-      waiting.delete(code);
-      for (const p of told ?? []) answer(p);
+      const told = waiting.get(code.key);
+      waiting.delete(code.key);
+      for (const p of told?.values() ?? []) answer(p);
     });
     return m;
   };
 
-  /** Places the answer node, so a run that read it while it had nothing runs again. */
+  const wait = (code: Code, p: Running) => {
+    let set = waiting.get(code.key);
+    if (!set) waiting.set(code.key, set = new Map());
+    set.set(p.id, p);
+  };
+
+  /**
+   * Writes the answer node, placing it if it is not there yet: either way a
+   * change to it, which marks the run that read it.
+   */
   const answer = (p: Running) => {
+    const at = { address: [p.name, LOADED] };
     try {
-      p.lasting.place(
-        {
-          address: [p.name],
-          name: LOADED,
-          id: `${p.id}/${LOADED}`,
-          value: true,
-          ephemeral: true,
-        } as Parameters<Acts["place"]>[0],
-      );
-    } catch {
-      // killed, or already answered: nothing waits
+      if (p.lasting.read(at as Parameters<Acts["read"]>[0]).length) {
+        p.lasting.write(
+          { ...at, patches: [{ type: "snapshot", value: true }] } as Parameters<Acts["write"]>[0],
+        );
+      } else {
+        p.lasting.place(
+          {
+            address: [p.name],
+            name: LOADED,
+            id: `${p.id}/${LOADED}`,
+            value: true,
+            ephemeral: true,
+          } as Parameters<Acts["place"]>[0],
+        );
+      }
+    } catch (e) {
+      // killed, or refused: nothing waits for it
+      if (!(e instanceof ErmineError)) throw e;
     }
   };
 
-  const codeOf = (code: Json): string => {
-    if (typeof code !== "string") throw cannotLoad("a part's code is a module's source or address");
-    return code;
+  /** The other part's module, when the scheduler gives the program and it has one. */
+  const otherOf = (p: Running, part: Part): Code | undefined => {
+    const other = p.code?.[part === "compute" ? "effect" : "compute"];
+    if (other === undefined) return;
+    try {
+      return moduleOf(other);
+    } catch {
+      return; // it fails when it is loaded
+    }
   };
 
   return {
-    // loading starts when a part is first asked for
+    started(p) {
+      // both parts start loading now, when the program is known
+      for (const code of [p.code?.compute, p.code?.effect]) {
+        if (code === undefined) continue;
+        try {
+          fetch(moduleOf(code));
+        } catch {
+          // it fails when it is loaded
+        }
+      }
+    },
     killed(p) {
-      for (const set of waiting.values()) set.delete(p);
+      for (const set of waiting.values()) set.delete(p.id);
     },
     load(code, part, p) {
-      const source = codeOf(code);
-      const m = fetch(source);
+      const own = moduleOf(code);
+      const m = fetch(own);
+      const other = part === "compute" ? otherOf(p, part) : undefined;
       return (given) => {
-        if (m.state === "loading") {
-          let set = waiting.get(source);
-          if (!set) waiting.set(source, set = new Set());
-          set.add(p);
-          if (part === "compute") {
+        if (part === "compute") {
+          const loading = [own, ...(other ? [other] : [])].filter((c) =>
+            fetch(c).state === "loading"
+          );
+          for (const c of loading) wait(c, p);
+          // without the program, the effect's module is unknown: read the answer in every run
+          if (loading.length || p.code === undefined) {
             given.api.read({ address: [given.name, LOADED] });
-            return given.pending;
           }
+          if (loading.length) return given.pending;
+        } else if (m.state === "loading") {
+          wait(own, p);
           throw cannotLoad("the effect's module has not loaded yet");
         }
         if (m.state === "failed") {
@@ -248,6 +361,47 @@ export function sameThread(
         if (typeof f !== "function") throw cannotLoad(`the module has no ${part}`);
         return f(given);
       };
+    },
+  };
+}
+
+// The loader of programs built into the host, as LOADERS.tex allows: "a name
+// in a table of programs built into a microcontroller's image". A part's
+// code is a name in the host's table, and the part is the function there.
+// For host code that has to be a process, as a link's mirror is, so it can
+// make ephemeral nodes; the program's scope is still only what a part is
+// given.
+
+/** A program the host has: its parts as functions, and what to do when a process running it is killed. */
+export type Builtin = {
+  compute: Loaded;
+  effect?: Loaded;
+  /** told when a process running it is killed, after its cleanup and its ephemeral nodes */
+  killed?(process: Running): void;
+};
+
+/** The loader of the host's own programs: each part's code is the name of one in the table. */
+export function builtin(table: { readonly [name: string]: Builtin }): Loader {
+  /** the program each process loaded, to tell it of the kill */
+  const running = new Map<Id, Builtin>();
+  const named = (code: Json): Builtin => {
+    if (typeof code !== "string" || !Object.hasOwn(table, code)) {
+      throw cannotLoad(`the host has no program ${JSON.stringify(code)}`);
+    }
+    return table[code];
+  };
+  return {
+    load(code, part, p) {
+      const b = named(code);
+      const f = b[part];
+      if (typeof f !== "function") throw cannotLoad(`${String(code)} has no ${part}`);
+      running.set(p.id, b);
+      return f;
+    },
+    killed(p) {
+      const b = running.get(p.id);
+      running.delete(p.id);
+      b?.killed?.(p);
     },
   };
 }

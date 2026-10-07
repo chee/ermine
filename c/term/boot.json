@@ -1,0 +1,20 @@
+# The boot image: PROTOCOL requests, one per line, run by the host as its
+# first changes, each with this file and its line as its cause (its site).
+# Requests carry no time (the host's clock stamps them) and no agent (the
+# person's, {"actor": $USER, "code": []}). start is the host's own; with
+# "scope": true the program names only its own window.
+# share and mount run ts/deno/link.ts with the deno found on PATH (run from
+# c/term); "push": true has the host send them their events unasked;
+# "relay": true lets share act for its mounters: the host keeps the actor and
+# peer its requests give, under share's own code.
+{"cmd": "place", "address": [], "name": "loaders", "id": "loaders", "value": null}
+{"cmd": "place", "address": ["loaders"], "name": "pty", "id": "loader-pty", "value": {"loader": "pty"}}
+{"cmd": "place", "address": ["loaders"], "name": "ermine", "id": "loader-ermine", "value": {"loader": "ermine"}}
+{"cmd": "place", "address": [], "name": "programs", "id": "programs", "value": null}
+{"cmd": "place", "address": ["programs"], "name": "shell", "id": "shell", "value": {"kind": "pty", "argv": ["/bin/sh", "-c", "exec \"${SHELL:-/bin/sh}\""]}}
+{"cmd": "place", "address": ["programs"], "name": "counter", "id": "counter", "value": {"kind": "ermine", "argv": ["/bin/sh", "examples/counter.sh"]}}
+{"cmd": "place", "address": ["programs"], "name": "clock", "id": "clock", "value": {"kind": "ermine", "argv": ["/bin/sh", "examples/clock.sh"]}}
+{"cmd": "place", "address": ["programs"], "name": "share", "id": "share", "value": {"kind": "ermine", "push": true, "relay": true, "argv": ["deno", "run", "--quiet", "--allow-net", "--allow-read", "--allow-env", "../../ts/deno/link.ts", "host"]}}
+{"cmd": "place", "address": ["programs"], "name": "mount", "id": "mount", "value": {"kind": "ermine", "push": true, "argv": ["deno", "run", "--quiet", "--allow-net", "--allow-read", "--allow-env", "../../ts/deno/link.ts", "mirror"]}}
+{"cmd": "place", "address": [], "name": "windows", "id": "windows", "value": null}
+{"cmd": "start", "address": ["windows"], "program": ["programs", "shell"], "scope": true}

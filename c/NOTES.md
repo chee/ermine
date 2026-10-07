@@ -237,6 +237,7 @@ Brought up to the revised CORE.tex and PROTOCOL.tex:
 | graph_test.c | `make check`: ephemeral nodes |
 | cbor.h, cbor.c | deterministic CBOR for values (the CBOR details are fixed in cbor.h's comment); not linked into `ermine` yet |
 | cbor_test.c | `make check`; its fixed vectors are `../conformance/cbor_vectors.json`, for every codec |
+| term/ | ermine-term, a toy OS over this graph: its own Makefile and NOTES.md |
 
 ```c
 struct ErmVtable {
@@ -256,6 +257,11 @@ ErmOp    { kind; ErmAddress address; name; id; hasPosition, position; Json *valu
 ErmResult{ ErmItems items; ErmListing listing; ErmChange *change; ErmMarks marked; ErmIds gone; }
 ErmEventFn(void *data, const ErmChange *change, const ErmItems *reaches)   // reaches: NULL unless the route changed
 ```
+
+For a host holding the bare graph: `ermGraphLast(graph)`, the latest time in
+it, and `ermGraphRelease(graph, ctx, stamp, id, out)`, CORE's `release`, which unplaces an
+ephemeral node from its one slot with no address (an unplace at its parent),
+as a scheduler's kill does (term/ uses both).
 
 Operations take decoded arguments: main answers `missing` and `wrong-field`
 before the graph sees a request. The graph's lookup reads each level

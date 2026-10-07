@@ -10,7 +10,7 @@ import type { Change, Id, Json, Record as Run, Step } from "../../../src/mod.ts"
 import { Agent, codeLike, Ending, Json as JsonView, peek } from "./bits.tsx";
 import { Highlight } from "./editor.tsx";
 import { explode, focus, select, selected, world } from "./state.ts";
-import { type Entry, ROOT } from "./world.ts";
+import { type Entry, isLoader, isProgram, ROOT } from "./world.ts";
 import { drop } from "./dnd.ts";
 
 const W = 184;
@@ -32,29 +32,23 @@ function layout(): {
   const at = new Map<Id, { x: number; y: number }>();
   const edges: Edge[] = [];
   const children = new Map<Id, { name: string; id: Id }[]>();
-  // a process runs where the driver's walk reaches it
-  const reached = world.running();
+  // a process runs where it was placed, under its pid
   for (const parent of world.made.keys()) {
     const list: { name: string; id: Id }[] = [];
     for (const [name, ids] of world.slotsOf(parent)) {
       for (const id of ids) {
         list.push({ name, id });
-        const program = name === "compute" || name === "effect";
-        const process = reached.get(id)?.parent === parent && reached.get(id)?.name === name;
-        edges.push({
-          from: parent,
-          to: id,
-          kind: program ? "program" : process ? "process" : "place",
-          label: name,
-        });
+        const process = world.procs.get(id)?.parent === parent && name === id;
+        edges.push({ from: parent, to: id, kind: process ? "process" : "place", label: name });
       }
     }
-    // programs last, so a process's own tree reads first
-    list.sort((a, b) =>
-      Number(a.name === "compute" || a.name === "effect") -
-      Number(b.name === "compute" || b.name === "effect")
-    );
     children.set(parent, list);
+  }
+  // the program each process kept when it started
+  for (const p of world.procs.values()) {
+    if (world.made.has(p.pid) && world.made.has(p.program.node)) {
+      edges.push({ from: p.pid, to: p.program.node, kind: "program", label: "runs" });
+    }
   }
   let row = 0;
   const fresh = (id: Id, seen: Set<Id>) =>
@@ -119,9 +113,8 @@ function layout(): {
 
 function kindOf(id: Id): string {
   if (world.isProcess(id)) return "process";
-  const where = world.placements().get(id) ?? [];
-  if (where.some((p) => p.name === "compute" || p.name === "effect")) return "program";
   const v = world.valueOf(id);
+  if (isProgram(v) || isLoader(v)) return "program";
   if (v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0) {
     return "folder";
   }
@@ -166,11 +159,12 @@ export function Canvas() {
     for (const e of world.log) {
       if (e.n <= seenLog.current) continue;
       if (e.t === "record") {
-        for (const m of e.record.marked) {
-          if (m.node !== e.record.process) {
+        for (const t of e.record.marked) {
+          const node = world.header(t)?.node;
+          if (node !== undefined && node !== e.record.process) {
             fresh.push({
               n: e.n * 100 + fresh.length,
-              from: m.node,
+              from: node,
               to: e.record.process,
               kind: "mark",
             });
@@ -472,16 +466,19 @@ export function Canvas() {
                   <span class="card-id">{id}</span>
                   {last ? <Ending ending={last.ending} /> : null}
                 </div>
-                {codeLike(id, v)
+                {codeLike(id, v) || (isProgram(v) && typeof v.compute === "string")
                   ? (
                     <div class="card-code">
-                      <Highlight code={v.replace(/^\s*\n/, "")} lines={2} />
+                      <Highlight
+                        code={(isProgram(v) ? String(v.compute) : String(v)).replace(/^\s*\n/, "")}
+                        lines={2}
+                      />
                     </div>
                   )
                   : (
                     <div class="card-peek">
                       {kind === "program"
-                        ? "steps"
+                        ? (isLoader(v) ? `loader ${v.loader}` : "steps")
                         : kind === "folder"
                         ? `${world.slotsOf(id).length} names`
                         : peek(v, 40)}
@@ -530,7 +527,7 @@ function Legend() {
         <i class="sw l-process" /> a process runs where it sits
       </div>
       <div>
-        <i class="sw l-program" /> a process's compute and effect
+        <i class="sw l-program" /> the program a process runs
       </div>
       <div>
         <i class="sw l-read" /> its last run read this
@@ -608,7 +605,10 @@ function Detail({ id, close }: { id: Id; close: () => void }) {
         </button>
         {lastChange
           ? (
-            <button type="button" onClick={() => (focus.value = { t: "change", ref: lastChange })}>
+            <button
+              type="button"
+              onClick={() => (focus.value = { t: "change", ref: lastChange.time })}
+            >
               why this value?
             </button>
           )

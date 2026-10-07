@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Code, type Mark } from "./editor.tsx";
 import type { Change, Id, Json, Record as Run } from "../../../src/mod.ts";
+import type { ProcessItem } from "../../../src/schedule.ts";
 import {
   Agent,
   Empty,
@@ -22,12 +23,13 @@ import {
 } from "./bits.tsx";
 import { act, dock, focus, select, selected, world } from "./state.ts";
 import { palette } from "./palette.tsx";
-import { J, ROOT, siteOf } from "./world.ts";
+import { isLoader, isProgram as programValue, J, plain, ROOT, siteOf } from "./world.ts";
+import { itemNote, LinkPart } from "./link.tsx";
 
 export function Inspector() {
   world.version.value;
   const sel = selected.value;
-  if (!sel || (!world.made.has(sel.id) && !world.isProcess(sel.id))) {
+  if (!sel || !world.made.has(sel.id)) {
     return (
       <main class="pane inspector">
         <div class="pane-head">
@@ -55,6 +57,7 @@ export function Inspector() {
     <main class="pane inspector">
       <Header id={sel.id} />
       <div class="inspector-body">
+        <LinkPart id={sel.id} />
         {world.isProcess(sel.id) ? <ProcessPart id={sel.id} /> : null}
         {isProgram(sel.id) ? <ProgramPart id={sel.id} /> : null}
         {isProgram(sel.id) ? null : <ValuePart id={sel.id} />}
@@ -66,16 +69,9 @@ export function Inspector() {
   );
 }
 
+/** A program node: its value is {kind, compute, effect?} (SCHEDULER.tex, Programs). */
 function isProgram(id: Id) {
-  const r = world.read(id);
-  if (!("value" in r)) return false;
-  const v = r.value;
-  if (typeof v !== "string" && !Array.isArray(v)) return false;
-  for (const ps of world.placements().get(id) ?? []) {
-    if (ps.name === "compute" || ps.name === "effect" || ps.name.startsWith("render-")) return true;
-  }
-  // code that is not in a slot yet still reads as code
-  return typeof v === "string" && /\breturn\b|=>|screen\(|el\.|\bconst\b/.test(v);
+  return programValue(world.valueOf(id));
 }
 
 function Header({ id }: { id: Id }) {
@@ -83,6 +79,7 @@ function Header({ id }: { id: Id }) {
   const made = world.made.get(id);
   const where = world.placements().get(id) ?? [];
   const running = world.running().has(id);
+  const eph = world.ephemeral.has(id);
   const route = selected.value?.route ?? [];
   const step = route[route.length - 1];
   const ask = (only: string) => (palette.value = { context: { id, route }, only });
@@ -144,16 +141,24 @@ function Header({ id }: { id: Id }) {
         {world.isProcess(id)
           ? (
             <span class={`badge ${running ? "b-run" : "b-stop"}`}>
-              {running ? "running" : "process"}
+              {running ? "process · running" : "process · killed"}
             </span>
           )
           : null}
         {isProgram(id) ? <span class="badge b-prog">program</span> : null}
+        {isLoader(world.valueOf(id)) ? <span class="badge b-prog">loader</span> : null}
+        {eph
+          ? (
+            <span class="badge b-stop" title="nobody keeps it: it goes with its process">
+              ephemeral
+            </span>
+          )
+          : null}
       </h1>
       {made
         ? (
           <div class="made">
-            made <Ref r={made} /> by <Agent agent={made.agent} />
+            made <Ref r={made.time} /> by <Agent agent={made.agent} />
             {made.process
               ? (
                 <>
@@ -161,9 +166,13 @@ function Header({ id }: { id: Id }) {
                 </>
               )
               : null}
-            {siteOf(made.cause) ? <SiteLink site={siteOf(made.cause)!} /> : null}
+            {siteOf(made.cause)
+              ? <SiteLink site={siteOf(made.cause)!} remote={world.linked.has(made.time)} />
+              : null}
           </div>
         )
+        : id !== ROOT && world.kept
+        ? <div class="made muted">kept from before this page: loaded with the graph</div>
         : null}
       {where.length
         ? (
@@ -212,6 +221,7 @@ function ValuePart({ id }: { id: Id }) {
     );
   }
   const value = "value" in r ? r.value : undefined;
+  const editable = plain(value ?? null);
   const write = (t = text) => {
     const p = parseJson(t);
     if (!p.ok) return setErr(p.why);
@@ -234,19 +244,25 @@ function ValuePart({ id }: { id: Id }) {
   return (
     <Section
       title="value"
-      aside={
-        <button
-          type="button"
-          class="mini"
-          onClick={(e) => {
-            e.preventDefault();
-            setText(JSON.stringify(value ?? null, null, 2));
-            setEditing(!editing);
-          }}
-        >
-          {editing ? "cancel" : "✎ edit"}
-        </button>
-      }
+      aside={editable
+        ? (
+          <button
+            type="button"
+            class="mini"
+            onClick={(e) => {
+              e.preventDefault();
+              setText(JSON.stringify(value ?? null, null, 2));
+              setEditing(!editing);
+            }}
+          >
+            {editing ? "cancel" : "✎ edit"}
+          </button>
+        )
+        : (
+          <span class="muted" title="bytes, typed arrays and live values are not JSON">
+            not JSON
+          </span>
+        )}
     >
       {editing
         ? (
@@ -277,10 +293,12 @@ function ValuePart({ id }: { id: Id }) {
             {item.change
               ? (
                 <>
-                  {" "}· set <Ref r={item.change} /> by <Agent agent={item.change.agent} />
+                  {" "}· set <Ref r={item.change.time} /> by <Agent agent={item.change.agent} />
                 </>
               )
               : " · as the host gave it"}
+            {item.ephemeral ? " · ephemeral: nobody keeps it" : ""}
+            {itemNote(item)}
           </div>
         ))}
       <div class="patcher">
@@ -502,9 +520,10 @@ function HistoryPart({ id }: { id: Id }) {
     <Section title="changes" aside={<span class="muted">{changes.length}</span>}>
       <div class="history">
         {changes.map((c) => (
-          <div class="hist" onClick={() => (focus.value = { t: "change", ref: c })}>
+          <div class="hist" onClick={() => (focus.value = { t: "change", ref: c.time })}>
             <span class="t">@{c.time}</span>
             <span class={`kind-tag kt-${c.kind}`}>{c.kind}</span>
+            {c.ephemeral ? <span class="kind-tag kt-make" title="ephemeral">~</span> : null}
             <span class="hist-what">{describe(c)}</span>
             <Agent agent={c.agent} />
             {c.process ? <span class="via">via {c.process}</span> : null}
@@ -515,107 +534,181 @@ function HistoryPart({ id }: { id: Id }) {
   );
 }
 
+/** One item a scheduler puts in front of a process's value (SCHEDULER.tex, Pending, waiting and errors). */
+function FrontItem({ item }: { item: ProcessItem }) {
+  world.version.value;
+  if ("waiting" in item) {
+    return (
+      <div class="hint">
+        <Ending ending="pending" /> waiting{item.waiting.length ? ", kept for it:" : ""}{" "}
+        {item.waiting.map((t) => <Ref key={t} r={t} />)}
+      </div>
+    );
+  }
+  if ("stopped" in item) {
+    return (
+      <div class="hint">
+        <span class="ending e-refused">■ stopped</span>{" "}
+        killed with the process that started it; it stays placed until it is unplaced
+      </div>
+    );
+  }
+  if ("error" in item) {
+    return (
+      <div class="error-line">
+        ✕ run #{item.from.run} ended with{" "}
+        <span class={`kind-tag kt-${item.error.kind}`}>{item.error.kind}</span>{" "}
+        {item.error.op ? <b>{item.error.op}</b> : null} {item.error.why.code}
+        {item.error.why.text ? `: ${item.error.why.text}` : ""}
+        {item.error.why.message !== undefined ? `: ${String(item.error.why.message)}` : ""}
+      </div>
+    );
+  }
+  const n = item.newer;
+  const say = (what: string, i: { node: string; time: number } | null | undefined) =>
+    i === undefined ? null : (
+      <span>
+        {what}: {i === null ? <b>none is found now</b> : (
+          <>
+            <NodeLink id={i.node} /> <span class="at">@{i.time}</span>
+          </>
+        )}
+        {" "}
+      </span>
+    );
+  return (
+    <div class="hint">
+      <span class="ending e-pending">↑ newer</span> {say("program", n.program)}
+      {say("loader", n.loader)}
+      <span class="muted">— it keeps running the one it started with</span>
+    </div>
+  );
+}
+
 function ProcessPart({ id }: { id: Id }) {
   world.version.value;
-  // a process runs where the driver's walk reaches it: in the directory it sits in, its cwd
-  const at = world.running().get(id);
-  const running = at !== undefined;
-  const path = (at?.route ?? []).slice(0, -1);
+  const p = world.procs.get(id)!;
+  const running = p.state === "running";
+  const placed = world.addressOf(id) !== undefined;
+  const front = world.front(id);
   const runs: Run[] = world.records.get(id) ?? [];
   const last = runs[runs.length - 1];
   const handlers = [...(world.handlers.get(id) ?? [])];
-  const where = at ? [{ parent: at.parent, name: at.name }] : [];
-  const dir = world.directory(id, at?.route);
-  const slot = (n: string) => Array.isArray(dir) ? dir.find(([s]) => s === n)?.[1] ?? [] : [];
+  const kids = [...world.procs.values()].filter((q) => q.by === id);
+  const newer = front.some((i) => "newer" in i);
+  const place = world.routeOf(p.cwd);
+  const kind = programValue(p.code) ? p.code.kind : undefined;
   const [inputs, setInputs] = useState<{ [h: string]: string }>({});
   return (
     <Section
       title={<>process {running ? <span class="dot-run" /> : null}</>}
-      aside={running
-        ? (
-          <button
-            type="button"
-            class="mini danger"
-            onClick={(e) => {
-              e.preventDefault();
-              const p = where[0];
-              act(`unplace(${J(p.parent)}, ${J(p.name)}, ${J(id)})`, "inspector: stop");
-            }}
-          >
-            ■ stop
-          </button>
-        )
-        : (
-          <button
-            type="button"
-            class="mini go"
-            onClick={(e) => {
-              e.preventDefault();
-              act(`start(${J(id)})`, "inspector: start");
-            }}
-          >
-            ▶ start under root
-          </button>
-        )}
+      aside={
+        <span>
+          {running && newer && p.path
+            ? (
+              <button
+                type="button"
+                class="mini go"
+                title="start the program again where it is, and unplace this one"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const s = act(`replace(${J(id)})`, "inspector: replace");
+                  const next = s.ok && s.result ? JSON.parse(s.result) : undefined;
+                  if (typeof next === "string") {
+                    select(
+                      next,
+                      world.routeOf(world.addressOf(next) ?? []),
+                    );
+                  }
+                }}
+              >
+                ↻ replace
+              </button>
+            )
+            : null}
+          {placed
+            ? (
+              <button
+                type="button"
+                class="mini danger"
+                onClick={(e) => {
+                  e.preventDefault();
+                  act(`stop(${J(id)})`, running ? "inspector: stop" : "inspector: unplace");
+                }}
+              >
+                {running ? "■ stop" : "unplace"}
+              </button>
+            )
+            : null}
+        </span>
+      }
     >
       <div class="proc-grid">
         <div class="kv">
-          <span class="k">runs in</span>
+          <span class="k">pid</span>
           <span class="v">
-            {path.length
-              ? path.map((s, i) => (
-                <>
-                  {i ? <span class="crumb-sep">/</span> : null}
-                  <NodeLink id={s.node} route={path.slice(0, i + 1)} />
-                </>
-              ))
-              : running
-              ? <span class="muted">the root — lookups search it</span>
-              : <span class="muted">nowhere — no place the root reaches holds it</span>}
+            <code>{id}</code>{" "}
+            <span class="muted">
+              started <Ref r={p.started} />
+            </span>
           </span>
         </div>
         <div class="kv">
-          <span class="k">runs as</span>
+          <span class="k">runs in</span>
           <span class="v">
-            {last ? <Agent agent={last.agent} /> : <span class="muted">not run yet</span>}
+            {place.length
+              ? place.map((s, i) => (
+                <>
+                  {i ? <span class="crumb-sep">/</span> : null}
+                  <NodeLink id={s.node} route={place.slice(0, i + 1)} />
+                </>
+              ))
+              : <span class="muted">the root — lookups search it</span>}
+          </span>
+        </div>
+        <div class="kv">
+          <span class="k">program</span>
+          <span class="v">
+            <NodeLink id={p.program.node} /> <span class="at">@{p.program.time}</span>
+            {p.path ? <code class="muted">{p.path.join("/")}</code> : null}
+            {kind ? <span class="muted">· loaders/{kind}</span> : null}
+          </span>
+        </div>
+        <div class="kv">
+          <span class="k">acts as</span>
+          <span class="v">
+            {last ? <Agent agent={last.agent} /> : <Agent agent={p.actor} />}
           </span>
         </div>
         <div class="kv">
           <span class="k">started by</span>
           <span class="v">
-            {where.length
-              ? where.map((p) => (
-                <span class="placement">
-                  <NodeLink id={p.parent} />
-                  <span class="slot-name">.{p.name}</span>
-                </span>
-              ))
-              : <span class="muted">nothing: no place the root reaches holds it</span>}
+            {p.by ? <NodeLink id={p.by} /> : <span class="muted">outside any process</span>}
           </span>
         </div>
-        <div class="kv">
-          <span class="k">compute</span>
-          <span class="v">
-            {slot("compute").map((x, i) => (
-              <span class={i ? "shadowed" : ""}>
-                <NodeLink id={x} />
+        {kids.length
+          ? (
+            <div class="kv">
+              <span class="k">started</span>
+              <span class="v">
+                {kids.map((k) => (
+                  <span class={k.state === "running" ? "" : "shadowed"}>
+                    <NodeLink id={k.pid} />
+                  </span>
+                ))}
               </span>
-            ))}
-            {slot("compute").length === 0 ? <span class="muted">none: runs fail</span> : null}
-          </span>
-        </div>
-        <div class="kv">
-          <span class="k">effect</span>
-          <span class="v">
-            {slot("effect").map((x, i) => (
-              <span class={i ? "shadowed" : ""}>
-                <NodeLink id={x} />
-              </span>
-            ))}
-            {slot("effect").length === 0 ? <span class="muted">none: a derived value</span> : null}
-          </span>
-        </div>
+            </div>
+          )
+          : null}
       </div>
+      {front.length
+        ? (
+          <div class="handlers">
+            <div class="sub-title">in front of its value</div>
+            {front.map((item, i) => <FrontItem key={i} item={item} />)}
+          </div>
+        )
+        : null}
       {handlers.length
         ? (
           <div class="handlers">
@@ -653,7 +746,7 @@ function ProcessPart({ id }: { id: Id }) {
         <div class="sub-title">
           runs <span class="muted">{runs.length}</span>
         </div>
-        {runs.length === 0 ? <Empty>no runs yet. a process runs once it is started.</Empty> : null}
+        {runs.length === 0 ? <Empty>no runs yet: it is marked by its start.</Empty> : null}
         {[...runs].reverse().slice(0, 30).map((r) => (
           <div
             class={`run-row${
@@ -667,7 +760,7 @@ function ProcessPart({ id }: { id: Id }) {
             <Ending ending={r.ending} />
             <span class="run-value">{"value" in r ? peek(r.value, 30) : ""}</span>
             <span class="run-marks">
-              {r.marked.slice(0, 3).map((m) => <Ref key={`${m.node}@${m.time}`} r={m} />)}
+              {r.marked.slice(0, 3).map((t) => <Ref key={t} r={t} />)}
               {r.marked.length > 3 ? <span class="muted">+{r.marked.length - 3}</span> : null}
             </span>
           </div>
@@ -688,12 +781,11 @@ const live = signal(
   })(),
 );
 
-function ProgramPart({ id }: { id: Id }) {
-  world.version.value;
-  const r = world.read(id);
-  const code = "value" in r ? r.value : null;
-  const steps = typeof code !== "string";
-  const asText = typeof code === "string" ? code : JSON.stringify(code, null, 2);
+/** One part of a program: its code, written into the program's value a moment after typing. */
+function PartEditor(
+  { id, part, code, steps }: { id: Id; part: "compute" | "effect"; code: Json; steps: boolean },
+) {
+  const asText = typeof code === "string" ? code : JSON.stringify(code ?? null, null, 2);
   const [text, setText] = useState(asText);
   const [err, setErr] = useState<string>();
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -703,9 +795,6 @@ function ProgramPart({ id }: { id: Id }) {
     if (text === written.current) setText(asText);
     written.current = asText;
   }, [id, asText]);
-  const users = (world.placements().get(id) ?? []).filter((p) =>
-    p.name === "compute" || p.name === "effect" || p.name.startsWith("render-")
-  );
   const save = (t = text) => {
     let value: Json = t;
     if (steps) {
@@ -716,26 +805,75 @@ function ProgramPart({ id }: { id: Id }) {
     if (t === written.current) return;
     written.current = t;
     const s = act(
-      `write(${J(id)}, ${J(value)})`,
-      live.value ? "live: program" : "inspector: rewrite program",
+      `set(${J(id)}, [], ${J(part)}, ${J(value)})`,
+      live.value ? `live: ${part}` : `inspector: rewrite ${part}`,
     );
     setErr(s.ok ? undefined : s.error?.why);
   };
-  // what the processes running it threw, and where
-  const thrown = [...world.thrown.entries()].filter(([, t]) => t.code === code);
-  const failing = users.filter((u) => u.name === "compute" || u.name === "effect").map((u) => {
-    const runs = world.records.get(u.parent);
-    return { process: u.parent, last: runs?.[runs.length - 1] };
-  });
-  const marks: Mark[] = thrown.flatMap((
-    [, t],
-  ) => (t.line ? [{ line: t.line, cls: "error" as const }] : []));
+  const thrown = [...world.thrown.entries()].filter(([, t]) =>
+    t.program === id && (t.part === part || (part === "effect" && t.part === "handler"))
+  );
+  const marks: Mark[] = thrown.flatMap(([, t]) =>
+    t.line && t.code === code ? [{ line: t.line, cls: "error" as const }] : []
+  );
+  return (
+    <div class="editbox">
+      <div class="sub-title">{part}</div>
+      <Code
+        value={text}
+        lang={steps ? "json" : "js"}
+        marks={marks}
+        minHeight={80}
+        maxHeight={420}
+        onChange={(t) => {
+          setText(t);
+          if (live.value) {
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => save(t), 650);
+          }
+        }}
+        onRun={() => save()}
+      />
+      {thrown.map(([p, t]) => (
+        <div class="error-line" key={p}>
+          ✕ the {t.part} of <NodeLink id={p} />
+          {t.line ? ` threw at line ${t.line}` : " threw"}: {t.message}
+        </div>
+      ))}
+      {!live.value
+        ? (
+          <div class="row-actions">
+            <button
+              type="button"
+              class="primary"
+              disabled={text === written.current}
+              onClick={() => save()}
+            >
+              save the {part}
+            </button>
+          </div>
+        )
+        : null}
+      {err ? <div class="error-line">✕ {err}</div> : null}
+    </div>
+  );
+}
+
+function ProgramPart({ id }: { id: Id }) {
+  world.version.value;
+  const v = world.valueOf(id);
+  if (!programValue(v)) return null;
+  const steps = v.kind === "steps";
+  // the processes that kept this program when they started; one started before its last change shows newer
+  const users = [...world.procs.values()].filter((p) => p.program.node === id);
+  const now = world.made.get(id)?.time;
+  const latest = Math.max(now ?? 0, world.latest.get(id) ?? 0);
   return (
     <Section
       title="program"
       aside={
         <span class="program-aside">
-          <label class="live" title="write the program a moment after you stop typing">
+          <label class="live" title="write each part a moment after you stop typing">
             <input
               type="checkbox"
               checked={live.value}
@@ -748,74 +886,70 @@ function ProgramPart({ id }: { id: Id }) {
             />
             live
           </label>
-          <span class="muted">{steps ? "steps" : "JS"}</span>
+          <span class="muted">kind {v.kind}, run by loaders/{v.kind}</span>
         </span>
       }
     >
       <div class="program-users">
         {users.length
           ? users.map((u) => {
-            const f = failing.find((x) => x.process === u.parent);
+            const runs = world.records.get(u.pid);
+            const last = runs?.[runs.length - 1];
+            const old = u.state === "running" && u.program.time < latest;
             return (
-              <span class="program-user" key={u.parent + u.name}>
-                the {u.name} of <NodeLink id={u.parent} />
-                {f?.last ? <Ending ending={f.last.ending} /> : null}
+              <span class="program-user" key={u.pid}>
+                <NodeLink id={u.pid} />
+                {u.state === "running" ? null : <span class="muted">killed</span>}
+                {last ? <Ending ending={last.ending} /> : null}
+                {old
+                  ? (
+                    <span class="ending e-pending" title="it runs the program as it started">
+                      ↑ newer
+                    </span>
+                  )
+                  : null}
               </span>
             );
           })
           : (
             <span class="muted">
-              no process runs this yet: drop it into a process's compute or effect slot
+              no process runs this yet: start(where, path) starts one, as programs/name
             </span>
           )}
       </div>
-      <Code
-        value={text}
-        lang={steps ? "json" : "js"}
-        marks={marks}
-        minHeight={120}
-        maxHeight={520}
-        onChange={(t) => {
-          setText(t);
-          if (live.value) {
-            clearTimeout(timer.current);
-            timer.current = setTimeout(() => save(t), 650);
-          }
-        }}
-        onRun={() => save()}
-      />
-      {thrown.map(([p, t]) => (
-        <div class="error-line" key={p}>
-          ✕ {t.part} of <b>{p}</b>
-          {t.line ? ` threw at line ${t.line}` : " threw"}: {t.message}
-        </div>
-      ))}
+      <PartEditor id={id} part="compute" code={v.compute} steps={steps} />
+      {v.effect !== undefined
+        ? <PartEditor id={id} part="effect" code={v.effect} steps={steps} />
+        : (
+          <div class="hint">
+            no effect: a process running it is a derived value.{" "}
+            <a
+              onClick={() =>
+                act(
+                  `set(${J(id)}, [], "effect", ${J(steps ? [] : EFFECT)})`,
+                  "inspector: an effect",
+                )}
+            >
+              add one
+            </a>
+          </div>
+        )}
       <div class="row-actions">
-        {live.value
-          ? (
-            <span class="hint">
-              live: each pause writes it, and every process running it runs again
-            </span>
-          )
-          : (
-            <>
-              <button
-                type="button"
-                class="primary"
-                disabled={text === written.current}
-                onClick={() => save()}
-              >
-                save — write the program
-              </button>
-              <span class="hint">⌘↵ · a write to a program marks every process running it</span>
-            </>
-          )}
+        <span class="hint">
+          {live.value
+            ? "live: each pause writes the part. a process keeps the program it started with, and shows newer"
+            : "⌘↵ · a process keeps the program it started with, and shows newer"}
+        </span>
         <a onClick={() => (dock.value = "make")}>what can programs use?</a>
       </div>
-      {err ? <div class="error-line">✕ {err}</div> : null}
     </Section>
   );
 }
+
+const EFFECT = `import { h, screen } from "demo"
+export default function ({ self, value }) {
+  screen(self).replaceChildren(h("pre", {}, JSON.stringify(value, null, 1)))
+}`;
 
 function SubscribePart({ id }: { id: Id }) {
   world.version.value;
@@ -855,7 +989,7 @@ function SubscribePart({ id }: { id: Id }) {
                   <div
                     key={i}
                     class="sub-event"
-                    onClick={() => (focus.value = { t: "change", ref: e.change })}
+                    onClick={() => (focus.value = { t: "change", ref: e.change.time })}
                   >
                     <span class="t">@{e.change.time}</span>
                     <span class={`kind-tag kt-${e.change.kind}`}>{e.change.kind}</span>
@@ -866,14 +1000,17 @@ function SubscribePart({ id }: { id: Id }) {
                   <div
                     key={i}
                     class="sub-event"
-                    onClick={() => (focus.value = {
-                      t: "record",
-                      process: e.record.process,
-                      run: e.record.run,
-                    })}
+                    onClick={() =>
+                      e.record.run !== undefined && (focus.value = {
+                        t: "record",
+                        process: e.record.process,
+                        run: e.record.run,
+                      })}
                   >
                     <span class="t">▷</span>
-                    <span>record #{e.record.run}</span>
+                    <span>
+                      {e.record.run !== undefined ? `record #${e.record.run}` : "a handler call"}
+                    </span>
                     <Ending ending={e.record.ending} />
                   </div>
                 )

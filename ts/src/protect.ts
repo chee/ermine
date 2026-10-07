@@ -27,6 +27,7 @@ import {
   Refused,
   told,
 } from "./types.ts";
+import { equal, isObject } from "./patch.ts";
 
 ours(import.meta.url);
 
@@ -157,4 +158,82 @@ export function subject(_op: string, args: object): Id | undefined {
 function on(args: object): string {
   const node = subject("", args);
   return node === undefined ? "" : ` on ${JSON.stringify(node)}`;
+}
+
+/**
+ * A rule (PROTECT.tex, Rules): the fields it gives, each to equal the
+ * operation's, and what it says. A field it leaves out matches anything.
+ */
+export type Rule = {
+  readonly agent?: Json;
+  readonly peer?: Json;
+  readonly process?: Id;
+  readonly op?: string;
+  readonly node?: Id;
+  readonly id?: Id;
+  readonly allow: boolean;
+};
+
+/**
+ * What a rule's fields are matched against: the agent's actor, when it has
+ * one, and otherwise the whole agent; the agent's peer, the key a link
+ * verified (only an owner stamps it, so a mounter cannot claim it); the last
+ * step of the agent's code, when it has one, and otherwise the operation's
+ * own process; and the node and id may is given.
+ */
+export function facts(
+  agent: Json,
+  process: Id | undefined,
+  args: object,
+): { actor: Json; peer?: Json; process?: Id; node?: Id; id?: Id } {
+  const a = isObject(agent) ? agent : undefined;
+  const actor = a && Object.hasOwn(a, "actor") ? a.actor : agent;
+  const code = a && Array.isArray(a.code) ? a.code : undefined;
+  const last = code?.[code.length - 1];
+  const by = code
+    ? (isObject(last) && typeof last.process === "string" ? last.process : undefined)
+    : process;
+  const { node, id } = args as { node?: unknown; id?: unknown };
+  return {
+    actor,
+    ...(a && Object.hasOwn(a, "peer") ? { peer: a.peer } : {}),
+    ...(by === undefined ? {} : { process: by }),
+    ...(typeof node === "string" ? { node } : {}),
+    ...(typeof id === "string" ? { id } : {}),
+  };
+}
+
+/** Whether every field a rule gives equals the operation's; one the operation lacks never matches. */
+export function matches(
+  rule: Omit<Rule, "allow">,
+  agent: Json,
+  process: Id | undefined,
+  op: string,
+  args: object,
+): boolean {
+  const f = facts(agent, process, args);
+  const has = (field: string) =>
+    Object.hasOwn(rule, field) && (rule as { [k: string]: unknown })[field] !== undefined;
+  if (has("agent") && !equal(rule.agent!, f.actor)) return false;
+  if (has("peer") && (f.peer === undefined || !equal(rule.peer!, f.peer))) return false;
+  if (has("process") && (f.process === undefined || rule.process !== f.process)) return false;
+  if (has("op") && rule.op !== op) return false;
+  if (has("node") && (f.node === undefined || rule.node !== f.node)) return false;
+  if (has("id") && (f.id === undefined || rule.id !== f.id)) return false;
+  return true;
+}
+
+/**
+ * A may from a list of rules (PROTECT.tex, Rules): the first rule whose given
+ * fields all equal the operation's wins, and a refusal names it by its place
+ * in the list; if none does, the operation is allowed.
+ */
+export function rules(list: readonly Rule[]): May {
+  return (agent, process, op, args) => {
+    for (let rule = 0; rule < list.length; rule++) {
+      if (!matches(list[rule], agent, process, op, args)) continue;
+      return list[rule].allow === true || { rule };
+    }
+    return true;
+  };
 }

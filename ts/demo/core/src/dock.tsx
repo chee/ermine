@@ -207,7 +207,7 @@ function Protect() {
   const rules = world.rules;
   const set = (i: number, r: Partial<Rule>) => {
     const next = { ...rules[i], ...r };
-    for (const k of ["agent", "process", "op", "node"] as const) {
+    for (const k of ["agent", "peer", "process", "op", "node"] as const) {
       if (next[k] === "") delete next[k];
     }
     world.rules = rules.map((x, j) => (j === i ? next : x));
@@ -223,7 +223,7 @@ function Protect() {
   return (
     <div class="protect">
       <div class="protect-intro">
-        <b>may(agent, process, op, node)</b>{" "}
+        <b>may(agent, peer, process, op, node)</b>{" "}
         is asked before every operation, including each directory a lookup reads. the first rule
         whose given fields all match wins; when none does, the operation is allowed. blank matches
         anything.
@@ -233,6 +233,9 @@ function Protect() {
           <tr>
             <th />
             <th>agent</th>
+            <th title="the key a link verified: an owner stamps it on a mounter's agent, and a mounter cannot claim it">
+              peer
+            </th>
             <th>process</th>
             <th>op</th>
             <th>node</th>
@@ -258,6 +261,16 @@ function Protect() {
                   value={r.agent ?? ""}
                   placeholder="any"
                   onInput={(e) => set(i, { agent: (e.target as HTMLInputElement).value })}
+                />
+              </td>
+              <td>
+                <input
+                  class="code"
+                  list="peers"
+                  value={r.peer ?? ""}
+                  placeholder="any"
+                  title="a mounter's key, as a share's status lists it: matches only what an owner stamped"
+                  onInput={(e) => set(i, { peer: (e.target as HTMLInputElement).value })}
                 />
               </td>
               <td>
@@ -330,6 +343,13 @@ function Protect() {
       </table>
       <datalist id="agents">
         {[...world.agents, ...computers()].map((a) => <option key={a} value={a} />)}
+      </datalist>
+      <datalist id="peers">
+        {world.links().flatMap((l) =>
+          ((l.status?.mounters as string[] | undefined) ?? []).map((p) => (
+            <option key={p} value={p} />
+          ))
+        )}
       </datalist>
       <datalist id="processes">
         {[...world.made.keys()].filter((x) => world.isProcess(x)).map((x) => (
@@ -447,23 +467,23 @@ function Lookup() {
 
 // --- make ---
 
-const COMPUTE_TEMPLATE =
-  `// a compute only reads. it is a module whose default export the driver calls
-// with { api, self, cwd, name, changes }; it returns the process's value, or
-// PENDING, from "ermine". api.lookup({ name }) finds the nearest slot by that
-// name from the process's place; an item's from.path is the address it was
-// found at. an address is a list of names from the directory it runs in, [];
-// its own node is [name]. api.read({ address }) is a list of items
-export default function ({ api }) {
+const COMPUTE_TEMPLATE = `// a compute only reads. it is a module whose default export the scheduler
+// calls with { api, self, cwd, name, changes, pending }; it returns the
+// process's value, or pending. api.lookup({ name }) finds the nearest slot by
+// that name from the process's place; an item's from.path is the address it
+// was found at. an address is a list of names from the node it runs in, [];
+// its own node is [name], its pid. api.read({ address }) is a list of items
+export default function ({ api, pending }) {
   const [clicks] = api.lookup({ name: "clicks" })
-  return api.read({ address: clicks.from.path })[0].value
+  return clicks ? api.read({ address: clicks.from.path })[0].value : pending
 }`;
 
-const EFFECT_TEMPLATE = `// an effect only writes. it runs when the driver wrote the value, with
-// { api, lasting, self, cwd, name, value, previous, handler }: lasting works
-// until the process stops, handler(name, fn) names what fire can run. from
-// "demo", this host: screen(self) to draw on, h(tag, props, ...children) to
-// build with, fire(process, handler, input?). return a cleanup if you like
+const EFFECT_TEMPLATE = `// an effect only writes. it runs after each run whose compute returned a
+// value, with { api, lasting, self, cwd, name, value, previous, handler }:
+// lasting works until the process is killed, handler(name, fn) names what
+// fire can run. it imports from "demo", this host: screen(self) to draw on,
+// h(tag, props, ...children) to build with, fire(process, handler, input?).
+// return a cleanup if you like
 import { h, screen } from "demo"
 export default function ({ self, value }) {
   screen(self).replaceChildren(h("div", { class: "big" }, value))
@@ -483,9 +503,9 @@ function Make() {
   const [err, setErr] = useState<string>();
   // a node is made by placing it: into the selected node, or the root
   const parent: Id = sel && world.made.has(sel.id) ? sel.id : ROOT;
-  // a process runs where it sits, once the root reaches it: under the root or a
-  // process, or, with there, in the selected node, so its lookups search there
-  const runner: Id = there ? parent : sel && world.isProcess(sel.id) ? sel.id : ROOT;
+  // a process runs where it is started: in the root, or, with there, in the
+  // selected node, so its lookups search there
+  const runner: Id = there ? parent : ROOT;
   const makeNode = () => {
     if (!name) return setErr("a node is made by placing it: it needs a name in its parent");
     const s = act(
@@ -498,7 +518,7 @@ function Make() {
   const makeProcess = () => {
     if (!pname) return setErr("a process needs a name");
     const lines = [
-      `process(${J(runner)}, ${J(pname)}, ${J(pname)}, {`,
+      `process(${J(runner)}, ${J(pname)}, {`,
       `  compute: ${J(compute)},`,
       ...(withEffect ? [`  effect: ${J(effect)},`] : []),
       `})`,
@@ -532,18 +552,21 @@ function Make() {
         <div class="reference">
           <p>
             <b>workspace</b> — <code>api</code>{" "}
-            is the top of the stack, acting as you, with sites filled in as causes. a node is made
-            by placing it. the graph is reached by address; a word names a node by its id or an
-            address, and the host turns an id into an address from the root that reaches it.
+            is the top of the stack, the scheduler, acting as you, with sites filled in as causes. a
+            node is made by placing it. the graph is reached by address; a word names a node by its
+            id or an address, and the host turns an id into an address from the root that reaches
+            it. a program is a node {"{"}kind, compute, effect?{"}"}{" "}
+            under programs/, run by the loader under loaders/ of its kind; start places a process
+            under a pid and runs it.
           </p>
           <code>
             make(parent, name, id, value) · write(id, v) · patch(id, ...patches) · splice(id, path,
             from, to, v?) · set(id, path, key, v?) · place(parent, name, id, pos?) · unplace(parent,
-            name, id) · read(id) · dir(id, name?) · lookup(name, place?) · program(parent, id, code)
-            · process(parent, name, id,{" "}
-            {"{"}compute, effect?{"}"}) · start(id, under?, name?) · stop(id, under?, name?) ·
-            fire(process, handler, input?) · batch(fn) · as(agent, fn) · because(cause, fn) ·
-            PENDING
+            name, id) · read(id) · dir(id, name?) · lookup(name, place?) · program(parent, name,
+            compute, effect?) · start(where, program, value?) → pid · stop(pid) · replace(pid) ·
+            process(parent, name, {"{"}compute, effect?, value?{"}"}) → pid · ui(parent, name,{" "}
+            {"{"}state, draw{"}"}) · fire(pid, handler, input?) · batch(fn) · as(agent, fn) ·
+            because(cause, fn) · bytes(base64) · typed(kind, elements)
           </code>
         </div>
       </div>
@@ -551,7 +574,7 @@ function Make() {
         <div class="sub-title">
           a process{" "}
           <span class="muted">
-            placed in <code>{runner}</code>, where it runs
+            started in <code>{runner}</code>, where it runs; its program in programs/
           </span>
         </div>
         <div class="inline">

@@ -10,9 +10,9 @@
 // first field missing or of the wrong kind answers; then the stack checks the
 // rest.
 
-import { equal, isObject, whole } from "../src/patch.ts";
+import { isObject, whole } from "../src/patch.ts";
 import { fields, type Graph, graph, type Kind } from "../src/graph.ts";
-import { type May, protect } from "../src/protect.ts";
+import { type May, protect, type Rule, rules as protectRules } from "../src/protect.ts";
 import { type FireOp, schedule, type Scheduler } from "../src/schedule.ts";
 import { steps } from "../src/steps.ts";
 import type { StartOp } from "../src/loaders.ts";
@@ -79,34 +79,17 @@ export const stacks: {
 
 /**
  * The harness's may (PROTECT.tex, Rules): the first rule whose given fields
- * all equal the operation's wins, and a refusal names it; none allows. A
- * rule's agent is matched against the agent's actor when it has one, and its
- * process against the last step of the agent's code when it has one.
+ * all equal the operation's wins, and a refusal names it; none allows. The
+ * matching is protect's own (src/protect.ts, rules): agent against the
+ * agent's actor, peer against its peer, process against the last step of
+ * its code.
  */
 export function rules(list: Json | undefined): May {
   if (list === undefined) return () => true;
   if (!Array.isArray(list) || !list.every(isObject)) {
     throw wrongField("rules", "rules are a list of maps");
   }
-  const all = list as { readonly [key: string]: Json }[];
-  return (agent, process, op, args) => {
-    const { node, id } = args as { node?: unknown; id?: unknown };
-    const actor = isObject(agent) && Object.hasOwn(agent, "actor") ? agent.actor : agent;
-    const code = isObject(agent) && Array.isArray(agent.code) ? agent.code : undefined;
-    const last = code?.[code.length - 1];
-    const by = code ? (isObject(last) ? last.process : undefined) : process;
-    for (let rule = 0; rule < all.length; rule++) {
-      const r = all[rule];
-      const has = (field: string) => Object.hasOwn(r, field);
-      if (has("agent") && !equal(r.agent, actor)) continue;
-      if (has("process") && (by === undefined || r.process !== by)) continue;
-      if (has("op") && r.op !== op) continue;
-      if (has("node") && (node === undefined || r.node !== node)) continue;
-      if (has("id") && (id === undefined || r.id !== id)) continue;
-      return r.allow === true || { rule };
-    }
-    return true;
-  };
+  return protectRules(list as unknown as Rule[]);
 }
 
 /** Where a value field was malformed: a mark that is no value, so the field is wrong-field in its turn. */

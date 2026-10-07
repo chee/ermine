@@ -32,7 +32,10 @@
     if (e && typeof e === "object" && "why" in e && "kind" in e) {
       return { kind: e.kind, op: e.op, why: e.why };
     }
-    return { kind: "thrown", why: { code: "thrown", text: String(e?.message ?? e) } };
+    return {
+      kind: "thrown",
+      why: { code: "thrown", text: String(e?.message ?? e) },
+    };
   };
 
   const attempt = (f) => {
@@ -84,7 +87,11 @@
     const key = JSON.stringify(address);
     if (s.subs.has(key) || s.subs.size >= SUBS) return;
     try {
-      const { sub } = s.api.subscribe({ agent: AGENT, address, send: (e) => hear(s, e) });
+      const { sub } = s.api.subscribe({
+        agent: AGENT,
+        address,
+        send: (e) => hear(s, e),
+      });
       s.subs.set(key, sub);
     } catch { /* an address that refuses is shown as refused when read */ }
   }
@@ -94,10 +101,12 @@
     status() {
       return {
         version,
-        graphs: listed().filter((g) => g && typeof g.name === "string").map((g) => {
-          const s = state(g.name);
-          return { name: g.name, gen: s.gen, events: s.n, subs: s.subs.size };
-        }),
+        graphs: listed().filter((g) => g && typeof g.name === "string").map(
+          (g) => {
+            const s = state(g.name);
+            return { name: g.name, gen: s.gen, events: s.n, subs: s.subs.size };
+          },
+        ),
       };
     },
     /** What an address reads as, and its directory; and each name's slot followed. */
@@ -114,7 +123,9 @@
     lookup(name, place, slot) {
       const s = state(name);
       if (!s) return { gone: true };
-      return structuredClone(attempt(() => s.api.lookup({ agent: AGENT, place, name: slot })));
+      return structuredClone(
+        attempt(() => s.api.lookup({ agent: AGENT, place, name: slot })),
+      );
     },
     /** The events after n, and the generation they belong to. */
     events(name, after) {
@@ -124,6 +135,9 @@
     },
   };
 
-  Object.defineProperty(globalThis, "__ermine_devtools", { value: agent, configurable: true });
+  Object.defineProperty(globalThis, "__ermine_devtools", {
+    value: agent,
+    configurable: true,
+  });
   return true;
 })();

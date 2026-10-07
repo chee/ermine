@@ -1,16 +1,17 @@
 /// <reference lib="dom" />
 // The browser: the graph as directories, from the root down. A node placed in
-// many slots shows in each. Program slots are dim; process nodes glow when
-// the driver runs them.
+// many slots shows in each. Process nodes glow while the scheduler runs them,
+// and say what is in front of their value; ephemeral nodes are slanted.
 
 import { useState } from "preact/hooks";
 import type { Id, Json, Step } from "../../../src/mod.ts";
 import { peek } from "./bits.tsx";
 import { lit, select, selected, world } from "./state.ts";
-import { ROOT } from "./world.ts";
+import { isLoader, isProgram, ROOT } from "./world.ts";
 import { dragData, drop, indexIn, readDrag } from "./dnd.ts";
 import { palette } from "./palette.tsx";
 import { askAt } from "./ask.tsx";
+import { linkMark } from "./link.tsx";
 
 function kindOf(
   id: Id,
@@ -20,8 +21,8 @@ function kindOf(
   if (world.isProcess(id)) {
     return running.has(id) ? { glyph: "◉", cls: "k-run" } : { glyph: "○", cls: "k-proc" };
   }
-  if (typeof value === "string" && isProgram(id)) return { glyph: "λ", cls: "k-prog" };
-  if (Array.isArray(value) && isProgram(id)) return { glyph: "λ", cls: "k-prog" };
+  if (isProgram(value)) return { glyph: "λ", cls: "k-prog" };
+  if (isLoader(value)) return { glyph: "⚙", cls: "k-prog" };
   if (
     value && typeof value === "object" && !Array.isArray(value) &&
     (value as { "@type"?: unknown })["@type"] === "llm"
@@ -34,9 +35,12 @@ function kindOf(
   return { glyph: "•", cls: "k-other" };
 }
 
-let programs = new Set<Id>();
-function isProgram(id: Id) {
-  return programs.has(id);
+/** What is in front of a process's value, as one glyph: waiting, stopped, an error, newer. */
+function fronted(id: Id): string {
+  const items = world.front(id);
+  return items.map((i) =>
+    "waiting" in i ? "…" : "stopped" in i ? "■" : "error" in i ? "✕" : "newer" in i ? "↑" : ""
+  ).join("");
 }
 
 /** Every node beneath these, through every slot, from the host's copy, beneath protect. */
@@ -62,12 +66,6 @@ export function Browser() {
   const [over, setOver] = useState<{ k: string; at: "before" | "into" | "after" }>();
   const running = world.running();
   const where = world.placements();
-  programs = new Set(
-    [...where.entries()].filter(([, ps]) =>
-      ps.some((p) => p.name === "compute" || p.name === "effect")
-    )
-      .map(([id]) => id),
-  );
   const toggle = (k: string) => {
     const next = new Set(open);
     next.has(k) ? next.delete(k) : next.add(k);
@@ -123,7 +121,7 @@ export function Browser() {
     const sel = selected.value?.id === id && rk(selected.value.route) === k;
     const latest = world.latest.get(id) ?? 0;
     const looped = trail.has(id);
-    const dim = name === "compute" || name === "effect";
+    const eph = world.ephemeral.has(id);
     const l = lit.value;
     const light = l?.found.includes(id)
       ? " lit-found"
@@ -168,7 +166,7 @@ export function Browser() {
     return (
       <div class="tree-node" key={k}>
         <div
-          class={`row${sel ? " sel" : ""}${dim ? " dim" : ""}${light}${
+          class={`row${sel ? " sel" : ""}${eph ? " dim" : ""}${light}${
             over?.k === k ? ` drop-${over.at}` : ""
           }${twin === id && (where.get(id)?.length ?? 0) > 1 ? " twin" : ""}`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
@@ -238,7 +236,20 @@ export function Browser() {
               </>
             )
             : null}
-          <span class="row-id">{id}</span>
+          <span
+            class="row-id"
+            style={eph ? { fontStyle: "italic" } : undefined}
+            title={eph ? "ephemeral: nobody keeps it" : undefined}
+          >
+            {id}
+          </span>
+          {world.isProcess(id) ? <span class="muted">{fronted(id)}</span> : null}
+          {(() => {
+            const m = linkMark(id);
+            return m
+              ? <span class="muted" title={m.title}>{m.glyph}{m.word ? ` ${m.word}` : ""}</span>
+              : null;
+          })()}
           {(where.get(id)?.length ?? 0) > 1
             ? (
               <span
@@ -350,6 +361,12 @@ export function Browser() {
         </span>
         <span>
           <b class="k-prog">λ</b> program
+        </span>
+        <span>
+          <i>~</i> ephemeral
+        </span>
+        <span title="a mount's copy of another page's node; ◌ a write sent and not yet answered">
+          <b>⇄</b> mounted
         </span>
         <span>
           <b>🔒</b> refused

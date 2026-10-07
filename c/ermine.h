@@ -317,12 +317,12 @@ ErmInterface ermGraph(const char *root);
 /** graph.c, for a host holding the bare graph ermGraph made: the latest time in it, 0 for none (CORE What the graph holds) */
 ErmTime ermGraphLast(ErmInterface graph);
 /**
- * graph.c, for a scheduler's bookkeeping beneath the wrappers (SCHEDULER
+ * graph.c, CORE release: for a scheduler's bookkeeping beneath the wrappers (SCHEDULER
  * Ephemeral nodes): unplaces the ephemeral node `id` from its one slot,
  * needing no address, as an unplace op at its parent would, letting it go;
  * nothing-there when no ephemeral node of that id is here
  */
-ErmErr ermGraphLetGo(ErmInterface graph, const ErmCtx *ctx, const ErmStamp *stamp, const char *id, ErmResult *out);
+ErmErr ermGraphRelease(ErmInterface graph, const ErmCtx *ctx, const ErmStamp *stamp, const char *id, ErmResult *out);
 
 // a string map ---------------------------------------------------------------------
 // Keys are copied; values are yours. Entries 0..count-1 are in insertion

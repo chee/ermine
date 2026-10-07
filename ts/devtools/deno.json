@@ -6,8 +6,8 @@
   },
   "nodeModulesDir": "auto",
   "imports": {
-    "solid-js": "npm:solid-js@2.0.0-rc.13",
-    "@solidjs/web": "npm:@solidjs/web@2.0.0-rc.13",
+    "solid-js": "npm:solid-js@2.0.0-rc.8",
+    "@solidjs/web": "npm:@solidjs/web@2.0.0-rc.8",
     "babel-preset-solid": "npm:babel-preset-solid@2.0.0-rc.2",
     "@babel/core": "npm:@babel/core@^7",
     "@babel/preset-typescript": "npm:@babel/preset-typescript@^7",
@@ -22,5 +22,16 @@
       "esnext",
       "deno.ns"
     ]
-  }
+  },
+  "fmt": {
+    "lineWidth": 100
+  },
+  "lint": {
+    "exclude": [
+      "dist"
+    ]
+  },
+  "exclude": [
+    "dist"
+  ]
 }
