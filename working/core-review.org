@@ -1,0 +1,45 @@
+#+title: Core review, 2026-10-08 (GRAPH alone; whole core)
+
+Growth: the five core papers went from 1,836 lines at the 10-06 split to
+2,881 (+57%); GRAPH +5.6% since HEAD, nearly all from refusal-aware walks.
+The papers are now ahead of every implementation (newer still built in all
+three; 18 scenarios stale; no scenario for refused union members, ended,
+skipped, render, closures, live cleanups, ephemeral start, waiting start).
+
+Biggest creep: walks that pass over refused union members "through the top
+of the stack": no operation can do it (no by-id reads), contradicts the
+scheduler's bookkeeping beneath the wrappers, a refused first member is
+both an error and a list item, PROTOCOL can't encode it. Options: drop
+(refuse the operation, as built) or one named walk seam in GRAPH with all
+rules in PROTECT.
+
+Ranked cuts (whole-core reviewer):
+1. Freeze the reference scheduler to what's decided; move proposals to
+   working/ (live-value cleanups, ending-by-itself policy, ephemeral
+   process nodes, render lane and skipped, readable scheduler, why lists,
+   arrive to SYNC). Keep stop(why)/ended(why) as opaque values shown.
+2. Cut LOADERS to the floor and finding a loader; targets, building and
+   what hosts can run to working/LOADING or a host layer; closures as a
+   table loader.
+3. Take processes out of GRAPH: endings, errors, records, every-reason
+   examples, process clauses in Ephemeral go to SCHEDULER (finish returns
+   the reads it kept).
+4. Refusal walk as one named seam, rules only in PROTECT.
+5. lookup {all} out of GRAPH (to IDEAS / a library).
+6. Pause: decide; dropping it is the largest pending SCHEDULER cut.
+7. PROTOCOL: it's the core contract but lives in layers/link/; move it;
+   layer codes and commands to each HARNESS.md; kill-order rules to
+   SCHEDULER; drop untested proposed encodings.
+8. Bound the per-ended-process state.
+GRAPH-only reviewer adds: subscribe route to one sentence; cut duplicated
+ephemeral sentences; authority advice to PROTECT; forget-during-run clause
+out; partial-walk .. rule out; optionally motivation and related work
+(~650 words) out of GRAPH. Older gaps: what letting go marks (built, not
+written), CBOR details, finish can't say cut, TS-only serving rule.
+Contradictions list: C1 agent bound before code search; C2 refused first
+member; C3 is the place's walk asked; C4 what a program is (two parts vs
+lanes vs client vs closure); C5 endings in GRAPH vs SCHEDULER; C6 live
+cleanup vs replaced runnable; C7 handlers on code change; C8 proposed in
+one paper, fact in another; C9 kill order only in PROTOCOL; C10 which
+wrong-field for a live compute value; C11 graph knows processes; C12 by-id
+operations.

@@ -1,5 +1,6 @@
 // Sharing one node's value as commits (SYNC.tex): the first
-// experiment, no network and no Subduction. A wrapper (GRAPH.tex, Running and
+// experiment, no network and no Subduction, kept for its rebasing (rebase.ts).
+// The sync stack SYNC.tex describes is sync.ts. A wrapper (GRAPH.tex, Running and
 // wrapping) over the stack, for one node, known by its id and reached by an
 // address, since nothing can write by id.
 //

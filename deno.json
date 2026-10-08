@@ -7,6 +7,9 @@
     "fuzz": "cd conformance && deno run --allow-run --allow-read --allow-write --allow-env fuzz/main.ts",
     "build": "deno run --allow-read --allow-write --allow-run experimental_hosts/web/typescript/bundle/build.ts",
     "demo": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/core/dev.ts",
+    "demo:together": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/core/together.ts",
+    "demo:sync": "deno run --allow-read --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/sync/serve.ts",
+    "demo:sync:cross": "deno run --allow-read --allow-run --allow-env experimental_hosts/web/typescript/demo/sync/cross.ts",
     "demo:build": "deno run --allow-read --allow-write --allow-run --allow-env experimental_hosts/web/typescript/demo/core/build.ts",
     "demo:d2:build": "deno run --allow-read --allow-write --allow-run --allow-env experimental_hosts/web/typescript/demo/d2/build.ts",
     "test:d2": "deno test --allow-read --allow-env experimental_hosts/web/typescript/demo/d2/test.ts"

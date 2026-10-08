@@ -258,6 +258,8 @@ export function steps(options: { live?: (kind: string) => Json } = {}): Loader {
           address: value("address"),
           program: value("program"),
           ...(step.value === undefined ? {} : { value: value("value") }),
+          ...(step.name === undefined ? {} : { name: value("name") }),
+          ...(step.id === undefined ? {} : { id: value("id") }),
           ...cause(),
         } as unknown as StartOp;
         const started = api.start(op);

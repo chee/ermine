@@ -209,14 +209,9 @@ export function keep(api: Interface, backend: Backend, root: Id, opts: KeepOptio
       }
       if (!at.ephemeral) dirty.add(c.node);
     }
-    // each id in each slot of a node let go was taken out by a change of its own, with the next time
-    let next = c.time;
-    for (const id of gone ?? []) {
-      const going = shadows.get(id);
-      if (going) { for (const ids of going.directory.values()) next += ids.length; }
-      shadows.delete(id);
-    }
-    if (next > time) time = next;
+    // letting go is part of this one change and takes no time of its own (GRAPH, Ephemeral)
+    for (const id of gone ?? []) shadows.delete(id);
+    if (c.time > time) time = c.time;
   }
 
   function kept(): Kept {
@@ -259,6 +254,19 @@ export function keep(api: Interface, backend: Backend, root: Id, opts: KeepOptio
     place: (op) => learning(() => api.place(op)),
     unplace: (op) => learning(() => api.unplace(op)),
     ...(api.release ? { release: (op) => learning(() => api.release!(op)) } : {}),
+    // a change made elsewhere, applied beneath the wrappers through the scheduler's arrive; a
+    // write to an id the graph does not have makes the node, an ordinary one (GRAPH, Operations)
+    ...(api.apply
+      ? {
+        apply: (id, change) =>
+          learning(() => {
+            const making = change.kind === "write" && !shadows.has(id);
+            const answer = api.apply!(id, change);
+            if (making) shadows.set(id, blank(false, null));
+            return answer;
+          }),
+      }
+      : {}),
     flush,
     kept,
   };

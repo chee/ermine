@@ -411,7 +411,12 @@ Deno.test("the spec's vectors V1 and V2 hold with the pid and site made shareabl
     return out.buffer;
   };
   const dev = "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8";
-  const N = unhex("22c1e041e5447f30db337207f569f6169f08885754ffc3de11c04ed30782d403");
+  // N's id: BLAKE3("ermine/v0/id" || "unlocked" as a CBOR text string || the bytes 20..3f)
+  const made = Uint8Array.from({ length: 32 }, (_, i) => 0x20 + i);
+  const input = [...new TextEncoder().encode("ermine/v0/id"), ...encode("unlocked"), ...made];
+  const n = digest(new Uint8Array(input));
+  assertEquals(n, "0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce");
+  const N = unhex(n);
   const site = {
     file: trim("file:///home/chee/app/notes/app.ts", ["/home/chee/app"]),
     line: 12,
@@ -428,7 +433,7 @@ Deno.test("the spec's vectors V1 and V2 hold with the pid and site made shareabl
     patches: [{ type: "snapshot", value: { title: "hello" } }],
   } as Value;
   const name1 = digest(encode(v1));
-  assertEquals(name1, "b4169cc553acbe5c3d4e04132949f025c7f813fa8095348a1acad0cb53d28a73");
+  assertEquals(name1, "175b587173b11fee87eb6e42023ab1f628e86eba61bacf57ebbfa25b264ae758");
   const pid = qualify("@7-kabab", dev);
   const v2 = {
     kind: "write",
@@ -445,7 +450,7 @@ Deno.test("the spec's vectors V1 and V2 hold with the pid and site made shareabl
   } as Value;
   assertEquals(
     digest(encode(v2)),
-    "0444b15251d22e978caf6551a8b0dd60c687226bebf98dce1955a8ea7d9ef8b4",
+    "abc096c6c1d41ccf27f424d32e9504871ea99d0577475a0cc9c049fbef738f65",
   );
 });
 

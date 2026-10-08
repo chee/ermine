@@ -98,7 +98,7 @@ function scenario(h: Host) {
   // let e1 go from its one slot: x1 is taken out of held, then e2 out of out
   const letting = h.unplace([], "cam", "e1", p);
   assertEquals(letting.gone, ["e2", "e1"]);
-  return { at: letting.change.time, out: 2 };
+  return { at: letting.change.time, out: 0 };
 }
 
 /** What the graph gives for each address down from the root, a few levels deep. */
@@ -219,7 +219,7 @@ Deno.test("each slot keeps its last change that was not ephemeral", async () => 
   assert(gone.change.time > 0);
 });
 
-Deno.test("the clock carries on after a load, past the times letting go took", async () => {
+Deno.test("the clock carries on after a load, from the last change", async () => {
   const backend = memory();
   const h = host(backend);
   const { at, out } = scenario(h);
@@ -321,6 +321,24 @@ Deno.test("a keeper beneath protect learns what passes through it", async () => 
   await h.k.flush();
   const kept = (await load(backend))!;
   assertEquals(kept.nodes.get("a1")?.value, 1);
+});
+
+Deno.test("a change applied through the keeper, as an arrival is, is kept", async () => {
+  const backend = memory();
+  const h = host(backend);
+  h.place([], "n", "n1");
+  const at = h.next();
+  h.k.apply!("n1", {
+    kind: "write",
+    patches: [{ type: "snapshot", value: "arrived" }],
+    agent: "a",
+    cause: site,
+    time: at,
+  });
+  assertEquals(h.k.kept().time, at);
+  await h.k.flush();
+  const g = graph("root", (await load(backend))!);
+  assertEquals(g.read({ agent: "probe", address: ["n"] })[0].value, "arrived");
 });
 
 Deno.test("flushing after each operation needs no call", async () => {

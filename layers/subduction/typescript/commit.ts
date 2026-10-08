@@ -1,5 +1,9 @@
 // A change as a commit (SYNC.tex, Documents and commits; Names,
 // order and time): the first experiment, writes to one node's value only.
+// Its blob is not SYNC.tex's (it has no nonce, and names its node by the id
+// the graph holds): the blob, seals and headers SYNC.tex fixes are blob.ts's,
+// and the sync stack is sync.ts's. Its site trimming and pid qualifying are
+// SYNC.tex's, and sync.ts uses them.
 //
 // The blob is the change in deterministic CBOR (cbor.ts), a map of:
 //
@@ -131,7 +135,7 @@ export function trim(file: string, roots: readonly string[] = []): string {
 }
 
 /** A cause with every site in it trimmed. */
-function trimmed(cause: Json, roots: readonly string[]): Json {
+export function trimmed(cause: Json, roots: readonly string[]): Json {
   if (Array.isArray(cause)) return cause.map((c) => trimmed(c, roots));
   if (!isMap(cause)) return cause;
   const out: { [k: string]: Json } = {};
@@ -145,7 +149,7 @@ function trimmed(cause: Json, roots: readonly string[]): Json {
 }
 
 /** An agent with the process of each step of its code qualified. */
-function qualified(agent: Json, device: string | undefined): Json {
+export function qualified(agent: Json, device: string | undefined): Json {
   if (!isMap(agent) || !Array.isArray(agent.code)) return agent;
   const out: { [k: string]: Json } = {};
   for (const [k, v] of Object.entries(agent as { [k: string]: Json })) define(out, k, v);

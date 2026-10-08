@@ -16,7 +16,7 @@ core/scheduler/      SCHEDULER.tex, LOADERS.tex; typescript/, with the TS harnes
 core/protect/        PROTECT.tex; typescript/
 core/mod.ts          the core's TypeScript, all in one module
 layers/link/         PROTOCOL.tex, link.org; typescript/ (deno/ holds the command line link)
-layers/subduction/   SYNC.tex and its notes; typescript/
+layers/subduction/   SYNC.tex and its notes; typescript/, c/ (linked into the C harness)
 layers/lock/         LOCK.tex
 layers/keyhive/      KEYHIVE.tex, NOTES.md
 layers/cache/        cache.org; typescript/

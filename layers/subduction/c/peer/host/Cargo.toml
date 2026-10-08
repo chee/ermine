@@ -1,0 +1,22 @@
+# The Rust-hosted peer: target/release/ermine-peer. The C harness (../line.c,
+# including core/graph/c/main.c whole) answers its lines; Subduction is
+# ../src/lib.rs. NOTES.md.
+[package]
+name = "ermine-peer-host"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+publish = false
+
+[[bin]]
+name = "ermine-peer"
+path = "main.rs"
+
+[dependencies]
+ermine-peer = { path = ".." }
+hex = "0.4.3"
+serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] }
+tokio = { workspace = true }
+
+[build-dependencies]
+cc = "1.2"
