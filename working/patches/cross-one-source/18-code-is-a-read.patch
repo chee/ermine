@@ -1,0 +1,26 @@
+--- core/scheduler/LOADERS.tex
++++ core/scheduler/LOADERS.tex
+@@ -35,9 +35,8 @@
+ A program is code of some kind: JavaScript, wasm, a closure, or anything a
+ host can run. When a process's program is a path, the host's \code{code}
+ finds it and gives back a setup, a compute or an effect
+-(\code{SCHEDULER.tex}, Programs); its reads are the run's
+-(\code{SCHEDULER.tex}, Code is a read). The reference \code{code} searches
+-for the program from where the process is placed, looks up a loader node by
++(\code{SCHEDULER.tex}, Programs; Code is a read). The reference
++\code{code} searches for the program from where the process is placed, looks up a loader node by
+ the program's kind, and calls the host's \emph{loader} that node names. Where
+ the code then runs, in the page, a worker or a pty, is the loader's doing.
+ So placing a program or a loader node nearer is how a part of the tree runs
+@@ -47,9 +46,8 @@
+ \section{Finding code}\label{sec:code}
+ 
+ \begin{decision}[The host finds code]
+-The host gives the scheduler \code{code(process, view)}. Each run of a
+-process whose program is a path calls it first, with the process and the
+-run's read-only view (\code{SCHEDULER.tex}, Code is a read). It gives back
++The host gives the scheduler \code{code(process, view)}, called as
++\code{SCHEDULER.tex} says (Code is a read). It gives back
+ pending, an error, or the program's code in one of the three shapes
+ (\code{SCHEDULER.tex}, Programs), with the program it found as
+ \code{\{"node": id, "time": t\}}: its node and the time of the change that

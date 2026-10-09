@@ -9,21 +9,24 @@ and the OS owns the screen. An experiment: nothing here is in a paper.
 
 ```
 mac/METAL.md          the contract between the metal and the OS
-mac/metal/            the metal, in Swift: window, input, devices, the font ROM; build.sh builds ermine-mac
+mac/metal/            the metal, in Swift: window, input, devices, the font ROM and the font chip; build.sh builds ermine-mac
 typescript/main.ts    the OS's entry; the metal runs it, or --headless
 typescript/host.ts    core 0: the SD card, the stack, /hw from the device tree, the drain, the loop
 typescript/procs.ts   the scheduler: processes in the setup shape (WHAT-IS-A-PROCESS.tex, layout A)
 typescript/metal.ts   the bus: records in, commands out, the frame buffer mapped; and a headless stand-in
 typescript/ports.ts   what a driver holds of a device, as a live value
 typescript/console.ts host code's own text console, for the bare monitor
-typescript/blitter.ts the blitter: BitBlt (copy, over, blend, clipped) and text from the font ROM, a device
+typescript/blitter.ts the blitter: BitBlt (copy, over, blend, clipped) and text, in the font ROM or a font, a device;
+                      and the draw device's ops: a list that records, played back, and selection over text runs
+typescript/link.ts    the link (layers/link) as a device on irq 52: mounts what erminex shares on a channel
 typescript/image.ts   what a first boot puts on the SD card
 typescript/sync.ts    sync: SYNC.tex's wrapper over procs, and the device's key and Subduction's storage beside the card
 typescript/presence.ts what is not a document, under what is shared, shown live over PRESENCE.tex's messages
-image/drivers/        display (the compositor), kbd, pointer, uart, timer, power, cpu, usb, net, clip, volumes, sound, web
+image/drivers/        display (the compositor), font, kbd, pointer, uart, timer, power, cpu, usb, net, clip, volumes, sound, web,
+                      access (what the screen means, for VoiceOver and the Mac's input methods), link
 image/programs/       shell, term (a window with a shell), browser, graph (the graph browser),
                       edit (the editor and workspace), wmii (the window manager's core),
-                      wmiirc (its policy), status (its bar), menu (the world menu)
+                      wmiirc (its policy), status (its bar), menu (the world menu), erminex (a shared window)
 ```
 
 ## Run it
@@ -141,6 +144,48 @@ blown-up screen of points.
   on the bare graph.
 - `say hello`, `beep`, `copy text`.
 
+## Text is text
+
+- **The draw device.** A window is not pixels but ops: fills, frames,
+  pixels and text runs (`blitter.ts`), as Plan 9's /dev/draw takes messages.
+  A program draws on `blit.list(w, h)` as on a form and puts its ops in its
+  layer's `draw`; the compositor plays them, and writes where each text run
+  went to `/dev/display/text/<layer>`. `cat /dev/display/text/bar` is what the
+  bar says.
+- **Selecting.** Drag across any window's text and it is selected, on a
+  lemon highlighter under the text; cmd-c copies it to the Mac's clipboard.
+  The selection is `/dev/display/selection`. A window that selects for
+  itself says `drags: true` and gets the drag: the editor does, with
+  shift-arrows, cmd-a, cmd-c, cmd-x and cmd-v.
+- **VoiceOver.** `/drivers/access` makes `/dev/access/tree` from the
+  windows, their text runs, and what each program says it is (a layer's
+  `access`: the editor and the shell are text areas, the graph's columns
+  lists of buttons, the browser's toolbar buttons and a field, the menu
+  menu items), and the metal mirrors it to the Mac's accessibility. Pressing
+  an element clicks it.
+- **The Mac's input methods.** What has the keyboard says where its caret is
+  (a layer's `input`), `/dev/access/input`, and the Mac's input methods type
+  there: Japanese, the emoji picker (ctrl-cmd-space), dictation, accents by
+  pressing and holding. Text in progress shows at the caret, underlined.
+
+## erminex
+
+`erminex <channel or name> <cmd>` (`experimental_hosts/term/c`) shares one
+program's terminal over the link. In a shell window here, `erminex <channel
+or name>` puts what it shares in that window, as a program run in a rio
+window: you type into the shared program, and cmd-w gives the shell its
+window back. From the console it opens a window of its own.
+
+```
+cd experimental_hosts/term/c && make erminex && ./erminex kitchen zsh    # in a Mac terminal
+erminex kitchen                                                          # in a shell window here
+```
+
+The link is a device, as the timer is: `/hw/devices/link`, irq 52, and
+`/drivers/link`, which keeps what is mounted at
+`/dev/link/windows/<name>/screen`. `cat /dev/link/windows/*` shows each
+mount's state.
+
 ## Sync
 
 Two machines share parts of the graph through a Subduction server, as
@@ -187,7 +232,20 @@ It mixes:
 - System 7 windows (a pinstriped active title, a close box on the left, a hard frame and a drop shadow);
 - acme's pale yellow in the shells, and a lemon highlighter for selections.
 
-The font ROM is Monaco (`ermine-mac --font NAME` for another). Every colour comes from `/etc/theme`, which every program reads as it draws. `edit /etc/theme`, change a colour, save, and the whole machine redraws in it.
+Text is the Mac's own fonts, rendered by CoreText at the screen's pixels.
+The metal's font chip renders a page of 256 characters of any font at any
+size when the OS asks, as Plan 9's fontsrv does. `/drivers/font` serves
+the fonts `/etc/theme` names at `/dev/font`, one for each role: `text`
+(Geneva), `title` (Geneva made bold, standing in for Chicago, for title
+bars, the bar and menus) and `fixed` (Monaco, for the editor and the graph
+browser's values). A character from a page not yet there asks for it, and
+whatever drew it draws again when it comes. The shells are in the font ROM,
+Monaco in cells (`ermine-mac --font NAME` for another), which is there
+before anything else is.
+
+Every colour and font comes from `/etc/theme`, which every program reads as
+it draws. `edit /etc/theme`, change a colour or a font, save, and the whole
+machine redraws in it.
 
 ## What building it ran into
 

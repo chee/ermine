@@ -1,0 +1,22 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -104,13 +104,12 @@
+ \end{lstlisting}
+ 
+ \code{start}: places a new ephemeral node holding \code{null} in the node
+-\code{address} reaches, as the caller; answers the placement (\code{id}: the
+-pid). \code{program}: a path, searched for from the new place
+-(\code{LOADERS.tex}, Finding the program) at each run (Programs, Code is a
+-read), or code, a function or map of functions (Programs), run as is. An id the graph
+-has or a slot holds: invalid (\code{GRAPH.tex}, Placement; Ephemeral
+-nodes). A name the slot has: no clash; the node goes last in the slot, unless the
+-start is matched (Children). \code{start} is invalid only when its placement
++\code{address} reaches, with no position (\code{GRAPH.tex}, Placement), as
++the caller, and answers the placement (\code{id}: the pid), unless the start
++is matched (Children). \code{program}: a path (\code{LOADERS.tex}, Finding
++the program), found at each run (Programs, Code is a read), or code, a
++function or map of functions (Programs), run as is. \code{start} is invalid
++only when its placement
+ is, as \code{protect} and the graph decide (\code{PROTECT.tex}).
+ 
+ \begin{decision}[A process is unique and local]

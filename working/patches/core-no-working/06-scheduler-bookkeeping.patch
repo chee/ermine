@@ -1,0 +1,12 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -54,8 +54,7 @@
+ gives: the stack; \code{code}, finding a process's code (\code{LOADERS.tex},
+ Finding code); the bookkeeping interface, beneath the wrappers: the bare
+ graph, or a host layer over it passing operations at an id on
+-(\code{GRAPH.tex}, Operations), like the keeper (\code{HOST.tex}, The
+-keeper); a \emph{clock}; hooks (\S\ref{sec:hooks}).
++(\code{GRAPH.tex}, Operations); a \emph{clock}; hooks (\S\ref{sec:hooks}).
+ 
+ \begin{lstlisting}
+ const bare = graph(root)

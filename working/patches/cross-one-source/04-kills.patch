@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -188,8 +188,8 @@
+ next; then it goes. Ordinary nodes it held stay here. The change also marks the
+ readers that read a slot it took apart, as an unplacement from that slot would.
+ With its answer (\S\ref{sec:operations}), a host can let the gone nodes' live
+-things go in the order they went, and a scheduler end the processes whose nodes
+-went. A gone node's id names nothing.
++things go in the order they went, and a scheduler learn of kills
++(\code{SCHEDULER.tex}, Killing). A gone node's id names nothing.
+ 
+ An ephemeral node whose ordinary holder no place reaches stays here,
+ unreachable, until the holder is placed again or an unplacement at its id lets

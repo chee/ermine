@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -449,8 +449,8 @@
+ 
+ \subsection{Operations}\label{sec:operations}
+ 
+-A program's interface; a wrapper may add more (as the scheduler adds
+-\code{start} and \code{batch}).
++A program's interface; a wrapper may add more (as the scheduler does:
++\code{SCHEDULER.tex}, What a process is given).
+ 
+ {\small
+ \begin{xltabular}{\linewidth}{@{}lX@{}}

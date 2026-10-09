@@ -1,0 +1,12 @@
+--- core/scheduler/LOADERS.tex
++++ core/scheduler/LOADERS.tex
+@@ -164,9 +164,6 @@
+ the host's interface, so each process that read that node runs again and
+ finds its code loaded.
+ 
+-What each platform lets a loader run, and where building happens, are argued
+-in \code{working/LOADING.tex}.
+-
+ \section{Running code elsewhere}\label{sec:elsewhere}
+ 
+ How a loader runs code in a worker, a frame or another core is the loader's

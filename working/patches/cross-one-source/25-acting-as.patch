@@ -1,0 +1,19 @@
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -331,13 +331,9 @@
+ 
+ \paragraph{Acting as someone.} Every request but a \code{test-} command
+ carries \code{"agent"}. A request may carry \code{"process"}, to act as that
+-process, so that with \code{schedule} it may make and place ephemeral nodes.
+-A request may carry
+-\code{"place"}, a list of names from the graph's root, to act at that place,
+-where its addresses and lookups start; without one, it acts at the root. It
+-may also carry \code{"chroot": n}, which hides the first $n$ names of its
+-place: its \code{/} is the node the place's whole walk, from the graph's
+-root, took at that depth (\code{GRAPH.tex}, Paths). A chroot that is not a
++process, and \code{"place"}, to act at that place; without a place, it acts
++at the root. It may also carry \code{"chroot": n}, its place's chroot
++(\code{GRAPH.tex}, Paths). A chroot that is not a
+ whole number, or is greater than the number of names in the place, is
+ \code{wrong-field}, field \code{chroot}.
+ 

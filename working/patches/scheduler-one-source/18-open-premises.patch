@@ -1,0 +1,25 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -638,15 +638,13 @@
+   restarts?
+-\item \emph{Moving a process node.} Only processes may move ephemeral nodes
+-  (Ephemeral nodes): host code cannot move a process node, even one it
+-  started. Are process nodes excepted?
+-\item \emph{A kill beneath the scheduler.} Host code unplacing a process node
+-  on the bare graph kills a process without the scheduler learning of it
+-  (Killing); its next write at its id makes an ordinary node (\code{GRAPH.tex}, Operations,
+-  At an id). Must host code unplace process nodes through the scheduler?
++\item \emph{Moving a process node.} Host code cannot (Ephemeral nodes),
++  even one it started. Are process nodes excepted?
++\item \emph{A kill beneath the scheduler} (Killing). The process's next
++  write at its id makes an ordinary node (\code{GRAPH.tex}, Operations, At an
++  id). Must host code unplace process nodes through the scheduler?
+ \item \emph{What a run cannot show.} A read that gave no items, or was
+   refused, shows nothing of where it looked; a lookup, neither the
+   directories searched nor what it saw. Should the graph's answers carry
+   these?
+-\item \emph{The top of the stack.} Process interfaces are bound over the top
+-  of the stack, so wrappers above (e.g.\ sync's, \code{SYNC.tex}) see a
++\item \emph{The top of the stack.} Process interfaces are bound over it (The
++  reference scheduler), so wrappers above (e.g.\ sync's, \code{SYNC.tex}) see a
+   program's operations; no graph operation tells a layer the top

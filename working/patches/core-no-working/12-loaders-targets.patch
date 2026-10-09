@@ -1,0 +1,12 @@
+--- core/scheduler/LOADERS.tex
++++ core/scheduler/LOADERS.tex
+@@ -196,9 +196,6 @@
+ read what it runs.
+ \end{decision}
+ 
+-What else a target says, and what a loader does with one, are argued in
+-\code{working/\allowbreak{}LOADING.tex} (Targets).
+-
+ \section{Open}
+ 
+ \begin{itemize}

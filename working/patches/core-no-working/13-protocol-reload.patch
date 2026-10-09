@@ -1,0 +1,15 @@
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -388,9 +388,9 @@
+ is not subscribed now, one never made, unsubscribed already, or made before
+ a \code{test-reload}, is \code{wrong-field}, field \code{sub}.
+ 
+-\code{test-reload} rebuilds the graph as a keeper restores one,
+-\code{graph(root, restored)} from what a keeper would have saved
+-(\code{GRAPH.tex}, Nodes; \code{HOST.tex}, The keeper). It drops every
++\code{test-reload} rebuilds the graph as a host restores one,
++\code{graph(root, restored)} from what a host would have saved
++(\code{GRAPH.tex}, Nodes). It drops every
+ subscription, the reads kept under every reader
+ (\code{GRAPH.tex}, Tracking), and, with \code{schedule}, everything the
+ scheduler holds, as a host that starts again would (\code{SCHEDULER.tex},

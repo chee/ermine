@@ -1,0 +1,32 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -163,8 +163,7 @@
+ \begin{enumerate}
+ \item no longer due;
+ \item children killed, newest first, each wholly before the next (Children);
+-\item cleanups, newest first, told \code{\{"killed": true\}}
+-  (\S\ref{sec:api}), an error ending one not stopping the rest;
++\item cleanups (\S\ref{sec:api}), an error ending one not stopping the rest;
+ \item its other ephemeral nodes released, newest first (Ephemeral nodes);
+ \item \code{forget} with the pid (\code{GRAPH.tex}, Tracking).
+ \end{enumerate}
+@@ -246,8 +245,8 @@
+ One change, an empty write at its pid as bookkeeping, status dropping
+ \code{new}, makes it due; it runs as \emph{replaced} until a run ends done.
+ It keeps pid, place, agent, height, run count, kept changes, children,
+-ephemeral nodes. As replaced: a setup's cleanups run, told
+-\code{\{"killed": false\}}, then the setup, children it starts again
++ephemeral nodes. As replaced: a setup's cleanups run (\S\ref{sec:api}),
++then the setup, children it starts again
+ matched (Processes, Children); a compute runs; an effect's compute runs,
+ then its effect part, even on an equal value. To start afresh: start a new
+ process, unplace the old.
+@@ -496,6 +495,6 @@
+ the order they began waiting, through an interface bound as the process,
+ readerless, reading and writing; a setup's value is written as a compute's.
+-Before an effect part, its earlier effect parts' cleanups run, told
+-\code{\{"killed": false\}}, newest first; an error ending one is the run's;
++Before an effect part, its earlier effect parts' cleanups run
++(\S\ref{sec:api}); an error ending one is the run's;
+ the effect part still runs. A compute rerun before its effect part ran: one
+ effect part, latest value; its earlier run ends done then. What the second

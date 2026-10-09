@@ -251,7 +251,7 @@ then nowhere but in records.
 | =:around= every part of a kind, below a place | a loader node there naming an advising loader (ran)                 | placement |
 | =:after= every run of one process             | subscribe to its node: each finished record is sent (ran)           | anyone    |
 | =:around= every run start and end             | a host layer given to =schedule= as its graph (ran)                 | the host  |
-| =:before-until= on a compute's reads          | order's =read= (SPLIT, proposed)                                    | the host  |
+| =:before-until= on a compute's reads          | the order, at the =reads= moment (SCHEDULER, Hooks)                 | the host  |
 
 #+begin_src ts
 const advise = (inner: Loader): Loader => ({ ...inner,

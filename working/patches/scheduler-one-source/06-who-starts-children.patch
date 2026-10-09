@@ -1,0 +1,16 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -174,10 +174,10 @@
+ round (Rounds): never runs it.
+ 
+ \paragraph{Children.} \emph{Children}: processes started through a
+-process's parts and handler calls; their nodes are ephemeral nodes it owns
++process's parts and handler calls (\S\ref{sec:api}); their nodes are
++ephemeral nodes it owns
+ (below). Started by host code: no parent. Computes and effects are children
+-of their starter. Any part or handler call but a cleanup may start children
+-while running.
++of their starter.
+ 
+ A setup, compute or effect part rerunning: its \code{start} naming a child
+ that part started before, still here, is \emph{matched} to it, one to one,

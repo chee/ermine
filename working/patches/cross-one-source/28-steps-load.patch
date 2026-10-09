@@ -1,0 +1,14 @@
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -454,9 +454,8 @@
+ three shapes, each part a list of steps, each a map whose \code{do} names a
+ step below, and each list of steps a step or a \code{\$function} holds is
+ one too. A program that fails the check is one its loader cannot load, with
+-\code{not-a-program}, so its run fails before any part runs
+-(\code{LOADERS.tex}, Finding code). The rest is checked as a step runs: a
+-field missing or of the wrong form, an unknown operator, an operator's
++\code{not-a-program} (\code{LOADERS.tex}, Finding code). The rest is
++checked as a step runs: a field missing or of the wrong form, an unknown operator, an operator's
+ argument of the wrong form or kind, a variable with no value, an \code{if}
+ test that is not a boolean, and missing used where it cannot be are each a
+ mistake, and throw \code{thrown} with no message. An operation step's fields

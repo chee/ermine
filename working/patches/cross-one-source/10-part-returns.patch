@@ -1,0 +1,30 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -246,10 +246,9 @@
+ 
+ \paragraph{What a part returns.} A setup or compute returning anything but a
+ value (\code{GRAPH.tex}, Values), or, from a compute, pending, such as
+-\code{undefined}, fails the run: \code{wrong-field}, field \code{value}, no
+-operation named. The value may be live: the process node is ephemeral
+-(\code{GRAPH.tex}, Values). In a language without exceptions, a part returns an error; the
+-run ends as if it threw it.
++\code{undefined}, fails the run: \code{wrong-field}, field \code{value}.
++The value may be live (\code{GRAPH.tex}, Values). In a language without
++exceptions, a part returns an error; the run ends as if it threw it.
+ 
+ \subsection{What a process is given}\label{sec:api}
+ 
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -219,8 +219,9 @@
+ failed, such as \code{read} or \code{start}, in an error a part met: as a
+ \code{try} catches it, and in a status, a latest run or a moment that holds
+ it. An error of kind \code{thrown} names none, nor does \code{not-a-program},
+-nor an error that answers a request, whose \code{cmd} says it. \code{why} is \code{\{"code": c, ...details, "text":
+-s?\}}: the code and its details are fixed, so tests compare them and
++nor the \code{wrong-field} of a part's return (\code{SCHEDULER.tex}, What a
++part returns), nor an error that answers a request, whose \code{cmd} says
++it. \code{why} is \code{\{"code": c, ...details, "text": s?\}}: the code and its details are fixed, so tests compare them and
+ programs can act on them; \code{text} is for people, free, and never
+ compared. A layer's \code{HARNESS.md} gives its own codes, such as
+ \code{LINK.tex}'s \code{gone}, beside those below.

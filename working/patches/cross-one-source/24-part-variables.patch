@@ -1,0 +1,39 @@
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -206,9 +206,7 @@
+ Any kind may have \code{"ephemeral": true}, there when the change is
+ ephemeral; \code{site} is there when the change has no process, and
+ \code{cause} when it has one; \code{position} as given; \code{value} when the
+-placement made the node. A process given a change only through refused reads
+-is given its header with \code{"refused": true} (\code{SCHEDULER.tex},
+-Marks).
++placement made the node.
+ 
+ \section{Errors}\label{sec:errors}
+ 
+@@ -480,20 +478,12 @@
+ {"$function": [step]}    a function, a live value of kind "function": called as a handler, it runs the steps
+ \end{lstlisting}
+ 
+-\paragraph{Variables.} Every part is bound at the process's place, its
+-\code{.}: the names it was started at, or that a \code{move} of its node last
+-gave it (\code{SCHEDULER.tex}, Processes). The process node itself is reached
++\paragraph{Variables.} Every part is bound at the process's place
++(\code{SCHEDULER.tex}, Processes). The process node itself is reached
+ by the address \code{[name]}. A part's variables are what
+-\code{SCHEDULER.tex} gives it (What a process is given), but for its
+-interface and its functions, which are steps:
+-\begin{itemize}
+-\item every part but a cleanup: \code{self} and \code{name};
+-\item a compute: \code{changes}, each whole or as its header with
+-  \code{"refused": true} (Encodings, Changes);
+-\item an effect part: \code{value} and \code{previous};
+-\item a handler call: \code{args}, missing if the call gave none;
+-\item a cleanup: \code{killed}.
+-\end{itemize}
++\code{SCHEDULER.tex} gives it (What a process is given; a compute's
++\code{changes}: Marks), but for its interface and its functions, which are
++steps; a handler call's \code{args} is missing if the call gave none.
+ The steps of a cleanup or a \code{\$function} also see the variables of the
+ part that made them, as they were then. Each part, handler call or cleanup
+ has one flat set of variables: a \code{let} anywhere in it is seen after.

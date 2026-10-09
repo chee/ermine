@@ -1,0 +1,11 @@
+--- core/scheduler/LOADERS.tex
++++ core/scheduler/LOADERS.tex
+@@ -92,7 +92,7 @@
+ 
+ A program node whose value is live, such as a closure in an ephemeral node
+ (\code{GRAPH.tex}, Ephemeral nodes), is code as it is: \code{code} gives it
+-back with no loader. It never leaves its host, and goes when its node goes;
++back with no loader. It goes when its node goes;
+ a process that has not yet run it then waits for a program, as for any
+ program that is not here.
+ 

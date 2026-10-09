@@ -1,0 +1,11 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -573,7 +573,7 @@
+ The host puts it on top of its stack; the scheduler, on every interface it hands
+ to code. Its shape check, a pure function, is run first on what reaches the
+ bare graph from outside without passing it: an arrival (\code{SCHEDULER.tex},
+-Arrivals), what a keeper restores (\code{HOST.tex}, The keeper); so malformed
++Arrivals), what a host restores; so malformed
+ input from a peer or storage cannot crash or corrupt the graph. A layer handing
+ the bare graph a value from code some other way copies it first, as the
+ scheduler does a compute's value (\code{SCHEDULER.tex}, Rounds). The graph

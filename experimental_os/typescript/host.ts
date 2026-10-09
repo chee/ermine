@@ -11,6 +11,7 @@ import { keep, type Keeper, load } from "../../experimental_layers/keep/typescri
 import { files } from "../../experimental_layers/keep/typescript/deno/files.ts";
 import type { Metal, Rec } from "./metal.ts";
 import { Display, Fonts, Line, Pasteboard, Power, Sound, Timer, Web } from "./ports.ts";
+import { Link } from "./link.ts";
 import { type Agent, type Procs, procs, resolve } from "./procs.ts";
 import { image, update } from "./image.ts";
 import { Console } from "./console.ts";
@@ -232,12 +233,14 @@ export class Machine {
       web: new Web(m),
       font: new Fonts(m),
     };
-    // core 0's own devices: the timer, and the blitter, the 2D engine any program may use
+    // core 0's own devices: the timer, the blitter, the 2D engine any program may use, and the link
     ports.blitter = new Blitter({ w: dt.font.w, h: dt.font.h, chars: dt.font.chars, alpha });
+    ports.link = new Link(m, { actor: dt.user });
     const devices = [
       ...dt.devices,
       { name: "timer", irq: 97, note: "core 0's own" },
-      { name: "blitter", note: "core 0's own: BitBlt, and text from the font ROM" },
+      { name: "blitter", note: "core 0's own: BitBlt, and text in the font ROM or a font" },
+      { name: "link", irq: 52, note: "core 0's own: the link (layers/link), over Subduction, as erminex shares a window" },
     ];
     for (const d of devices) {
       place(["/", "hw", "devices"], d.name, `hw.dev.${d.name}`, d);

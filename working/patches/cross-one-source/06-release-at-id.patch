@@ -1,0 +1,16 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -190,10 +190,9 @@
+ interface: invalid (\code{not-a-process}). A process, not its program,
+ \emph{owns} those it makes, its children's nodes included.
+ 
+-\emph{Release}: the scheduler unplaces the node at its id (found even where
+-no address reaches it) from its one slot (\code{GRAPH.tex}, Operations), as
+-bookkeeping, one change each, carrying its cause's agent and process, or
+-site: the killing change, or the call that did not start a child again
++\emph{Release}: the scheduler unplaces the node at its id (\code{GRAPH.tex},
++Operations, At an id), as bookkeeping, one change each, carrying its cause's
++agent and process, or site: the killing change, or the call that did not start a child again
+ (\code{GRAPH.tex}, Changes). The agent gains \code{"kill": pid} (What a
+ process acts as), \code{pid} the node's owner.
+ 

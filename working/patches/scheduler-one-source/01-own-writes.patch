@@ -1,0 +1,22 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -418,8 +418,7 @@
+ a stale value as current: when a read through an interface the scheduler
+ bound, not stopped (Order), reaches a due process's node, that process's
+ pending, before the read; when a request ends, pending for each process
+-still due. No status write makes its own
+-process due.
++still due.
+ 
+ \subsection{The latest run}\label{sec:run}
+ 
+@@ -448,8 +447,7 @@
+ \code{reads}: each read, \code{code}'s first, tracked or not, with the times
+ of the changes setting the items it got. \code{wrote}: its changes' times.
+ \code{ended}: how it ended (Rounds). \code{equal}: whether its compute's
+-value equalled the last. A write to \code{run} never makes its own process
+-due.
++value equalled the last.
+ 
+ \subsection{Marks}\label{sec:marks}
+ 

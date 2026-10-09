@@ -1,0 +1,13 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -589,8 +589,8 @@
+ A handler call passes \code{starts}, \code{reads}, \code{ends} too,
+ \code{"handler": name} replacing \code{"run"}. \code{reads}: every read
+ through an interface the scheduler bound, tracked or not. \code{ends}:
+-whether the value came back equal. The order hears the same moments, and
+-stops a run at a read (Order). Open: how the two parts are exported.
++whether the value came back equal. The order stops a run at a read
++(Order). Open: how the two parts are exported.
+ 
+ \subsection{What the scheduler holds}\label{sec:state}
+ 

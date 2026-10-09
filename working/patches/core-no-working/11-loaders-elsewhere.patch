@@ -1,0 +1,11 @@
+--- core/scheduler/LOADERS.tex
++++ core/scheduler/LOADERS.tex
+@@ -170,7 +170,7 @@
+ \section{Running code elsewhere}\label{sec:elsewhere}
+ 
+ How a loader runs code in a worker, a frame or another core is the loader's
+-own design (\code{IDEAS.tex}, Running code elsewhere).
++own design.
+ 
+ \begin{decision}[A loader can hand out a function that runs in a worker]
+ A loader may hand back a JavaScript function that runs everything in a

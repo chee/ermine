@@ -1,0 +1,34 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -661,7 +661,7 @@
+ \code{SITE} macro,
+ \code{experimental\_hosts/\allowbreak{}term/\allowbreak{}c/\allowbreak{}host.h},
+ expands to \code{\_\_FILE\_\_}, \code{\_\_LINE\_\_} and \code{\_\_func\_\_}
+-where written); a harness is given it in each request (\code{PROTOCOL.tex}).
++where written); for a harness: \code{PROTOCOL.tex}.
+ 
+ \section{Open}
+ 
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -321,8 +321,7 @@
+ \item \code{"handler": name}: a handler call (Handlers);
+ \item \code{"cleanup": true}: a cleanup at a kill.
+ \end{itemize}
+-Host code that is not a process: empty \code{code}; its changes have their
+-site (\code{GRAPH.tex}, Changes).
++Host code that is not a process: empty \code{code}.
+ 
+ At \code{start}: the starting change's agent, minus \code{person} and
+ \code{trusted}, plus a step for the new process; a starting agent not of
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -106,7 +106,7 @@
+ id, name & a string \\
+ value, agent & any value (\code{GRAPH.tex}, Values), in the JSON form below; with \code{schedule}, a process's agent has the shape \code{SCHEDULER.tex} gives (What a process acts as), each step's \code{program} an identity \\
+ status & the map \code{SCHEDULER.tex} gives (Status), in the last step of an agent's \code{code}: its \code{pending} a time, its \code{error} an error (\S\ref{sec:errors}), its \code{new} the identity of the program \code{code} gave (Questions) \\
+-site & \code{\{"file": s, "line": n, "column": n?, "function": s?\}}: where in the code the request that made a change was written (\code{GRAPH.tex}, Changes), which the harness is given (\S\ref{sec:session}) \\
++site & \code{\{"file": s, "line": n, "column": n?, "function": s?\}}: the site of a change (\code{GRAPH.tex}, Changes), which the harness is given (\S\ref{sec:session}) \\
+ cause & any value, on any change that has one \\
+ time & a whole number from 1 to $2^{53}-1$; a change is named by its time \\
+ place & a list of names from the graph's root \\

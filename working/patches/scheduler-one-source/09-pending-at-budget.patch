@@ -1,0 +1,11 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -548,7 +548,7 @@
+ request, 100000 unless the host sets it; loops the order cannot see (e.g.\
+ two effects writing through the world) run to it. Checked before each run or
+ handler call starts; once reached, none start. Waiting parts still run; due
+-stays due, pending written; queued stays queued; the request answers the
++stays due; queued stays queued; the request answers the
+ error \code{budget} (\code{PROTOCOL.tex}, Errors); its changes stand. Only a
+ request starts a round: the next one runs what is due and queued.
+ 

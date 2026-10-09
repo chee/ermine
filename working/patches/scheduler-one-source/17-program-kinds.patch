@@ -1,0 +1,15 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -212,9 +212,9 @@
+ \item function: \emph{setup}. Untracked. Called once. Makes nodes and
+   subprocesses. Returns a value.
+-\item \code{\{compute\}}: \emph{compute}. Tracked. Returns the process's
+-  value, or \emph{pending}. Reruns when what it read changes.
++\item \code{\{compute\}}: \emph{compute}. Tracked. Returns a value, or
++  \emph{pending}. Reruns when what it read changes.
+ \item \code{\{compute, effect\}}: \emph{effect}. A compute whose value, only
+   when not equal to the last, goes to its \emph{effect part}, which acts on
+-  it, in the graph or outside.
++  it.
+ \end{itemize}
+ Whether an effect part writes the graph is not the scheduler's rule. A steps

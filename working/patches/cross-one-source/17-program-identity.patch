@@ -1,0 +1,19 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -434,7 +434,8 @@
+   "error":   e? }
+ \end{lstlisting}
+ 
+-\code{by}: why it ran, the times of the changes it was given (Marks).
++\code{program}: \code{LOADERS.tex}, Finding code. \code{by}: why it ran, the
++times of the changes it was given (Marks).
+ \code{reads}: each read, \code{code}'s first, tracked or not, with the times
+ of the changes setting the items it got. \code{wrote}: its changes' times.
+ \code{ended}: how it ended (Rounds). \code{equal}: whether its compute's
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -114,3 +114,3 @@
+ patch & as in \code{GRAPH.tex}: \code{snapshot}, \code{splice} or \code{set} \\
+-identity & \code{\{"node": id, "time": t\}}: a program, as its node and the time of the change that last set it (\code{LOADERS.tex}, Finding code) \\
++identity & \code{\{"node": id, "time": t\}}: a program (\code{LOADERS.tex}, Finding code) \\
+ item & one of the kinds below \\

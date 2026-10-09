@@ -1,0 +1,19 @@
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -390,12 +390,10 @@
+ \code{replace} also take \code{site} and \code{cause} (\S\ref{sec:session},
+ Time, site and cause).
+ 
+-\paragraph{Events.} A subscription keeps its events until \code{take} gives
+-them (\code{GRAPH.tex}, Operations). An event is \code{\{"change": c\}}; or
+-\code{\{"change": c, "reaches": [item]\}} for a change after which the
+-address reaches another node or none, or one where it reached none, or the
+-same node by another route, the items being what reading the address gave
+-just after it. Subscriptions are numbered from 1 in each session, in the
++\paragraph{Events.} An event (\code{GRAPH.tex}, Operations) is
++\code{\{"change": c\}}; or, where \code{subscribe} keeps a change with what
++the address read just after it, \code{\{"change": c, "reaches": [item]\}},
++those items. Subscriptions are numbered from 1 in each session, in the
+ order they are made. A \code{take} or an \code{unsubscribe} of a number that
+ is not subscribed now, one never made, unsubscribed already, or made before
+ a \code{test-reload}, is \code{wrong-field}, field \code{sub}.

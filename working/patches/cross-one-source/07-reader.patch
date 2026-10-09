@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -563,8 +563,8 @@
+ \begin{itemize}
+ \item checks each request's shape (\code{missing}, \code{wrong-field}:
+   \code{PROTOCOL.tex}, Errors);
+-\item strips \code{reader}: only the scheduler binds a
+-  reader (\code{SCHEDULER.tex}, Rounds), so a request passed on from elsewhere
++\item strips \code{reader} (who binds one: \code{SCHEDULER.tex}, What a
++  process is given), so a request passed on from elsewhere
+   (such as a link mounter's: \code{LINK.tex}, Serving) cannot make reads under a
+   process's id;
+ \item copies a request's values, so the caller's later changes to its own never

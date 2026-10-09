@@ -1,0 +1,12 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -298,8 +298,7 @@
+ The host's interface adds \code{start}, \code{call}, \code{batch},
+ \code{replace}; \code{arrive}: Arrivals.
+ 
+-A read that should update belongs in a compute. All reads pass the read hook
+-(\S\ref{sec:hooks}); a run's are listed in its latest run (\S\ref{sec:run}).
++A read that should update belongs in a compute.
+ A part's interfaces stop when it returns (operations through them then:
+ \code{stopped}), except
+ \code{call}, lasting until the process is killed, for plain functions given

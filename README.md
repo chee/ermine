@@ -7,7 +7,7 @@ says why it was given (`core/graph/GRAPH.tex`, Designable software).
 The graph of `core/graph/GRAPH.tex`, protect of `core/protect/PROTECT.tex`, the reference scheduler
 of `core/scheduler/SCHEDULER.tex` and the loaders of `core/scheduler/LOADERS.tex`, in Deno
 TypeScript, C and Haskell, each with a harness that speaks the lines of `core/PROTOCOL.tex`; the
-graph also in OCaml and Zig. `working/ARCHITECTURE.tex` says how the parts fit and which paper holds
+graph also in OCaml and Zig. `working/MAP.org` says where the design stands and which paper holds
 what. Every command below runs from the repository root.
 
 ## Layout
@@ -27,7 +27,7 @@ layers/lock/         LOCK.tex
 layers/keyhive/      KEYHIVE.tex, NOTES.md
 experimental_hosts/term/   c/: ermine-term and erminex, over core/graph/c
 experimental_hosts/web/    dom.org, signals.org; typescript/: demo/, dom/, signals/, keep/, devtools/, bundle/
-working/             ARCHITECTURE.tex, HOST.tex, IDEAS.tex, working notes, next.org
+working/             MAP.org, HOST.tex, IDEAS.tex, working notes, next.org
 conformance/         the suite (scenarios/, one folder per stack), the fuzzer (fuzz/), a HARNESS.md per layer, steps.ts
 recipes/
 deno.json            one config for all the TypeScript

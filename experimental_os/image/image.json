@@ -1,0 +1,605 @@
+{
+ "about": "what a first boot of ermineOS puts on the SD card (c/host.c): nodes, each at its parent's names, with a value or a program's source; and what boots, in order, each started as its actor",
+ "nodes": [
+  {
+   "at": [],
+   "name": "etc",
+   "id": "etc",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "dev",
+   "id": "dev",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "drivers",
+   "id": "drivers",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "programs",
+   "id": "programs",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "apps",
+   "id": "apps",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "n",
+   "id": "n",
+   "value": null
+  },
+  {
+   "at": [],
+   "name": "js",
+   "id": "loader-js",
+   "value": {
+    "loader": "deno-js"
+   }
+  },
+  {
+   "at": [],
+   "name": "c",
+   "id": "loader-c",
+   "value": {
+    "loader": "c"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "display",
+   "id": "drv-display",
+   "value": {
+    "kind": "c",
+    "name": "display"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "font",
+   "id": "drv-font",
+   "value": {
+    "kind": "c",
+    "name": "font"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "kbd",
+   "id": "drv-kbd",
+   "value": {
+    "kind": "c",
+    "name": "kbd"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "pointer",
+   "id": "drv-pointer",
+   "value": {
+    "kind": "c",
+    "name": "pointer"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "uart",
+   "id": "drv-uart",
+   "value": {
+    "kind": "c",
+    "name": "uart"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "power",
+   "id": "drv-power",
+   "value": {
+    "kind": "c",
+    "name": "power"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "clip",
+   "id": "drv-clip",
+   "value": {
+    "kind": "c",
+    "name": "clip"
+   }
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "shell",
+   "id": "prog-shell",
+   "source": "programs/shell.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "term",
+   "id": "prog-term",
+   "source": "programs/term.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "wmii",
+   "id": "prog-wmii",
+   "source": "programs/wmii.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "wmiirc",
+   "id": "prog-wmiirc",
+   "source": "programs/wmiirc.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "status",
+   "id": "prog-status",
+   "source": "programs/status.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "menu",
+   "id": "prog-menu",
+   "source": "programs/menu.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "graph",
+   "id": "prog-graph",
+   "source": "programs/graph.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "edit",
+   "id": "prog-edit",
+   "source": "programs/edit.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "browser",
+   "id": "prog-browser",
+   "source": "programs/browser.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "erminex",
+   "id": "prog-erminex",
+   "source": "programs/erminex.js"
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "display",
+   "id": "dev-display",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "font",
+   "id": "dev-font",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "kbd",
+   "id": "dev-kbd",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "pointer",
+   "id": "dev-pointer",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "uart0",
+   "id": "dev-uart0",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "power",
+   "id": "dev-power",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "clip",
+   "id": "dev-clip",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "clock",
+   "id": "dev-clock",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "wm",
+   "id": "dev-wm",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "console",
+   "id": "apps-console",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "wmiirc",
+   "id": "apps-wmiirc",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "status",
+   "id": "apps-status",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "menu",
+   "id": "apps-menu",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "term",
+   "id": "apps-term",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "browser",
+   "id": "apps-browser",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "graph",
+   "id": "apps-graph",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "edit",
+   "id": "apps-edit",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "workspace",
+   "id": "apps-workspace",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "erminex",
+   "id": "apps-erminex",
+   "value": null
+  },
+  {
+   "at": [
+    "apps",
+    "workspace"
+   ],
+   "name": "text",
+   "id": "workspace-text",
+   "value": "a workspace: text kept in the graph, at /apps/workspace/text.\n\ncmd-s saves it. Open any node in an editor from the graph browser (alt-g, then enter),\nor from a shell: edit /programs/status.\n"
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "uart0",
+   "id": "etc-uart0",
+   "value": {
+    "echo": true
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "desktop",
+   "id": "etc-desktop",
+   "value": {
+    "term": {
+     "cols": 80,
+     "rows": 24
+    }
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "browser",
+   "id": "etc-browser",
+   "value": {
+    "home": "https://webkit.org",
+    "search": "https://duckduckgo.com/?q="
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "theme",
+   "id": "etc-theme",
+   "value": {
+    "paper": 16644330,
+    "desk": 15985362,
+    "grain": 14997172,
+    "ink": 2761256,
+    "ink2": 7035494,
+    "ink3": 11049634,
+    "line": 1841687,
+    "chrome": 15525332,
+    "hi": 16776694,
+    "lo": 12168856,
+    "select": 16777096,
+    "acme": 16777194,
+    "tag": 15400959,
+    "rose": 14828924,
+    "cherry": 13771850,
+    "lemon": 16777096,
+    "sky": 3633919,
+    "mint": 1610603,
+    "lilac": 8084710,
+    "butter": 11042048,
+    "peach": 13918765,
+    "teal": 1015695,
+    "risoPink": 16730288,
+    "risoBlue": 30911,
+    "fonts": {
+     "text": {
+      "name": "Geneva",
+      "size": 12
+     },
+     "title": {
+      "name": "Geneva",
+      "size": 12,
+      "bold": true
+     },
+     "fixed": {
+      "name": "Monaco",
+      "size": 11
+     }
+    }
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "rules",
+   "id": "etc-rules",
+   "value": []
+  }
+ ],
+ "boot": [
+  {
+   "start": [
+    "dev",
+    "display"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "display"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "font"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "font"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "kbd"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "kbd"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "pointer"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "pointer"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "uart0"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "uart"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "power"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "power"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "clip"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "clip"
+   ]
+  },
+  {
+   "start": [
+    "apps",
+    "console"
+   ],
+   "program": [
+    "programs",
+    "shell"
+   ],
+   "actor": "person",
+   "data": {
+    "line": [
+     "dev",
+     "uart0"
+    ]
+   }
+  },
+  {
+   "start": [
+    "dev",
+    "wm"
+   ],
+   "name": "wmii",
+   "program": [
+    "programs",
+    "wmii"
+   ],
+   "actor": "person"
+  },
+  {
+   "start": [
+    "apps",
+    "wmiirc"
+   ],
+   "program": [
+    "programs",
+    "wmiirc"
+   ],
+   "actor": "person"
+  },
+  {
+   "start": [
+    "apps",
+    "status"
+   ],
+   "program": [
+    "programs",
+    "status"
+   ]
+  },
+  {
+   "start": [
+    "apps",
+    "term"
+   ],
+   "program": [
+    "programs",
+    "term"
+   ],
+   "actor": "person"
+  }
+ ]
+}

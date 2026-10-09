@@ -1,0 +1,23 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -72,8 +72,7 @@
+ as nodes.
+ 
+ Programs run as processes, under a swappable scheduler (\S\ref{sec:running});
+-a process's latest run says what marked it and what it looked up, read and
+-wrote (\code{SCHEDULER.tex}).
++what a process's latest run shows: \code{SCHEDULER.tex} (The latest run).
+ 
+ Lookup: by name, through the directories above a process's place, nearest
+ first, like \code{node\_modules}. Configuration is placement: a subtree wanting
+--- core/PROTOCOL.tex
++++ core/PROTOCOL.tex
+@@ -567,7 +567,7 @@
+ all if it is left out, and drops them all. A kind is \code{due},
+ \code{starts}, \code{reads} or \code{ends}; a \code{kinds} that is not a list
+ of these is \code{wrong-field}, field \code{kinds}. The recorder is the
+-harness's, for tests: the scheduler keeps no records.
++harness's, for tests (\code{SCHEDULER.tex}, The latest run).
+ 
+ \section{Scenarios}
+ 

@@ -1,0 +1,13 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -359,8 +359,8 @@
+ \end{decision}
+ 
+ Handler: an ephemeral node holding a function (a live value;
+-\code{GRAPH.tex}, Values), placed by a process at \code{on/<name>} inside
+-its node, by the layout; its owner is its \emph{definer}. Placing again
++\code{GRAPH.tex}, Values), placed by a process as the layout says
++(Processes); its owner is its \emph{definer}. Placing again
+ places another node; to replace one, a program writes the node it has.
+ 
+ \begin{lstlisting}

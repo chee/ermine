@@ -26,29 +26,28 @@
 // it let go; settle() runs what is due: loads, computes lowest height first,
 // effects' computes, then the runs of effects whose value changed.
 //
-// For sync (layers/subduction/SYNC.tex), which wraps this layer as it wraps
-// the reference scheduler: arrive, which makes a change made elsewhere
-// beneath protect and notes it as any other; time; and top. Once a wrapper
-// above is told it is the top, programs' interfaces are bound over it, so it
-// sees what programs do, and an ordinary node a program makes by name takes
-// its id from it, as SYNC.tex's Making and mounting says the layer that makes
-// a node gives its id.
+// Over the core graph as GRAPH.tex now has it: a read made with a reader is
+// tracked for it, and forget drops what it read, so a compute forgets, then
+// reads, each run; views are core's bind; a change from no process carries
+// its site. There is no top: this layer is the top of its stack, and sync
+// (layers/subduction/SYNC.tex), which wrapped it with arrive and top, waits
+// for that layer to come over to this core.
 
 import { type Graph } from "../../core/graph/typescript/graph.ts";
 import { equal, isLive } from "../../core/graph/typescript/patch.ts";
+import { bind as view } from "../../core/graph/typescript/view.ts";
 import {
   type Address,
+  capture,
   type Change,
   type Changed,
-  type Given,
   type Id,
   type Interface,
   invalid,
+  type Item,
   type Json,
-  told,
   type ValueItem,
 } from "../../core/graph/typescript/types.ts";
-import type { Arriving, Scheduled } from "../../core/scheduler/typescript/schedule.ts";
 
 /** What a compute returns when it has nothing yet. */
 export const pending: unique symbol = Symbol.for("ermine.pending");
@@ -193,15 +192,16 @@ export type StartOp = {
   by?: Agent;
 };
 
+/** A release: an ephemeral node let go by its id, wherever it is (GRAPH.tex: an unplace given only at). */
+export type ReleaseOp = { id: Id; agent: Json; process?: Id; cause?: Json; time: number; site?: unknown };
+
 export type Options = {
-  /** the bare graph, for binding, recording and forgetting */
+  /** the bare graph, for forgetting what a reader read */
   graph: Graph;
-  /** the stack beneath this layer: protect, then the keeper */
+  /** the stack beneath this layer: protect over the bare graph */
   below: Interface;
-  /** the keeper or the bare graph, for releasing by id beneath protect */
-  release: (op: Parameters<NonNullable<Interface["release"]>>[0]) => Changed;
-  /** the keeper or the bare graph, for a change made elsewhere, beneath protect (arrive) */
-  apply?: (id: Id, change: Given) => Changed;
+  /** the bare graph, for releasing by id beneath protect */
+  release: (op: ReleaseOp) => Changed;
   /** the clock: each change's time */
   clock: () => number;
   /** the host's agent, for its own changes */
@@ -213,11 +213,8 @@ export type Options = {
 };
 
 export type Procs = {
-  /** the interface every change goes through: the stack, with each answer noted; arrive, time and top for sync */
-  api: Interface & {
-    arrive(id: Id, change: Arriving, process?: Id): Scheduled;
-    readonly time: number;
-  };
+  /** the interface every change goes through: the stack, with each answer noted */
+  api: Interface & { readonly time: number };
   start(op: StartOp): string;
   kill(pid: string, cause?: Json): void;
   /** runs setup with the new code the process's program reached */
@@ -238,6 +235,9 @@ export type Procs = {
 };
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+/** The node an item's address reached: the last step of its route, if it has one. */
+const reached = (item: Item | undefined): Id | undefined =>
+  item && "route" in item.from ? item.from.route.at(-1)?.node : undefined;
 const snapshot = (value: unknown) => [{ type: "snapshot" as const, value: value as Json }];
 const abs = (names: readonly string[]) => ["/", ...names];
 const CONSONANTS = "bdfgjklmnprstvz";
@@ -281,7 +281,11 @@ export function procs(o: Options): Procs {
   /** the time of the last change stamped here */
   let last = 0;
   const stamp = <T extends object>(op: T): T & { time: number } => {
-    const out = ("time" in op && typeof op.time === "number" ? op : { ...op, time: clock() }) as T & { time: number };
+    let out = ("time" in op && typeof op.time === "number" ? op : { ...op, time: clock() }) as T & { time: number };
+    // a change from no process says where it was made (GRAPH.tex, Changes)
+    if (!("process" in out && out.process !== undefined) && !("site" in out && out.site !== undefined)) {
+      out = { ...out, site: capture() ?? { file: "experimental_os/typescript/procs.ts", line: 0 } };
+    }
     last = Math.max(last, out.time);
     return out;
   };
@@ -293,7 +297,8 @@ export function procs(o: Options): Procs {
   const parkNext = new Set<Id>();
 
   function noted(answer: Changed): Changed {
-    for (const { change, marked } of answer.made ?? []) {
+    {
+      const { change, marked } = answer;
       if (change.kind === "place" && change.value !== undefined && isLive(change.value)) {
         live.set(change.id, change.value);
       }
@@ -322,43 +327,18 @@ export function procs(o: Options): Procs {
     return answer;
   }
 
-  /** the top of the stack, which programs' interfaces are bound over: this interface, until a wrapper above says */
-  let up: Interface;
-
   const api: Procs["api"] = {
     ...below,
     write: (op) => noted(below.write(stamp(op))),
     place: (op) => noted(below.place(stamp(op))),
     unplace: (op) => noted(below.unplace(stamp(op))),
-    arrive,
+    move: (op) => noted(below.move(stamp(op))),
     get time() {
       return last;
     },
-    top: told((top) => {
-      up = top;
-      tell(top);
-    }),
   };
-  up = api;
-  const tell = below.top(api);
-
-  /**
-   * A change made elsewhere, made here (SCHEDULER.tex, Arrivals): stamped,
-   * applied beneath protect, which is not asked, and noted, so what it marked
-   * runs at the next settle. An ephemeral node it makes for a process is that
-   * process's. It runs nothing before it answers, so its runs and stopped are
-   * empty.
-   */
-  function arrive(id: Id, change: Arriving, process?: Id): Scheduled {
-    if (!o.apply) throw new Error("arrive needs the bare graph's apply");
-    const answer = noted(o.apply(id, stamp(change) as Given));
-    const made = change as { kind: string; id?: Id; value?: Json; ephemeral?: boolean };
-    const p = process === undefined ? undefined : all.get(process);
-    if (p && !p.ended && made.kind === "place" && made.value !== undefined && made.ephemeral === true) {
-      p.owned.push(made.id!);
-    }
-    return { ...answer, runs: [], stopped: [] };
-  }
+  /** the top of the stack, which programs' interfaces are bound over */
+  const up: Interface = api;
 
   const release = (op: { id: Id; agent: Json; cause?: Json; process?: Id }) => noted(o.release(stamp(op)));
 
@@ -386,8 +366,42 @@ export function procs(o: Options): Procs {
 
   // --- interfaces
 
-  const bind = (p: Proc, story: Agent, process: Id, writes: boolean) =>
-    g.bind(up, { agent: story as Json, process, place: p.place, chroot: p.chroot, writes });
+  /**
+   * A view of the stack as story at the process's place (GRAPH.tex, An
+   * interface fixes its agent and its place), its reads tracked for reader if
+   * given, which stops working when its run ends; values: the nodes whose
+   * values it read.
+   */
+  type Bound = Interface & { end(): void; values: Set<Id> };
+  const bind = (p: Proc, story: Agent, process: Id, writes: boolean, reader?: Id): Bound => {
+    const v = view(up, { agent: story as Json, process, ...(reader !== undefined ? { reader } : {}), place: p.place, chroot: p.chroot, writes });
+    let open = true;
+    const values = new Set<Id>();
+    const guard = <A extends unknown[], R>(f: (...a: A) => R) => (...a: A): R => {
+      if (!open) throw invalid("stopped", "this interface has stopped working: setup or this run has returned");
+      return f(...a);
+    };
+    return {
+      read: guard((op) => {
+        const items = v.read(op);
+        for (const i of items) if ("value" in i) values.add(i.from.route.at(-1)?.node ?? "");
+        return items;
+      }),
+      directory: guard((op) => v.directory(op)),
+      lookup: guard((op) => v.lookup(op)),
+      lookups: guard((op) => v.lookups(op)),
+      write: guard((op) => v.write(op)),
+      place: guard((op) => v.place(op)),
+      unplace: guard((op) => v.unplace(op)),
+      move: guard((op) => v.move(op)),
+      subscribe: guard((op) => v.subscribe(op)),
+      take: guard((op) => v.take(op)),
+      unsubscribe: guard((op) => v.unsubscribe(op)),
+      cwd: guard((op) => v.cwd(op)),
+      end: () => (open = false),
+      values,
+    };
+  };
 
   /** The program's interface over a bound one: ids filled in, ephemeral placements owned, start, call, release. */
   function wrap(p: Proc, b: Interface, story: Agent): Api {
@@ -398,11 +412,10 @@ export function procs(o: Options): Procs {
       write: (op) => b.write(op),
       unplace: (op) => b.unplace(op),
       place(op) {
-        // a wrapper above names an ordinary node made by name (sync, from the folder's lock); the layer names the rest
-        const named = op.id === undefined && up !== api && op.value !== undefined && !op.ephemeral;
-        const id = op.id ?? (named ? undefined : `${p.pid}.${++serial}`);
-        const answer = b.place((id === undefined ? op : { ...op, id }) as PlaceOp);
-        if (op.ephemeral) p.owned.push(id!);
+        // a node made by name is given an id here
+        const id = op.id ?? `${p.pid}.${++serial}`;
+        const answer = b.place({ ...op, id } as PlaceOp);
+        if (op.ephemeral) p.owned.push(id);
         return answer;
       },
       start(op) {
@@ -419,7 +432,7 @@ export function procs(o: Options): Procs {
       },
       call(op) {
         const items = b.read({ address: op.address });
-        const node = items[0]?.from.route.at(-1)?.node;
+        const node = reached(items[0]);
         const h = node === undefined ? undefined : handlers.get(node);
         if (!h) throw invalid("not-a-handler", `${op.address.join("/")} reaches no handler`);
         return invoke(h, story, op.args ?? []);
@@ -634,7 +647,7 @@ export function procs(o: Options): Procs {
       }
     }
     runCleanups(r.proc, r, true);
-    g.forget({ agent: "pi", id: r.id });
+    g.forget({ reader: r.id });
     marks.delete(r.id);
     readers.delete(r.id);
     byNode.delete(r.node);
@@ -689,21 +702,21 @@ export function procs(o: Options): Procs {
       }
       return;
     }
-    const b = bind(p, book(p), p.pid, false);
-    const rec = g.record(b, []);
+    // the reads that find it are tracked for the process, so new code marks it
+    g.forget({ reader: p.pid });
+    const b = bind(p, book(p), p.pid, false, p.pid);
     let item: ValueItem | undefined;
     try {
       const parts = p.program.split("/").filter((n) => n);
       let items: ValueItem[] = [];
-      if (p.program.startsWith("/")) items = rec.read({ address: ["/", ...parts] });
+      if (p.program.startsWith("/")) items = b.read({ address: ["/", ...parts] }) as ValueItem[];
       else {
-        const found = rec.lookup({ name: parts[0] });
+        const found = b.lookup({ name: parts[0] });
         const first = found.find((i) => "id" in i && !i.pending) as { from: { path: string[] } } | undefined;
-        if (first) items = rec.read({ address: [...first.from.path, ...parts.slice(1)] });
+        if (first) items = b.read({ address: [...first.from.path, ...parts.slice(1)] }) as ValueItem[];
       }
-      item = items[0];
+      item = items.find((i) => "value" in i);
     } finally {
-      g.finish(rec, "done");
       b.end();
     }
     const source = item?.value;
@@ -770,7 +783,7 @@ export function procs(o: Options): Procs {
     try {
       let data: ValueItem[] = [];
       try {
-        data = api.read({ agent: book(p) as Json, address: ["/", "proc", p.pid, "data"] });
+        data = api.read({ agent: book(p) as Json, address: ["/", "proc", p.pid, "data"] }) as ValueItem[];
       } catch { /* none */ }
       returned = p.code!.setup({ ...tools(p, frame, wrap(p, b, story)), data, name: p.name, cwd: p.place.slice(p.chroot) });
       p.state = "running";
@@ -823,17 +836,17 @@ export function procs(o: Options): Procs {
     r.taint = taint;
     running = taint;
     const story: Agent = { actor: p.actor, code: [step(p, { [r.kind]: r.at.slice(nodeOf(p).length).join("/"), run: r.computes })] };
-    const b = g.bind(up, { agent: story as Json, process: r.id, place: p.place, chroot: p.chroot, writes: false });
-    const rec = g.record(b, changes.map((c) => c.time));
+    // what it read last time is dropped; what it reads now is tracked for it
+    g.forget({ reader: r.id });
+    const b = bind(p, story, r.id, false, r.id);
     let value: unknown;
     let failed: string | undefined;
     try {
-      const data = r.data !== undefined ? rec.read({ address: [...abs(r.at), "data"] }) : [];
-      value = r.compute({ api: rec, data, changes, self: r.node, pending });
+      const data = r.data !== undefined ? b.read({ address: [...abs(r.at), "data"] }) as ValueItem[] : [];
+      value = r.compute({ api: b, data, changes, self: r.node, pending });
     } catch (e) {
       failed = message(e);
     } finally {
-      g.finish(rec, failed ? "failed" : value === pending ? "pending" : "done");
       b.end();
     }
     const had = r.id in p.failures;
@@ -841,7 +854,7 @@ export function procs(o: Options): Procs {
     else delete p.failures[r.id];
     // one more than the highest compute whose node it read
     let height = 0;
-    for (const id of rec.values) {
+    for (const id of b.values) {
       const d = byNode.get(id);
       if (d && d !== r) height = Math.max(height, d.height + 1);
     }
@@ -1047,7 +1060,7 @@ export function procs(o: Options): Procs {
     }
     for (const r of [...p.kids.values()]) end(r, false);
     runCleanups(p, p, true);
-    g.forget({ agent: "pi", id: p.pid });
+    g.forget({ reader: p.pid });
     marks.delete(p.pid);
     for (const h of p.handlers.values()) handlers.delete(h.node);
     try {
@@ -1064,7 +1077,7 @@ export function procs(o: Options): Procs {
 
   function call(address: readonly string[], caller: Agent, args: unknown[]): unknown {
     const items = api.read({ agent: caller as Json, address: abs(address) });
-    const node = items[0]?.from.route.at(-1)?.node;
+    const node = reached(items[0]);
     const h = node === undefined ? undefined : handlers.get(node);
     if (!h) throw invalid("not-a-handler", `/${address.join("/")} reaches no handler`);
     return invoke(h, caller, args);

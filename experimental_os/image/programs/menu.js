@@ -2,7 +2,9 @@
 // click on the root. A layer of its own at x, y, above everything; a click
 // on an item does it, and the menu ends. Any click elsewhere ends it too: it
 // reads /dev/wm/event, so it hears every click the wm sees.
-export default ({ api, effect, handler, self, data }) => {
+export default ({ api, effect, handler, self, name, cwd, data }) => {
+  // this process's own node: the menu's owner, whose on/pointer the window manager calls
+  const here = ["/", ...cwd, name]
   const blit = api.read({ address: ["/", "hw", "devices", "blitter", "port"] })[0].value
   const WM = ["/", "dev", "wm"]
   const snap = (value) => [{ type: "snapshot", value }]
@@ -28,7 +30,7 @@ export default ({ api, effect, handler, self, data }) => {
   // paper, a hard black frame, a drop shadow
   const T = { paper: 0xfdf8ea, ink: 0x2a2228, ink3: 0xa89aa2, line: 0x1c1a17, ...(api.read({ address: ["/", "etc", "theme"] })[0]?.value ?? {}) }
   const draw = (F) => {
-    const f = blit.form(W + S, H + S, 0xff000000)
+    const f = blit.list(W + S, H + S)
     blit.fill(f, S, S, W, H, T.line)
     blit.fill(f, 0, 0, W, H, T.paper)
     for (let i = 0; i < u; i++) blit.frame(f, i, i, W - 2 * i, H - 2 * i, T.line)
@@ -38,24 +40,21 @@ export default ({ api, effect, handler, self, data }) => {
       blit.text(f, 12 * u, ty, label, T.ink, undefined, undefined, F)
       if (key) blit.text(f, W - 12 * u - blit.measure(key, F), ty, key, T.ink3, undefined, undefined, F)
     })
-    // the shadow's corners are the desktop's: a menu is not square there
-    for (let j = 0; j < S; j++) {
-      for (let i = 0; i < S; i++) {
-        f.bits[j * (W + S) + W + i] = 0xff000000
-        f.bits[(H + j) * (W + S) + i] = 0xff000000
-      }
-    }
-    return f.bits
+    return f.ops
   }
-  api.place({ address: LAYER.slice(0, -1), name: LAYER.at(-1), value: { x, y, w: W + S, h: H + S, z: 200000, owner: self, pixels: draw(F0), over: true }, ephemeral: true })
+  // to VoiceOver, a menu of items; pressing one is a click on it
+  const access = [{
+    role: "menu", label: "world menu", x: 0, y: 0, w: W, h: H,
+    children: ITEMS.map(([label, key], i) => ({ role: "menuitem", label: key ? `${label}, ${key}` : label, x: u, y: 4 * u + i * ROW, w: W - 2 * u, h: ROW })),
+  }]
+  api.place({ address: LAYER.slice(0, -1), name: LAYER.at(-1), value: { x, y, w: W + S, h: H + S, z: 200000, owner: here, draw: draw(F0), access, over: true }, ephemeral: true })
   // drawn again when a page of the font comes
   effect("draw", ({ api }) => api.read({ address: FONT })[0]?.value ?? null, (F, { api }) => {
-    if (F && F !== F0 && api.read({ address: LAYER }).length) api.write({ address: LAYER, patches: [{ type: "set", path: [], key: "pixels", value: draw(F) }] })
+    if (F && F !== F0 && api.read({ address: LAYER }).length) api.write({ address: LAYER, patches: [{ type: "set", path: [], key: "draw", value: draw(F) }] })
   })
 
   const end = (api) => {
-    const at = (api.read({ address: ["/", "proc", self] })[0]?.value?.node ?? "").split("/").filter((n) => n)
-    if (at.length) api.unplace({ address: ["/", ...at.slice(0, -1)], name: at.at(-1), id: self })
+    api.unplace({ address: [], name, id: self })
   }
   handler("pointer", ({ api }, recs) => {
     const r = recs.find((r) => r.event === "down")

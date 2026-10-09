@@ -1,0 +1,13 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -32,8 +32,8 @@
+ \maketitle
+ 
+ \begin{abstract}
+-The graph runs nothing: a change reports the readers it marked
+-(\code{GRAPH.tex}, Tracking); a \emph{scheduler} decides what runs, when.
++A change reports the readers it marked (\code{GRAPH.tex}, Operations);
++a \emph{scheduler} decides what runs, when.
+ Below: what every scheduler does, then the reference scheduler: its
+ processes, programs (\emph{setup}, \emph{compute}, \emph{effect}), what a
+ process is given and acts as, handlers, status, the latest run, marks,
