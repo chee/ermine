@@ -12,7 +12,7 @@
 
 typedef struct Host Host;
 
-/** the SD card, the stack, /hw from the device tree, what boots; NULL if it cannot */
+/** the card, the stack, /hw from the device tree, what boots; NULL if it cannot */
 Host *hostBoot(const ErmosConfig *config);
 /** one turn: these records (JSON text, oldest first), then what is due */
 void hostTurn(Host *host, const char *const *records, int count);
@@ -20,7 +20,7 @@ void hostTurn(Host *host, const char *const *records, int count);
 int64_t hostWait(Host *host);
 /** whether it is still running: false once it has powered off */
 bool hostRunning(Host *host);
-/** writes the SD card and lets everything go */
+/** closes the connection and lets everything go */
 void hostOff(Host *host);
 
 // for drivers and loaders
@@ -39,5 +39,7 @@ void hostWake(Host *host, int64_t at);
 void hostSay(Host *host, const char *format, ...) __attribute__((format(printf, 2, 3)));
 /** an operation as host code, with that agent (NULL: the machine's), through the scheduler; *out what its ok holds */
 ErmErr hostDo(Host *host, Json *agent, const char *op, Json *fields, Json **out);
+/** an operation as the machine on the keeper, beneath protect, the wrapper and the scheduler: the host's own bookkeeping, never committed */
+ErmErr hostBare(Host *host, const char *op, Json *fields, Json **out);
 
 #endif

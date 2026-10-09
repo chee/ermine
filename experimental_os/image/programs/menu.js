@@ -20,6 +20,7 @@ export default ({ api, effect, handler, self, name, cwd, data }) => {
     ["the graph", "alt-g", (api) => start(api, "graph", "programs/graph")],
     ["a workspace", "alt-e", (api) => start(api, "edit", "programs/edit", { path: ["apps", "workspace", "text"] })],
     ["the window manager's policy", "", (api) => start(api, "edit", "programs/edit", { path: ["programs", "wmiirc"] })],
+    ["the cat clock", "", (api) => start(api, "catclock", "programs/catclock")],
     ["Mac windows", "ctrl-cmd-w", (api) => api.write({ address: ["/", "dev", "display", "want"], patches: snap({ windows: true }) })],
     ["power off", "", (api) => api.write({ address: ["/", "dev", "power", "switch"], patches: snap({ off: true }) })],
   ]

@@ -54,6 +54,14 @@
    }
   },
   {
+   "at": [],
+   "name": "exec",
+   "id": "loader-exec",
+   "value": {
+    "loader": "exec"
+   }
+  },
+  {
    "at": [
     "drivers"
    ],
@@ -212,6 +220,19 @@
   },
   {
    "at": [
+    "programs"
+   ],
+   "name": "catclock",
+   "id": "prog-catclock",
+   "value": {
+    "kind": "exec",
+    "argv": [
+     "catclock"
+    ]
+   }
+  },
+  {
+   "at": [
     "dev"
    ],
    "name": "display",
@@ -280,6 +301,23 @@
    ],
    "name": "wm",
    "id": "dev-wm",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "sync",
+   "id": "dev-sync",
+   "value": null
+  },
+  {
+   "at": [
+    "dev",
+    "sync"
+   ],
+   "name": "shared",
+   "id": "sync-shared",
    "value": null
   },
   {
@@ -360,6 +398,14 @@
    ],
    "name": "erminex",
    "id": "apps-erminex",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "catclock",
+   "id": "apps-catclock",
    "value": null
   },
   {
@@ -460,6 +506,16 @@
    "name": "rules",
    "id": "etc-rules",
    "value": []
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "sync",
+   "id": "etc-sync",
+   "value": {
+    "server": "wss://galaxy.observer"
+   }
   }
  ],
  "boot": [

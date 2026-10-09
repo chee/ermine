@@ -40,7 +40,13 @@ experimental_os/mac/ermineOS --os "deno run -A --quiet experimental_os/typescrip
 
 ermineOS is the C OS (ERMINEOS.md): core's C graph, protect and scheduler,
 with drivers in C and the JavaScript programs run by deno, which must be on
-PATH. Its card is `~/.ermine/card`; the TypeScript OS's is `~/.ermine/sd`.
+PATH, and sync: the layer's C sync and Subduction, through galaxy.observer
+(`share path` in a shell, `mount dir name id` on another machine). The
+build needs Homebrew's openssl@3 and, the first time, cargo, which builds
+Subduction's library (minutes). Its card is `~/.ermine/card`: the device's
+key and Subduction's store, from which each boot takes the graph back. A
+card from before sync (graph.cbor) is left as it is, unread, and the image
+makes the card again. The TypeScript OS's is `~/.ermine/sd`.
 With no window: `experimental_os/c/test/headless.sh`, then
 `experimental_os/mac/build/test/headless --fresh`, its stdin the serial
 line, a line starting `!` a hand on the machine (c/test/headless.c).

@@ -1,0 +1,1462 @@
+[
+ {
+  "name": "c/arrive",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 23.252499999999998,
+  "run": {
+   "min": 0.098828125,
+   "median": 0.12495770499999999,
+   "samples": [
+    0.12495770499999999,
+    0.098828125,
+    0.13902208500000002
+   ]
+  },
+  "iterations": 200,
+  "check": "ok",
+  "heap": {
+   "built": 1292176,
+   "after": 1498968
+  },
+  "ops": {
+   "write": 3,
+   "forget": 1,
+   "read": 1
+  },
+  "split": {
+   "graph": 0.03645041499999991,
+   "rest": 0.08850729000000007
+  }
+ },
+ {
+  "name": "c/boot",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 25.877667,
+  "run": {
+   "min": 2.739457999999999,
+   "median": 4.120542,
+   "samples": [
+    5.215250000000005,
+    4.120542,
+    2.739457999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2234680,
+   "after": 2430192
+  },
+  "ops": {},
+  "split": {
+   "graph": 9.839458000000008,
+   "rest": -5.718916000000007
+  }
+ },
+ {
+  "name": "c/classroom",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 11.232291,
+  "run": {
+   "min": 3.0601660000000024,
+   "median": 4.347458000000003,
+   "samples": [
+    4.828916999999997,
+    4.347458000000003,
+    3.0601660000000024
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 487000,
+   "after": 744832
+  },
+  "ops": {
+   "write": 51,
+   "forget": 20,
+   "read": 75,
+   "lookup": 15,
+   "directory": 5
+  },
+  "split": {
+   "graph": 1.4937500000000057,
+   "rest": 2.8537079999999975
+  }
+ },
+ {
+  "name": "c/drag",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 8.478083,
+  "run": {
+   "min": 7.661000000000001,
+   "median": 10.872917000000001,
+   "samples": [
+    7.661000000000001,
+    11.841250000000002,
+    10.872917000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 294808,
+   "after": 658104
+  },
+  "report": {
+   "draws": 241
+  },
+  "ops": {
+   "read": 125,
+   "place": 1,
+   "forget": 62,
+   "write": 183,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 1.5312920000000076,
+   "rest": 9.341624999999993
+  }
+ },
+ {
+  "name": "c/editor",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 12.671541999999999,
+  "run": {
+   "min": 36.50395900000001,
+   "median": 39.06970899999999,
+   "samples": [
+    50.61045800000001,
+    39.06970899999999,
+    36.50395900000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 314120,
+   "after": 753256
+  },
+  "report": {
+   "mirrored": 401,
+   "wordsRuns": 401
+  },
+  "ops": {
+   "read": 300,
+   "write": 419,
+   "forget": 200
+  },
+  "split": {
+   "graph": 15.765332999999998,
+   "rest": 23.30437599999999
+  }
+ },
+ {
+  "name": "c/eink",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 8.706125,
+  "run": {
+   "min": 32.89979199999999,
+   "median": 37.81533300000001,
+   "samples": [
+    55.45016700000001,
+    37.81533300000001,
+    32.89979199999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 390480,
+   "after": 812200
+  },
+  "report": {
+   "draws": 22,
+   "ticks": 240
+  },
+  "ops": {
+   "write": 185,
+   "forget": 61,
+   "read": 1281
+  },
+  "split": {
+   "graph": 14.400875000000042,
+   "rest": 23.414457999999968
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 9.077208000000002,
+  "run": {
+   "min": 5.8081670000000045,
+   "median": 7.776707999999999,
+   "samples": [
+    5.8081670000000045,
+    7.776707999999999,
+    9.700291999999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 467680,
+   "after": 693424
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  },
+  "ops": {
+   "write": 147,
+   "forget": 70,
+   "read": 140
+  },
+  "split": {
+   "graph": 4.865499999999997,
+   "rest": 2.911208000000002,
+   "diverged": "op 6 read: marked undefined became threw"
+  }
+ },
+ {
+  "name": "c/handlers",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 11.770457999999998,
+  "run": {
+   "min": 0.129941209,
+   "median": 0.14825079199999994,
+   "samples": [
+    0.129941209,
+    0.14825079199999994
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 374312,
+   "after": 807632
+  },
+  "report": {
+   "handlerCalls": 3300
+  },
+  "ops": {
+   "read": 3.3,
+   "write": 3.3,
+   "forget": 1.1
+  },
+  "split": {
+   "graph": 0.021873707999999964,
+   "rest": 0.12637708399999997
+  }
+ },
+ {
+  "name": "c/hotplug",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 7.189582999999999,
+  "run": {
+   "min": 0.6775874999999999,
+   "median": 0.9131457999999995,
+   "samples": [
+    0.9131457999999995,
+    0.6775874999999999
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 315904,
+   "after": 785912
+  },
+  "report": {
+   "drivers": 30
+  },
+  "ops": {
+   "read": 7,
+   "place": 5,
+   "forget": 4,
+   "directory": 2,
+   "write": 5,
+   "lookup": 1,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 0.15646249999999923,
+   "rest": 0.7566833000000002
+  }
+ },
+ {
+  "name": "c/log/list",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.579957999999998,
+  "run": {
+   "min": 0.234237875,
+   "median": 0.234237875,
+   "samples": [
+    0.234237875
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 223680,
+   "after": 857880
+  },
+  "ops": {
+   "write": 5,
+   "forget": 2,
+   "read": 2
+  },
+  "split": {
+   "graph": 0.09753099999999995,
+   "rest": 0.13670687500000006
+  }
+ },
+ {
+  "name": "c/log/nodes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 5.567874999999999,
+  "run": {
+   "min": 0.9726977079999999,
+   "median": 0.9726977079999999,
+   "samples": [
+    0.9726977079999999
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 225488,
+   "after": 1723248
+  },
+  "ops": {
+   "place": 1,
+   "forget": 2,
+   "directory": 2,
+   "write": 4
+  },
+  "split": {
+   "graph": 0.511091292,
+   "rest": 0.46160641599999985
+  }
+ },
+ {
+  "name": "c/log/bytes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 7.723582999999991,
+  "run": {
+   "min": 0.26698579199999994,
+   "median": 0.26698579199999994,
+   "samples": [
+    0.26698579199999994
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 224120,
+   "after": 723856
+  },
+  "ops": {
+   "write": 5,
+   "forget": 2,
+   "read": 2
+  },
+  "split": {
+   "graph": 0.06597220800000002,
+   "rest": 0.2010135839999999
+  }
+ },
+ {
+  "name": "c/park",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 7.038042000000001,
+  "run": {
+   "min": 0.5815410000000014,
+   "median": 0.788415999999998,
+   "samples": [
+    0.9123330000000003,
+    0.788415999999998,
+    0.5815410000000014
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 238616,
+   "after": 434248
+  },
+  "report": {
+   "parked": 5,
+   "runs": 10
+  },
+  "ops": {
+   "write": 6,
+   "forget": 2,
+   "read": 2
+  },
+  "split": {
+   "graph": 0.08108399999999705,
+   "rest": 0.707332000000001
+  }
+ },
+ {
+  "name": "c/pi",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 11.923167,
+  "run": {
+   "min": 0.45687625,
+   "median": 0.5306725,
+   "samples": [
+    0.5306725,
+    0.45687625
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 366664,
+   "after": 863560
+  },
+  "report": {
+   "draws": 301
+  },
+  "ops": {
+   "read": 11,
+   "write": 7,
+   "forget": 1
+  },
+  "split": {
+   "graph": 0.13375249999999994,
+   "rest": 0.39692000000000005
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 14.206792,
+  "run": {
+   "min": 9.839874999999992,
+   "median": 10.854584000000003,
+   "samples": [
+    10.854584000000003,
+    9.839874999999992,
+    12.450292000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 521920,
+   "after": 802976
+  },
+  "report": {
+   "paneRuns": 120
+  },
+  "ops": {
+   "place": 2,
+   "forget": 27,
+   "lookup": 54,
+   "read": 72,
+   "lookups": 27,
+   "directory": 27,
+   "write": 56,
+   "unplace": 2
+  },
+  "split": {
+   "graph": 4.239041999999998,
+   "rest": 6.615542000000005
+  }
+ },
+ {
+  "name": "c/presence",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 15.7985,
+  "run": {
+   "min": 8.410291999999998,
+   "median": 11.497792000000004,
+   "samples": [
+    11.497792000000004,
+    16.257958000000002,
+    8.410291999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 609104,
+   "after": 893768
+  },
+  "ops": {
+   "read": 130,
+   "write": 111,
+   "forget": 7,
+   "directory": 5,
+   "unplace": 2,
+   "place": 5
+  },
+  "split": {
+   "graph": 4.698292000000009,
+   "rest": 6.799499999999995
+  }
+ },
+ {
+  "name": "c/procs/churn",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 2.7649589999999975,
+  "run": {
+   "min": 6.105666999999997,
+   "median": 6.4174580000000105,
+   "samples": [
+    15.658707999999997,
+    6.105666999999997,
+    6.4174580000000105
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 112136,
+   "after": 731824
+  },
+  "report": {
+   "cleanups": 40,
+   "runs": 160,
+   "stopped": 0
+  },
+  "ops": {
+   "place": 100,
+   "forget": 80,
+   "read": 40,
+   "write": 40,
+   "unplace": 10
+  },
+  "split": {
+   "graph": 0.9555830000000043,
+   "rest": 5.461875000000006
+  }
+ },
+ {
+  "name": "c/procs/tree",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1.1365000000000016,
+  "run": {
+   "min": 8.660291999999998,
+   "median": 8.751208000000005,
+   "samples": [
+    8.660291999999998,
+    10.305332999999997,
+    8.751208000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 64528,
+   "after": 658008
+  },
+  "report": {
+   "cleanups": 63
+  },
+  "ops": {
+   "place": 126,
+   "forget": 126,
+   "write": 63,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 1.1116250000000036,
+   "rest": 7.639583000000002
+  }
+ },
+ {
+  "name": "c/procs/idle",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 23.010707999999997,
+  "run": {
+   "min": 1.9000830000000022,
+   "median": 1.984250000000003,
+   "samples": [
+    1.984250000000003,
+    1.9000830000000022,
+    2.129583999999994
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1109968,
+   "after": 1153720
+  },
+  "report": {
+   "runsAfterBuild": 0,
+   "due": 100
+  },
+  "ops": {
+   "write": 100
+  },
+  "split": {
+   "graph": 0.3347090000000037,
+   "rest": 1.6495409999999993
+  }
+ },
+ {
+  "name": "c/queue",
+  "group": "C",
+  "size": "small",
+  "measures": "graph",
+  "build": 15.317166,
+  "run": {
+   "min": 1.9266162500000001,
+   "median": 2.6147945900000003,
+   "samples": [
+    2.6147945900000003,
+    1.9266162500000001
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 477176,
+   "after": 1253600
+  },
+  "report": {
+   "sent": 301
+  },
+  "ops": {
+   "move": 1,
+   "forget": 1.9,
+   "read": 1.9,
+   "write": 2.9,
+   "place": 0.9
+  },
+  "split": {
+   "graph": 0.7729254100000026,
+   "rest": 1.8418691799999976
+  }
+ },
+ {
+  "name": "c/sheet",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 27.809458999999997,
+  "run": {
+   "min": 5.831167000000008,
+   "median": 14.605958000000001,
+   "samples": [
+    15.207332999999991,
+    14.605958000000001,
+    5.831167000000008
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 716816,
+   "after": 1053320
+  },
+  "ops": {
+   "write": 120,
+   "forget": 59,
+   "read": 147,
+   "place": 1,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 1.3018329999999878,
+   "rest": 13.304125000000013
+  }
+ },
+ {
+  "name": "c/todo",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 33.449208,
+  "run": {
+   "min": 21.724020999999993,
+   "median": 23.127677000000006,
+   "samples": [
+    23.127677000000006,
+    44.19025,
+    21.724020999999993
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1049080,
+   "after": 1338296
+  },
+  "report": {
+   "renders": 66
+  },
+  "ops": {
+   "write": 28.75,
+   "forget": 16,
+   "directory": 11,
+   "read": 457,
+   "place": 3,
+   "unplace": 2
+  },
+  "split": {
+   "graph": 18.805416750000006,
+   "rest": 4.322260249999999
+  }
+ },
+ {
+  "name": "d/budget",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 98.939125,
+  "run": {
+   "min": 71.78558300000003,
+   "median": 104.22120799999999,
+   "samples": [
+    104.22120799999999,
+    71.78558300000003,
+    144.26
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2820136,
+   "after": 3022640
+  },
+  "report": {
+   "errors": 5,
+   "nudges": 5
+  },
+  "ops": {
+   "write": 803,
+   "forget": 400,
+   "read": 402
+  },
+  "split": {
+   "graph": 5.783041000000139,
+   "rest": 98.43816699999985
+  }
+ },
+ {
+  "name": "d/cycle",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.4027910000000006,
+  "run": {
+   "min": 0.12652295000000002,
+   "median": 0.16539584999999982,
+   "samples": [
+    0.1916166999999998,
+    0.12652295000000002,
+    0.16539584999999982
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 44416,
+   "after": 177584
+  },
+  "ops": {
+   "read": 1,
+   "lookup": 1,
+   "directory": 1
+  },
+  "split": {
+   "graph": 0.17476039999999954,
+   "rest": -0.009364549999999722
+  }
+ },
+ {
+  "name": "d/errors",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 17.866584000000003,
+  "run": {
+   "min": 3.4834625000000017,
+   "median": 4.647281250000001,
+   "samples": [
+    7.396758299999999,
+    3.4834625000000017,
+    4.647281250000001
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 542000,
+   "after": 910624
+  },
+  "report": {
+   "failed": 1620
+  },
+  "ops": {
+   "write": 31,
+   "forget": 20,
+   "read": 20
+  },
+  "split": {
+   "graph": 0.37358125000000086,
+   "rest": 4.2737
+  }
+ },
+ {
+  "name": "d/flip",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 9.236459000000004,
+  "run": {
+   "min": 0.7685771000000002,
+   "median": 0.7696228999999996,
+   "samples": [
+    0.7685771000000002,
+    1.0974979000000005,
+    0.7696228999999996
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 479144,
+   "after": 736872
+  },
+  "ops": {
+   "move": 1,
+   "forget": 10,
+   "read": 10,
+   "write": 20
+  },
+  "split": {
+   "graph": 0.2779125000000008,
+   "rest": 0.49171039999999877
+  }
+ },
+ {
+  "name": "d/holes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1.0131249999999987,
+  "run": {
+   "min": 23.809250000000006,
+   "median": 24.378957999999997,
+   "samples": [
+    24.378957999999997,
+    23.809250000000006,
+    68.56995800000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 66688,
+   "after": 1401824
+  },
+  "report": {
+   "pending": 400,
+   "runs": 800
+  },
+  "ops": {
+   "place": 300,
+   "forget": 200,
+   "read": 200,
+   "write": 400
+  },
+  "split": {
+   "graph": 4.558791000000042,
+   "rest": 19.820166999999955
+  }
+ },
+ {
+  "name": "d/hooks/none",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 8.367666,
+  "run": {
+   "min": 0.7225850000000003,
+   "median": 0.9980000000000001,
+   "samples": [
+    0.9980000000000001,
+    1.6852891800000003,
+    0.7225850000000003
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 383872,
+   "after": 710472
+  },
+  "report": {
+   "moments": 0
+  },
+  "ops": {
+   "write": 13,
+   "forget": 6,
+   "read": 10
+  },
+  "split": {
+   "graph": 0.48607832000000145,
+   "rest": 0.5119216799999986
+  }
+ },
+ {
+  "name": "d/hooks/recorder",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 8.511292000000005,
+  "run": {
+   "min": 3.292484159999999,
+   "median": 3.963724180000004,
+   "samples": [
+    12.038712499999999,
+    3.292484159999999,
+    3.963724180000004
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 394224,
+   "after": 2669168
+  },
+  "report": {
+   "moments": 5628
+  },
+  "ops": {
+   "write": 13,
+   "forget": 6,
+   "read": 10
+  },
+  "split": {
+   "graph": 0.5633258400000067,
+   "rest": 3.400398339999997
+  }
+ },
+ {
+  "name": "d/huge",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 739.9209579999999,
+  "run": {
+   "min": 166.81412499999988,
+   "median": 219.51012500000002,
+   "samples": [
+    219.51012500000002,
+    244.66808300000002,
+    166.81412499999988
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 5469088,
+   "after": 5655256
+  },
+  "report": {
+   "bytesString": 1000000,
+   "items": 100000,
+   "keys": 10000
+  },
+  "ops": {
+   "write": 6,
+   "forget": 3,
+   "read": 6
+  },
+  "split": {
+   "graph": 26.626582999999982,
+   "rest": 192.88354200000003
+  }
+ },
+ {
+  "name": "d/kept",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.7498339999999999,
+  "run": {
+   "min": 21.164708000000005,
+   "median": 22.692625000000007,
+   "samples": [
+    22.692625000000007,
+    21.164708000000005,
+    42.727417
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 64416,
+   "after": 564576
+  },
+  "report": {
+   "heapWhilePending": 3209816
+  },
+  "ops": {
+   "place": 4,
+   "forget": 102,
+   "read": 204,
+   "write": 204
+  },
+  "split": {
+   "graph": 2.749917000000039,
+   "rest": 19.942707999999968
+  }
+ },
+ {
+  "name": "d/names",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 12.917917,
+  "run": {
+   "min": 1.1615916,
+   "median": 1.2316417999999998,
+   "samples": [
+    1.1615916,
+    1.5469665999999989,
+    1.2316417999999998
+   ]
+  },
+  "iterations": 5,
+  "check": "ok",
+  "heap": {
+   "built": 1463912,
+   "after": 1536688
+  },
+  "ops": {
+   "directory": 1
+  },
+  "split": {
+   "graph": 0.9452833999999996,
+   "rest": 0.28635840000000023
+  }
+ },
+ {
+  "name": "d/nan",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 38.497958,
+  "run": {
+   "min": 0.14414333,
+   "median": 0.27643957999999996,
+   "samples": [
+    0.4799275,
+    0.27643957999999996,
+    0.14414333
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 229440,
+   "after": 645120
+  },
+  "report": {
+   "nanDraws": 1,
+   "zeroDraws": 401
+  },
+  "ops": {
+   "write": 4,
+   "forget": 2,
+   "read": 2
+  },
+  "split": {
+   "graph": 0.03186083999999994,
+   "rest": 0.24457874000000002
+  }
+ },
+ {
+  "name": "d/recode",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 27.060875000000003,
+  "run": {
+   "min": 9.315540999999996,
+   "median": 13.032665999999992,
+   "samples": [
+    16.637333000000012,
+    13.032665999999992,
+    9.315540999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1185000,
+   "after": 1492104
+  },
+  "ops": {
+   "write": 306,
+   "forget": 102,
+   "read": 105,
+   "lookup": 2
+  },
+  "split": {
+   "graph": 3.3542919999999867,
+   "rest": 9.678374000000005
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 8.529167000000001,
+  "run": {
+   "min": 0.4067350000000002,
+   "median": 0.4691416799999999,
+   "samples": [
+    0.4691416799999999,
+    0.4067350000000002,
+    0.5065258399999999
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 375336,
+   "after": 672104
+  },
+  "report": {
+   "levels": 10
+  },
+  "ops": {
+   "write": 3,
+   "forget": 1,
+   "read": 13,
+   "lookup": 1
+  },
+  "split": {
+   "graph": 0.40229333999999994,
+   "rest": 0.06684833999999995
+  }
+ },
+ {
+  "name": "d/sites/fixed",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 4.685249999999996,
+  "run": {
+   "min": 19.98183300000005,
+   "median": 584.7370830000001,
+   "samples": [
+    628.884333,
+    584.7370830000001,
+    19.98183300000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 109624,
+   "after": 297376
+  },
+  "ops": {
+   "write": 1000
+  },
+  "split": {
+   "graph": 16.481374999999844,
+   "rest": 568.2557080000003
+  }
+ },
+ {
+  "name": "d/sites/depth1",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 3.438874999999996,
+  "run": {
+   "min": 13.858334000000013,
+   "median": 266.35754199999997,
+   "samples": [
+    13.858334000000013,
+    266.35754199999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 109736,
+   "after": 236592
+  },
+  "ops": {
+   "write": 20
+  },
+  "split": {
+   "graph": 0.169208000000026,
+   "rest": 266.18833399999994
+  }
+ },
+ {
+  "name": "d/sites/depth200",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 4.445042000000001,
+  "run": {
+   "min": 181.96362499999987,
+   "median": 443.485167,
+   "samples": [
+    443.485167,
+    181.96362499999987
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 109736,
+   "after": 242568
+  },
+  "ops": {
+   "write": 20
+  },
+  "split": {
+   "graph": 0.21908300000018244,
+   "rest": 443.2660839999998
+  }
+ },
+ {
+  "name": "d/stops/readers",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 562.635541,
+  "run": {
+   "min": 5.340165999999954,
+   "median": 6.589542000000051,
+   "samples": [
+    6.589542000000051,
+    8.458208000000013,
+    5.340165999999954
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1057904,
+   "after": 1061616
+  },
+  "report": {
+   "stopped": 87,
+   "runs": 1562
+  },
+  "ops": {
+   "write": 101,
+   "forget": 50,
+   "read": 50
+  },
+  "split": {
+   "graph": 1.408666999999923,
+   "rest": 5.180875000000128
+  }
+ },
+ {
+  "name": "d/stops/toggle",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 22.873625000000004,
+  "run": {
+   "min": 9.18908399999998,
+   "median": 33.739832999999976,
+   "samples": [
+    33.739832999999976,
+    103.630583,
+    9.18908399999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 763776,
+   "after": 931120
+  },
+  "report": {
+   "stopped": 94,
+   "runs": 344
+  },
+  "ops": {
+   "write": 150,
+   "forget": 74,
+   "read": 147
+  },
+  "split": {
+   "graph": 1.8335409999999683,
+   "rest": 31.906292000000008
+  }
+ },
+ {
+  "name": "d/tiny/spread",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 143.027417,
+  "run": {
+   "min": 67.64320800000007,
+   "median": 75.94833299999993,
+   "samples": [
+    67.64320800000007,
+    75.94833299999993,
+    568.6776250000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 3246816,
+   "after": 3584336
+  },
+  "ops": {
+   "write": 1200,
+   "forget": 100,
+   "read": 1000
+  },
+  "split": {
+   "graph": 112.47287500000039,
+   "rest": -36.52454200000045
+  }
+ },
+ {
+  "name": "d/tiny/one",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 13.006000000000029,
+  "run": {
+   "min": 83.74062500000002,
+   "median": 131.02979200000004,
+   "samples": [
+    83.74062500000002,
+    131.02979200000004,
+    322.31662499999993
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 194112,
+   "after": 460200
+  },
+  "ops": {
+   "write": 1002,
+   "forget": 1,
+   "read": 1
+  },
+  "split": {
+   "graph": 8.960583000000042,
+   "rest": 122.069209
+  }
+ },
+ {
+  "name": "d/unwind/processes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.8643749999999955,
+  "run": {
+   "min": 26.45425000000006,
+   "median": 47.99629099999993,
+   "samples": [
+    94.596,
+    26.45425000000006,
+    47.99629099999993
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 63936,
+   "after": 667992
+  },
+  "ops": {
+   "place": 200,
+   "forget": 200,
+   "write": 100,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 8.627790999999888,
+   "rest": 39.36850000000004
+  }
+ },
+ {
+  "name": "d/unwind/ephemeral",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 0.6486249999999814,
+  "run": {
+   "min": 0.8656659999999761,
+   "median": 0.9969159999999988,
+   "samples": [
+    2.275541999999973,
+    0.9969159999999988,
+    0.8656659999999761
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 21024,
+   "after": 133080
+  },
+  "ops": {
+   "place": 100,
+   "unplace": 1
+  },
+  "split": {
+   "graph": 1.4509580000000142,
+   "rest": -0.4540420000000154
+  }
+ }
+]

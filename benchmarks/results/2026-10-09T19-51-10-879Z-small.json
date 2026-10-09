@@ -1,0 +1,1047 @@
+[
+ {
+  "name": "c/arrive",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 476.99245800000006,
+  "run": {
+   "min": 0.180971669999999,
+   "median": 1.5181354150000015,
+   "samples": [
+    1.9772435399999995,
+    1.5181354150000015,
+    0.180971669999999
+   ]
+  },
+  "iterations": 200,
+  "check": "ok",
+  "heap": {
+   "built": 1292032,
+   "after": 1488112
+  }
+ },
+ {
+  "name": "c/boot",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 591.69175,
+  "run": {
+   "min": 7.435040999999956,
+   "median": 48.17329100000006,
+   "samples": [
+    7.435040999999956,
+    347.33620800000006,
+    48.17329100000006
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2246896,
+   "after": 2466136
+  }
+ },
+ {
+  "name": "c/classroom",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 90.141167,
+  "run": {
+   "min": 10.166124999999965,
+   "median": 10.193249999999978,
+   "samples": [
+    10.193249999999978,
+    10.166124999999965,
+    325.086916
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 487000,
+   "after": 752856
+  }
+ },
+ {
+  "name": "c/drag",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 8.037708000000002,
+  "run": {
+   "min": 6.556375000000003,
+   "median": 14.801709000000002,
+   "samples": [
+    14.801709000000002,
+    24.983834,
+    6.556375000000003
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 289272,
+   "after": 654872
+  },
+  "report": {
+   "draws": 241
+  }
+ },
+ {
+  "name": "c/editor",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 28.168541000000005,
+  "run": {
+   "min": 33.206916999999976,
+   "median": 488.9231669999999,
+   "samples": [
+    488.9231669999999,
+    544.461292,
+    33.206916999999976
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 228656,
+   "after": 752912
+  },
+  "report": {
+   "mirrored": 401,
+   "wordsRuns": 401
+  }
+ },
+ {
+  "name": "c/eink",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 16.621667000000002,
+  "run": {
+   "min": 252.56404199999997,
+   "median": 476.85570799999994,
+   "samples": [
+    476.85570799999994,
+    599.527458,
+    252.56404199999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 390480,
+   "after": 820552
+  },
+  "report": {
+   "draws": 22,
+   "ticks": 240
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 9.545583,
+  "run": {
+   "min": 96.006167,
+   "median": 130.64412499999997,
+   "samples": [
+    344.89158299999997,
+    96.006167,
+    130.64412499999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 492728,
+   "after": 810104
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  }
+ },
+ {
+  "name": "c/handlers",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 8.999375000000015,
+  "run": {
+   "min": 1.0411861670000002,
+   "median": 1.6409067499999999,
+   "samples": [
+    1.6409067499999999,
+    1.0411861670000002
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 374312,
+   "after": 1048104
+  },
+  "report": {
+   "handlerCalls": 2200
+  }
+ },
+ {
+  "name": "c/hotplug",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 9.277083999999999,
+  "run": {
+   "min": 1.3168250000000001,
+   "median": 17.8213458,
+   "samples": [
+    1.3168250000000001,
+    17.8213458
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 315904,
+   "after": 785752
+  },
+  "report": {
+   "drivers": 30
+  }
+ },
+ {
+  "name": "c/log/list",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 279.127333,
+  "run": {
+   "min": 2.619792083,
+   "median": 2.619792083,
+   "samples": [
+    2.619792083
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 223680,
+   "after": 889896
+  }
+ },
+ {
+  "name": "c/log/nodes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 316.078666,
+  "run": {
+   "min": 7.022830368055556,
+   "median": 7.022830368055556,
+   "samples": [
+    7.022830368055556
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 225488,
+   "after": 1349200
+  }
+ },
+ {
+  "name": "c/log/bytes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.349791,
+  "run": {
+   "min": 2.5745657090000003,
+   "median": 2.5745657090000003,
+   "samples": [
+    2.5745657090000003
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 222376,
+   "after": 691352
+  }
+ },
+ {
+  "name": "c/park",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 7.398875,
+  "run": {
+   "min": 0.5268340000000009,
+   "median": 0.8294580000000025,
+   "samples": [
+    0.8444999999999965,
+    0.8294580000000025,
+    0.5268340000000009
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 234104,
+   "after": 434248
+  },
+  "report": {
+   "parked": 5,
+   "runs": 10
+  }
+ },
+ {
+  "name": "c/pi",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 152.11845899999997,
+  "run": {
+   "min": 1.3351041699999997,
+   "median": 7.358445410000001,
+   "samples": [
+    7.358445410000001,
+    1.3351041699999997
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 391496,
+   "after": 878408
+  },
+  "report": {
+   "draws": 301
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 387.58475,
+  "run": {
+   "min": 14.261916999999926,
+   "median": 82.46995800000002,
+   "samples": [
+    172.40379100000007,
+    82.46995800000002,
+    14.261916999999926
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 477112,
+   "after": 803216
+  },
+  "report": {
+   "paneRuns": 120
+  }
+ },
+ {
+  "name": "c/presence",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 316.5355,
+  "run": {
+   "min": 11.216709000000037,
+   "median": 11.680958000000032,
+   "samples": [
+    188.75795799999992,
+    11.680958000000032,
+    11.216709000000037
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 644568,
+   "after": 827216
+  }
+ },
+ {
+  "name": "c/procs/churn",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 2.7564999999999884,
+  "run": {
+   "min": 5.63270799999998,
+   "median": 7.284708000000023,
+   "samples": [
+    93.64216699999997,
+    5.63270799999998,
+    7.284708000000023
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 112136,
+   "after": 730568
+  },
+  "report": {
+   "cleanups": 40,
+   "runs": 160,
+   "stopped": 0
+  }
+ },
+ {
+  "name": "c/procs/tree",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.9567909999999955,
+  "run": {
+   "min": 8.662417000000005,
+   "median": 9.519292000000007,
+   "samples": [
+    11.318834000000038,
+    9.519292000000007,
+    8.662417000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 64528,
+   "after": 672048
+  },
+  "report": {
+   "cleanups": 63
+  }
+ },
+ {
+  "name": "c/procs/idle",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 302.523959,
+  "run": {
+   "min": 1.3170000000000073,
+   "median": 1.4259159999999724,
+   "samples": [
+    2.9215000000000373,
+    1.4259159999999724,
+    1.3170000000000073
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1104648,
+   "after": 1140872
+  },
+  "report": {
+   "runsAfterBuild": 0,
+   "due": 100
+  }
+ },
+ {
+  "name": "c/queue",
+  "group": "C",
+  "size": "small",
+  "measures": "graph",
+  "build": 17.958792000000003,
+  "run": {
+   "min": 12.177580830000002,
+   "median": 12.348415,
+   "samples": [
+    12.348415,
+    12.177580830000002
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 477176,
+   "after": 1252208
+  },
+  "report": {
+   "sent": 301
+  }
+ },
+ {
+  "name": "c/sheet",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 23.95675,
+  "run": {
+   "min": 132.66883399999995,
+   "median": 206.36820799999998,
+   "samples": [
+    486.762417,
+    206.36820799999998,
+    132.66883399999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 710368,
+   "after": 905320
+  }
+ },
+ {
+  "name": "c/todo",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 29.389457999999998,
+  "run": {
+   "min": 126.388552,
+   "median": 196.46795825000004,
+   "samples": [
+    255.26517725000002,
+    126.388552,
+    196.46795825000004
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1049200,
+   "after": 1283568
+  },
+  "report": {
+   "renders": 50
+  }
+ },
+ {
+  "name": "d/budget",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 466.986417,
+  "run": {
+   "min": 378.328,
+   "median": 411.28587500000003,
+   "samples": [
+    378.328,
+    411.28587500000003,
+    455.1588750000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2818480,
+   "after": 3021944
+  },
+  "report": {
+   "errors": 5,
+   "nudges": 5
+  }
+ },
+ {
+  "name": "d/cycle",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.794749999999997,
+  "run": {
+   "min": 0.1673541499999999,
+   "median": 0.18752499999999978,
+   "samples": [
+    0.1673541499999999,
+    0.18752499999999978,
+    0.19946249999999993
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 48952,
+   "after": 177584
+  }
+ },
+ {
+  "name": "d/errors",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 198.69108300000002,
+  "run": {
+   "min": 15.950052100000004,
+   "median": 16.27542709999999,
+   "samples": [
+    16.27542709999999,
+    15.950052100000004,
+    20.9269542
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 569152,
+   "after": 910624
+  },
+  "report": {
+   "failed": 1620
+  }
+ },
+ {
+  "name": "d/flip",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 9.30570800000001,
+  "run": {
+   "min": 0.738356250000001,
+   "median": 0.7873353999999992,
+   "samples": [
+    0.9071167000000002,
+    0.738356250000001,
+    0.7873353999999992
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 486248,
+   "after": 718432
+  }
+ },
+ {
+  "name": "d/holes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1.0374589999999984,
+  "run": {
+   "min": 78.39337499999999,
+   "median": 168.201958,
+   "samples": [
+    440.945625,
+    78.39337499999999,
+    168.201958
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 66688,
+   "after": 1401256
+  },
+  "report": {
+   "pending": 400,
+   "runs": 800
+  }
+ },
+ {
+  "name": "d/hooks/none",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 9.16487500000001,
+  "run": {
+   "min": 3.7158158400000003,
+   "median": 5.92189668,
+   "samples": [
+    8.22925668,
+    3.7158158400000003,
+    5.92189668
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 383872,
+   "after": 700448
+  },
+  "report": {
+   "moments": 0
+  }
+ },
+ {
+  "name": "d/hooks/recorder",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 9.743875000000003,
+  "run": {
+   "min": 6.922377500000002,
+   "median": 8.995484999999999,
+   "samples": [
+    21.50426418,
+    8.995484999999999,
+    6.922377500000002
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 394224,
+   "after": 2668784
+  },
+  "report": {
+   "moments": 5628
+  }
+ },
+ {
+  "name": "d/huge",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 987.359375,
+  "run": {
+   "min": 465.03266699999995,
+   "median": 581.6454160000003,
+   "samples": [
+    605.6903750000001,
+    581.6454160000003,
+    465.03266699999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 5462904,
+   "after": 5656384
+  },
+  "report": {
+   "bytesString": 1000000,
+   "items": 100000,
+   "keys": 10000
+  }
+ },
+ {
+  "name": "d/kept",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.764916999999997,
+  "run": {
+   "min": 189.09337500000004,
+   "median": 309.72737500000005,
+   "samples": [
+    567.967334,
+    309.72737500000005,
+    189.09337500000004
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 64416,
+   "after": 577696
+  },
+  "report": {
+   "heapWhilePending": 3211792
+  }
+ },
+ {
+  "name": "d/names",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 249.606875,
+  "run": {
+   "min": 1.175058200000001,
+   "median": 1.2027000000000043,
+   "samples": [
+    1.2027000000000043,
+    1.175058200000001,
+    54.589275
+   ]
+  },
+  "iterations": 5,
+  "check": "ok",
+  "heap": {
+   "built": 1463352,
+   "after": 1535960
+  }
+ },
+ {
+  "name": "d/nan",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 10.097334,
+  "run": {
+   "min": 1.3537870799999996,
+   "median": 1.6758916699999986,
+   "samples": [
+    3.04184083,
+    1.6758916699999986,
+    1.3537870799999996
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 229440,
+   "after": 646416
+  },
+  "report": {
+   "nanDraws": 1,
+   "zeroDraws": 401
+  }
+ },
+ {
+  "name": "d/recode",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 463.25512499999996,
+  "run": {
+   "min": 102.29120799999998,
+   "median": 173.31320800000003,
+   "samples": [
+    295.80325000000005,
+    102.29120799999998,
+    173.31320800000003
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1184832,
+   "after": 1346872
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 8.597041,
+  "run": {
+   "min": 0.8499674999999979,
+   "median": 1.3682349999999996,
+   "samples": [
+    1.3682349999999996,
+    7.775559160000003,
+    0.8499674999999979
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 375336,
+   "after": 672096
+  },
+  "report": {
+   "levels": 10
+  }
+ },
+ {
+  "name": "d/sites/fixed",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 3.0539580000000015,
+  "run": {
+   "min": 65.916334,
+   "median": 118.99970800000006,
+   "samples": [
+    65.916334,
+    499.957541,
+    118.99970800000006
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 109624,
+   "after": 296872
+  }
+ },
+ {
+  "name": "d/sites/depth1",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 2.529667,
+  "run": {
+   "min": 3.2056249999999977,
+   "median": 4.022959,
+   "samples": [
+    3.2056249999999977,
+    4.022959
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 97024,
+   "after": 236592
+  }
+ },
+ {
+  "name": "d/sites/depth200",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 3.094958000000002,
+  "run": {
+   "min": 176.08275000000003,
+   "median": 280.1172919999999,
+   "samples": [
+    176.08275000000003,
+    280.1172919999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 109736,
+   "after": 242568
+  }
+ },
+ {
+  "name": "d/stops/readers",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1353.402,
+  "run": {
+   "min": 9.13654200000019,
+   "median": 58.36387500000001,
+   "samples": [
+    9.13654200000019,
+    73.75266600000009,
+    58.36387500000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1057920,
+   "after": 1058760
+  },
+  "report": {
+   "stopped": 87,
+   "runs": 1562
+  }
+ },
+ {
+  "name": "d/stops/toggle",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 355.301375,
+  "run": {
+   "min": 65.11454100000003,
+   "median": 153.2650000000001,
+   "samples": [
+    177.82774999999992,
+    65.11454100000003,
+    153.2650000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 773928,
+   "after": 932744
+  },
+  "report": {
+   "stopped": 94,
+   "runs": 344
+  }
+ },
+ {
+  "name": "d/tiny/spread",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 723.6877920000001,
+  "run": {
+   "min": 512.2224579999997,
+   "median": 521.6737499999999,
+   "samples": [
+    521.6737499999999,
+    524.7787910000002,
+    512.2224579999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 3287120,
+   "after": 3586120
+  }
+ },
+ {
+  "name": "d/tiny/one",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 5.146791999999991,
+  "run": {
+   "min": 19.600750000000062,
+   "median": 22.01400000000001,
+   "samples": [
+    413.41175,
+    19.600750000000062,
+    22.01400000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 196752,
+   "after": 464464
+  }
+ },
+ {
+  "name": "d/unwind/processes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.9690000000000012,
+  "run": {
+   "min": 416.1165420000002,
+   "median": 418.999875,
+   "samples": [
+    537.8605,
+    418.999875,
+    416.1165420000002
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 63936,
+   "after": 840576
+  }
+ },
+ {
+  "name": "d/unwind/ephemeral",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 0.3312090000000012,
+  "run": {
+   "min": 1.0269999999999975,
+   "median": 1.5222079999999991,
+   "samples": [
+    2.1426250000000024,
+    1.5222079999999991,
+    1.0269999999999975
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 21024,
+   "after": 143784
+  }
+ }
+]

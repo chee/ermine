@@ -1,20 +1,28 @@
 // host.c: ermineOS's host (host.h; ../ERMINEOS.md). Core 0's own work: the
-// SD card (store.c), the stack (the graph, protect with /etc/rules, the
-// scheduler with the host's loaders), /hw from the device tree, what boots,
-// the drain, which hands each turn's records to the driver that claimed
-// their line, the clock, and the commands to the metal.
+// card (peer.c: the device and Subduction's store), the stack, /hw from the
+// device tree, what boots, the drain, which hands each turn's records to the
+// driver that claimed their line, the clock, and the commands to the metal.
 //
-// The stack: the bare graph, protect over it, the scheduler over protect.
-// Host code acts through the scheduler's interface with an agent whose code
-// is empty, its changes carrying a site (SCHEDULER.tex, What a process acts
-// as). What it keeps for itself, /hw, is placed beneath, on the bare graph:
-// ephemeral, made again each boot, and never the scheduler's business.
+// The stack: the bare graph, sync's keeper over it, protect over that, the
+// sync wrapper over protect, the scheduler over the wrapper:
+// schedule(sync(protect(keeper(graph)))). So every operation a program
+// makes, and the host's, passes through the wrapper, which commits what is
+// made on a document (SYNC.tex, Sync is a process and a wrapper), while the
+// scheduler's bookkeeping and what arrives go through the keeper, beneath it
+// (SCHEDULER.tex, Open, The top of the stack: here the wrappers go beneath
+// the scheduler). Host code acts through the scheduler's interface with an
+// agent whose code is empty, its changes carrying a site (SCHEDULER.tex,
+// What a process acts as). What it keeps for itself, /hw, is placed
+// beneath, on the keeper: ephemeral, made again each boot, and never the
+// scheduler's business.
 
 #include "host.h"
 
 #include "jsload.h"
+#include "exec.h"
 #include "drivers.h"
-#include "store.h"
+#include "drv.h"
+#include "peer.h"
 
 #include "../../core/graph/c/entry.h"
 #include "../../core/protect/c/protect.h"
@@ -35,15 +43,14 @@ typedef struct Held {
 struct Host {
 	ErmosConfig config;
 	Json *dt;
-	ErmInterface graph, protect, top;
+	ErmInterface graph, kept, protect, wrapped, top;
 	ErmSchedule *schedule;
+	ErmSync *sync;
 	Json *machine, *person, *personAgent, *site;
 	char *user;
 	ErmTime base, last;
 	int64_t started;    // µs, CLOCK_MONOTONIC, at boot
 	int64_t wake;       // the earliest turn a driver asked for; 0: none
-	int64_t savedAt;    // when the card was last written
-	ErmTime savedTime;  // the graph's highest time then
 	int64_t second;     // the clock's last second written
 	bool running;
 	ERM_LIST(Held) held;
@@ -148,11 +155,15 @@ static ErmErr operate(Host *h, ErmInterface iface, Json *agent, const char *name
 	ErmOpKind kind = kindOf(name);
 	if (kind == ERM_OPS) return ermDetail(ermInvalid("unsupported"), "op", jsonString(name));
 	if (ermOpIsChange(kind) && !jsonGet(fields, "site")) jsonAdd(fields, "site", jsonShallow(h->site));
+	// a place with a value and no id is a making: the sync wrapper gets its id from the folder's lock (SYNC.tex, Making and mounting)
+	bool making = kind == ERM_OP_PLACE && !jsonGet(fields, "id") && jsonGet(fields, "value");
+	if (making) jsonAdd(fields, "id", jsonString(""));
 	ErmRequest request = { fields, false, ermOk() };
 	ErmOp op;
 	ErmStamp stamp;
 	ermRequestOp(&request, kind, false, false, &op, &stamp);
 	if (request.err.kind) return request.err;
+	if (making) op.id = NULL;
 	if (op.kind == ERM_OP_TAKE || op.kind == ERM_OP_UNSUBSCRIBE) ermRequestWhole(&request, "sub", true, 1, &op.sub);
 	if (request.err.kind) return request.err;
 	ErmCtx ctx = { .agent = agent };
@@ -176,7 +187,8 @@ ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) 
 		const char *id = ermRequestText(&request, "id", false, false);
 		ErmStamp stamp = { .site = h->site };
 		ErmResult r = { 0 };
-		err = request.err.kind ? request.err : ermScheduleStart(h->schedule, &ctx, &stamp, &address, program, pname, id, &r);
+		// through the wrapper, which follows a document whose id the start gave
+		err = request.err.kind ? request.err : ermSyncStart(h->sync, &ctx, &stamp, &address, program, pname, id, &r);
 		if (!err.kind) *out = ermChangeAnswer(&r);
 	} else if (strcmp(name, "call") == 0) {
 		ErmAddress address = ermRequestAddress(&request, "address");
@@ -195,12 +207,12 @@ ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) 
 	return err.kind ? err : ended;
 }
 
-/** an operation on the bare graph, beneath protect and the scheduler: the host's own bookkeeping */
-static ErmErr bare(Host *h, const char *name, Json *fields) {
-	Json *out = NULL;
+/** an operation on the keeper, beneath protect, the wrapper and the scheduler: the host's own bookkeeping */
+ErmErr hostBare(Host *h, const char *name, Json *fields, Json **out) {
+	*out = NULL;
 	ErmOpKind kind = kindOf(name);
 	if (ermOpIsChange(kind) && !jsonGet(fields, "time")) {
-		// the bare graph takes the time from its caller
+		// beneath the scheduler, the time is the caller's to give
 		ErmRequest request = { fields, false, ermOk() };
 		ErmOp op;
 		ErmStamp stamp;
@@ -210,9 +222,16 @@ static ErmErr bare(Host *h, const char *name, Json *fields) {
 		stamp.time = next(h);
 		ErmCtx ctx = { .agent = h->machine };
 		ErmResult r = { 0 };
-		return h->graph.vt->op(h->graph.self, &ctx, &stamp, &op, &r);
+		ErmErr err = h->kept.vt->op(h->kept.self, &ctx, &stamp, &op, &r);
+		if (!err.kind) *out = okOf(&op, &r);
+		return err;
 	}
-	return operate(h, h->graph, h->machine, name, fields, &out);
+	return operate(h, h->kept, h->machine, name, fields, out);
+}
+
+static ErmErr bare(Host *h, const char *name, Json *fields) {
+	Json *out = NULL;
+	return hostBare(h, name, fields, &out);
 }
 
 static void place(Host *h, Json *at, const char *name, const char *id, Json *value, bool ephemeral) {
@@ -230,10 +249,10 @@ static void place(Host *h, Json *at, const char *name, const char *id, Json *val
 	}
 }
 
-/** the value the address reaches, read as the machine on the bare graph */
+/** the value the address reaches, read as the machine on the keeper */
 static Json *peek(Host *h, Json *address) {
 	Json *f = keyed("address", address), *out = NULL;
-	if (operate(h, h->graph, h->machine, "read", f, &out).kind) return NULL;
+	if (operate(h, h->kept, h->machine, "read", f, &out).kind) return NULL;
 	Json *items = jsonGet(out, "items");
 	return items && items->array.count ? jsonGet(items->array.items[0], "value") : NULL;
 }
@@ -242,6 +261,9 @@ static Json *peek(Host *h, Json *address) {
 
 static ErmAnswer may(void *data, Json *agent, const char *process, const char *op, const ErmArgs *args) {
 	Host *h = data;
+	// the lock's first, naming the document's access node as what it read (SYNC.tex, The access node), then the rules'
+	ErmAnswer lock = ermSyncMay(h->sync, agent, process, op, args);
+	if (lock.kind != ERM_YES) return lock;
 	Json *list = peek(h, names("/", "etc", "rules", NULL));
 	if (list != h->rules) {
 		h->rules = list;
@@ -249,8 +271,10 @@ static ErmAnswer may(void *data, Json *agent, const char *process, const char *o
 		ErmRules rules;
 		if (jsonIsArray(list) && ermRulesFrom(jsonShallow(list), &rules)) h->may = rules;
 	}
-	if (!h->may.list) return (ErmAnswer){ .kind = ERM_YES };
-	return ermRulesMay(&h->may, agent, process, op, args);
+	if (!h->may.list) return lock;
+	ErmAnswer rules = ermRulesMay(&h->may, agent, process, op, args);
+	for (int i = 0; i < lock.depends.count; i++) ERM_PUSH(rules.depends, lock.depends.items[i]);
+	return rules;
 }
 
 // --- loaders
@@ -295,22 +319,9 @@ static void makeHw(Host *h) {
 		if (strcmp(k, "alpha") == 0) {
 			// base64, as the metal sends it
 			const char *text = jsonText(font->object.members[i].value);
-			size_t n = text ? strlen(text) : 0;
-			unsigned char *bytes = malloc(n * 3 / 4 + 3);
-			size_t m = 0;
-			int bits = 0, acc = 0;
-			for (size_t j = 0; j < n; j++) {
-				const char *table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-				const char *at = strchr(table, text[j]);
-				if (!at || text[j] == '\0') continue;
-				acc = acc << 6 | (int)(at - table);
-				bits += 6;
-				if (bits >= 8) {
-					bits -= 8;
-					bytes[m++] = (unsigned char)(acc >> bits);
-				}
-			}
-			jsonAdd(rom, "alpha", jsonBytes(bytes, m));
+			size_t n = 0;
+			uint8_t *bytes = drvUnbase64(text ? text : "", &n);
+			jsonAdd(rom, "alpha", jsonBytes(bytes, n));
 			free(bytes);
 		} else jsonAdd(rom, k, font->object.members[i].value);
 	}
@@ -394,7 +405,26 @@ static Json *imageValue(Host *h, Json *entry) {
 	return v;
 }
 
+/**
+ * What a first boot puts on the card: each node made by name through the
+ * top, as the machine, so the wrapper makes it a document, its id from the
+ * lock (SYNC.tex, Making and mounting), and it is kept: the image's ids are
+ * not used. The root's value is written first, which carries its lock
+ * record (SYNC.tex: the root's first value commit is the first write of its
+ * value through the wrapper).
+ */
 static void makeImage(Host *h, Json *img) {
+	Json *f = keyed("address", names("/", NULL)), *out = NULL;
+	Json *patches = jsonArray(), *patch = keyed("type", jsonString("snapshot"));
+	jsonAdd(patch, "value", keyed("machine", jsonString(h->user)));
+	jsonPush(patches, patch);
+	jsonAdd(f, "patches", patches);
+	ErmErr err = hostDo(h, NULL, "write", f, &out);
+	if (err.kind) {
+		char *why = jsonPrint(err.why);
+		hostSay(h, "image: the root: %s", why);
+		free(why);
+	}
 	Json *nodes = jsonGet(img, "nodes");
 	for (int i = 0; nodes && i < nodes->array.count; i++) {
 		Json *e = nodes->array.items[i];
@@ -405,9 +435,8 @@ static void makeImage(Host *h, Json *img) {
 		Json *f = jsonObject();
 		jsonAdd(f, "address", address);
 		jsonAdd(f, "name", jsonShallow(jsonGet(e, "name")));
-		jsonAdd(f, "id", jsonShallow(jsonGet(e, "id")));
 		jsonAdd(f, "value", imageValue(h, e));
-		ErmErr err = bare(h, "place", f);
+		err = hostDo(h, NULL, "place", f, &out);
 		if (err.kind) {
 			char *why = jsonPrint(err.why);
 			hostSay(h, "image: %s: %s", jsonText(jsonGet(e, "name")), why);
@@ -465,6 +494,34 @@ static void moment(void *data, Json *m) {
 	free(text);
 }
 
+// --- the scheduler's top: the sync wrapper, which is made over the scheduler, so after it
+
+/**
+ * A program's making: the scheduler reads a place's fields as a request's,
+ * which name an id, so a program gives "" for a node it makes by name, and it
+ * goes on to the wrapper with none, as the conformance harness's making does
+ * (core/graph/c/main.c). An ephemeral node a program makes keeps the id it
+ * gave: the scheduler holds the node as its process's by it.
+ */
+static ErmErr laterOp(void *self, const ErmCtx *ctx, const ErmStamp *stamp, const ErmOp *op, ErmResult *out) {
+	Host *h = self;
+	ErmInterface to = h->wrapped.vt ? h->wrapped : h->protect;
+	if (op->kind == ERM_OP_PLACE && op->id && !*op->id && op->value && !op->ephemeral) {
+		ErmOp making = *op;
+		making.id = NULL;
+		return to.vt->op(to.self, ctx, stamp, &making, out);
+	}
+	return to.vt->op(to.self, ctx, stamp, op, out);
+}
+
+static void laterForget(void *self, const char *reader) {
+	Host *h = self;
+	ErmInterface to = h->wrapped.vt ? h->wrapped : h->protect;
+	to.vt->forget(to.self, reader);
+}
+
+static const ErmVtable laterVtable = { laterOp, laterForget };
+
 // --- booting
 
 Host *hostBoot(const ErmosConfig *config) {
@@ -488,42 +545,49 @@ Host *hostBoot(const ErmosConfig *config) {
 	jsonAdd(h->personAgent, "trusted", jsonBoolean(true));
 	jsonAdd(h->personAgent, "code", jsonArray());
 
+	// the card: the device, and what Subduction holds (peer.c), from which the graph is made again
 	const char *sd = config->sd ? config->sd : "/tmp/ermineOS-card";
-	if (config->fresh) {
-		char *card = formatString("%s/graph.cbor", sd);
-		remove(card);
-		free(card);
-	}
 	const char *wrong = NULL;
-	ErmSaved *saved = storeLoad(sd, &wrong);
-	if (wrong) hostSay(h, "the SD card (%s) could not be read: %s; booting empty", sd, wrong);
-	h->graph = ermGraph("machine", saved);
-	h->base = saved ? saved->last + 1 : 1;
+	bool made = false;
+	h->sync = peerOpen(h, sd, config->fresh, &made, &wrong);
+	if (!h->sync) {
+		hostSay(h, "the SD card (%s) could not be used: %s", sd, wrong);
+		return NULL;
+	}
+	h->graph = ermGraph(ermSyncRoot(h->sync), NULL);
+	struct timespec wall;
+	clock_gettime(CLOCK_REALTIME, &wall);
+	h->base = (ErmTime)wall.tv_sec * 1000000 + wall.tv_nsec / 1000;
 	h->last = h->base - 1;
-	h->savedTime = saved ? saved->last : 0;
-	h->savedAt = hostNow(h);
-	hostSay(h, saved ? "the SD card (%s) holds a graph" : "the SD card (%s) is empty", sd);
 
-	h->protect = ermProtect(h->graph, may, h);
-	static ErmLoader loaders[2];
+	// schedule(sync(protect(keeper(graph)))): the scheduler's top is the wrapper, made after it
+	h->kept = ermSyncKeeper(h->sync, h->graph);
+	h->protect = ermProtect(h->kept, may, h);
+	static ErmLoader loaders[3];
 	loaders[0] = (ErmLoader){ "c", h, loadC };
 	loaders[1] = jsLoader(h);
+	loaders[2] = execLoader(h);
 	ErmScheduleOptions options = {
-		.graph = h->graph,
-		.code = ermReferenceCode(loaders, 2),
+		.graph = h->kept,
+		.code = ermReferenceCode(loaders, 3),
 		.given = { "given", h, loadGiven },
 		.clock = { next, h },
 		.hooks = { moment, h },
 	};
-	h->schedule = ermSchedule(h->protect, &options);
+	h->schedule = ermSchedule((ErmInterface){ &laterVtable, h }, &options);
+	h->wrapped = ermSyncWrap(h->sync, h->protect, h->schedule);
 	h->top = ermScheduleInterface(h->schedule);
 	h->running = true;
 
+	int taken = peerStart(h, h->schedule);
 	Json *img = image(h);
-	if (!saved && img) {
+	bool empty = !peek(h, names("/", "etc", NULL));
+	hostSay(h, empty ? "the SD card (%s) is empty" : "the SD card (%s) holds a graph: %d changes taken in from its store", sd, taken);
+	if (empty && img) {
 		makeImage(h, img);
 		hostSay(h, "first boot: the image made the SD card");
 	}
+	(void)made;
 	makeHw(h);
 	if (!config->bare && img) boot(h, img);
 	hostCommand(h, parse("{\"op\": \"ready\"}"));
@@ -537,6 +601,16 @@ static bool trusted(int irq) {
 }
 
 static void deliver(Host *h, int irq, Json *records) {
+	// loaders/exec's own line: a program's frames came, or it exited
+	if (irq == 60) {
+		for (int i = 0; i < records->array.count; i++) execRecord(h, records->array.items[i]);
+		return;
+	}
+	// the network's (peer.c): the connection opened, or something came
+	if (irq == 61) {
+		for (int i = 0; i < records->array.count; i++) peerRecord(h, records->array.items[i]);
+		return;
+	}
 	char n[16];
 	snprintf(n, sizeof n, "%d", irq);
 	Json *line = peek(h, names("/", "hw", "irq", n, NULL));
@@ -595,16 +669,6 @@ static void tick(Host *h) {
 	}
 }
 
-static void save(Host *h, bool now) {
-	ErmTime last = ermGraphLast(h->graph);
-	if (last == h->savedTime) return;
-	if (!now && hostNow(h) - h->savedAt < 5000000) return;
-	const char *why = NULL;
-	if (!storeSave(h->config.sd ? h->config.sd : "/tmp/ermineOS-card", h->graph, &why)) hostSay(h, "the SD card: %s", why);
-	h->savedAt = hostNow(h);
-	h->savedTime = last;
-}
-
 void hostTurn(Host *h, const char *const *records, int count) {
 	// lines claimed since the last turn get what waited for them, first
 	for (int i = 0; i < h->held.count; i++) {
@@ -650,7 +714,7 @@ void hostTurn(Host *h, const char *const *records, int count) {
 	free(irqs.items);
 	free(groups.items);
 	tick(h);
-	save(h, false);
+	peerTurn(h);
 }
 
 int64_t hostWait(Host *h) {
@@ -671,7 +735,8 @@ bool hostRunning(Host *h) {
 }
 
 void hostOff(Host *h) {
-	save(h, true);
+	peerStop(h);
+	execStop(h);
 	jsStop(h);
-	hostSay(h, "the SD card is written");
+	hostSay(h, "off: the SD card holds every change as it was made");
 }
