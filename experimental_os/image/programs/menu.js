@@ -8,7 +8,12 @@ export default ({ api, effect, handler, self, name, cwd, data }) => {
   const blit = api.read({ address: ["/", "hw", "devices", "blitter", "port"] })[0].value
   const WM = ["/", "dev", "wm"]
   const snap = (value) => [{ type: "snapshot", value }]
-  const start = (api, folder, program, d) => api.start({ address: ["/", "apps", folder], program, ...(d ? { data: d } : {}) })
+  // started by the window manager's policy, so what starts outlives this menu
+  const start = (api, folder, program, d) => {
+    const op = { address: ["/", "apps", folder], program, ...(d ? { data: d } : {}) }
+    const launch = api.read({ address: ["/", "dev", "wm", "launch"] })[0]?.value
+    return Array.isArray(launch) ? api.call({ address: launch, args: [op] }) : api.start(op)
+  }
   const ITEMS = [
     ["a shell", "alt-enter", (api) => start(api, "term", "programs/term")],
     ["a browser", "alt-b", (api) => start(api, "browser", "programs/browser")],

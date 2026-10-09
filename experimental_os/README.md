@@ -32,12 +32,22 @@ image/programs/       shell, term (a window with a shell), browser, graph (the g
 ## Run it
 
 ```
-experimental_os/mac/metal/build.sh          # once: builds experimental_os/mac/ermine-mac
-experimental_os/mac/ermine-mac               # from a terminal: that terminal is the serial line
-experimental_os/mac/ermine-mac --fullscreen  # the whole screen
-experimental_os/mac/ermine-mac --windows     # each of its windows a Mac window
-experimental_os/mac/ermine-mac -- --fresh    # a fresh SD card: the image makes it again
+experimental_os/mac/metal/build.sh        # once: builds experimental_os/mac/ermineOS
+experimental_os/mac/ermineOS               # from a terminal: that terminal is the serial line
+experimental_os/mac/ermineOS -- --fresh    # a fresh SD card: the image makes it again
+experimental_os/mac/ermineOS --os "deno run -A --quiet experimental_os/typescript/main.ts"   # the TypeScript OS
 ```
+
+ermineOS is the C OS (ERMINEOS.md): core's C graph, protect and scheduler,
+with drivers in C and the JavaScript programs run by deno, which must be on
+PATH. Its card is `~/.ermine/card`; the TypeScript OS's is `~/.ermine/sd`.
+With no window: `experimental_os/c/test/headless.sh`, then
+`experimental_os/mac/build/test/headless --fresh`, its stdin the serial
+line, a line starting `!` a hand on the machine (c/test/headless.c).
+
+The rest of this README describes the TypeScript OS, which the C one is
+taking over from. `--fullscreen` and `--windows` work for both; windows
+mode is not in the C compositor yet.
 
 A card an older image made is brought up to date at boot. Whatever the
 image made and no one has changed since gets the newer version, and anything

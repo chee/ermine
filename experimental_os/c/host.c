@@ -455,6 +455,16 @@ static void boot(Host *h, Json *img) {
 	}
 }
 
+/** the scheduler's moments (SCHEDULER.tex, Hooks): a run that fails or is stopped is said in the log (a parked loop is not: its process says so) */
+static void moment(void *data, Json *m) {
+	Host *h = data;
+	const char *ended = jsonText(jsonGet(m, "ended"));
+	if (!ended || strcmp(ended, "failed")) return;
+	char *text = jsonPrint(m);
+	hostSay(h, "run: %s", text);
+	free(text);
+}
+
 // --- booting
 
 Host *hostBoot(const ErmosConfig *config) {
@@ -503,6 +513,7 @@ Host *hostBoot(const ErmosConfig *config) {
 		.code = ermReferenceCode(loaders, 2),
 		.given = { "given", h, loadGiven },
 		.clock = { next, h },
+		.hooks = { moment, h },
 	};
 	h->schedule = ermSchedule(h->protect, &options);
 	h->top = ermScheduleInterface(h->schedule);
