@@ -1,0 +1,49 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -519,31 +519,26 @@
+ 
+ \subsection{Marks}\label{sec:marks}
+ 
+-A process is \emph{due} when it has been marked and has not run since. The
+-scheduler keeps a due list, each process with the time of its first mark. A
+-process the graph marked joins it, the process that made the change
+-included, unless it is being killed or the change was the scheduler's own
++\emph{Due}: marked, not run since. The due list holds each due process with
++its first mark's time. A process the graph marked joins it, the one making the
++change included, unless being killed or the change was the scheduler's own
+ write for it (Status; The latest run).
+ 
+-Every change that marks a process is kept for it, and each run's compute is
+-given every change kept, in order, each once. They are let go when a run ends
+-done: for an effect, once its effect part ran, or its compute returned an
+-equal value. A run that ends pending, failed, stopped or parked, or a compute
+-that runs again before its effect part ran, leaves them kept, so a later run
+-is given them too.
++Every change marking a process is kept for it; each run's compute is given
++them all, in order, each once. Let go when a run ends done (an effect: once
++its effect part ran, or its compute returned an equal value); kept when a
++run ends pending, failed, stopped or parked, or a compute reruns before its
++effect part ran.
+ 
+-When a change marks the process only through refused reads
+-(\code{GRAPH.tex}, Tracking), the run is given the change's header
+-(\code{GRAPH.tex}, Changes) with \code{"refused": true}, in place of the
+-change. A refused reader learns that something changed, and who changed it,
+-never what.
++Marked only through refused reads (\code{GRAPH.tex}, Tracking): the run gets
++the change's header (\code{GRAPH.tex}, Changes) with
++\code{"refused": true}, not the change.
+ 
+ \begin{decision}[Every reason is a change]
+-A process runs only because a change marked it, and the moment it becomes
+-due names that change (\S\ref{sec:hooks}); there is no other kind of reason.
+-So a process's first run is marked by its start, a replaced process's by its
+-replacement, and running something by hand is a change too: a press of a
+-button writes a node a process reads, or calls a handler that does.
++A process runs only because a change marked it; the moment it becomes due
++names that change (\S\ref{sec:hooks}). A first run is marked by its start, a
++replaced process's by its replacement; running by hand is a change too (a
++button press writes a node a process reads, or calls a handler that does).
+ \end{decision}
+ 
+ \subsection{Rounds}\label{sec:rounds}

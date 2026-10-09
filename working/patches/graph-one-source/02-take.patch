@@ -1,0 +1,15 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -687,9 +687,9 @@
+ \emph{Subscribers collect their events} (\S\ref{sec:operations}) needed and
+ nothing decided.
+ \begin{itemize}
+-\item \code{take(subscription)}: a subscriber takes its events, dropping them;
+-  \code{unsubscribe} drops those not taken.
+-\item \code{take} is not a read: not tracked, asks no \code{enter}.
++\item \code{take(subscription)}, and the events it and \code{unsubscribe}
++  drop (\S\ref{sec:operations}).
++\item \code{take} not being a read (\S\ref{sec:operations}).
+ \item A change's answer does not name the subscriptions that kept it.
+ \end{itemize}
+ Open with it: how many events a subscription may keep; as written, a

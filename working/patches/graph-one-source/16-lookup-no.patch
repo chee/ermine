@@ -1,0 +1,11 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -607,7 +607,7 @@
+   a \code{read} or \code{directory} read of it. No: a \emph{refused} item in
+   its place, from the route to that member.
+ \item each directory a lookup's or lookups' search reads, nearest first: as a
+-  \code{directory} read. No: the search ends (\S\ref{sec:lookup}).
++  \code{directory} read. No: \S\ref{sec:lookup}.
+ \end{itemize}
+ A move asks along its \code{address}'s walk, at the parent it takes the id out
+ of, along its \code{to}'s walk, then at the parent it places the id into; each

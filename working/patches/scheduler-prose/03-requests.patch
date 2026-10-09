@@ -1,0 +1,17 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -86,8 +86,8 @@
+ outside a round: an outside operation, a \code{batch}, a handler call, a
+-\code{replace} or an arrival. One made while a round runs is queued, and runs
+-after the round, in the order it came, as part of the request that is
+-running and against its budget (Order). Queued from another thread, it
+-returns once it and what it caused are done; queued from inside a part, as
+-when an effect calls a handler, it returns at once, with nothing. A part's
+-own graph operations are not queued.
++\code{replace} or an arrival. A request made while a round runs is queued.
++It runs after the round, in the order it came, as part of the running
++request and against its budget (Order). Queued from another
++thread, it returns once it and what it caused are done. Queued from inside a
++part, as when an effect calls a handler, it returns at once, with nothing. A
++part's own graph operations are not queued.
+ 

@@ -1,0 +1,62 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -247,39 +247,30 @@
+ 
+ \subsection{Programs}\label{sec:program}
+ 
+-A process runs a \emph{program}. For now, the scheduler knows what a program
+-is by its shape (Open, Render effects):
++A process runs a \emph{program}; for now, its kind is its shape (Open,
++Render effects):
+ \begin{itemize}
+-\item a function is a \emph{setup}. It is called once, and its reads are not
+-  tracked. It makes what its effects need, the nodes, data and computations,
+-  and returns the process's value: for a renderer, a DOM or a matrix of
+-  characters. Only what changed runs again, never the whole process;
+-\item \code{\{compute\}} is a \emph{compute}. It reads through an interface
+-  that tracks its reads, and returns a value, which the scheduler makes the
+-  process's value, or \emph{pending}. It runs again when what it read
+-  changes;
+-\item \code{\{compute, effect\}} is an \emph{effect}: a compute whose value,
+-  when it is not equal to the last, is then given to its \emph{effect part},
+-  which does what the value calls for, in the graph or outside it. On an
+-  equal value the effect part does not run.
++\item function: \emph{setup}. Untracked. Called once. Makes nodes and
++  subprocesses. Returns a value.
++\item \code{\{compute\}}: \emph{compute}. Tracked. Returns the process's
++  value, or \emph{pending}. Reruns when what it read changes.
++\item \code{\{compute, effect\}}: \emph{effect}. A compute whose value, only
++  when not equal to the last, goes to its \emph{effect part}, which acts on
++  it, in the graph or outside.
+ \end{itemize}
+-A program with no effect part is a derived value, like a formula in a
+-spreadsheet. Whether an effect part writes into the graph is not the
+-scheduler's rule; a library can steer programs away from it. A steps program
+-(\code{PROTOCOL.tex}) may have any of the three. A program given to \code{start} as
+-a path is found by \code{code} (\code{LOADERS.tex}, Finding code); one given
+-as code runs as it is.
++Whether an effect part writes the graph is not the scheduler's rule. A steps
++program (\code{PROTOCOL.tex}) may have any of the three. A path given to
++\code{start}: found by \code{code} (\code{LOADERS.tex}, Finding code); code
++given: run as is.
+ 
+ \begin{decision}[Code is a read]
+-When a process's program is a path, each run first calls
+-\code{code(process, view)}, the \code{view} being the run's read-only view,
+-as the process, at its place (\S\ref{sec:rounds}). What \code{code} reads is
+-among the run's reads: \code{protect} decides each as any read of the
+-process's, and each is tracked like any other, so an edit to what it read,
+-such as the program or its loader node, one placed nearer, or one that goes,
+-marks the process. Code that is not here yet is waited for: if \code{code}
+-gives pending, the run ends pending, and the code's arrival marks the
+-process.
++Program a path: each run first calls \code{code(process, view)},
++\code{view} the run's read-only view, as the process, at its place
++(\S\ref{sec:rounds}). Its reads are the run's: \code{protect} decides them;
++tracked, so an edit to what it read (e.g.\ the program or its loader node,
++one placed nearer, one gone) marks the process. Missing code is waited for: if
++\code{code} gives pending, the run ends pending; the code's arrival marks
++the process.
+ \end{decision}
+ 
+ \paragraph{New code.} A process runs the code its first run found until its

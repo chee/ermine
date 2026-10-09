@@ -1,0 +1,115 @@
+#+title: SCHEDULER review after the rewrite (10-09)
+#+author: LLM generated working output
+
+Dark-room and drift review of core/scheduler/SCHEDULER.tex (S) and
+LOADERS.tex (L) after the 10-09 rewrite, against GRAPH.tex (G) and
+WHAT-IS-A-PROCESS.tex (W). "#n" is SCHEDULER's n-th first-pass choice.
+
+* Size
+S's rule text is about 5,960 words plus 1,260 in L; GRAPH is about 5,530. 28
+terms defined, about 10 used undefined; 18 decision boxes, 25 first-pass
+choices, 20 Open items; about 25 special cases. Overloaded: "run" (a run, the
+run node, the step field, the scheduler's half), "pending" (item, status,
+sentinel, a way a run ends), "part" (children at S:150, functions at S:318),
+"stopped" (an interface, a way a run ends).
+
+* A. Questions for the designer (most consequential first)
+1. Who a handler call acts as. S:445-448 with S:402-403 bind a call with
+   process = the definer, against S's own decision box (S:439-442) and W.
+   #11 re-adopts what W lists as not adopted. Process = definer: the editor's
+   own-typing filter works; process = caller: host calls carry no process,
+   and ephemeral nodes they make fail not-a-process.
+2. A process can't reliably reach its own inside. Parts and handlers live in
+   its node, but operations go by path from its ".", and self is only an id.
+   Duplicate names, unions and moved folders can send start({address:[name]})
+   into another process's node; moving a process node leaves its children's
+   places reaching nothing; ending itself goes through protect and its walk.
+3. Status is a second channel: pending, error, new and loop ride in the
+   agent's last step (#2), against G's "not yet is told in the list, with no
+   second channel". A read of a due process that waits after the reader gets
+   a stale value with no item; another writer at a process node erases the
+   status; #3's lazy pending doesn't mark readers when a process becomes due.
+4. Setup reruns on replace (S:302-306) is written as a rule; W lists whether
+   setup runs again as open. Matching and "a kept effect runs again" depend
+   on it.
+5. The run node is a reserved name (#5), against "no reserved names".
+6. call lasts until the kill (#12): a lasting interface, which W removed.
+7. Kept changes (S:528-539): in neither list; the heaviest state; duplicates
+   subscribe/take for the one case that needs change bodies.
+8. arrive (S:94-102): skips protect; gives arriving ephemeral nodes to "the
+   calling process" though it names none; SYNC.tex:216 depends on it.
+9. LOADERS: the field is still `kind` (the designer: "kind is the wrong name
+   for the field"); caching by code content shares module state across
+   processes; "the call of a part is synchronous" vs worker functions that
+   can't answer at once.
+10. Hooks: S decides the four moments W lists as proposed; host hooks return
+    nothing, but the order must answer at a read, so "one kind of hook serves
+    both" isn't met, and there is no interface for swapping the order.
+11. "The stack describes itself as data" is in neither S nor L (belongs in
+    HOST, says the writer).
+12. Computes made by a compute can't get data (#19, #20); with #13 such a
+    child keeps its first closure forever.
+13. Rules to confirm or demote to first-pass: the move rule under "a place
+    is names"; "the scheduler marks its own changes in the agent" and the
+    agent shape; "every reason is a change"; L's "the host finds code", "a
+    loader node names a loader", "Targets"; not-a-process; request queueing
+    beyond #8; ending itself's shape; "a setup returning a non-value fails";
+    start's id?; previous; the whole-path program search.
+
+* B. Fixable without the designer (two builds would differ)
+1. Several kills in one change: "most recently started first" vs children
+   nested in the parent's kill (P1 t1 with child C t3, P2 t2: C,P2,P1 or
+   P2,P1→C).
+2. Queued requests: make-settle-make-settle vs make-both-one-round; a host
+   read inside a part is queued and returns nothing.
+3. "Done": a cleanup error before an effect part fails the run though the
+   effect ran, so its changes are re-given and a patch applied twice; an
+   earlier run "ends done" yet keeps its changes.
+4. The first value: start places null; a first result of null is equal to
+   "the value it last wrote", so one build never runs the effect part.
+5. Writing pending "first": inside enter (re-entering the graph) or read,
+   write, read again; what "reaches a due process's node" means.
+6. Loop cause: one level or transitive (A→B→C→A).
+7. Nested releases: which change is "the killing change".
+8. Ties at equal height go to the lowest id, but pids are fresh (uuid vs
+   counter give different orders).
+9. A matched start with a different address or program.
+10. `..` in a program path: invalid at start or at every run.
+11. Shapes not given: call's answer; new: c when code gave functions, pending
+    or an error; a reads entry for directory(address, name); by for a setup
+    run; a step with no program; a cleanup step at a kill; the order of
+    through; self and name in a handler call; the budget option.
+12. Subscriptions a part makes can't be taken after its interface stops; a
+    kill doesn't end them; not in the state list.
+13. Unplacing the run node makes the next write at that id an ordinary
+    orphan.
+14. G says S copies a compute's value; S never does, nor says how a JS host
+    tells a live value from a plain one.
+15. The slow loader's write: given only the program and the process, and
+    writes at an id work only on the bare graph.
+16. The state list omits previous, which part registered each cleanup, and
+    subscriptions.
+17. Budget: once reached, a request from another thread waits until some
+    other request comes.
+18. A setup returning undefined fails, so `({start}) => { start(...) }` fails.
+19. Stale references: G:416 "Records" (fixed); G:672-676 open though #6
+    answers it; G:451 says the scheduler adds only start and batch; PROTOCOL
+    lacks not-a-handler (since added), uses lasting wording for stopped, and
+    has "budget failed before its effect"; S:153-154 says everything inside
+    is ephemeral though G allows mounting ordinary nodes there.
+
+* C. API beyond GRAPH's operations
+Shown to be the scheduler's: start, call, onCleanup, peep, batch, the
+pending sentinel, value. Not shown: changes, previous, arrive, replace as an
+operation, a lasting call, the run node. Programs must read: 4 status
+fields, 8 run fields, an agent with 4 fields and 5 step markers, 4 hook
+moments, 6 new error codes, and the not-a-process restriction.
+
+* D. Cuts the reviewer suggests (the designer prefers prose fixes first)
+1. Drop kept changes; give computes `by` (headers and times); programs that
+   need change bodies subscribe.
+2. Drop ownership and release of ephemeral nodes outside the process node,
+   and not-a-process; the layout already puts temporary state inside.
+3. Move the reference `code` (program search, loader lookup, kind, caching,
+   the slow-loader write) into a host library; S keeps only the
+   code(process, view) contract and "Code is a read".

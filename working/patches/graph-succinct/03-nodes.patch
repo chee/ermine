@@ -1,0 +1,40 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -109,22 +109,23 @@
+ \subsection{Nodes}\label{sec:nodes}
+ 
+ \begin{definition}[Node]
+-A node has an \emph{id}, a \emph{value} and a \emph{directory}. The id is a
+-string, which the graph only compares. The directory maps names to
+-\emph{slots}: a slot is an ordered list of ids, each at most once, and one id
+-may be in several slots. A slot with no ids is gone.
++An \emph{id} (a string the graph only compares), a \emph{value}, a
++\emph{directory} (names to \emph{slots}). Slot: ordered ids, each at most once;
++an id may be in several slots; a slot with no ids is gone.
+ \end{definition}
+ 
+-A graph is made by \code{graph(root, restored?)}, \code{root} being the id
+-of its \emph{root} node. Without \code{restored}, the root is its only node,
+-with the value null, and its highest time is 0 (\S\ref{sec:changes}).
+-\code{restored} is what a keeper saved (\code{HOST.tex}, The keeper): the
+-ordinary nodes, each with its value and slots, the headers of their last
+-changes that were not ephemeral, and the highest time; the graph made from it
+-holds those, and its highest time is that time. This is how a graph is
+-restored: there is no restore operation. Every other node is made by placing
+-it (\S\ref{sec:placement}). A node is \emph{here} when the graph has it. A node
+-that no slot reachable from the root holds cannot be reached from any place;
++\code{graph(root, restored?)} makes a graph; \code{root}: its \emph{root}
++node's id.
++\begin{itemize}
++\item without \code{restored}: only the root, value null; highest time 0
++  (\S\ref{sec:changes});
++\item \code{restored}: what a keeper saved (\code{HOST.tex}, The keeper): the
++  ordinary nodes with values and slots, the headers of their last changes that
++  were not ephemeral, and the highest time; the graph holds these, its highest
++  time being that time. No restore operation.
++\end{itemize}
++Other nodes: made by placing (\S\ref{sec:placement}). \emph{Here}: in the
++graph. A node no slot reachable from the root holds is reachable from no place;
+ placing its id again brings it back as it was.
+ 
+ \subsection{Values}\label{sec:values}

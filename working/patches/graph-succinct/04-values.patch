@@ -1,0 +1,72 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -130,43 +130,39 @@
+ \subsection{Values}\label{sec:values}
+ 
+ \begin{definition}[Value]
+-A \emph{value} is null, a boolean, a number, a string, a list of values, a map
+-from strings to values, \emph{bytes}, or a \emph{typed array}; an ephemeral
+-node's whole value may also be \emph{live}.
++Null, boolean, number, string, list of values, map from strings to values,
++\emph{bytes}, \emph{typed array}; an ephemeral node's whole value may also be
++\emph{live}.
+ \begin{itemize}
+-\item A number is a binary64 floating-point number, NaN, the infinities and
+-  $-0$ included. All NaNs are one NaN.
+-\item A string is a sequence of Unicode scalar values: every code point but
+-  the surrogates. Ids and names are strings.
+-\item Bytes are a sequence of octets.
+-\item A typed array is a kind, one of \code{int8}, \code{uint8},
+-  \code{int16}, \code{uint16}, \code{int32}, \code{uint32}, \code{int64},
+-  \code{uint64}, \code{float32} and \code{float64}, and a sequence of
+-  elements of that kind.
+-\item A live value is something only its host holds, such as a canvas or a
+-  socket.
++\item number: binary64, with NaN, the infinities and $-0$; all NaNs are one.
++\item string: a sequence of Unicode scalar values (every code point but the
++  surrogates). Ids and names are strings.
++\item bytes: a sequence of octets.
++\item typed array: a kind (\code{int8}, \code{uint8}, \code{int16},
++  \code{uint16}, \code{int32}, \code{uint32}, \code{int64}, \code{uint64},
++  \code{float32}, \code{float64}) and a sequence of elements of it.
++\item live: held only by its host (such as a canvas or a socket).
+ \end{itemize}
+ \end{definition}
+ 
+-Bytes and typed arrays are held as the machine holds them, never as strings
+-or lists of numbers. Two values are equal when they are of the same kind and
+-their parts are equal: numbers as JavaScript's \code{Object.is} compares them,
+-so $0$ and $-0$ differ and NaN equals NaN; typed arrays only of the same
+-element kind, then element by element, as numbers, the bits of a NaN aside;
+-maps with the same keys in any order; live values only when they are the same
+-thing. A typed array never equals a list, nor bytes a string.
++Bytes and typed arrays: held as the machine holds them, never as strings or
++number lists.
+ 
+-The graph never looks inside a live value, and a snapshot can replace it. It
+-has no encoding and never leaves its host. Other values are encoded as
+-deterministic CBOR \cite{CBOR}, typed arrays as RFC~8746 tags
+-\cite{CBORArrays}, by the rules in \code{SYNC.tex} (The change blob);
+-\code{PROTOCOL.tex} gives them a JSON form.
++Equal: same kind, equal parts. Numbers: by JavaScript's \code{Object.is}
++($0 \ne -0$; NaN equals NaN). Typed arrays: same element kind, then element
++by element as numbers, NaN bits aside. Maps: same keys, any order. Live values:
++only the same thing. A typed array never equals a list, nor bytes a string.
+ 
+-A value the graph holds is never changed in place: a write makes a new value.
+-A read may give the graph's own value, and its reader must not change it;
+-TypeScript freezes its lists and maps. Values from code are copied on the way in
+-(\S\ref{sec:running}, The entry layer).
++Live values: the graph never looks inside them; a snapshot can replace one; no
++encoding; never leave their host. Others: deterministic CBOR \cite{CBOR}, typed
++arrays as RFC~8746 tags \cite{CBORArrays}, per \code{SYNC.tex} (The change
++blob); JSON form: \code{PROTOCOL.tex}.
+ 
++Held values never change in place; a write makes a new one. A read may give the
++graph's own value; its reader must not change it (TypeScript freezes its lists
++and maps). Values from code are copied in (\S\ref{sec:running}, The entry
++layer).
++
+ \subsection{Ephemeral nodes}\label{sec:ephemeral}
+ 
+ \begin{definition}[Ephemeral]

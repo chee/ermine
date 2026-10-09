@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -577,8 +577,8 @@
+ input from a peer or storage cannot crash or corrupt the graph. A layer handing
+ the bare graph a value from code some other way copies it first, as the
+ scheduler does a compute's value (\code{SCHEDULER.tex}, Rounds). The graph
+-still checks its own laws: \code{missing} (neither process nor site,
+-\S\ref{sec:changes}), \code{above-root}, \code{nothing-there}, \code{exists},
++still checks its own laws: \code{missing} (\S\ref{sec:changes}),
++\code{above-root}, \code{nothing-there}, \code{exists},
+ \code{not-in-slot}, \code{position}, \code{one-place}, \code{ephemeral-parent},
+ \code{time}, the patch codes.
+ 

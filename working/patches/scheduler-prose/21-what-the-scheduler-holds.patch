@@ -1,0 +1,47 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -680,24 +680,33 @@
+ 
+ \subsection{What the scheduler holds}\label{sec:state}
+ 
+-All of the reference scheduler's state is:
++The reference scheduler's whole state is:
+ \begin{itemize}
+-\item for each process: its place, name and agent; its program, and the code
+-  it runs; its parent, and the ephemeral nodes it owns, its children's nodes
+-  among them, each child with its name, the part that started it, and the
+-  replacement it last took; its
+-  height, from 0; its count of runs; whether it runs as replaced; the
+-  changes kept for it, with what caused them in the current request; the
+-  value it last wrote at its id, and its status; the reads of its last compute, for heights; its waiting setup
+-  or effect part, while it waits; its cleanups; and whom it waits after, if
+-  it was stopped;
++\item for each process:
++  \begin{itemize}
++  \item its place, name and agent;
++  \item its program, and the code it runs;
++  \item its parent;
++  \item the ephemeral nodes it owns, its children's nodes among them, each
++    child with its name, the part that started it, and the replacement it
++    last took;
++  \item its height, from 0, and its count of runs;
++  \item whether it runs as replaced;
++  \item the changes kept for it, with what caused them in the current
++    request;
++  \item the value it last wrote at its id, and its status;
++  \item the reads of its last compute, for heights;
++  \item its waiting setup or effect part, while it waits;
++  \item its cleanups;
++  \item whom it waits after, if it was stopped;
++  \end{itemize}
+ \item the due list, each process with the time of its first mark;
+ \item the requests queued while a round runs;
+ \item the clock, the hooks, the budget, and the runs and handler calls the
+   current request has caused.
+ \end{itemize}
+ Handlers and each latest run are in the graph. None of this survives a
+-restart; a restored graph has the highest time saved (\code{GRAPH.tex},
++restart. A restored graph has the highest time saved (\code{GRAPH.tex},
+ Nodes), so the clock goes on from there. A cache (\code{CACHE.tex}) can keep
+ a compute's values.
+ 

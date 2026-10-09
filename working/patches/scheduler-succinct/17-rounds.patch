@@ -1,0 +1,54 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -548,9 +548,9 @@
+ 
+ \subsection{Rounds}\label{sec:rounds}
+ 
+-While anything is due, the scheduler runs a round: first the runs that only
+-read, then the parts that write. While a process is due, the order picks one
+-(Order), and the run runs it:
++While anything is due, the scheduler runs a round: first runs that only
++read, then parts that write. While a process is due, the order picks one
++(Order); the run runs it:
+ 
+ \begin{lstlisting}
+ forget(p)
+@@ -563,24 +563,21 @@
+          effect: if v was written, or p runs as replaced, the effect part waits for the second half
+ \end{lstlisting}
+ 
+-When no process is due, the round's second half runs each setup and effect
+-part that waits, in the order they began waiting, through an interface bound
+-as the process, with no reader, that reads and writes; a setup's value is
+-written as a compute's is. Before an effect part,
+-the cleanups its earlier effect parts registered run, told
+-\code{\{"killed": false\}}, the most recently registered first; an error that
+-ends one is the run's, and the effect part still runs. A process whose
+-compute runs again before its effect part ran has one effect part, with the
+-latest value, and its earlier run ends done then. What the second half marks is due in the next round. Then the
+-requests queued in the round run.
++Second half, once nothing is due: waiting setups and effect parts run, in
++the order they began waiting, through an interface bound as the process,
++readerless, reading and writing; a setup's value is written as a compute's.
++Before an effect part, its earlier effect parts' cleanups run, told
++\code{\{"killed": false\}}, newest first; an error ending one is the run's;
++the effect part still runs. A compute rerun before its effect part ran: one
++effect part, latest value; its earlier run ends done then. What the second
++half marks: due next round. Then the round's queued requests run.
+ 
+-\paragraph{How a run ends.} A run ends \emph{done}; \emph{pending}, if
+-\code{code} or its compute gave pending; \emph{failed}, if an error ended
+-\code{code} or one of its parts, a refusal included, the first such error
+-being the run's; \emph{stopped} or \emph{parked} (Order). Where a failed load
+-ends the run is \code{LOADERS.tex}'s (Finding code). At its end, the
+-scheduler writes its status if that changed (\S\ref{sec:status}) and its
+-latest run (\S\ref{sec:run}), and passes the moment to the hooks.
++\paragraph{How a run ends.} \emph{Done}; \emph{pending}, if \code{code} or
++its compute gave pending; \emph{failed}, if an error, a refusal included,
++ended \code{code} or a part (the first such error is the run's);
++\emph{stopped} or \emph{parked} (Order). Where a failed load ends the run:
++\code{LOADERS.tex}, Finding code. At the end: status written if changed
++(\S\ref{sec:status}), latest run written (\S\ref{sec:run}), hooks told.
+ 
+ \subsection{Order}
+ 

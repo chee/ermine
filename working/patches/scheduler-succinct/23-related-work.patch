@@ -1,0 +1,44 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -758,27 +758,24 @@
+ 
+ \section{Related work}
+ 
+-\paragraph{Solid.} A setup runs once, as a Solid component does, and the
+-compute that only reads and the effect part that acts follow Solid~2's split
+-effects \cite{Solid}, so a computation can be run again or thrown away.
++\paragraph{Solid.} A setup runs once, like a Solid component; the read-only
++compute and acting effect part follow Solid~2's split effects \cite{Solid}:
++a computation can be rerun or thrown away.
+ 
+-\paragraph{Coherent reaction.} Edwards's coherent reaction orders a cycle's
+-reactions so none reads state another will change later in the cycle
+-\cite{Coherent}. The split gets part of this: computes see no effect part's
+-writes until the next round.
++\paragraph{Coherent reaction.} Edwards orders a cycle's reactions so none
++reads state another changes later in it \cite{Coherent}. The split gets part
++of this: computes see no effect part's writes until the next round.
+ 
+-\paragraph{Incremental.} Ordering runs by heights that only rise is how
+-Incremental stabilises \cite{Incremental}, so a reader runs after what it
+-read.
++\paragraph{Incremental.} Ordering runs by heights that only rise, as
++Incremental stabilises \cite{Incremental}: a reader runs after what it read.
+ 
+-\paragraph{Smalltalk.} A method changed in a running Smalltalk image is used
+-from its next call, while calls already running finish with the old one
+-\cite{Smalltalk}. A process likewise keeps its own code while new code is
+-shown, and takes it when it is replaced.
++\paragraph{Smalltalk.} A method changed in a running image applies from its
++next call; running calls finish with the old \cite{Smalltalk}. Likewise a
++process keeps its code while new code is shown, taking it when replaced.
+ 
+-\paragraph{Hazel.} Hazel runs a program with holes in it and resumes when a
+-hole is filled \cite{Hazel}, as a process started before its program is here
+-waits, visibly, and runs when it arrives.
++\paragraph{Hazel.} Runs a program with holes, resuming when a hole is filled
++\cite{Hazel}; likewise a process started before its program is here waits,
++visibly, and runs when it arrives.
+ 
+ \paragraph{Unix.} A process's parent is whoever started it, as in Unix.
+ 

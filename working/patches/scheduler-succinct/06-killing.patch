@@ -1,0 +1,56 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -174,33 +174,25 @@
+ 
+-\paragraph{Killing.} A process is \emph{killed} when its node goes
+-(\code{GRAPH.tex}, Ephemeral nodes): when it is unplaced, at an address or at
+-its id, or goes with an ephemeral node that holds it; rearranging the tree
+-around it does not kill it. The scheduler learns of a kill from the ids a
+-change's answer says went, for each change made through it or by its
+-bookkeeping, and for none made beneath it on the bare graph. A process
+-ends itself, as a script exits, the same way: it unplaces its own node, at
+-the address \code{[]}, under its name, with its pid. When its code ends by
+-itself, as an external program exits, the host or the loader running it
+-unplaces its node; why a process ended is the host's to keep
+-(\code{HOST.tex}). A process node no place reaches stays here, and runs on
+-(Open, Unreachable processes).
++\paragraph{Killing.} \emph{Killed}: its node gone (\code{GRAPH.tex},
++Ephemeral nodes): unplaced, at an address or its id, or gone with an
++ephemeral node holding it. Rearranging the tree around it: no kill. The
++scheduler learns of kills from the ids a change's answer says went: changes
++through it or its bookkeeping, not beneath it on the bare graph. To end
++itself, a process unplaces its own node (address \code{[]}, its name, its
++pid). Code ending by itself: its host or loader unplaces its node; why it
++ended is the host's to keep (\code{HOST.tex}). A process node no place
++reaches stays, running on (Open, Unreachable processes).
+ 
+-When a process is killed, everything unwinds, the newest first:
++Unwinding, newest first:
+ \begin{enumerate}
+-\item it is no longer due;
+-\item its children are killed, the most recently started first, each
+-  wholly before the next (Children);
+-\item its cleanups run, the most recently registered first, each told
+-  \code{\{"killed": true\}} (\S\ref{sec:api}); an error that ends one does
+-  not stop the rest;
+-\item the scheduler releases the other ephemeral nodes it owns, the most
+-  recently made first (Ephemeral nodes);
+-\item it calls \code{forget} with the pid, so the graph drops its reads
+-  (\code{GRAPH.tex}, Tracking).
++\item no longer due;
++\item children killed, newest first, each wholly before the next (Children);
++\item cleanups, newest first, told \code{\{"killed": true\}}
++  (\S\ref{sec:api}), an error ending one not stopping the rest;
++\item its other ephemeral nodes released, newest first (Ephemeral nodes);
++\item \code{forget} with the pid (\code{GRAPH.tex}, Tracking).
+ \end{enumerate}
+-When one change kills several processes, they are killed the most recently
+-started first. A kill made during one of the process's own parts, handler
+-calls or cleanups, such as a script unplacing its own node, takes effect when
+-that returns; its other operations go on. A process killed while its setup
+-or effect part waits in a round (Rounds) never runs it.
++One change killing several: newest started first. A kill during the
++process's own part, handler call or cleanup takes effect when that returns;
++its other operations go on. Killed while its setup or effect part waits in a
++round (Rounds): never runs it.
+ 

@@ -1,0 +1,45 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -206,26 +206,20 @@
+ 
+-\paragraph{Children.} A process's \emph{children} are the processes started
+-through its parts and handler calls; their nodes are ephemeral nodes it owns
+-(below), so the processes form a tree of who started what, wherever they are
+-placed. One started by host code has no parent. Computes and effects are
+-children of the process that starts them, and parts can make parts: any part
+-or handler call but a cleanup may start children while it runs.
+-
+-When a setup, a compute or an effect part runs again, a \code{start} it makes
+-with the name of a child that part started before, still here, is
+-\emph{matched} to that child, one to one, in the order they were started.
+-Names are, for now, the only way to match (Open, Matching). A matched start
+-makes no new process and no change, and answers with the child's id: the
+-child keeps its node, height and kept changes, and runs the new code from its
+-next run. If the maker runs as
+-replaced (Programs, New code), the child is replaced too, once for each
+-replacement of its maker. When a call of the part ends done, the children
+-that part started before and did not start again are released, as at a kill,
+-the most recently started first.
++\paragraph{Children.} \emph{Children}: processes started through a
++process's parts and handler calls; their nodes are ephemeral nodes it owns
++(below). Started by host code: no parent. Computes and effects are children
++of their starter. Any part or handler call but a cleanup may start children
++while running.
+ 
+-What a maker gives a compute is a \code{data} child node, which the maker
+-places inside the compute's node and writes only when its value is not equal
+-to the one there, so an equal value is no change, and a matched compute runs
+-again only when what it reads changes.
++A setup, compute or effect part rerunning: its \code{start} naming a child
++that part started before, still here, is \emph{matched} to it, one to one,
++in start order; by name only, for now (Open, Matching). Matched: no new
++process, no change; answers the child's id; the child keeps node, height and
++kept changes, running the new code from its next run. Maker run as replaced
++(Programs, New code): the child replaced too, once per replacement. A call
++of the part ending done releases the children that part started before
++and did not start again, as at a kill, newest first.
+ 
++A maker gives a compute a \code{data} child node, inside the compute's node,
++writing it only when not equal to the value there.
++
+ \paragraph{Ephemeral nodes.} Only processes make, place or move ephemeral

@@ -1,8 +1,0 @@
-{"name":"the owner says who (link.org, decided 2026-10-07): a mounter's write is stamped with the agent {actor: what it claimed, peer: its id on the channel}, at the owner's time, with its cause as it sent it","steps":[
-{"send":{"cmd":"reset","stack":"link","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"a","id":"a","value":null,"cause":{"file":"s.js","line":1,"column":1}}},
-{"send":{"cmd":"serve","as":"O","place":["a"]}},
-{"send":{"cmd":"mount","as":"M"},"expect":{"ok":{"owner":"O"}}},
-{"send":{"cmd":"send","via":"M","request":{"cmd":"write","agent":"me","address":[],"patches":[{"type":"snapshot","value":1}],"cause":{"file":"m.js","line":2,"column":3}}},"expect":{"ok":{"answer":{"seq":5,"ok":{"change":{"node":"a","time":2,"kind":"write","agent":{"actor":"me","peer":"M"},"cause":{"file":"m.js","line":2,"column":3}}}}}}},
-{"send":{"cmd":"read","agent":"host","address":["a"]},"expect":{"ok":{"items":[{"value":1,"change":{"node":"a","time":2,"agent":{"actor":"me","peer":"M"}}}]}}}
-]}

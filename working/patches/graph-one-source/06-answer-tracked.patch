@@ -1,0 +1,14 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -426,8 +426,9 @@
+ what the read would have looked at there: a member's slot of the next name,
+ where a walk tried it; what a read would have read of the node it acts on, or of
+ a member it hands over; the slot of the name in the directory that ended a
+-lookup's search. The nodes an answer depended on are tracked as refused too
+-(\S\ref{sec:running}). Not refused: a member passed over for lacking the name;
++lookup's search. The nodes an answer depended on: \emph{enter's answer names
++what it read} (\S\ref{sec:running}). Not refused: a member passed over for
++lacking the name;
+ what a refused read and another both tracked.
+ 
+ A change marks:

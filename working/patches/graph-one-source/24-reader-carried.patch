@@ -1,0 +1,16 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -403,9 +403,10 @@
+ 
+ \subsection{Tracking}\label{sec:tracking}
+ 
+-\emph{Reader}: to the graph, only an id. An operation may carry one; its reads
+-are tracked under it as made, knowing every answer the \code{enter}s gave
+-(\S\ref{sec:running}). No reader: not tracked. A reader's reads mark it from
++\emph{Reader}: to the graph, only an id. An operation's reads are tracked
++under its reader (\S\ref{sec:operations}) as made, knowing every answer the
++\code{enter}s gave (\S\ref{sec:running}). No reader: not tracked. A reader's
++reads mark it from
+ when made until \code{forget(reader)} drops them all: the reader starts over,
+ and nothing marks it until it reads again. A scheduler's use:
+ \code{SCHEDULER.tex} (Marks; The latest run).

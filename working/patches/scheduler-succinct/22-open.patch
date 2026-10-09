@@ -1,0 +1,99 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -703,57 +703,54 @@
+ 
+ \section{Open}
+ 
+-Proposals not yet decided are in two working papers,
+-\code{WHAT-IS-A-PROCESS.tex} and \code{scheduler-proposals.org}.
++Undecided proposals: \code{WHAT-IS-A-PROCESS.tex},
++\code{scheduler-proposals.org}.
+ 
+ \begin{itemize}
+-\item \emph{Stages.} How effects run in stages, such as a DOM flush before
+-  other effects, without coupling them. It needs solving; this first pass
+-  skips it (\code{working/stages-research.org}).
+-\item \emph{Render effects.} How a program makes an effect that renders,
+-  with stages; and whether a program's kind stays known by its shape.
+-\item \emph{Matching.} By structure, or by order as React's hooks are, as
++\item \emph{Stages.} How effects run in stages (e.g.\ a DOM flush before
++  other effects) without coupling them. Needs solving; this first pass skips it
++  (\code{working/stages-research.org}).
++\item \emph{Render effects.} How a program makes a rendering effect, with
++  stages; whether a program's kind stays known by its shape.
++\item \emph{Matching.} By structure, or by order (as React's hooks), as
+   choices beside names (Processes, Children).
+-\item \emph{Mounters.} Where the nodes of a process that serves another store
+-  as nodes go, such as an Automerge or a Patchwork folder: inside it, or
++\item \emph{Mounters.} Where the nodes of a process serving another store as
++  nodes (e.g.\ an Automerge or Patchwork folder) go: inside it, or
+   alongside, as part of the graph.
+ \item \emph{Whose call.} A plain function a program gives the world calls as
+   the process, so a person's click through it carries no \code{person}: the
+   host does not see it (\code{HOST.tex}, Trusted input and the actor).
+ \item \emph{Unreachable processes.} A process whose node's ordinary holder
+-  no place reaches runs on (\code{GRAPH.tex}, Ephemeral nodes). Whether
+-  anything releases it, or it runs until its owner is killed or the host
+-  restarts.
+-\item \emph{Moving a process node.} Only a process may move an ephemeral
+-  node (Ephemeral nodes), so host code cannot move a process node, even one
+-  it started. Whether process nodes are excepted.
+-\item \emph{A kill beneath the scheduler.} Host code that unplaces a process
+-  node on the bare graph kills a process the scheduler does not learn of
+-  (Killing), and the process's next write at its id makes an ordinary node
+-  (\code{GRAPH.tex}, Operations, At an id). Whether host code must unplace
+-  process nodes through the scheduler.
++  no place reaches runs on (\code{GRAPH.tex}, Ephemeral nodes). Does
++  anything release it, or does it run until its owner is killed or the host
++  restarts?
++\item \emph{Moving a process node.} Only processes may move ephemeral nodes
++  (Ephemeral nodes): host code cannot move a process node, even one it
++  started. Are process nodes excepted?
++\item \emph{A kill beneath the scheduler.} Host code unplacing a process node
++  on the bare graph kills a process without the scheduler learning of it
++  (Killing); its next write at its id makes an ordinary node (\code{GRAPH.tex}, Operations,
++  At an id). Must host code unplace process nodes through the scheduler?
+ \item \emph{What a run cannot show.} A read that gave no items, or was
+-  refused, shows nothing of where it looked; a lookup shows neither the
+-  directories it searched nor what it saw there. Whether the graph's answers
+-  carry these.
+-\item \emph{The top of the stack.} The scheduler binds a process's
+-  interfaces over the top of the stack, so that wrappers above it, such as
+-  sync's (\code{SYNC.tex}), see a program's operations, but the graph has no
+-  operation that tells a layer the top (\code{GRAPH.tex}, Running and
+-  wrapping). How the scheduler is given the top, or whether it binds over
+-  itself and the wrappers go beneath it.
+-\item \emph{A moved chroot.} What a process's chroot becomes when a move
+-  takes its node out from under its start.
+-\item \emph{After a move.} Whether a \code{move} marks the process.
+-\item \emph{Handing on.} How a process that makes things for others hands
+-  its ephemeral nodes on, so they outlive it.
+-\item \emph{Small hosts.} Kept changes are held whole, and grow while a
+-  process stays pending or failing; whether a microcontroller caps them.
+-\item \emph{The cost of the budget.} A large budget can freeze a page
+-  before it is reached.
+-\item \emph{Two effects writing one node.} The scheduler does not detect two
+-  effects writing one node in a round, and one action can spread over several
+-  rounds (Coherent reaction, below).
++  refused, shows nothing of where it looked; a lookup, neither the
++  directories searched nor what it saw. Should the graph's answers carry
++  these?
++\item \emph{The top of the stack.} Process interfaces are bound over the top
++  of the stack, so wrappers above (e.g.\ sync's, \code{SYNC.tex}) see a
++  program's operations; no graph operation tells a layer the top
++  (\code{GRAPH.tex}, Running and wrapping). How is the scheduler given it?
++  Or does it bind over itself, wrappers beneath?
++\item \emph{A moved chroot.} A process's chroot after a move takes its node
++  out from under its start.
++\item \emph{After a move.} Does \code{move} mark the process?
++\item \emph{Handing on.} How a process making things for others hands its
++  ephemeral nodes on, to outlive it.
++\item \emph{Small hosts.} Kept changes are held whole, growing while a
++  process stays pending or failing. Should a microcontroller cap them?
++\item \emph{The cost of the budget.} A large budget can freeze a page before
++  it is reached.
++\item \emph{Two effects writing one node.} Undetected within a round; one
++  action can spread over several rounds (Coherent reaction, below).
+ \end{itemize}
+ 
+ \section{Related work}

@@ -1,0 +1,108 @@
+#+title: Subtract review: a core that fits on one A4 sheet
+
+Four reviewers looked for concepts to collapse, or to move up a layer,
+without losing power: one each on GRAPH, SCHEDULER and PROTOCOL, and one
+across the seams between them. Sketches they wrote are in the scratchpad
+(min/graph.js, a4/mini.js).
+
+* Measure
+- Today's TS core is the graph (2,045 code lines) plus the scheduler
+  (1,670), about 9.5 sheets at 7pt. Another 1,242 lines live in the core
+  folders without being core: drive.ts, steps.ts, cbor.ts and hash.ts.
+- One double-sided A4 sheet holds about 390 lines at 7pt in two columns, or
+  about 160 at 8pt in one.
+- Sketches: a graph of about 200 lines (12k characters) and a scheduler of
+  about 195 lines (9k), each passing smoke tests.
+- Rebuilt with every cut, graph plus runner comes to about 500 lines, which
+  is 1.3 sheets at 7pt. One sheet at 7pt also needs about 110 lines of
+  decided features to go: move, refused positions, typed arrays, pending
+  ids, ordered letting go, lookups.
+
+* No reversal: structural moves
+Each item lists the reports that propose it.
+1. Non-core files leave the core folders (P1, ~1,470 lines):
+   - drive.ts goes to a host, or is deleted;
+   - steps.ts goes to conformance;
+   - cbor.ts and hash.ts go to a values library;
+   - the sameThread and builtin loaders go to hosts.
+2. Records leave the graph (GRAPH 1, SEAM P3, ~300 lines). Tracking
+   becomes reads kept under a reader id, plus forget(reader). One recorder
+   above the graph builds records. This matches chee's 10-06 "ids + start
+   over", and closes three GRAPH Open items.
+3. One entry layer (GRAPH 2 and 6, SEAM P2, ~330 net). It holds request
+   shape checks, value copies and site capture. The graph still requires a
+   site.
+4. bind becomes a library view (GRAPH 7, SEAM P8, ~95). It keeps the
+   decision that an interface fixes its agent and place.
+5. apply, release and arrive become operations "at: id" on the bare graph
+   (GRAPH 9 and 11, SCHEDULER 5, SEAM P9, ~65). This answers the Open "does
+   apply take a move": yes.
+6. Keeping and reload leave the graph for the keeper (GRAPH 10, SEAM P10,
+   ~60).
+7. reach and top leave the graph (GRAPH 12, SEAM P12, ~50). The cost is
+   rewriting sync.ts (7 sites) and mirror.ts (2) to route through enter.
+8. Equality and patches become a values library (GRAPH 3, SEAM P4). The
+   rule stays in GRAPH.
+9. No pull-on-read (SCHEDULER 6, SEAM P14). This matches chee's 10-04
+   "nothing recomputes inside a read". The cost is extra runs when the order
+   is wrong.
+10. Finding code moves to a loader layer (SCHEDULER 2, SEAM P5). There are
+    no runnables or restarts. It replaces the LOADERS proposal, which was
+    never agreed.
+11. Protocol and harness, ours to decide (PROTOCOL 1, 2, 3, 5, 6, 8, 9;
+    about a third of the harness, TS 1,235 → 850 lines):
+    - one step kind per operation, and a smaller expression language;
+    - events pushed, not polled;
+    - generic command dispatch;
+    - pids "@<time>";
+    - a "strict" tier for line robustness;
+    - no op on direct answers;
+    - lists always present.
+
+* Reversals: chee decides
+- Graph:
+  - subscribe becomes a library over one listener per reader. It reverses
+    the 10-06 core list "read, change, subscribe, track". (GRAPH 5, SEAM
+    P6)
+  - lookup and lookups become a library over directory reads. They reverse
+    10-05 and today's lookups. SEAM disagrees: it keeps lookup in the graph,
+    taking a path, so the program search uses it. (GRAPH 4 against SEAM P5)
+  - move leaves the graph: the scheduler does place then unplace. It
+    reverses wave 2's move. SEAM keeps move, but lists it among the cuts
+    for one sheet. (GRAPH 8)
+  - The graph stamps time as highest + 1, and wall time goes in the cause.
+    It reverses 10-05's "time = driver's clock". (SEAM P16, PROTOCOL 10)
+  - There is one process field: the binding's reader. (GRAPH 14, SEAM P17)
+- Scheduler:
+  - Process nodes are ephemeral, owned by whoever started them, and a kill
+    is the graph's gone. It reverses SCHEDULER's Killing and Children, and
+    adopts the "ephemeral process nodes" proposal. (SCHEDULER 3, SEAM P7)
+  - A process's value and items are written by id, and there is no covered
+    state. It flips wave 2 #8 from b to a; chee said "a or b, don't mind".
+    (SCHEDULER 4, SEAM P11)
+  - There is no stop: ending a process is unplacing it, and the last record
+    says why. It reverses stop. (SCHEDULER 10, SEAM P15)
+  - Handlers become input nodes the host writes. This is disputed: SEAM
+    rejects it because it loses the host vouching for person and trusted.
+    (SCHEDULER 1)
+  - Fewer items and endings: waiting becomes a pending item, stopped
+    becomes an error item, a refused ending becomes failed, and cut goes.
+    (SEAM P13)
+- Protocol:
+  - Typed arrays travel as base64 bytes, as CBOR's RFC 8746 does.
+    (PROTOCOL 4)
+  - A request with several faults may answer with any one of them. GRAPH's
+    security order stays. (PROTOCOL 7)
+- The split itself: graph | runner | processes | loaders, with only the
+  graph and the runner in the core, and processes as one reference policy
+  over the runner. (SEAM section 6)
+
+* Contradictions the seam reviewer found (for the next confirm round)
+- An item's change: GRAPH says the header; PROTOCOL's Items still give the
+  body too.
+- move's one-place: PROTOCOL's error table still says ephemeral nodes only.
+- PROTOCOL cites PROTECT sections that are gone ("Every member handed over",
+  "Pending").
+- Check order: PROTOCOL puts protect wholly first; GRAPH puts above-root and
+  nothing-there first.
+- GRAPH's apply row repeats SCHEDULER's Arrivals.

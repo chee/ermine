@@ -1,12 +1,13 @@
 {
   "tasks": {
-    "test": "deno test --allow-read --allow-write core layers experimental_hosts/web/typescript/dom experimental_hosts/web/typescript/signals experimental_hosts/web/typescript/keep",
+    "test": "deno test --allow-read --allow-write core layers experimental_hosts/web/typescript/dom experimental_hosts/web/typescript/signals experimental_layers",
     "check": "deno check core layers experimental_hosts/web/typescript/demo experimental_hosts/web/typescript/dom experimental_hosts/web/typescript/signals experimental_hosts/web/typescript/bundle",
     "conformance": "cd conformance && ERMINE_HARNESS=\"deno run --quiet ../core/scheduler/typescript/harness/main.ts\" deno test --allow-run --allow-read --allow-env",
     "conformance:test": "cd conformance && deno test --allow-run --allow-read --allow-env",
     "fuzz": "cd conformance && deno run --allow-run --allow-read --allow-write --allow-env fuzz/main.ts",
     "build": "deno run --allow-read --allow-write --allow-run experimental_hosts/web/typescript/bundle/build.ts",
-    "demo": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/core/dev.ts",
+    "demo": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/serve.ts",
+    "demo:core": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/core/dev.ts",
     "demo:together": "deno run --allow-read --allow-write --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/core/together.ts",
     "demo:sync": "deno run --allow-read --allow-run --allow-net --allow-env experimental_hosts/web/typescript/demo/sync/serve.ts",
     "demo:sync:cross": "deno run --allow-read --allow-run --allow-env experimental_hosts/web/typescript/demo/sync/cross.ts",
@@ -31,7 +32,10 @@
     "@lezer/highlight": "npm:@lezer/highlight@^1",
     "demo": "./experimental_hosts/web/typescript/demo/core/host/demo.js",
     "ermine": "./experimental_hosts/web/typescript/demo/core/host/ermine.js",
-    "d2/ermine": "./experimental_hosts/web/typescript/demo/d2/src/ermine.ts"
+    "d2/ermine": "./experimental_hosts/web/typescript/demo/d2/src/ermine.ts",
+    "dom-example/ermine": "./experimental_hosts/web/typescript/demo/dom-example/ermine.ts",
+    "signals/ermine": "./experimental_hosts/web/typescript/demo/signals/ermine.ts",
+    "processes/ermine": "./experimental_hosts/web/typescript/demo/processes/ermine.ts"
   },
   "lint": {
     "exclude": [

@@ -1,0 +1,21 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -47,12 +47,12 @@
+ 
+ \section{Every scheduler}
+ 
+-A scheduler is a wrapper over the graph (\code{GRAPH.tex}, Running and
+-wrapping) that runs the processes a change marks, in whatever order it
+-chooses: at once, lazily, once a frame, or by hand. The reference one below
+-can be swapped for another. Whatever its order, a process it was told is
+-marked, and that has not run since, never reads as current: whenever a read
+-can reach it, its status says pending (\S\ref{sec:status}).
++A scheduler wraps the graph (\code{GRAPH.tex}, Running and wrapping) and
++runs the processes a change marks, in an order it chooses: at once, lazily,
++once a frame, or by hand. The reference scheduler below can be swapped for
++another. Whatever the order, once a scheduler is told a process is marked,
++the process never reads as current until it runs: whenever a read can reach
++it, its status says pending (\S\ref{sec:status}).
+ 
+ \section{The reference scheduler}
+ 

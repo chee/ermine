@@ -1,0 +1,22 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -637,13 +637,12 @@
+ 
+ \subsection{Outside operations and batches}
+ 
+-An operation from outside that makes a change runs everything due once it is
+-made, and returns once nothing is due, or at its budget. A read, a
+-subscription and an operation that fails run nothing. \code{batch} is the
+-scheduler's own operation, on the host's interface: it makes several
+-operations, then runs what is due. An error inside it that its code does not
+-catch ends it there; what was changed before stands, and what is due runs. A
+-handler call and a \code{replace} from outside run what is due the same way.
++An outside operation making a change runs all that is due once made,
++returning once nothing is, or at its budget; reads, subscriptions and failed
++operations run nothing. \code{batch}, the scheduler's own, on the host's
++interface: makes several operations, then runs what is due; an error its
++code does not catch ends it, earlier changes standing, what is due running.
++Outside handler calls and \code{replace}: likewise.
+ 
+ \begin{lstlisting}
+ api.batch(() => {                        // what these mark runs once, after the last

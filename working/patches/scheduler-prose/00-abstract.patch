@@ -1,0 +1,20 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -32,14 +32,14 @@
+ \maketitle
+ 
+ \begin{abstract}
+-The ermine graph never runs anything: a change reports which readers it
++The ermine graph never runs anything. A change reports which readers it
+ marked (\code{GRAPH.tex}, Tracking), and a \emph{scheduler} decides what to
+ run and when. The reference scheduler's processes are ephemeral nodes placed
+-by \code{start}, which end when their node goes. A program is a
++by \code{start}. Each ends when its node goes. A program is a
+ \emph{setup}, run once; a \emph{compute}, run again when what it read
+ changes; or an \emph{effect}, a compute whose value is acted on. Computes and
+ effects are processes too, children of the process that starts them. A
+-process's interface is the graph's, bound to its place and identity; the
++process's interface is the graph's, bound to its place and identity. The
+ scheduler adds only what it alone can do. It keeps no history: it writes each
+ process's status and latest run into the graph, and passes four moments to
+ hooks.

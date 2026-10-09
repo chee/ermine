@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -665,8 +665,8 @@
+ \section{Open}
+ 
+ \begin{itemize}
+-\item A slot item carries the slot's last change's header, maybe about another
+-  member. Should each member carry the header of the change that placed it?
++\item A slot item's header (\S\ref{sec:paths}): should each member carry the
++  header of the change that placed it?
+ \item A move from elsewhere knows its two parents only by id (\code{SYNC.tex},
+   Open, Syncing a move). A move at an id walks its address and \code{to} from
+   one node; the path from there to each parent may be unknown, reach another

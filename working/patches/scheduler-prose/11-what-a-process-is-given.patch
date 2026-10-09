@@ -1,0 +1,63 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -315,13 +315,14 @@
+ 
+ \subsection{What a process is given}\label{sec:api}
+ 
+-Each part is a function, called with one map, so a program names only what
+-it uses. Its \code{api} is the graph's view (\code{GRAPH.tex}, An interface
+-fixes its agent and its place), under the entry layer, bound with the
+-process's agent, pid and place: the graph's operations, with the process and
+-its \code{.} as their origin and the provenance on every change. The
+-scheduler adds as little as it can; nicer interfaces, such as signals-style
+-ones, or \code{input}, which finds or makes a node, are libraries.
++Each part is a function called with one map, so a program names only what
++it uses. A part's \code{api} is the graph's view (\code{GRAPH.tex}, An
++interface fixes its agent and its place), under the entry layer, bound with
++the process's agent, pid and place: the graph's operations, with the process
++and its \code{.} as their origin and the provenance on every change.
++The scheduler adds as little as it can. Nicer interfaces, such as
++signals-style ones, or \code{input}, which finds or makes a node, are
++libraries.
+ 
+ \noindent{\small
+ \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+@@ -341,10 +342,10 @@
+ \item \code{start} (Processes): only the scheduler makes and runs processes;
+ \item \code{call} (Handlers): a call runs code as an agent naming both its
+   caller and its definer, then runs what is due;
+-\item \code{onCleanup(f)}: \code{f} is called, told
+-  \code{\{"killed": false\}}, before that part runs again, and told
+-  \code{\{"killed": true\}} at the kill, the most recently registered first;
+-  only the scheduler knows when either comes;
++\item \code{onCleanup(f)}: the scheduler calls \code{f} before that part runs
++  again, told \code{\{"killed": false\}}, and at the kill, told
++  \code{\{"killed": true\}}, the most recently registered first; only the
++  scheduler knows when either comes;
+ \item \code{peep}: a second view of the compute's, with no reader, so its
+   reads are not tracked (\code{GRAPH.tex}, Tracking); only the scheduler
+   binds a reader;
+@@ -352,16 +353,16 @@
+   own node; the rest is what the part is for.
+ \end{itemize}
+ The host's interface adds \code{start}, \code{call}, \code{batch} and
+-\code{replace}; the sync process is given \code{arrive}.
++\code{replace}.
+ 
+ The reads of a setup, an effect part, a handler call, a cleanup and a peep
+ are not tracked: a read that should update belongs in a compute. All reads
+-pass the read hook (\S\ref{sec:hooks}), and a run's are listed in its latest
+-run (\S\ref{sec:run}). Every interface a part is given stops when the part
+-returns, and an operation through it then is \code{stopped}, but for
+-\code{call}, which lasts until the process is killed, so a program can give
+-the world a plain function, such as a DOM \code{onclick}, that calls one of
+-its handlers.
++pass the read hook (\S\ref{sec:hooks}), and a run's reads are listed in its
++latest run (\S\ref{sec:run}). Every interface a part is given stops when the
++part returns; an operation through it after that is \code{stopped}. The
++exception is \code{call}, which lasts until the process is killed, so a
++program can give the world a plain function, such as a DOM \code{onclick},
++that calls one of its handlers.
+ 
+ \subsection{What a process acts as}
+ 

@@ -1,0 +1,69 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -351,36 +351,38 @@
+ 
+ \subsection{Placement}\label{sec:placement}
+ 
+-Placing puts an id in a slot of the node an address reaches, at a position if
+-one is given and at the end if not.
++\emph{Placing} puts an id in a slot of the node an address reaches, at a
++position if given, else at the end.
+ \begin{itemize}
+-\item With a value, it makes the node, ephemeral if it says so. The id must not
+-  be here (\code{exists}).
+-\item With no value, it \emph{mounts} the id. If its node is here, that node is
+-  in one more place. If not, the slot holds the id, \emph{pending}, until a
+-  node with that id is made: walks pass over it, and its slot item is marked
+-  pending. A value placed for a pending id makes the node, which fills every
+-  slot holding the id; placed into one of those slots, the id stays where it
+-  is unless a position is given.
+-\end{itemize}
+-A position is a gap in the slot: 0 before the first id, the slot's length
+-after the last; anything greater is invalid (\code{position}). Placing an id
+-already in the slot at a position reorders it: it is put in at that gap, then
+-taken out of its old place. With no position, the slot stays as it is, though
+-the placement is still a change, and the slot's last change. Unplacing takes
+-an id out of a slot; an id that is not there is invalid (\code{not-in-slot}).
+-All of these are changes to the parent.
++\item with a value: makes the node, ephemeral if it says so; the id must not be
++  here (\code{exists});
++\item without: \emph{mounts} the id. Node here: in one more place. Not here:
++  the slot holds the id \emph{pending} until a node with that id is made; walks
++  pass over it; its slot item is pending. A value placed for a pending id makes
++  the node, filling every slot holding the id; placed into one of those, the id
++  stays put unless a position is given;
++\item position: a gap; 0 before the first id, the slot's length after the
++  last; greater: invalid (\code{position});
++\item an id already in the slot, at a position: reordered, put in at that gap,
++  then out of its old place. No position: the slot stays as is, yet it is still
++  a change, and the slot's last;
++\item \emph{unplacing}: takes an id out of a slot; not there: invalid
++  (\code{not-in-slot}).
++\end{itemize}
++All change the parent.
+ 
+-Moving takes an id out of one slot and places it into another, as one change
+-to both parents: it places the id into the second slot as placing with no
+-value does, then takes it out of the first, if that is another slot, and lets
+-nothing go. It is invalid where that placement or that unplacement would be,
+-except that an ephemeral node may leave its one slot for another
+-(\S\ref{sec:ephemeral}). Moving a node into a slot of itself, or of any node
+-it holds, directly or through other nodes, is invalid too (\code{one-place});
+-placing may still mount a node inside itself. A subscription that a change to
+-either parent would reach keeps the move as one event. What moving a process node means is
+-\code{SCHEDULER.tex}'s (Processes).
++\emph{Moving}: one change to both parents: places the id into the second slot as
++placing with no value does, then takes it out of the first, if another slot;
++lets nothing go.
++\begin{itemize}
++\item invalid where that placement or that unplacement would be, except that an
++  ephemeral node may leave its one slot for another (\S\ref{sec:ephemeral});
++\item invalid (\code{one-place}): into a slot of itself, or of any node it
++  holds, directly or not. Placing may still mount a node inside itself;
++\item a subscription a change to either parent would reach keeps it as one
++  event;
++\item moving a process node: \code{SCHEDULER.tex} (Processes).
++\end{itemize}
+ 
+ \subsection{Lookup}\label{sec:lookup}
+ 

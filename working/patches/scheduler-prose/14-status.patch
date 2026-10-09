@@ -1,0 +1,44 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -459,8 +459,8 @@
+ \end{decision}
+ 
+ Each write the scheduler makes at a process's id, the value's included,
+-carries the whole status in the last step of its agent, \code{"status": s},
+-where \code{s} is a map with any of these fields:
++carries the whole status as \code{"status": s} in the last step of its
++agent. \code{s} is a map with any of these fields:
+ \begin{itemize}
+ \item \code{"pending": t}: the process is due, or its last run ended
+   pending; \code{t} is the time of the change that first marked it;
+@@ -475,16 +475,20 @@
+ header of the node's value item (\code{GRAPH.tex}, Paths), with the value
+ still there to fall back to or pass on.
+ 
+-The scheduler writes at the pid, as bookkeeping and as the process: a
+-snapshot when a setup or a compute returns a value not equal to the one it
+-last wrote there, and an empty list of patches when a run ends with a status
+-other than the one last written. A run that ends with an error equal to the
+-last changes nothing, so a process that keeps failing the same way stops. The scheduler writes pending
+-before a run ends only where a read could otherwise take an out-of-date value
+-as current: when a read through an interface it bound reaches a due
+-process's node, and is not stopped (Order), it writes that process's pending
+-first, so the read shows it; and when a request ends, it writes pending for
+-each process still due. No status write makes its own process due.
++The scheduler writes at the pid, as bookkeeping and as the process:
++\begin{itemize}
++\item a snapshot, when a setup or a compute returns a value not equal to the
++  one it last wrote there;
++\item an empty list of patches, when a run ends with a status other than the
++  one last written.
++\end{itemize}
++A run that ends with an error equal to the last changes nothing, so a
++process that keeps failing the same way stops. The scheduler writes pending
++before a run ends only where a read could otherwise take an out-of-date
++value as current. When a read through an interface it bound reaches a due
++process's node, and is not stopped (Order), the scheduler first writes that
++process's pending, so the read shows it. When a request ends, it writes
++pending for each process still due.
+ 
+ \subsection{The latest run}\label{sec:run}
+ 

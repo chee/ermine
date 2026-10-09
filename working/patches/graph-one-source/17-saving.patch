@@ -1,0 +1,13 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -536,8 +536,8 @@
+ \item the highest time it has had (\S\ref{sec:changes}).
+ \end{itemize}
+ No log: older changes are history, for whatever keeps it (\code{IDEAS.tex},
+-Kept history). It saves nothing itself: a keeper saves it and makes a new graph
+-from what it saved (\S\ref{sec:nodes}; \code{HOST.tex}, The keeper).
++Kept history). It saves nothing itself (\S\ref{sec:nodes}; \code{HOST.tex}, The
++keeper).
+ 
+ \section{Running and wrapping}\label{sec:running}
+ 

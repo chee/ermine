@@ -1,0 +1,27 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -188,10 +188,10 @@
+ its time: its slots are taken apart by name in code point order, ids in slot
+ order, each ephemeral node among them taken apart likewise and gone before the
+ next; then it goes. Ordinary nodes it held stay here. The change also marks the
+-readers that read a slot it took apart, as an unplacement from that slot would,
+-and answers with the ids that went, in order, so a host can let their live
+-things go in that order and a scheduler end the processes whose nodes went. A
+-gone node's id names nothing.
++readers that read a slot it took apart, as an unplacement from that slot would.
++With its answer (\S\ref{sec:operations}), a host can let the gone nodes' live
++things go in the order they went, and a scheduler end the processes whose nodes
++went. A gone node's id names nothing.
+ 
+ An ephemeral node whose ordinary holder no place reaches stays here,
+ unreachable, until the holder is placed again or an unplacement at its id lets
+@@ -488,7 +488,8 @@
+   site and cause if it has them;
+ \item an operation making a change answers with it; the readers it marked, each
+   once, in code point order; which of them only through refused reads
+-  (\S\ref{sec:tracking}); for an unplacement, the ids it let go;
++  (\S\ref{sec:tracking}); for an unplacement, the ids it let go, in the order
++  they went (\S\ref{sec:ephemeral});
+ \item a write, placement, unplacement or move whose address, or \code{to},
+   reaches nothing: invalid (\code{nothing-there});
+ \item an error: a code from a fixed list, with details (\code{PROTOCOL.tex},

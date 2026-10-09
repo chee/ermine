@@ -1,0 +1,111 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -104,73 +104,61 @@
+ \subsection{Processes}\label{sec:processes}
+ 
+ \begin{definition}[Process]
+-A \emph{process} is an ephemeral node (\code{GRAPH.tex}, Ephemeral nodes)
+-placed by the scheduler's \code{start}. Its id, its \emph{pid}, is the id the
+-\code{start} gives, or else a fresh one, which the graph does not have; its
+-name is the name the \code{start} gives, or else its pid. Its \emph{place}
+-(\code{GRAPH.tex}, Paths) is the names, from the root, of the node it was
+-started in, its \code{.}, with the chroot of the interface that started it.
+-Its value is what its setup returned or its compute last returned.
++An ephemeral node (\code{GRAPH.tex}, Ephemeral nodes) placed by the
++scheduler's \code{start}. \emph{pid}: its id, the \code{start}'s or a fresh
++one not in the graph. Name: the \code{start}'s, else the pid. \emph{Place}
++(\code{GRAPH.tex}, Paths): the names from the root to the node it was
++started in (its \code{.}), with the starting interface's chroot. Value: its
++setup's return, or its compute's last return.
+ \end{definition}
+ 
+ \begin{lstlisting}
+ start({address, program, name?, id?})    starts program in the node address reaches; answers with the placement
+ \end{lstlisting}
+ 
+-\code{start} places a new ephemeral node, holding \code{null}, in the node
+-\code{address} reaches, as the caller, and answers with the placement, whose
+-\code{id} is the pid. \code{program} is a path, searched for from the new
+-process's place (\code{LOADERS.tex}, Finding the program), or code given
+-directly: a function, or a map of functions (Programs). Each run, not
+-\code{start}, finds the code, so a process can start before its program is
+-here. An id the graph already has, or that a slot holds, is invalid
+-(\code{GRAPH.tex}, Placement; Ephemeral nodes); a name the slot already has
+-is no clash: the process node goes at the end of the slot, unless the start
+-is matched (Children).
+-
+-The new process acts beneath its caller's \code{/}, so it never escapes a
+-chroot, and its \code{cwd} is the path from there to its place
+-(\code{GRAPH.tex}, Paths). \code{start} is invalid only when its placement
++\code{start}: places a new ephemeral node holding \code{null} in the node
++\code{address} reaches, as the caller; answers the placement (\code{id}: the
++pid). \code{program}: a path, searched for from the new place
++(\code{LOADERS.tex}, Finding the program), or code, a function or map of
++functions (Programs); each run finds it, not \code{start}. An id the graph
++has or a slot holds: invalid (\code{GRAPH.tex}, Placement; Ephemeral
++nodes). A name the slot has: no clash; the node goes last in the slot, unless the
++start is matched (Children). \code{start} is invalid only when its placement
+ is, as \code{protect} and the graph decide (\code{PROTECT.tex}). The new
+-process has read nothing yet, so the scheduler makes it due by the start's
+-change.
++process acts beneath the caller's \code{/}, \code{cwd} the path from there to
++its place (\code{GRAPH.tex}, Paths); it is due by the start's change.
+ 
+ \begin{decision}[A process is unique and local]
+-A process is one node, in one slot, running only on the device whose
+-scheduler started it. Its node is ephemeral, so the graph keeps it in one
+-slot (\code{one-place}) and never saves it. A node placed with \code{place},
+-or brought from storage or from elsewhere, is not started, whatever it holds:
+-only \code{start} starts, and each \code{start} that is not matched makes a
+-new process. Another device may be sent the node, as presence
+-(\code{PRESENCE.tex}), and read it, but never runs it. What a host starts
+-when it boots is the host's own.
++One node, one slot, running only on the device whose scheduler started it.
++Ephemeral (\code{one-place}, never saved). Only \code{start} starts, each
++unmatched one making a new process; a node placed with \code{place}, or brought
++from storage or elsewhere, is not started, whatever it holds. Other devices
++may be sent the node, as presence (\code{PRESENCE.tex}), and read it; never
++run it. What a host starts at boot: its own.
+ \end{decision}
+ 
+ \begin{decision}[The layout, for now: inside and alongside]
+-A process's temporary state, its parts, which are its computes and effects
+-(Children), and its handlers, at \code{on/<name>} (Handlers), go inside its
+-node. What it makes real goes alongside it, in its \code{.}, where it may
+-write, so it outlives the process. Everything inside is ephemeral and never
+-saved (\code{GRAPH.tex}, Ephemeral nodes).
++Inside its node: its temporary state, its parts, which are its computes and
++effects (Children), and its handlers, at \code{on/<name>} (Handlers);
++everything inside ephemeral, never saved (\code{GRAPH.tex}, Ephemeral
++nodes). Alongside, in its \code{.}, where it may write: what it makes real,
++to outlive it.
+ \end{decision}
+ 
+-\noindent The scheduler writes one node inside, the latest run
++\noindent Inside, the scheduler writes only the latest run
+ (\S\ref{sec:run}); every other name under a process is the program's.
+ 
+ \begin{decision}[A place is names]
+-A process's place is names, not a node. Moving or renaming a folder above
+-it does not change its place, so its address may then reach another node or
+-nothing. To carry a process along, \code{move} its node (\code{GRAPH.tex},
+-Placement), even within its own slot. Its node does not go, so it is not
+-killed, and it keeps its pid, children and kept changes; its place becomes
+-the names, from the root, of the node the move's \code{to} reached, and its
+-name the move's \code{toname}, so its next run finds its code from there.
++Names, not a node: moving or renaming a folder above does not change it,
++so its address may then reach another node, or nothing. To carry a
++process, \code{move} its node (\code{GRAPH.tex}, Placement), even within its
++slot: no kill; pid, children, kept changes kept; place: the names from the
++root to the node \code{to} reached; name: \code{toname}; the next run finds
++code from there.
+ \end{decision}
+ 
+ A process runs while its node is here, whether or not its address reaches
+-the node: a node in front of it in a union, or a folder above it moved,
+-changes only what reads find. Its value and status are written at its id
+-(\S\ref{sec:status}).
++it; value and status at its id (\S\ref{sec:status}).
+ 
+ \paragraph{Killing.} A process is \emph{killed} when its node goes
+ (\code{GRAPH.tex}, Ephemeral nodes): when it is unplaced, at an address or at

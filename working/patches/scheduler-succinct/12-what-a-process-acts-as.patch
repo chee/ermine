@@ -1,0 +1,78 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -365,9 +365,8 @@
+ 
+ \subsection{What a process acts as}
+ 
+-Every interface the scheduler hands a process is bound (\code{GRAPH.tex}, An
+-interface fixes its agent and its place) with the process's id, its place,
+-and an agent of this shape:
++Every interface the scheduler hands a process is bound (\code{GRAPH.tex}, An interface
++fixes its agent and its place) with its id, place and agent:
+ 
+ \begin{lstlisting}
+ { "actor":   a,
+@@ -376,39 +375,37 @@
+   "code":    [ { "process": id, "program": {"node": id, "time": t}, "run": n }, ... ] }
+ \end{lstlisting}
+ 
+-\code{actor} is whoever the changes are for: a person, a device, a service.
+-\code{person} and \code{trusted} are only on a handler call made by host code
+-that knows a person made it (\code{HOST.tex}, Trusted input and the actor).
+-\code{code} lists the code the change went through, outermost first: each
+-process that started the next, ending with the one that made the change,
+-with the program it runs (\code{LOADERS.tex}, Finding code), or, for code
+-given to \code{start}, its maker's program; and what it was doing:
++\code{actor}: who made the changes (person, device, service).
++\code{person}, \code{trusted}: only on a handler call by host code knowing a
++person made it (\code{HOST.tex}, Trusted input and the actor). \code{code}:
++the code the change went through, outermost first, each process starting
++the next, ending with the one that made the change; each with its program (\code{LOADERS.tex},
++Finding code; for code given to \code{start}, its maker's) and what it was
++doing:
+ \begin{itemize}
+-\item \code{"run": n}, its \code{n}th run, counting from 1: a setup, a
+-  compute or an effect part, with the cleanups before it;
+-\item \code{"handler": name}, a handler call (Handlers);
+-\item \code{"cleanup": true}, a cleanup at a kill.
++\item \code{"run": n}: its \code{n}th run, from 1: setup, compute or effect
++  part, with the cleanups before it;
++\item \code{"handler": name}: a handler call (Handlers);
++\item \code{"cleanup": true}: a cleanup at a kill.
+ \end{itemize}
+ The scheduler's own writes add \code{"status"} (\S\ref{sec:status}) or
+ \code{"kill"} (Processes, Ephemeral nodes) to the last step. Host code that
+-is not a process binds an agent with an empty \code{code}, and its changes
+-have their site (\code{GRAPH.tex}, Changes).
++is not a process: empty \code{code}; its changes have their site
++(\code{GRAPH.tex}, Changes).
+ 
+-A process's agent is made at \code{start}: the starting change's agent,
+-without its \code{person} and \code{trusted}, with a step for the new process
+-added to its \code{code}; a starting agent not of this shape is taken as the
+-actor, with an empty \code{code}. Each run and cleanup changes only the last
+-step; a handler call adds one (Handlers). Until a process's code is first
+-found, its step names no program. The last step's \code{process} is always
+-the one the interface is bound to.
++At \code{start}: the starting change's agent, minus \code{person} and
++\code{trusted}, plus a step for the new process; a starting agent not of
++this shape is taken as the actor, with empty \code{code}. Runs and cleanups
++change only the last step; a handler call adds one (Handlers). Before its
++code is first found, a process's step names no program. The last step's
++\code{process}: always the one the interface is bound to.
+ 
+ \begin{decision}[The scheduler marks its own changes in the agent]
+-Only the scheduler writes the steps of an agent's \code{code}. A program's
+-interfaces are bound (\code{GRAPH.tex}, An interface fixes its agent and its
+-place), so it cannot set a step, make a change that says the scheduler made
+-it, or give itself a \code{person} or \code{trusted}, which come only from
+-host code. The scheduler marks its own changes, its status writes and its
+-releases, in the last step.
++Only the scheduler writes \code{code} steps. A program's interfaces are bound
++(\code{GRAPH.tex}, An interface fixes its agent and its place): it cannot
++set a step, make a change as the scheduler, or give itself \code{person} or
++\code{trusted}, which only host code gives. The
++scheduler marks its own changes (status writes, releases) in the last step.
+ \end{decision}
+ 
+ \subsection{Handlers}\label{sec:handlers}

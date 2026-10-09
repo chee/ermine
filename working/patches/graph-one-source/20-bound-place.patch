@@ -1,0 +1,11 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -218,7 +218,7 @@
+ \item start, \code{/}: the node after the first chroot names; nothing above it
+   can be named or found;
+ \item \code{.}: the node the whole walk reaches;
+-\item \code{cwd}: the names after the start. An interface is bound to a place.
++\item \code{cwd}: the names after the start.
+ \end{itemize}
+ Names, not a node: moving a node on its walk leaves the place as is; it may then
+ reach another node, or none.

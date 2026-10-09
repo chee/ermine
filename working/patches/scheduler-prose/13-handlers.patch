@@ -1,0 +1,54 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -420,35 +420,35 @@
+ \end{decision}
+ 
+ A handler is an ephemeral node whose value is a function, a live value
+-(\code{GRAPH.tex}, Values), which a process places, by the layout at
+-\code{on/<name>} inside its node; the process that owns it is its
+-\emph{definer}. Placing a handler again places another node; to replace one,
+-a program writes the node it has.
++(\code{GRAPH.tex}, Values). A process places it, by the layout at
++\code{on/<name>} inside its node. The process that owns it is its
++\emph{definer}. Placing a handler again places another node; to replace
++one, a program writes the node it has.
+ 
+ \begin{lstlisting}
+ call({address, args?})    calls the handler the address reaches, with args
+ \end{lstlisting}
+ 
+ \code{call} reads the node the address reaches, as the caller, so
+-\code{protect} decides whether the caller may reach it. A node that is not an
+-ephemeral node a process owns, holding a function, is \code{not-a-handler}; a
+-handler whose node has gone is reached by nothing (\code{nothing-there}).
+-The function is called with the map a handler call is given
+-(\S\ref{sec:api}).
++\code{protect} decides whether the caller may reach it. A node is
++\code{not-a-handler} unless it is an ephemeral node a process owns, holding a
++function. A handler whose node has gone is reached by nothing
++(\code{nothing-there}). The scheduler calls the function with the map a
++handler call is given (\S\ref{sec:api}).
+ 
+ \begin{decision}[A call acts as itself]
+ A handler call does not act as its definer. Its changes name both who called
+-the handler and who defined it, and whether both must be allowed is
++the handler and who defined it. Whether both must be allowed is
+ \code{protect}'s choice (\code{PROTECT.tex}).
+ \end{decision}
+ 
+ So a call's agent is the caller's, with one more step,
+-\code{\{"process": definer, "program": p, "handler": name\}}, \code{p} being
+-the definer's program and \code{name} the address's last name. Its interface
+-is bound at the definer's place, with no reader. A call is a request
+-(Requests): an error that ends the handler goes back to a caller outside a
+-round, and the changes made before it stand. A handler call is not a run:
+-what it did shows in its changes and at the hooks.
++\code{\{"process": definer, "program": p, "handler": name\}}, where \code{p}
++is the definer's program and \code{name} the address's last name. The call's
++interface is bound at the definer's place, with no reader. A call is a
++request (Requests): an error that ends the handler goes back to a caller
++outside a round, and the changes made before it stand. A handler call is not
++a run: what it did shows in its changes and at the hooks.
+ 
+ \subsection{Status}\label{sec:status}
+ 

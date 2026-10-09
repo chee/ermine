@@ -1,0 +1,68 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -697,40 +697,40 @@
+ 
+ \section{Related work}
+ 
+-\paragraph{FRP.} A node's value is like a behaviour and its changes like
+-events \cite{FRP}.
++\paragraph{FRP.} A node's value is like a behaviour, its changes like events
++\cite{FRP}.
+ 
+-\paragraph{Self-adjusting computation.} Change propagation re-runs the parts
+-of a computation whose inputs changed \cite{Acar05}; the reads tracked for a
+-reader play the part of its trace.
++\paragraph{Self-adjusting computation.} Change propagation re-runs the parts of
++a computation whose inputs changed \cite{Acar05}; the reads tracked for a reader
++play the part of its trace.
+ 
+ \paragraph{Propagators.} Cells and propagators \cite{Propagators} are close to
+-nodes and processes, but cells only gain information, so the order of runs
+-does not matter; ermine's values are replaced, so it does.
++nodes and processes, but cells only gain information, so run order does not
++matter; ermine's values are replaced, so it does.
+ 
+-\paragraph{Plan 9.} Plan 9's union directories, where a walk takes the first
+-of several directories bound in order that has the name \cite{Plan9}, are the
+-shape of ermine's slots.
++\paragraph{Plan 9.} Union directories, where a walk takes the first of several
++directories bound in order that has the name \cite{Plan9}: the shape of
++ermine's slots.
+ 
+-\paragraph{Build systems.} Separating the scheduler from the graph is like
+-separating a build system's scheduler from its rebuilder \cite{Mokhov18}.
+-
+-\paragraph{Subtext.} Subtext made a program's workings what a person looks at
+-and edits \cite{Subtext}. ermine asks this of the data instead: every value
+-says which change made it, whatever language wrote it.
++\paragraph{Build systems.} Scheduler apart from graph, as a build system's
++scheduler from its rebuilder \cite{Mokhov18}.
+ 
+-\paragraph{Hazel.} Hazel runs programs with holes in them and shows what flows
+-around them \cite{Hazel}. A read that gives nothing yet, or only pending
+-items, is ermine's hole: the system goes on, and says what it waits for.
++\paragraph{Subtext.} Made a program's workings what a person looks at and edits
++\cite{Subtext}. ermine asks this of the data instead: every value says which
++change made it, whatever language wrote it.
+ 
+-\paragraph{Smalltalk.} A Smalltalk image is a world of live objects, changed
+-while it runs \cite{Smalltalk}. ermine's graph is meant to be such a world,
+-held as data any language can reach.
++\paragraph{Hazel.} Runs programs with holes, showing what flows around them
++\cite{Hazel}. ermine's hole: a read giving nothing yet, or only pending items;
++the system goes on, saying what it waits for.
+ 
+-\paragraph{Boxer.} In Boxer, what a box can see is what it is inside
+-\cite{Boxer}. Lookup, searching the directories a place went through, is the
+-same idea, in a tree that can be mounted into.
++\paragraph{Smalltalk.} An image: a world of live objects, changed while it runs
++\cite{Smalltalk}. ermine's graph is meant to be such a world, held as data any
++language can reach.
+ 
++\paragraph{Boxer.} What a box can see is what it is inside \cite{Boxer}.
++Lookup, through the directories a place went through, is the same idea, in a
++tree that can be mounted into.
++
+ \begin{thebibliography}{99}
+ \small
+ \raggedright

@@ -1,0 +1,20 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -515,7 +515,7 @@
+ \emph{View}: \code{bind(api, \{agent, process?, reader?, place?, chroot?,
+ reads?, writes?\})}. Every operation through it has that agent, process,
+ reader, place and chroot; it may read, write or both. Its holder cannot change
+-them, so it strips \code{at}. A change through a view that only reads:
++them. A change through a view that only reads:
+ \code{read-only}; a read through one that only writes: \code{write-only}. A
+ library over any interface, not a graph operation. Knowing an id is enough to
+ mount its node, so whether an agent may mount, read or write anything is for
+@@ -562,7 +562,7 @@
+ \begin{itemize}
+ \item checks each request's shape (\code{missing}, \code{wrong-field}:
+   \code{PROTOCOL.tex}, Errors);
+-\item strips \code{reader}, as it strips \code{at}: only the scheduler binds a
++\item strips \code{reader}: only the scheduler binds a
+   reader (\code{SCHEDULER.tex}, Rounds), so a request passed on from elsewhere
+   (such as a link mounter's: \code{LINK.tex}, Serving) cannot make reads under a
+   process's id;

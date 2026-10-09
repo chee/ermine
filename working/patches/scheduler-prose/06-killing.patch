@@ -1,0 +1,35 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -176,11 +176,11 @@
+ (\code{GRAPH.tex}, Ephemeral nodes): when it is unplaced, at an address or at
+-its id, or goes with an ephemeral node that holds it; rearranging the tree
++its id, or goes with an ephemeral node that holds it. Rearranging the tree
+ around it does not kill it. The scheduler learns of a kill from the ids a
+ change's answer says went, for each change made through it or by its
+-bookkeeping, and for none made beneath it on the bare graph. A process
+-ends itself, as a script exits, the same way: it unplaces its own node, at
+-the address \code{[]}, under its name, with its pid. When its code ends by
+-itself, as an external program exits, the host or the loader running it
+-unplaces its node; why a process ended is the host's to keep
+-(\code{HOST.tex}). A process node no place reaches stays here, and runs on
++bookkeeping, and for none made beneath it on the bare graph. A process ends
++itself the same way, as a script exits: it unplaces its own
++node, at the address \code{[]}, under its name, with its pid. When its code
++ends by itself, as an external program exits, the host or the loader running
++it unplaces its node. Why a process ended is the host's to keep
++(\code{HOST.tex}). A process node no place reaches stays here and runs on
+ (Open, Unreachable processes).
+@@ -195,4 +195,4 @@
+   not stop the rest;
+-\item the scheduler releases the other ephemeral nodes it owns, the most
+-  recently made first (Ephemeral nodes);
++\item the scheduler releases the other ephemeral nodes the process owns, the
++  most recently made first (Ephemeral nodes);
+ \item it calls \code{forget} with the pid, so the graph drops its reads
+@@ -203,4 +203,4 @@
+ calls or cleanups, such as a script unplacing its own node, takes effect when
+-that returns; its other operations go on. A process killed while its setup
+-or effect part waits in a round (Rounds) never runs it.
++that returns, and its other operations go on. A process killed while its
++setup or effect part waits in a round (Rounds) never runs it.
+ 

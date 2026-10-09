@@ -1,0 +1,74 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -170,42 +170,42 @@
+ \subsection{Ephemeral nodes}\label{sec:ephemeral}
+ 
+ \begin{definition}[Ephemeral]
+-A node is \emph{ephemeral} if the placement that made it says so; it stays so,
+-and no other node becomes so. It is read, written, placed and walked as any
+-node is, and its items say that it is ephemeral. It is never saved: whatever
+-saves the graph leaves out every ephemeral node, its id in every slot, and
+-every ephemeral change.
++A node is \emph{ephemeral} if the placement that made it says so; it stays so;
++no other node becomes so. Read, written, placed and walked as any node is; its
++items say it is ephemeral. Never saved: saving leaves out every
++ephemeral node, its id in every slot, and every ephemeral change.
+ \end{definition}
+ 
+-An ephemeral node is in one slot: the one it was made in, or the one a move
+-last put it in (\S\ref{sec:placement}). Placing it in another slot, mounting
+-its id anywhere else, or making an ephemeral node with an id that a slot
+-already holds, is invalid (\code{one-place}). Making an ordinary node in an
+-ephemeral node's slot is invalid (\code{ephemeral-parent}), since it would be
+-saved with nothing that made it; mounting one there is not. As no node is
+-moved inside itself (\S\ref{sec:placement}), ephemeral nodes form no cycle,
+-and each has one parent. A scheduler's process node is ephemeral
+-(\code{SCHEDULER.tex}, Processes), so this keeps a process in one place.
++An ephemeral node is in one slot: where it was made, or where a move last put
++it (\S\ref{sec:placement}).
++\begin{itemize}
++\item invalid (\code{one-place}): placing it in another slot; mounting its id
++  elsewhere; making an ephemeral node with an id a slot already holds;
++\item invalid (\code{ephemeral-parent}): making an ordinary node in an
++  ephemeral node's slot, as it would be saved with nothing that made it;
++  mounting one there is not;
++\item no node moves inside itself (\S\ref{sec:placement}), so ephemeral nodes
++  form no cycle, and each has one parent. A scheduler's process node is
++  ephemeral (\code{SCHEDULER.tex}, Processes): one place per process.
++\end{itemize}
+ 
+-Unplacing an ephemeral node from its slot \emph{lets it go}, in that change
+-and at its time: its slots are taken apart by name, in code point order, and
+-the ids of each in slot order, each ephemeral node among them taken apart the
+-same way and gone before the next; then it goes. An ordinary node it held stays
+-here. The change also marks the readers that read a slot it took apart, as
+-an unplacement from that slot would, and answers with the ids that went, in
+-order, so a host can let their live things go in that order, a stream before
+-its connection, and a scheduler can end the processes whose nodes went. A
++Unplacing an ephemeral node from its slot \emph{lets it go}, in that change, at
++its time: its slots are taken apart by name in code point order, ids in slot
++order, each ephemeral node among them taken apart likewise and gone before the
++next; then it goes. Ordinary nodes it held stay here. The change also marks the
++readers that read a slot it took apart, as an unplacement from that slot would,
++and answers with the ids that went, in order, so a host can let their live
++things go in that order and a scheduler end the processes whose nodes went. A
+ gone node's id names nothing.
+ 
+ An ephemeral node whose ordinary holder no place reaches stays here,
+-unreachable, until its holder is placed again or an unplacement at its id
+-lets it go (\S\ref{sec:operations}).
++unreachable, until the holder is placed again or an unplacement at its id lets
++it go (\S\ref{sec:operations}).
+ 
+-A change is \emph{ephemeral} when the node it changes, places or unplaces is
+-ephemeral; a move only when its placement and its unplacement would both be.
+-It marks, and subscriptions keep it, as any change, but it never becomes a slot's last
+-change, so a slot's items carry the same header
+-before the graph is saved and after.
++\emph{Ephemeral change}: one changing, placing or unplacing an ephemeral node; a
++move, only if its placement and unplacement both would be. Marks; subscriptions
++keep it; never a slot's last change, so slot items carry the same header before
++and after saving.
+ 
+ \subsection{Paths}\label{sec:paths}
+ 

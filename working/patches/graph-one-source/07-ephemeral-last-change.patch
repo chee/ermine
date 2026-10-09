@@ -1,0 +1,12 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -527,8 +527,7 @@
+ All its state:
+ \begin{itemize}
+ \item nodes: id, value, directory, whether ephemeral;
+-\item each value's and slot's last change (a slot's: its last that is not
+-  ephemeral);
++\item each value's and slot's last change (\S\ref{sec:ephemeral});
+ \item each ephemeral node's one slot;
+ \item each reader's tracked reads, each with whether it is refused;
+ \item subscriptions: address, the \code{enter}s it brought, the events it

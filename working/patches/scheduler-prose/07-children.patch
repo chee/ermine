@@ -1,0 +1,34 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -207,6 +207,6 @@
+ \paragraph{Children.} A process's \emph{children} are the processes started
+-through its parts and handler calls; their nodes are ephemeral nodes it owns
++through its parts and handler calls. Their nodes are ephemeral nodes it owns
+ (below), so the processes form a tree of who started what, wherever they are
+-placed. One started by host code has no parent. Computes and effects are
+-children of the process that starts them, and parts can make parts: any part
++placed. One started by host code has no parent. Computes and effects
++are children of the process that starts them. Parts can make parts: any part
+ or handler call but a cleanup may start children while it runs.
+@@ -216,10 +216,9 @@
+ \emph{matched} to that child, one to one, in the order they were started.
+-Names are, for now, the only way to match (Open, Matching). A matched start
+-makes no new process and no change, and answers with the child's id: the
++For now, names are the only way to match (Open, Matching). A matched start
++makes no new process and no change, and answers with the child's id. The
+ child keeps its node, height and kept changes, and runs the new code from its
+-next run. If the maker runs as
+-replaced (Programs, New code), the child is replaced too, once for each
+-replacement of its maker. When a call of the part ends done, the children
+-that part started before and did not start again are released, as at a kill,
+-the most recently started first.
++next run. If the maker runs as replaced (Programs, New code), the child is
++replaced too, once for each replacement of its maker. When a call of the part
++ends done, the scheduler releases the children that part started before and
++did not start again, as at a kill, the most recently started first.
+ 
+@@ -227,3 +226,3 @@
+ places inside the compute's node and writes only when its value is not equal
+-to the one there, so an equal value is no change, and a matched compute runs
++to the one there. So an equal value is no change, and a matched compute runs
+ again only when what it reads changes.

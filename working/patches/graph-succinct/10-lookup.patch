@@ -1,0 +1,42 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -385,25 +385,23 @@
+ \subsection{Lookup}\label{sec:lookup}
+ 
+ \begin{definition}[Lookup]
+-\code{lookup(name)} searches the directories the place's walk went through,
+-from its \code{.} back up to its start and no higher, and gives all the items
+-of the nearest slot with that name that holds a node that is here, each from
+-its path, such as \code{["..", "theme"]}, which reads straight back. Where the
+-place's walk stops part way, the search starts at the last node it took.
++\code{lookup(name)}: searches the directories the place's walk went through,
++from its \code{.} up to its start, no higher; gives all items of the nearest
++slot with that name holding a node that is here, each from its path (such as
++\code{["..", "theme"]}, which reads straight back). Where the place's walk
++stops part way, the search starts at the last node it took.
+ \end{definition}
+ 
+-Each step reads the slot of that name in one directory, even where there is
+-no such slot, after asking the lookup's \code{enter}s about that directory
+-(\S\ref{sec:running}). A no ends the search, as if there were no parent. It is
+-not an error: the lookup gives one item saying the search was refused, from
+-the path to that directory, \code{[]} for its \code{.}, so a reader can see
+-that something farther up was not searched. Pending ends it the same way,
+-with a pending item.
++Each step reads the slot of that name in one directory, even if there is none,
++after asking the lookup's \code{enter}s about that directory
++(\S\ref{sec:running}). No: the search ends as if there were no parent; not an
++error: the lookup gives one item saying the search was refused, from the path
++to that directory (\code{[]} for its \code{.}). Pending: the same, with a
++pending item.
+ 
+-\code{lookups(name)} gives the items of every slot with that name that holds a
+-node that is here, nearest first, so a reader sees what the nearest shadows.
+-It searches up to the start and is tracked as a lookup is; a refused or
+-pending step ends it with the same item, after what it found below.
++\code{lookups(name)}: the items of every slot with that name holding a node
++that is here, nearest first, up to the start; tracked as a lookup is; a refused
++or pending step ends it with the same item, after what it found below.
+ 
+ \subsection{Tracking}\label{sec:tracking}
+ 

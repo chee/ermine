@@ -1,0 +1,11 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -153,7 +153,7 @@
+ only the same thing. A typed array never equals a list, nor bytes a string.
+ 
+ Live values: the graph never looks inside them; a snapshot can replace one; no
+-encoding; never leave their host. Others: deterministic CBOR \cite{CBOR}, typed
++encoding. Others: deterministic CBOR \cite{CBOR}, typed
+ arrays as RFC~8746 tags \cite{CBORArrays}, per \code{SYNC.tex} (The change
+ blob); JSON form: \code{PROTOCOL.tex}.
+ 

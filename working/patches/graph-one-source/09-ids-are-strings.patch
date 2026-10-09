@@ -1,0 +1,20 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -108,7 +108,7 @@
+ 
+ \begin{definition}[Node]
+ An \emph{id} (a string the graph only compares), a \emph{value}, a
+-\emph{directory} (names to \emph{slots}). Slot: ordered ids, each at most once;
++\emph{directory} (string names to \emph{slots}). Slot: ordered ids, each at most once;
+ an id may be in several slots; a slot with no ids is gone.
+ \end{definition}
+ 
+@@ -135,7 +135,7 @@
+ \begin{itemize}
+ \item number: binary64, with NaN, the infinities and $-0$; all NaNs are one.
+ \item string: a sequence of Unicode scalar values (every code point but the
+-  surrogates). Ids and names are strings.
++  surrogates).
+ \item bytes: a sequence of octets.
+ \item typed array: a kind (\code{int8}, \code{uint8}, \code{int16},
+   \code{uint16}, \code{int32}, \code{uint32}, \code{int64}, \code{uint64},

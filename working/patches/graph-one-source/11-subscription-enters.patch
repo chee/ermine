@@ -1,0 +1,11 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -635,7 +635,7 @@
+ why \code{\{"code": "pending"\}}. A refused or pending item holds only its from:
+ something is there, never what.
+ 
+-A subscription keeps the \code{enter}s it brought (\S\ref{sec:state}). They are
++A subscription's \code{enter}s (\S\ref{sec:state}) are
+ asked again each time its address is walked again, after a change that could
+ alter what it reaches, after a change to a node an answer depended on, and,
+ while it is refused, at each change it would keep. It keeps a change only if,

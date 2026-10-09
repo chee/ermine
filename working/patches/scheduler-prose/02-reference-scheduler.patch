@@ -1,0 +1,49 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -59,8 +59,14 @@
+ The reference scheduler, \code{schedule}, wraps the host's stack. The host
+-gives it that stack; \code{code}, which finds a process's code
+-(\code{LOADERS.tex}, Finding code); the interface its bookkeeping goes
+-through, beneath the wrappers, which is the bare graph or a layer of the
+-host's own over it that passes operations at an id on (\code{GRAPH.tex},
+-Operations), as the keeper does (\code{HOST.tex}, The keeper); its
+-\emph{clock}; and its hooks (\S\ref{sec:hooks}).
++gives it:
++\begin{itemize}
++\item that stack;
++\item \code{code}, which finds a process's code (\code{LOADERS.tex}, Finding
++  code);
++\item the interface its bookkeeping goes through, beneath the wrappers: the
++  bare graph, or a layer of the host's own over it that passes operations at
++  an id on (\code{GRAPH.tex}, Operations), as the keeper does
++  (\code{HOST.tex}, The keeper);
++\item its \emph{clock};
++\item its hooks (\S\ref{sec:hooks}).
++\end{itemize}
+ 
+@@ -71,14 +77,14 @@
+ 
+-The clock gives each change its time, greater than any it gave before and
+-than the highest time of the graph (\code{GRAPH.tex}, Nodes). The scheduler
+-stamps each change made through it with the clock, and the host stamps its
+-own changes beneath the scheduler with the same one.
++The clock gives each change a time greater than any it gave before and than
++the graph's highest time (\code{GRAPH.tex}, Nodes). The scheduler stamps
++each change made through it with the clock. The host stamps its own changes
++beneath the scheduler with the same clock.
+ 
+-Its \emph{bookkeeping}, what it reads and writes on its own account, such as
+-each process's value, status and latest run, and the releases at a kill, goes
+-through the bookkeeping interface. An operation made there brings no
+-\code{enter}, so nothing refuses it (\code{GRAPH.tex}, Running and
+-wrapping), and a refusal can never hide a kill from the scheduler. What it
+-does on a process's behalf, such as finding its code, goes through the top of
+-the stack, where \code{protect} decides it.
++The scheduler's \emph{bookkeeping} is what it reads and writes on its own
++account, such as each process's value, status and latest run, and the
++releases at a kill. It goes through the bookkeeping interface. An operation
++there brings no \code{enter}, so nothing refuses it (\code{GRAPH.tex},
++Running and wrapping), and no refusal can hide a kill from the scheduler.
++What the scheduler does for a process, such as finding its code, goes
++through the top of the stack, where \code{protect} decides it.
+ 

@@ -1,0 +1,91 @@
+--- core/scheduler/SCHEDULER.tex
++++ core/scheduler/SCHEDULER.tex
+@@ -584,56 +584,47 @@
+ 
+ \subsection{Order}
+ 
+-The reference order picks the due process with the lowest height; among
+-equals, the one whose first mark is oldest; then the lowest id, in code point
+-order. A process goes before one whose last compute read anything its value
+-or its last effect part changed, by \emph{height}. After each compute, each
+-other process whose compute read this process's value gets a height above
+-this one's, if it is not already greater; after each effect part, so does
+-each other process whose last compute read anything the effect part or its
+-cleanups changed: a value, a slot, or a slot a walk went through. Heights
+-only rise. The order comes from the last runs, so after a dependency changes,
+-a reader can come before its new writer; it is then stopped at its read.
++Reference order: the due process with the lowest height; then oldest first
++mark; then lowest id, in code point order. \emph{Height} puts a process before any whose last compute
++read anything its value or last effect part changed: after a compute, every
++other process whose compute read its value gets a height above its own,
++unless already greater; after an effect part, every other one whose last compute read anything it or its cleanups changed
++(a value, a slot, or a slot a walk went through). Heights only rise. The order
++comes from the last runs: after a dependency changes, a reader can come
++before its new writer, and is then stopped at its read.
+ 
+ \begin{decision}[No pull-on-read: stop and run again]
+-Nothing is computed inside a read. A compute that reads the node of another
+-process that is due is stopped, and runs again after that process.
++Nothing is computed inside a read: a compute reading another due process's
++node is stopped, and reruns after that process.
+ \end{decision}
+ 
+-The read throws; whatever the compute does after, its run ends stopped and
+-nothing it returns is used. Its kept changes stay, and it stays due, with a
+-height above that process's, and \emph{waits after} it until it runs again.
+-A compute's read of a due process that waits, directly or through others,
+-after the reader, is not stopped: it goes on, and shows that process's
+-pending (\S\ref{sec:status}).
++The read throws; whatever the compute then does, its run ends stopped, its
++return unused. Kept changes stay; it stays due, above that process's
++height, and \emph{waits after} it until it reruns. A read of a due process
++waiting, directly or through others, after the reader: not stopped; it goes
++on, showing that process's pending (\S\ref{sec:status}).
+ 
+ \begin{decision}[A loop is parked, for now]
+-A loop is parked, and its sides shown, until a change from outside it
+-reaches it: only when one more lap would write a new value.
++A loop is parked, its sides shown, until a change from outside it reaches
++it: only when one more lap would write a new value.
+ \end{decision}
+ 
+-\paragraph{Loops.} A change made in a request is \emph{caused} by the run
+-that made it, and by every run, in that request, whose changes marked that
+-run; a request queued from inside a part is caused as the part's run is. A
+-process marked by a change its own run caused is in a loop. Its next run's
+-compute runs. If it returns a value equal to the one held, the loop ends
+-there, as any equal value ends one. If not, the loop is parked: the value is
+-not written, no effect part runs, and the run ends parked, its status saying
+-\code{"loop": \{"through": [pid, ...], "value": v\}}, the processes whose runs
+-caused the change and the value it returned, unless that is live. It is not
+-due, and keeps its kept changes, until a change its loop did not cause marks
+-it.
++\paragraph{Loops.} A change in a request is \emph{caused} by the run that
++made it and every run in that request whose changes marked that run; a
++request queued from inside a part, as the part's run. A process marked by a
++change its own run caused: in a loop. Its next compute equal to the value
++held ends the loop; otherwise parked: value not written, no effect part, run
++ended parked, status \code{"loop": \{"through": [pid, ...], "value": v\}}
++(the processes whose runs caused the change; the value, unless live); not
++due, kept changes kept, until a change its loop did not cause marks it.
+ 
+-\paragraph{The budget.} A loop the order cannot see, such as two effects
+-writing through the world, runs to the \emph{budget}: the most runs and
+-handler calls one request may cause. It is 100000 unless the host sets it,
+-and counts afresh for each request. The scheduler checks it before it starts
+-each run or handler call; once it is reached, it starts no more. The parts
+-already waiting in the round still run, as parts of runs already counted;
+-what is still due stays due, its pending written; queued requests stay
+-queued; and the request answers with the error \code{budget}
+-(\code{PROTOCOL.tex}, Errors). What it changed stands. The next request runs
+-what is due and what is queued; nothing else starts a round.
++\paragraph{The budget.} \emph{Budget}: the most runs and handler calls per
++request, 100000 unless the host sets it; loops the order cannot see (e.g.\
++two effects writing through the world) run to it. Checked before each run or
++handler call starts; once reached, none start. Waiting parts still run; due
++stays due, pending written; queued stays queued; the request answers the
++error \code{budget} (\code{PROTOCOL.tex}, Errors); its changes stand. Only a
++request starts a round: the next one runs what is due and queued.
+ 
+ \subsection{Outside operations and batches}
+ 

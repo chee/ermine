@@ -1,0 +1,67 @@
+#+title: Banning cycles: where a ban pays (review, 10-09)
+#+author: LLM generated working output
+
+A reviewer's answer to: "would things overall get simpler or more complex if
+we banned cycles? ... lay them all out in a table". SCHEDULER.tex was read
+mid-edit (13:42), so its line numbers may shift. [spec] = a paper says it;
+[reading] = the reviewer's inference.
+
+* Short answer
+Banning cycles everywhere would make ermine more complex. Most places can't
+form a cycle anyway (by construction, or because walks follow routes); the
+places that do loop either want loops or already handle them. One ban pays:
+no cycle made only of ordinary nodes' slots, and only if a node goes when
+its last slot lets it go. With free(id) or a sweep, there is nothing to ban.
+
+* Where a cycle can form
+| place | cycle today? | verdict |
+|-------+--------------+---------|
+| containment, ordinary nodes only (A in A; A→B→A) | yes: mounting inside itself is allowed, only move refuses (GRAPH.tex:379-381; FILES.tex:291-292 "a link cycle") | ban only if last-slot removal; cost: a subtree walk per mount, and mutual links as slots (wiki pages, alice/friends↔bob/friends) become references in values |
+| containment through an ephemeral node (O→E→O) | yes: an ordinary node may be mounted in an ephemeral node's slot inside it (files program's handles; a renderer mounting its own folder; the scheduler mounting the graph under itself) | allow: it ends with the process |
+| ephemeral nodes only | no: one slot each, move refuses cycles (GRAPH.tex:185-187) | keep |
+| unions; one node in many slots | sharing, not a cycle; but 2^n paths are possible, so walkers need a seen-set anyway | nothing to ban |
+| `..` and routes | no: `..` steps back along the walk taken | nothing to ban |
+| lookup, program and loader lookup | no: they search the place's own walk, fixed length | nothing to ban |
+| values that hold themselves | no: a value is a finite CBOR tree | keep |
+| values naming nodes (references) | yes, freely; the graph never looks inside a value | allow; followers keep a seen-set |
+| protect/enter reading the graph | possible: may reading through the protected stack would recurse | write one line: "may reads beneath protect" |
+| a compute reading its own node | defused: own writes never make it due | keep the exception |
+| A reads B reads A | yes: parked; heights rise per lap; "waits after" exception | don't ban: parking keeps loops that settle (°C/°F stop after one lap); Excel ships iterative calculation for this |
+| an effect writing what a compute read | yes: parked within the request | don't ban |
+| loops through the world in one request | yes: the budget stops them | keep the budget |
+| loops across requests (link echo, a subscriber writing back, a timer) | yes, and nothing catches them: causes and the budget are per request | a gap, not a ban question; "One motion" (IDEAS) would let a scheduler see it |
+| handlers calling handlers; advice | yes: queued, counted in the budget; advice calling by path reaches itself | don't ban; `next` is the route-based fix |
+| subscriptions | no re-entry: the graph never calls code | keep |
+| process tree and ownership | no: time order | nothing to ban |
+| ownership crossing placement | yes: P moves its node into its child's; killing either ends both | allow; worth a conformance scenario |
+| loaders | no regress: the host's loaders are the floor | keep the floor |
+| the stack as data | self-reference, not a loop | nothing to ban |
+| link mounts between hosts | no graph cycle; echo is the across-requests row | nothing to ban |
+| sync | two devices could each mount half of A→B→A | if banned, a sync rule must say who wins |
+| cache | no: traces are trees, keys a hash chain | nothing to ban |
+| provenance and time | no: time only grows | already acyclic; it is what makes loops visible |
+| code that walks the graph (files store, renderers, share guard) | they cope (homes settle root-down; the budget stops a renderer recursing) | a weak reason to ban |
+
+* Letting go, each way
+- Refuse ordinary-only cycles: the holder count is exact and local, as in
+  Unix. The price is mutual links as slots.
+- Sweep from the root: always exact, covers the whole graph; could run when
+  idle, or reuse the files store's root-down pass.
+- Mark a slot that holds an ancestor and don't count it: wrong in a DAG.
+  Root holds A and C; A/y mounts C; then C/x mounts A. If "ancestor" means
+  reachable, C/x is marked; unplace root/a and A goes though root→C→x still
+  reaches it. If it means on the route at mount time, nothing is marked;
+  unplace root/a and root/c and A and C hold each other forever. Getting it
+  right needs a reachability check when a count hits 0, which is a sweep.
+- free(id): cycles don't matter; slots still holding a freed id read pending.
+
+Whichever way: ids kept outside slots (references, a run's {node, time},
+cache leaves) can come to name a gone node, so "placing its id again brings
+it back as it was" (GRAPH.tex:127-128) stops being true.
+
+* Twin-width
+Banning cycles doesn't get it: any graph is the shape of some DAG. What
+decides it is the pattern of sharing. For this decision it doesn't matter.
+The separate twin-width review (10-09) says drop it: mounting builds every
+graph; every rule that bounds it bounds sharing; ermine's questions are index
+lookups (holders, readers in graph.ts) or reachability.

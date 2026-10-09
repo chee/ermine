@@ -1,0 +1,117 @@
+--- core/graph/GRAPH.tex
++++ core/graph/GRAPH.tex
+@@ -448,8 +448,8 @@
+ 
+ \subsection{Operations}\label{sec:operations}
+ 
+-A program's interface has these; a wrapper may add more, as the scheduler adds
+-\code{start} and \code{batch}.
++A program's interface; a wrapper may add more (as the scheduler adds
++\code{start} and \code{batch}).
+ 
+ {\small
+ \begin{xltabular}{\linewidth}{@{}lX@{}}
+@@ -464,60 +464,62 @@
+ \code{write(address, patches)} & applies the patches to the node the address reaches \\
+ \code{place(address, name, id, position?, value?)} & places, reorders, makes or mounts an id (\S\ref{sec:placement}) \\
+ \code{unplace(address, name, id)} & takes an id out of a slot \\
+-\code{move(address, name, id, to, toname, position?)} & takes an id out of one slot and places it into another, as one change (\S\ref{sec:placement}) \\
++\code{move(address, name, id, to, toname, position?)} & moves an id from one slot into another, as one change (\S\ref{sec:placement}) \\
+ \code{subscribe(address)} & keeps, as its \emph{events}, each change to the node the address reaches; and each change that alters whether the address reaches a node, which node, or the route to it, with what the address read just after it \\
+-\code{take(subscription)} & the events the subscription kept, in the order of their changes, and drops them \\
++\code{take(subscription)} & the events the subscription kept, in change order, and drops them \\
+ \code{unsubscribe(subscription)} & stops them, and drops those not taken \\
+ \code{cwd} & the place's names below its start \\
+ \bottomrule
+ \end{xltabular}}
+ 
+ \begin{decision}[Subscribers collect their events]
+-The graph never calls code, not for a subscription either: a subscription
+-keeps its events until its subscriber takes them, when it wants.
++The graph never calls code, even for subscriptions: a subscription keeps its
++events until its subscriber takes them, when it wants.
+ \end{decision}
+ 
+-A subscriber takes them as a Plan~9 program reads events from a file, or an
+-epoll caller takes what is ready. \code{take} is not a read: it is never
+-tracked, and asks no \code{enter}, since the subscription's \code{enter}s were
+-asked as it kept each event (\S\ref{sec:running}).
+-
+-Wrappers pass on \code{forget(reader)} (\S\ref{sec:tracking}); no program's
+-interface has it.
++\code{take}: not a read; never tracked; asks no \code{enter} (the subscription's
++\code{enter}s were asked as it kept each event, \S\ref{sec:running}).
++\code{forget(reader)} (\S\ref{sec:tracking}): passed on by wrappers; in no
++program's interface.
+ 
+-Every operation carries an agent and a place, with its chroot, or \code{at}
+-(below), and may carry a process and a reader; a change also carries a time, and its site and cause
+-when it has them. An operation that makes a change answers with it, the
+-readers it marked, each once, in code point order, and which of them it
+-marked only through refused reads (\S\ref{sec:tracking}); an unplacement
+-also with the ids it let go. A write, a placement, an unplacement or a move
+-whose address, or \code{to}, reaches nothing is invalid
+-(\code{nothing-there}). An error names a code from a fixed list, with details
+-(\code{PROTOCOL.tex}, Errors).
++\begin{itemize}
++\item every operation carries an agent and a place with its chroot, or \code{at}
++  (below); it may carry a process and a reader. A change also: a time, and its
++  site and cause if it has them;
++\item an operation making a change answers with it; the readers it marked, each
++  once, in code point order; which of them only through refused reads
++  (\S\ref{sec:tracking}); for an unplacement, the ids it let go;
++\item a write, placement, unplacement or move whose address, or \code{to},
++  reaches nothing: invalid (\code{nothing-there});
++\item an error: a code from a fixed list, with details (\code{PROTOCOL.tex},
++  Errors).
++\end{itemize}
+ 
+-\paragraph{At an id.} On the bare graph (\S\ref{sec:running}), a write, a placement, an unplacement
+-or a move may be made \emph{at an id}: \code{at} names a node in place of the
+-place, and the operation's address, and a move's \code{to}, start at that
+-node, with nothing above it. If no node with that id is here, the address
+-reaches nothing. A write at an id the graph does not have, with no names in
+-its address, makes that node, ordinary, its value the patches applied to
+-null, and fills every slot holding the id. An unplacement given only
+-\code{at}, with no address, name or id, takes the ephemeral node with that
+-id out of its one slot and lets it go; it is \code{nothing-there} if no
+-ephemeral node with that id is here.
+-They are for changes made elsewhere (\code{SCHEDULER.tex}, Arrivals) and
+-for a scheduler's bookkeeping (\code{SCHEDULER.tex}, Processes).
++\paragraph{At an id.} On the bare graph (\S\ref{sec:running}), a write,
++placement, unplacement or move may be made \emph{at an id}: \code{at} names a
++node in place of the place; the address, and a move's \code{to}, start there,
++nothing above it.
++\begin{itemize}
++\item no node with that id here: the address reaches nothing;
++\item a write at an id the graph does not have, with no names in its address:
++  makes that node, ordinary, its value the patches applied to null, filling
++  every slot holding the id;
++\item an unplacement given only \code{at} (no address, name or id): takes the
++  ephemeral node with that id out of its one slot and lets it go;
++  \code{nothing-there} if no such ephemeral node is here.
++\end{itemize}
++They are for changes made elsewhere (\code{SCHEDULER.tex}, Arrivals) and a
++scheduler's bookkeeping (\code{SCHEDULER.tex}, Processes).
+ 
+ \begin{decision}[An interface fixes its agent and its place]
+-A \emph{view}, \code{bind(api, \{agent, process?, reader?, place?, chroot?,
+-reads?, writes?\})}, makes every operation through it with that agent,
+-process, reader, place and chroot, and may read, write or both; its holder
+-cannot change them, so it strips \code{at}. A change through a view that
+-only reads is \code{read-only}, and a read through one that only writes is
+-\code{write-only}. A view is a library over any interface, not an operation
+-of the graph's. Since knowing an id is enough to mount its node, whether an
+-agent may mount, read or write anything is for \code{protect}
+-(\code{PROTECT.tex}).
++\emph{View}: \code{bind(api, \{agent, process?, reader?, place?, chroot?,
++reads?, writes?\})}. Every operation through it has that agent, process,
++reader, place and chroot; it may read, write or both. Its holder cannot change
++them, so it strips \code{at}. A change through a view that only reads:
++\code{read-only}; a read through one that only writes: \code{write-only}. A
++library over any interface, not a graph operation. Knowing an id is enough to
++mount its node, so whether an agent may mount, read or write anything is for
++\code{protect} (\code{PROTECT.tex}).
+ \end{decision}
+ 
+ \subsection{What the graph holds}\label{sec:state}
