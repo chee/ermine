@@ -234,6 +234,36 @@ sleep 0.5
 run "ls /dev/mac/windows" "dev> " "windows listed"
 none "v1" "its owner unplaced"
 
+# --- launch (headless answers a launch with a fake app at pid 15100, a window after)
+from=$(size "$err")
+ask '{"do":{"l1":{"n":1,"act":"launch","app":"TextEdit"}}}'
+waitfor "$err" '"op":"macdo","req":[0-9]*,"pid":0,"n":0,"act":"launch","app":"TextEdit"' "$from" && ok "launch: macdo at /dev/mac" || bad "launch: no macdo"
+waitfor "$err" "mac: launch TextEdit: 15100" "$from" && ok "launch: logged with its pid" || bad "launch: no log line"
+run "cat /dev/mac/do/l1" '"value":15100' "launch: the pid in its node"
+also '"error":null' "launch: error null"
+run "ls /dev/mac/apps" "15100 " "launch: the app mirrored"
+tail -c +"$((from + 1))" "$err" | grep -q '"op":"capture"' && bad "a launch without show shows a window" || ok "a launch without show shows nothing"
+ask '{"do":{"l2":{"n":1,"act":"launch"},"l3":{"n":1,"act":"launch","app":"nothing"}}}'
+sleep 0.5
+run "cat /dev/mac/do/l2" '"error":"bad"' "launch with no app: bad, at once"
+run "cat /dev/mac/do/l3" '"error":"bad"' "launch of no app: the metal's bad"
+ask '{}'
+echo '!post {"irq": 51, "event": "quit", "pid": 15100}' >&3
+sleep 0.5
+# the program, from a shell through the wm (as /etc/keys runs it): the window comes after the answer
+from=$(size "$err")
+echo "wm run mac launch -s TextEdit" >&3
+waitfor "$err" '"act":"launch","app":"TextEdit"' "$from" && ok "mac launch -s: macdo" || bad "mac launch -s: no macdo"
+waitfor "$err" '"op":"capture","view":"view-[0-9]*","pid":15100,"window":200001' "$from" && ok "mac launch -s: its first window shown, through macview" || bad "mac launch -s: no capture"
+sleep 0.5
+run "ls /dev/mac/do" "dev> " "do listed"
+none "launch-" "mac ended, its do node with it"
+run "ls /dev/mac/views" "view-" "macview's view node"
+lv=$(last | grep -o 'view-[0-9]*' | head -1)
+metal "rm /dev/mac/windows/$lv" "\"op\":\"uncapture\",\"view\":\"$lv\"" "the launched window closed"
+echo '!post {"irq": 51, "event": "quit", "pid": 15100}' >&3
+sleep 0.5
+
 # --- cost: an app of 5000 elements, placed
 perl -e '
 	my $pid = 20000; my $n = 100000; my @items; my @recs;

@@ -262,14 +262,6 @@
    "at": [
     "programs"
    ],
-   "name": "menu",
-   "id": "prog-menu",
-   "source": "programs/menu.js"
-  },
-  {
-   "at": [
-    "programs"
-   ],
    "name": "graph",
    "id": "prog-graph",
    "source": "programs/graph.js"
@@ -355,6 +347,14 @@
    "at": [
     "programs"
    ],
+   "name": "mac",
+   "id": "prog-mac",
+   "source": "programs/mac.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
    "name": "keys",
    "id": "prog-keys",
    "source": "programs/keys.js"
@@ -406,6 +406,14 @@
    "name": "windows",
    "id": "prog-windows",
    "source": "programs/windows.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "takeover",
+   "id": "prog-takeover",
+   "source": "programs/takeover.js"
   },
   {
    "at": [
@@ -580,14 +588,6 @@
    "at": [
     "apps"
    ],
-   "name": "menu",
-   "id": "apps-menu",
-   "value": null
-  },
-  {
-   "at": [
-    "apps"
-   ],
    "name": "term",
    "id": "apps-term",
    "value": null
@@ -662,6 +662,14 @@
    ],
    "name": "macview",
    "id": "apps-macview",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "mac",
+   "id": "apps-mac",
    "value": null
   },
   {
@@ -750,6 +758,14 @@
    ],
    "name": "windows",
    "id": "apps-windows",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "takeover",
+   "id": "apps-takeover",
    "value": null
   },
   {
@@ -1142,6 +1158,35 @@
    "at": [
     "etc"
    ],
+   "name": "views",
+   "id": "etc-views",
+   "value": {
+    "c": {
+     "label": "c",
+     "line": [
+      "name"
+     ]
+    },
+    "js": {
+     "label": "js",
+     "line": [
+      "source"
+     ],
+     "show": "source"
+    },
+    "exec": {
+     "label": "exec",
+     "line": [
+      "argv"
+     ],
+     "show": "argv"
+    }
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
    "name": "rules",
    "id": "etc-rules",
    "value": []
@@ -1168,7 +1213,6 @@
     "A-g": "graph",
     "A-f": "computer",
     "A-e": "edit apps/workspace/text",
-    "A-p": "menu",
     "A-S-c": "window close",
     "M-w": "window close",
     "A-m": "window minimize",
@@ -1264,6 +1308,10 @@
      "label": "Mac windows",
      "run": "windows",
      "key": "M-C-w"
+    },
+    {
+     "label": "Mac apps…",
+     "run": "macapps"
     },
     "-",
     {

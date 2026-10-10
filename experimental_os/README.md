@@ -26,7 +26,7 @@ image/drivers/        display (the compositor), font, kbd, pointer, uart, timer,
                       access (what the screen means, for VoiceOver and the Mac's input methods), link
 image/programs/       shell, term (a window with a shell), browser, graph (the graph browser),
                       edit (the editor and workspace), wmii (the window manager's core),
-                      wmiirc (its policy), status (its bar), menu (the world menu), erminex (a shared window)
+                      wmiirc (its policy), status (its bar), erminex (a shared window)
 ```
 
 ## Run it
@@ -100,8 +100,7 @@ blown-up screen of points.
   items.
   The mod key is option (alt), as wmii's default Mod1 is. cmd belongs to the
   editor and the Mac.
-  - alt-enter a shell, alt-b a browser, alt-g the graph, alt-e a workspace,
-    alt-p the world menu
+  - alt-enter a shell, alt-b a browser, alt-g the graph, alt-e a workspace
   - alt-h/j/k/l select; alt-shift-h/j/k/l move the window (past the edge: a
     new column)
   - alt-d/s/m: the column's mode (default, stack, max)
@@ -109,9 +108,9 @@ blown-up screen of points.
   - alt-1…9 view a tag; alt-shift-1…9 tag the window; alt-shift-c or cmd-w
     close it
   - from a shell: `wm view 2`, `wm colmode sel stack`, `cat /dev/wm/event`
-- **The world menu.** Click the root (an empty view), or press alt-p, as in
-  Squeak: a shell, a browser, the graph, a workspace, the window manager's
-  policy, Mac windows, power off.
+- **The world menu.** The rabbit, the menu bar's first menu, as System 7's
+  apple: a shell, a browser, the graph, a workspace, the window manager's
+  policy, Mac windows, power off. Its items are /etc/menu.
 - **The graph browser** (cmd-g, or `graph <path>` in a shell). It has
   columns down the tree and, under them, the selected node: its value, its
   route, its slot, and the change that made it (who, through which code,

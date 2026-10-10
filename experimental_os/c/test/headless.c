@@ -18,9 +18,9 @@
 // compare with it pixel for pixel. HEADLESS_CURSOR logs each layers command,
 // [layers], with flips.
 //
-// The Mac menu bar's menus command is logged, [menus] n, the world menu's items and each menu's
-// title and items; a choice there is !post {"irq": 33, "event": "menu", "n": n, "world": true, "item": i}
-// (or "menu": m in place of world).
+// The Mac menu bar's menus command is logged, [menus] n, each menu's title and items (the world
+// menu first, titled ermine), with their chords; a choice there is
+// !post {"irq": 33, "event": "menu", "n": n, "menu": m, "item": i}.
 //
 //   headless [--w W] [--h H] [--unit U] [--sd DIR] [--image DIR] [--runner FILE] [--fresh]
 
@@ -226,13 +226,15 @@ static void stack(uint32_t *out) {
 }
 
 /** the mode record the metal sends: in windows mode the main screen's size; on the monitor, layers when it stacks them */
+static bool takeover; // as the metal's: full screen, the Mac's ways out off too
+
 static void sendMode(void) {
 	pthread_mutex_lock(&lock);
 	stacking = layersOn && !windowsMode;
 	if (!stacking) unlayerAll();
 	pthread_mutex_unlock(&lock);
-	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s, \"layers\": %s}", W, H, 1.0 / U, U,
-	     windowsMode ? "true" : "false", stacking ? "true" : "false");
+	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s, \"layers\": %s, \"takeover\": %s}", W, H, 1.0 / U, U,
+	     windowsMode ? "true" : "false", stacking ? "true" : "false", takeover ? "true" : "false");
 }
 
 /** the page being mirrored, as the Mac's webmirror copies it fps times a second */
@@ -426,6 +428,28 @@ static void command(void *data, const char *json) {
 		post("{\"irq\": 51, \"event\": \"frame\", \"view\": \"%s\", \"n\": 1, \"half\": 0, \"w\": 320, \"h\": 200}", view);
 		return;
 	}
+	if (!strcmp(op, "macdo") && jsonText(jsonGet(c, "act")) && !strcmp(jsonText(jsonGet(c, "act")), "launch")) {
+		// an app launched: none is here, so a fake one at pid 15100, named as asked, answers, then
+		// comes as NSWorkspace and AX would give it, a window after; "nothing" is no app (bad)
+		const char *app = jsonText(jsonGet(c, "app"));
+		int64_t req = (int64_t)(jsonGet(c, "req") ? jsonGet(c, "req")->number : 0);
+		char name[64];
+		int k = 0;
+		for (const char *p = app ? app : ""; *p && k < (int)sizeof name - 1; p++)
+			if (*p != '"' && *p != '\\') name[k++] = *p;
+		name[k] = 0;
+		fprintf(stderr, "[metal] %.120s\n", json);
+		if (!strcmp(name, "nothing")) {
+			post("{\"irq\": 51, \"event\": \"done\", \"req\": %lld, \"error\": \"bad\"}", (long long)req);
+			return;
+		}
+		post("{\"irq\": 51, \"event\": \"done\", \"req\": %lld, \"value\": 15100}", (long long)req);
+		post("{\"irq\": 51, \"event\": \"app\", \"pid\": 15100, \"n\": 200000, \"name\": \"%s\", \"bundle\": \"test.launched\", \"path\": \"/x\", \"policy\": \"regular\", \"active\": true, "
+		     "\"hidden\": false, \"state\": \"running\", \"electron\": false}", name);
+		post("{\"irq\": 51, \"event\": \"tree\", \"pid\": 15100, \"items\": [{\"add\": 200001, \"parent\": 0, \"name\": \"window-1\", \"value\": {\"role\": \"AXWindow\", \"title\": \"%s\", "
+		     "\"x\": 100, \"y\": 100, \"w\": 320, \"h\": 200}}]}", name);
+		return;
+	}
 	if (!strcmp(op, "webmirror")) {
 		// a page's pixels copied to its plane: here a colour, and a frame record, as WebKit's copy would give
 		int64_t slot = (int64_t)(jsonGet(c, "slot") ? jsonGet(c, "slot")->number : -1), fps = (int64_t)(jsonGet(c, "fps") ? jsonGet(c, "fps")->number : 0);
@@ -442,6 +466,15 @@ static void command(void *data, const char *json) {
 		return;
 	}
 	if (!strcmp(op, "display")) {
+		Json *take = jsonGet(c, "takeover");
+		if (take && take->type == JSON_BOOLEAN) {
+			takeover = take->boolean;
+			fprintf(stderr, "[display] takeover %s\n", takeover ? "on" : "off");
+			if (!jsonGet(c, "windows")) {
+				sendMode();
+				return;
+			}
+		}
 		Json *on = jsonGet(c, "windows");
 		bool want = on && on->type == JSON_BOOLEAN && on->boolean;
 		fprintf(stderr, "[display] windows %s\n", want ? "on" : "off");
@@ -549,18 +582,27 @@ static void command(void *data, const char *json) {
 		free(p);
 	} else if (!strcmp(op, "menus")) {
 		// what the Mac's menu bar would show after its own menus
-		Json *world = jsonGet(c, "world"), *menus = jsonGet(c, "menus");
-		fprintf(stderr, "[menus] %g world", jsonGet(c, "n") ? jsonGet(c, "n")->number : -1);
-		for (int i = 0; jsonIsArray(world) && i < world->array.count; i++)
-			fprintf(stderr, " | %s%s%s", jsonText(jsonGet(world->array.items[i], "label")) ? jsonText(jsonGet(world->array.items[i], "label")) : "-",
-			        jsonText(jsonGet(world->array.items[i], "key")) ? " " : "", jsonText(jsonGet(world->array.items[i], "key")) ? jsonText(jsonGet(world->array.items[i], "key")) : "");
+		Json *menus = jsonGet(c, "menus");
+		fprintf(stderr, "[menus] %g", jsonGet(c, "n") ? jsonGet(c, "n")->number : -1);
 		for (int i = 0; jsonIsArray(menus) && i < menus->array.count; i++) {
 			Json *m = menus->array.items[i], *items = jsonGet(m, "items");
-			fprintf(stderr, " ;; %s:", jsonText(jsonGet(m, "title")) ? jsonText(jsonGet(m, "title")) : "?");
-			for (int k = 0; jsonIsArray(items) && k < items->array.count; k++)
-				fprintf(stderr, " | %s", jsonText(jsonGet(items->array.items[k], "label")) ? jsonText(jsonGet(items->array.items[k], "label")) : "-");
+			fprintf(stderr, "%s%s:", i ? " ;; " : " ", jsonText(jsonGet(m, "title")) ? jsonText(jsonGet(m, "title")) : "?");
+			for (int k = 0; jsonIsArray(items) && k < items->array.count; k++) {
+				const char *label = jsonText(jsonGet(items->array.items[k], "label")), *key = jsonText(jsonGet(items->array.items[k], "key"));
+				fprintf(stderr, " | %s%s%s", label ? label : "-", key ? " " : "", key ? key : "");
+			}
 		}
 		fprintf(stderr, "\n");
+	} else if (!strcmp(op, "web") && jsonText(jsonGet(c, "url"))) {
+		// a page asked for: there at once, titled by its host, as WebKit's would say; a page it would
+		// open beside it is !post {"irq": 49, "event": "open", "id": id, "url": url, "behind": false}
+		const char *id = jsonText(jsonGet(c, "id")), *url = jsonText(jsonGet(c, "url")), *host = strstr(url, "://");
+		host = host ? host + 3 : url;
+		fprintf(stderr, "[metal] %.120s\n", json);
+		if (!strpbrk(url, "\"\\")) {
+			post("{\"irq\": 49, \"event\": \"url\", \"id\": \"%s\", \"url\": \"%s\"}", id ? id : "", url);
+			post("{\"irq\": 49, \"event\": \"title\", \"id\": \"%s\", \"title\": \"%.*s\"}", id ? id : "", (int)strcspn(host, "/?#"), host);
+		}
 	} else if (!strcmp(op, "quit")) {
 		post("{\"irq\": 1, \"why\": \"os\"}");
 	} else if (!strcmp(op, "cursor") && jsonGet(c, "shape")) {
