@@ -1,5 +1,5 @@
 // /programs/menu: the world menu, as Squeak's is, opened by wmiirc on a
-// click on the root. A layer of its own at x, y, above everything; a click
+// click on the root or the menu bar's rabbit. A layer of its own at x, y, above everything; a click
 // on an item does it, and the menu ends. Any click elsewhere ends it too: it
 // reads /dev/wm/event, so it hears every click the wm sees.
 export default ({ api, effect, handler, self, name, cwd, data }) => {
@@ -21,7 +21,9 @@ export default ({ api, effect, handler, self, name, cwd, data }) => {
     ["the graph", "alt-g", (api) => start(api, "graph", "programs/graph")],
     ["a workspace", "alt-e", (api) => start(api, "edit", "programs/edit", { path: ["apps", "workspace", "text"] })],
     ["the window manager's policy", "", (api) => start(api, "edit", "programs/edit", { path: ["programs", "wmiirc"] })],
+    ["the cursor, in Paint", "", (api) => start(api, "paint", "programs/paint", { path: ["etc", "cursors", "arrow"] })],
     ["the cat clock", "", (api) => start(api, "catclock", "programs/catclock")],
+    ["a plasma, in video memory", "", (api) => start(api, "plasma", "programs/plasma")],
     ["Mac windows", "ctrl-cmd-w", (api) => api.write({ address: ["/", "dev", "display", "want"], patches: snap({ windows: true }) })],
     ["power off", "", (api) => api.write({ address: ["/", "dev", "power", "switch"], patches: snap({ off: true }) })],
   ]
@@ -74,7 +76,7 @@ export default ({ api, effect, handler, self, name, cwd, data }) => {
   const opened = api.read({ address: [...WM, "event"] })[0]?.value?.n ?? 0
   effect("elsewhere", ({ api }) => {
     const ev = api.read({ address: [...WM, "event"] })[0]?.value ?? { events: [] }
-    return ev.events.some((e) => e.n > opened && ["ClientClick", "RootClick", "LeftBarClick", "RightBarClick", "FocusTag"].includes(e.type))
+    return ev.events.some((e) => e.n > opened && ["ClientClick", "RootClick", "LeftBarClick", "RightBarClick", "MenuBarClick", "TaskBarClick", "FocusTag"].includes(e.type))
   }, (clicked, { api }) => {
     if (clicked) end(api)
   })

@@ -32,6 +32,34 @@ static struct {
 } shown;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+static void post(const char *format, ...) __attribute__((format(printf, 1, 2)));
+
+/** windows mode: the Mac windows the OS made, as the metal keeps them */
+static bool windowsMode;
+static struct Surf {
+	char id[128];
+	int w, h;
+	uint32_t *bits;
+} surfs[64];
+static int nsurfs;
+
+static struct Surf *surf(const char *id) {
+	for (int i = 0; i < nsurfs; i++) if (!strcmp(surfs[i].id, id)) return &surfs[i];
+	return NULL;
+}
+
+static void unsurfaceAll(void) {
+	for (int i = 0; i < nsurfs; i++) free(surfs[i].bits);
+	if (nsurfs) fprintf(stderr, "[unsurface] all %d, back to the monitor\n", nsurfs);
+	nsurfs = 0;
+}
+
+/** the mode record the metal sends: in windows mode the main screen's size */
+static void sendMode(void) {
+	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s}", W, H, 1.0 / U, U,
+	     windowsMode ? "true" : "false");
+}
+
 /** the page being mirrored, as the Mac's webmirror copies it fps times a second */
 static struct {
 	char id[128];
@@ -132,9 +160,12 @@ static void command(void *data, const char *json) {
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
 	const char *op = jsonText(jsonGet(c, "op"));
-	// HEADLESS_CURSOR: every cursor command (a shape: the metal moves the plane) and flip, with when it came
+	// HEADLESS_CURSOR: every cursor command (a shape: the metal moves the plane) and flip (with the size of what changed), with when it came
 	if (op && !strcmp(op, "cursor") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[cursor] %lld %g %g\n", (long long)now(), jsonGet(c, "x") ? jsonGet(c, "x")->number : -1, jsonGet(c, "y") ? jsonGet(c, "y")->number : -1);
-	if (op && !strcmp(op, "flip") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[flip] %lld\n", (long long)now());
+	if (op && !strcmp(op, "flip") && getenv("HEADLESS_CURSOR")) {
+		Json *d = jsonGet(c, "dirty");
+		fprintf(stderr, "[flip] %lld %gx%g\n", (long long)now(), jsonGet(d, "w") ? jsonGet(d, "w")->number : -1, jsonGet(d, "h") ? jsonGet(d, "h")->number : -1);
+	}
 	if (!op) return;
 	if (!strcmp(op, "webmirror")) {
 		// a page's pixels copied to its plane: here a colour, and a frame record, as WebKit's copy would give
@@ -148,6 +179,81 @@ static void command(void *data, const char *json) {
 		pthread_mutex_lock(&lock);
 		snprintf(mirror.id, sizeof mirror.id, "%s", jsonText(jsonGet(c, "id")) ? jsonText(jsonGet(c, "id")) : "");
 		mirror.slot = slot, mirror.fps = slot >= 0 && slot < 2 ? fps : 0;
+		pthread_mutex_unlock(&lock);
+		return;
+	}
+	if (!strcmp(op, "display")) {
+		Json *on = jsonGet(c, "windows");
+		bool want = on && on->type == JSON_BOOLEAN && on->boolean;
+		fprintf(stderr, "[display] windows %s\n", want ? "on" : "off");
+		if (want == windowsMode) return;
+		pthread_mutex_lock(&lock);
+		windowsMode = want;
+		if (!want) unsurfaceAll();
+		pthread_mutex_unlock(&lock);
+		sendMode();
+		return;
+	}
+	if (!strcmp(op, "surface")) {
+		const char *id = jsonText(jsonGet(c, "id"));
+		int w = (int)(jsonGet(c, "w") ? jsonGet(c, "w")->number : 0), h = (int)(jsonGet(c, "h") ? jsonGet(c, "h")->number : 0);
+		Json *key = jsonGet(c, "key");
+		fprintf(stderr, "[surface] %s %dx%d at %g,%g \"%s\"%s%s\n", id ? id : "?", w, h, jsonGet(c, "x") ? jsonGet(c, "x")->number : 0, jsonGet(c, "y") ? jsonGet(c, "y")->number : 0,
+		        jsonText(jsonGet(c, "title")) ? jsonText(jsonGet(c, "title")) : "", key && key->type == JSON_BOOLEAN && key->boolean ? " key" : "",
+		        windowsMode ? "" : " (screen mode: ignored)");
+		if (!id || !windowsMode || w < 1 || h < 1 || w > W || h > H) return;
+		// made key: the window server says so, as the Mac's does
+		if (key && key->type == JSON_BOOLEAN && key->boolean) post("{\"irq\": 33, \"event\": \"key\", \"id\": \"%s\"}", id);
+		pthread_mutex_lock(&lock);
+		struct Surf *s = surf(id);
+		if (!s && nsurfs < 64) {
+			s = &surfs[nsurfs++];
+			*s = (struct Surf){ 0 };
+			snprintf(s->id, sizeof s->id, "%s", id);
+		}
+		if (s && (s->w != w || s->h != h)) {
+			free(s->bits);
+			s->bits = calloc((size_t)(w * h), 4);
+			s->w = w, s->h = h;
+		}
+		pthread_mutex_unlock(&lock);
+		return;
+	}
+	if (!strcmp(op, "present")) {
+		// the piece at sx, sy of the buffer, dirty's w × h of it (the whole surface without one), to dirty's place in the surface
+		const char *id = jsonText(jsonGet(c, "id"));
+		int b = (int)(jsonGet(c, "buffer") ? jsonGet(c, "buffer")->number : 0), sx = (int)(jsonGet(c, "sx") ? jsonGet(c, "sx")->number : 0), sy = (int)(jsonGet(c, "sy") ? jsonGet(c, "sy")->number : 0);
+		pthread_mutex_lock(&lock);
+		struct Surf *s = id ? surf(id) : NULL;
+		Json *dirty = jsonGet(c, "dirty");
+		int dx = 0, dy = 0, dw = s ? s->w : 0, dh = s ? s->h : 0;
+		if (dirty) {
+			dx = (int)jsonGet(dirty, "x")->number, dy = (int)jsonGet(dirty, "y")->number, dw = (int)jsonGet(dirty, "w")->number, dh = (int)jsonGet(dirty, "h")->number;
+		}
+		uint32_t sum = 0;
+		bool ok = s && b >= 0 && b < 2 && dx >= 0 && dy >= 0 && dx + dw <= s->w && dy + dh <= s->h && sx + dw <= W && sy + dh <= H;
+		if (ok)
+			for (int y = 0; y < dh; y++)
+				for (int x = 0; x < dw; x++) {
+					uint32_t p = buffers[b][(sy + y) * W + sx + x];
+					s->bits[(dy + y) * s->w + dx + x] = p;
+					sum = sum * 31 + p;
+				}
+		pthread_mutex_unlock(&lock);
+		fprintf(stderr, "[present] %s %dx%d at %d,%d from buffer %d at %d,%d%s%s\n", id ? id : "?", dw, dh, dx, dy, b, sx, sy, dirty ? "" : " (whole)",
+		        ok ? "" : s ? " OUT OF RANGE" : " NO SURFACE");
+		(void)sum;
+		return;
+	}
+	if (!strcmp(op, "unsurface")) {
+		const char *id = jsonText(jsonGet(c, "id"));
+		fprintf(stderr, "[unsurface] %s\n", id ? id : "?");
+		pthread_mutex_lock(&lock);
+		struct Surf *s = id ? surf(id) : NULL;
+		if (s) {
+			free(s->bits);
+			*s = surfs[--nsurfs];
+		}
 		pthread_mutex_unlock(&lock);
 		return;
 	}
@@ -193,7 +299,31 @@ static void command(void *data, const char *json) {
 	}
 }
 
+/** a surface's pixels, as its Mac window shows them */
+static void shotSurface(const char *path, const char *id) {
+	pthread_mutex_lock(&lock);
+	struct Surf *s = surf(id);
+	FILE *f = s ? fopen(path, "wb") : NULL;
+	if (f) {
+		fprintf(f, "P6 %d %d 255\n", s->w, s->h);
+		for (int i = 0; i < s->w * s->h; i++) {
+			uint32_t p = s->bits[i];
+			unsigned char rgb[3] = { (unsigned char)(p >> 16), (unsigned char)(p >> 8), (unsigned char)p };
+			fwrite(rgb, 1, 3, f);
+		}
+		fclose(f);
+	} else fprintf(stderr, "[shot] no surface %s\n", id);
+	pthread_mutex_unlock(&lock);
+}
+
 static void shot(const char *path) {
+	const char *id = strchr(path, ' ');
+	if (id) {
+		char file[1024];
+		snprintf(file, sizeof file, "%.*s", (int)(id - path), path);
+		shotSurface(file, id + 1);
+		return;
+	}
 	pthread_mutex_lock(&lock);
 	int b = shown.buffer, w = shown.w ? shown.w : W, h = shown.h ? shown.h : H;
 	pthread_mutex_unlock(&lock);
@@ -244,6 +374,12 @@ int main(int argc, char **argv) {
 		else if (!strcmp(argv[i], "--image") && i + 1 < argc) image = argv[++i];
 		else if (!strcmp(argv[i], "--runner") && i + 1 < argc) runner = argv[++i];
 		else if (!strcmp(argv[i], "--fresh")) fresh = true;
+	}
+	// a Wayland socket of its own, so a test never meets the person's ermineOS on ~/.ermine/wayland
+	if (!getenv("XDG_RUNTIME_DIR")) {
+		char *dir = NULL;
+		if (asprintf(&dir, "%s/ermine-headless-XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp") > 0 && mkdtemp(dir)) setenv("XDG_RUNTIME_DIR", dir, 1);
+		free(dir);
 	}
 	buffers[0] = calloc((size_t)(W * H), 4);
 	buffers[1] = calloc((size_t)(W * H), 4);
@@ -307,6 +443,17 @@ int main(int argc, char **argv) {
 			post("{\"irq\": 35, \"event\": \"up\", \"x\": %d, \"y\": %d, \"button\": 0, \"buttons\": [], \"mods\": []}", x, y);
 		} else if (!strcmp(word, "post")) {
 			// a record as the metal would send it, as it is: {"irq": n, ...}
+			if (getenv("HEADLESS_CURSOR")) fprintf(stderr, "[post] %lld\n", (long long)now());
+			// a mode record switches windows mode here, as the metal's own would
+			Json *r = jsonParse(rest, strlen(rest), NULL);
+			const char *e = jsonText(jsonGet(r, "event"));
+			Json *on = jsonGet(r, "windows");
+			if (e && !strcmp(e, "mode") && on && on->type == JSON_BOOLEAN) {
+				pthread_mutex_lock(&lock);
+				windowsMode = on->boolean;
+				if (!windowsMode) unsurfaceAll();
+				pthread_mutex_unlock(&lock);
+			}
 			post("%s", rest);
 		} else if (!strcmp(word, "move")) {
 			int x = 0, y = 0;

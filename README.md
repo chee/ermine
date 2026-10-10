@@ -5,8 +5,9 @@ see, rearrange, replace, reshape and repair, where every value says which change
 says why it was given (`core/graph/GRAPH.tex`, Designable software).
 
 The graph of `core/graph/GRAPH.tex`, protect of `core/protect/PROTECT.tex`, the reference scheduler
-of `core/scheduler/SCHEDULER.tex` and the loaders of `core/scheduler/LOADERS.tex`, in Deno
-TypeScript, C and Haskell, each with a harness that speaks the lines of `core/PROTOCOL.tex`; the
+of `core/scheduler/SCHEDULER.tex` and loaders (the superseded model, until rewritten to
+`core/scheduler/LOADERS.tex`), in Deno
+TypeScript, C and Haskell, each with a harness (`conformance/HARNESS.tex`) that speaks the lines of `core/WIRE.tex`; the
 graph also in OCaml and Zig. `working/MAP.org` says where the design stands and which paper holds
 what. Every command below runs from the repository root.
 
@@ -15,7 +16,7 @@ what. Every command below runs from the repository root.
 One folder per part, each with its paper and one subfolder per language:
 
 ```
-core/PROTOCOL.tex    the lines every harness speaks
+core/WIRE.tex        the lines a harness, a link or a host speaks
 core/graph/          GRAPH.tex; typescript/, c/ (the C harness), haskell/ (the Haskell harness), ocaml/, zig/
 core/scheduler/      SCHEDULER.tex, LOADERS.tex; typescript/, with the TS harness in typescript/harness/; c/, haskell/
 core/protect/        PROTECT.tex; typescript/, c/, haskell/
@@ -28,7 +29,7 @@ layers/keyhive/      KEYHIVE.tex, NOTES.md
 experimental_hosts/term/   c/: ermine-term and erminex, over core/graph/c
 experimental_hosts/web/    dom.org, signals.org; typescript/: demo/, dom/, signals/, keep/, devtools/, bundle/
 working/             MAP.org, HOST.tex, IDEAS.tex, working notes, next.org
-conformance/         the suite (scenarios/, one folder per stack), the fuzzer (fuzz/), a HARNESS.md per layer, steps.ts
+conformance/         HARNESS.tex (the harness: session, programs as data, scenarios); the suite (scenarios/, one folder per stack), the fuzzer (fuzz/), a HARNESS.md per layer, steps.ts
 recipes/
 deno.json            one config for all the TypeScript
 ```
@@ -47,7 +48,7 @@ core/scheduler/typescript/loaders.ts   the loader interface, and sameThread(), w
 core/scheduler/typescript/harness/main.ts      the harness: JSON lines on stdin and stdout, a new stack per reset
 core/scheduler/typescript/harness/forms.ts     values in JSON: bytes, typed arrays, live stand-ins, NaN, -0
 core/mod.ts                        all of the core
-conformance/steps.ts               steps(): the loader of programs as data (PROTOCOL.tex, Programs as data); hosts use it too
+conformance/steps.ts               steps(): the loader of programs as data (conformance/HARNESS.tex, Programs as data); hosts use it too
 experimental_layers/keep/typescript/keeper.ts     keep(graph, backend, root): a wrapper right over the bare graph that keeps
                                    what GRAPH.tex says is kept; load(backend) gives it back for graph(root, kept)
 experimental_layers/keep/typescript/indexeddb.ts  the keeper's backend in the browser

@@ -42,4 +42,19 @@ ErmErr hostDo(Host *host, Json *agent, const char *op, Json *fields, Json **out)
 /** an operation as the machine on the keeper, beneath protect, the wrapper and the scheduler: the host's own bookkeeping, never committed */
 ErmErr hostBare(Host *host, const char *op, Json *fields, Json **out);
 
+/**
+ * a plane: pixels a driver keeps in its own memory, w × h, rows stride
+ * pixels apart, for a layer {"plane": {"source", "id", "serial"}} to show
+ * without them going through the graph (drv_display.c's render)
+ */
+typedef struct HostPlane {
+	const uint32_t *bits;
+	int w, h, stride;
+} HostPlane;
+typedef bool (*HostPlaneFn)(void *data, int64_t id, HostPlane *out);
+/** a source of planes, by name: fn gives plane id, false when there is none; called on the OS's thread only */
+void hostPlanes(Host *host, const char *source, HostPlaneFn fn, void *data);
+/** plane id of that source: false when there is none */
+bool hostPlane(Host *host, const char *source, int64_t id, HostPlane *out);
+
 #endif

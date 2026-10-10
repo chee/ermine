@@ -1,9 +1,0 @@
---- core/scheduler/SCHEDULER.tex
-+++ core/scheduler/SCHEDULER.tex
-@@ -500,5 +500,5 @@
- the effect part still runs. A compute rerun before its effect part ran: one
- effect part, latest value; its earlier run ends done then. What the second
--half marks: due next round. Then the round's queued requests run.
-+half marks: due next round.
- 
- \paragraph{How a run ends.} \emph{Done}; \emph{pending}, if \code{code} or

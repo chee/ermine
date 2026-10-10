@@ -179,6 +179,36 @@
   },
   {
    "at": [
+    "drivers"
+   ],
+   "name": "vram",
+   "id": "drv-vram",
+   "value": {
+    "kind": "c",
+    "name": "vram"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "pty",
+   "id": "drv-pty",
+   "value": {
+    "kind": "c",
+    "name": "pty"
+   }
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "cursor",
+   "id": "prog-cursor",
+   "source": "programs/cursor.js"
+  },
+  {
+   "at": [
     "programs"
    ],
    "name": "shell",
@@ -269,6 +299,14 @@
    "at": [
     "programs"
    ],
+   "name": "paint",
+   "id": "prog-paint",
+   "source": "programs/paint.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
    "name": "catclock",
    "id": "prog-catclock",
    "value": {
@@ -277,6 +315,14 @@
      "catclock"
     ]
    }
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "plasma",
+   "id": "prog-plasma",
+   "source": "programs/plasma.js"
   },
   {
    "at": [
@@ -384,6 +430,22 @@
   },
   {
    "at": [
+    "dev"
+   ],
+   "name": "vram",
+   "id": "dev-vram",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "pty",
+   "id": "dev-pty",
+   "value": null
+  },
+  {
+   "at": [
     "dev",
     "sync"
    ],
@@ -483,8 +545,32 @@
    "at": [
     "apps"
    ],
+   "name": "plasma",
+   "id": "apps-plasma",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "cursor",
+   "id": "apps-cursor",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
    "name": "computer",
    "id": "apps-computer",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "paint",
+   "id": "apps-paint",
    "value": null
   },
   {
@@ -849,6 +935,88 @@
    "value": {
     "server": "wss://galaxy.observer"
    }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "cursors",
+   "id": "etc-cursors",
+   "value": null
+  },
+  {
+   "at": [
+    "etc",
+    "cursors"
+   ],
+   "name": "arrow",
+   "id": "cursor-arrow",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "o": 1053720,
+     "x": 16644330
+    },
+    "hot": [
+     0,
+     0
+    ],
+    "rows": [
+     "o           ",
+     "oo          ",
+     "oxo         ",
+     "oxxo        ",
+     "oxxxo       ",
+     "oxxxxo      ",
+     "oxxxxxo     ",
+     "oxxxxxxo    ",
+     "oxxxxxxxo   ",
+     "oxxxxxxxxo  ",
+     "oxxxxxoooo  ",
+     "oxxoxxo     ",
+     "oxo oxxo    ",
+     "oo  oxxo    ",
+     "o    oxxo   ",
+     "     oxxo   ",
+     "      oo    "
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "cursors"
+   ],
+   "name": "resize",
+   "id": "cursor-resize",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "o": 1053720,
+     "x": 16644330
+    },
+    "hot": [
+     7,
+     7
+    ],
+    "rows": [
+     " ooooo         ",
+     "oxxxxxo        ",
+     "oxxxxo         ",
+     "oxxxxo         ",
+     "oxxxxxo        ",
+     "oxooxxxo       ",
+     " o  oxxxo      ",
+     "     oxxxo     ",
+     "      oxxxo  o ",
+     "       oxxxooxo",
+     "        oxxxxxo",
+     "         oxxxxo",
+     "         oxxxxo",
+     "        oxxxxxo",
+     "         ooooo "
+    ]
+   }
   }
  ],
  "boot": [
@@ -964,6 +1132,28 @@
   },
   {
    "start": [
+    "dev",
+    "vram"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "vram"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "pty"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "pty"
+   ]
+  },
+  {
+   "start": [
     "apps",
     "console"
    ],
@@ -978,6 +1168,16 @@
      "uart0"
     ]
    }
+  },
+  {
+   "start": [
+    "apps",
+    "cursor"
+   ],
+   "program": [
+    "programs",
+    "cursor"
+   ]
   },
   {
    "start": [

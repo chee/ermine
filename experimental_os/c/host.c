@@ -41,6 +41,13 @@ typedef struct Held {
 	ERM_LIST(Json *) records;
 } Held;
 
+/** a source of planes (hostPlanes) */
+typedef struct PlaneSource {
+	char *name;
+	HostPlaneFn fn;
+	void *data;
+} PlaneSource;
+
 struct Host {
 	ErmosConfig config;
 	Json *dt;
@@ -57,6 +64,7 @@ struct Host {
 	ERM_LIST(Held) held;
 	Json *rules;        // /etc/rules as last read
 	ErmRules may;
+	ERM_LIST(PlaneSource) planes; // hostPlanes'
 };
 
 // --- small things
@@ -89,6 +97,21 @@ static int64_t monotonic(void) {
 
 const ErmosConfig *hostConfig(Host *h) {
 	return &h->config;
+}
+
+void hostPlanes(Host *h, const char *source, HostPlaneFn fn, void *data) {
+	for (int i = 0; i < h->planes.count; i++)
+		if (!strcmp(h->planes.items[i].name, source)) {
+			h->planes.items[i].fn = fn, h->planes.items[i].data = data;
+			return;
+		}
+	ERM_PUSH(h->planes, ((PlaneSource){ copyString(source), fn, data }));
+}
+
+bool hostPlane(Host *h, const char *source, int64_t id, HostPlane *out) {
+	for (int i = 0; source && i < h->planes.count; i++)
+		if (!strcmp(h->planes.items[i].name, source)) return h->planes.items[i].fn(h->planes.items[i].data, id, out);
+	return false;
 }
 
 Json *hostTree(Host *h) {
@@ -361,6 +384,7 @@ static void makeHw(Host *h) {
 	Json *devices = jsonGet(dt, "devices");
 	Json *own = parse("[{\"name\": \"timer\", \"irq\": 97, \"note\": \"core 0's own\"},"
 	                  " {\"name\": \"wayland\", \"irq\": 62, \"note\": \"the Wayland compositor's socket (drv_wayland.c)\"},"
+	                  " {\"name\": \"pty\", \"irq\": 63, \"note\": \"the pseudo-terminals' masters (drv_pty.c)\"},"
 	                  " {\"name\": \"blitter\", \"note\": \"core 0's own: BitBlt, text, and the draw device's ops\"}]");
 	for (int pass = 0; pass < 2; pass++) {
 		Json *list = pass ? own : devices;
@@ -833,6 +857,7 @@ void hostOff(Host *h) {
 	linkStop(h);
 	peerStop(h);
 	execStop(h);
+	vramStop();
 	jsStop(h);
 	hostSay(h, "off: the SD card holds every change as it was made");
 }
