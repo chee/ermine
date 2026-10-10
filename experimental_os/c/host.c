@@ -360,6 +360,7 @@ static void makeHw(Host *h) {
 	place(h, names("/", "hw", NULL), "irq", "hw.irq", jsonNull(), true);
 	Json *devices = jsonGet(dt, "devices");
 	Json *own = parse("[{\"name\": \"timer\", \"irq\": 97, \"note\": \"core 0's own\"},"
+	                  " {\"name\": \"wayland\", \"irq\": 62, \"note\": \"the Wayland compositor's socket (drv_wayland.c)\"},"
 	                  " {\"name\": \"blitter\", \"note\": \"core 0's own: BitBlt, text, and the draw device's ops\"}]");
 	for (int pass = 0; pass < 2; pass++) {
 		Json *list = pass ? own : devices;

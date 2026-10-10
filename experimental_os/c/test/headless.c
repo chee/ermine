@@ -132,7 +132,7 @@ static void command(void *data, const char *json) {
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
 	const char *op = jsonText(jsonGet(c, "op"));
-	// HEADLESS_CURSOR: every cursor command and flip, with when it came, to time the pointer and the frames
+	// HEADLESS_CURSOR: every cursor command (a shape: the metal moves the plane) and flip, with when it came
 	if (op && !strcmp(op, "cursor") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[cursor] %lld %g %g\n", (long long)now(), jsonGet(c, "x") ? jsonGet(c, "x")->number : -1, jsonGet(c, "y") ? jsonGet(c, "y")->number : -1);
 	if (op && !strcmp(op, "flip") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[flip] %lld\n", (long long)now());
 	if (!op) return;

@@ -1,0 +1,456 @@
+[
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.3407920000000004,
+  "run": {
+   "min": 2.786207999999995,
+   "median": 4.604582999999998,
+   "samples": [
+    7.848374999999997,
+    6.467208999999997,
+    4.604582999999998,
+    2.786207999999995,
+    2.903917
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 144184,
+   "after": 331072
+  }
+ },
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 4.185333,
+  "run": {
+   "min": 7.2918750000000045,
+   "median": 9.702791999999988,
+   "samples": [
+    12.778208,
+    7.2918750000000045,
+    10.431291999999992,
+    9.702791999999988,
+    8.208708000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 806984,
+   "after": 1138168
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 2.169083999999998,
+  "run": {
+   "min": 0.1892920000000018,
+   "median": 0.39970899999999787,
+   "samples": [
+    1.0360410000000009,
+    0.39970899999999787,
+    0.44766699999999915,
+    0.2886249999999997,
+    0.1892920000000018
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 169280,
+   "after": 299888
+  },
+  "report": {
+   "resolutions": 40
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 5.8317499999999995,
+  "run": {
+   "min": 2.7871670000000037,
+   "median": 4.994833,
+   "samples": [
+    7.937666000000004,
+    6.6832080000000005,
+    4.994833,
+    4.564582999999999,
+    2.7871670000000037
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 742904,
+   "after": 892856
+  },
+  "report": {
+   "resolutions": 800
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 6.120707999999999,
+  "run": {
+   "min": 0.055749999999999744,
+   "median": 0.11087500000000006,
+   "samples": [
+    0.13745899999999978,
+    0.11087500000000006,
+    0.11666699999999963,
+    0.055749999999999744,
+    0.06149999999999878
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 444472,
+   "after": 479192
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 91.684166,
+  "run": {
+   "min": 0.20250000000000057,
+   "median": 0.2834580000000102,
+   "samples": [
+    0.35266599999999926,
+    0.3191669999999931,
+    0.2834580000000102,
+    0.2554590000000019,
+    0.20250000000000057
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 10913744,
+   "after": 10963488
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.738541999999999,
+  "run": {
+   "min": 4.392500000000005,
+   "median": 7.140500000000003,
+   "samples": [
+    7.4281660000000045,
+    7.657958000000001,
+    7.140500000000003,
+    4.392500000000005,
+    4.537292000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 127592,
+   "after": 268520
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 10
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 1.3834169999999997,
+  "run": {
+   "min": 32.78554199999999,
+   "median": 34.86937499999999,
+   "samples": [
+    35.695583,
+    34.86937499999999,
+    36.376000000000005,
+    34.35137499999999,
+    32.78554199999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 117344,
+   "after": 275168
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 100
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 3.4344160000000006,
+  "run": {
+   "min": 0.03354200000000063,
+   "median": 0.03495800000000315,
+   "samples": [
+    0.12708399999999997,
+    0.04491600000000062,
+    0.03399999999999892,
+    0.03354200000000063,
+    0.03495800000000315
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 187392,
+   "after": 319488
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 15.681416999999998,
+  "run": {
+   "min": 0.19654200000000088,
+   "median": 0.24379199999999912,
+   "samples": [
+    0.2797920000000005,
+    0.24379199999999912,
+    0.2550420000000031,
+    0.2312080000000023,
+    0.19654200000000088
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 767704,
+   "after": 845056
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.5387909999999998,
+  "run": {
+   "min": 0.7953749999999999,
+   "median": 0.8953750000000014,
+   "samples": [
+    1.6215829999999976,
+    1.379249999999999,
+    0.8953750000000014,
+    0.8012499999999996,
+    0.7953749999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 86608,
+   "after": 221384
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 2.475625000000001,
+  "run": {
+   "min": 1.1650829999999992,
+   "median": 2.0185829999999996,
+   "samples": [
+    1.1650829999999992,
+    3.687583,
+    2.700292000000001,
+    1.9316250000000004,
+    2.0185829999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 157592,
+   "after": 275408
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 5.473792000000001,
+  "run": {
+   "min": 5.212792,
+   "median": 5.838625,
+   "samples": [
+    5.907042000000001,
+    5.212792,
+    5.838625
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 447488,
+   "after": 718808
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 16.181957999999998,
+  "run": {
+   "min": 32.388583,
+   "median": 36.523875000000004,
+   "samples": [
+    36.523875000000004,
+    32.388583,
+    37.846541
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1135744,
+   "after": 1461384
+  },
+  "report": {
+   "failed": 400,
+   "runs": 3100
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 13.129084000000002,
+  "run": {
+   "min": 4.824916999999999,
+   "median": 5.336084,
+   "samples": [
+    5.336084,
+    4.824916999999999,
+    5.7379999999999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 557824,
+   "after": 885240
+  },
+  "report": {
+   "paneRuns": 120
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 35.195791,
+  "run": {
+   "min": 53.289124999999984,
+   "median": 56.039458000000025,
+   "samples": [
+    60.394499999999994,
+    53.289124999999984,
+    56.039458000000025
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1647312,
+   "after": 2041096
+  },
+  "report": {
+   "paneRuns": 1000
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 7.551792000000001,
+  "run": {
+   "min": 0.18895833999999995,
+   "median": 0.22163668,
+   "samples": [
+    0.34576083999999996,
+    0.18895833999999995,
+    0.22163668
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 432696,
+   "after": 790392
+  },
+  "report": {
+   "levels": 10
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "medium",
+  "measures": "both",
+  "build": 22.370459000000004,
+  "run": {
+   "min": 6.506327500000002,
+   "median": 7.823936659999999,
+   "samples": [
+    15.353571660000002,
+    7.823936659999999,
+    6.506327500000002
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 696368,
+   "after": 994128
+  },
+  "report": {
+   "levels": 100
+  }
+ }
+]

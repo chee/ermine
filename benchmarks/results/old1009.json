@@ -1,0 +1,456 @@
+[
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 3.6750000000000007,
+  "run": {
+   "min": 12.430791000000006,
+   "median": 16.792666999999994,
+   "samples": [
+    12.430791000000006,
+    16.792666999999994,
+    25.02579200000001,
+    13.128292000000002,
+    27.092416000000014
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 168784,
+   "after": 233128
+  }
+ },
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 4.659207999999998,
+  "run": {
+   "min": 120.91454199999998,
+   "median": 132.003958,
+   "samples": [
+    138.28212499999998,
+    147.096,
+    121.97929099999999,
+    132.003958,
+    120.91454199999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 855512,
+   "after": 1111704
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.388,
+  "run": {
+   "min": 0.1953750000000003,
+   "median": 0.26295799999999936,
+   "samples": [
+    0.264583,
+    0.26295799999999936,
+    0.21408300000000047,
+    0.1953750000000003,
+    0.33066700000000004
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 158544,
+   "after": 208840
+  },
+  "report": {
+   "resolutions": 40
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 5.6690000000000005,
+  "run": {
+   "min": 3.6502499999999998,
+   "median": 4.214791999999996,
+   "samples": [
+    4.563749999999999,
+    5.0716670000000015,
+    4.214791999999996,
+    4.073292000000002,
+    3.6502499999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 880424,
+   "after": 927272
+  },
+  "report": {
+   "resolutions": 800
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 4.3298749999999995,
+  "run": {
+   "min": 0.04991599999999963,
+   "median": 0.06441699999999884,
+   "samples": [
+    0.26233299999999815,
+    0.1063330000000029,
+    0.05504200000000026,
+    0.04991599999999963,
+    0.06441699999999884
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 373360,
+   "after": 394112
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 147.667167,
+  "run": {
+   "min": 0.3103749999999934,
+   "median": 0.3517500000000098,
+   "samples": [
+    0.561000000000007,
+    0.44883400000000506,
+    0.3517500000000098,
+    0.31995900000001143,
+    0.3103749999999934
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 10840256,
+   "after": 10889136
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.3918750000000006,
+  "run": {
+   "min": 4.278832999999999,
+   "median": 5.056124999999994,
+   "samples": [
+    7.610749999999996,
+    5.056124999999994,
+    4.278832999999999,
+    5.7024159999999995,
+    4.304333
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 132352,
+   "after": 232184
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 10
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 1.3226669999999991,
+  "run": {
+   "min": 33.526916,
+   "median": 35.42675,
+   "samples": [
+    50.166459,
+    38.96145799999999,
+    35.42675,
+    33.526916,
+    33.88674999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 114920,
+   "after": 239800
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 100
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 3.818792,
+  "run": {
+   "min": 0.05695800000000162,
+   "median": 0.062249999999998806,
+   "samples": [
+    0.06012499999999932,
+    0.05695800000000162,
+    0.07600000000000051,
+    0.0782500000000006,
+    0.062249999999998806
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 174080,
+   "after": 267456
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 13.502416,
+  "run": {
+   "min": 0.21454200000000156,
+   "median": 0.26599999999999824,
+   "samples": [
+    0.26599999999999824,
+    0.24770799999999582,
+    0.21454200000000156,
+    0.2677090000000035,
+    0.3704170000000033
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 759016,
+   "after": 838448
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.6202079999999999,
+  "run": {
+   "min": 1.1729999999999983,
+   "median": 1.2576249999999973,
+   "samples": [
+    1.8648329999999973,
+    1.5542080000000027,
+    1.2576249999999973,
+    1.1790839999999996,
+    1.1729999999999983
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 113264,
+   "after": 197200
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 5.831542000000001,
+  "run": {
+   "min": 1.7753750000000004,
+   "median": 1.9621250000000003,
+   "samples": [
+    1.7753750000000004,
+    2.7389580000000002,
+    2.5787090000000035,
+    1.8936250000000001,
+    1.9621250000000003
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 210520,
+   "after": 308824
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.054917,
+  "run": {
+   "min": 4.252542000000002,
+   "median": 6.153542000000002,
+   "samples": [
+    4.252542000000002,
+    6.153542000000002,
+    8.697167
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 435200,
+   "after": 784816
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 19.975542,
+  "run": {
+   "min": 31.034458,
+   "median": 40.189459,
+   "samples": [
+    41.07166599999999,
+    40.189459,
+    31.034458
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1149344,
+   "after": 1413176
+  },
+  "report": {
+   "failed": 400,
+   "runs": 3100
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 9.657083,
+  "run": {
+   "min": 5.287209000000004,
+   "median": 5.633667000000003,
+   "samples": [
+    5.287209000000004,
+    5.967582999999998,
+    5.633667000000003
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 521920,
+   "after": 802688
+  },
+  "report": {
+   "paneRuns": 120
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 43.851957999999996,
+  "run": {
+   "min": 67.42070899999999,
+   "median": 85.16700000000003,
+   "samples": [
+    98.05233399999997,
+    85.16700000000003,
+    67.42070899999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1649288,
+   "after": 1979424
+  },
+  "report": {
+   "paneRuns": 1000
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 5.107875,
+  "run": {
+   "min": 0.25701000000000007,
+   "median": 0.28201415999999996,
+   "samples": [
+    0.32700499999999993,
+    0.25701000000000007,
+    0.28201415999999996
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 375336,
+   "after": 706960
+  },
+  "report": {
+   "levels": 10
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "medium",
+  "measures": "both",
+  "build": 18.388625,
+  "run": {
+   "min": 5.510236659999999,
+   "median": 5.788630839999999,
+   "samples": [
+    6.138904999999999,
+    5.788630839999999,
+    5.510236659999999
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 651312,
+   "after": 915952
+  },
+  "report": {
+   "levels": 100
+  }
+ }
+]

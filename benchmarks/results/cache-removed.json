@@ -1,0 +1,456 @@
+[
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.7020829999999982,
+  "run": {
+   "min": 2.9980840000000057,
+   "median": 4.864916999999998,
+   "samples": [
+    8.673041999999995,
+    6.938457999999997,
+    4.864916999999998,
+    4.403165999999999,
+    2.9980840000000057
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 136088,
+   "after": 324304
+  }
+ },
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 4.725417000000002,
+  "run": {
+   "min": 7.671999999999997,
+   "median": 9.087708000000006,
+   "samples": [
+    10.270458000000005,
+    9.087708000000006,
+    8.249500000000012,
+    7.671999999999997,
+    10.415582999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 802640,
+   "after": 1129624
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 2.446083,
+  "run": {
+   "min": 0.333750000000002,
+   "median": 0.507042000000002,
+   "samples": [
+    0.6817920000000015,
+    0.46987499999999827,
+    0.507042000000002,
+    0.5088749999999997,
+    0.333750000000002
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 148720,
+   "after": 284896
+  },
+  "report": {
+   "resolutions": 40
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 5.224958000000001,
+  "run": {
+   "min": 3.2993330000000043,
+   "median": 4.228999999999999,
+   "samples": [
+    5.483208999999999,
+    5.357540999999998,
+    4.228999999999999,
+    3.947334000000005,
+    3.2993330000000043
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 723192,
+   "after": 886120
+  },
+  "report": {
+   "resolutions": 800
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 6.603541999999999,
+  "run": {
+   "min": 0.07191699999999912,
+   "median": 0.11245800000000017,
+   "samples": [
+    0.14150000000000063,
+    0.2727080000000015,
+    0.09066699999999983,
+    0.11245800000000017,
+    0.07191699999999912
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 446648,
+   "after": 466648
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 99.981166,
+  "run": {
+   "min": 0.18325000000000102,
+   "median": 0.2882499999999908,
+   "samples": [
+    0.3254579999999976,
+    0.2897919999999914,
+    0.2882499999999908,
+    0.23529200000000117,
+    0.18325000000000102
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 10900584,
+   "after": 10946320
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.741249999999999,
+  "run": {
+   "min": 4.846083,
+   "median": 5.870792000000002,
+   "samples": [
+    8.024000000000001,
+    7.198707999999996,
+    5.870792000000002,
+    4.846083,
+    4.896916999999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 123160,
+   "after": 262224
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 10
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 1.6992919999999998,
+  "run": {
+   "min": 37.916957999999994,
+   "median": 43.730582999999996,
+   "samples": [
+    42.38933300000001,
+    47.98441699999999,
+    43.730582999999996,
+    44.226583000000005,
+    37.916957999999994
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 112912,
+   "after": 268872
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 100
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 4.931167,
+  "run": {
+   "min": 0.04425000000000168,
+   "median": 0.04933399999999821,
+   "samples": [
+    0.13308299999999917,
+    0.05433299999999974,
+    0.04933399999999821,
+    0.04425000000000168,
+    0.044375000000002274
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 183152,
+   "after": 311304
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 13.067542,
+  "run": {
+   "min": 0.22325000000000017,
+   "median": 0.2580419999999961,
+   "samples": [
+    0.29016599999999926,
+    0.2580419999999961,
+    0.3002080000000049,
+    0.23108299999999815,
+    0.22325000000000017
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 760960,
+   "after": 837336
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.5175,
+  "run": {
+   "min": 0.485042,
+   "median": 0.7042079999999977,
+   "samples": [
+    1.1506250000000016,
+    0.7042079999999977,
+    0.7666660000000007,
+    0.5683749999999996,
+    0.485042
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 82072,
+   "after": 215208
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 2.2780419999999992,
+  "run": {
+   "min": 1.225874999999995,
+   "median": 1.2618749999999963,
+   "samples": [
+    1.2603749999999998,
+    1.3939160000000008,
+    1.4011250000000004,
+    1.2618749999999963,
+    1.225874999999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 151296,
+   "after": 279600
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.536041999999998,
+  "run": {
+   "min": 2.988624999999999,
+   "median": 5.1469999999999985,
+   "samples": [
+    5.1469999999999985,
+    2.988624999999999,
+    5.424707999999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 417528,
+   "after": 766640
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 16.425375000000003,
+  "run": {
+   "min": 22.785042000000004,
+   "median": 30.119792000000004,
+   "samples": [
+    30.119792000000004,
+    22.785042000000004,
+    33.076333000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1131880,
+   "after": 1446352
+  },
+  "report": {
+   "failed": 400,
+   "runs": 3100
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 11.546584,
+  "run": {
+   "min": 4.074959,
+   "median": 4.432958000000006,
+   "samples": [
+    4.432958000000006,
+    4.074959,
+    4.484791999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 544288,
+   "after": 872696
+  },
+  "report": {
+   "paneRuns": 120
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 38.604917,
+  "run": {
+   "min": 90.733834,
+   "median": 95.71129199999996,
+   "samples": [
+    107.890625,
+    95.71129199999996,
+    90.733834
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1633888,
+   "after": 2027208
+  },
+  "report": {
+   "paneRuns": 1000
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 8.593459,
+  "run": {
+   "min": 0.35350334000000005,
+   "median": 0.4281141600000001,
+   "samples": [
+    0.8367633200000002,
+    0.35350334000000005,
+    0.4281141600000001
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 425112,
+   "after": 775416
+  },
+  "report": {
+   "levels": 10
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "medium",
+  "measures": "both",
+  "build": 25.105000000000004,
+  "run": {
+   "min": 5.41421918,
+   "median": 5.435406680000001,
+   "samples": [
+    5.435406680000001,
+    5.41421918,
+    7.7925875000000016
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 688736,
+   "after": 983048
+  },
+  "report": {
+   "levels": 100
+  }
+ }
+]

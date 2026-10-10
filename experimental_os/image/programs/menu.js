@@ -15,6 +15,7 @@ export default ({ api, effect, handler, self, name, cwd, data }) => {
     return Array.isArray(launch) ? api.call({ address: launch, args: [op] }) : api.start(op)
   }
   const ITEMS = [
+    ["My Computer", "alt-f", (api) => start(api, "computer", "programs/computer")],
     ["a shell", "alt-enter", (api) => start(api, "term", "programs/term")],
     ["a browser", "alt-b", (api) => start(api, "browser", "programs/browser")],
     ["the graph", "alt-g", (api) => start(api, "graph", "programs/graph")],

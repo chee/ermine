@@ -39,6 +39,12 @@
   },
   {
    "at": [],
+   "name": "home",
+   "id": "home",
+   "value": null
+  },
+  {
+   "at": [],
    "name": "js",
    "id": "loader-js",
    "value": {
@@ -162,6 +168,17 @@
   },
   {
    "at": [
+    "drivers"
+   ],
+   "name": "wayland",
+   "id": "drv-wayland",
+   "value": {
+    "kind": "c",
+    "name": "wayland"
+   }
+  },
+  {
+   "at": [
     "programs"
    ],
    "name": "shell",
@@ -239,6 +256,14 @@
    "name": "erminex",
    "id": "prog-erminex",
    "source": "programs/erminex.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "computer",
+   "id": "prog-computer",
+   "source": "programs/computer.js"
   },
   {
    "at": [
@@ -351,6 +376,14 @@
   },
   {
    "at": [
+    "dev"
+   ],
+   "name": "wayland",
+   "id": "dev-wayland",
+   "value": null
+  },
+  {
+   "at": [
     "dev",
     "sync"
    ],
@@ -448,12 +481,274 @@
   },
   {
    "at": [
+    "apps"
+   ],
+   "name": "computer",
+   "id": "apps-computer",
+   "value": null
+  },
+  {
+   "at": [
     "apps",
     "workspace"
    ],
    "name": "text",
    "id": "workspace-text",
    "value": "a workspace: text kept in the graph, at /apps/workspace/text.\n\ncmd-s saves it. Open any node in an editor from the graph browser (alt-g, then enter),\nor from a shell: edit /programs/status.\n"
+  },
+  {
+   "at": [
+    "home"
+   ],
+   "name": "Welcome",
+   "id": "home-welcome",
+   "value": "Welcome to your computer.\n\nThis is your home, /home. What you keep here stays on this\nmachine's card, and goes wherever you share it.\n\n  Notes      for writing things down; cmd-n makes a new note\n  Pictures   a few to start with: open one, then Set as Desktop\n  Trash      what you throw away waits here until you empty it\n\nDouble-click to open. The arrow at the top left goes up a\nfolder; the path at the bottom goes anywhere, as far as /, the\nwhole graph. Every folder here is a node, and so is every file:\na node can hold a value and other nodes at once.\n\nConnect... mounts a node someone shared with you: paste the id\ntheir share printed, give it a name, and it shows up here, live.\n\nHave a lovely day.\n"
+  },
+  {
+   "at": [
+    "home"
+   ],
+   "name": "Notes",
+   "id": "home-notes",
+   "value": null
+  },
+  {
+   "at": [
+    "home",
+    "Notes"
+   ],
+   "name": "Things to try",
+   "id": "home-notes-try",
+   "value": "Things to try\n\n- write a note and save it with cmd-s\n- make a folder for a project\n- set the gingham as your desktop\n- open / and wander about: everything on this machine is a node\n"
+  },
+  {
+   "at": [
+    "home"
+   ],
+   "name": "Pictures",
+   "id": "home-pictures",
+   "value": null
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Cherries",
+   "id": "home-pictures-cherries",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "g": 1610603,
+     "h": 7127962,
+     "k": 1841687,
+     "w": 16776694
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "................hhhhh...",
+     "..............ggg.ggg...",
+     ".............kkggg......",
+     ".............kkk........",
+     "............kk.k........",
+     "............k..k........",
+     "...........kk..k........",
+     "...........k...k........",
+     "..........kk...kk.......",
+     "..........k.....k.......",
+     ".....kkkkkk.....k.......",
+     "....kkccckk.....k.......",
+     "...kkccccckk..kkkkkk....",
+     "...kcwwcccck.kkcccckk...",
+     "...kcwccccckkkwwcccckk..",
+     "...kccccccckkcwcccccck..",
+     "...kccccccckkcccccccck..",
+     "...kkccccckkkcccccccck..",
+     "....kkccckk.kkcccccckk..",
+     ".....kkkkk...kkcccckk...",
+     "..............kkkkkk....",
+     "........................"
+    ]
+   }
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Lemon",
+   "id": "home-pictures-lemon",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "g": 1610603,
+     "h": 7127962,
+     "k": 1841687,
+     "l": 16774056,
+     "y": 16769357
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "...............k.h......",
+     "..............ghhk......",
+     ".............ghh........",
+     "............ghg.........",
+     "........kkkggkkk........",
+     "......kkyyyyyyyykk......",
+     ".....kyyyyyyyyyyyyk.....",
+     "....kyyyyyyyyyyyyyyk....",
+     "...kyyyllyyyyyyyyyyyk...",
+     "...kyyllyyyyyyyyyyyyk...",
+     "...kyyyyyyyyyyyyyyyyk...",
+     ".kkkyyyyyyyyyyyyyyyykkk.",
+     "...kyyyyyyyyyyyyyyyyk...",
+     "...kyyyyyyyyyyyyyyyyk...",
+     "....kyyyyyyyyyyyyyyk....",
+     ".....kyyyyyyyyyyyyk.....",
+     "......kkyyyyyyyykk......",
+     "........kkkkkkkk........",
+     "........................",
+     "........................",
+     "........................",
+     "........................"
+    ]
+   }
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Rabbit",
+   "id": "home-pictures-rabbit",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "P": 16730288,
+     "b": 30911
+    },
+    "rows": [
+     "................",
+     "....PP....PP....",
+     "...P.bP..P.bP...",
+     "...Pb.Pb.Pb.Pb..",
+     "...Pb.Pb.Pb.Pb..",
+     "...Pb.Pb.Pb.Pb..",
+     "....P..PP.bP.b..",
+     "...PPPPPPPPPP...",
+     "..PPPPPPPPPPPP..",
+     "..PPbPPPPPPbPPb.",
+     "..PPPPPPPPPPPPb.",
+     "..PPPPPbbPPPPPb.",
+     "...PPPPPPPPPPbb.",
+     "....PPPPPPPPbb..",
+     "...PPbbbbbbPP...",
+     "....bb......bb.."
+    ]
+   }
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Gingham",
+   "id": "home-pictures-gingham",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "p": 16644330,
+     "s": 16169160
+    },
+    "rows": [
+     "ccccssss",
+     "ccccssss",
+     "ccccssss",
+     "ccccssss",
+     "sssspppp",
+     "sssspppp",
+     "sssspppp",
+     "sssspppp"
+    ],
+    "tile": true
+   }
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Lemons",
+   "id": "home-pictures-lemons",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "d": 15985362,
+     "g": 1610603,
+     "y": 16769357
+    },
+    "rows": [
+     "dddddddddddddddd",
+     "dddddddddddddddd",
+     "ddyyygdddddddddd",
+     "dyyyyyyddddddddd",
+     "dyyyyyyddddddddd",
+     "ddyyyydddddddddd",
+     "dddddddddddddddd",
+     "dddddddddddddddd",
+     "dddddddddddddddd",
+     "dddddddddddddddd",
+     "ddddddddddyyygdd",
+     "dddddddddyyyyyyd",
+     "dddddddddyyyyyyd",
+     "ddddddddddyyyydd",
+     "dddddddddddddddd",
+     "dddddddddddddddd"
+    ],
+    "tile": true
+   }
+  },
+  {
+   "at": [
+    "home",
+    "Pictures"
+   ],
+   "name": "Polka",
+   "id": "home-pictures-polka",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "p": 16644330
+    },
+    "rows": [
+     "pppppppppppp",
+     "ppccpppppppp",
+     "pccccppppppp",
+     "pccccppppppp",
+     "ppccpppppppp",
+     "pppppppppppp",
+     "pppppppppppp",
+     "ppppppppccpp",
+     "pppppppccccp",
+     "pppppppccccp",
+     "ppppppppccpp",
+     "pppppppppppp"
+    ],
+    "tile": true
+   }
+  },
+  {
+   "at": [
+    "home"
+   ],
+   "name": "Trash",
+   "id": "home-trash",
+   "value": null
   },
   {
    "at": [
@@ -654,6 +949,17 @@
    "program": [
     "drivers",
     "web"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "wayland"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "wayland"
    ]
   },
   {
