@@ -1,9 +1,0 @@
-{"name":"an ephemeral node has one slot: holders gives it, then the slot a move put it in, then nothing once an unplacement let it go","steps":[
-{"send":{"cmd":"test-reset","stack":"graph","root":"root"}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"x","id":"e","ephemeral":true,"time":1,"site":{"file":"s.js","line":1,"column":1},"value":{}}},
-{"send":{"cmd":"holders","agent":"host","id":"e"},"expect":{"ok":{"holders":[{"node":"root","name":"x","position":0}]}}},
-{"send":{"cmd":"move","agent":"host","address":[],"name":"x","id":"e","to":[],"toname":"y","time":2,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"root","time":2,"kind":"move"}}}},
-{"send":{"cmd":"holders","agent":"host","id":"e"},"expect":{"ok":{"holders":[{"node":"root","name":"y","position":0}]}}},
-{"send":{"cmd":"unplace","agent":"host","address":[],"name":"y","id":"e","time":3,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"root","time":3,"kind":"unplace"},"gone":["e"]}}},
-{"send":{"cmd":"holders","agent":"host","id":"e"},"expect":{"ok":{"holders":[]}}}
-]}

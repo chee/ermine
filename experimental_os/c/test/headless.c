@@ -5,7 +5,22 @@
 // on the machine:
 //
 //   !key Enter [mods...]   !type text   !click x y   !move x y   !drag x0 y0 x1 y1   !post {record}
-//   !compose text   !commit text   !shot file.ppm   !wait ms
+//   !compose text   !commit text   !shot file.ppm   !wait ms   !stats label
+//
+// !stats says what the OS commanded since the last: each op's count, bytes
+// and the pixels it had the metal copy; then counts again.
+//
+// Layers mode, as the Mac's: the mode record says layers: true, and the
+// compositor sends each layer as a tile (layers); this keeps each tile's
+// pixels, place, depth and shadow, and !shot stacks them, shadows drawn as
+// a Gaussian blur of their box. HEADLESS_LAYERS=0: the frame buffer, flipped,
+// as before; HEADLESS_SHADOWS=0: tiles stacked without their shadows, to
+// compare with it pixel for pixel. HEADLESS_CURSOR logs each layers command,
+// [layers], with flips.
+//
+// The Mac menu bar's menus command is logged, [menus] n, the world menu's items and each menu's
+// title and items; a choice there is !post {"irq": 33, "event": "menu", "n": n, "world": true, "item": i}
+// (or "menu": m in place of world).
 //
 //   headless [--w W] [--h H] [--unit U] [--sd DIR] [--image DIR] [--runner FILE] [--fresh]
 
@@ -16,11 +31,14 @@
 #include "../../../core/graph/c/json.h"
 #include "../drv.h"
 
+#include <fcntl.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -33,6 +51,7 @@ static struct {
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void post(const char *format, ...) __attribute__((format(printf, 1, 2)));
+static int64_t now(void);
 
 /** windows mode: the Mac windows the OS made, as the metal keeps them */
 static bool windowsMode;
@@ -54,10 +73,166 @@ static void unsurfaceAll(void) {
 	nsurfs = 0;
 }
 
-/** the mode record the metal sends: in windows mode the main screen's size */
+/** layers mode: the tiles stacked, as the metal keeps them; pixels 0xff000000 are none (BLIT_TRANSPARENT) */
+static bool layersOn = true, stacking;
+static struct Tile {
+	char id[128];
+	int x, y, w, h;
+	double z;
+	bool painted, shadowed;
+	uint32_t *bits;
+	uint32_t color;
+	double opacity, radius, sx, sy;
+	int bx, by, bw, bh;
+} tiles[256];
+static int ntiles;
+/** web pages placed in tiles (overlay with layer): each shows as the mirror's test colour, live, in its tile, as WebKit's view would */
+static struct Page {
+	char id[128], layer[128];
+	int x, y, w, h;
+	bool visible;
+} pages[16];
+static int npages;
+
+static struct Tile *tileOf(const char *id) {
+	for (int i = 0; i < ntiles; i++) if (!strcmp(tiles[i].id, id)) return &tiles[i];
+	return NULL;
+}
+
+/** the stack emptied, as the metal empties it off the monitor (lock held) */
+static void unlayerAll(void) {
+	for (int i = 0; i < ntiles; i++) free(tiles[i].bits);
+	ntiles = 0;
+}
+
+static double number(const Json *o, const char *key, double otherwise) {
+	Json *v = jsonGet(o, key);
+	return jsonIsNumber(v) ? v->number : otherwise;
+}
+
+/** a layers command: tiles set (placed, painted) and dropped, as the metal's stack takes them; the pixels painted */
+static int64_t layers(const Json *c) {
+	int b = (int)number(c, "buffer", 0), moved = 0, painted = 0;
+	int64_t pixels = 0;
+	Json *set = jsonGet(c, "set"), *drop = jsonGet(c, "drop");
+	pthread_mutex_lock(&lock);
+	for (int i = 0; jsonIsArray(set) && i < set->array.count; i++) {
+		Json *item = set->array.items[i];
+		const char *id = jsonText(jsonGet(item, "id"));
+		if (!id) continue;
+		struct Tile *t = tileOf(id);
+		if (!t && ntiles < 256) {
+			t = &tiles[ntiles++];
+			*t = (struct Tile){ 0 };
+			snprintf(t->id, sizeof t->id, "%s", id);
+		}
+		if (!t) continue;
+		if (jsonGet(item, "x")) {
+			moved++;
+			int w = (int)number(item, "w", 0), h = (int)number(item, "h", 0);
+			if (w != t->w || h != t->h) {
+				free(t->bits);
+				t->bits = w > 0 && h > 0 ? malloc((size_t)(w * h) * 4) : NULL;
+				for (int k = 0; k < w * h; k++) t->bits[k] = 0xff000000u;
+				t->w = w, t->h = h, t->painted = false;
+			}
+			t->x = (int)number(item, "x", 0), t->y = (int)number(item, "y", 0), t->z = number(item, "z", 0);
+			Json *sh = jsonGet(item, "shadow"), *box = jsonGet(sh, "box");
+			t->shadowed = jsonIsObject(sh);
+			if (t->shadowed) {
+				t->color = (uint32_t)number(sh, "color", 0), t->opacity = number(sh, "opacity", 0), t->radius = number(sh, "radius", 0);
+				t->sx = number(sh, "x", 0), t->sy = number(sh, "y", 0);
+				t->bx = (int)number(box, "x", 0), t->by = (int)number(box, "y", 0), t->bw = (int)number(box, "w", t->w), t->bh = (int)number(box, "h", t->h);
+			}
+		}
+		Json *p = jsonGet(item, "paint");
+		if (p) {
+			int sx = (int)number(p, "sx", 0), sy = (int)number(p, "sy", 0), x = (int)number(p, "x", 0), y = (int)number(p, "y", 0), w = (int)number(p, "w", 0), h = (int)number(p, "h", 0);
+			bool ok = t->bits && b >= 0 && b < 2 && x >= 0 && y >= 0 && x + w <= t->w && y + h <= t->h && sx >= 0 && sy >= 0 && sx + w <= W && sy + h <= H;
+			if (!ok) fprintf(stderr, "[layers] %s: paint %dx%d at %d,%d from %d,%d OUT OF RANGE\n", id, w, h, x, y, sx, sy);
+			else {
+				for (int row = 0; row < h; row++) memcpy(t->bits + (size_t)(y + row) * (size_t)t->w + x, buffers[b] + (size_t)(sy + row) * (size_t)W + sx, (size_t)w * 4);
+				t->painted = true;
+				painted++;
+				pixels += (int64_t)w * h;
+			}
+		}
+	}
+	for (int i = 0; jsonIsArray(drop) && i < drop->array.count; i++) {
+		struct Tile *t = tileOf(jsonText(drop->array.items[i]) ? jsonText(drop->array.items[i]) : "");
+		if (!t) continue;
+		free(t->bits);
+		*t = tiles[--ntiles];
+	}
+	pthread_mutex_unlock(&lock);
+	if (getenv("HEADLESS_CURSOR"))
+		fprintf(stderr, "[layers] %lld set %d (moved %d, painted %d: %lld pixels), dropped %d\n", (long long)now(), jsonIsArray(set) ? set->array.count : 0, moved, painted, (long long)pixels,
+		        jsonIsArray(drop) ? drop->array.count : 0);
+	return pixels;
+}
+
+static int byZ(const void *a, const void *b) {
+	const struct Tile *ta = *(struct Tile *const *)a, *tb = *(struct Tile *const *)b;
+	return ta->z < tb->z ? -1 : ta->z > tb->z ? 1 : (ta < tb ? -1 : ta > tb);
+}
+
+/** a Gaussian's share of [a, b], sigma s: how much of a blurred edge covers a point */
+static double within(double a, double b, double s) {
+	return s <= 0 ? (a <= 0 && b > 0) : 0.5 * (erf(b / (s * sqrt(2))) - erf(a / (s * sqrt(2))));
+}
+
+/** the tiles stacked, as the metal's GPU shows them: each one's shadow (its box blurred, as Core Animation's shadowRadius), then its pixels (lock held) */
+static void stack(uint32_t *out) {
+	for (int i = 0; i < W * H; i++) out[i] = 0;
+	struct Tile *order[256];
+	for (int i = 0; i < ntiles; i++) order[i] = &tiles[i];
+	qsort(order, (size_t)ntiles, sizeof *order, byZ);
+	const char *e = getenv("HEADLESS_SHADOWS");
+	bool shadows = !e || strcmp(e, "0");
+	for (int i = 0; i < ntiles; i++) {
+		struct Tile *t = order[i];
+		if (!t->painted) continue;
+		if (shadows && t->shadowed && t->opacity > 0) {
+			double s = t->radius / 2, x0 = t->x + t->bx + t->sx, y0 = t->y + t->by + t->sy;
+			int reach = (int)ceil(3 * s) + 1;
+			for (int y = (int)floor(y0) - reach; y < y0 + t->bh + reach; y++) {
+				if (y < 0 || y >= H) continue;
+				double fy = within(y0 - (y + 0.5), y0 + t->bh - (y + 0.5), s);
+				for (int x = (int)floor(x0) - reach; x < x0 + t->bw + reach; x++) {
+					if (x < 0 || x >= W) continue;
+					double a = t->opacity * fy * within(x0 - (x + 0.5), x0 + t->bw - (x + 0.5), s);
+					uint32_t p = out[y * W + x];
+					int r = (int)(((p >> 16) & 255) * (1 - a) + ((t->color >> 16) & 255) * a + 0.5), g = (int)(((p >> 8) & 255) * (1 - a) + ((t->color >> 8) & 255) * a + 0.5),
+					    bl = (int)((p & 255) * (1 - a) + (t->color & 255) * a + 0.5);
+					out[y * W + x] = (uint32_t)(r << 16 | g << 8 | bl);
+				}
+			}
+		}
+		for (int y = 0; y < t->h; y++) {
+			if (t->y + y < 0 || t->y + y >= H) continue;
+			for (int x = 0; x < t->w; x++) {
+				uint32_t p = t->bits[y * t->w + x];
+				if (p != 0xff000000u && t->x + x >= 0 && t->x + x < W) out[(t->y + y) * W + t->x + x] = p;
+			}
+		}
+		for (int k = 0; k < npages; k++) {
+			struct Page *pg = &pages[k];
+			if (!pg->visible || strcmp(pg->layer, t->id)) continue;
+			for (int y = pg->y; y < pg->y + pg->h && y < t->h; y++)
+				for (int x = pg->x; x < pg->x + pg->w && x < t->w; x++)
+					if (y >= 0 && x >= 0 && t->y + y >= 0 && t->y + y < H && t->x + x >= 0 && t->x + x < W) out[(t->y + y) * W + t->x + x] = 0x3366cc;
+		}
+	}
+}
+
+/** the mode record the metal sends: in windows mode the main screen's size; on the monitor, layers when it stacks them */
 static void sendMode(void) {
-	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s}", W, H, 1.0 / U, U,
-	     windowsMode ? "true" : "false");
+	pthread_mutex_lock(&lock);
+	stacking = layersOn && !windowsMode;
+	if (!stacking) unlayerAll();
+	pthread_mutex_unlock(&lock);
+	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s, \"layers\": %s}", W, H, 1.0 / U, U,
+	     windowsMode ? "true" : "false", stacking ? "true" : "false");
 }
 
 /** the page being mirrored, as the Mac's webmirror copies it fps times a second */
@@ -154,19 +329,103 @@ static char *page(double size, bool bold, int n) {
 	return jsonPrint(r);
 }
 
+/** what the OS has commanded since the last !stats: commands by op, their bytes, and the pixels they had copied */
+static struct {
+	char op[32][16];
+	int64_t n[32], bytes[32], pixels[32];
+	int ops;
+} stats;
+
+static void count(const char *op, size_t bytes, int64_t pixels) {
+	pthread_mutex_lock(&lock);
+	int i = 0;
+	while (i < stats.ops && strcmp(stats.op[i], op)) i++;
+	if (i == stats.ops && stats.ops < 32) snprintf(stats.op[stats.ops++], sizeof stats.op[0], "%s", op);
+	if (i < 32) stats.n[i]++, stats.bytes[i] += (int64_t)bytes, stats.pixels[i] += pixels;
+	pthread_mutex_unlock(&lock);
+}
+
+/** !stats label: what was counted, then counting again */
+static void report(const char *label) {
+	pthread_mutex_lock(&lock);
+	int64_t n = 0, bytes = 0, pixels = 0;
+	for (int i = 0; i < stats.ops; i++) {
+		fprintf(stderr, "[stats] %s %s: %lld, %lld bytes, %lld pixels\n", label, stats.op[i], (long long)stats.n[i], (long long)stats.bytes[i], (long long)stats.pixels[i]);
+		n += stats.n[i], bytes += stats.bytes[i], pixels += stats.pixels[i];
+	}
+	fprintf(stderr, "[stats] %s all: %lld commands, %lld bytes, %lld pixels copied\n", label, (long long)n, (long long)bytes, (long long)pixels);
+	memset(&stats, 0, sizeof stats);
+	pthread_mutex_unlock(&lock);
+}
+
+static int64_t area(const Json *r) {
+	return r ? (int64_t)(jsonGet(r, "w") ? jsonGet(r, "w")->number : 0) * (int64_t)(jsonGet(r, "h") ? jsonGet(r, "h")->number : 0) : 0;
+}
+
 /** what the OS commands the hardware */
 static void command(void *data, const char *json) {
 	(void)data;
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
 	const char *op = jsonText(jsonGet(c, "op"));
-	// HEADLESS_CURSOR: every cursor command (a shape: the metal moves the plane) and flip (with the size of what changed), with when it came
+	if (op && !strcmp(op, "overlay") && jsonText(jsonGet(c, "layer"))) {
+		// a page in a tile: where, to stack it there
+		const char *id = jsonText(jsonGet(c, "id"));
+		pthread_mutex_lock(&lock);
+		int k = 0;
+		while (k < npages && strcmp(pages[k].id, id ? id : "")) k++;
+		if (k < 16) {
+			if (k == npages) npages++;
+			struct Page *pg = &pages[k];
+			snprintf(pg->id, sizeof pg->id, "%s", id ? id : "");
+			snprintf(pg->layer, sizeof pg->layer, "%s", jsonText(jsonGet(c, "layer")));
+			pg->x = (int)number(c, "x", 0), pg->y = (int)number(c, "y", 0), pg->w = (int)number(c, "w", 0), pg->h = (int)number(c, "h", 0);
+			Json *v = jsonGet(c, "visible");
+			pg->visible = !v || v->type != JSON_BOOLEAN || v->boolean;
+		}
+		pthread_mutex_unlock(&lock);
+	}
+	if (op && !strcmp(op, "overlay") && !jsonText(jsonGet(c, "layer"))) {
+		// out of a tile (hidden, or placed over the frame buffer)
+		const char *id = jsonText(jsonGet(c, "id"));
+		pthread_mutex_lock(&lock);
+		for (int k = 0; k < npages; k++)
+			if (!strcmp(pages[k].id, id ? id : "")) pages[k] = pages[--npages];
+		pthread_mutex_unlock(&lock);
+	}
+	if (op && !strcmp(op, "layers")) {
+		if (getenv("HEADLESS_LAYERSLOG")) fprintf(stderr, "[metal] %.400s\n", json);
+		count(op, strlen(json), layers(c));
+		return;
+	}
+	if (op) count(op, strlen(json), !strcmp(op, "flip") || !strcmp(op, "present") ? area(jsonGet(c, "dirty")) : 0);
+	// HEADLESS_CURSOR: every cursor command (a shape: the metal moves the plane) and flip (the size of what changed, the buffer), with when it came
 	if (op && !strcmp(op, "cursor") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[cursor] %lld %g %g\n", (long long)now(), jsonGet(c, "x") ? jsonGet(c, "x")->number : -1, jsonGet(c, "y") ? jsonGet(c, "y")->number : -1);
 	if (op && !strcmp(op, "flip") && getenv("HEADLESS_CURSOR")) {
 		Json *d = jsonGet(c, "dirty");
-		fprintf(stderr, "[flip] %lld %gx%g\n", (long long)now(), jsonGet(d, "w") ? jsonGet(d, "w")->number : -1, jsonGet(d, "h") ? jsonGet(d, "h")->number : -1);
+		fprintf(stderr, "[flip] %lld %gx%g %g\n", (long long)now(), jsonGet(d, "w") ? jsonGet(d, "w")->number : -1, jsonGet(d, "h") ? jsonGet(d, "h")->number : -1, jsonGet(c, "buffer")->number);
 	}
 	if (!op) return;
+	if (!strcmp(op, "capture")) {
+		// a Mac window captured: its plane file mapped, half 0 a test colour, the view live and its first frame, as ScreenCaptureKit's would give
+		const char *path = jsonText(jsonGet(c, "path")), *view = jsonText(jsonGet(c, "view"));
+		int64_t mw = (int64_t)(jsonGet(c, "maxw") ? jsonGet(c, "maxw")->number : 0), mh = (int64_t)(jsonGet(c, "maxh") ? jsonGet(c, "maxh")->number : 0);
+		fprintf(stderr, "[metal] %.120s\n", json);
+		int fd = path ? open(path, O_RDWR) : -1;
+		size_t bytes = (size_t)(mw * mh * 4 * 2);
+		uint32_t *bits = fd >= 0 && bytes ? mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) : MAP_FAILED;
+		if (fd >= 0) close(fd);
+		if (bits == MAP_FAILED || !view || mw < 320 || mh < 200) {
+			fprintf(stderr, "[capture] no plane %s\n", path ? path : "?");
+			return;
+		}
+		for (int y = 0; y < 200; y++)
+			for (int x = 0; x < 320; x++) bits[y * mw + x] = 0x00cc6633;
+		munmap(bits, bytes);
+		post("{\"irq\": 51, \"event\": \"view\", \"view\": \"%s\", \"state\": \"live\"}", view);
+		post("{\"irq\": 51, \"event\": \"frame\", \"view\": \"%s\", \"n\": 1, \"half\": 0, \"w\": 320, \"h\": 200}", view);
+		return;
+	}
 	if (!strcmp(op, "webmirror")) {
 		// a page's pixels copied to its plane: here a colour, and a frame record, as WebKit's copy would give
 		int64_t slot = (int64_t)(jsonGet(c, "slot") ? jsonGet(c, "slot")->number : -1), fps = (int64_t)(jsonGet(c, "fps") ? jsonGet(c, "fps")->number : 0);
@@ -191,7 +450,7 @@ static void command(void *data, const char *json) {
 		windowsMode = want;
 		if (!want) unsurfaceAll();
 		pthread_mutex_unlock(&lock);
-		sendMode();
+		sendMode(); // the stack emptied going to windows, and started again coming back
 		return;
 	}
 	if (!strcmp(op, "surface")) {
@@ -288,6 +547,20 @@ static void command(void *data, const char *json) {
 		char *p = page(size, b, n);
 		post("{\"irq\": 50, \"font\": \"%s\", \"size\": %g, \"bold\": %s, \"synthetic\": false, \"page\": %d, %s", font ? font : "", size, b ? "true" : "false", n, p + 1);
 		free(p);
+	} else if (!strcmp(op, "menus")) {
+		// what the Mac's menu bar would show after its own menus
+		Json *world = jsonGet(c, "world"), *menus = jsonGet(c, "menus");
+		fprintf(stderr, "[menus] %g world", jsonGet(c, "n") ? jsonGet(c, "n")->number : -1);
+		for (int i = 0; jsonIsArray(world) && i < world->array.count; i++)
+			fprintf(stderr, " | %s%s%s", jsonText(jsonGet(world->array.items[i], "label")) ? jsonText(jsonGet(world->array.items[i], "label")) : "-",
+			        jsonText(jsonGet(world->array.items[i], "key")) ? " " : "", jsonText(jsonGet(world->array.items[i], "key")) ? jsonText(jsonGet(world->array.items[i], "key")) : "");
+		for (int i = 0; jsonIsArray(menus) && i < menus->array.count; i++) {
+			Json *m = menus->array.items[i], *items = jsonGet(m, "items");
+			fprintf(stderr, " ;; %s:", jsonText(jsonGet(m, "title")) ? jsonText(jsonGet(m, "title")) : "?");
+			for (int k = 0; jsonIsArray(items) && k < items->array.count; k++)
+				fprintf(stderr, " | %s", jsonText(jsonGet(items->array.items[k], "label")) ? jsonText(jsonGet(items->array.items[k], "label")) : "-");
+		}
+		fprintf(stderr, "\n");
 	} else if (!strcmp(op, "quit")) {
 		post("{\"irq\": 1, \"why\": \"os\"}");
 	} else if (!strcmp(op, "cursor") && jsonGet(c, "shape")) {
@@ -324,18 +597,25 @@ static void shot(const char *path) {
 		shotSurface(file, id + 1);
 		return;
 	}
-	pthread_mutex_lock(&lock);
-	int b = shown.buffer, w = shown.w ? shown.w : W, h = shown.h ? shown.h : H;
-	pthread_mutex_unlock(&lock);
 	FILE *f = fopen(path, "wb");
 	if (!f) return;
+	// held while it is read: the next flip waits, and so the compose after it, which draws into this buffer
+	pthread_mutex_lock(&lock);
+	uint32_t *stacked = NULL;
+	if (stacking) {
+		stacked = malloc((size_t)(W * H) * 4);
+		stack(stacked);
+	}
+	int b = shown.buffer, w = stacked ? W : shown.w ? shown.w : W, h = stacked ? H : shown.h ? shown.h : H;
 	fprintf(f, "P6 %d %d 255\n", w, h);
 	for (int y = 0; y < h; y++)
 		for (int x = 0; x < w; x++) {
-			uint32_t p = buffers[b][y * W + x];
+			uint32_t p = stacked ? stacked[y * W + x] : buffers[b][y * W + x];
 			unsigned char rgb[3] = { (unsigned char)(p >> 16), (unsigned char)(p >> 8), (unsigned char)p };
 			fwrite(rgb, 1, 3, f);
 		}
+	pthread_mutex_unlock(&lock);
+	free(stacked);
 	fclose(f);
 }
 
@@ -396,11 +676,14 @@ int main(int argc, char **argv) {
 	    " \"font\": %s,"
 	    " \"devices\": [{\"name\": \"display\", \"irq\": 33}, {\"name\": \"keyboard\", \"irq\": 34}, {\"name\": \"pointer\", \"irq\": 35}, {\"name\": \"uart0\", \"irq\": 36},"
 	    " {\"name\": \"power\", \"irq\": 40}, {\"name\": \"thermal\", \"irq\": 41}, {\"name\": \"usb\", \"irq\": 44}, {\"name\": \"clipboard\", \"irq\": 46},"
-	    " {\"name\": \"font\", \"irq\": 50, \"families\": [\"blocks\"]}, {\"name\": \"web\", \"irq\": 49, \"engine\": \"none\"}, {\"name\": \"speech\"}]}",
+	    " {\"name\": \"font\", \"irq\": 50, \"families\": [\"blocks\"]}, {\"name\": \"web\", \"irq\": 49, \"engine\": \"none\"},"
+	    " {\"name\": \"mac\", \"irq\": 51, \"ax\": false, \"capture\": false}, {\"name\": \"speech\"}]}",
 	    getenv("USER") ? getenv("USER") : "person", W, H, W, H, 1.0 / U, U, font);
 	ErmosConfig config = { .dt = dt, .buffers = { buffers[0], buffers[1] }, .planes = planes, .nplanes = 2, .sd = sd, .image = image, .runner = runner, .fresh = fresh, .command = command };
+	const char *lo = getenv("HEADLESS_LAYERS");
+	layersOn = !lo || strcmp(lo, "0");
 	ermosStart(&config);
-	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false}", W, H, 1.0 / U, U);
+	sendMode();
 	post("{\"irq\": 40, \"ac\": true, \"battery\": true, \"percent\": 100, \"charging\": false, \"minutes\": null}");
 	post("{\"irq\": 41, \"state\": \"nominal\", \"lowPower\": false}");
 	char line[4096];
@@ -418,6 +701,7 @@ int main(int argc, char **argv) {
 		else rest = "";
 		if (!strcmp(word, "wait")) usleep((useconds_t)atoi(rest) * 1000);
 		else if (!strcmp(word, "shot")) shot(rest);
+		else if (!strcmp(word, "stats")) report(rest);
 		else if (!strcmp(word, "type")) {
 			for (char *c = rest; *c; c++) {
 				char k[2] = { *c, 0 };
@@ -447,11 +731,18 @@ int main(int argc, char **argv) {
 			// a mode record switches windows mode here, as the metal's own would
 			Json *r = jsonParse(rest, strlen(rest), NULL);
 			const char *e = jsonText(jsonGet(r, "event"));
-			Json *on = jsonGet(r, "windows");
+			Json *on = jsonGet(r, "windows"), *ls = jsonGet(r, "layers");
 			if (e && !strcmp(e, "mode") && on && on->type == JSON_BOOLEAN) {
 				pthread_mutex_lock(&lock);
 				windowsMode = on->boolean;
 				if (!windowsMode) unsurfaceAll();
+				pthread_mutex_unlock(&lock);
+			}
+			if (e && !strcmp(e, "mode")) {
+				// stacking as the record says, as the OS takes it
+				pthread_mutex_lock(&lock);
+				stacking = !windowsMode && ls && ls->type == JSON_BOOLEAN && ls->boolean;
+				if (!stacking) unlayerAll();
 				pthread_mutex_unlock(&lock);
 			}
 			post("%s", rest);

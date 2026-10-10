@@ -8,7 +8,7 @@
 jsc_libs="-framework JavaScriptCore"
 jsc_js="$repo/experimental_os/deno/jsc.js"
 if command -v deno > /dev/null 2>&1; then
-  for f in "$repo/experimental_os/deno/jsc.ts" "$repo/experimental_os/deno/tools.ts" "$repo/experimental_os/typescript/blitter.ts"; do
+  for f in "$repo/experimental_os/deno/jsc.ts" "$repo/experimental_os/deno/tools.ts" "$repo/experimental_os/deno/readline.ts" "$repo/experimental_os/typescript/blitter.ts"; do
     if [ ! -f "$jsc_js" ] || [ "$f" -nt "$jsc_js" ]; then
       if {
         echo "// jsc.js: made from jsc.ts by c/jsc.sh (deno bundle); not edited by hand."

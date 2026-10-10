@@ -201,6 +201,17 @@
   },
   {
    "at": [
+    "drivers"
+   ],
+   "name": "mac",
+   "id": "drv-mac",
+   "value": {
+    "kind": "c",
+    "name": "mac"
+   }
+  },
+  {
+   "at": [
     "programs"
    ],
    "name": "cursor",
@@ -326,6 +337,86 @@
   },
   {
    "at": [
+    "programs"
+   ],
+   "name": "macview",
+   "id": "prog-macview",
+   "source": "programs/macview.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "macapps",
+   "id": "prog-macapps",
+   "source": "programs/macapps.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "keys",
+   "id": "prog-keys",
+   "source": "programs/keys.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "window",
+   "id": "prog-window",
+   "source": "programs/window.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "view",
+   "id": "prog-view",
+   "source": "programs/view.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "select",
+   "id": "prog-select",
+   "source": "programs/select.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "layout",
+   "id": "prog-layout",
+   "source": "programs/layout.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "power",
+   "id": "prog-power",
+   "source": "programs/power.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "windows",
+   "id": "prog-windows",
+   "source": "programs/windows.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "inspect",
+   "id": "prog-inspect",
+   "source": "programs/inspect.js"
+  },
+  {
+   "at": [
     "dev"
    ],
    "name": "display",
@@ -446,6 +537,14 @@
   },
   {
    "at": [
+    "dev"
+   ],
+   "name": "mac",
+   "id": "dev-mac",
+   "value": null
+  },
+  {
+   "at": [
     "dev",
     "sync"
    ],
@@ -553,6 +652,22 @@
    "at": [
     "apps"
    ],
+   "name": "macapps",
+   "id": "apps-macapps",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "macview",
+   "id": "apps-macview",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
    "name": "cursor",
    "id": "apps-cursor",
    "value": null
@@ -572,6 +687,87 @@
    "name": "paint",
    "id": "apps-paint",
    "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "shell",
+   "id": "apps-shell",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "keys",
+   "id": "apps-keys",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "window",
+   "id": "apps-window",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "view",
+   "id": "apps-view",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "select",
+   "id": "apps-select",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "layout",
+   "id": "apps-layout",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "power",
+   "id": "apps-power",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "windows",
+   "id": "apps-windows",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "inspect",
+   "id": "apps-inspect",
+   "value": null
+  },
+  {
+   "at": [
+    "apps",
+    "shell"
+   ],
+   "name": "history",
+   "id": "shell-history",
+   "value": []
   },
   {
    "at": [
@@ -874,6 +1070,23 @@
    "at": [
     "etc"
    ],
+   "name": "mac",
+   "id": "etc-mac",
+   "value": {
+    "on": true,
+    "depth": 24,
+    "app": 4000,
+    "total": 40000,
+    "rows": 200,
+    "text": 4096,
+    "hz": 10,
+    "skip": []
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
    "name": "theme",
    "id": "etc-theme",
    "value": {
@@ -901,6 +1114,13 @@
     "teal": 1015695,
     "risoPink": 16730288,
     "risoBlue": 30911,
+    "shadow": {
+     "color": 0,
+     "opacity": 0.28,
+     "radius": 10,
+     "x": 0,
+     "y": 4
+    },
     "fonts": {
      "text": {
       "name": "Geneva",
@@ -935,6 +1155,122 @@
    "value": {
     "server": "wss://galaxy.observer"
    }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "keys",
+   "id": "etc-keys",
+   "value": {
+    "A-return": "term",
+    "A-b": "browser",
+    "A-g": "graph",
+    "A-f": "computer",
+    "A-e": "edit apps/workspace/text",
+    "A-p": "menu",
+    "A-S-c": "window close",
+    "M-w": "window close",
+    "A-m": "window minimize",
+    "M-m": "window minimize",
+    "A-S-m": "window restore",
+    "A-tab": "select next",
+    "A-S-tab": "select prev",
+    "A-j": "select down",
+    "A-k": "select up",
+    "A-h": "select left",
+    "A-l": "select right",
+    "A-t": "layout toggle",
+    "A-d": "window mode default",
+    "A-s": "window mode stack",
+    "A-x": "window mode max",
+    "A-S-h": "window send left",
+    "A-S-j": "window send down",
+    "A-S-k": "window send up",
+    "A-S-l": "window send right",
+    "A-1": "view 1",
+    "A-S-1": "window tag 1",
+    "A-2": "view 2",
+    "A-S-2": "window tag 2",
+    "A-3": "view 3",
+    "A-S-3": "window tag 3",
+    "A-4": "view 4",
+    "A-S-4": "window tag 4",
+    "A-5": "view 5",
+    "A-S-5": "window tag 5",
+    "A-6": "view 6",
+    "A-S-6": "window tag 6",
+    "A-7": "view 7",
+    "A-S-7": "window tag 7",
+    "A-8": "view 8",
+    "A-S-8": "window tag 8",
+    "A-9": "view 9",
+    "A-S-9": "window tag 9",
+    "M-i": "inspect"
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "menu",
+   "id": "etc-menu",
+   "value": [
+    {
+     "label": "My Computer",
+     "run": "computer"
+    },
+    {
+     "label": "a shell",
+     "run": "term"
+    },
+    {
+     "label": "a browser",
+     "run": "browser"
+    },
+    {
+     "label": "the graph",
+     "run": "graph"
+    },
+    {
+     "label": "a workspace",
+     "run": "edit apps/workspace/text"
+    },
+    {
+     "label": "Keys",
+     "run": "keys"
+    },
+    {
+     "label": "Inspect the window",
+     "run": "inspect"
+    },
+    {
+     "label": "the window manager's policy",
+     "run": "edit programs/wmiirc"
+    },
+    {
+     "label": "the cursor, in Paint",
+     "run": "paint etc/cursors/arrow"
+    },
+    {
+     "label": "the cat clock",
+     "run": "catclock"
+    },
+    {
+     "label": "a plasma, in video memory",
+     "run": "plasma"
+    },
+    {
+     "label": "Mac windows",
+     "run": "windows",
+     "key": "M-C-w"
+    },
+    "-",
+    {
+     "label": "power off",
+     "run": "power off"
+    }
+   ]
   },
   {
    "at": [
@@ -1150,6 +1486,17 @@
    "program": [
     "drivers",
     "pty"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "mac"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "mac"
    ]
   },
   {

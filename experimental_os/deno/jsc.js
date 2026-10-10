@@ -1,5 +1,11 @@
 // jsc.js: made from jsc.ts by c/jsc.sh (deno bundle); not edited by hand.
 (() => {
+  var __defProp = Object.defineProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
   // experimental_os/typescript/blitter.ts
   var TRANSPARENT = 4278190080;
   var recording = (f) => "ops" in f;
@@ -734,6 +740,369 @@
     while (y++ < b) plot(0, y);
   }
 
+  // experimental_os/deno/readline.ts
+  var readline_exports = {};
+  __export(readline_exports, {
+    chord: () => chord,
+    insert: () => insert,
+    key: () => key,
+    keyName: () => keyName,
+    normal: () => normal,
+    selection: () => selection,
+    type: () => type
+  });
+  var NAMES = {
+    Enter: "return",
+    Tab: "tab",
+    Space: "space",
+    " ": "space",
+    Backspace: "backspace",
+    Escape: "escape",
+    Delete: "delete",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    ArrowUp: "up",
+    ArrowDown: "down",
+    Home: "home",
+    End: "end",
+    PageUp: "pageup",
+    PageDown: "pagedown",
+    ".": "period",
+    ",": "comma",
+    "-": "minus",
+    "=": "equal",
+    "/": "slash",
+    "\\": "backslash",
+    ";": "semicolon",
+    "'": "quote",
+    "`": "grave",
+    "[": "bracketleft",
+    "]": "bracketright"
+  };
+  var MODS = [
+    [
+      "cmd",
+      "M"
+    ],
+    [
+      "ctrl",
+      "C"
+    ],
+    [
+      "alt",
+      "A"
+    ],
+    [
+      "shift",
+      "S"
+    ]
+  ];
+  function keyName(key2) {
+    return NAMES[key2] ?? (key2.length === 1 ? key2.toLowerCase() : key2.toLowerCase());
+  }
+  function chord(r) {
+    const mods = MODS.filter(([m]) => r.mods?.includes(m)).map(([, c]) => c);
+    return [
+      ...mods,
+      keyName(String(r.key ?? ""))
+    ].join("-");
+  }
+  function normal(text) {
+    const parts = String(text).trim().split("-");
+    let key2 = parts.pop() ?? "";
+    if (key2 === "" && parts.length && parts.at(-1) === "") {
+      parts.pop();
+      key2 = "-";
+    }
+    const mods = new Set(parts.map((p) => p.toUpperCase()));
+    return [
+      ...MODS.map(([, c]) => c).filter((c) => mods.has(c)),
+      keyName(key2)
+    ].join("-");
+  }
+  var isWord = (c) => /[\w]/.test(c ?? "");
+  var wordBack = (t, i) => {
+    while (i > 0 && !isWord(t[i - 1])) i--;
+    while (i > 0 && isWord(t[i - 1])) i--;
+    return i;
+  };
+  var wordOn = (t, i) => {
+    while (i < t.length && !isWord(t[i])) i++;
+    while (i < t.length && isWord(t[i])) i++;
+    return i;
+  };
+  var lineStart = (t, i) => t.lastIndexOf("\n", i - 1) + 1;
+  var lineEnd = (t, i) => {
+    const e = t.indexOf("\n", i);
+    return e < 0 ? t.length : e;
+  };
+  function whole2(f) {
+    const text = String(f.text ?? "");
+    return {
+      text,
+      pos: Math.max(0, Math.min(text.length, f.pos ?? text.length)),
+      mark: f.mark ?? null,
+      ring: [
+        ...f.ring ?? []
+      ],
+      undo: [
+        ...f.undo ?? []
+      ],
+      yank: f.yank ?? null,
+      last: "",
+      goal: f.goal ?? null
+    };
+  }
+  function change(f, text, pos) {
+    const top = f.undo.at(-1);
+    if (text !== f.text && (!top || top.text !== f.text)) f.undo.push({
+      text: f.text,
+      pos: f.pos
+    });
+    if (f.undo.length > 200) f.undo.shift();
+    f.text = text;
+    f.pos = Math.max(0, Math.min(text.length, pos));
+    f.mark = null;
+    return f;
+  }
+  function kill(f, a, b, was) {
+    if (a === b) return f;
+    const text = f.text.slice(a, b);
+    if (was === "kill" && f.ring.length) f.ring[f.ring.length - 1] = a < f.pos ? text + f.ring.at(-1) : f.ring.at(-1) + text;
+    else f.ring.push(text);
+    if (f.ring.length > 60) f.ring.shift();
+    f.last = "kill";
+    return change(f, f.text.slice(0, a) + f.text.slice(b), a);
+  }
+  function selection(f) {
+    if (f.mark === null || f.mark === void 0 || f.mark === f.pos) return null;
+    return f.mark < f.pos ? [
+      f.mark,
+      f.pos
+    ] : [
+      f.pos,
+      f.mark
+    ];
+  }
+  function insert(field, text) {
+    const f = whole2(field);
+    const sel = selection(f);
+    const [a, b] = sel ?? [
+      f.pos,
+      f.pos
+    ];
+    f.goal = null;
+    return change(f, f.text.slice(0, a) + text + f.text.slice(b), a + text.length);
+  }
+  function key(field, k, o = {}) {
+    const f = whole2(field);
+    const was = field.last ?? "";
+    const t = f.text, p = f.pos;
+    let c = normal(k);
+    const shifted = /(^|-)S-/.test(c);
+    const bare = c.replace(/(^|-)S-/, "$1");
+    const MOVES = [
+      "left",
+      "right",
+      "up",
+      "down",
+      "home",
+      "end",
+      "A-left",
+      "A-right",
+      "C-left",
+      "C-right",
+      "M-left",
+      "M-right",
+      "M-up",
+      "M-down",
+      "C-a",
+      "C-e",
+      "C-b",
+      "C-f",
+      "A-b",
+      "A-f",
+      "C-p",
+      "C-n"
+    ];
+    if (shifted && MOVES.includes(bare)) c = bare;
+    const move = (to, vertical2 = false) => {
+      if (shifted && o.select) f.mark = f.mark ?? p;
+      else f.mark = null;
+      if (!vertical2) f.goal = null;
+      f.pos = Math.max(0, Math.min(t.length, to));
+      return f;
+    };
+    const vertical = (dir) => {
+      if (!o.lines) return null;
+      const s = lineStart(t, p), col = f.goal ?? p - s;
+      f.goal = col;
+      if (dir < 0) {
+        if (s === 0) return move(0, true);
+        const ps = lineStart(t, s - 1);
+        return move(Math.min(ps + col, s - 1), true);
+      }
+      const e = lineEnd(t, p);
+      if (e >= t.length) return move(t.length, true);
+      return move(Math.min(e + 1 + col, lineEnd(t, e + 1)), true);
+    };
+    const sel = selection(f);
+    if (sel && o.select && [
+      "backspace",
+      "delete",
+      "C-d",
+      "C-h"
+    ].includes(c)) return change(f, t.slice(0, sel[0]) + t.slice(sel[1]), sel[0]);
+    switch (c) {
+      case "C-a":
+      case "home":
+      case "M-left":
+        return move(o.lines ? lineStart(t, p) : 0);
+      case "C-e":
+      case "end":
+      case "M-right":
+        return move(o.lines ? lineEnd(t, p) : t.length);
+      case "C-b":
+      case "left":
+        return move(sel && !shifted && o.select ? sel[0] : p - 1);
+      case "C-f":
+      case "right":
+        return move(sel && !shifted && o.select ? sel[1] : p + 1);
+      case "A-b":
+      case "A-left":
+      case "C-left":
+        return move(wordBack(t, p));
+      case "A-f":
+      case "A-right":
+      case "C-right":
+        return move(wordOn(t, p));
+      case "C-p":
+      case "up":
+        return vertical(-1);
+      case "C-n":
+      case "down":
+        return vertical(1);
+      case "M-up":
+        return move(0);
+      case "M-down":
+        return move(t.length);
+      case "backspace":
+      case "C-h":
+        return p > 0 ? change(f, t.slice(0, p - 1) + t.slice(p), p - 1) : f;
+      case "delete":
+      case "C-d":
+        return p < t.length ? change(f, t.slice(0, p) + t.slice(p + 1), p) : f;
+      case "A-d":
+        return kill(f, p, wordOn(t, p), was);
+      case "A-backspace":
+        return kill(f, wordBack(t, p), p, was);
+      case "C-w": {
+        let i = p;
+        while (i > 0 && t[i - 1] === " ") i--;
+        while (i > 0 && t[i - 1] !== " " && !(o.lines && t[i - 1] === "\n")) i--;
+        return kill(f, i, p, was);
+      }
+      case "C-k": {
+        const e = o.lines ? lineEnd(t, p) : t.length;
+        return kill(f, p, e === p && e < t.length ? e + 1 : e, was);
+      }
+      case "C-u":
+      case "M-backspace":
+        return kill(f, o.lines ? lineStart(t, p) : 0, p, was);
+      case "C-y": {
+        if (!f.ring.length) return f;
+        const text = f.ring.at(-1);
+        const out = change(f, t.slice(0, p) + text + t.slice(p), p + text.length);
+        out.yank = {
+          i: f.ring.length - 1,
+          at: p,
+          length: text.length
+        };
+        out.last = "yank";
+        return out;
+      }
+      case "A-y": {
+        if (!f.ring.length || was !== "yank" || !f.yank) return f;
+        const i = (f.yank.i - 1 + f.ring.length) % f.ring.length, text = f.ring[i], at = f.yank.at;
+        const out = change(f, t.slice(0, at) + text + t.slice(at + f.yank.length), at + text.length);
+        out.yank = {
+          i,
+          at,
+          length: text.length
+        };
+        out.last = "yank";
+        return out;
+      }
+      case "C-t": {
+        if (t.length < 2 || p === 0) return f;
+        const q = p === t.length ? p - 1 : p;
+        return change(f, t.slice(0, q - 1) + t[q] + t[q - 1] + t.slice(q + 1), q + 1);
+      }
+      case "A-t": {
+        let e2 = wordOn(t, p);
+        if (e2 === p) e2 = wordBack(t, t.length) === t.length ? t.length : wordOn(t, wordBack(t, t.length));
+        const s2 = wordBack(t, e2), s1 = wordBack(t, s2), e1 = wordOn(t, s1);
+        if (s1 === s2 || e1 > s2) return f;
+        return change(f, t.slice(0, s1) + t.slice(s2, e2) + t.slice(e1, s2) + t.slice(s1, e1) + t.slice(e2), e2);
+      }
+      case "A-u":
+      case "A-l":
+      case "A-c": {
+        let a = p;
+        while (a < t.length && !isWord(t[a])) a++;
+        const b = wordOn(t, a);
+        if (a === b) return f;
+        const w = t.slice(a, b);
+        const to = c === "A-u" ? w.toUpperCase() : c === "A-l" ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase();
+        return change(f, t.slice(0, a) + to + t.slice(b), b);
+      }
+      case "C-_":
+      case "C-slash":
+      case "C-S-minus": {
+        const top = f.undo.pop();
+        if (!top) return f;
+        Object.assign(f, {
+          text: top.text,
+          pos: Math.min(top.pos, top.text.length),
+          mark: null,
+          goal: null
+        });
+        return f;
+      }
+      case "A-r": {
+        if (!f.undo.length) return f;
+        Object.assign(f, {
+          text: f.undo[0].text,
+          pos: f.undo[0].text.length,
+          undo: [],
+          mark: null,
+          goal: null
+        });
+        return f;
+      }
+      case "A-backslash": {
+        let a = p, b = p;
+        while (a > 0 && t[a - 1] === " ") a--;
+        while (b < t.length && t[b] === " ") b++;
+        return a === b ? f : change(f, t.slice(0, a) + t.slice(b), a);
+      }
+    }
+    return null;
+  }
+  function type(field, r, o = {}) {
+    if (r.event === "commit") {
+      if (!r.replace) return insert(field, r.text ?? "");
+      const f = whole2(field);
+      const n = Math.max(0, r.replace[1] - r.replace[0]);
+      return change(f, f.text.slice(0, Math.max(0, f.pos - n)) + (r.text ?? "") + f.text.slice(f.pos), Math.max(0, f.pos - n) + (r.text ?? "").length);
+    }
+    if (!r.down) return null;
+    const c = chord(r);
+    const typing = r.text && !/[\x00-\x1f\x7f\uf700-\uf8ff]/.test(r.text) && !/(^|-)[MCA]-/.test(c) && r.key !== "Enter" && r.key !== "Tab";
+    if (typing) return insert(field, r.text);
+    return key(field, c, o);
+  }
+
   // experimental_os/deno/tools.ts
   var codes = /* @__PURE__ */ new Map();
   var fns = /* @__PURE__ */ new Map();
@@ -1005,12 +1374,13 @@
       },
       onCleanup(f) {
         ask(pid, given.api ?? 0, "onCleanup", {
-          fn: fnOf(pid, "cleanup", f)
+          fn: fnOf(pid, "cleanup", f, depth)
         });
       },
       plane(n, w, h) {
         return planeOf(pid, api, n, w, h);
-      }
+      },
+      readline: readline_exports
     };
   }
   var PLANES = [
@@ -1020,7 +1390,8 @@
     "planes"
   ];
   function planeOf(pid, api, n, w, h) {
-    api.place({
+    const via = () => current ? apiOf(current.pid, current.api) : api;
+    via().place({
       address: PLANES,
       name: n,
       value: {
@@ -1029,7 +1400,6 @@
       },
       ephemeral: true
     });
-    const via = () => current && current.pid === pid ? apiOf(pid, current.api) : api;
     let bits = null, id = -1, stride = w, serial = 0, copy = false;
     const ready = () => {
       if (bits) return true;
@@ -1174,7 +1544,8 @@
           fns.delete(call);
           if (!cancelled.delete(call)) out = fn.f();
         } else out = fn.f({
-          killed: !!given.killed
+          killed: !!given.killed,
+          api: t.api
         });
       }
       return {

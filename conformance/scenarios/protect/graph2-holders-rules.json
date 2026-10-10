@@ -1,6 +1,0 @@
-{"name":"a rule refusing everything an agent does does not refuse holders: it is an operation on the bare graph, where protect is never asked","steps":[
-{"send":{"cmd":"test-reset","stack":"graph","root":"root","rules":[{"agent":"eve","allow":false}]}},
-{"send":{"cmd":"place","agent":"host","address":[],"name":"g","id":"s","time":1,"site":{"file":"s.js","line":1,"column":1},"value":"S"}},
-{"send":{"cmd":"read","agent":"eve","address":["g"]},"expect":{"error":{"kind":"refused","why":{"code":"rule","rule":0}}}},
-{"send":{"cmd":"holders","agent":"eve","id":"s"},"expect":{"ok":{"holders":[{"node":"root","name":"g","position":0}]}}}
-]}

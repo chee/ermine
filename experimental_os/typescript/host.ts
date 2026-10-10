@@ -205,16 +205,37 @@ export class Machine {
     return { yes: true };
   }
 
-  /** A node's path from the root, by the first slot that holds it at each step; "" when it is held by none. */
+  /**
+   * A node's path from the root, by the shortest walk of names (the first in name order on a tie);
+   * "" when the root does not reach it. The host keeps no reverse index: it walks what it can read.
+   */
   pathOf(node: Id): string {
-    const names: string[] = [];
-    for (let at = node; at !== ROOT && names.length < 64;) {
-      const holder = this.g.holders({ id: at })[0];
-      if (!holder) return "";
-      names.unshift(holder.name);
-      at = holder.node;
+    if (node === ROOT) return "/";
+    const seen = new Set<Id>([ROOT]);
+    let level: { id: Id; names: string[] }[] = [{ id: ROOT, names: [] }];
+    for (let depth = 0; level.length && depth < 64; depth++) {
+      const next: { id: Id; names: string[] }[] = [];
+      for (const { id, names } of level) {
+        let listing;
+        try {
+          listing = this.g.directory({ agent: "machine", address: ["/", ...names] });
+        } catch {
+          continue;
+        }
+        if (!("directory" in listing)) continue;
+        for (const [name, items] of listing.directory) {
+          for (const item of items) {
+            if (!("id" in item) || item.pending || seen.has(item.id)) continue;
+            if (item.id === node) return "/" + [...names, name].join("/");
+            seen.add(item.id);
+            next.push({ id: item.id, names: [...names, name] });
+          }
+        }
+        void id;
+      }
+      level = next;
     }
-    return "/" + names.join("/");
+    return "";
   }
 
   /** /hw from the device tree: made again at each boot, ephemeral, by host code. */
