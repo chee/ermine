@@ -1,0 +1,12 @@
+{"name":"holders gives an id's slots, ordered by node id then name, each with its position, whatever the order they were placed in; it is untracked, so a later placement marks no reader named in the request","steps":[
+{"send":{"cmd":"test-reset","stack":"graph","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p","id":"p","time":1,"site":{"file":"s.js","line":1,"column":1},"value":{}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"q","id":"q","time":2,"site":{"file":"s.js","line":1,"column":1},"value":{}}},
+{"send":{"cmd":"place","agent":"host","address":["q"],"name":"z","id":"s","time":3,"site":{"file":"s.js","line":1,"column":1},"value":"S"}},
+{"send":{"cmd":"place","agent":"host","address":["p"],"name":"b","id":"o1","time":4,"site":{"file":"s.js","line":1,"column":1},"value":1}},
+{"send":{"cmd":"place","agent":"host","address":["p"],"name":"b","id":"s","position":1,"time":5,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"place","agent":"host","address":["p"],"name":"a","id":"s","time":6,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"holders","agent":"host","id":"s","reader":"r"},"expect":{"ok":{"holders":[{"node":"p","name":"a","position":0},{"node":"p","name":"b","position":1},{"node":"q","name":"z","position":0}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"t","id":"s","time":7,"site":{"file":"s.js","line":1,"column":1}},"expect":{"ok":{"change":{"node":"root","time":7,"kind":"place","name":"t","id":"s"},"marked":[]}}},
+{"send":{"cmd":"holders","agent":"host","id":"s"},"expect":{"ok":{"holders":[{"node":"p","name":"a","position":0},{"node":"p","name":"b","position":1},{"node":"q","name":"z","position":0},{"node":"root","name":"t","position":0}]}}}
+]}

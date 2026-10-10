@@ -15,7 +15,7 @@
     "demo:build": "deno run --allow-read --allow-write --allow-run --allow-env experimental_hosts/web/typescript/demo/core/build.ts",
     "demo:d2:build": "deno run --allow-read --allow-write --allow-run --allow-env experimental_hosts/web/typescript/demo/d2/build.ts",
     "test:d2": "deno test --allow-read --allow-env experimental_hosts/web/typescript/demo/d2/test.ts",
-    "files": "deno run --allow-read --allow-write --allow-ffi --allow-run --allow-env experimental_layers/files/main.ts"
+    "files": "deno run --allow-read --allow-write --allow-ffi --allow-run --allow-env --allow-net experimental_layers/files/main.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1",

@@ -1,0 +1,5 @@
+{"name":"on a stack over the scheduler holders is unsupported: the scheduler tracks the graph itself","steps":[
+{"send":{"cmd":"test-reset","stack":"schedule","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p","id":"p","value":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"holders","agent":"host","id":"p"},"expect":{"unsupported":"holders"}}
+]}

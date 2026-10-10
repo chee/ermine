@@ -140,6 +140,28 @@
   },
   {
    "at": [
+    "drivers"
+   ],
+   "name": "link",
+   "id": "drv-link",
+   "value": {
+    "kind": "c",
+    "name": "link"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "web",
+   "id": "drv-web",
+   "value": {
+    "kind": "c",
+    "name": "web"
+   }
+  },
+  {
+   "at": [
     "programs"
    ],
    "name": "shell",
@@ -309,6 +331,22 @@
    ],
    "name": "sync",
    "id": "dev-sync",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "link",
+   "id": "dev-link",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "web",
+   "id": "dev-web",
    "value": null
   },
   {
@@ -598,6 +636,28 @@
   },
   {
    "start": [
+    "dev",
+    "link"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "link"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "web"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "web"
+   ]
+  },
+  {
+   "start": [
     "apps",
     "console"
    ],
@@ -645,17 +705,6 @@
     "programs",
     "status"
    ]
-  },
-  {
-   "start": [
-    "apps",
-    "term"
-   ],
-   "program": [
-    "programs",
-    "term"
-   ],
-   "actor": "person"
   }
  ]
 }

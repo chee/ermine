@@ -1,0 +1,280 @@
+[
+ {
+  "name": "b/unions/read",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 15.557249999999996,
+  "run": {
+   "min": 12.14554099999998,
+   "median": 17.69004099999998,
+   "samples": [
+    27.711874999999992,
+    17.69004099999998,
+    12.14554099999998,
+    19.248999999999995,
+    16.406417000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 287768,
+   "after": 446248
+  }
+ },
+ {
+  "name": "b/unions/read",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 66.42516700000002,
+  "run": {
+   "min": 84.748291,
+   "median": 196.527833,
+   "samples": [
+    214.83412499999997,
+    306.76895900000005,
+    84.748291,
+    196.527833,
+    106.710959
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1879312,
+   "after": 2215768
+  }
+ },
+ {
+  "name": "b/wide/directory",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 15.38308400000001,
+  "run": {
+   "min": 12.90741700000001,
+   "median": 15.15025,
+   "samples": [
+    12.90741700000001,
+    15.187874999999991,
+    17.16500000000002,
+    15.15025,
+    13.454374999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1834696,
+   "after": 1886928
+  }
+ },
+ {
+  "name": "b/wide/directory",
+  "group": "B",
+  "size": "medium",
+  "measures": "graph",
+  "build": 105.66358400000001,
+  "run": {
+   "min": 68.15795800000001,
+   "median": 99.93791700000003,
+   "samples": [
+    99.93791700000003,
+    68.15795800000001,
+    83.967083,
+    111.46962499999995,
+    440.14824999999985
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 16565960,
+   "after": 16709064
+  }
+ },
+ {
+  "name": "c/presence",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 20.639166000000003,
+  "run": {
+   "min": 6.092083000000002,
+   "median": 13.097166000000001,
+   "samples": [
+    16.922791000000004,
+    6.092083000000002,
+    13.097166000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 678288,
+   "after": 870224
+  }
+ },
+ {
+  "name": "c/presence",
+  "group": "C",
+  "size": "medium",
+  "measures": "both",
+  "build": 23.97725,
+  "run": {
+   "min": 108.806959,
+   "median": 165.192541,
+   "samples": [
+    108.806959,
+    179.83091699999997,
+    165.192541
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1962944,
+   "after": 2354816
+  }
+ },
+ {
+  "name": "c/todo",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 22.219,
+  "run": {
+   "min": 8.68240625,
+   "median": 8.786010500000003,
+   "samples": [
+    8.68240625,
+    8.786010500000003,
+    10.160000000000004
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1131112,
+   "after": 1398088
+  },
+  "report": {
+   "renders": 66
+  }
+ },
+ {
+  "name": "c/todo",
+  "group": "C",
+  "size": "medium",
+  "measures": "scheduler",
+  "build": 214.714875,
+  "run": {
+   "min": 71.98720825000004,
+   "median": 76.4205,
+   "samples": [
+    106.18858350000002,
+    76.4205,
+    71.98720825000004
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 5787120,
+   "after": 6151312
+  },
+  "report": {
+   "renders": 66
+  }
+ },
+ {
+  "name": "d/cycle",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 0.9861250000000013,
+  "run": {
+   "min": 0.23129790000000003,
+   "median": 0.25472295,
+   "samples": [
+    0.23129790000000003,
+    0.2692125000000001,
+    0.25472295
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 50792,
+   "after": 234440
+  }
+ },
+ {
+  "name": "d/cycle",
+  "group": "D",
+  "size": "medium",
+  "measures": "graph",
+  "build": 1.4822500000000005,
+  "run": {
+   "min": 1.5769708500000008,
+   "median": 1.8815812500000006,
+   "samples": [
+    2.9941000000000004,
+    1.8815812500000006,
+    1.5769708500000008
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 67424,
+   "after": 391200
+  }
+ },
+ {
+  "name": "d/names",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 10.550916,
+  "run": {
+   "min": 0.5771000000000001,
+   "median": 0.8905417999999997,
+   "samples": [
+    0.5771000000000001,
+    0.8905417999999997,
+    0.9546418000000003
+   ]
+  },
+  "iterations": 5,
+  "check": "ok",
+  "heap": {
+   "built": 1885392,
+   "after": 1957520
+  }
+ },
+ {
+  "name": "d/names",
+  "group": "D",
+  "size": "medium",
+  "measures": "graph",
+  "build": 89.357,
+  "run": {
+   "min": 7.1139860000000015,
+   "median": 8.051930666666673,
+   "samples": [
+    7.1139860000000015,
+    8.051930666666673,
+    14.845499999999996
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 16956160,
+   "after": 17093784
+  }
+ }
+]

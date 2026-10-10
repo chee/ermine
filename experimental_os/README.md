@@ -41,7 +41,7 @@ experimental_os/mac/ermineOS --os "deno run -A --quiet experimental_os/typescrip
 ermineOS is the C OS (ERMINEOS.md): core's C graph, protect and scheduler,
 with drivers in C and the JavaScript programs run by deno, which must be on
 PATH, and sync: the layer's C sync and Subduction, through galaxy.observer
-(`share path` in a shell, `mount dir name id` on another machine). The
+(`share path` in a shell, `mount path id` on another machine). The
 build needs Homebrew's openssl@3 and, the first time, cargo, which builds
 Subduction's library (minutes). Its card is `~/.ermine/card`: the device's
 key and Subduction's store, from which each boot takes the graph back. A
@@ -218,9 +218,9 @@ comes from the other machine is made here beneath protect.
   everything the image made are, keeps its id: `share /` or `share /dev`
   prints the id of a view, a document that stands for it. The other machine
   sees what is under it as it changes, and cannot change it.
-- **Mount.** On the other machine, `mount /n mac1 ermine://…` (`/n` is where
+- **Mount.** On the other machine, `mount /n/mac1 ermine://…` (`/n` is where
   other machines go, as on Plan 9). It reads pending until it has come.
-- **Stop.** `rm /dev/sync/shared <hex>` stops sending it; the folder stays.
+- **Stop.** `rm /dev/sync/shared/<hex>` stops sending it; the folder stays.
 - **Who sees it.** Anyone with a view's id sees it all, unencrypted, and the
   server relays it: `share /` includes what is typed and copied, and what
   every window shows. Paths in `/etc/sync`'s `"private"` list are never shown.
@@ -279,7 +279,7 @@ machine redraws in it.
   level-triggered interrupt stays pending.
 - **No move in the TS graph.** GRAPH.tex has one, and the TS graph does not.
   The layer gives a process `release`, which unplaces an ephemeral node by id
-  for the process that placed it.
+  (an unplace given only `at`, on the bare graph) for the process that placed it.
 - **A process's "."** is the folder it starts in (decided 10-09). Each
   driver's folder, /dev/display and the rest, is ordinary and saved; what
   the driver places there is ephemeral and its own. A window's nodes live

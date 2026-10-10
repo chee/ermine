@@ -1,0 +1,12 @@
+{"name":"holders lists the slots holding an id whose node is not here, in every node holding it; an id in no slot gives an empty list; when the node is made, the same slots are still listed, each at its position","steps":[
+{"send":{"cmd":"test-reset","stack":"graph","root":"root"}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"g","id":"ghost","time":1,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"holders","agent":"host","id":"ghost"},"expect":{"ok":{"holders":[{"node":"root","name":"g","position":0}]}}},
+{"send":{"cmd":"holders","agent":"host","id":"nowhere"},"expect":{"ok":{"holders":[]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"p","id":"p","time":2,"site":{"file":"s.js","line":1,"column":1},"value":{}}},
+{"send":{"cmd":"place","agent":"host","address":["p"],"name":"x","id":"o","time":3,"site":{"file":"s.js","line":1,"column":1},"value":1}},
+{"send":{"cmd":"place","agent":"host","address":["p"],"name":"x","id":"ghost","time":4,"site":{"file":"s.js","line":1,"column":1}}},
+{"send":{"cmd":"holders","agent":"host","id":"ghost"},"expect":{"ok":{"holders":[{"node":"p","name":"x","position":1},{"node":"root","name":"g","position":0}]}}},
+{"send":{"cmd":"place","agent":"host","address":[],"name":"g","id":"ghost","time":5,"site":{"file":"s.js","line":1,"column":1},"value":2},"expect":{"ok":{"change":{"node":"root","time":5,"kind":"place","name":"g","id":"ghost","value":2}}}},
+{"send":{"cmd":"holders","agent":"host","id":"ghost"},"expect":{"ok":{"holders":[{"node":"p","name":"x","position":1},{"node":"root","name":"g","position":0}]}}}
+]}

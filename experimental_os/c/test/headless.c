@@ -4,7 +4,7 @@
 // once, the serial line on stdin and stdout. A line starting "!" is a hand
 // on the machine:
 //
-//   !key Enter [mods...]   !type text   !click x y   !drag x0 y0 x1 y1
+//   !key Enter [mods...]   !type text   !click x y   !move x y   !drag x0 y0 x1 y1   !post {record}
 //   !compose text   !commit text   !shot file.ppm   !wait ms
 //
 //   headless [--w W] [--h H] [--unit U] [--sd DIR] [--image DIR] [--runner FILE] [--fresh]
@@ -26,10 +26,17 @@
 
 static int W = 800, H = 500, U = 1;
 static uint32_t *buffers[2];
+static uint32_t *planes[2]; // web pages' planes: a page mirrored is a test colour, as no page draws here
 static struct {
 	int buffer, w, h;
 } shown;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+/** the page being mirrored, as the Mac's webmirror copies it fps times a second */
+static struct {
+	char id[128];
+	int64_t slot, fps;
+} mirror;
 
 static int64_t now(void) {
 	static int64_t start;
@@ -125,7 +132,25 @@ static void command(void *data, const char *json) {
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
 	const char *op = jsonText(jsonGet(c, "op"));
+	// HEADLESS_CURSOR: every cursor command and flip, with when it came, to time the pointer and the frames
+	if (op && !strcmp(op, "cursor") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[cursor] %lld %g %g\n", (long long)now(), jsonGet(c, "x") ? jsonGet(c, "x")->number : -1, jsonGet(c, "y") ? jsonGet(c, "y")->number : -1);
+	if (op && !strcmp(op, "flip") && getenv("HEADLESS_CURSOR")) fprintf(stderr, "[flip] %lld\n", (long long)now());
 	if (!op) return;
+	if (!strcmp(op, "webmirror")) {
+		// a page's pixels copied to its plane: here a colour, and a frame record, as WebKit's copy would give
+		int64_t slot = (int64_t)(jsonGet(c, "slot") ? jsonGet(c, "slot")->number : -1), fps = (int64_t)(jsonGet(c, "fps") ? jsonGet(c, "fps")->number : 0);
+		fprintf(stderr, "[metal] %.120s\n", json);
+		if (slot >= 0 && slot < 2 && fps > 0) {
+			for (int i = 0; i < W * H; i++) planes[slot][i] = 0x3366cc;
+			post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"slot\": %lld, \"w\": %d, \"h\": %d, \"n\": 1}", jsonText(jsonGet(c, "id")), (long long)slot, W, H);
+		}
+		// and again at its fps, as the Mac copies a live page, until it is stopped
+		pthread_mutex_lock(&lock);
+		snprintf(mirror.id, sizeof mirror.id, "%s", jsonText(jsonGet(c, "id")) ? jsonText(jsonGet(c, "id")) : "");
+		mirror.slot = slot, mirror.fps = slot >= 0 && slot < 2 ? fps : 0;
+		pthread_mutex_unlock(&lock);
+		return;
+	}
 	if (!strcmp(op, "tx")) {
 		size_t n;
 		uint8_t *bytes = drvUnbase64(jsonText(jsonGet(c, "bytes")), &n);
@@ -138,6 +163,13 @@ static void command(void *data, const char *json) {
 		shown.w = (int)jsonGet(c, "w")->number;
 		shown.h = (int)jsonGet(c, "h")->number;
 		pthread_mutex_unlock(&lock);
+		// HEADLESS_COPY: a copy of the whole frame, as the Mac's flip makes on the OS's thread
+		if (getenv("HEADLESS_COPY")) {
+			void *copy = malloc((size_t)(W * H) * 4);
+			memcpy(copy, buffers[shown.buffer], (size_t)(W * H) * 4);
+			__asm__ volatile("" : : "r"(copy) : "memory");
+			free(copy);
+		}
 	} else if (!strcmp(op, "vsync")) {
 		Json *on = jsonGet(c, "on");
 		if (on && on->type == JSON_BOOLEAN && on->boolean) post("{\"irq\": 33, \"event\": \"vsync\", \"frame\": 0}");
@@ -152,6 +184,10 @@ static void command(void *data, const char *json) {
 		free(p);
 	} else if (!strcmp(op, "quit")) {
 		post("{\"irq\": 1, \"why\": \"os\"}");
+	} else if (!strcmp(op, "cursor") && jsonGet(c, "shape")) {
+		// a new image for the cursor plane: said, as the metal draws it
+		Json *shape = jsonGet(c, "shape");
+		fprintf(stderr, "[metal] cursor shape %gx%g, hot %g %g\n", jsonGet(shape, "w")->number, jsonGet(shape, "h")->number, jsonGet(shape, "hotx")->number, jsonGet(shape, "hoty")->number);
 	} else if (strcmp(op, "cursor") && strcmp(op, "ready") && strcmp(op, "access") && strcmp(op, "textinput")) {
 		fprintf(stderr, "[metal] %.120s\n", json);
 	}
@@ -182,6 +218,21 @@ static void key(const char *name, const char *mods) {
 		     down ? "true" : "false", name, down ? text : "", mods);
 }
 
+/** the mirror's frames, fps a second, while one is asked for */
+static void *mirroring(void *arg) {
+	(void)arg;
+	for (;;) {
+		pthread_mutex_lock(&lock);
+		int64_t fps = mirror.fps, slot = mirror.slot;
+		char id[128];
+		memcpy(id, mirror.id, sizeof id);
+		pthread_mutex_unlock(&lock);
+		if (fps > 0) post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"slot\": %lld, \"w\": %d, \"h\": %d, \"n\": 1}", id, (long long)slot, W, H);
+		usleep(fps > 0 ? (useconds_t)(1000000 / fps) : 50000);
+	}
+	return NULL;
+}
+
 int main(int argc, char **argv) {
 	const char *sd = "/tmp/ermineOS-headless", *image = "experimental_os/image", *runner = "experimental_os/deno/runner.ts";
 	bool fresh = false;
@@ -196,6 +247,11 @@ int main(int argc, char **argv) {
 	}
 	buffers[0] = calloc((size_t)(W * H), 4);
 	buffers[1] = calloc((size_t)(W * H), 4);
+	pthread_t mirrorThread;
+	pthread_create(&mirrorThread, NULL, mirroring, NULL);
+	pthread_detach(mirrorThread);
+	planes[0] = calloc((size_t)(W * H), 4);
+	planes[1] = calloc((size_t)(W * H), 4);
 	char *font = rom(8 * U, 16 * U);
 	char *dt = formatString(
 	    "{\"model\": \"headless\", \"cpu\": \"\", \"cores\": 1, \"memory\": 0, \"os\": \"none\", \"host\": \"headless\", \"user\": \"%s\", \"home\": \"/\","
@@ -204,9 +260,9 @@ int main(int argc, char **argv) {
 	    " \"font\": %s,"
 	    " \"devices\": [{\"name\": \"display\", \"irq\": 33}, {\"name\": \"keyboard\", \"irq\": 34}, {\"name\": \"pointer\", \"irq\": 35}, {\"name\": \"uart0\", \"irq\": 36},"
 	    " {\"name\": \"power\", \"irq\": 40}, {\"name\": \"thermal\", \"irq\": 41}, {\"name\": \"usb\", \"irq\": 44}, {\"name\": \"clipboard\", \"irq\": 46},"
-	    " {\"name\": \"font\", \"irq\": 50, \"families\": [\"blocks\"]}, {\"name\": \"speech\"}]}",
+	    " {\"name\": \"font\", \"irq\": 50, \"families\": [\"blocks\"]}, {\"name\": \"web\", \"irq\": 49, \"engine\": \"none\"}, {\"name\": \"speech\"}]}",
 	    getenv("USER") ? getenv("USER") : "person", W, H, W, H, 1.0 / U, U, font);
-	ErmosConfig config = { .dt = dt, .buffers = { buffers[0], buffers[1] }, .sd = sd, .image = image, .runner = runner, .fresh = fresh, .command = command };
+	ErmosConfig config = { .dt = dt, .buffers = { buffers[0], buffers[1] }, .planes = planes, .nplanes = 2, .sd = sd, .image = image, .runner = runner, .fresh = fresh, .command = command };
 	ermosStart(&config);
 	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false}", W, H, 1.0 / U, U);
 	post("{\"irq\": 40, \"ac\": true, \"battery\": true, \"percent\": 100, \"charging\": false, \"minutes\": null}");
@@ -245,9 +301,17 @@ int main(int argc, char **argv) {
 		} else if (!strcmp(word, "click")) {
 			int x = 0, y = 0;
 			sscanf(rest, "%d %d", &x, &y);
+			if (getenv("HEADLESS_CURSOR")) fprintf(stderr, "[move] %lld %d %d\n", (long long)now(), x, y);
 			post("{\"irq\": 35, \"event\": \"move\", \"x\": %d, \"y\": %d, \"buttons\": [], \"mods\": []}", x, y);
 			post("{\"irq\": 35, \"event\": \"down\", \"x\": %d, \"y\": %d, \"button\": 0, \"buttons\": [0], \"mods\": []}", x, y);
 			post("{\"irq\": 35, \"event\": \"up\", \"x\": %d, \"y\": %d, \"button\": 0, \"buttons\": [], \"mods\": []}", x, y);
+		} else if (!strcmp(word, "post")) {
+			// a record as the metal would send it, as it is: {"irq": n, ...}
+			post("%s", rest);
+		} else if (!strcmp(word, "move")) {
+			int x = 0, y = 0;
+			sscanf(rest, "%d %d", &x, &y);
+			post("{\"irq\": 35, \"event\": \"move\", \"x\": %d, \"y\": %d, \"buttons\": [], \"mods\": []}", x, y);
 		} else if (!strcmp(word, "drag")) {
 			int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
 			sscanf(rest, "%d %d %d %d", &x0, &y0, &x1, &y1);

@@ -1,0 +1,48 @@
+#+title: Graph primitives under a core library (sketch, 10-09)
+#+author: LLM generated working output
+
+The designer: "i still want this library api to be _core_, but i would like
+if the graph was to provide the lower level parts instead". Core in two
+layers: the graph gives primitives; lookup, lookups, get handles and typed
+lookup are a core library over them. Proposed, not decided.
+
+* Graph primitives
+1. Read at an id (bare graph only, as the other at-id operations):
+   read({at: id, address?}). The address starts at that node, nothing above
+   it. Tracked as any read. An id whose node is not here: a pending item.
+2. Value-only reads: read({address, fields: ["value"]}). Items carry only the
+   fields asked for (value, header, from); default all. Tracking unchanged.
+   Safe through views: it asks for less.
+3. holders({at: id}) (bare graph first): [{node, name, position}], the slots
+   holding id. Tracked on "holders of id": placing or unplacing it marks.
+   Views need a chroot rule first.
+4. The change feed (bare graph): subscribe({}) with no address; one event
+   per change; taken with take; the bound is the host's (decided).
+5. Already there: reads under your own reader id; a bare graph's change
+   answers name the readers each change marked (cache validation).
+
+* Core library on them
+- lookup(name), lookups(name): directory reads by name up the place's walk;
+  the same slot keys tracked as today's built-in. GRAPH loses them as
+  operations.
+- get(address) -> handle: h() first value; h.all() every item;
+  h.items({fields}); h.write(op). On the bare graph: walk resolved once,
+  reads at the id after, cache dropped when its reader is marked. Through a
+  view: path reads.
+- lookupByType(T): names as the index (a loader placed under each capability
+  it provides, then lookup(K)); or index/T nodes kept by an indexer process
+  fed by the change feed. Readers of index/T are marked only when T's set
+  changes: createSelector's precision from the feed plus tracking.
+
+* The line
+Reads at an id, holders and the feed: bare graph only (host, trusted code).
+Programs: the same library through their views, on path reads. A host may
+offer a fast index to programs as a service; callers confirm with their own
+reads (Spotlight: index with full rights, filter by the caller's at query
+time).
+
+* Measure before the freeze
+- library lookup, get and typed lookup against today's built-in lookup, on
+  deep trees (benchmarks/b/lookups, d/search, c/plugins);
+- readers marked by a type change: index/T nodes against scanning;
+- value-only reads against full items, per read.

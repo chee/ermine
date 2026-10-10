@@ -1,23 +1,24 @@
 #!/bin/sh
-# headless.sh: builds the OS with no window (headless.c), core read in place,
-# into ../../mac/build/test/headless. Run it from the repository's root:
+# headless.sh: builds the OS with no window (headless.c), with core as
+# committed (../tree.sh), into ../../mac/build/test/headless. Run it from
+# the repository's root:
 #   experimental_os/mac/build/test/headless --fresh
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
-c="$here/.."
-core="$here/../../../core"
 out="$here/../../mac/build/test"
-mac="$here/../../mac"
+mac="$(cd "$here/../../mac" && pwd)"
 mkdir -p "$out"
+. "$here/../tree.sh"
+c="$tree/experimental_os/c"
+core="$tree/core"
 . "$c/subduction.sh"
 os=""
 for f in "$c"/*.c; do
 	case "$(basename "$f")" in host_stub.c) ;; *) os="$os $f" ;; esac
 done
 # shellcheck disable=SC2086
-cc -std=c11 -Wall -Wextra -Werror -O1 -g ${SANITIZE:-} $sync_cflags -o "$out/headless" "$here/headless.c" $os \
-	"$core/graph/c/json.c" "$core/graph/c/cbor.c" "$core/graph/c/ermine.c" "$core/graph/c/graph.c" "$core/graph/c/entry.c" \
-	"$core/protect/c/protect.c" "$core/scheduler/c/schedule.c" "$core/scheduler/c/steps.c" $sync_sources $sync_libs -lpthread
+cc -std=c11 -Wall -Wextra -Werror -O1 -g ${SANITIZE:-} $sync_cflags -o "$out/headless" "$c/test/headless.c" $os \
+	$core_sources $sync_sources $sync_libs -lpthread
 echo "built $out/headless"
 # the programs loaders/exec runs, as ermineOS's build makes them
 mkdir -p "$out/../programs"

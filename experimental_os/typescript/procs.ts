@@ -38,6 +38,7 @@ import { equal, isLive } from "../../core/graph/typescript/patch.ts";
 import { bind as view } from "../../core/graph/typescript/view.ts";
 import {
   type Address,
+  type Bare,
   capture,
   type Change,
   type Changed,
@@ -46,6 +47,7 @@ import {
   invalid,
   type Item,
   type Json,
+  type Site,
   type ValueItem,
 } from "../../core/graph/typescript/types.ts";
 
@@ -192,16 +194,22 @@ export type StartOp = {
   by?: Agent;
 };
 
-/** A release: an ephemeral node let go by its id, wherever it is (GRAPH.tex: an unplace given only at). */
-export type ReleaseOp = { id: Id; agent: Json; process?: Id; cause?: Json; time: number; site?: unknown };
+/** A change made elsewhere, as an operation at an id (GRAPH.tex, Operations, At an id). */
+export type Arrival = { kind: "write" | "place" | "unplace" | "move"; at: Id; agent: Json; [field: string]: unknown };
+
 
 export type Options = {
   /** the bare graph, for forgetting what a reader read */
   graph: Graph;
   /** the stack beneath this layer: protect over the bare graph */
   below: Interface;
-  /** the bare graph, for releasing by id beneath protect */
-  release: (op: ReleaseOp) => Changed;
+  /**
+   * The bare graph as it is kept, beneath protect: an ephemeral node is let
+   * go by its id there, and a change made elsewhere is made there, at an id
+   * (GRAPH.tex, Operations, At an id); once a wrapper is made over the stack,
+   * through its bookkeeping instead (top).
+   */
+  kept: Bare;
   /** the clock: each change's time */
   clock: () => number;
   /** the host's agent, for its own changes */
@@ -214,7 +222,14 @@ export type Options = {
 
 export type Procs = {
   /** the interface every change goes through: the stack, with each answer noted */
-  api: Interface & { readonly time: number };
+  api: Interface & { readonly time: number; arrive(arrival: Arrival): Changed };
+  /**
+   * A wrapper (sync) made over the stack beneath this layer is the top, which
+   * programs' interfaces are bound over from here; this layer's own
+   * bookkeeping goes beneath it, through the wrapper's bookkeeping. Gives the
+   * top with its changes stamped, as a program's are.
+   */
+  top(over: Interface, bookkeeping: Bare): Interface;
   start(op: StartOp): string;
   kill(pid: string, cause?: Json): void;
   /** runs setup with the new code the process's program reached */
@@ -265,6 +280,7 @@ export function resolve(place: readonly string[], chroot: number, address: Addre
 
 export function procs(o: Options): Procs {
   const { graph: g, below, clock } = o;
+  let bare = o.kept;
   let serial = 0;
   let order = 0;
   let pids = 0;
@@ -327,20 +343,27 @@ export function procs(o: Options): Procs {
     return answer;
   }
 
+  /** an interface with every change made through it stamped, and each answer noted */
+  const noting = (b: Interface): Interface => ({
+    ...b,
+    write: (op) => noted(b.write(stamp(op))),
+    place: (op) => noted(b.place(stamp(op))),
+    unplace: (op) => noted(b.unplace(stamp(op))),
+    move: (op) => noted(b.move(stamp(op))),
+  });
   const api: Procs["api"] = {
-    ...below,
-    write: (op) => noted(below.write(stamp(op))),
-    place: (op) => noted(below.place(stamp(op))),
-    unplace: (op) => noted(below.unplace(stamp(op))),
-    move: (op) => noted(below.move(stamp(op))),
+    ...noting(below),
+    arrive: ({ kind, at, time: _, ...op }) => noted(bare[kind](stamp({ address: [], ...op, at }) as never)),
     get time() {
       return last;
     },
   };
-  /** the top of the stack, which programs' interfaces are bound over */
-  const up: Interface = api;
+  /** the top of the stack, which programs' interfaces are bound over; this layer's own until a wrapper is made over the stack beneath it */
+  let up: Interface = api;
+  let topped = false;
 
-  const release = (op: { id: Id; agent: Json; cause?: Json; process?: Id }) => noted(o.release(stamp(op)));
+  /** an ephemeral node let go by its id, wherever it is (GRAPH.tex: an unplace given only at) */
+  const release = ({ id, ...op }: { id: Id; agent: Json; cause?: Json; process?: Id }) => noted(bare.unplace(stamp({ ...op, at: id })));
 
   /** The ids an answer let go: live things released, readers and processes ended. */
   function letGo(ids: readonly Id[]) {
@@ -412,10 +435,10 @@ export function procs(o: Options): Procs {
       write: (op) => b.write(op),
       unplace: (op) => b.unplace(op),
       place(op) {
-        // a node made by name is given an id here
-        const id = op.id ?? `${p.pid}.${++serial}`;
+        // a node made by name is given an id here, unless the top gives it (a document: SYNC.tex, Making and mounting)
+        const id = op.id ?? (topped && !op.ephemeral ? undefined : `${p.pid}.${++serial}`);
         const answer = b.place({ ...op, id } as PlaceOp);
-        if (op.ephemeral) p.owned.push(id);
+        if (op.ephemeral) p.owned.push(id!);
         return answer;
       },
       start(op) {
@@ -1085,6 +1108,13 @@ export function procs(o: Options): Procs {
 
   return {
     api,
+    top(over, bookkeeping) {
+      up = noting(over);
+      Object.assign(api, noting({ ...below, ...bookkeeping }));
+      bare = bookkeeping;
+      topped = true;
+      return up;
+    },
     start,
     kill,
     replace,

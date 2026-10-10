@@ -1,0 +1,5577 @@
+[
+ {
+  "name": "a/cellx",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 13.732667000000003,
+  "run": {
+   "min": 1.2986460000000015,
+   "median": 2.7989687499999967,
+   "samples": [
+    2.995739500000001,
+    2.649906250000001,
+    3.4236250000000013,
+    1.2986460000000015,
+    2.7989687499999967
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 739392,
+   "after": 998816
+  }
+ },
+ {
+  "name": "a/cellx",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.927916999999999,
+  "run": {
+   "min": 0.29814575000000065,
+   "median": 0.3572187499999995,
+   "samples": [
+    0.5797292499999998,
+    0.4436770000000001,
+    0.3572187499999995,
+    0.33859375000000025,
+    0.29814575000000065
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 218536,
+   "after": 413576
+  }
+ },
+ {
+  "name": "a/cellx",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 1.017125,
+  "run": {
+   "min": 0.02308349999999937,
+   "median": 0.025916499999999232,
+   "samples": [
+    0.05780199999999969,
+    0.03220849999999942,
+    0.023729000000000333,
+    0.02308349999999937,
+    0.025916499999999232
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 64440,
+   "after": 105328
+  }
+ },
+ {
+  "name": "a/cellx",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.3213749999999997,
+  "run": {
+   "min": 0.03446875000000027,
+   "median": 0.041885249999999985,
+   "samples": [
+    0.062489499999999865,
+    0.043062500000000004,
+    0.041885249999999985,
+    0.03446875000000027,
+    0.03534374999999912
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 93464,
+   "after": 133016
+  }
+ },
+ {
+  "name": "a/dynamic/simple",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 15.454459,
+  "run": {
+   "min": 0.6802687500000004,
+   "median": 0.7768500000000003,
+   "samples": [
+    0.9607667,
+    0.88235205,
+    0.7768500000000003,
+    0.7366645499999998,
+    0.6802687500000004
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 700728,
+   "after": 996968
+  },
+  "report": {
+   "count": 1708,
+   "effects": 97
+  }
+ },
+ {
+  "name": "a/dynamic/simple",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 3.368000000000002,
+  "run": {
+   "min": 0.08051040000000001,
+   "median": 0.1183937499999999,
+   "samples": [
+    0.14950624999999995,
+    0.13456045000000003,
+    0.1183937499999999,
+    0.08644999999999996,
+    0.08051040000000001
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 250648,
+   "after": 460536
+  },
+  "report": {
+   "count": 1708,
+   "effects": 97
+  }
+ },
+ {
+  "name": "a/dynamic/simple",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.8748329999999989,
+  "run": {
+   "min": 0.0058832999999999915,
+   "median": 0.0071187500000000625,
+   "samples": [
+    0.01015625,
+    0.0058832999999999915,
+    0.008510449999999992,
+    0.0071187500000000625,
+    0.006331250000000033
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 67472,
+   "after": 112144
+  },
+  "report": {
+   "count": 715,
+   "effects": 97
+  }
+ },
+ {
+  "name": "a/dynamic/simple",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.7964169999999999,
+  "run": {
+   "min": 0.006447950000000003,
+   "median": 0.008270800000000023,
+   "samples": [
+    0.013610399999999957,
+    0.00924794999999996,
+    0.008270800000000023,
+    0.007427049999999991,
+    0.006447950000000003
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 81624,
+   "after": 130752
+  },
+  "report": {
+   "count": 715,
+   "effects": 97
+  }
+ },
+ {
+  "name": "a/dynamic/dynamic",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 12.462708,
+  "run": {
+   "min": 1.6843833000000017,
+   "median": 2.0203749999999987,
+   "samples": [
+    2.0413875000000004,
+    2.1693457999999994,
+    1.8893958000000013,
+    2.0203749999999987,
+    1.6843833000000017
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 762944,
+   "after": 1059200
+  },
+  "report": {
+   "count": 1873,
+   "effects": 60
+  }
+ },
+ {
+  "name": "a/dynamic/dynamic",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 3.078583,
+  "run": {
+   "min": 0.33279579999999986,
+   "median": 0.35272080000000017,
+   "samples": [
+    0.3554000000000002,
+    0.33279579999999986,
+    0.3389667000000003,
+    0.3554375,
+    0.35272080000000017
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 262144,
+   "after": 493360
+  },
+  "report": {
+   "count": 1873,
+   "effects": 60
+  }
+ },
+ {
+  "name": "a/dynamic/dynamic",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.7658339999999999,
+  "run": {
+   "min": 0.019879199999999743,
+   "median": 0.02204580000000007,
+   "samples": [
+    0.03230830000000005,
+    0.026583300000000067,
+    0.02204580000000007,
+    0.019879199999999743,
+    0.019879200000000097
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 79344,
+   "after": 133208
+  },
+  "report": {
+   "count": 1201,
+   "effects": 60
+  }
+ },
+ {
+  "name": "a/dynamic/dynamic",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.830582999999999,
+  "run": {
+   "min": 0.011908299999999983,
+   "median": 0.019045799999999957,
+   "samples": [
+    0.030825000000000102,
+    0.022195800000000078,
+    0.018841600000000014,
+    0.011908299999999983,
+    0.019045799999999957
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 96664,
+   "after": 160872
+  },
+  "report": {
+   "count": 1201,
+   "effects": 60
+  }
+ },
+ {
+  "name": "a/dynamic/web",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 16.912333000000004,
+  "run": {
+   "min": 1.490885500000001,
+   "median": 2.3959164999999985,
+   "samples": [
+    4.3324687499999985,
+    2.9098957500000004,
+    2.3959164999999985,
+    2.1235937500000013,
+    1.490885500000001
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 931040,
+   "after": 1191632
+  },
+  "report": {
+   "count": 547,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/web",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 4.344208000000002,
+  "run": {
+   "min": 0.4520520000000001,
+   "median": 0.49492700000000056,
+   "samples": [
+    0.5267812500000009,
+    0.5588124999999993,
+    0.47516674999999964,
+    0.4520520000000001,
+    0.49492700000000056
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 339984,
+   "after": 543416
+  },
+  "report": {
+   "count": 547,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/web",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 1.1936670000000014,
+  "run": {
+   "min": 0.028489749999999425,
+   "median": 0.030020749999999374,
+   "samples": [
+    0.06792724999999944,
+    0.03954150000000034,
+    0.0286249999999999,
+    0.028489749999999425,
+    0.030020749999999374
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 104792,
+   "after": 147760
+  },
+  "report": {
+   "count": 543,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/web",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.5081659999999992,
+  "run": {
+   "min": 0.03196874999999988,
+   "median": 0.04423975000000002,
+   "samples": [
+    0.0973437499999994,
+    0.05925000000000047,
+    0.04423975000000002,
+    0.034895999999999816,
+    0.03196874999999988
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 123152,
+   "after": 166176
+  },
+  "report": {
+   "count": 543,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/dense",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 16.745916,
+  "run": {
+   "min": 4.112552000000001,
+   "median": 4.8970105,
+   "samples": [
+    4.81025,
+    4.9296875,
+    7.063114500000001,
+    4.8970105,
+    4.112552000000001
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 803032,
+   "after": 1035696
+  },
+  "report": {
+   "count": 780,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/dense",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 4.197542,
+  "run": {
+   "min": 0.6228227499999992,
+   "median": 0.9618749999999991,
+   "samples": [
+    1.6181459999999994,
+    0.9618749999999991,
+    0.9695415000000001,
+    0.6428335000000001,
+    0.6228227499999992
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 293384,
+   "after": 506328
+  },
+  "report": {
+   "count": 780,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/dense",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.6850830000000006,
+  "run": {
+   "min": 0.025281249999999922,
+   "median": 0.04367725,
+   "samples": [
+    0.07012499999999999,
+    0.0723332499999998,
+    0.04367725,
+    0.04280200000000001,
+    0.025281249999999922
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 470008,
+   "after": 149752
+  },
+  "report": {
+   "count": 772,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/dense",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.8882500000000011,
+  "run": {
+   "min": 0.022073000000000675,
+   "median": 0.03867699999999985,
+   "samples": [
+    0.07611450000000008,
+    0.06563549999999951,
+    0.03867699999999985,
+    0.03231250000000063,
+    0.022073000000000675
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 103840,
+   "after": 166720
+  },
+  "report": {
+   "count": 772,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 10.138875,
+  "run": {
+   "min": 2.311698,
+   "median": 3.1954062500000013,
+   "samples": [
+    4.901979249999998,
+    3.6477917499999997,
+    2.311698,
+    2.4345730000000003,
+    3.1954062500000013
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 772976,
+   "after": 1011784
+  },
+  "report": {
+   "count": 1036,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.570208000000001,
+  "run": {
+   "min": 0.3503335000000005,
+   "median": 0.44072900000000015,
+   "samples": [
+    0.5677395000000001,
+    0.4787082499999995,
+    0.44072900000000015,
+    0.362927,
+    0.3503335000000005
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 266928,
+   "after": 474520
+  },
+  "report": {
+   "count": 1036,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.9221249999999994,
+  "run": {
+   "min": 0.023218750000000732,
+   "median": 0.0311874999999997,
+   "samples": [
+    0.035979000000000205,
+    0.0311874999999997,
+    0.03174999999999972,
+    0.023218750000000732,
+    0.02590625000000024
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 81840,
+   "after": 119128
+  },
+  "report": {
+   "count": 1033,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.1873750000000012,
+  "run": {
+   "min": 0.02878124999999976,
+   "median": 0.04903124999999964,
+   "samples": [
+    0.08288525000000035,
+    0.06817724999999975,
+    0.04903124999999964,
+    0.03575000000000017,
+    0.02878124999999976
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 96744,
+   "after": 146272
+  },
+  "report": {
+   "count": 1033,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/mixed",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 21.845458,
+  "run": {
+   "min": 4.500458500000001,
+   "median": 5.004145749999999,
+   "samples": [
+    9.061239500000003,
+    6.2933022500000035,
+    4.54035425,
+    5.004145749999999,
+    4.500458500000001
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 960784,
+   "after": 1209928
+  },
+  "report": {
+   "count": 1213,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/mixed",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 5.180041000000001,
+  "run": {
+   "min": 0.7899687499999999,
+   "median": 1.0197604999999985,
+   "samples": [
+    1.291854250000001,
+    1.0912187500000012,
+    0.7899687499999999,
+    0.9817605,
+    1.0197604999999985
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 342328,
+   "after": 553616
+  },
+  "report": {
+   "count": 1213,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/mixed",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 1.1494159999999987,
+  "run": {
+   "min": 0.03135399999999944,
+   "median": 0.03792725000000008,
+   "samples": [
+    0.05460400000000032,
+    0.04887500000000067,
+    0.03792725000000008,
+    0.03135399999999944,
+    0.032103999999999466
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 110008,
+   "after": 150992
+  },
+  "report": {
+   "count": 1208,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/mixed",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.4516670000000005,
+  "run": {
+   "min": 0.03384374999999995,
+   "median": 0.04714574999999943,
+   "samples": [
+    0.10948949999999957,
+    0.07093749999999943,
+    0.043927250000000306,
+    0.03384374999999995,
+    0.04714574999999943
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 125544,
+   "after": 194960
+  },
+  "report": {
+   "count": 1208,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/kairo/avoidable",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 5.145624999999999,
+  "run": {
+   "min": 0.059339999999999976,
+   "median": 0.10379582999999996,
+   "samples": [
+    0.11537416,
+    0.20317292,
+    0.10379582999999996,
+    0.059339999999999976,
+    0.08777833999999998
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 284344,
+   "after": 676088
+  },
+  "report": {
+   "c3runs": 0,
+   "effects": 0
+  }
+ },
+ {
+  "name": "a/kairo/avoidable",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.3265000000000011,
+  "run": {
+   "min": 0.012590830000000004,
+   "median": 0.014765830000000014,
+   "samples": [
+    0.019060830000000025,
+    0.021678749999999986,
+    0.014765830000000014,
+    0.012590830000000004,
+    0.013055419999999991
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 74984,
+   "after": 294336
+  },
+  "report": {
+   "c3runs": 0,
+   "effects": 0
+  }
+ },
+ {
+  "name": "a/kairo/avoidable",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.28895799999999916,
+  "run": {
+   "min": 0.0011191700000000005,
+   "median": 0.0012824999999999775,
+   "samples": [
+    0.0017412500000000008,
+    0.0012083400000000033,
+    0.0011191700000000005,
+    0.0012824999999999775,
+    0.0016166700000000134
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 16352,
+   "after": 75128
+  },
+  "report": {
+   "c3runs": 0,
+   "effects": 0
+  }
+ },
+ {
+  "name": "a/kairo/avoidable",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.634208000000001,
+  "run": {
+   "min": 0.0012170799999999993,
+   "median": 0.0019612500000000034,
+   "samples": [
+    0.0021066700000000084,
+    0.002313749999999999,
+    0.0019612500000000034,
+    0.0012170799999999993,
+    0.0016770800000000107
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 24080,
+   "after": 89680
+  },
+  "report": {
+   "c3runs": 0,
+   "effects": 0
+  }
+ },
+ {
+  "name": "a/kairo/broad",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 5.268457999999999,
+  "run": {
+   "min": 0.39717165999999965,
+   "median": 0.5287150000000003,
+   "samples": [
+    0.5294874999999999,
+    0.9201641799999999,
+    0.5287150000000003,
+    0.39717165999999965,
+    0.44509165999999994
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 454696,
+   "after": 809928
+  },
+  "report": {
+   "effects": 1500
+  }
+ },
+ {
+  "name": "a/kairo/broad",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.4431660000000015,
+  "run": {
+   "min": 0.05009749999999997,
+   "median": 0.056959160000000036,
+   "samples": [
+    0.06576584000000003,
+    0.056959160000000036,
+    0.05009749999999997,
+    0.05386250000000004,
+    0.0663466600000001
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 116992,
+   "after": 367376
+  },
+  "report": {
+   "effects": 1500
+  }
+ },
+ {
+  "name": "a/kairo/broad",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.3014159999999997,
+  "run": {
+   "min": 0.002995000000000019,
+   "median": 0.0035891799999999917,
+   "samples": [
+    0.004276659999999985,
+    0.004123320000000028,
+    0.0031916599999999916,
+    0.002995000000000019,
+    0.0035891799999999917
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 28136,
+   "after": 88848
+  },
+  "report": {
+   "effects": 1500
+  }
+ },
+ {
+  "name": "a/kairo/broad",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.5204170000000001,
+  "run": {
+   "min": 0.0034241600000000007,
+   "median": 0.004839999999999982,
+   "samples": [
+    0.00590168000000002,
+    0.007875820000000004,
+    0.004839999999999982,
+    0.003561680000000003,
+    0.0034241600000000007
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 34696,
+   "after": 121016
+  },
+  "report": {
+   "effects": 1500
+  }
+ },
+ {
+  "name": "a/kairo/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 3.6712089999999993,
+  "run": {
+   "min": 0.19039,
+   "median": 0.26479166000000004,
+   "samples": [
+    0.3501249999999999,
+    0.19039,
+    0.26479166000000004,
+    0.19453831999999976,
+    0.31969000000000025
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 282032,
+   "after": 687528
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.5013750000000012,
+  "run": {
+   "min": 0.03876166000000005,
+   "median": 0.041557499999999976,
+   "samples": [
+    0.04904665999999999,
+    0.03876166000000005,
+    0.041557499999999976,
+    0.04384916000000004,
+    0.041055000000000064
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 67400,
+   "after": 285408
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.36324999999999896,
+  "run": {
+   "min": 0.0021875,
+   "median": 0.0023499999999999945,
+   "samples": [
+    0.006126679999999993,
+    0.0028883400000000135,
+    0.0023341800000000034,
+    0.0021875,
+    0.0023499999999999945
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 14624,
+   "after": 68144
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.5944580000000013,
+  "run": {
+   "min": 0.002803339999999999,
+   "median": 0.0029524999999999933,
+   "samples": [
+    0.0031908200000000165,
+    0.0029524999999999933,
+    0.0028341600000000257,
+    0.002803339999999999,
+    0.004888340000000007
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 23792,
+   "after": 67528
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/diamond",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 5.213666,
+  "run": {
+   "min": 0.21597917999999994,
+   "median": 0.3761591799999999,
+   "samples": [
+    0.44036081999999993,
+    0.3761591799999999,
+    0.28889084,
+    0.21597917999999994,
+    0.4828541800000002
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 347544,
+   "after": 738888
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/diamond",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.964583000000001,
+  "run": {
+   "min": 0.04283916000000005,
+   "median": 0.04693082000000004,
+   "samples": [
+    0.06316084000000004,
+    0.04283916000000005,
+    0.04332666000000003,
+    0.05492750000000001,
+    0.04693082000000004
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 103304,
+   "after": 313688
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/diamond",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.3672500000000003,
+  "run": {
+   "min": 0.0026566600000000307,
+   "median": 0.0033891599999999757,
+   "samples": [
+    0.0045949999999999845,
+    0.003954159999999973,
+    0.0033891599999999757,
+    0.0029691599999999594,
+    0.0026566600000000307
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 17104,
+   "after": 78304
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/diamond",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.6461670000000002,
+  "run": {
+   "min": 0.0024224999999999854,
+   "median": 0.0036791600000000103,
+   "samples": [
+    0.006776679999999971,
+    0.006660000000000039,
+    0.0036791600000000103,
+    0.002572499999999991,
+    0.0024224999999999854
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 25280,
+   "after": 91376
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/mux",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "both",
+  "build": 22.014125,
+  "run": {
+   "min": 0.7930260250000003,
+   "median": 0.8763031250000004,
+   "samples": [
+    0.9575875,
+    0.8763031250000004,
+    1.002698975,
+    0.7941125,
+    0.7930260250000003
+   ]
+  },
+  "iterations": 40,
+  "check": "ok",
+  "heap": {
+   "built": 871632,
+   "after": 1427392
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mux",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "both",
+  "build": 8.432666999999999,
+  "run": {
+   "min": 0.13038124999999995,
+   "median": 0.14114687499999992,
+   "samples": [
+    0.15137499999999998,
+    0.13038124999999995,
+    0.18723332500000006,
+    0.139490625,
+    0.14114687499999992
+   ]
+  },
+  "iterations": 40,
+  "check": "ok",
+  "heap": {
+   "built": 258824,
+   "after": 499104
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mux",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "both",
+  "build": 0.6259999999999994,
+  "run": {
+   "min": 0.007057275000000018,
+   "median": 0.007366649999999986,
+   "samples": [
+    0.13868542499999997,
+    0.007347899999999985,
+    0.007390625000000028,
+    0.007366649999999986,
+    0.007057275000000018
+   ]
+  },
+  "iterations": 40,
+  "check": "ok",
+  "heap": {
+   "built": 65224,
+   "after": 142032
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mux",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "both",
+  "build": 0.716208,
+  "run": {
+   "min": 0.019885425000000012,
+   "median": 0.020073974999999945,
+   "samples": [
+    0.02265522500000001,
+    0.019885425000000012,
+    0.02016770000000001,
+    0.019914575000000045,
+    0.020073974999999945
+   ]
+  },
+  "iterations": 40,
+  "check": "ok",
+  "heap": {
+   "built": 84824,
+   "after": 117496
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/repeated",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "graph",
+  "build": 7.587167000000001,
+  "run": {
+   "min": 0.20729082000000004,
+   "median": 0.26891334,
+   "samples": [
+    0.3208574999999999,
+    0.20729082000000004,
+    0.26891334,
+    0.2448441599999998,
+    0.31610750000000026
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 224128,
+   "after": 602640
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/repeated",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "graph",
+  "build": 1.3145409999999984,
+  "run": {
+   "min": 0.03663668000000001,
+   "median": 0.04239917999999989,
+   "samples": [
+    0.10805334000000003,
+    0.05616750000000003,
+    0.04239917999999989,
+    0.03986000000000004,
+    0.03663668000000001
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 63016,
+   "after": 275296
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/repeated",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "graph",
+  "build": 0.41658299999999926,
+  "run": {
+   "min": 0.001531659999999988,
+   "median": 0.001838339999999974,
+   "samples": [
+    0.017023340000000005,
+    0.001870839999999987,
+    0.001531659999999988,
+    0.0018325000000000103,
+    0.001838339999999974
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 15128,
+   "after": 61328
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/repeated",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "graph",
+  "build": 0.5927910000000001,
+  "run": {
+   "min": 0.0017841800000000063,
+   "median": 0.0021983399999999874,
+   "samples": [
+    0.0026675000000000184,
+    0.0025008400000000107,
+    0.0021983399999999874,
+    0.0017841800000000063,
+    0.0021266800000000075
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 22752,
+   "after": 70928
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/triangle",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 7.290125000000003,
+  "run": {
+   "min": 0.3564433200000002,
+   "median": 0.59245834,
+   "samples": [
+    0.7272000000000003,
+    0.59245834,
+    0.6545008200000001,
+    0.5803341599999999,
+    0.3564433200000002
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 439232,
+   "after": 793336
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/triangle",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.814375,
+  "run": {
+   "min": 0.06068750000000009,
+   "median": 0.08196168,
+   "samples": [
+    0.08196168,
+    0.06820166,
+    0.0870508199999999,
+    0.10993917999999994,
+    0.06068750000000009
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 128016,
+   "after": 351736
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/triangle",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.4795000000000016,
+  "run": {
+   "min": 0.002460840000000033,
+   "median": 0.0033825000000000218,
+   "samples": [
+    0.00639166000000003,
+    0.004723320000000015,
+    0.0033825000000000218,
+    0.0031299999999999527,
+    0.002460840000000033
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 29024,
+   "after": 88792
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/triangle",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.5005419999999994,
+  "run": {
+   "min": 0.0017266599999999953,
+   "median": 0.00259249999999998,
+   "samples": [
+    0.009098320000000016,
+    0.005482499999999994,
+    0.00259249999999998,
+    0.0017266599999999953,
+    0.0018866600000000133
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 46168,
+   "after": 105544
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/unstable",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 3.7901249999999997,
+  "run": {
+   "min": 0.19320668000000013,
+   "median": 0.20826000000000008,
+   "samples": [
+    0.28087666,
+    0.20826000000000008,
+    0.19320668000000013,
+    0.20748831999999992,
+    0.22479583999999989
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 284320,
+   "after": 670504
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/unstable",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.2822499999999994,
+  "run": {
+   "min": 0.023144179999999962,
+   "median": 0.027745000000000034,
+   "samples": [
+    0.05747832000000003,
+    0.04051166000000002,
+    0.027745000000000034,
+    0.023144179999999962,
+    0.023669160000000033
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 73664,
+   "after": 296712
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/unstable",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.3894580000000012,
+  "run": {
+   "min": 0.002348339999999993,
+   "median": 0.0026266600000000293,
+   "samples": [
+    0.004777500000000003,
+    0.002645819999999972,
+    0.0026266600000000293,
+    0.002565000000000026,
+    0.002348339999999993
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 16072,
+   "after": 65992
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/unstable",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.5963340000000006,
+  "run": {
+   "min": 0.0029275000000000516,
+   "median": 0.004325819999999965,
+   "samples": [
+    0.004874180000000053,
+    0.004325819999999965,
+    0.004765820000000005,
+    0.0029275000000000516,
+    0.00305416000000001
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 23968,
+   "after": 101216
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/mol",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 6.7571249999999985,
+  "run": {
+   "min": 0.610158299999999,
+   "median": 0.7516124999999996,
+   "samples": [
+    1.5309124999999995,
+    0.7516124999999996,
+    0.7303667000000005,
+    0.8253,
+    0.610158299999999
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 406944,
+   "after": 727200
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mol",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.4939160000000005,
+  "run": {
+   "min": 0.25671249999999973,
+   "median": 0.30200829999999995,
+   "samples": [
+    0.3070208000000001,
+    0.30200829999999995,
+    0.25671249999999973,
+    0.27979580000000015,
+    0.32884169999999957
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 114600,
+   "after": 335632
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mol",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 1.0399579999999986,
+  "run": {
+   "min": 0.06457499999999997,
+   "median": 0.06971670000000003,
+   "samples": [
+    0.07759169999999997,
+    0.06971670000000003,
+    0.06679999999999993,
+    0.06457499999999997,
+    0.07359170000000007
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 32408,
+   "after": 103264
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/mol",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.2705409999999997,
+  "run": {
+   "min": 0.06566250000000018,
+   "median": 0.0679750000000002,
+   "samples": [
+    0.08192500000000003,
+    0.07075829999999997,
+    0.06702089999999998,
+    0.0679750000000002,
+    0.06566250000000018
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 47168,
+   "after": 117528
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/s/create/0to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.06466700000000003,
+  "run": {
+   "min": 0.9805416666666721,
+   "median": 2.497471999999997,
+   "samples": [
+    4.482055333333332,
+    2.516805666666668,
+    1.654681000000006,
+    2.497471999999997,
+    0.9805416666666721
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 1053040
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/0to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.036583999999999506,
+  "run": {
+   "min": 0.18388866666666695,
+   "median": 0.35562499999999986,
+   "samples": [
+    0.3063749999999992,
+    0.4787363333333339,
+    0.35562499999999986,
+    0.35901399999999956,
+    0.18388866666666695
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 537512
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/0to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.06366700000000058,
+  "run": {
+   "min": 0.017764000000000262,
+   "median": 0.025986000000000214,
+   "samples": [
+    0.025986000000000214,
+    0.020874666666667114,
+    0.05877766666666654,
+    0.031027666666666082,
+    0.017764000000000262
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 35552
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/0to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.06137499999999996,
+  "run": {
+   "min": 0.027902666666667148,
+   "median": 0.044013666666666985,
+   "samples": [
+    0.044013666666666985,
+    0.02919433333333406,
+    0.07022233333333361,
+    0.04991666666666698,
+    0.027902666666667148
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 49120
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.04220899999999972,
+  "run": {
+   "min": 2.058180666666663,
+   "median": 2.6365416666666683,
+   "samples": [
+    2.6365416666666683,
+    2.7935976666666655,
+    2.852917,
+    2.058180666666663,
+    2.2174446666666703
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 797544
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.04345799999999933,
+  "run": {
+   "min": 0.2544863333333325,
+   "median": 0.40838933333333455,
+   "samples": [
+    0.478694666666667,
+    0.40838933333333455,
+    0.4583056666666643,
+    0.38030533333333355,
+    0.2544863333333325
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 697440
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.0367090000000001,
+  "run": {
+   "min": 0.035388666666667255,
+   "median": 0.05291666666666709,
+   "samples": [
+    0.055139333333332985,
+    0.036749666666667125,
+    0.07305533333333376,
+    0.05291666666666709,
+    0.035388666666667255
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 133728
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.06187500000000057,
+  "run": {
+   "min": 0.07629166666666738,
+   "median": 0.0933196666666672,
+   "samples": [
+    0.0933196666666672,
+    0.11702733333333508,
+    0.09602766666666677,
+    0.09015266666666832,
+    0.07629166666666738
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 98880
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.03787499999999966,
+  "run": {
+   "min": 1.4231249999999989,
+   "median": 2.1388056666666677,
+   "samples": [
+    3.1443056666666678,
+    2.0857916666666654,
+    2.1388056666666677,
+    3.2757079999999994,
+    1.4231249999999989
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 756968
+  },
+  "report": {
+   "computations": 20
+  }
+ },
+ {
+  "name": "a/s/create/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.06337500000000063,
+  "run": {
+   "min": 0.2638890000000013,
+   "median": 0.3365416666666678,
+   "samples": [
+    0.6665140000000006,
+    0.3365416666666678,
+    0.332374999999999,
+    0.37129199999999923,
+    0.2638890000000013
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 634592
+  },
+  "report": {
+   "computations": 20
+  }
+ },
+ {
+  "name": "a/s/create/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.06012499999999932,
+  "run": {
+   "min": 0.04130566666666624,
+   "median": 0.05723599999999962,
+   "samples": [
+    0.05723599999999962,
+    0.054055666666666724,
+    0.08450000000000084,
+    0.06476399999999909,
+    0.04130566666666624
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 115576
+  },
+  "report": {
+   "computations": 20
+  }
+ },
+ {
+  "name": "a/s/create/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.0642499999999977,
+  "run": {
+   "min": 0.054513999999999875,
+   "median": 0.06677766666666685,
+   "samples": [
+    0.06054166666666797,
+    0.06695833333333212,
+    0.0986110000000006,
+    0.06677766666666685,
+    0.054513999999999875
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 83160
+  },
+  "report": {
+   "computations": 20
+  }
+ },
+ {
+  "name": "a/s/create/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.0711250000000021,
+  "run": {
+   "min": 1.710457999999998,
+   "median": 2.253555666666666,
+   "samples": [
+    2.253555666666666,
+    2.897264000000002,
+    3.4369170000000033,
+    2.2415836666666613,
+    1.710457999999998
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 972032
+  },
+  "report": {
+   "computations": 10
+  }
+ },
+ {
+  "name": "a/s/create/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.08204100000000025,
+  "run": {
+   "min": 0.302764000000001,
+   "median": 0.401027999999999,
+   "samples": [
+    0.6090416666666675,
+    0.4277083333333316,
+    0.302764000000001,
+    0.34113899999999947,
+    0.401027999999999
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 569768
+  },
+  "report": {
+   "computations": 10
+  }
+ },
+ {
+  "name": "a/s/create/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.05624999999999858,
+  "run": {
+   "min": 0.03959733333333304,
+   "median": 0.045999999999999375,
+   "samples": [
+    0.03959733333333304,
+    0.0470276666666661,
+    0.07952766666666615,
+    0.045999999999999375,
+    0.03986133333333323
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 87072
+  },
+  "report": {
+   "computations": 10
+  }
+ },
+ {
+  "name": "a/s/create/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.04195800000000105,
+  "run": {
+   "min": 0.04034733333333307,
+   "median": 0.046833333333333727,
+   "samples": [
+    0.04573600000000037,
+    0.046833333333333727,
+    0.09051400000000005,
+    0.05041666666666641,
+    0.04034733333333307
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 69176
+  },
+  "report": {
+   "computations": 10
+  }
+ },
+ {
+  "name": "a/s/create/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.054209000000000174,
+  "run": {
+   "min": 1.4313053333333343,
+   "median": 1.5492086666666651,
+   "samples": [
+    3.213513666666666,
+    1.4404026666666663,
+    1.5492086666666651,
+    1.4313053333333343,
+    1.6759309999999985
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 903632
+  },
+  "report": {
+   "computations": 1
+  }
+ },
+ {
+  "name": "a/s/create/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.0664580000000008,
+  "run": {
+   "min": 0.2262776666666658,
+   "median": 0.36563866666666794,
+   "samples": [
+    0.6048196666666664,
+    0.36563866666666794,
+    1.7447636666666664,
+    0.2885133333333319,
+    0.2262776666666658
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 590568
+  },
+  "report": {
+   "computations": 1
+  }
+ },
+ {
+  "name": "a/s/create/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.04220800000000047,
+  "run": {
+   "min": 0.026791666666666696,
+   "median": 0.03530600000000087,
+   "samples": [
+    0.03115266666666609,
+    0.03669433333333316,
+    0.08233333333333093,
+    0.03530600000000087,
+    0.026791666666666696
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 85448
+  },
+  "report": {
+   "computations": 1
+  }
+ },
+ {
+  "name": "a/s/create/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.06833300000000087,
+  "run": {
+   "min": 0.031513666666666516,
+   "median": 0.04116633333333297,
+   "samples": [
+    0.03554166666666703,
+    0.04116633333333297,
+    0.07866633333333202,
+    0.0465973333333333,
+    0.031513666666666516
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 66448
+  },
+  "report": {
+   "computations": 1
+  }
+ },
+ {
+  "name": "a/s/create/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.06037500000000051,
+  "run": {
+   "min": 2.15640333333333,
+   "median": 2.592097333333335,
+   "samples": [
+    3.5670836666666665,
+    2.592097333333335,
+    5.229541666666667,
+    2.4822916666666637,
+    2.15640333333333
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 785568
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.06408300000000011,
+  "run": {
+   "min": 0.31137500000000057,
+   "median": 0.4813886666666664,
+   "samples": [
+    0.8503469999999993,
+    0.6419030000000004,
+    0.4813886666666664,
+    0.3625416666666664,
+    0.31137500000000057
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 632968
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.0491659999999996,
+  "run": {
+   "min": 0.04697233333333273,
+   "median": 0.088069666666667,
+   "samples": [
+    0.088069666666667,
+    0.04697233333333273,
+    0.09402800000000038,
+    0.1642363333333338,
+    0.07687466666666747
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 128512
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.12716700000000003,
+  "run": {
+   "min": 0.0510693333333343,
+   "median": 0.10406933333333394,
+   "samples": [
+    0.05479166666666657,
+    0.20634733333333344,
+    0.0510693333333343,
+    0.11791699999999967,
+    0.10406933333333394
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 9728,
+   "after": 70904
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.04791699999999999,
+  "run": {
+   "min": 1.9896529999999994,
+   "median": 2.7663886666666664,
+   "samples": [
+    3.6072639999999985,
+    2.6163469999999998,
+    3.682652999999997,
+    1.9896529999999994,
+    2.7663886666666664
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 786952
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.04733399999999932,
+  "run": {
+   "min": 0.39941633333333354,
+   "median": 0.43398600000000087,
+   "samples": [
+    0.874527333333333,
+    0.43398600000000087,
+    0.39941633333333354,
+    0.5271529999999996,
+    0.4264446666666686
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 573640
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.06966699999999904,
+  "run": {
+   "min": 0.027180333333332623,
+   "median": 0.04227800000000078,
+   "samples": [
+    0.04452799999999968,
+    0.034472000000000946,
+    0.06563899999999971,
+    0.04227800000000078,
+    0.027180333333332623
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 92976
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.04300000000000104,
+  "run": {
+   "min": 0.038416999999999035,
+   "median": 0.051139000000000344,
+   "samples": [
+    0.051139000000000344,
+    0.08029166666666754,
+    0.050999999999999567,
+    0.06099999999999876,
+    0.038416999999999035
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 63752
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to8",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.043874999999999886,
+  "run": {
+   "min": 2.3401946666666666,
+   "median": 3.366264000000006,
+   "samples": [
+    4.657013666666667,
+    2.6812496666666683,
+    4.728791333333334,
+    3.366264000000006,
+    2.3401946666666666
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 785352
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to8",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.042500000000000426,
+  "run": {
+   "min": 0.3014996666666659,
+   "median": 0.3797356666666675,
+   "samples": [
+    0.5047360000000012,
+    0.3842916666666672,
+    0.3797356666666675,
+    0.3014996666666659,
+    0.31043100000000007
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 556048
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to8",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.06295800000000007,
+  "run": {
+   "min": 0.02681966666666587,
+   "median": 0.0505693333333331,
+   "samples": [
+    0.04472200000000015,
+    0.0505693333333331,
+    0.09158333333333364,
+    0.06393099999999781,
+    0.02681966666666587
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2744,
+   "after": 97512
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to8",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.043082999999999316,
+  "run": {
+   "min": 0.0575276666666665,
+   "median": 0.07345800000000106,
+   "samples": [
+    0.06641666666666761,
+    0.10004199999999959,
+    0.07345800000000106,
+    0.0575276666666665,
+    0.07895833333333258
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 68536
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 0.04216699999999918,
+  "run": {
+   "min": 2.557208666666663,
+   "median": 4.428666666666667,
+   "samples": [
+    5.898916333333335,
+    2.557208666666663,
+    4.428666666666667,
+    4.936096999999999,
+    3.0514586666666665
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 784128
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 0.07716699999999932,
+  "run": {
+   "min": 0.24176366666666857,
+   "median": 0.36193066666666596,
+   "samples": [
+    0.716916666666665,
+    0.6011803333333331,
+    0.3048750000000003,
+    0.36193066666666596,
+    0.24176366666666857
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2640,
+   "after": 549048
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.07370900000000091,
+  "run": {
+   "min": 0.027083333333332387,
+   "median": 0.03577766666666804,
+   "samples": [
+    0.03577766666666804,
+    0.035361000000000566,
+    0.07031933333333147,
+    0.04380566666666633,
+    0.027083333333332387
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 90400
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.06370900000000113,
+  "run": {
+   "min": 0.03284733333333397,
+   "median": 0.04927733333333487,
+   "samples": [
+    0.04608333333333311,
+    0.08098600000000052,
+    0.04927733333333487,
+    0.061624999999999375,
+    0.03284733333333397
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2664,
+   "after": 67480
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/update/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 14.862125,
+  "run": {
+   "min": 2.9616390000000004,
+   "median": 4.499125000000002,
+   "samples": [
+    3.7806250000000006,
+    5.193152999999998,
+    4.499125000000002,
+    7.241555666666666,
+    2.9616390000000004
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 775224,
+   "after": 1027888
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 4.945625,
+  "run": {
+   "min": 0.8402776666666677,
+   "median": 0.9655139999999989,
+   "samples": [
+    2.075250000000002,
+    1.2294030000000002,
+    0.9655139999999989,
+    0.9033053333333333,
+    0.8402776666666677
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 296728,
+   "after": 503856
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 1.1633749999999985,
+  "run": {
+   "min": 0.037527666666666924,
+   "median": 0.06427799999999924,
+   "samples": [
+    0.04937500000000009,
+    0.09279166666666683,
+    0.07879166666666748,
+    0.06427799999999924,
+    0.037527666666666924
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 76384,
+   "after": 459536
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.3550000000000004,
+  "run": {
+   "min": 0.050361333333332446,
+   "median": 0.06865266666666632,
+   "samples": [
+    0.09415299999999978,
+    0.06865266666666632,
+    0.06913899999999984,
+    0.06066666666666739,
+    0.050361333333332446
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 91208,
+   "after": 467584
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 16.693708,
+  "run": {
+   "min": 3.023027666666669,
+   "median": 4.016152999999998,
+   "samples": [
+    5.019305666666668,
+    6.227361000000002,
+    4.016152999999998,
+    3.0515000000000043,
+    3.023027666666669
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 521184,
+   "after": 880128
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 3.2395829999999997,
+  "run": {
+   "min": 0.5002640000000014,
+   "median": 0.5794443333333325,
+   "samples": [
+    0.8845556666666674,
+    0.8781389999999997,
+    0.5794443333333325,
+    0.5021389999999997,
+    0.5002640000000014
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 253048,
+   "after": 424560
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.9951249999999998,
+  "run": {
+   "min": 0.02777800000000023,
+   "median": 0.039986333333333825,
+   "samples": [
+    0.039986333333333825,
+    0.07652766666666604,
+    0.04255566666666629,
+    0.038305666666667314,
+    0.02777800000000023
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 66464,
+   "after": 94952
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.417459000000001,
+  "run": {
+   "min": 0.027902666666665965,
+   "median": 0.03523599999999997,
+   "samples": [
+    0.03523599999999997,
+    0.0644306666666677,
+    0.036291666666667055,
+    0.0325833333333326,
+    0.027902666666665965
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 81608,
+   "after": 109208
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 10.851875,
+  "run": {
+   "min": 1.915499999999999,
+   "median": 2.2505556666666657,
+   "samples": [
+    1.915499999999999,
+    2.674638999999999,
+    2.2505556666666657,
+    2.2332779999999985,
+    3.37947233333333
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 542992,
+   "after": 934520
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.2201249999999995,
+  "run": {
+   "min": 0.25966666666666666,
+   "median": 0.5295416666666668,
+   "samples": [
+    0.604472,
+    0.5295416666666668,
+    0.4677220000000008,
+    0.5874166666666673,
+    0.25966666666666666
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 234200,
+   "after": 399616
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.9370000000000012,
+  "run": {
+   "min": 0.02063900000000037,
+   "median": 0.029430666666666383,
+   "samples": [
+    0.029430666666666383,
+    0.06016666666666618,
+    0.031083333333333723,
+    0.027125000000000437,
+    0.02063900000000037
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 61296,
+   "after": 104928
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.0964170000000006,
+  "run": {
+   "min": 0.030069666666667178,
+   "median": 0.035041666666667005,
+   "samples": [
+    0.035041666666667005,
+    0.03372233333333341,
+    0.07593066666666697,
+    0.03513900000000092,
+    0.030069666666667178
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 69752,
+   "after": 102296
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 7.715584,
+  "run": {
+   "min": 1.1815416666666678,
+   "median": 1.380583333333334,
+   "samples": [
+    1.5499723333333317,
+    1.380583333333334,
+    1.6065279999999997,
+    1.3528053333333336,
+    1.1815416666666678
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 352976,
+   "after": 766760
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.9429169999999996,
+  "run": {
+   "min": 0.16827799999999962,
+   "median": 0.24631966666666708,
+   "samples": [
+    0.3719723333333332,
+    0.27477800000000013,
+    0.24631966666666708,
+    0.21737500000000054,
+    0.16827799999999962
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 200720,
+   "after": 373152
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.577083,
+  "run": {
+   "min": 0.009388999999999944,
+   "median": 0.018041666666666956,
+   "samples": [
+    0.022972333333333594,
+    0.04826366666666656,
+    0.018041666666666956,
+    0.016861333333333544,
+    0.009388999999999944
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 46616,
+   "after": 83424
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.6900000000000013,
+  "run": {
+   "min": 0.01519433333333294,
+   "median": 0.02330533333333366,
+   "samples": [
+    0.027569333333332818,
+    0.02330533333333366,
+    0.0467636666666665,
+    0.022375000000000256,
+    0.01519433333333294
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 52120,
+   "after": 90040
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 8.912875,
+  "run": {
+   "min": 1.6911666666666652,
+   "median": 1.8856946666666683,
+   "samples": [
+    2.474111333333333,
+    2.1113196666666667,
+    1.8856946666666683,
+    1.6911666666666652,
+    1.8785973333333317
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 744848,
+   "after": 1002184
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.1252499999999994,
+  "run": {
+   "min": 0.3060833333333335,
+   "median": 0.44768066666666684,
+   "samples": [
+    0.5462083333333325,
+    0.5587363333333334,
+    0.44768066666666684,
+    0.3113889999999995,
+    0.3060833333333335
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 254656,
+   "after": 440216
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.8801670000000001,
+  "run": {
+   "min": 0.03344433333333422,
+   "median": 0.03794433333333321,
+   "samples": [
+    0.03729166666666591,
+    0.0768469999999996,
+    0.03893033333333307,
+    0.03794433333333321,
+    0.03344433333333422
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 74720,
+   "after": 112896
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.0390829999999998,
+  "run": {
+   "min": 0.03834733333333299,
+   "median": 0.05588899999999993,
+   "samples": [
+    0.07352800000000019,
+    0.05588899999999993,
+    0.07847199999999965,
+    0.04115300000000014,
+    0.03834733333333299
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 84376,
+   "after": 122816
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 12.065750000000001,
+  "run": {
+   "min": 1.3606109999999962,
+   "median": 2.6202499999999986,
+   "samples": [
+    3.377611333333332,
+    2.9686529999999984,
+    2.434138666666667,
+    2.6202499999999986,
+    1.3606109999999962
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 707264,
+   "after": 971728
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.712624999999999,
+  "run": {
+   "min": 0.47037500000000065,
+   "median": 0.6085139999999996,
+   "samples": [
+    1.1894859999999998,
+    0.6466666666666671,
+    0.5133890000000001,
+    0.47037500000000065,
+    0.6085139999999996
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 242088,
+   "after": 438552
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.6006670000000014,
+  "run": {
+   "min": 0.027249999999999847,
+   "median": 0.06769466666666683,
+   "samples": [
+    0.04081933333333391,
+    0.08211133333333365,
+    0.07840266666666551,
+    0.06769466666666683,
+    0.027249999999999847
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 65752,
+   "after": 106320
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.1332079999999998,
+  "run": {
+   "min": 0.02280533333333305,
+   "median": 0.0332359999999999,
+   "samples": [
+    0.05556966666666696,
+    0.03593066666666663,
+    0.0332359999999999,
+    0.02672199999999947,
+    0.02280533333333305
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 81408,
+   "after": 110136
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 10.414334,
+  "run": {
+   "min": 1.9900276666666674,
+   "median": 2.991208333333333,
+   "samples": [
+    4.628541666666668,
+    2.7141943333333316,
+    2.991208333333333,
+    3.423471999999999,
+    1.9900276666666674
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 683488,
+   "after": 974000
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 2.222042,
+  "run": {
+   "min": 0.23680566666666655,
+   "median": 0.3656946666666663,
+   "samples": [
+    1.0275416666666668,
+    0.3794026666666663,
+    0.3656946666666663,
+    0.34168066666666636,
+    0.23680566666666655
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 228744,
+   "after": 429960
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.8445419999999988,
+  "run": {
+   "min": 0.029735999999999763,
+   "median": 0.037971999999999895,
+   "samples": [
+    0.03945833333333345,
+    0.07180533333333372,
+    0.037971999999999895,
+    0.0336110000000005,
+    0.029735999999999763
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 62520,
+   "after": 100904
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 1.1417080000000013,
+  "run": {
+   "min": 0.02698599999999966,
+   "median": 0.038000000000000256,
+   "samples": [
+    0.08630533333333308,
+    0.044653000000000276,
+    0.038000000000000256,
+    0.028861333333334,
+    0.02698599999999966
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 76856,
+   "after": 110792
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/teardown",
+  "group": "A",
+  "size": "small",
+  "framework": "ermine",
+  "measures": "scheduler",
+  "build": 7.2514579999999995,
+  "run": {
+   "min": 0.2203336666666639,
+   "median": 0.3044166666666707,
+   "samples": [
+    0.2793886666666623,
+    0.4914446666666687,
+    0.3044166666666707,
+    0.2203336666666639,
+    0.3373470000000012
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 594440,
+   "after": 1104712
+  }
+ },
+ {
+  "name": "a/s/teardown",
+  "group": "A",
+  "size": "small",
+  "framework": "bare",
+  "measures": "scheduler",
+  "build": 1.8962500000000002,
+  "run": {
+   "min": 0.08004199999999884,
+   "median": 0.10762466666666626,
+   "samples": [
+    0.26556933333333416,
+    0.20465266666666793,
+    0.10762466666666626,
+    0.09936100000000063,
+    0.08004199999999884
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 217616,
+   "after": 742456
+  }
+ },
+ {
+  "name": "a/s/teardown",
+  "group": "A",
+  "size": "small",
+  "framework": "alien",
+  "measures": "scheduler",
+  "build": 0.39316700000000004,
+  "run": {
+   "min": 0.0009586666666668483,
+   "median": 0.0014026666666673293,
+   "samples": [
+    0.006888666666666173,
+    0.0014026666666673293,
+    0.001958333333332026,
+    0.0009586666666668483,
+    0.0012086666666668577
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 12752,
+   "after": 45432
+  }
+ },
+ {
+  "name": "a/s/teardown",
+  "group": "A",
+  "size": "small",
+  "framework": "preact",
+  "measures": "scheduler",
+  "build": 0.27399999999999913,
+  "run": {
+   "min": 0.0005279999999991958,
+   "median": 0.0019996666666664,
+   "samples": [
+    0.009680333333333735,
+    0.001139333333333899,
+    0.0019996666666664,
+    0.002250333333333169,
+    0.0005279999999991958
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 11440,
+   "after": 53664
+  }
+ },
+ {
+  "name": "b/at/write",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 10.711917,
+  "run": {
+   "min": 2.670709000000002,
+   "median": 2.8681669999999997,
+   "samples": [
+    2.8681669999999997,
+    2.842000000000006,
+    2.670709000000002,
+    2.9664590000000004,
+    3.794542
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 944632,
+   "after": 1114960
+  },
+  "report": {
+   "atMsPerRun": 1.8070971666666675,
+   "addressMsPerRun": 1.676895833333333
+  }
+ },
+ {
+  "name": "b/at/make",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 6.512957999999999,
+  "run": {
+   "min": 1.6382909999999953,
+   "median": 2.389083999999997,
+   "samples": [
+    2.4719169999999977,
+    2.3312500000000043,
+    2.4827919999999963,
+    2.389083999999997,
+    1.6382909999999953
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 866600,
+   "after": 5728000
+  }
+ },
+ {
+  "name": "b/ephemeral/churn",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.3942499999999995,
+  "run": {
+   "min": 4.456834000000001,
+   "median": 4.796999999999997,
+   "samples": [
+    6.596084000000005,
+    6.205624999999998,
+    4.796999999999997,
+    4.456834000000001,
+    4.779458000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 53720,
+   "after": 340168
+  }
+ },
+ {
+  "name": "b/ephemeral/tree",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 5.166708000000002,
+  "run": {
+   "min": 0.2025839999999981,
+   "median": 0.25950000000000273,
+   "samples": [
+    0.7062920000000013,
+    0.7014160000000018,
+    0.25950000000000273,
+    0.24008399999999952,
+    0.2025839999999981
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 740280,
+   "after": 840960
+  },
+  "report": {
+   "nodes": 364
+  }
+ },
+ {
+  "name": "b/layers/stack",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.5497910000000008,
+  "run": {
+   "min": 14.992500000000007,
+   "median": 16.749832999999995,
+   "samples": [
+    19.706333,
+    16.189916999999994,
+    18.452957999999995,
+    16.749832999999995,
+    14.992500000000007
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 77352,
+   "after": 385864
+  },
+  "report": {
+   "bare": 1.4461670000000026,
+   "entry": 2.530833999999999,
+   "protect": 1.5322499999999764,
+   "entry+protect": 4.005332999999979,
+   "view": 1.4144170000000145,
+   "entry+capture": 80.97750000000019
+  }
+ },
+ {
+  "name": "b/lookups/deep",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.6289580000000008,
+  "run": {
+   "min": 5.139209000000001,
+   "median": 5.909708999999999,
+   "samples": [
+    5.539459000000001,
+    6.716417000000007,
+    5.909708999999999,
+    5.139209000000001,
+    6.065750000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 160944,
+   "after": 366872
+  }
+ },
+ {
+  "name": "b/lookups/modules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 2.388749999999998,
+  "run": {
+   "min": 0.279874999999997,
+   "median": 1.8129169999999988,
+   "samples": [
+    1.8129169999999988,
+    3.323500000000003,
+    0.797542,
+    6.084707999999999,
+    0.279874999999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 179744,
+   "after": 256832
+  },
+  "report": {
+   "resolutions": 40
+  }
+ },
+ {
+  "name": "b/lookups/retarget",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 9.950624999999999,
+  "run": {
+   "min": 0.08129200000000125,
+   "median": 0.09316700000000111,
+   "samples": [
+    0.22129099999999724,
+    0.24954100000000068,
+    0.09316700000000111,
+    0.08129200000000125,
+    0.08962500000000162
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 449832,
+   "after": 481928
+  }
+ },
+ {
+  "name": "b/mounts/fan",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 5.06625,
+  "run": {
+   "min": 0.3531670000000027,
+   "median": 0.40050000000000097,
+   "samples": [
+    0.5147919999999999,
+    0.4856250000000024,
+    0.3939160000000008,
+    0.3531670000000027,
+    0.40050000000000097
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 455680,
+   "after": 500600
+  }
+ },
+ {
+  "name": "b/mounts/pending",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 10.028167,
+  "run": {
+   "min": 0.1570840000000011,
+   "median": 0.21875,
+   "samples": [
+    0.28504099999999966,
+    0.213124999999998,
+    0.1570840000000011,
+    0.21875,
+    0.22274999999999778
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 424600,
+   "after": 1016728
+  }
+ },
+ {
+  "name": "b/moves/subtree",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 5.386999999999999,
+  "run": {
+   "min": 0.03599999999999781,
+   "median": 0.039791999999998495,
+   "samples": [
+    0.05408299999999855,
+    0.039791999999998495,
+    0.04437499999999872,
+    0.03599999999999781,
+    0.037375000000000824
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1134896,
+   "after": 1169984
+  }
+ },
+ {
+  "name": "b/paths/deep",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.6078330000000012,
+  "run": {
+   "min": 5.374459000000002,
+   "median": 6.435749999999999,
+   "samples": [
+    6.581125000000004,
+    6.435749999999999,
+    5.374459000000002,
+    6.220041999999999,
+    6.935124999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 225496,
+   "after": 839560
+  },
+  "report": {
+   "steps": 101
+  }
+ },
+ {
+  "name": "b/paths/dotdot",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 3.556000000000001,
+  "run": {
+   "min": 1.9273329999999973,
+   "median": 2.6940840000000037,
+   "samples": [
+    5.973125,
+    2.953832999999996,
+    2.6940840000000037,
+    2.5308339999999987,
+    1.9273329999999973
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 371288,
+   "after": 456984
+  }
+ },
+ {
+  "name": "b/protect/rules",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.5939999999999994,
+  "run": {
+   "min": 4.509709000000001,
+   "median": 4.888708000000001,
+   "samples": [
+    6.286708999999998,
+    4.8970839999999995,
+    4.888708000000001,
+    4.509709000000001,
+    4.677250000000001
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 114464,
+   "after": 263592
+  },
+  "report": {
+   "asksPerRead": 12,
+   "rules": 10
+  }
+ },
+ {
+  "name": "b/protect/refused",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 4.480167000000002,
+  "run": {
+   "min": 0.08141700000000185,
+   "median": 0.08804100000000048,
+   "samples": [
+    0.16029100000000085,
+    0.12454199999999815,
+    0.08479099999999917,
+    0.08804100000000048,
+    0.08141700000000185
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 182992,
+   "after": 290472
+  }
+ },
+ {
+  "name": "b/protect/union",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.587833999999999,
+  "run": {
+   "min": 0.8165830000000014,
+   "median": 1.3129580000000018,
+   "samples": [
+    1.7687500000000007,
+    1.8360839999999996,
+    0.9516670000000005,
+    0.8165830000000014,
+    1.3129580000000018
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 85000,
+   "after": 204952
+  }
+ },
+ {
+  "name": "b/restore/kept",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 11.356708000000001,
+  "run": {
+   "min": 1.618541999999998,
+   "median": 3.125084000000001,
+   "samples": [
+    4.005208999999994,
+    3.347541999999997,
+    2.570042000000001,
+    3.125084000000001,
+    1.618541999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2589152,
+   "after": 2655752
+  },
+  "report": {
+   "nodes": 1101
+  }
+ },
+ {
+  "name": "b/restore/footprint",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 0.037624999999998465,
+  "run": {
+   "min": 33.102875,
+   "median": 35.86937499999999,
+   "samples": [
+    35.495959,
+    33.102875,
+    36.791082999999986,
+    35.86937499999999,
+    37.621290999999985
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2960,
+   "after": 2620392
+  },
+  "report": {
+   "bytesPerNode": 182.784,
+   "bytesPerSlotEntry": 530.136,
+   "bytesPerTrackedRead": 717.208,
+   "bytesPerSubscription": 595.544
+  }
+ },
+ {
+  "name": "b/subscribe/quiet",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 10.389083,
+  "run": {
+   "min": 10.448833999999998,
+   "median": 11.726084,
+   "samples": [
+    11.156875,
+    10.448833999999998,
+    11.726084,
+    14.217917,
+    18.649208
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1549648,
+   "after": 1648392
+  }
+ },
+ {
+  "name": "b/subscribe/hot",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.8361670000000014,
+  "run": {
+   "min": 0.7622919999999986,
+   "median": 0.8033749999999991,
+   "samples": [
+    1.0563749999999992,
+    0.7842920000000007,
+    0.8087079999999993,
+    0.8033749999999991,
+    0.7622919999999986
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 143952,
+   "after": 239256
+  }
+ },
+ {
+  "name": "b/subscribe/route",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.9874170000000007,
+  "run": {
+   "min": 0.36666699999999963,
+   "median": 0.5789580000000001,
+   "samples": [
+    0.6807079999999992,
+    0.36666699999999963,
+    0.5789580000000001,
+    0.5839170000000031,
+    0.3805829999999979
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 152264,
+   "after": 310624
+  }
+ },
+ {
+  "name": "b/subscribe/untaken",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 2.8514999999999997,
+  "run": {
+   "min": 1.3805419999999984,
+   "median": 1.889208,
+   "samples": [
+    2.1643749999999997,
+    2.040082999999999,
+    1.889208,
+    1.6832090000000015,
+    1.3805419999999984
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 58416,
+   "after": 1606920
+  },
+  "report": {
+   "bytesPerEvent": 258,
+   "events": 6000
+  }
+ },
+ {
+  "name": "b/tracking/readers",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 5.165249999999999,
+  "run": {
+   "min": 1.409625000000002,
+   "median": 1.5805410000000002,
+   "samples": [
+    2.0674589999999995,
+    1.9699580000000019,
+    1.5108749999999986,
+    1.409625000000002,
+    1.5805410000000002
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 599888,
+   "after": 668792
+  }
+ },
+ {
+  "name": "b/tracking/wide",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 9.771041,
+  "run": {
+   "min": 2.4393329999999978,
+   "median": 2.740124999999999,
+   "samples": [
+    2.740124999999999,
+    2.616749999999996,
+    3.356583999999998,
+    2.4393329999999978,
+    5.7357920000000036
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1770400,
+   "after": 1936040
+  }
+ },
+ {
+  "name": "b/tracking/rerun",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.2333750000000006,
+  "run": {
+   "min": 0.2870829999999991,
+   "median": 0.3328330000000008,
+   "samples": [
+    0.40491600000000005,
+    0.2879579999999997,
+    0.2870829999999991,
+    0.38370800000000216,
+    0.3328330000000008
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 86360,
+   "after": 249344
+  }
+ },
+ {
+  "name": "b/unions/walk-last",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.2083330000000014,
+  "run": {
+   "min": 3.2756669999999986,
+   "median": 6.067791,
+   "samples": [
+    6.067791,
+    4.4439579999999985,
+    6.831417000000002,
+    7.303417000000003,
+    3.2756669999999986
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 80704,
+   "after": 214136
+  }
+ },
+ {
+  "name": "b/unions/read",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 3.0201659999999997,
+  "run": {
+   "min": 13.405749999999998,
+   "median": 17.670707999999998,
+   "samples": [
+    17.670707999999998,
+    17.822333,
+    18.393166000000008,
+    13.405749999999998,
+    13.828874999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 213216,
+   "after": 389360
+  }
+ },
+ {
+  "name": "b/values/typed",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 2.4787909999999993,
+  "run": {
+   "min": 0.46095900000000256,
+   "median": 0.5237909999999992,
+   "samples": [
+    0.7549589999999995,
+    0.5237909999999992,
+    0.47720800000000096,
+    0.46095900000000256,
+    0.6472080000000027
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 55904,
+   "after": 184896
+  }
+ },
+ {
+  "name": "b/values/string",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 4.183750000000002,
+  "run": {
+   "min": 1.040458000000001,
+   "median": 1.076708,
+   "samples": [
+    1.242167000000002,
+    1.0504169999999995,
+    1.1104999999999983,
+    1.040458000000001,
+    1.076708
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 58136,
+   "after": 171368
+  }
+ },
+ {
+  "name": "b/values/map",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.5431670000000004,
+  "run": {
+   "min": 0.7498749999999994,
+   "median": 1.0856250000000003,
+   "samples": [
+    1.9409160000000014,
+    1.5498750000000001,
+    1.0856250000000003,
+    0.7498749999999994,
+    0.8423329999999964
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 84960,
+   "after": 278664
+  }
+ },
+ {
+  "name": "b/wide/place",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.414083999999999,
+  "run": {
+   "min": 2.2989999999999995,
+   "median": 2.5600839999999963,
+   "samples": [
+    2.7733750000000015,
+    2.7520000000000024,
+    2.2989999999999995,
+    2.5472079999999977,
+    2.5600839999999963
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 53552,
+   "after": 4528752
+  }
+ },
+ {
+  "name": "b/wide/directory",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 8.513917,
+  "run": {
+   "min": 16.004082999999994,
+   "median": 19.292999999999992,
+   "samples": [
+    21.217666,
+    16.004082999999994,
+    22.863540999999998,
+    19.292999999999992,
+    17.156333000000004
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 983552,
+   "after": 1046080
+  }
+ },
+ {
+  "name": "b/wide/slot",
+  "group": "B",
+  "size": "small",
+  "measures": "graph",
+  "build": 1.3577919999999999,
+  "run": {
+   "min": 0.5585419999999992,
+   "median": 0.8860410000000023,
+   "samples": [
+    1.5175839999999994,
+    0.8234999999999992,
+    1.4563329999999972,
+    0.8860410000000023,
+    0.5585419999999992
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 53808,
+   "after": 438016
+  }
+ },
+ {
+  "name": "c/arrive",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 17.988000000000003,
+  "run": {
+   "min": 0.05351479000000005,
+   "median": 0.05839124999999996,
+   "samples": [
+    0.07953062499999998,
+    0.05839124999999996,
+    0.05351479000000005
+   ]
+  },
+  "iterations": 200,
+  "check": "ok",
+  "heap": {
+   "built": 1249552,
+   "after": 1512304
+  }
+ },
+ {
+  "name": "c/boot",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 10.678292,
+  "run": {
+   "min": 1.4242909999999966,
+   "median": 1.8277920000000023,
+   "samples": [
+    2.404,
+    1.4242909999999966,
+    1.8277920000000023
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1650400,
+   "after": 1990456
+  }
+ },
+ {
+  "name": "c/classroom",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 7.702249999999999,
+  "run": {
+   "min": 2.3581660000000007,
+   "median": 2.4182500000000005,
+   "samples": [
+    2.809750000000001,
+    2.3581660000000007,
+    2.4182500000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 540120,
+   "after": 804128
+  }
+ },
+ {
+  "name": "c/drag",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 5.318833999999999,
+  "run": {
+   "min": 4.353082999999998,
+   "median": 6.166667,
+   "samples": [
+    6.166667,
+    9.231124999999999,
+    4.353082999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 294888,
+   "after": 791304
+  },
+  "report": {
+   "draws": 241
+  }
+ },
+ {
+  "name": "c/editor",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 4.936917000000001,
+  "run": {
+   "min": 17.629125000000002,
+   "median": 18.723208,
+   "samples": [
+    18.723208,
+    21.151167,
+    17.629125000000002
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 322920,
+   "after": 799256
+  },
+  "report": {
+   "mirrored": 401,
+   "wordsRuns": 401
+  }
+ },
+ {
+  "name": "c/eink",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 6.871540999999999,
+  "run": {
+   "min": 15.4165,
+   "median": 16.36475,
+   "samples": [
+    21.893375,
+    16.36475,
+    15.4165
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 403152,
+   "after": 831032
+  },
+  "report": {
+   "draws": 22,
+   "ticks": 240
+  }
+ },
+ {
+  "name": "c/grant",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 7.760416999999999,
+  "run": {
+   "min": 4.852624999999996,
+   "median": 5.812458999999997,
+   "samples": [
+    5.812458999999997,
+    5.900167000000003,
+    4.852624999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 437464,
+   "after": 830768
+  },
+  "report": {
+   "failed": 40,
+   "runs": 310
+  }
+ },
+ {
+  "name": "c/handlers",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 10.767917,
+  "run": {
+   "min": 0.06242258300000003,
+   "median": 0.09024916700000003,
+   "samples": [
+    0.09024916700000003,
+    0.06242258300000003
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 389656,
+   "after": 829456
+  },
+  "report": {
+   "handlerCalls": 3300
+  }
+ },
+ {
+  "name": "c/hotplug",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 7.15625,
+  "run": {
+   "min": 0.5166291999999999,
+   "median": 0.7395582999999994,
+   "samples": [
+    0.5166291999999999,
+    0.7395582999999994
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 332896,
+   "after": 917280
+  },
+  "report": {
+   "drivers": 30
+  }
+ },
+ {
+  "name": "c/log/list",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 4.3614999999999995,
+  "run": {
+   "min": 0.147547958,
+   "median": 0.147547958,
+   "samples": [
+    0.147547958
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 204248,
+   "after": 934040
+  }
+ },
+ {
+  "name": "c/log/nodes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.639292000000005,
+  "run": {
+   "min": 0.939795958,
+   "median": 0.939795958,
+   "samples": [
+    0.939795958
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 236736,
+   "after": 1286520
+  }
+ },
+ {
+  "name": "c/log/bytes",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 4.158042,
+  "run": {
+   "min": 0.0765595,
+   "median": 0.0765595,
+   "samples": [
+    0.0765595
+   ]
+  },
+  "iterations": 1000,
+  "check": "ok",
+  "heap": {
+   "built": 240360,
+   "after": 767320
+  }
+ },
+ {
+  "name": "c/park",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 6.028250000000002,
+  "run": {
+   "min": 0.39154100000000014,
+   "median": 0.4653749999999981,
+   "samples": [
+    0.47479200000000077,
+    0.4653749999999981,
+    0.39154100000000014
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 255424,
+   "after": 452648
+  },
+  "report": {
+   "parked": 5,
+   "runs": 10
+  }
+ },
+ {
+  "name": "c/pi",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 6.347584000000001,
+  "run": {
+   "min": 0.2171716699999999,
+   "median": 0.23329541000000006,
+   "samples": [
+    0.23329541000000006,
+    0.2171716699999999
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 407280,
+   "after": 945648
+  },
+  "report": {
+   "draws": 301
+  }
+ },
+ {
+  "name": "c/plugins",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 12.951334000000001,
+  "run": {
+   "min": 6.002707999999998,
+   "median": 6.7664159999999995,
+   "samples": [
+    6.7664159999999995,
+    8.260750000000002,
+    6.002707999999998
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 562248,
+   "after": 885856
+  },
+  "report": {
+   "paneRuns": 120
+  }
+ },
+ {
+  "name": "c/presence",
+  "group": "C",
+  "size": "small",
+  "measures": "both",
+  "build": 8.974749999999998,
+  "run": {
+   "min": 4.692875000000001,
+   "median": 4.930499999999995,
+   "samples": [
+    4.692875000000001,
+    4.965666999999996,
+    4.930499999999995
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 629016,
+   "after": 857432
+  }
+ },
+ {
+  "name": "c/procs/churn",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1.9332499999999992,
+  "run": {
+   "min": 4.870750000000001,
+   "median": 4.982084,
+   "samples": [
+    4.982084,
+    4.870750000000001,
+    9.052999999999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 124600,
+   "after": 838072
+  },
+  "report": {
+   "cleanups": 40,
+   "runs": 160,
+   "stopped": 0
+  }
+ },
+ {
+  "name": "c/procs/tree",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.9327500000000004,
+  "run": {
+   "min": 4.296374999999998,
+   "median": 4.553291999999999,
+   "samples": [
+    5.4605,
+    4.296374999999998,
+    4.553291999999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 72216,
+   "after": 650168
+  },
+  "report": {
+   "cleanups": 63
+  }
+ },
+ {
+  "name": "c/procs/idle",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 15.654125,
+  "run": {
+   "min": 1.162666999999999,
+   "median": 1.2867499999999978,
+   "samples": [
+    1.162666999999999,
+    1.3315409999999943,
+    1.2867499999999978
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1106848,
+   "after": 1151296
+  },
+  "report": {
+   "runsAfterBuild": 0,
+   "due": 100
+  }
+ },
+ {
+  "name": "c/queue",
+  "group": "C",
+  "size": "small",
+  "measures": "graph",
+  "build": 6.787416,
+  "run": {
+   "min": 0.43958249999999993,
+   "median": 0.4456674999999998,
+   "samples": [
+    0.4456674999999998,
+    0.43958249999999993
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 445264,
+   "after": 1228136
+  },
+  "report": {
+   "sent": 301
+  }
+ },
+ {
+  "name": "c/sheet",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 9.474542000000001,
+  "run": {
+   "min": 3.8494579999999985,
+   "median": 5.309916000000001,
+   "samples": [
+    3.8494579999999985,
+    5.309916000000001,
+    6.607208
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 732544,
+   "after": 1069688
+  }
+ },
+ {
+  "name": "c/todo",
+  "group": "C",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 17.266750000000002,
+  "run": {
+   "min": 8.360135249999999,
+   "median": 8.928364500000004,
+   "samples": [
+    8.360135249999999,
+    8.928364500000004,
+    9.917166499999993
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1035904,
+   "after": 1318152
+  },
+  "report": {
+   "renders": 66
+  }
+ },
+ {
+  "name": "d/budget",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 58.173458,
+  "run": {
+   "min": 20.811958000000004,
+   "median": 31.628375000000005,
+   "samples": [
+    20.811958000000004,
+    31.628375000000005,
+    39.67112499999999
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2758888,
+   "after": 3154632
+  },
+  "report": {
+   "errors": 5,
+   "nudges": 5
+  }
+ },
+ {
+  "name": "d/cycle",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 6.803000000000001,
+  "run": {
+   "min": 0.10911454999999996,
+   "median": 0.12136250000000004,
+   "samples": [
+    0.12377289999999981,
+    0.12136250000000004,
+    0.10911454999999996
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 64040,
+   "after": 204904
+  }
+ },
+ {
+  "name": "d/errors",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 12.719916000000001,
+  "run": {
+   "min": 1.5104166499999991,
+   "median": 1.76799375,
+   "samples": [
+    1.76799375,
+    2.348831249999999,
+    1.5104166499999991
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 556592,
+   "after": 962952
+  },
+  "report": {
+   "failed": 1620
+  }
+ },
+ {
+  "name": "d/flip",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 10.229667000000003,
+  "run": {
+   "min": 0.6956353999999998,
+   "median": 0.7994916499999996,
+   "samples": [
+    0.6956353999999998,
+    0.8410353999999998,
+    0.7994916499999996
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 501632,
+   "after": 769040
+  }
+ },
+ {
+  "name": "d/holes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 1.274458000000001,
+  "run": {
+   "min": 14.993750000000006,
+   "median": 21.493624999999994,
+   "samples": [
+    22.600041999999995,
+    14.993750000000006,
+    21.493624999999994
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 74376,
+   "after": 1285616
+  },
+  "report": {
+   "pending": 400,
+   "runs": 800
+  }
+ },
+ {
+  "name": "d/hooks/none",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 8.258083999999997,
+  "run": {
+   "min": 0.5104658400000003,
+   "median": 0.6484199999999999,
+   "samples": [
+    0.5104658400000003,
+    0.6484199999999999,
+    1.2914349999999997
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 408656,
+   "after": 758152
+  },
+  "report": {
+   "moments": 0
+  }
+ },
+ {
+  "name": "d/hooks/recorder",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 6.738792,
+  "run": {
+   "min": 0.28620165999999986,
+   "median": 0.3905724999999998,
+   "samples": [
+    0.75403666,
+    0.28620165999999986,
+    0.3905724999999998
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 418784,
+   "after": 3617080
+  },
+  "report": {
+   "moments": 5628
+  }
+ },
+ {
+  "name": "d/huge",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 63.950417,
+  "run": {
+   "min": 27.027749999999997,
+   "median": 27.70433399999999,
+   "samples": [
+    38.93479199999999,
+    27.70433399999999,
+    27.027749999999997
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 5464664,
+   "after": 5676424
+  },
+  "report": {
+   "bytesString": 1000000,
+   "items": 100000,
+   "keys": 10000
+  }
+ },
+ {
+  "name": "d/kept",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.9611660000000004,
+  "run": {
+   "min": 9.295417,
+   "median": 14.151499999999999,
+   "samples": [
+    14.151499999999999,
+    16.416833000000004,
+    9.295417
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 72104,
+   "after": 611304
+  },
+  "report": {
+   "heapWhilePending": 3280408
+  }
+ },
+ {
+  "name": "d/names",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 7.475209000000001,
+  "run": {
+   "min": 1.0704083999999994,
+   "median": 1.1065834000000003,
+   "samples": [
+    1.1065834000000003,
+    1.0704083999999994,
+    1.3766666
+   ]
+  },
+  "iterations": 5,
+  "check": "ok",
+  "heap": {
+   "built": 1003912,
+   "after": 1070360
+  }
+ },
+ {
+  "name": "d/nan",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 4.990708,
+  "run": {
+   "min": 0.07953958999999998,
+   "median": 0.15950625000000002,
+   "samples": [
+    0.15950625000000002,
+    0.1695029199999999,
+    0.07953958999999998
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 249968,
+   "after": 682752
+  },
+  "report": {
+   "nanDraws": 1,
+   "zeroDraws": 401
+  }
+ },
+ {
+  "name": "d/recode",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 19.419916999999998,
+  "run": {
+   "min": 8.428874999999998,
+   "median": 9.188083000000006,
+   "samples": [
+    9.188083000000006,
+    8.428874999999998,
+    9.697041999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1203744,
+   "after": 1441200
+  }
+ },
+ {
+  "name": "d/search",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 7.719041999999998,
+  "run": {
+   "min": 0.35258749999999994,
+   "median": 0.35671499999999995,
+   "samples": [
+    0.35671499999999995,
+    0.38210082,
+    0.35258749999999994
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 431144,
+   "after": 781600
+  },
+  "report": {
+   "levels": 10
+  }
+ },
+ {
+  "name": "d/sites/fixed",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 2.6104999999999983,
+  "run": {
+   "min": 4.561958000000004,
+   "median": 5.067750000000004,
+   "samples": [
+    4.561958000000004,
+    5.067750000000004,
+    5.7671669999999935
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 122088,
+   "after": 410880
+  }
+ },
+ {
+  "name": "d/sites/depth1",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 2.437332999999999,
+  "run": {
+   "min": 2.462457999999998,
+   "median": 2.5737500000000004,
+   "samples": [
+    2.462457999999998,
+    2.5737500000000004
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 122200,
+   "after": 250920
+  }
+ },
+ {
+  "name": "d/sites/depth200",
+  "group": "D",
+  "size": "small",
+  "measures": "both",
+  "build": 2.6814169999999997,
+  "run": {
+   "min": 13.982749999999996,
+   "median": 15.250583999999996,
+   "samples": [
+    13.982749999999996,
+    15.250583999999996
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 108000,
+   "after": 256896
+  }
+ },
+ {
+  "name": "d/stops/readers",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 103.96724999999999,
+  "run": {
+   "min": 2.523458000000005,
+   "median": 2.6056660000000136,
+   "samples": [
+    2.802082999999982,
+    2.6056660000000136,
+    2.523458000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 1091160,
+   "after": 1098024
+  },
+  "report": {
+   "stopped": 87,
+   "runs": 1562
+  }
+ },
+ {
+  "name": "d/stops/toggle",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 11.410625000000001,
+  "run": {
+   "min": 3.681207999999998,
+   "median": 3.6975830000000016,
+   "samples": [
+    4.392125,
+    3.681207999999998,
+    3.6975830000000016
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 781304,
+   "after": 987136
+  },
+  "report": {
+   "stopped": 94,
+   "runs": 344
+  }
+ },
+ {
+  "name": "d/tiny/spread",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 26.905749999999998,
+  "run": {
+   "min": 21.575749999999985,
+   "median": 21.616333999999995,
+   "samples": [
+    21.616333999999995,
+    26.127750000000006,
+    21.575749999999985
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 2866952,
+   "after": 3257536
+  }
+ },
+ {
+  "name": "d/tiny/one",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 4.561250000000001,
+  "run": {
+   "min": 9.884917000000002,
+   "median": 12.792584000000005,
+   "samples": [
+    13.433708999999993,
+    9.884917000000002,
+    12.792584000000005
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 212480,
+   "after": 479632
+  }
+ },
+ {
+  "name": "d/unwind/processes",
+  "group": "D",
+  "size": "small",
+  "measures": "scheduler",
+  "build": 0.6609999999999996,
+  "run": {
+   "min": 10.143083999999988,
+   "median": 14.799374999999998,
+   "samples": [
+    15.750416999999999,
+    14.799374999999998,
+    10.143083999999988
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 71640,
+   "after": 678544
+  }
+ },
+ {
+  "name": "d/unwind/ephemeral",
+  "group": "D",
+  "size": "small",
+  "measures": "graph",
+  "build": 0.4229580000000013,
+  "run": {
+   "min": 0.7385419999999989,
+   "median": 0.887125000000001,
+   "samples": [
+    0.8910829999999983,
+    0.887125000000001,
+    0.7385419999999989
+   ]
+  },
+  "iterations": 1,
+  "check": "ok",
+  "heap": {
+   "built": 28784,
+   "after": 146048
+  }
+ }
+]

@@ -111,10 +111,10 @@ Deno.test({
       const shared = await a.type("share /apps/notes");
       const id = /ermine:\/\/[0-9a-f]{64}/.exec(shared)?.[0];
       assert(id, "share printed no id");
-      await a.type(`mk /apps/notes todo "buy milk"`);
+      await a.type(`mk /apps/notes/todo "buy milk"`);
 
       // B mounts it, and the note comes
-      await b.type(`mount /apps notes ${id}`);
+      await b.type(`mount /apps/notes ${id}`);
       await b.poll("cat /apps/notes/todo", /^"buy milk"$/m);
       await b.type("ls /apps/notes");
 
@@ -139,11 +139,11 @@ Deno.test({
       await b.type("why /apps/notes/todo");
 
       // a removal reaches the other machine
-      await a.type("rm /apps/notes todo");
+      await a.type("rm /apps/notes/todo");
       await b.poll("ls /apps/notes", /^$/);
 
       // a process in the shared folder: its node is ephemeral, shown on B live, read there, never run there
-      await a.type(`mk /programs seven "export default () => 7"`);
+      await a.type(`mk /programs/seven "export default () => 7"`);
       const pid = /@\d+-[a-z]+/.exec(await a.type("start /apps/notes programs/seven"))?.[0];
       assert(pid, "start printed no pid");
       await b.poll(`cat /apps/notes/${pid}`, /^7$/m);
@@ -153,7 +153,7 @@ Deno.test({
       // the root is no document: shared, it is shown as a view, and no id on A changes
       const root = /ermine:\/\/[0-9a-f]{64}/.exec(await a.type("share /"))?.[0];
       assert(root, "share / printed no id");
-      await b.type(`mount /n mac1 ${root}`);
+      await b.type(`mount /n/mac1 ${root}`);
       await b.poll("cat /n/mac1/etc/desktop", /"background"/);
       await b.poll("ls /n/mac1/proc", /^@\d+-/m);
       await b.type("ls /n/mac1");
@@ -166,7 +166,7 @@ Deno.test({
       // /dev: the devices and the windows, changing on A, seen on B
       const dev = /ermine:\/\/[0-9a-f]{64}/.exec(await a.type("share /dev"))?.[0];
       assert(dev, "share /dev printed no id");
-      await b.type(`mount /n a-dev ${dev}`);
+      await b.type(`mount /n/a-dev ${dev}`);
       await b.poll("ls /n/a-dev/kbd", /^state /m);
       await a.hand("!usb attach 42 SanDisk");
       await b.poll("ls /n/a-dev/usb", /sandisk/);

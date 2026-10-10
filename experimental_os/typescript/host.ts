@@ -1,13 +1,14 @@
 // host.ts: core 0 of the ermine OS. It loads the SD card, builds the stack
-// (sync > procs > protect > keeper > the bare graph), makes /hw from the device
+// (procs > sync > protect > keeper > the library > the bare graph), makes /hw from the device
 // tree the metal handed over, starts /boot, and runs the loop of PI-OS.tex:
 // drain the ring into handler calls, settle, keep, wait. With --bare it
 // builds no stack and runs the bare monitor instead.
 
-import { graph, type Graph, type Kept } from "../../core/graph/typescript/graph.ts";
-import { matches, type May, protect, type Rule } from "../../core/protect/typescript/protect.ts";
-import type { Id, Json } from "../../core/graph/typescript/types.ts";
-import { keep, type Keeper, load } from "../../experimental_layers/keep/typescript/keeper.ts";
+import { graph, type Graph } from "../../core/graph/typescript/graph.ts";
+import { library } from "../../core/graph/typescript/library.ts";
+import { type Args, matches, type May, protect, type Rule } from "../../core/protect/typescript/protect.ts";
+import type { Answer, Id, Item, Json, Site, SlotItem } from "../../core/graph/typescript/types.ts";
+import { keep, type Kept, type Keeper, load } from "../../experimental_layers/keep/typescript/keeper.ts";
 import { files } from "../../experimental_layers/keep/typescript/deno/files.ts";
 import type { Metal, Rec } from "./metal.ts";
 import { Display, Fonts, Line, Pasteboard, Power, Sound, Timer, Web } from "./ports.ts";
@@ -36,6 +37,13 @@ type HostRule = Rule & { under?: string; note?: string };
 /** The irqs of a person's hands: the host vouches that a person made them. */
 const HANDS = new Set([34, 35, 36]);
 const HOST: Agent = { actor: "machine", code: [] };
+/** the bare graph's root id */
+const ROOT = "machine";
+/** where the host's own changes say they come from */
+const SITE: Site = { file: "experimental_os/typescript/host.ts", line: 1 };
+
+/** what an item holds, when it is a value's: a refused or pending read holds none */
+const valueOf = (item: Item | undefined): Json | undefined => item && "value" in item ? item.value : undefined;
 
 export class Machine {
   g!: Graph;
@@ -104,8 +112,8 @@ export class Machine {
     } catch (e) {
       this.say(`the SD card could not be read: ${(e as Error).message}; booting empty`);
     }
-    this.g = graph("machine", kept);
-    this.keeper = keep(this.g, backend, "machine", { kept, auto: false, failed: (e) => this.say(`keeper: ${e}`) });
+    this.g = graph(ROOT, kept);
+    this.keeper = keep(library(this.g, ROOT), backend, ROOT, { kept, auto: false, failed: (e) => this.say(`keeper: ${e}`) });
     this.base = (kept?.time ?? 0) + 1;
     this.last = this.base - 1;
     const dt = this.o.metal.dt;
@@ -120,9 +128,7 @@ export class Machine {
     const p = procs({
       graph: this.g,
       below: prot,
-      release: (op) => this.keeper.release!(op),
-      // a change made elsewhere, which sync takes in
-      apply: (id, change) => this.keeper.apply!(id, change),
+      kept: this.keeper,
       clock: this.clock,
       host: HOST,
       log: (t) => this.say(t),
@@ -132,8 +138,8 @@ export class Machine {
     // the image is the machine's own, as firmware is: it writes the card beneath protect, before any process runs
     const below = {
       ...this.keeper,
-      place: (op: Parameters<Keeper["place"]>[0]) => this.keeper.place({ ...op, time: this.clock() }),
-      write: (op: Parameters<Keeper["write"]>[0]) => this.keeper.write({ ...op, time: this.clock() }),
+      place: (op: Parameters<Keeper["place"]>[0]) => this.keeper.place({ ...op, time: this.clock(), site: SITE }),
+      write: (op: Parameters<Keeper["write"]>[0]) => this.keeper.write({ ...op, time: this.clock(), site: SITE }),
     };
     if (!kept) {
       await image(below, this.person);
@@ -147,7 +153,8 @@ export class Machine {
     }
     // sync: a wrapper over procs, the top of the stack from here, before any process runs (sync.ts)
     try {
-      const synced = await sync({ sd: this.o.sd, graph: this.g, procs: p, host: HOST, say: (t) => this.say(t) });
+      // the wrapper's bookkeeping goes to the bare graph through the keeper, which saw every other change
+      const synced = await sync({ sd: this.o.sd, graph: this.keeper as unknown as Graph, below: prot, procs: p, host: HOST, say: (t) => this.say(t) });
       this.synced = true;
       // keeping the graph keeps what sync committed too (SYNC.tex, Starting again)
       const flush = this.keeper.flush;
@@ -160,7 +167,7 @@ export class Machine {
     api.place({ agent: HOST as Json, address: ["/", "dev"], name: "cons", id: "cons", value: [...this.#log], ephemeral: true });
     api.write({ agent: HOST as Json, address: ["/", "dev", "clock"], patches: [{ type: "snapshot", value: { base: this.base, unit: "µs" } }] });
     this.tickClock(true);
-    const boot = this.g.read({ agent: "machine", address: ["/", "boot"] })[0]?.value;
+    const boot = valueOf(this.g.read({ agent: "machine", address: ["/", "boot"] })[0]);
     const entries = Array.isArray(boot) ? boot as { [k: string]: Json }[] : [];
     for (const [i, entry] of entries.entries()) {
       try {
@@ -180,32 +187,34 @@ export class Machine {
     }
   }
 
-  /** The host's may: /etc/rules, first match wins, none allows; a rule's "under" matches a path. */
-  may(agent: Json, process: Id | undefined, op: string, args: object): ReturnType<May> {
-    const list = this.g.read({ agent: "machine", address: ["/", "etc", "rules"] })[0]?.value;
-    if (!Array.isArray(list)) return true;
-    const a = args as { address?: string[]; place?: string[]; chroot?: number; program?: string };
-    const program = a.program ?? this.procs?.programOf(agent);
+  /** The host's may: /etc/rules, first match wins, none allows; a rule's "under" matches the path of the node asked about. */
+  may(agent: Json, process: Id | undefined, op: string, args: Args): Answer {
+    const list = valueOf(this.g.read({ agent: "machine", address: ["/", "etc", "rules"] })[0]);
+    if (!Array.isArray(list)) return { yes: true };
     let path: string | undefined;
-    if (Array.isArray(a.address)) {
-      try {
-        path = "/" + resolve(a.place ?? [], a.chroot ?? 0, a.address).join("/");
-      } catch {
-        path = undefined;
-      }
-    }
-    const given = program ? { ...args, program } : args;
     for (let i = 0; i < list.length; i++) {
       const { under, note: _n, ...plain } = list[i] as HostRule;
       if (under !== undefined) {
-        if (path === undefined) continue;
+        path ??= this.pathOf(args.node);
         const prefix = under.endsWith("/") ? under : under + "/";
         if (path !== under && !path.startsWith(prefix)) continue;
       }
-      if (!matches(plain, agent, process, op, given)) continue;
-      return plain.allow === true || { rule: i };
+      if (!matches(plain, agent, process, op, args)) continue;
+      return plain.allow === true ? { yes: true } : { no: { code: "rule", rule: i, text: `rule ${i} refuses ${op} at ${args.node}` } };
     }
-    return true;
+    return { yes: true };
+  }
+
+  /** A node's path from the root, by the first slot that holds it at each step; "" when it is held by none. */
+  pathOf(node: Id): string {
+    const names: string[] = [];
+    for (let at = node; at !== ROOT && names.length < 64;) {
+      const holder = this.g.holders({ id: at })[0];
+      if (!holder) return "";
+      names.unshift(holder.name);
+      at = holder.node;
+    }
+    return "/" + names.join("/");
   }
 
   /** /hw from the device tree: made again at each boot, ephemeral, by host code. */
@@ -316,9 +325,8 @@ export class Machine {
     const irqs = this.g.directory({ agent: "machine", address: ["/", "hw", "irq"] });
     for (const [name] of "directory" in irqs ? irqs.directory : []) {
       const irq = Number(name);
-      const item = this.g.read({ agent: "machine", address: ["/", "hw", "irq", name] })[0];
-      if (!item) continue;
-      const v = item.value as { [k: string]: Json };
+      const v = valueOf(this.g.read({ agent: "machine", address: ["/", "hw", "irq", name] })[0]) as { [k: string]: Json } | undefined;
+      if (!v) continue;
       const count = (v.count as number) + (this.#counts.get(irq) ?? 0);
       const dropped = this.o.metal.dropped.get(irq) ?? 0;
       const next = { ...v, count, dropped };
@@ -335,7 +343,7 @@ export class Machine {
     const recs = this.o.metal.take();
     // lines claimed since the last turn get what waited for them, first
     for (const [irq, held] of [...this.#pending]) {
-      const owner = (this.g.read({ agent: "machine", address: ["/", "hw", "irq", String(irq)] })[0]?.value as { owner?: string } | undefined)?.owner;
+      const owner = (valueOf(this.g.read({ agent: "machine", address: ["/", "hw", "irq", String(irq)] })[0]) as { owner?: string } | undefined)?.owner;
       if (!owner) continue;
       this.#pending.delete(irq);
       recs.unshift(...held);
@@ -352,7 +360,7 @@ export class Machine {
         continue;
       }
       this.#counts.set(r.irq, (this.#counts.get(r.irq) ?? 0) + 1);
-      const line = this.g.read({ agent: "machine", address: ["/", "hw", "irq", String(r.irq)] })[0]?.value as
+      const line = valueOf(this.g.read({ agent: "machine", address: ["/", "hw", "irq", String(r.irq)] })[0]) as
         | { owner?: string; handler?: string; masked?: boolean }
         | undefined;
       if (!line?.owner || line.masked) {
@@ -509,17 +517,17 @@ export class Machine {
       case "ls": {
         const l = this.g.directory({ agent, address });
         if (!("directory" in l)) return "";
-        return l.directory.map(([n, items]) => `${n}  ${items.map((i) => i.id + (i.pending ? "…" : "")).join(" ")}`).join("\n");
+        return l.directory.map(([n, items]) => `${n}  ${(items as SlotItem[]).map((i) => i.id + (i.pending ? "…" : "")).join(" ")}`).join("\n");
       }
       case "write": {
         const value = JSON.parse(rest.join(" "));
         // the keeper, beneath every other layer: so a change made here is saved
-        const c = this.keeper.write({ agent, address, time: this.clock(), patches: [{ type: "snapshot", value }] });
+        const c = this.keeper.write({ agent, address, time: this.clock(), site: SITE, patches: [{ type: "snapshot", value }] });
         return `t=${c.change.time} cause ${show(c.change.cause)}`;
       }
       case "rm": {
         const [name, id] = rest;
-        const c = this.keeper.unplace({ agent, address, name, id, time: this.clock() });
+        const c = this.keeper.unplace({ agent, address, name, id, time: this.clock(), site: SITE });
         return `t=${c.change.time}`;
       }
       case "off":

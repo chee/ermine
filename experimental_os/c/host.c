@@ -3,9 +3,9 @@
 // device tree, what boots, the drain, which hands each turn's records to the
 // driver that claimed their line, the clock, and the commands to the metal.
 //
-// The stack: the bare graph, sync's keeper over it, protect over that, the
+// The stack: the bare graph, the library over it, sync's keeper over that, protect over that, the
 // sync wrapper over protect, the scheduler over the wrapper:
-// schedule(sync(protect(keeper(graph)))). So every operation a program
+// schedule(sync(protect(keeper(library(graph))))). So every operation a program
 // makes, and the host's, passes through the wrapper, which commits what is
 // made on a document (SYNC.tex, Sync is a process and a wrapper), while the
 // scheduler's bookkeeping and what arrives go through the keeper, beneath it
@@ -25,6 +25,7 @@
 #include "peer.h"
 
 #include "../../core/graph/c/entry.h"
+#include "../../core/graph/c/library.h"
 #include "../../core/protect/c/protect.h"
 
 #include <stdarg.h>
@@ -143,7 +144,11 @@ static Json *okOf(const ErmOp *op, const ErmResult *r) {
 		for (int i = 0; i < r->cwd.count; i++) jsonPush(cwd, jsonString(r->cwd.items[i]));
 		return keyed("cwd", cwd);
 	}
-	if (op->kind == ERM_OP_DIRECTORY && !op->name) return keyed("directory", ermListingToJson(&r->listing));
+	if (op->kind == ERM_OP_DIRECTORY && !op->name) {
+		Json *listed = keyed("directory", ermListingToJson(&r->listing));
+		jsonAdd(listed, "apart", ermItemsToJson(&r->apart));
+		return listed;
+	}
 	if (op->kind == ERM_OP_SUBSCRIBE) return keyed("sub", jsonInteger(r->sub));
 	if (op->kind == ERM_OP_TAKE) return keyed("events", ermEventsToJson(&r->events));
 	return keyed("items", ermItemsToJson(&r->items));
@@ -207,24 +212,49 @@ ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) 
 	return err.kind ? err : ended;
 }
 
-/** an operation on the keeper, beneath protect, the wrapper and the scheduler: the host's own bookkeeping */
+/** the id of the node an address reaches, read as the machine on the keeper; NULL when none does */
+static const char *nodeId(Host *h, Json *address) {
+	ErmRequest request = { keyed("address", address), false, ermOk() };
+	ErmOp read = { .kind = ERM_OP_READ, .address = ermRequestAddress(&request, "address") };
+	if (request.err.kind) return NULL;
+	// the root, which no route leads to
+	if (!read.address.names.count && !read.address.ups) return ermSyncRoot(h->sync);
+	ErmCtx ctx = { .agent = h->machine };
+	ErmResult r = { 0 };
+	if (h->kept.vt->op(h->kept.self, &ctx, &(ErmStamp){ 0 }, &read, &r).kind) return NULL;
+	for (int i = 0; i < r.items.count; i++) {
+		const ErmItem *item = &r.items.items[i];
+		if (item->kind == ERM_ITEM_VALUE && item->route.count) return item->route.items[item->route.count - 1].node;
+	}
+	return NULL;
+}
+
+/**
+ * an operation beneath protect, the wrapper and the scheduler: the host's own
+ * bookkeeping. A change is the scheduler's arrive, at the id of the node the
+ * address reaches, so it is made on the keeper and never committed, and the
+ * parts that read what it changed run again (SCHEDULER Arrivals)
+ */
 ErmErr hostBare(Host *h, const char *name, Json *fields, Json **out) {
 	*out = NULL;
 	ErmOpKind kind = kindOf(name);
-	if (ermOpIsChange(kind) && !jsonGet(fields, "time")) {
-		// beneath the scheduler, the time is the caller's to give
+	if (ermOpIsChange(kind)) {
 		ErmRequest request = { fields, false, ermOk() };
 		ErmOp op;
 		ErmStamp stamp;
 		if (!jsonGet(fields, "site")) jsonAdd(fields, "site", jsonShallow(h->site));
 		ermRequestOp(&request, kind, false, false, &op, &stamp);
 		if (request.err.kind) return request.err;
-		stamp.time = next(h);
-		ErmCtx ctx = { .agent = h->machine };
+		const char *at = nodeId(h, jsonGet(fields, "address"));
+		if (!at) return ermInvalid("nothing-there");
+		op.address = (ErmAddress){ 0 };
+		ErmCtx ctx = { .agent = h->machine, .at = at };
 		ErmResult r = { 0 };
-		ErmErr err = h->kept.vt->op(h->kept.self, &ctx, &stamp, &op, &r);
-		if (!err.kind) *out = okOf(&op, &r);
-		return err;
+		ermScheduleBegin(h->schedule);
+		ErmErr err = ermScheduleArrive(h->schedule, NULL, &ctx, &stamp, &op, &r);
+		ErmErr ended = ermScheduleEnd(h->schedule, true);
+		if (!err.kind) *out = r.change ? okOf(&op, &r) : jsonNull();
+		return err.kind ? err : ended;
 	}
 	return operate(h, h->kept, h->machine, name, fields, out);
 }
@@ -445,6 +475,68 @@ static void makeImage(Host *h, Json *img) {
 	}
 }
 
+/**
+ * A card an older image made, brought up to date: each image node it lacks
+ * is made, by name, as a first boot makes it; one whose value differs from
+ * the image's gets the image's, if its last change is the machine's, so the
+ * image wrote it and no one has since. What a person changed is left as they
+ * left it, and the log says so.
+ */
+static void updateImage(Host *h, Json *img) {
+	Json *nodes = jsonGet(img, "nodes");
+	int made = 0, updated = 0;
+	for (int i = 0; nodes && i < nodes->array.count; i++) {
+		Json *e = nodes->array.items[i], *at = jsonGet(e, "at");
+		const char *name = jsonText(jsonGet(e, "name"));
+		if (!name) continue;
+		Json *parent = jsonArray();
+		jsonPush(parent, jsonString("/"));
+		for (int k = 0; jsonIsArray(at) && k < at->array.count; k++) jsonPush(parent, at->array.items[k]);
+		Json *address = jsonShallow(parent), *out = NULL;
+		jsonPush(address, jsonString(name));
+		Json *item = NULL;
+		if (!hostDo(h, NULL, "read", keyed("address", address), &out).kind) {
+			Json *items = jsonGet(out, "items");
+			for (int k = 0; jsonIsArray(items) && k < items->array.count && !item; k++)
+				if (jsonGet(items->array.items[k], "value")) item = items->array.items[k];
+		}
+		Json *value = imageValue(h, e);
+		if (!item) {
+			Json *f = keyed("address", parent);
+			jsonAdd(f, "name", jsonString(name));
+			jsonAdd(f, "value", value);
+			ErmErr err = hostDo(h, NULL, "place", f, &out);
+			if (err.kind) {
+				char *why = jsonPrint(err.why);
+				hostSay(h, "image: %s: %s", name, why);
+				free(why);
+			} else made++;
+			continue;
+		}
+		if (jsonEqual(jsonGet(item, "value"), value)) continue;
+		const char *actor = jsonText(jsonGet(jsonGet(jsonGet(item, "change"), "agent"), "actor"));
+		char *where = jsonPrint(address);
+		if (!actor || strcmp(actor, "machine") != 0) {
+			hostSay(h, "image: %s was changed by %s since the image made it: kept as it is", where, actor ? actor : "someone");
+			free(where);
+			continue;
+		}
+		Json *patches = jsonArray(), *patch = keyed("type", jsonString("snapshot"));
+		jsonAdd(patch, "value", value);
+		jsonPush(patches, patch);
+		Json *f = keyed("address", address);
+		jsonAdd(f, "patches", patches);
+		ErmErr err = hostDo(h, NULL, "write", f, &out);
+		if (err.kind) {
+			char *why = jsonPrint(err.why);
+			hostSay(h, "image: %s: %s", where, why);
+			free(why);
+		} else updated++;
+		free(where);
+	}
+	if (made || updated) hostSay(h, "the image brought the SD card up to date: %d made, %d newer", made, updated);
+}
+
 /** what boots: each entry started as its actor; its data in a node inside it */
 static void boot(Host *h, Json *img) {
 	Json *list = jsonGet(img, "boot");
@@ -560,8 +652,8 @@ Host *hostBoot(const ErmosConfig *config) {
 	h->base = (ErmTime)wall.tv_sec * 1000000 + wall.tv_nsec / 1000;
 	h->last = h->base - 1;
 
-	// schedule(sync(protect(keeper(graph)))): the scheduler's top is the wrapper, made after it
-	h->kept = ermSyncKeeper(h->sync, h->graph);
+	// schedule(sync(protect(keeper(library(graph))))): the scheduler's top is the wrapper, made after it
+	h->kept = ermSyncKeeper(h->sync, ermLibrary(h->graph, ermSyncRoot(h->sync)));
 	h->protect = ermProtect(h->kept, may, h);
 	static ErmLoader loaders[3];
 	loaders[0] = (ErmLoader){ "c", h, loadC };
@@ -586,6 +678,8 @@ Host *hostBoot(const ErmosConfig *config) {
 	if (empty && img) {
 		makeImage(h, img);
 		hostSay(h, "first boot: the image made the SD card");
+	} else if (img) {
+		updateImage(h, img);
 	}
 	(void)made;
 	makeHw(h);
@@ -638,7 +732,11 @@ static void deliver(Host *h, int irq, Json *records) {
 	}
 }
 
-/** writes /dev/clock/second and wall each second, and minute as it turns */
+/**
+ * writes /dev/clock/second and wall each second, and minute as it turns:
+ * ephemeral nodes, the host's own, made and written beneath on the keeper,
+ * as /hw is; never kept, and made again each boot
+ */
 static void tick(Host *h) {
 	time_t now = time(NULL);
 	if ((int64_t)now == h->second) return;
@@ -651,20 +749,15 @@ static void tick(Host *h) {
 	Json *values[3] = { jsonInteger((int64_t)now), jsonInteger((int64_t)now / 60), jsonString(wall) };
 	for (int i = 0; i < 3; i++) {
 		if (i == 1 && !minute) continue;
-		Json *f = jsonObject(), *patches = jsonArray(), *out = NULL;
+		Json *f = jsonObject(), *patches = jsonArray();
 		jsonPush(patches, keyed("type", jsonString("snapshot")));
 		jsonAdd(patches->array.items[0], "value", values[i]);
 		jsonAdd(f, "address", names("/", "dev", "clock", nodes[i], NULL));
 		jsonAdd(f, "patches", patches);
-		if (hostDo(h, NULL, "write", f, &out).kind) {
-			Json *p = jsonObject();
-			jsonAdd(p, "address", names("/", "dev", "clock", NULL));
-			jsonAdd(p, "name", jsonString(nodes[i]));
+		if (bare(h, "write", f).kind) {
 			char *id = formatString("clock-%s", nodes[i]);
-			jsonAdd(p, "id", jsonString(id));
+			place(h, names("/", "dev", "clock", NULL), nodes[i], id, values[i], true);
 			free(id);
-			jsonAdd(p, "value", values[i]);
-			hostDo(h, NULL, "place", p, &out);
 		}
 	}
 }
@@ -715,6 +808,7 @@ void hostTurn(Host *h, const char *const *records, int count) {
 	free(groups.items);
 	tick(h);
 	peerTurn(h);
+	linkTurn(h);
 }
 
 int64_t hostWait(Host *h) {
@@ -735,6 +829,7 @@ bool hostRunning(Host *h) {
 }
 
 void hostOff(Host *h) {
+	linkStop(h);
 	peerStop(h);
 	execStop(h);
 	jsStop(h);

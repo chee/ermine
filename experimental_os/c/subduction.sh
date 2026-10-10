@@ -6,11 +6,15 @@
 # libsubduction_c.a, is built by cargo into $mac/build/subduction, once (it
 # takes minutes), its Cargo.lock as it is. OpenSSL is Homebrew's openssl@3.
 #
+# The link (layers/link/c) goes over the same connection (drv_link.c).
+#
 # Gives: $sync_sources, $sync_cflags (for the C), $sync_libs (to link).
 
-layers="$(cd "$mac/../../layers" && pwd)"
+# the layers as tree.sh staged them, beside core as committed; else in place
+if [ -n "${tree:-}" ]; then layers="$tree/layers"; else layers="$(cd "$mac/../../layers" && pwd)"; fi
 peer="$layers/subduction/c/peer"
-sync_sources="$layers/subduction/c/sync.c $layers/subduction/c/blob.c $layers/subduction/c/sha2.c \
+crate="$(cd "$mac/../../layers/subduction/c/peer" && pwd)" # cargo builds the crate where it is
+sync_sources="$layers/subduction/c/sync.c $layers/subduction/c/blob.c $layers/subduction/c/sha2.c $layers/link/c/link.c \
 $layers/cache/c/hash.c $peer/websocket.c $peer/transport_openssl.c $peer/store_files.c $peer/platform_posix.c"
 
 openssl="${OPENSSL:-$(brew --prefix openssl@3 2>/dev/null)}"
@@ -34,6 +38,6 @@ sync_cflags="-I$openssl/include $blake3"
 rust="$mac/build/subduction/release/libsubduction_c.a"
 if [ ! -f "$rust" ]; then
   echo "building Subduction's library (cargo, a few minutes) into $mac/build/subduction" >&2
-  (cd "$peer" && cargo rustc --release --lib --locked --color never --target-dir "$mac/build/subduction" -- --print native-static-libs) >&2
+  (cd "$crate" && cargo rustc --release --lib --locked --color never --target-dir "$mac/build/subduction" -- --print native-static-libs) >&2
 fi
 sync_libs="$rust -L$openssl/lib -lssl -lcrypto -liconv -lm"

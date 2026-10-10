@@ -45,7 +45,7 @@
 
 import type { Graph } from "../../core/graph/typescript/graph.ts";
 import type { Hash } from "../../core/graph/typescript/hash.ts";
-import type { Id, Json, Listing, PlaceOp } from "../../core/graph/typescript/types.ts";
+import type { Id, Interface, Json, Listing, PlaceOp, ValueItem } from "../../core/graph/typescript/types.ts";
 import { decode, type Value } from "../../core/graph/typescript/cbor.ts";
 import type { Scheduler } from "../../core/scheduler/typescript/schedule.ts";
 import { equal, isLive } from "../../core/graph/typescript/patch.ts";
@@ -64,6 +64,8 @@ export type Options = {
   sd: string;
   /** the bare graph */
   graph: Graph;
+  /** the stack the wrapper is made over: protect over the keeper */
+  below: Interface;
   procs: Procs;
   /** the host's agent, for what it does here */
   host: Agent;
@@ -71,7 +73,7 @@ export type Options = {
 };
 
 export type Synced = {
-  /** the top of the stack */
+  /** the wrapper, the top of the stack */
   api: Sync;
   /** resolves once what was committed here is in Subduction's storage, or after two seconds */
   flush(): Promise<void>;
@@ -103,7 +105,7 @@ async function key(dir: string): Promise<string> {
   return seed;
 }
 
-/** procs as the scheduler sync wraps: arrive, time and top are procs'; start, fire and restart are not used here. */
+/** procs as the scheduler the wrapper is begun with: arrive and time are procs'; start, fire and restart are not used here. */
 function scheduler(p: Procs): Scheduler {
   const not = (op: string) => () => {
     throw new Error(`${op}: processes start and are called through procs, beneath sync`);
@@ -131,7 +133,7 @@ export async function sync(o: Options): Promise<Synced> {
   const seed = await key(dir);
   const me = publicKey(seed);
   const lock = unlocked();
-  const look = (address: string[]) => g.read({ agent: "machine", address });
+  const look = (address: string[]) => g.read({ agent: "machine", address }) as ValueItem[];
   const listing = (address: string[]): Listing | undefined => {
     try {
       return g.directory({ agent: "machine", address });
@@ -160,10 +162,12 @@ export async function sync(o: Options): Promise<Synced> {
   if (!look(SHARED).length) p.api.place({ agent: HOST, address: SYNC, name: "shared", id: "sync-shared", value: null });
   if (!look(VIEWS).length) p.api.place({ agent: HOST, address: SYNC, name: "views", id: "sync-views", value: {} });
 
-  // --- the wrapper, over procs: from here, the top of the stack
+  // --- the wrapper, over protect and beneath procs: programs' operations go through it from here, procs' bookkeeping beneath it
   // a stand-in for another machine's live value is its kind, in PROTOCOL.tex's JSON form
   const live = (kind: string) => ({ "/": { live: kind } }) as Json;
-  const s = wrap(scheduler(p), { graph: g, key: me, seed, locks: [lock], root: made, roots: [ROOT], live });
+  const s = wrap(o.below, { graph: g, clock: { get time() { return p.api.time; } }, key: me, seed, locks: [lock], root: made, roots: [ROOT], live });
+  const top = p.top(s, s.bookkeeping);
+  s.begin(scheduler(p));
   const link = {
     server: "",
     connected: false,
@@ -175,7 +179,7 @@ export async function sync(o: Options): Promise<Synced> {
     error: null as string | null,
   };
   let shown = JSON.stringify(link);
-  s.place({ agent: HOST, address: SYNC, name: "link", id: "sync-link", value: link, ephemeral: true });
+  top.place({ agent: HOST, address: SYNC, name: "link", id: "sync-link", value: link, ephemeral: true });
 
   /** What /dev/sync/shared holds: the documents shared or mounted here, by their hex. */
   function roots(): Set<Hash> {
@@ -228,7 +232,7 @@ export async function sync(o: Options): Promise<Synced> {
       if (linked.has(hex)) continue;
       try {
         // a mount through sync: sync follows it
-        s.place({ agent: HOST, address: LINK, name: hex, id: idOf(hex) });
+        top.place({ agent: HOST, address: LINK, name: hex, id: idOf(hex) });
         linked.add(hex);
       } catch (e) {
         link.error = `link ${hex.slice(0, 8)}: ${message(e)}`;
@@ -238,7 +242,7 @@ export async function sync(o: Options): Promise<Synced> {
       if (out.has(hex)) continue;
       linked.delete(hex);
       try {
-        s.unplace({ agent: HOST, address: LINK, name: hex, id: idOf(hex) });
+        top.unplace({ agent: HOST, address: LINK, name: hex, id: idOf(hex) });
       } catch {
         // gone already
       }
@@ -274,10 +278,10 @@ export async function sync(o: Options): Promise<Synced> {
     const value = item === undefined || isLive(item.value) ? null : item.value;
     // a making by name, with no id: sync gives it one from the lock (SYNC.tex, Making and mounting)
     const making = { agent, address: SHARED, name: "view", value: { view: at, value } } as unknown as PlaceOp;
-    const id = (s.place(making).change as { id: Id }).id;
+    const id = (top.place(making).change as { id: Id }).id;
     const hex = docOf(id)!;
-    s.place({ agent, address: SHARED, name: hex, id });
-    s.unplace({ agent, address: SHARED, name: "view", id });
+    top.place({ agent, address: SHARED, name: hex, id });
+    top.unplace({ agent, address: SHARED, name: "view", id });
     p.api.write({ agent, address: VIEWS, patches: [{ type: "set", path: [], key: hex, value: at }] });
     return id;
   }
@@ -295,7 +299,7 @@ export async function sync(o: Options): Promise<Synced> {
       if (was && was.value === value && was.anchor === anchor) continue;
       mirrored.set(hex, { value, anchor });
       if (anchor?.view === path && equal((anchor.value ?? null) as Json, value as Json)) continue;
-      s.write({ agent: HOST, cause: { view: path }, address: [...LINK, hex], patches: [{ type: "snapshot", value: { view: path, value } as Json }] });
+      top.write({ agent: HOST, cause: { view: path }, address: [...LINK, hex], patches: [{ type: "snapshot", value: { view: path, value } as Json }] });
     }
   }
 
@@ -451,7 +455,7 @@ export async function sync(o: Options): Promise<Synced> {
     if (text === shown) return;
     shown = text;
     try {
-      s.write({ agent: HOST, address: LINK, patches: [{ type: "snapshot", value: link as unknown as Json }] });
+      top.write({ agent: HOST, address: LINK, patches: [{ type: "snapshot", value: link as unknown as Json }] });
     } catch {
       // its node is gone
     }
