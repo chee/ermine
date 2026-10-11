@@ -1,0 +1,75 @@
+{
+	"title": "only a process makes or places an ephemeral node",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"ephemeral": true,
+			"expect": {
+				"error": "not-a-process"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "create",
+						"ephemeral": true,
+						"value": 1,
+						"var": "m"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$var": "m"
+						}
+					},
+					{
+						"do": "return",
+						"value": 0
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"@3"
+				]
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "x",
+			"child": "@3",
+			"expect": {
+				"error": "not-a-process"
+			}
+		},
+		{
+			"op": "node",
+			"id": "@3",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 3
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": true
+				}
+			}
+		}
+	]
+}

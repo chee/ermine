@@ -152,7 +152,7 @@ sleep 0.5
 run "cat /dev/web/pages/$name" '"state":"c3RhdGUx"' "state, in the page's node"
 run "ls /apps/browser/tabs" "" "the tabs' documents"
 doc=$(last | perl -ne 'print "$1\n" if /^(\@?\d+)\s/' | head -1)
-run "cat /apps/browser/tabs/$doc" '"state":"c3RhdGUx"' "state kept in the tab's document"
+run "cat /apps/browser/tabs/$doc/0/state" '"c3RhdGUx"' "state kept beside the tab's document, its state"
 # a second tab with a page, so the first (one live) is let go; selecting it again brings it back from its state
 hand "!key t cmd"
 sleep 0.4
@@ -164,6 +164,65 @@ from=$(size "$err")
 echo "!key 1 cmd" >&3
 waitfor "$err" "\[web\] $name brought back from its state" "$from" && ok "selected again: brought back from its state" || bad "not brought back from its state"
 
+# --- history: each tab its own node, a navigation one change to it, its history the node's; back and forward move
+# where the tab is (here, in the view) and write nothing
+pid=${name#web-}
+pid=${pid%-0}
+run "cat /apps/browser/tabs/$doc" '"tabs":\[0,1\]' "the window's document: its tabs by id"
+run "cat /apps/browser/tabs/$doc/0" '"url":"https://example.org"' "each tab a node of its own"
+run "cat /dev/sync/want/browser-$pid" 'ermine://' "the tabs' histories asked for"
+hand "!nav $name https://b.org"
+hand "!nav $name https://c.org"
+sleep 0.4
+run "cat /apps/browser/tabs/$doc/0" '"url":"https://c.org"' "a link followed: the tab's node, an entry"
+also '"from":null' "from the newest: null"
+# the history of tab 0's node, served by the sync driver
+hist=""
+run "ls /dev/sync/history" "" "the histories served"
+for h in $(last | perl -ne 'print "$1\n" if /^([0-9a-f]{64})\s/'); do
+	from=$(size "$out")
+	echo "cat /dev/sync/history/$h" >&3
+	sleep 0.4
+	last | grep -q 'https://c.org' && hist=$h
+done
+[ -n "$hist" ] && ok "/dev/sync/history/<hex>: the tab's node's history" || bad "no history with the tab's entries"
+run "cat /dev/sync/history/$hist" '"key":"from"' "its changes, with their patches"
+also '"commit":"[0-9a-f]\{64\}"' "each named by its commit"
+also '"value":{[^}]*"url":"https://b.org"' "each with the value after it"
+metal "!key [ cmd" '"op":"web","id":"'"$name"'","go":"back"' "back: WebKit's own back, its list going the same way"
+sleep 0.4
+run "cat /apps/browser/$pid/view" '"here":{"0":"[0-9a-f]\{64\}"}' "back: here, in the view"
+run "cat /apps/browser/tabs/$doc/0" '"url":"https://c.org"' "back writes nothing: the tab's node as it was"
+hand "!nav $name https://e.org"
+sleep 0.4
+run "cat /apps/browser/tabs/$doc/0" '"from":"[0-9a-f]\{64\}"' "a link from an earlier entry: a branch, from it"
+also '"url":"https://e.org"' "the branch's entry"
+run "cat /apps/browser/$pid/view" '"here":{}' "here: the newest again"
+metal "!key [ cmd" '"op":"web","id":"'"$name"'","go":"back"' "back from the branch"
+metal "!key ] cmd" '"op":"web","id":"'"$name"'","go":"forward"' "forward: the branch last on"
+sleep 0.4
+run "cat /apps/browser/$pid/view" '"here":{}' "forward: the newest, e"
+# the popup: every tab's history, searched
+hand "!key y cmd"
+run "ls /dev/display/layers" "browser-$pid-history" "cmd-y: the history popup, a layer of its own"
+echo "!type c.org" >&3
+sleep 0.5
+run "cat /dev/display/layers/browser-$pid-history" '"c.org"' "typed: the entries found"
+case "$(last)" in *'"e.org"'*) bad "the search shows e.org" ;; *) ok "the search leaves out the rest" ;; esac
+metal "!key Enter" '"op":"web","id":"'"$name"'","url":"https://c.org"' "return: c, off the line WebKit holds, loaded"
+run "ls /dev/display/layers" "" "the layers"
+case "$(last)" in *"browser-$pid-history"*) bad "the popup still there" ;; *) ok "chosen: the popup goes" ;; esac
+run "cat /apps/browser/tabs/$doc/0" '"url":"https://e.org"' "moving to c writes nothing"
+hand "!key y cmd"
+echo "!type b.org" >&3
+sleep 0.4
+metal "!key Enter cmd" '"op":"web","id":"web-'"$pid"'-2"' "cmd-return: in a new tab"
+sleep 0.4
+run "cat /apps/browser/tabs/$doc/2" '"url":"https://b.org"' "the new tab at the entry's address"
+hand "!replace web-$pid-2 https://b2.org"
+sleep 0.4
+run "cat /apps/browser/tabs/$doc/2" '"url":"https://b2.org"' "a redirect: the entry's address put right"
+also '"from":null' "a redirect is no entry"
 # a covering window: drawn over the page, as any window is
 run "start /apps/inspect programs/inspect" "in /apps/inspect" "another window"
 sleep 1
@@ -171,6 +230,23 @@ echo "!shot $tmp/c.ppm" >&3
 sleep 0.8
 m=$(count "$tmp/c.ppm" 3366cc)
 [ "$m" -lt "$(count "$tmp/a.ppm" 3366cc)" ] && ok "a window above covers the page ($m pixels left)" || bad "a window above does not cover the page"
+
+# History, the window
+run "start /apps/history programs/history" "in /apps/history" "History, a window"
+sleep 1
+run "ls /dev/display/layers" "history-@" "its layer"
+hl=$(last | perl -ne 'print "$1\n" if /^(history-\@\d+)\s/' | head -1)
+run "cat /dev/display/layers/$hl" '"e.org"' "every tab's entries, the branch too"
+also '"b2.org"' "the new tab's"
+# an older browser's window: its tabs inside its document, made nodes of their own once
+run 'mk /apps/browser/tabs/old {"tabs":[{"id":3,"url":"https://old.org","title":"Old","state":"c3Q="}],"at":0,"n":4,"closed":[{"url":"https://gone.org","title":"Gone","at":0}]}' "t=" "an older browser's window"
+from=$(size "$err")
+echo "start /apps/browser programs/browser old" >&3
+waitfor "$err" '\[web\] web-@[0-9]*-3 brought back from its state' "$from" && ok "migrated: its tab brought back from its state" || bad "the old window's tab not brought back"
+run "cat /apps/browser/tabs/old" '"tabs":\[3\]' "migrated: the tabs by id"
+run "cat /apps/browser/tabs/old/3" '"url":"https://old.org"' "migrated: a tab's node"
+run "cat /apps/browser/tabs/old/3/state" '"c3Q="' "migrated: its state"
+run "cat /apps/browser/tabs/old/4" '"url":"https://gone.org"' "migrated: a closed tab, a node of its own"
 
 echo "!wait 200" >&3
 [ "$failed" = 0 ] && echo "all passed" || echo "$failed failed"

@@ -21,7 +21,7 @@ for f in "$c"/*.c; do
 done
 # shellcheck disable=SC2086
 cc -std=c11 -Wall -Wextra -Werror -O1 -g ${SANITIZE:-} $sync_cflags $way_cflags $vt_cflags -o "$out/headless" "$c/test/headless.c" $os \
-	$core_sources $sync_sources $sync_libs $way_libs $vt_libs $jsc_libs -lpthread
+	$core_sources $sync_sources $sync_libs $way_libs $vt_libs $jsc_libs -lz -lpthread
 echo "built $out/headless"
 # the programs loaders/exec runs, as ermineOS's build makes them
 mkdir -p "$out/../programs"

@@ -1,0 +1,69 @@
+{
+	"title": "rules: passing, not listing (PROTECT.tex)",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "pass", "args": { "node": "home", "name": "theme" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "op": "pass", "node": "home", "name": "theme", "allow": true },
+						{ "op": "pass", "node": "home", "allow": false },
+						{ "op": "list", "node": "home", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "pass", "args": { "node": "home", "name": "notes" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "op": "pass", "node": "home", "name": "theme", "allow": true },
+						{ "op": "pass", "node": "home", "allow": false },
+						{ "op": "list", "node": "home", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "list", "args": { "node": "home" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "op": "pass", "node": "home", "name": "theme", "allow": true },
+						{ "op": "pass", "node": "home", "allow": false },
+						{ "op": "list", "node": "home", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 2 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "home", "object": "value" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "op": "pass", "node": "home", "name": "theme", "allow": true },
+						{ "op": "pass", "node": "home", "allow": false },
+						{ "op": "list", "node": "home", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		}
+	]
+}

@@ -1,0 +1,5 @@
+{
+	"title": "a map without nodes: not-a-graph",
+	"bytes": "a164726f6f746172",
+	"expect": { "code": "not-a-graph" }
+}

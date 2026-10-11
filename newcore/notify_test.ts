@@ -1,6 +1,7 @@
 import { assertEquals } from "@std/assert"
 import {
 	createNotify,
+	facts,
 	type Kind,
 	type Options,
 	type Patch,
@@ -80,7 +81,7 @@ function setup(start: V) {
 		patch(p: Patch) {
 			const before = value
 			value = apply(value, p)
-			n.patched(p, before)
+			n.patched(p, facts(p, before))
 			return log.splice(0)
 		},
 	}
@@ -265,7 +266,7 @@ Deno.test("laws: nothing missed, chases hold their thing", () => {
 				})()
 			const before = value
 			value = apply(value, p)
-			n.patched(p, before)
+			n.patched(p, facts(p, before))
 			for (const w of [...watches]) {
 				const now = w.r.value
 				const said = `seed ${seed} step ${step} ${JSON.stringify(p)} ${
@@ -306,7 +307,10 @@ Deno.test("shifting down: chased reads land on nodes already there", () => {
 	s.patch({ path: ["items"], range: [0, 2] })
 	assertEquals([d.path, d.value], [["items", 1], "d"])
 	assertEquals([one.path, one.value], [["items", 1], "d"])
-	assertEquals(s.patch({ path: ["items", 1], value: "x" }).sort(), [`["items",1] value`, `["items",3]~ value`])
+	assertEquals(s.patch({ path: ["items", 1], value: "x" }).sort(), [
+		`["items",1] value`,
+		`["items",3]~ value`,
+	])
 	s.patch({ path: ["items"], range: [0, 0], value: ["y"] })
 	assertEquals(d.path, ["items", 2])
 	// [y, c, x]: by position
@@ -321,8 +325,27 @@ Deno.test("shifting: many chased reads, in order, then all of them back", () => 
 	rs.forEach((r, i) => assertEquals(r.value, `e${i}`))
 	s.patch({ path: ["items"], range: [0, 3] })
 	rs.forEach((r, i) => assertEquals(r.path, ["items", i]))
-	assertEquals(s.patch({ path: ["items"], range: [25, 25], move: { path: ["items", 0] } }).length, 26)
+	assertEquals(
+		s.patch({ path: ["items"], range: [25, 25], move: { path: ["items", 0] } }).length,
+		26,
+	)
 	assertEquals(rs[0].path, ["items", 25])
 	assertEquals(rs[1].path, ["items", 0])
 	assertEquals(rs[30].path, ["items", 30])
+})
+
+// found by the audit of 10-11
+
+Deno.test("a read keeps no hold on the caller's path: a shift moves the read, not the array given", () => {
+	const s = setup(items())
+	const path = ["items", 1]
+	const r = s.read(path, { chase: true })
+	s.patch({ path: ["items"], range: [0, 0], value: ["q"] })
+	assertEquals(r.path, ["items", 2])
+	assertEquals(path, ["items", 1])
+})
+
+Deno.test("a lone high surrogate is one code point in a span's value, as in its places", () => {
+	const s = setup({ text: "\ud83da" })
+	assertEquals(s.read(["text", [1, 2]]).value, "a")
 })

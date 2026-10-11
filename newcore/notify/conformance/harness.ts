@@ -11,7 +11,14 @@
 // heard: only reads that heard something; each read's kinds once, in any order. A read gone or
 // stopped is not live; its path and value are then whatever it last had. A value absent at a
 // path: no "value" field. Anything not understood: {"error": why}.
-import { createNotify, type Options, type Patch, type Path, type Read } from "../../notify.ts"
+import {
+	createNotify,
+	facts,
+	type Options,
+	type Patch,
+	type Path,
+	type Read,
+} from "../../notify.ts"
 
 let content: unknown
 let notify = createNotify(() => content)
@@ -46,7 +53,7 @@ function answer(q: Request): unknown {
 		case "patch": {
 			const before = content
 			content = q.value
-			notify.patched(q.patch!, before)
+			notify.patched(q.patch!, facts(q.patch!, before))
 			const heard: Record<string, string[]> = {}
 			for (const [name, e] of reads) {
 				if (e.heard.length > 0) heard[name] = e.heard

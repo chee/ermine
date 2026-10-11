@@ -1,0 +1,66 @@
+{
+	"title": "rules: tagging, not retyping; objects and versions match deep",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "a",
+			"ask": { "op": "write", "args": { "node": "n", "object": ["info", "tags"], "at": 0 } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": "a", "op": "write", "object": ["info", "tags"], "allow": true },
+						{ "actor": "a", "op": "write", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "a",
+			"ask": { "op": "write", "args": { "node": "n", "object": ["info", "type"], "at": 0 } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": "a", "op": "write", "object": ["info", "tags"], "allow": true },
+						{ "actor": "a", "op": "write", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "a",
+			"ask": { "op": "write", "args": { "node": "n", "object": "value", "at": 0 } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "object": ["info", "value"], "allow": false },
+						{ "object": "value", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "a",
+			"ask": { "op": "pop", "args": { "node": "n", "object": ["children", "x"], "at": [0, 2] } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "object": ["children"], "allow": false },
+						{ "object": ["children", "x", "y"], "allow": false },
+						{ "object": ["children", "x"], "op": "pop", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 2 } } }
+		}
+	]
+}

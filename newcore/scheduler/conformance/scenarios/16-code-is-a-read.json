@@ -1,0 +1,111 @@
+{
+	"title": "a program by path is waited for, read as the process, and taken when it arrives",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": [
+				"prog"
+			],
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": {
+									"pending": 2
+								},
+								"time": 3,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "create",
+			"value": {
+				"setup": [
+					{
+						"do": "return",
+						"value": "hello"
+					}
+				]
+			},
+			"id": "prog",
+			"expect": {
+				"ok": "prog"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "prog",
+			"child": "prog",
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": "hello",
+								"time": 8
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "@1",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "hello",
+							"time": 8
+						}
+					],
+					"info": {},
+					"children": {
+						"run": [
+							{
+								"content": [
+									"@4"
+								],
+								"time": 5
+							}
+						]
+					},
+					"ephemeral": true
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,123 @@
+{
+	"title": "a compute reading an info or a list runs again when it changes, not for another list",
+	"steps": [
+		{
+			"op": "create",
+			"value": null,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "info",
+						"address": [
+							"a"
+						],
+						"name": "theme"
+					},
+					{
+						"do": "children",
+						"address": [
+							"a"
+						],
+						"name": "kids",
+						"var": "k"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$len": {
+								"$var": "k"
+							}
+						}
+					},
+					{
+						"do": "return",
+						"value": null
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "theme",
+			"patches": [
+				{
+					"path": [],
+					"value": "dark"
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"id": "b",
+			"expect": {
+				"ok": "b"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "a",
+			"name": "kids",
+			"child": "b",
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "insert",
+			"id": "a",
+			"name": "other",
+			"child": "b",
+			"expect": {
+				"ok": 13
+			}
+		},
+		{
+			"op": "remove",
+			"id": "a",
+			"name": "kids",
+			"index": 0,
+			"expect": {
+				"ok": 14
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					0,
+					0,
+					1,
+					0
+				]
+			}
+		}
+	]
+}

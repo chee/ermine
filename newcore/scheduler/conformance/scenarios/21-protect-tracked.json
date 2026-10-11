@@ -1,0 +1,120 @@
+{
+	"title": "protect: a compute's policy reads are tracked: new rules run it again",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"op": "read",
+					"node": "a",
+					"process": "@6",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "x"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@6"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": null,
+								"time": 8
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"rules"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": []
+				}
+			],
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": 1,
+								"time": 12
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

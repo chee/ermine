@@ -3,17 +3,19 @@
 // since only the end is ever seen. any patch invalid: it throws, and nothing changes
 import createChange, { type Change, type Header } from "./change.ts"
 import type { Node } from "./node.ts"
-import type { Key, Patch } from "./notify.ts"
+import type { Fact, Facts, Key, Patch } from "./notify.ts"
 
 // which object: the value, an info name, or a name's list
 export type Which = "value" | readonly ["info", string] | readonly ["children", string]
 
 // the change's header (change.ts): time, actor, and reader, site, cause when given
 export type Options = Header & {
-	// told of each patch once the change is in, in order, with the content before it (notify's
-	// patched), and the node's id and which object; given: no copy changes in place across
-	// patches, so each before stays as it was
-	patched?: (patch: Patch, before: unknown, node: string, which: Which) => void
+	// told of each patch once the change is in, in order, with what notify reads of the content
+	// before it (notify's facts), and the node's id and which object
+	patched?: (patch: Patch, facts: Facts, node: string, which: Which) => void
+	// string positions and lengths count UTF-16 units, as JavaScript's own, not code points; not
+	// the change's. notify still counts code points (an experiment: mutate_bench.ts)
+	utf16?: boolean
 }
 
 export type Code = "not-a-patch" | "no-key" | "range" | "wrong-kind" | "into-itself"
@@ -44,14 +46,29 @@ const fail = (code: Code): never => {
 }
 
 // a string's UTF-16 unit at code point n, walking no further than it must
-function unit(s: string, n: number): number {
-	let i = 0
-	for (let k = 0; k < n; k++) {
-		if (i >= s.length) return -1
+// one walk: the UTF-16 units where code points a and b start, and, all: how many code points
+// there are (else -1); null: b past the end
+function walk(s: string, a: number, b: number, all: boolean): [number, number, number] | null {
+	const u = s.length
+	let i = 0, k = 0
+	for (; k < a; k++) {
+		if (i >= u) return null
 		const c = s.charCodeAt(i)
 		i += c >= 0xd800 && c < 0xdc00 ? 2 : 1
 	}
-	return i
+	const x = i
+	for (; k < b; k++) {
+		if (i >= u) return null
+		const c = s.charCodeAt(i)
+		i += c >= 0xd800 && c < 0xdc00 ? 2 : 1
+	}
+	const y = i
+	if (!all) return [x, y, -1]
+	for (; i < u; k++) {
+		const c = s.charCodeAt(i)
+		i += c >= 0xd800 && c < 0xdc00 ? 2 : 1
+	}
+	return [x, y, k]
 }
 function len(v: unknown): number {
 	if (typeof v === "string") {
@@ -81,10 +98,10 @@ function shape(p: Patch): boolean {
 	return true
 }
 
-// one edit's content, changed patch by patch
-function createWork(root: unknown) {
+// one edit's content, changed patch by patch; list: a name's list, there only when not empty
+function createWork(root: unknown, list: boolean, utf16: boolean) {
 	// made here: may change in place
-	let own = new WeakSet<object>()
+	const own = new WeakSet<object>()
 	const copy = <T extends object>(v: T): T => {
 		if (own.has(v)) return v
 		const c = (isList(v) ? v.slice() : { ...v }) as T
@@ -127,24 +144,35 @@ function createWork(root: unknown) {
 		return v
 	}
 
+	// the last splice's sequence, as it was: its fact (a string counted only when asked)
+	let seq: Fact = { list: false, length: 0, had: true }
+
 	// the span [a, b) of what is at path replaced by w (undefined: removed); what was there
-	function splice(path: readonly Key[], a: number, b: number, w: unknown): unknown {
+	// count: a string's code points are counted, for seq
+	function splice(path: readonly Key[], a: number, b: number, w: unknown, count = false): unknown {
 		const v = get(path)
 		if (typeof v !== "string" && !isList(v) && !typed(v)) fail("wrong-kind")
-		if (a > b || b > len(v)) fail("range")
+		if (a > b) fail("range")
 		let out: unknown, taken: unknown
 		if (typeof v === "string") {
 			if (w !== undefined && typeof w !== "string") fail("wrong-kind")
-			const x = unit(v, a), y = unit(v, b)
+			const at = utf16 ? (b > v.length ? null : [a, b, v.length]) : walk(v, a, b, count)
+			if (!at) return fail("range")
+			const [x, y, n] = at
+			seq = { list: false, length: n, had: true }
 			taken = v.slice(x, y)
 			out = v.slice(0, x) + (w ?? "") + v.slice(y)
 		} else if (isList(v)) {
+			if (b > v.length) fail("range")
 			if (w !== undefined && !isList(w)) fail("wrong-kind")
+			seq = { list: true, length: v.length, had: true }
 			const l = copy(v)
 			taken = l.splice(a, b - a, ...(w as unknown[] ?? []))
 			out = l
 		} else {
 			const t = v as Typed
+			if (b > t.length) fail("range")
+			seq = { list: false, length: t.length, had: true }
 			if (w !== undefined && (!typed(w) || w.constructor !== t.constructor)) fail("wrong-kind")
 			const wn = w ? (w as Typed).length : 0
 			const n = new (t.constructor as new (n: number) => Typed)(t.length - (b - a) + wn)
@@ -174,39 +202,92 @@ function createWork(root: unknown) {
 	}
 
 	// takes what is at a place out; what it was
-	function take(p: { path: readonly Key[]; range?: readonly [number, number] }): unknown {
-		if (p.range) return splice(p.path, p.range[0], p.range[1], undefined)
+	function take(
+		p: { path: readonly Key[]; range?: readonly [number, number] },
+		count: boolean,
+	): unknown {
+		if (p.range) return splice(p.path, p.range[0], p.range[1], undefined, count)
 		const v = get(p.path)
 		set(p.path, undefined)
 		return v
 	}
 
-	function apply(p: Patch) {
+	// what notify reads at an unranged place, as the content is now; nothing checked
+	// a ranged place's: seq, from its splice, so a string is walked once
+	function fact(p: { path: readonly Key[] }): Fact {
+		const look = (path: readonly Key[]) => {
+			let v = work.root === ABSENT ? undefined : work.root
+			for (const k of path) {
+				v = v !== null && typeof v === "object" ? (v as Record<Key, unknown>)[k] : undefined
+			}
+			return v
+		}
+		// a parent is a list or a map: never a string
+		const size = (v: unknown) => isList(v) ? v.length : 0
+		if (!p.path.length) {
+			const r = work.root
+			return {
+				list: false,
+				length: 0,
+				had: r !== ABSENT && !(list && (r as unknown[]).length === 0),
+			}
+		}
+		const v = look(p.path.slice(0, -1)), k = p.path[p.path.length - 1]
+		// a list's: the index is in it
+		if (isList(v)) {
+			return { list: true, length: v.length, had: typeof k === "number" && k < v.length }
+		}
+		return {
+			list: false,
+			length: 0,
+			had: v !== null && typeof v === "object" && Object.hasOwn(v, k),
+		}
+	}
+
+	// tell: answers the patch's facts
+	function apply(p: Patch, tell: boolean): Facts | undefined {
 		// nothing there: only a put at the whole
 		if (work.root === ABSENT && (p.path.length || p.range || !("value" in p))) fail("no-key")
 		if (p.move) {
 			const from = p.move
 			if (under(p, from)) fail("into-itself")
-			const was = take(from)
-			if (!p.range) return set(p.path, was)
+			let was = tell && !from.range ? fact(from) : undefined
+			const moved = take(from, tell)
+			if (tell && from.range) was = seq
+			if (!p.range) {
+				const place = tell ? fact(p) : undefined
+				set(p.path, moved)
+				return tell ? { place: place!, from: was } : undefined
+			}
 			const v = get(p.path)
 			// one element into a list's span: as a list of one
-			const w = isList(v) && !from.range ? [was] : was
-			return void splice(p.path, p.range[0], p.range[1], w)
+			const w = isList(v) && !from.range ? [moved] : moved
+			splice(p.path, p.range[0], p.range[1], w, tell)
+			if (!tell) return
+			const size = from.range
+				? from.range[1] - from.range[0]
+				: isList(v)
+				? 1
+				: utf16 && typeof moved === "string"
+				? moved.length
+				: len(moved)
+			return { place: seq, from: was, size }
 		}
 		const w = "value" in p ? p.value : undefined
-		if (p.range) return void splice(p.path, p.range[0], p.range[1], w)
+		if (p.range) {
+			return splice(p.path, p.range[0], p.range[1], w, tell), tell ? { place: seq } : undefined
+		}
+		const facts = tell ? { place: fact(p) } : undefined
 		if (w === undefined && "value" in p) fail("not-a-patch")
 		// removing a missing map key: nothing
 		if (w === undefined && p.path.length) {
 			const at = get(p.path.slice(0, -1)), k = p.path[p.path.length - 1]
-			if (isMap(at) && typeof k === "string" && !Object.hasOwn(at, k)) return
+			if (isMap(at) && typeof k === "string" && !Object.hasOwn(at, k)) return facts
 		}
 		set(p.path, w)
+		return facts
 	}
-	// what is made from here on is new: what was made before stays as it is
-	const keep = () => void (own = new WeakSet())
-	return { work, apply, keep }
+	return { work, apply }
 }
 
 // p's place lies inside what from takes: under its path, or in its span
@@ -247,15 +328,15 @@ export default function mutate<V>(
 	const before = vs.get()
 	const list = which !== "value" && which[0] === "children"
 	const start = before.length ? before[0].content : list ? [] : ABSENT
-	const { patched, ...header } = options
-	const { work, apply, keep } = createWork(start)
-	const seen: [Patch, unknown][] = []
+	const { patched, utf16, ...header } = options
+	const { work, apply } = createWork(start, list, utf16 ?? false)
+	const seen: [Patch, Facts][] = []
 	let i = 0
 	for (const p of patches) {
 		try {
 			if (!shape(p)) fail("not-a-patch")
-			if (patched) seen.push([p, work.root === ABSENT ? undefined : work.root]), keep()
-			apply(p)
+			const facts = apply(p, patched !== undefined)
+			if (facts) seen.push([p, facts])
 		} catch (e) {
 			if (e instanceof Fail) throw new MutateError(e.code, i)
 			throw e
@@ -271,6 +352,6 @@ export default function mutate<V>(
 		if (before.length && "because" in before[0]) first.because = before[0].because
 		vs.set([first, ...rest])
 	}
-	for (const [p, b] of seen) patched!(p, b, node.id, which)
+	for (const [p, f] of seen) patched!(p, f, node.id, which)
 	return change
 }

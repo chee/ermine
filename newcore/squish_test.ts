@@ -96,13 +96,14 @@ Deno.test("squish: same end result as the patches, over random typing", () => {
 		for (let i = 0; i < 30; i++) {
 			const n = Array.from(doc).length
 			const at = rnd(n + 1)
+			const a = Math.min(at, n - 1)
 			const p = rnd(3) === 0 && n > 0
-				? del(Math.min(at, n - 1), Math.min(at, n - 1) + 1 + rnd(Math.min(2, n - at)))
+				? del(a, a + 1 + rnd(Math.min(2, n - a)))
 				: ins(at, "ab😀"[rnd(3)] + (rnd(2) ? "z" : ""))
 			if (p.range![1] > n) continue
 			doc = apply(doc, [p])
 			ps.push(p)
-			if (rnd(2)) ps.push(...(rnd(2) ? [ins(Array.from(doc).length, "!")] : []), ...[])
+			if (rnd(2) && rnd(2)) ps.push(ins(Array.from(doc).length, "!"))
 			doc = apply(start, ps)
 		}
 		const out = squish(ps)
@@ -146,4 +147,13 @@ Deno.test("squish: values given in, or given out, never change after", () => {
 	assertEquals(bytes.value, new Uint8Array([1, 2]))
 	assertEquals((bytes.value as Uint8Array).buffer.byteLength, 2)
 	assertEquals(s.patches(), [ins(0, [1, 2, 3], ["l"]), ins(0, new Uint8Array([1, 2, 3]), ["b"])])
+})
+
+// found by the audit of 10-11
+
+Deno.test("squish: a long list typed into a list is one insert", () => {
+	const big = Array.from({ length: 200000 }, (_, i) => i)
+	const out = squish([ins(0, [1, 2], ["l"]), ins(1, big, ["l"])])
+	assertEquals(out.length, 1)
+	assertEquals((out[0].value as unknown[]).length, 200002)
 })

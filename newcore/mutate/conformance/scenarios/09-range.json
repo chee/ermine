@@ -1,0 +1,174 @@
+{
+	"title": "range: past the end, backwards",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"s": "ab",
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						3
+					]
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					]
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						2
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"fail": "range",
+				"patch": 1
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"s": "ab",
+								"l": [
+									1
+								]
+							},
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						}
+					],
+					"info": []
+				}
+			}
+		}
+	]
+}

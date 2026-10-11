@@ -6,3 +6,5 @@ crash-*
 *.dSYM
 node-harness
 node-harness-check
+pack-harness
+pack-harness-check

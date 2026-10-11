@@ -1,7 +1,7 @@
 // deno run --allow-read --allow-run newcore/notify/wasm/bench.ts
 // The same twelve cases, three ways: notify.ts, notify.c as wasm (both timed by the same loop
 // here, in V8), and notify.c native (its own bench, ../c/bench). patched() only, every time.
-import { createNotify, type Patch } from "../../notify.ts"
+import { createNotify, facts, type Patch } from "../../notify.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const N = 10_000
@@ -72,14 +72,17 @@ function ts(): number[] {
 		}, newkey],
 		[(n) => n.read(["text", [50_000, 50_000]], { chase: true }).on(() => {}), typed],
 		[(n) => {
-			for (let i = 0; i < 100; i++) n.read(["text", [i * 1000, i * 1000]], { chase: true }).on(() => {})
+			for (let i = 0; i < 100; i++) {
+				n.read(["text", [i * 1000, i * 1000]], { chase: true }).on(() => {})
+			}
 		}, typed0],
 	]
 	return cases.map(([reads, patch]) => {
 		const n = createNotify(() => content)
 		reads(n)
+		const f = facts(patch, content)
 		return time((times) => {
-			for (let k = 0; k < times; k++) n.patched(patch, content)
+			for (let k = 0; k < times; k++) n.patched(patch, f)
 		})
 	})
 }
@@ -111,7 +114,11 @@ async function native(): Promise<number[]> {
 }
 
 const show = (ns: number) =>
-	ns >= 1e6 ? `${(ns / 1e6).toFixed(2)} ms` : ns >= 1e3 ? `${(ns / 1e3).toFixed(2)} µs` : `${ns.toFixed(0)} ns`
+	ns >= 1e6
+		? `${(ns / 1e6).toFixed(2)} ms`
+		: ns >= 1e3
+		? `${(ns / 1e3).toFixed(2)} µs`
+		: `${ns.toFixed(0)} ns`
 
 const t = ts(), w = await wasm()
 // ../c/bench runs the move case last
@@ -121,6 +128,8 @@ console.log(`| case | notify.ts | wasm | native C | wasm ÷ native | ts ÷ wasm 
 console.log(`|---|---|---|---|---|---|`)
 names.forEach((name, i) => {
 	console.log(
-		`| ${name} | ${show(t[i])} | ${show(w[i])} | ${show(c[i])} | ${(w[i] / c[i]).toFixed(1)}× | ${(t[i] / w[i]).toFixed(1)}× |`,
+		`| ${name} | ${show(t[i])} | ${show(w[i])} | ${show(c[i])} | ${(w[i] / c[i]).toFixed(1)}× | ${
+			(t[i] / w[i]).toFixed(1)
+		}× |`,
 	)
 })

@@ -182,20 +182,6 @@ static long len(const nt_value *v) {
 	if (v->type == NT_LIST) return (long)v->count;
 	return 0;
 }
-// more than k elements, less taken out; a string counts no further than it must
-static int longer(const nt_value *v, long less, long k) {
-	k += less;
-	if (k < 0) return 1;
-	if (v == NULL || v->type != NT_STR) return len(v) > k;
-	if ((size_t)k >= v->bytes) return 0;
-	if (v->ascii) return 1;
-	// every code point is one to four bytes
-	if (4 * (size_t)k < v->bytes) return 1;
-	long n = 0;
-	for (const char *p = v->str; *p; p++)
-		if (((unsigned char)*p & 0xC0) != 0x80 && ++n > k) return 1;
-	return 0;
-}
 // slice's [a, b) in 0..size, as Array.slice would have it
 static void clamp(long size, long *a, long *b) {
 	if (*a < 0) *a = *a + size < 0 ? 0 : *a + size;
@@ -854,7 +840,8 @@ static void kid_each(R *rd, void *p) {
 // the sequence at the path: [f, f + r) becomes n long; atomic: no path goes into it
 // v, less: what it was, less what a move took out, for knowing if it had more than k elements
 // moved: what left is carried; single: one element left
-static void splice(nt_notify *nf, const nt_key *path, size_t d, const nt_value *v, long less, long f,
+// length: how long the sequence was (its fact's)
+static void splice(nt_notify *nf, const nt_key *path, size_t d, long length, long f,
 		long r, long n, int atomic, int moved, int single) {
 	T *small[8];
 	T **ts = d < 8 ? small : xrealloc(NULL, (d + 1) * sizeof *ts);
@@ -870,7 +857,7 @@ static void splice(nt_notify *nf, const nt_key *path, size_t d, const nt_value *
 		if (!even && !nf->still) hit(nf, rd, NT_LENGTH);
 	}
 	// by position: what is touched; past the longer of the two lengths nothing was or is
-#define REACHES(k) (even ? (k) < f + r : longer(v, less, (k)) || longer(v, less, (k) - n + r))
+#define REACHES(k) (even ? (k) < f + r : length > (k) || length > (k) - n + r)
 	size_t to = even ? lower(t->nk, t->nnk, f + r) : t->nnk;
 	go_t *go = NULL;
 	size_t ngo = 0, cgo = 0;
@@ -1026,14 +1013,12 @@ static void whole_each(R *r, void *p) {
 	if (r->chase) gone(p, r);
 	else hit(p, r, NT_VALUE);
 }
-// one place, removed (no value) or put (a value n long), against the content as it is then;
-// rm: what is already taken out of the base. moved: chased reads in what leaves are carried
-static void act(nt_notify *n, const nt_value *base, const nt_place *rm, const nt_place *p, int has_value,
-		long vn, int moved) {
+// one place, removed (no value) or put (a value n long); f: its fact (nt_facts).
+// moved: chased reads in what leaves are carried
+static void act(nt_notify *n, const nt_fact *f, const nt_place *p, int has_value, long vn, int moved) {
 	if (p->has_range) {
-		view seq = view_at(base, rm, p->path, p->length);
-		splice(n, p->path, p->length, seq.v, seq.cut_count, p->from, p->to - p->from,
-			has_value ? vn : 0, !is_list(seq), moved, 0);
+		splice(n, p->path, p->length, f->length, p->from, p->to - p->from, has_value ? vn : 0,
+			!f->list, moved, 0);
 		return;
 	}
 	if (p->length == 0) {
@@ -1042,16 +1027,14 @@ static void act(nt_notify *n, const nt_value *base, const nt_place *rm, const nt
 		else each(&n->root, whole_each, n);
 		return;
 	}
-	view parent = view_at(base, rm, p->path, p->length - 1);
 	nt_key k = p->path[p->length - 1];
-	if (is_list(parent)) {
+	if (f->list) {
 		if (has_value) put(n, p->path, p->length, 0);
-		else splice(n, p->path, p->length - 1, parent.v, parent.cut_count, k.n, 1, 0, 0, moved, 1);
+		else splice(n, p->path, p->length - 1, f->length, k.n, 1, 0, 0, moved, 1);
 		return;
 	}
-	int had = view_has(parent, k);
-	if (has_value) put(n, p->path, p->length, !had);
-	else if (had) unkey(n, p->path, p->length, moved);
+	if (has_value) put(n, p->path, p->length, !f->had);
+	else if (f->had) unkey(n, p->path, p->length, moved);
 }
 
 // relink what moved, before the next step walks the trie
@@ -1068,7 +1051,7 @@ static void settle(nt_notify *n) {
 	n->nspans = 0;
 }
 
-void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
+void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts) {
 	n->tick++;
 	n->step++;
 	n->nfired = 0;
@@ -1085,25 +1068,15 @@ void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
 		// a move inside one sequence: its length stays
 		size_t fl = from->has_range ? from->length : from->length ? from->length - 1 : 0;
 		size_t pk = pl->has_range ? pl->length : pl->length ? pl->length - 1 : 0;
-		int from_list = from->has_range;
-		if (!from_list) {
-			const nt_value *pv = at(before, from->path, fl);
-			from_list = pv != NULL && pv->type == NT_LIST;
-		}
+		int from_list = from->has_range || facts->from.list;
 		n->still = from_list && pl->has_range && same_keys(from->path, fl, pl->path, pk);
-		act(n, before, NULL, from, 0, 0, 1);
+		act(n, &facts->from, from, 0, 0, 1);
 		settle(n);
 		for (size_t i = 0; i < n->ncarried; i++) detach(n->carried[i].r);
-		view dest = {NULL, 0, 0, NULL};
-		if (pl->has_range) dest = view_at(before, from, pl->path, pl->length);
-		long count = 0;
-		if (pl->has_range) {
-			if (from->has_range) count = from->to - from->from;
-			else if (is_list(dest)) count = 1;
-			else count = len(at(before, from->path, from->length));
-		}
+		int dest = pl->has_range && facts->place.list;
+		long count = pl->has_range ? (long)facts->size : 0;
 		n->step++;
-		act(n, before, from, pl, 1, count, 0);
+		act(n, &facts->place, pl, 1, count, 0);
 		settle(n);
 		// carried reads land inside what arrived
 		for (size_t i = 0; i < n->ncarried; i++) {
@@ -1120,7 +1093,7 @@ void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
 			if (pl->has_range) {
 				long g = pl->from;
 				if (c->single) {
-					if (is_list(dest)) {
+					if (dest) {
 						rel = xrealloc(rel, (nrel + 2) * sizeof *rel);
 						memmove(rel + 1, rel, nrel * sizeof *rel);
 						rel[0] = numkey(0);
@@ -1155,7 +1128,7 @@ void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
 	} else {
 		int has = patch->has_value;
 		long vn = has && pl->has_range ? len(patch->value) : 0;
-		act(n, before, NULL, pl, has, vn, 0);
+		act(n, &facts->place, pl, has, vn, 0);
 		settle(n);
 	}
 	for (size_t i = 0; i < n->nfired; i++) {
@@ -1275,4 +1248,52 @@ int nt_span(const nt_read *r, long *a, long *b) {
 nt_value *nt_value_of(const nt_read *r) {
 	const nt_value *v = at(r->n->get(r->n->ctx), r->keys, r->nkeys);
 	return r->has_span ? slice(v, r->sa, r->sb) : copy(v);
+}
+
+// a place's fact, as the base with rm taken out is seen (as notify.ts's fact)
+static nt_fact fact_of(const nt_value *base, const nt_place *rm, const nt_place *p) {
+	nt_fact f = {0, 0, 0};
+	if (p->has_range) {
+		view w = view_at(base, rm, p->path, p->length);
+		f.list = is_list(w);
+		f.length = (size_t)(len(w.v) - w.cut_count);
+		f.had = w.v != NULL;
+		return f;
+	}
+	if (p->length == 0) {
+		f.had = rm == NULL ? base != NULL : view_at(base, rm, NULL, 0).v != NULL;
+		return f;
+	}
+	view w = view_at(base, rm, p->path, p->length - 1);
+	nt_key k = p->path[p->length - 1];
+	f.list = is_list(w);
+	f.length = (size_t)(len(w.v) - w.cut_count);
+	// a list's: the index is in it
+	f.had = f.list ? k.type == NT_NUM_KEY && k.n >= 0 && (size_t)k.n < f.length : view_has(w, k);
+	return f;
+}
+
+nt_facts nt_facts_of(const nt_patch *patch, const nt_value *before) {
+	nt_facts fs = {0};
+	const nt_place *pl = &patch->place;
+	if (!patch->has_move) {
+		fs.place = fact_of(before, NULL, pl);
+		return fs;
+	}
+	const nt_place *from = &patch->move;
+	fs.place = fact_of(before, from, pl);
+	fs.has_from = 1;
+	fs.from = fact_of(before, NULL, from);
+	if (pl->has_range) {
+		fs.has_size = 1;
+		if (from->has_range) fs.size = (size_t)(from->to - from->from);
+		else if (fs.place.list) fs.size = 1;
+		else fs.size = (size_t)len(at(before, from->path, from->length));
+	}
+	return fs;
+}
+
+void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
+	nt_facts fs = nt_facts_of(patch, before);
+	nt_patched_facts(n, patch, &fs);
 }

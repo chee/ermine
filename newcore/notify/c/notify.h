@@ -1,4 +1,4 @@
-// notify (newcore/notify.ts), in C. A patch and the content before it, into fine-grained
+// notify (newcore/notify.ts), in C. A patch and its facts (or the content before it), into fine-grained
 // notifies on the reads of that content. Same shape as notify.ts.
 // Out of memory aborts: nothing here returns it.
 #ifndef NOTIFY_H
@@ -98,7 +98,32 @@ int nt_span(const nt_read *r, long *a, long *b);
 // what it sees: a new value to nt_free, or NULL when absent
 nt_value *nt_value_of(const nt_read *r);
 
-// the caller applied the patch; before is the content before it
+// what notify reads of the content before a patch, never the content (notify.ts's Facts).
+// a place: is it a list, how long (code points for a string), was the key there
+typedef struct {
+	int list;
+	size_t length;
+	int had;
+} nt_fact;
+#define NT_FACTS
+typedef struct {
+	// the patch's place, as it is when the patch lands (a move's: with what left gone).
+	// ranged: the sequence at its path; else its parent, had: its last key there (a list's:
+	// the index is in it). at [], unranged: had: the object there
+	nt_fact place;
+	// a move: where it came from, as place is
+	int has_from;
+	nt_fact from;
+	// a ranged move: how many places what moved fills where it lands
+	int has_size;
+	size_t size;
+} nt_facts;
+
+// the caller applied the patch; facts: about the content before it
+void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts);
+// the facts, from the whole content before the patch: for a caller that has it
+nt_facts nt_facts_of(const nt_patch *patch, const nt_value *before);
+// nt_patched_facts with nt_facts_of(patch, before)
 void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before);
 
 #endif

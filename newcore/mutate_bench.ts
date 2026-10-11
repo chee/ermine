@@ -149,7 +149,7 @@ for (const [name, w] of Object.entries(each)) {
 	})
 }
 
-// patched given: each before kept, so nothing made here changes in place across patches
+// patched given: the facts notify reads gathered per patch
 for (const name of ["typing", "appending", "puts", "moves"]) {
 	const w = work[name]
 	Deno.bench(`${name}: mutate, patched`, { group: `${name}, patched` }, (b) => {
@@ -158,4 +158,51 @@ for (const name of ["typing", "appending", "puts", "moves"]) {
 		mutate(n, "value", w.patches, { ...by, patched: () => {} })
 		b.end()
 	})
+}
+
+// strings: positions as code points (walked) against UTF-16 units (JavaScript's own)
+// ASCII: the same patches either way. emoji typing: each count its own positions
+const emoji = (step: number): Patch[] =>
+	Array.from({ length: N }, (_, i) => ({ path: ["t"], range: [i * step, i * step], value: "😀" }))
+const strings: Record<string, [Work, Work]> = {
+	typing: [work.typing, work.typing],
+	fixing: [work.fixing, work.fixing],
+	scattered: [work.scattered, work.scattered],
+	"typing emoji": [{ start: () => ({ t: "" }), patches: emoji(1) }, {
+		start: () => ({ t: "" }),
+		patches: emoji(2),
+	}],
+}
+for (const [name, [points, units]] of Object.entries(strings)) {
+	assertEquals(
+		viaMutate(points),
+		(() => {
+			const n = node(units.start())
+			mutate(n, "value", units.patches, { ...by, utf16: true })
+			return n.value[0].content
+		})(),
+		name,
+	)
+	const group = `${name}: code points or utf16`
+	const runs: [string, Work, boolean][] = [["code points", points, false], ["utf16", units, true]]
+	for (const [count, w, utf16] of runs) {
+		Deno.bench(`${name}: mutate, ${count}`, { group, baseline: !utf16 }, (b) => {
+			const n = node(w.start())
+			b.start()
+			mutate(n, "value", w.patches, { ...by, utf16 })
+			b.end()
+		})
+		Deno.bench(`${name}: mutate, patched, ${count}`, { group }, (b) => {
+			const n = node(w.start())
+			b.start()
+			mutate(n, "value", w.patches, { ...by, utf16, patched: () => {} })
+			b.end()
+		})
+		Deno.bench(`${name}: cabbages, ${count}`, { group }, (b) => {
+			let root = w.start()
+			b.start()
+			for (const p of w.patches) root = apply(root, p, utf16)
+			b.end()
+		})
+	}
 }

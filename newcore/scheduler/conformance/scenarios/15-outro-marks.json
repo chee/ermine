@@ -1,0 +1,76 @@
+{
+	"title": "an outro marks what looked at the node; an intro again is not here",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"compute": [
+					{
+						"do": "look",
+						"address": [
+							"a"
+						],
+						"var": "l"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$var": "l"
+						}
+					},
+					{
+						"do": "return",
+						"value": null
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "outro",
+			"id": "a",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					[
+						{
+							"id": "a",
+							"loaded": true
+						}
+					],
+					[
+						{
+							"id": "a",
+							"loaded": false
+						}
+					]
+				]
+			}
+		}
+	]
+}

@@ -40,7 +40,7 @@ function set(root: any, path: readonly Key[], w: any): any {
 
 // [a, b) of the sequence at path replaced by w (undefined: removed); the root after it,
 // and what was there
-function splice(root: any, path: readonly Key[], a: number, b: number, w: any) {
+function splice(root: any, path: readonly Key[], a: number, b: number, w: any, utf16: boolean) {
 	const seq = at(root, path)
 	if (Array.isArray(seq)) {
 		const taken = w === undefined ? seq.splice(a, b - a) : seq.splice(a, b - a, ...w)
@@ -48,7 +48,7 @@ function splice(root: any, path: readonly Key[], a: number, b: number, w: any) {
 	}
 	let out: any, taken: any
 	if (typeof seq === "string") {
-		const x = unit(seq, a), y = unit(seq, b)
+		const x = utf16 ? a : unit(seq, a), y = utf16 ? b : unit(seq, b)
 		taken = seq.slice(x, y)
 		out = seq.slice(0, x) + (w ?? "") + seq.slice(y)
 	} else if (typed(seq)) {
@@ -63,20 +63,22 @@ function splice(root: any, path: readonly Key[], a: number, b: number, w: any) {
 }
 
 // applies p to target in place; the root after it (new only when p acts at [])
-export function apply(target: any, p: Patch): any {
+// utf16: string positions count UTF-16 units, as cabbages did, not code points
+export function apply(target: any, p: Patch, utf16 = false): any {
 	let root = target
 	let w: any = p.value
 	if (p.move) {
 		const f = p.move
-		if (f.range) ({ root, taken: w } = splice(root, f.path, f.range[0], f.range[1], undefined))
-		else {
+		if (f.range) {
+			;({ root, taken: w } = splice(root, f.path, f.range[0], f.range[1], undefined, utf16))
+		} else {
 			w = at(root, f.path)
 			root = set(root, f.path, undefined)
 			// one element into a list's span: as a list of one
 			if (p.range && Array.isArray(at(root, p.path))) w = [w]
 		}
 	}
-	if (p.range) return splice(root, p.path, p.range[0], p.range[1], w).root
+	if (p.range) return splice(root, p.path, p.range[0], p.range[1], w, utf16).root
 	return set(root, p.path, w)
 }
 

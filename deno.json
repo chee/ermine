@@ -47,6 +47,7 @@
   },
   "fmt": {
     "lineWidth": 100,
+    "semiColons": false,
     "exclude": [
       "experimental_hosts/web/typescript/bundle/dist",
       "experimental_hosts/web/typescript/demo/core/dist",

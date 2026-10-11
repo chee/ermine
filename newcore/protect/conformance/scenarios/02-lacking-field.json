@@ -1,0 +1,39 @@
+{
+	"title": "rules: a field the ask lacks never matches",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "home" } },
+			"nodes": { "r": { "value": [{ "name": "theme", "allow": false }] } },
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "pass", "args": { "node": "home", "name": "theme" } },
+			"nodes": { "r": { "value": [{ "name": "theme", "allow": false }] } },
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "home" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "peer": "k1", "allow": false },
+						{ "person": "bob", "allow": false },
+						{ "trusted": true, "allow": false },
+						{ "process": "p", "allow": false },
+						{ "program": "q", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		}
+	]
+}

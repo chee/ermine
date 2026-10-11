@@ -1,5 +1,6 @@
 // a patch, and the content before it, into fine-grained notifies on reads of that content
-// patches are GRAPH.tex's; the caller applies them, then says so with patched(patch, before)
+// patches are GRAPH.tex's; the caller applies them, then says so with patched(patch, facts):
+// the few things about the content before it that notify reads, never the content
 // only listened places are walked: reads sit in a trie of their paths
 // no patch walks the content: a long string or list costs what the patch touches
 
@@ -9,6 +10,19 @@ export type Span = readonly [number, number]
 export type Path = readonly (Key | Span)[]
 export type Place = { path: readonly Key[]; range?: Span }
 export type Patch = Place & { value?: unknown; move?: Place }
+// one place in the content before a patch: is it a list, how long (code points for a string),
+// and was the key there
+export type Fact = { list: boolean; length: number; had: boolean }
+export type Facts = {
+	// the patch's place, as it is when the patch lands (a move's: with what left gone).
+	// ranged: the sequence at its path; else its parent, had: its last key there.
+	// at [], unranged: had: the object there
+	place: Fact
+	// a move: where it came from, as place is
+	from?: Fact
+	// a ranged move: how many places what moved fills where it lands
+	size?: number
+}
 export type Kind = "value" | "keys" | "length" | "moved" | "gone"
 export type Edge = "in" | "out"
 export type Options = {
@@ -84,23 +98,6 @@ function len(v: unknown): number {
 	if (ArrayBuffer.isView(v)) return (v as unknown as { length: number }).length
 	return 0
 }
-// more than k elements, less taken out; a string counts no further than it must
-function longer(v: unknown, less: number, k: number): boolean {
-	k += less
-	if (k < 0) return true
-	if (typeof v !== "string") return len(v) > k
-	const u = v.length
-	if (k >= u) return false
-	// every code point is one or two units
-	if (2 * k < u) return true
-	let n = 0
-	for (let i = 0; i < u; i++) {
-		const c = v.charCodeAt(i)
-		if (c >= 0xd800 && c < 0xdc00) i++
-		if (++n > k) return true
-	}
-	return false
-}
 // a string's code points [a, b), walking no further than b
 function slice(v: unknown, a: number, b: number): unknown {
 	if (typeof v === "string") {
@@ -161,6 +158,35 @@ function after(before: unknown, from: Place): Look {
 		if (!same(path, seq)) return { v, less: 0 }
 		return listy ? { v, less: r } : { v, less: 0, lost: from.path[from.path.length - 1] }
 	}
+}
+
+// a place's fact, as look sees the content
+function fact(look: Look, p: Place): Fact {
+	if (p.range) {
+		const { v, less } = look(p.path)
+		return { list: isList(v), length: len(v) - less, had: v !== undefined }
+	}
+	if (!p.path.length) return { list: false, length: 0, had: look([]).v !== undefined }
+	const { v, less, lost } = look(p.path.slice(0, -1))
+	const k = p.path[p.path.length - 1], length = len(v) - less
+	// a list's: the index is in it
+	if (isList(v)) return { list: true, length, had: typeof k === "number" && k < length }
+	return { list: false, length, had: has(v, k) && k !== lost }
+}
+
+// the facts patched takes, from the whole content before the patch: for a caller that has it
+export function facts(patch: Patch, before: unknown): Facts {
+	const now: Look = (path) => ({ v: at(before, path), less: 0 })
+	if (!patch.move) return { place: fact(now, patch) }
+	const from = patch.move
+	const place = fact(after(before, from), patch)
+	if (!patch.range) return { place, from: fact(now, from) }
+	const size = from.range
+		? from.range[1] - from.range[0]
+		: place.list
+		? 1
+		: len(at(before, from.path))
+	return { place, from: fact(now, from), size }
 }
 
 // a point through [f, f + r) becoming n: ProseMirror's map with assoc
@@ -340,7 +366,7 @@ export function createNotify(get: () => unknown) {
 		if (d > 0 && ts.length >= d) {
 			const parent = ts[d - 1]
 			for (const r of parent.spans) if (inside(r.span, path[d - 1])) hit(r, "value")
-			if (keyed) for (const r of parent.reads) hit(r, "keys")
+			if (keyed) { for (const r of parent.reads) hit(r, "keys") }
 		}
 		if (ts.length > d) each(ts[d], (r) => hit(r, "value"))
 	}
@@ -350,7 +376,7 @@ export function createNotify(get: () => unknown) {
 		const ts = line(path)
 		const d = path.length
 		above(ts, path)
-		if (ts.length >= d) for (const r of ts[d - 1].reads) hit(r, "keys")
+		if (ts.length >= d) { for (const r of ts[d - 1].reads) hit(r, "keys") }
 		if (ts.length > d) {
 			each(ts[d], (r) => {
 				if (!r.chase) hit(r, "value")
@@ -497,12 +523,20 @@ export function createNotify(get: () => unknown) {
 
 	// one place, removed (value absent) or put, against the content as it is then
 	// moved: chased reads in what leaves are carried, not gone
-	function act(look: Look, p: Place, value: { n: number } | null, moved: boolean) {
+	function act(f: Fact, p: Place, value: { n: number } | null, moved: boolean) {
 		const { path, range } = p
+		const more = (k: number) => f.length > k
 		if (range) {
-			const { v, less } = look(path)
-			const more = (k: number) => longer(v, less, k)
-			splice(path, more, range[0], range[1] - range[0], value ? value.n : 0, !isList(v), moved, false)
+			splice(
+				path,
+				more,
+				range[0],
+				range[1] - range[0],
+				value ? value.n : 0,
+				!f.list,
+				moved,
+				false,
+			)
 			return
 		}
 		if (path.length === 0) {
@@ -511,19 +545,14 @@ export function createNotify(get: () => unknown) {
 			else each(root, (r) => r.chase ? gone(r) : hit(r, "value"))
 			return
 		}
-		const { v: parent, less, lost } = look(path.slice(0, -1))
 		const k = path[path.length - 1]
-		if (isList(parent)) {
+		if (f.list) {
 			if (value) put(path, false)
-			else {
-				const more = (j: number) => longer(parent, less, j)
-				splice(path.slice(0, -1), more, k as number, 1, 0, false, moved, true)
-			}
+			else splice(path.slice(0, -1), more, k as number, 1, 0, false, moved, true)
 			return
 		}
-		const had = has(parent, k) && k !== lost
-		if (value) put(path, !had)
-		else if (had) unkey(path, moved)
+		if (value) put(path, !f.had)
+		else if (f.had) unkey(path, moved)
 	}
 
 	// relink what moved, before the next step walks the trie
@@ -538,7 +567,7 @@ export function createNotify(get: () => unknown) {
 		spans = []
 	}
 
-	function patched(patch: Patch, before: unknown) {
+	function patched(patch: Patch, facts: Facts) {
 		tick++
 		step++
 		fired = []
@@ -547,26 +576,19 @@ export function createNotify(get: () => unknown) {
 		carried = []
 		still = false
 		moving = patch.move !== undefined
-		const now: Look = (path) => ({ v: at(before, path), less: 0 })
 		if (patch.move) {
 			const from = patch.move
+			const was = facts.from!
 			const seq = (p: Place) => p.range ? p.path : p.path.slice(0, -1)
-			still = (from.range !== undefined || isList(at(before, seq(from)))) &&
+			still = (from.range !== undefined || was.list) &&
 				patch.range !== undefined && same(seq(from), seq(patch))
-			act(now, from, null, true)
+			act(was, from, null, true)
 			settle()
 			for (const c of carried) detach(c.r)
-			const mid = after(before, from)
-			const dest = patch.range ? mid(patch.path).v : undefined
-			const n = !patch.range
-				? 0
-				: from.range
-				? from.range[1] - from.range[0]
-				: isList(dest)
-				? 1
-				: len(at(before, from.path))
+			const dest = patch.range ? facts.place.list : false
+			const n = patch.range ? facts.size! : 0
 			step++
-			act(mid, patch, { n }, false)
+			act(facts.place, patch, { n }, false)
 			settle()
 			// carried reads land inside what arrived
 			for (const c of carried) {
@@ -579,10 +601,12 @@ export function createNotify(get: () => unknown) {
 				}
 				if (patch.range) {
 					const g = patch.range[0]
-					if (c.single) rel = isList(dest) ? [0, ...rel] : rel.length ? rel : [[0, n]]
+					if (c.single) rel = dest ? [0, ...rel] : rel.length ? rel : [[0, n]]
 					const head = rel[0]
 					rel = [
-						typeof head === "number" ? head + g : [(head as Span)[0] + g, (head as Span)[1] + g],
+						typeof head === "number"
+							? head + g
+							: [(head as Span)[0] + g, (head as Span)[1] + g],
 						...rel.slice(1),
 					]
 				}
@@ -596,7 +620,7 @@ export function createNotify(get: () => unknown) {
 			}
 		} else {
 			const value = "value" in patch ? { n: patch.range ? len(patch.value) : 0 } : null
-			act(now, patch, value, false)
+			act(facts.place, patch, value, false)
 			settle()
 		}
 		const heard = fired
@@ -607,7 +631,11 @@ export function createNotify(get: () => unknown) {
 			if (m !== -1 && back(r)) kinds.splice(m, 1)
 			if (!r.live) detach(r)
 			// a handler may add or stop others: each kind goes to the ones there when it began
-			for (const kind of kinds) for (const h of r.handlers.size === 1 ? r.handlers : [...r.handlers]) h(kind)
+			for (const kind of kinds) {
+				for (
+					const h of r.handlers.size === 1 ? r.handlers : [...r.handlers]
+				) h(kind)
+			}
 		}
 	}
 

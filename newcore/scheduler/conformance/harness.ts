@@ -1,0 +1,156 @@
+// The reference scheduler on the line protocol: one JSON request per line in, one answer per line
+// out, in order. Another implementation joins by speaking this (SCHEDULER_HARNESS).
+//
+//   {"op":"new","rules"?:[rule...]}       a new scheduler, root "root", clock at 0. rules: a node
+//                                         "rules" is made (intro), placed in the root, then given
+//                                         them, and protect reads them (protect.ts rules)   → {}
+//   {"op":op,...}                         a host operation (normal.ts), as the host     → {"ok":a}
+//   {"op":"start","address":a,"program":p,"name"?,"id"?,"args"?}                    → {"ok":pid}
+//   {"op":"call","address":a,"args"?,"actor"?,"person"?,"trusted"?}            → {"ok":answer}
+//   {"op":"replace","address":a}                                                  → {"ok":null}
+//   {"op":"outro","id":id}                                                        → {"ok":null}
+//   {"op":"batch","ops":[request...]}     each made inside one batch            → {"ok":[answer]}
+//   {"op":"moments"}                      the moments since the last asked, then forgotten
+//   {"op":"log"}                          what programs logged since the last asked
+//   {"op":"node","id":id}                 {"value":[version],"info":{n:[version]},
+//                                          "children":{n:[version]},"ephemeral":b}; null: not loaded
+//   {"op":"clock"}                        the last time given
+//
+// a program: as steps.ts; a path (a list): found by the host's code, which reads the path from
+// the process's place, its first item's first version a program; none there: pending.
+// a moment: as SCHEDULER.tex's, a read's without its items, an error as its code.
+// an error: {"error": code} (normal.ts); the harness goes on.
+import createNode from "../../node.ts"
+import { rules } from "../../protect.ts"
+import { type Api, createScheduler, type Finder, type Moment, PENDING } from "../../scheduler.ts"
+import { code, json, operate, version } from "./normal.ts"
+import { load, program } from "./steps.ts"
+
+type S = ReturnType<typeof createScheduler>
+
+let moments: unknown[] = []
+let clock = { time: 0 }
+let logged: unknown[] = []
+const log = (v: unknown) => void logged.push(v)
+
+function moment(m: Moment): unknown {
+	const out = { ...m } as Record<string, unknown>
+	if ("reads" in m) delete out.items
+	if ("error" in out) out.error = code((m as { error: unknown }).error)
+	return json(out)
+}
+
+// the host's code: the program at the path, read as the process
+const finder: Finder = (process, view: Api) => {
+	const found = view.content(process.program).find((it) => it.versions?.length)
+	if (!found) return PENDING
+	const v = found.versions![0]
+	return { code: load(v.content, log), program: { node: found.id, time: v.change.time! } }
+}
+
+function make(q: Record<string, unknown>): S {
+	moments = []
+	logged = []
+	clock = { time: 0 }
+	const s = createScheduler({
+		root: "root",
+		clock,
+		hooks: [(m) => moments.push(moment(m))],
+		code: finder,
+		...(q.rules ? { may: rules("rules") } : {}),
+	})
+	if (q.rules) {
+		s.intro(
+			createNode("rules", {
+				value: [{ content: [], change: { time: 0, actor: "host", node: "rules" } }],
+			}),
+		)
+		s.insert("root", "rules", "rules")
+		s.write(["rules"], [{ path: [], value: q.rules }])
+	}
+	return s
+}
+
+let s = make({})
+
+// deno-lint-ignore no-explicit-any
+function answer(q: Record<string, any>): unknown {
+	switch (q.op) {
+		case "new":
+			s = make(q)
+			return undefined
+		case "start": {
+			const op: Record<string, unknown> = {
+				address: q.address,
+				program: program(q.program, log),
+			}
+			for (const f of ["name", "id", "args"]) if (q[f] !== undefined) op[f] = q[f]
+			return s.start(op as never).id
+		}
+		case "call": {
+			const { op: _, ...rest } = q
+			return json(s.call(rest as never))
+		}
+		case "replace":
+			s.replace({ address: q.address })
+			return null
+		case "outro":
+			s.outro(q.id)
+			return null
+		case "batch": {
+			const out: unknown[] = []
+			s.batch(() => {
+				for (const r of q.ops) out.push(answer(r))
+			})
+			return out
+		}
+		case "moments": {
+			const out = moments
+			moments = []
+			return out
+		}
+		case "log": {
+			const out = logged
+			logged = []
+			return out
+		}
+		case "node": {
+			const n = s.get(q.id)
+			if (!n) return null
+			const of = (m: Map<string, unknown[]>) =>
+				Object.fromEntries([...m].map(([k, vs]) => [k, vs.map((v) => version(v as never))]))
+			return {
+				value: n.value.map((v) => version(v)),
+				info: of(n.info),
+				children: of(n.children as Map<string, unknown[]>),
+				ephemeral: s.ephemeral(q.id),
+			}
+		}
+		case "clock":
+			return clock.time
+		default: {
+			const { op, ...fields } = q
+			return operate(s, op, fields)
+		}
+	}
+}
+
+const lines = Deno.stdin.readable.pipeThrough(new TextDecoderStream())
+let buffer = ""
+const out = (v: unknown) =>
+	Deno.stdout.writeSync(new TextEncoder().encode(JSON.stringify(v) + "\n"))
+for await (const chunk of lines) {
+	buffer += chunk
+	let i
+	while ((i = buffer.indexOf("\n")) !== -1) {
+		const line = buffer.slice(0, i)
+		buffer = buffer.slice(i + 1)
+		if (line.trim() === "") continue
+		try {
+			const a = answer(JSON.parse(line))
+			out(a === undefined ? {} : { ok: a })
+		} catch (e) {
+			out({ error: code(e) })
+		}
+	}
+}

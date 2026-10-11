@@ -1,0 +1,126 @@
+{
+	"title": "pending: a status in front of the value, gone when the value is current",
+	"steps": [
+		{
+			"op": "create",
+			"value": false,
+			"id": "flag",
+			"expect": {
+				"ok": "flag"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "flag",
+			"child": "flag",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"flag"
+						],
+						"var": "f"
+					},
+					{
+						"do": "if",
+						"test": {
+							"$get": [
+								{
+									"$var": "f"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						},
+						"then": [
+							{
+								"do": "return",
+								"value": "ready"
+							}
+						],
+						"else": [
+							{
+								"do": "pending"
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": {
+									"pending": 4
+								},
+								"time": 5,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 3
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"flag"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": true
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": "ready",
+								"time": 9
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,396 @@
+{
+	"title": "readers run after what they read: c read b, b read a; a and c due: a, b, c",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "src",
+			"expect": {
+				"ok": "src"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "src",
+			"child": "src",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "create",
+			"value": 0,
+			"id": "other",
+			"expect": {
+				"ok": "other"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "other",
+			"child": "other",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "a",
+			"program": {
+				"compute": [
+					{
+						"do": "log",
+						"value": "a"
+					},
+					{
+						"do": "content",
+						"address": [
+							"src"
+						],
+						"var": "s"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "s"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@5"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "b",
+			"program": {
+				"compute": [
+					{
+						"do": "log",
+						"value": "b"
+					},
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "s"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "s"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								1
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@10"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "c",
+			"program": {
+				"compute": [
+					{
+						"do": "log",
+						"value": "c"
+					},
+					{
+						"do": "content",
+						"address": [
+							"b"
+						],
+						"var": "s"
+					},
+					{
+						"do": "content",
+						"address": [
+							"other"
+						],
+						"var": "o"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "s"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								{
+									"$get": [
+										{
+											"$var": "o"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@15"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"a",
+					"b",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "batch",
+			"ops": [
+				{
+					"op": "write",
+					"address": [
+						"other"
+					],
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				},
+				{
+					"op": "write",
+					"address": [
+						"src"
+					],
+					"patches": [
+						{
+							"path": [],
+							"value": 2
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					20,
+					21
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"a",
+					"b",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"c"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@15",
+						"versions": [
+							{
+								"content": 4,
+								"time": 26
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@5",
+						"by": 6
+					},
+					{
+						"starts": "@5",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@5",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@5",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@10",
+						"by": 11
+					},
+					{
+						"starts": "@10",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@10",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@10",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@15",
+						"by": 16
+					},
+					{
+						"starts": "@15",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@15",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"reads": "@15",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@15",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@15",
+						"by": 20
+					},
+					{
+						"due": "@5",
+						"by": 21
+					},
+					{
+						"starts": "@5",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"reads": "@5",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"due": "@10",
+						"by": 22
+					},
+					{
+						"ends": "@5",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "@10",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"reads": "@10",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@10",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "@15",
+						"run": 2,
+						"rank": 2
+					},
+					{
+						"reads": "@15",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"reads": "@15",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@15",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

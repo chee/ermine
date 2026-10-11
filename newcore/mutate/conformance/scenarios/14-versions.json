@@ -1,0 +1,249 @@
+{
+	"title": "a node with several versions keeps the rest and because",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"a": 1
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					},
+					"because": "front"
+				},
+				{
+					"content": {
+						"a": 2
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				},
+				{
+					"content": 3,
+					"change": {
+						"time": 0,
+						"actor": "host"
+					},
+					"because": "back"
+				}
+			],
+			"info": [
+				[
+					"i",
+					[
+						{
+							"content": 1,
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						},
+						{
+							"content": 2,
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						}
+					]
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 10
+				}
+			],
+			"header": {
+				"time": 7,
+				"actor": {
+					"person": "p",
+					"code": [
+						"c"
+					]
+				},
+				"reader": "pid3",
+				"cause": "x"
+			},
+			"expect": {
+				"change": {
+					"time": 7,
+					"actor": {
+						"person": "p",
+						"code": [
+							"c"
+						]
+					},
+					"reader": "pid3",
+					"cause": "x",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"a": 10
+							},
+							"change": {
+								"time": 7,
+								"actor": {
+									"person": "p",
+									"code": [
+										"c"
+									]
+								},
+								"reader": "pid3",
+								"cause": "x",
+								"node": "a"
+							},
+							"because": "front"
+						},
+						{
+							"content": {
+								"a": 2
+							},
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"time": 0,
+								"actor": "host"
+							},
+							"because": "back"
+						}
+					],
+					"info": [
+						[
+							"i",
+							[
+								{
+									"content": 1,
+									"change": {
+										"time": 0,
+										"actor": "host"
+									}
+								},
+								{
+									"content": 2,
+									"change": {
+										"time": 0,
+										"actor": "host"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "mutate",
+			"which": [
+				"info",
+				"i"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "now"
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"a": 10
+							},
+							"change": {
+								"time": 7,
+								"actor": {
+									"person": "p",
+									"code": [
+										"c"
+									]
+								},
+								"reader": "pid3",
+								"cause": "x",
+								"node": "a"
+							},
+							"because": "front"
+						},
+						{
+							"content": {
+								"a": 2
+							},
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"time": 0,
+								"actor": "host"
+							},
+							"because": "back"
+						}
+					],
+					"info": [
+						[
+							"i",
+							[
+								{
+									"content": "now",
+									"change": {
+										"time": 1,
+										"actor": "me",
+										"node": "a"
+									}
+								},
+								{
+									"content": 2,
+									"change": {
+										"time": 0,
+										"actor": "host"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		}
+	]
+}

@@ -214,11 +214,33 @@
    "at": [
     "drivers"
    ],
+   "name": "sync",
+   "id": "drv-sync",
+   "value": {
+    "kind": "c",
+    "name": "sync"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
    "name": "mac",
    "id": "drv-mac",
    "value": {
     "kind": "c",
     "name": "mac"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
+   "name": "vnc",
+   "id": "drv-vnc",
+   "value": {
+    "kind": "c",
+    "name": "vnc"
    }
   },
   {
@@ -297,6 +319,14 @@
    "at": [
     "programs"
    ],
+   "name": "history",
+   "id": "prog-history",
+   "source": "programs/history.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
    "name": "erminex",
    "id": "prog-erminex",
    "source": "programs/erminex.js"
@@ -361,6 +391,14 @@
    "name": "mac",
    "id": "prog-mac",
    "source": "programs/mac.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "vnc",
+   "id": "prog-vnc",
+   "source": "programs/vnc.js"
   },
   {
    "at": [
@@ -572,6 +610,14 @@
   },
   {
    "at": [
+    "dev"
+   ],
+   "name": "vnc",
+   "id": "dev-vnc",
+   "value": null
+  },
+  {
+   "at": [
     "dev",
     "sync"
    ],
@@ -617,6 +663,14 @@
    ],
    "name": "browser",
    "id": "apps-browser",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "history",
+   "id": "apps-history",
    "value": null
   },
   {
@@ -689,6 +743,14 @@
    ],
    "name": "mac",
    "id": "apps-mac",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "vnc",
+   "id": "apps-vnc",
    "value": null
   },
   {
@@ -1156,6 +1218,75 @@
      "x": 0,
      "y": 4
     },
+    "window": {
+     "radius": 0,
+     "frame": {
+      "width": 1,
+      "color": "line"
+     },
+     "drop": {
+      "size": 1,
+      "color": "line"
+     },
+     "rule": {
+      "width": 1,
+      "color": "line"
+     },
+     "bevel": {
+      "width": 0,
+      "hi": "hi",
+      "lo": "lo"
+     },
+     "bar": {
+      "height": null,
+      "pad": 6,
+      "color": "chrome"
+     },
+     "title": {
+      "font": "title",
+      "color": "ink",
+      "align": "center",
+      "room": 80,
+      "pad": 6,
+      "inset": 1
+     },
+     "stripes": {
+      "on": true,
+      "count": null,
+      "step": 2,
+      "width": 1,
+      "inset": 3,
+      "color": "line"
+     },
+     "boxes": {
+      "on": true,
+      "left": [
+       "close"
+      ],
+      "right": [
+       "minimize",
+       "inspect"
+      ],
+      "size": null,
+      "inset": 8,
+      "gap": 6,
+      "plate": 2,
+      "line": 1,
+      "color": "line"
+     },
+     "grip": 12,
+     "inactive": {
+      "stripes": {
+       "on": false
+      },
+      "boxes": {
+       "on": false
+      },
+      "title": {
+       "color": "ink2"
+      }
+     }
+    },
     "fonts": {
      "text": {
       "name": "Geneva",
@@ -1292,6 +1423,10 @@
      "run": "browser"
     },
     {
+     "label": "History…",
+     "run": "history"
+    },
+    {
      "label": "the graph",
      "run": "graph"
     },
@@ -1335,6 +1470,10 @@
     {
      "label": "Mac apps…",
      "run": "macapps"
+    },
+    {
+     "label": "Another screen (VNC)…",
+     "run": "vnc"
     },
     "-",
     {
@@ -1649,12 +1788,34 @@
   {
    "start": [
     "dev",
+    "sync"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "sync"
+   ]
+  },
+  {
+   "start": [
+    "dev",
     "mac"
    ],
    "name": "driver",
    "program": [
     "drivers",
     "mac"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "vnc"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "vnc"
    ]
   },
   {

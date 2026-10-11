@@ -3,7 +3,7 @@ import createChange, { type Change } from "./change.ts"
 import createNode from "./node.ts"
 import mutate, { MutateError } from "./mutate.ts"
 import { squish } from "./squish.ts"
-import { createNotify, type Patch } from "./notify.ts"
+import { createNotify, type Facts, facts, type Patch } from "./notify.ts"
 
 const by = { actor: "me", time: 5 }
 const at = (
@@ -123,26 +123,30 @@ Deno.test("mutate: invalid, nothing changes", () => {
 	assertEquals(content, { s: "ab", l: [1], m: {} })
 })
 
-Deno.test("mutate: patched hears each patch once the change is in, with its own before", () => {
+Deno.test("mutate: patched hears each patch once the change is in, with its facts", () => {
 	const n = createNode<unknown, Change>("a", { value: at({ t: "ab", l: [1] }) })
 	const notify = createNotify(() => n.value[0].content)
 	const heard: [string, unknown][] = []
 	const t = notify.read(["t"]), l = notify.read(["l", 0])
 	t.on((kind) => heard.push([kind, t.value]))
 	l.on((kind) => heard.push([kind, l.value]))
-	const befores: unknown[] = []
+	const told: Facts[] = []
 	const c = mutate(n, "value", [
 		{ path: ["t"], range: [2, 2], value: "c" },
 		{ path: ["l", 0], value: 2 },
 		{ path: ["t"], range: [0, 1] },
 	], {
 		...by,
-		patched(p, before) {
-			befores.push(structuredClone(before))
-			notify.patched(p, before)
+		patched(p, f) {
+			told.push(f)
+			notify.patched(p, f)
 		},
 	})
-	assertEquals(befores, [{ t: "ab", l: [1] }, { t: "abc", l: [1] }, { t: "abc", l: [2] }])
+	assertEquals(told, [
+		{ place: { list: false, length: 2, had: true } },
+		{ place: { list: true, length: 1, had: true } },
+		{ place: { list: false, length: 3, had: true } },
+	])
 	// handlers read the end: the change is in before any is told
 	assertEquals(heard, [
 		["value", "bc"],
@@ -173,9 +177,133 @@ Deno.test("mutate: patched is told the node and which object", () => {
 		children: [["kids", at(["b"]) as never]],
 	})
 	const told: unknown[] = []
-	const patched = (_p: Patch, _b: unknown, node: string, which: unknown) => told.push([node, which])
+	const patched = (_p: Patch, _b: unknown, node: string, which: unknown) =>
+		told.push([node, which])
 	mutate(n, "value", [{ path: [], value: 2 }], { ...by, patched })
 	mutate(n, ["info", "theme"], [{ path: [], value: "y" }], { ...by, patched })
 	mutate(n, ["children", "kids"], [{ path: [], range: [1, 1], value: ["c"] }], { ...by, patched })
 	assertEquals(told, [["a", "value"], ["a", ["info", "theme"]], ["a", ["children", "kids"]]])
+})
+
+Deno.test("mutate: patched at [] says whether the object was there", () => {
+	const n = createNode<unknown, Change>("a")
+	const told: boolean[] = []
+	const patched = (_p: Patch, f: Facts) => told.push(f.place.had)
+	mutate(n, ["info", "x"], [{ path: [], value: 1 }, { path: [], value: 2 }], { ...by, patched })
+	mutate(n, ["children", "k"], [{ path: [], value: ["m"] }], { ...by, patched })
+	mutate(n, ["children", "k"], [{ path: [] }], { ...by, patched })
+	assertEquals(told, [false, true, false, true])
+})
+
+// mutate's facts, against notify's facts() from the whole content before each patch
+Deno.test("mutate: facts as notify makes them from the content", () => {
+	let x = 0
+	const rand = (n: number) => (x = (x * 1103515245 + 12345) & 0x7fffffff) % n
+	const keys = ["a", "b", "c"]
+	function patch(v: Record<string, unknown>): Patch {
+		const l = v.l as unknown[], s = v.s as string
+		const i = rand(l.length + 1), j = i + rand(l.length - i + 1)
+		const c = rand(s.length + 1)
+		switch (rand(10)) {
+			case 0:
+				return { path: ["l"], range: [i, j], value: [rand(9)] }
+			case 1:
+				return { path: ["l"], range: [i, j] }
+			case 2:
+				return { path: ["s"], range: [c, c], value: rand(2) ? "x" : "😀" }
+			case 3:
+				return { path: ["m", keys[rand(3)]], value: rand(9) }
+			case 4:
+				return { path: ["m", keys[rand(3)]] }
+			case 5:
+				return l.length
+					? {
+						path: ["l"],
+						range: [i % l.length, i % l.length],
+						move: { path: ["l", rand(l.length)] },
+					}
+					: { path: ["l"], range: [0, 0], value: [1, 2, 3] }
+			case 6:
+				return l.length > 1
+					? {
+						path: ["l"],
+						range: [0, 0],
+						move: { path: ["l"], range: [1, 1 + rand(l.length - 1)] },
+					}
+					: { path: ["l", 0], value: 0 } as Patch
+			case 7:
+				return l.length
+					? { path: ["m", keys[rand(3)]], move: { path: ["l", rand(l.length)] } }
+					: { path: ["s"], range: [0, 0], value: "y" }
+			case 8:
+				return l.length > 1
+					? { path: ["l", rand(l.length - 1)], move: { path: ["l", rand(l.length)] } }
+					: { path: ["l", rand(l.length + 1)], value: 7 }
+			default:
+				return { path: ["l", rand(l.length + 1)], value: 7 }
+		}
+	}
+	for (let seed = 1; seed <= 40; seed++) {
+		x = seed
+		const n = createNode<unknown, Change>("a", {
+			value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
+		})
+		const ps: Patch[] = [], befores: unknown[] = []
+		// one change each, to have each content before; patches that fail are left out
+		for (let step = 0; step < 30; step++) {
+			const v = n.value[0].content as Record<string, unknown>
+			const p = patch(v)
+			try {
+				mutate(n, "value", [p], by)
+				ps.push(p), befores.push(v)
+			} catch (e) {
+				if (!(e instanceof MutateError)) throw e
+			}
+		}
+		const m = createNode<unknown, Change>("a", {
+			value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
+		})
+		const told: Facts[] = []
+		mutate(m, "value", ps, { ...by, patched: (_p, f) => told.push(f) })
+		assertEquals(m.value[0].content, n.value[0].content, `seed ${seed}`)
+		ps.forEach((p, i) =>
+			assertEquals(told[i], facts(p, befores[i]), `seed ${seed} ${JSON.stringify(p)}`)
+		)
+	}
+})
+
+Deno.test("mutate: utf16 counts UTF-16 units, and is not the change's", () => {
+	const n = createNode<unknown, Change>("a", { value: at({ s: "a😀b" }) })
+	const told: Facts[] = []
+	const c = mutate(n, "value", [{ path: ["s"], range: [3, 4] }], {
+		...by,
+		utf16: true,
+		patched: (_p, f) => told.push(f),
+	})
+	assertEquals(n.value[0].content, { s: "a😀" })
+	assertEquals(told[0].place.length, 4)
+	assertEquals("utf16" in c, false)
+	assertEquals(
+		code(() => mutate(n, "value", [{ path: ["s"], range: [0, 4] }], { ...by, utf16: true })),
+		"range",
+	)
+})
+
+// found by the audit of 10-11
+
+Deno.test("mutate: a children content is a list; anything else at [] is wrong-kind", () => {
+	const n = createNode<unknown, Change>("a")
+	mutate(n, ["children", "k"], [{ path: [], value: ["m"] }], by)
+	for (const value of ["", "abc", 5]) {
+		assertEquals(code(() => mutate(n, ["children", "k"], [{ path: [], value }], by)), "wrong-kind")
+	}
+	assertEquals(n.children.get("k")![0].content, ["m"])
+})
+
+Deno.test("mutate: the facts of moving the whole onto itself are notify's", () => {
+	const n = createNode<unknown, Change>("a", { value: at({ x: 1 }) })
+	const told: Facts[] = []
+	const p: Patch = { path: [], move: { path: [] } }
+	mutate(n, "value", [p], { ...by, patched: (_p, f) => told.push(f) })
+	assertEquals(told, [facts(p, { x: 1 })])
 })

@@ -1,0 +1,121 @@
+{
+	"title": "a setup runs once, untracked; its value is the process's; the moments",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "r"
+					},
+					{
+						"do": "return",
+						"value": {
+							"a": {
+								"$get": [
+									{
+										"$var": "r"
+									},
+									0,
+									"versions",
+									0,
+									"content"
+								]
+							}
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": {
+									"a": 1
+								},
+								"time": 5
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@3",
+						"by": 4
+					},
+					{
+						"starts": "@3",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@3",
+						"run": 1,
+						"op": "content",
+						"tracked": false
+					},
+					{
+						"ends": "@3",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

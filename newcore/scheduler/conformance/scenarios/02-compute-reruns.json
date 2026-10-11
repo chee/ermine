@@ -1,0 +1,237 @@
+{
+	"title": "a compute runs again when what it read changes; a peep marks nothing",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "create",
+			"value": 10,
+			"id": "b",
+			"expect": {
+				"ok": "b"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "b",
+			"child": "b",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "content",
+						"address": [
+							"b"
+						],
+						"var": "y",
+						"peep": true
+					},
+					{
+						"do": "log",
+						"value": "ran"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "x"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								{
+									"$get": [
+										{
+											"$var": "y"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@5"
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 20
+				}
+			],
+			"expect": {
+				"ok": 10
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@5",
+						"versions": [
+							{
+								"content": 11,
+								"time": 7
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@5",
+						"versions": [
+							{
+								"content": 22,
+								"time": 12
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"ran",
+					"ran"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@5",
+						"by": 6
+					},
+					{
+						"starts": "@5",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@5",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"reads": "@5",
+						"run": 1,
+						"op": "content",
+						"tracked": false
+					},
+					{
+						"ends": "@5",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@5",
+						"by": 11
+					},
+					{
+						"starts": "@5",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"reads": "@5",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"reads": "@5",
+						"run": 2,
+						"op": "content",
+						"tracked": false
+					},
+					{
+						"ends": "@5",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

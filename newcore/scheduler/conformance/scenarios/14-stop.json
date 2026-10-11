@@ -1,0 +1,280 @@
+{
+	"title": "a compute reading a due process's node is stopped, and runs again after it",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "src",
+			"expect": {
+				"ok": "src"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "src",
+			"child": "src",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "b",
+			"program": {
+				"compute": [
+					{
+						"do": "log",
+						"value": "b"
+					},
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "s"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "s"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "batch",
+			"ops": [
+				{
+					"op": "start",
+					"address": [],
+					"name": "a",
+					"program": {
+						"compute": [
+							{
+								"do": "log",
+								"value": "a"
+							},
+							{
+								"do": "content",
+								"address": [
+									"src"
+								],
+								"var": "s"
+							},
+							{
+								"do": "return",
+								"value": {
+									"$get": [
+										{
+											"$var": "s"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								}
+							}
+						]
+					}
+				}
+			],
+			"expect": {
+				"ok": [
+					"@8"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"b",
+					"b",
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"src"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"ok": 18
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": 3,
+								"time": 21
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@3",
+						"by": 4
+					},
+					{
+						"starts": "@3",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@3",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@3",
+						"by": 9
+					},
+					{
+						"due": "@8",
+						"by": 9
+					},
+					{
+						"starts": "@3",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "@3",
+						"run": 2,
+						"ended": "stopped",
+						"waits": "@8"
+					},
+					{
+						"starts": "@8",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@8",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@8",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "@3",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"reads": "@3",
+						"run": 3,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@8",
+						"by": 18
+					},
+					{
+						"starts": "@8",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"reads": "@8",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"due": "@3",
+						"by": 19
+					},
+					{
+						"ends": "@8",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "@3",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"reads": "@3",
+						"run": 4,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

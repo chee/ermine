@@ -1,0 +1,142 @@
+{
+	"title": "an effect's changes say why it ran",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "create",
+			"value": null,
+			"id": "out",
+			"expect": {
+				"ok": "out"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "out",
+			"child": "out",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "return",
+						"value": [
+							{
+								"$get": [
+									{
+										"$var": "x"
+									},
+									0,
+									"versions",
+									0,
+									"content"
+								]
+							}
+						]
+					}
+				],
+				"effect": [
+					{
+						"do": "write",
+						"address": [
+							"out"
+						],
+						"patches": [
+							{
+								"path": [],
+								"value": {
+									"$given": "value"
+								}
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"ok": "@5"
+			}
+		},
+		{
+			"op": "node",
+			"id": "out",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": [
+								1
+							],
+							"time": 8
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "node",
+			"id": "out",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": [
+								2
+							],
+							"time": 13
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		}
+	]
+}

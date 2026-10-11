@@ -1,0 +1,202 @@
+{
+	"title": "not-a-patch: bad shapes, at their index",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": "l"
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"l",
+						-1
+					]
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 1
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						-1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0
+					]
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1.5
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1,
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": "l"
+					}
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						true
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"l": [
+									1
+								]
+							},
+							"change": {
+								"time": 0,
+								"actor": "host"
+							}
+						}
+					],
+					"info": []
+				}
+			}
+		}
+	]
+}

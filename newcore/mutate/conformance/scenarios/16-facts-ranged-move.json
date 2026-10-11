@@ -1,0 +1,259 @@
+{
+	"title": "facts on a ranged move: place, from and size",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"l": [
+							1,
+							2,
+							3,
+							4
+						],
+						"k": [
+							"a"
+						],
+						"s": "x😀y",
+						"t": "..",
+						"m": {
+							"a": 1
+						}
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							3
+						]
+					}
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							3
+						]
+					}
+				},
+				{
+					"path": [
+						"k"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"move": {
+						"path": [
+							"k",
+							0
+						]
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"patched": true,
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "a"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 4,
+							"had": true
+						},
+						"size": 2
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 2,
+							"had": true
+						},
+						"size": 1
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 3,
+							"had": true
+						},
+						"size": 2
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 1
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						},
+						"from": {
+							"list": true,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 4,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"l": [
+									4,
+									1
+								],
+								"k": [
+									"a",
+									2,
+									3
+								],
+								"s": "x",
+								"t": "..😀y",
+								"m": {
+									"b": 1
+								}
+							},
+							"change": {
+								"time": 1,
+								"actor": "me",
+								"node": "a"
+							}
+						}
+					],
+					"info": []
+				}
+			}
+		}
+	]
+}

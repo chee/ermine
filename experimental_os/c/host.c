@@ -386,6 +386,8 @@ static void makeHw(Host *h) {
 	                  " {\"name\": \"wayland\", \"irq\": 62, \"note\": \"the Wayland compositor's socket (drv_wayland.c)\"},"
 	                  " {\"name\": \"pty\", \"irq\": 63, \"note\": \"the pseudo-terminals' masters (drv_pty.c)\"},"
 	                  " {\"name\": \"sock\", \"irq\": 64, \"note\": \"the shell's Unix socket and its connections (drv_sock.c)\"},"
+	                  " {\"name\": \"history\", \"irq\": 65, \"note\": \"a history served may have changed (peer.c)\"},"
+	                  " {\"name\": \"vnc\", \"irq\": 66, \"note\": \"the VNC connections' sockets (drv_vnc.c)\"},"
 	                  " {\"name\": \"blitter\", \"note\": \"core 0's own: BitBlt, text, and the draw device's ops\"}]");
 	for (int pass = 0; pass < 2; pass++) {
 		Json *list = pass ? own : devices;
@@ -860,6 +862,7 @@ void hostOff(Host *h) {
 	execStop(h);
 	vramStop();
 	sockStop();
+	vncStop();
 	jsStop(h);
 	hostSay(h, "off: the SD card holds every change as it was made");
 }

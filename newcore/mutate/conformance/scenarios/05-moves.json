@@ -1,0 +1,184 @@
+{
+	"title": "moves: leave first, then land in what is left",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"l": [
+							"a",
+							"b",
+							"c"
+						],
+						"m": {},
+						"s": "xy"
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k"
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"l": [
+									"c"
+								],
+								"m": {
+									"k": "b"
+								},
+								"s": "xy"
+							},
+							"change": {
+								"time": 1,
+								"actor": "me",
+								"node": "a"
+							}
+						}
+					],
+					"info": []
+				}
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"l": [
+									"c"
+								],
+								"s": "xy",
+								"z": {
+									"k": "b"
+								}
+							},
+							"change": {
+								"time": 1,
+								"actor": "me",
+								"node": "a"
+							}
+						}
+					],
+					"info": []
+				}
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"z",
+						"k"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"move": {
+						"path": [
+							"nothing"
+						]
+					}
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		}
+	]
+}

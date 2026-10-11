@@ -7,6 +7,7 @@
 //   !key Enter [mods...]   !type text   !click x y   !move x y   !drag x0 y0 x1 y1   !post {record}
 //   !compose text   !commit text   !shot file.ppm   !wait ms   !stats label
 //   !page id rrggbb [x y w h]   a web page's next frame: that rectangle (all of it) painted, with dirty
+//   !nav id url   !replace id url   a web page going there itself (a link, pushState), or its URL replaced (a redirect)
 //
 // !stats says what the OS commanded since the last: each op's count, bytes
 // and the pixels it had the metal copy; then counts again.
@@ -85,6 +86,7 @@ static struct Tile {
 	uint32_t color;
 	double opacity, radius, sx, sy;
 	int bx, by, bw, bh;
+	int corner[4]; // the shadow's box rounded: top left, top right, bottom right, bottom left
 } tiles[256];
 static int ntiles;
 /** web pages: each one's plane file, mapped, as the metal maps it; no engine draws here, so a page is a
@@ -96,6 +98,65 @@ static struct Page {
 	int64_t n, took;
 } pages[16];
 static int npages;
+
+/** each page's back and forward list, as WebKit keeps one: a load drops what is ahead and adds its URL; a go moves
+ * along it; each change said (list), with the URL and a title (its host) */
+static struct List {
+	char id[128];
+	char *urls[64];
+	int n, at;
+} lists[32];
+static int nlists;
+static pthread_mutex_t listing = PTHREAD_MUTEX_INITIALIZER; // the lists: the OS's commands and the hand's !nav, !replace
+
+static struct List *listOf(const char *id) {
+	for (int i = 0; id && i < nlists; i++) if (!strcmp(lists[i].id, id)) return &lists[i];
+	if (!id || nlists == 32) return NULL;
+	struct List *l = &lists[nlists++];
+	*l = (struct List){ .at = -1 };
+	snprintf(l->id, sizeof l->id, "%s", id);
+	return l;
+}
+
+/** the page at its list's current URL: url, title and list said */
+static void listed(const struct List *l) {
+	const char *url = l->urls[l->at], *host = strstr(url, "://");
+	host = host ? host + 3 : url;
+	post("{\"irq\": 49, \"event\": \"url\", \"id\": \"%s\", \"url\": \"%s\"}", l->id, url);
+	post("{\"irq\": 49, \"event\": \"title\", \"id\": \"%s\", \"title\": \"%.*s\"}", l->id, (int)strcspn(host, "/?#"), host);
+	char urls[64 * 260] = "", *o = urls;
+	for (int i = 0; i < l->n; i++) o += snprintf(o, (size_t)(urls + sizeof urls - o), "%s\"%s\"", i ? ", " : "", l->urls[i]);
+	post("{\"irq\": 49, \"event\": \"list\", \"id\": \"%s\", \"urls\": [%s], \"at\": %d}", l->id, urls, l->at);
+}
+
+/** a load: what is ahead dropped, the URL added, current */
+static void pushed(struct List *l, const char *url) {
+	for (int i = l->at + 1; i < l->n; i++) free(l->urls[i]);
+	l->n = l->at + 1 < l->n ? l->at + 1 : l->n;
+	if (l->n == 64) {
+		free(l->urls[0]);
+		memmove(l->urls, l->urls + 1, sizeof l->urls[0] * 63);
+		l->n--;
+	}
+	l->urls[l->n++] = strdup(url);
+	l->at = l->n - 1;
+}
+
+/** !nav id url: the page goes there itself (a link, pushState); !replace id url: its current URL replaced (a redirect, replaceState) */
+static void navPage(const char *rest, bool replace) {
+	char id[128], url[250];
+	if (sscanf(rest, "%127s %249s", id, url) < 2 || strpbrk(url, "\"\\")) return;
+	pthread_mutex_lock(&listing);
+	struct List *l = listOf(id);
+	if (l && l->at >= 0) {
+		if (replace) {
+			free(l->urls[l->at]);
+			l->urls[l->at] = strdup(url);
+		} else pushed(l, url);
+		listed(l);
+	}
+	pthread_mutex_unlock(&listing);
+}
 
 static struct Page *pageOf(const char *id) {
 	for (int i = 0; id && i < npages; i++) if (!strcmp(pages[i].id, id)) return &pages[i];
@@ -151,6 +212,8 @@ static int64_t layers(const Json *c) {
 				t->color = (uint32_t)number(sh, "color", 0), t->opacity = number(sh, "opacity", 0), t->radius = number(sh, "radius", 0);
 				t->sx = number(sh, "x", 0), t->sy = number(sh, "y", 0);
 				t->bx = (int)number(box, "x", 0), t->by = (int)number(box, "y", 0), t->bw = (int)number(box, "w", t->w), t->bh = (int)number(box, "h", t->h);
+				Json *cs = jsonGet(sh, "corners");
+				for (int q = 0; q < 4; q++) t->corner[q] = jsonIsArray(cs) && cs->array.count == 4 && jsonIsNumber(cs->array.items[q]) ? (int)cs->array.items[q]->number : 0;
 			}
 		}
 		Json *p = jsonGet(item, "paint");
@@ -189,6 +252,31 @@ static double within(double a, double b, double s) {
 	return s <= 0 ? (a <= 0 && b > 0) : 0.5 * (erf(b / (s * sqrt(2))) - erf(a / (s * sqrt(2))));
 }
 
+/** how many pixels of row k, from a corner's edge, are outside its curve of radius r (drv_display.c's) */
+static int notch(int r, int k) {
+	if (k < 0 || k >= r) return 0;
+	double dy = r - (k + 0.5), n = r - sqrt((double)r * r - dy * dy) - 0.5;
+	return n > 0 ? (int)ceil(n) : 0;
+}
+
+/** what a box's rounded corners do not cast at pixel x, y: each corner's notched rows, blurred (drv_display.c's) */
+static double notched(const int r[4], double x0, double y0, int w, int h, double s, int x, int y) {
+	double sum = 0, px = x + 0.5, py = y + 0.5, reach = 3 * s + 1;
+	for (int q = 0; q < 4; q++) {
+		if (r[q] <= 0) continue;
+		bool left = q == 0 || q == 3, top = q < 2;
+		double cx = left ? x0 : x0 + w, cy = top ? y0 : y0 + h;
+		if (fabs(px - cx) > r[q] + reach || fabs(py - cy) > r[q] + reach) continue;
+		for (int k = 0; k < r[q]; k++) {
+			int n = notch(r[q], k);
+			if (!n) break;
+			double ya = top ? y0 + k : y0 + h - 1 - k, xa = left ? x0 : x0 + w - n;
+			sum += within(ya - py, ya + 1 - py, s) * within(xa - px, xa + n - px, s);
+		}
+	}
+	return sum;
+}
+
 /** the tiles stacked, as the metal's GPU shows them: each one's shadow (its box blurred, as Core Animation's shadowRadius), then its pixels (lock held) */
 static void stack(uint32_t *out) {
 	for (int i = 0; i < W * H; i++) out[i] = 0;
@@ -209,6 +297,10 @@ static void stack(uint32_t *out) {
 				for (int x = (int)floor(x0) - reach; x < x0 + t->bw + reach; x++) {
 					if (x < 0 || x >= W) continue;
 					double a = t->opacity * fy * within(x0 - (x + 0.5), x0 + t->bw - (x + 0.5), s);
+					if (t->corner[0] || t->corner[1] || t->corner[2] || t->corner[3]) {
+						a -= t->opacity * notched(t->corner, x0, y0, t->bw, t->bh, s, x, y);
+						if (a < 0) a = 0;
+					}
 					uint32_t p = out[y * W + x];
 					int r = (int)(((p >> 16) & 255) * (1 - a) + ((t->color >> 16) & 255) * a + 0.5), g = (int)(((p >> 8) & 255) * (1 - a) + ((t->color >> 8) & 255) * a + 0.5),
 					    bl = (int)((p & 255) * (1 - a) + (t->color & 255) * a + 0.5);
@@ -485,6 +577,12 @@ static void command(void *data, const char *json) {
 			*pg = pages[--npages];
 		}
 		pthread_mutex_unlock(&lock);
+		// its list goes with the engine's page
+		pthread_mutex_lock(&listing);
+		struct List *l = listOf(jsonText(jsonGet(c, "id")));
+		for (int i = 0; l && i < l->n; i++) free(l->urls[i]);
+		if (l) l->n = 0, l->at = -1;
+		pthread_mutex_unlock(&listing);
 		return;
 	}
 	if (!strcmp(op, "display")) {
@@ -620,11 +718,33 @@ static void command(void *data, const char *json) {
 		// open beside it is !post {"irq": 49, "event": "open", "id": id, "url": url, "behind": false}
 		const char *id = jsonText(jsonGet(c, "id")), *url = jsonText(jsonGet(c, "url")), *host = strstr(url, "://");
 		host = host ? host + 3 : url;
+		(void)host;
 		fprintf(stderr, "[metal] %.120s\n", json);
-		if (!strpbrk(url, "\"\\")) {
-			post("{\"irq\": 49, \"event\": \"url\", \"id\": \"%s\", \"url\": \"%s\"}", id ? id : "", url);
-			post("{\"irq\": 49, \"event\": \"title\", \"id\": \"%s\", \"title\": \"%.*s\"}", id ? id : "", (int)strcspn(host, "/?#"), host);
+		pthread_mutex_lock(&listing);
+		struct List *l = listOf(id);
+		if (!strpbrk(url, "\"\\") && strlen(url) < 250 && l) {
+			// brought back from its state: the list it had is the engine's, so here the URL alone
+			if (jsonText(jsonGet(c, "state"))) {
+				for (int i = 0; i < l->n; i++) free(l->urls[i]);
+				l->n = 0;
+				l->at = -1;
+			}
+			pushed(l, url);
+			listed(l);
 		}
+		pthread_mutex_unlock(&listing);
+	} else if (!strcmp(op, "web") && jsonGet(c, "go")) {
+		// back, forward, or that far along the list
+		pthread_mutex_lock(&listing);
+		struct List *l = listOf(jsonText(jsonGet(c, "id")));
+		const char *go = jsonText(jsonGet(c, "go"));
+		int to = !l ? -1 : l->at + (go && !strcmp(go, "back") ? -1 : go && !strcmp(go, "forward") ? 1 : go ? 0 : (int)number(c, "go", 0));
+		fprintf(stderr, "[metal] %.120s\n", json);
+		if (l && to != l->at && to >= 0 && to < l->n) {
+			l->at = to;
+			listed(l);
+		}
+		pthread_mutex_unlock(&listing);
 	} else if (!strcmp(op, "quit")) {
 		post("{\"irq\": 1, \"why\": \"os\"}");
 	} else if (!strcmp(op, "cursor") && jsonGet(c, "shape")) {
@@ -787,6 +907,8 @@ int main(int argc, char **argv) {
 		else if (!strcmp(word, "shot")) shot(rest);
 		else if (!strcmp(word, "stats")) report(rest);
 		else if (!strcmp(word, "page")) paintPage(rest);
+		else if (!strcmp(word, "nav")) navPage(rest, false);
+		else if (!strcmp(word, "replace")) navPage(rest, true);
 		else if (!strcmp(word, "type")) {
 			for (char *c = rest; *c; c++) {
 				char k[2] = { *c, 0 };

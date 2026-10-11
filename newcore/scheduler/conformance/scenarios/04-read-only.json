@@ -1,0 +1,95 @@
+{
+	"title": "a compute only reads: its write is refused, the run fails, the error its status",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "write",
+						"address": [
+							"a"
+						],
+						"patches": [
+							{
+								"path": [],
+								"value": 2
+							}
+						]
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 1,
+								"time": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": {
+									"error": "read-only"
+								},
+								"time": 5,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 3
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

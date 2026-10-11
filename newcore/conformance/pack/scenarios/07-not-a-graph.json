@@ -1,0 +1,5 @@
+{
+	"title": "bytes that are no graph: not-a-graph",
+	"bytes": "f6",
+	"expect": { "code": "not-a-graph" }
+}

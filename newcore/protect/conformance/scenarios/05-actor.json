@@ -1,0 +1,97 @@
+{
+	"title": "rules: the actor's own actor, peer, person, trusted; its code's last step's process and program",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": {
+				"actor": "bob",
+				"peer": "k1",
+				"code": [
+					{ "process": "p1" },
+					{ "process": "p2", "program": { "node": "prog", "time": 3 } }
+				]
+			},
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "person": "bob", "allow": false },
+						{ "process": "p1", "allow": false },
+						{ "actor": { "actor": "bob" }, "allow": false },
+						{ "process": "p2", "allow": true }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": {
+				"actor": "bob",
+				"peer": "k1",
+				"code": [
+					{ "process": "p1" },
+					{ "process": "p2", "program": { "node": "prog", "time": 3 } }
+				]
+			},
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "program": "prog", "peer": "k2", "allow": true },
+						{ "program": "prog", "peer": "k1", "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": { "actor": "bob", "code": [{ "process": "p1", "program": "direct" }] },
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "program": "direct", "allow": false }] } },
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": { "name": "x", "trusted": false },
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "trusted": true, "allow": false },
+						{ "actor": { "trusted": false, "name": "x" }, "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": { "actor": null },
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": { "actor": null }, "allow": true },
+						{ "actor": null, "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 1 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": ["bob"],
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "actor": ["bob"], "allow": false }] } },
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } } }
+		}
+	]
+}

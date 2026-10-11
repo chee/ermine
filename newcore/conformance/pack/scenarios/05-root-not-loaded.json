@@ -1,0 +1,6 @@
+{
+	"title": "a root not loaded: nothing-there, its id",
+	"root": "nope",
+	"nodes": [{ "id": "r", "value": [], "info": [], "children": [], "header": {} }],
+	"expect": { "code": "nothing-there", "id": "nope" }
+}

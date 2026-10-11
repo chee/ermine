@@ -1,0 +1,59 @@
+{
+	"title": "rules: the first match wins; none: yes; a refusal names its place",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "mine", "object": "value" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": "bob", "node": "mine", "allow": false },
+						{ "actor": "bob", "allow": true }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "other" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": "bob", "node": "mine", "allow": false },
+						{ "actor": "bob", "allow": true }
+					]
+				}
+			},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "carol",
+			"ask": { "op": "read", "args": { "node": "other" } },
+			"nodes": {
+				"r": {
+					"value": [
+						{ "actor": "bob", "allow": false },
+						{ "op": "write", "allow": false },
+						{ "allow": false }
+					]
+				}
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 2 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "carol",
+			"ask": { "op": "read", "args": { "node": "other" } },
+			"nodes": { "r": { "value": [] } },
+			"expect": { "answer": { "yes": true } }
+		}
+	]
+}

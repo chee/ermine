@@ -1,0 +1,127 @@
+{
+	"title": "a kill unwinds: children first, then cleanups, then the nodes it made",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "create",
+						"ephemeral": true,
+						"value": 1,
+						"var": "m"
+					},
+					{
+						"do": "insert",
+						"id": {
+							"$given": "self"
+						},
+						"name": "made",
+						"child": {
+							"$var": "m"
+						}
+					},
+					{
+						"do": "start",
+						"address": [],
+						"name": "kid",
+						"program": {
+							"setup": [
+								{
+									"do": "cleanup",
+									"steps": [
+										{
+											"do": "log",
+											"value": "kid"
+										}
+									]
+								},
+								{
+									"do": "return",
+									"value": 0
+								}
+							]
+						},
+						"var": "k"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$var": "k"
+						}
+					},
+					{
+						"do": "cleanup",
+						"steps": [
+							{
+								"do": "log",
+								"value": "parent"
+							}
+						]
+					},
+					{
+						"do": "return",
+						"value": 0
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"@5"
+				]
+			}
+		},
+		{
+			"op": "outro",
+			"id": "@1",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"kid",
+					"parent"
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "@3",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "node",
+			"id": "@5",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"kid"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@5",
+						"loaded": false
+					}
+				]
+			}
+		}
+	]
+}

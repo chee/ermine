@@ -1,0 +1,64 @@
+{
+	"title": "first: the first answer not yes, outside in; none: yes",
+	"steps": [
+		{
+			"op": "may",
+			"policy": {
+				"first": [
+					"anyone",
+					{ "answer": { "no": { "code": "lock" } } },
+					{ "answer": { "pending": true } }
+				]
+			},
+			"actor": "a",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {},
+			"expect": { "answer": { "no": { "code": "lock" } } }
+		},
+		{
+			"op": "may",
+			"policy": {
+				"first": [{ "answer": { "pending": true } }, { "answer": { "no": { "code": "lock" } } }]
+			},
+			"actor": "a",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {},
+			"expect": { "answer": { "pending": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "first": [] },
+			"actor": "a",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "first": [{ "rules": "a" }, { "rules": "b" }] },
+			"actor": "x",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"a": { "value": [{ "actor": "x", "allow": true }] },
+				"b": { "value": [{ "actor": "x", "allow": false }] }
+			},
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } } }
+		},
+		{
+			"op": "may",
+			"policy": { "first": [{ "rules": "a" }, { "first": [{ "rules": "b" }] }] },
+			"actor": "x",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "a": { "value": [] } },
+			"expect": { "answer": { "pending": true } }
+		},
+		{
+			"op": "may",
+			"policy": "anyone",
+			"actor": null,
+			"ask": { "op": "anything", "args": { "node": "" } },
+			"nodes": {},
+			"expect": { "answer": { "yes": true } }
+		}
+	]
+}

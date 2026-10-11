@@ -1,0 +1,57 @@
+{
+	"title": "placing: unplace each removed, then place each added, as often as it was; order and symbols ask nothing",
+	"steps": [
+		{
+			"op": "placing",
+			"node": "n",
+			"name": "theme",
+			"before": ["a", "b", "a"],
+			"after": ["b", "c", "c", "a"],
+			"expect": {
+				"asks": [
+					{ "op": "unplace", "args": { "node": "n", "name": "theme", "id": "a" } },
+					{ "op": "place", "args": { "node": "n", "name": "theme", "id": "c" } },
+					{ "op": "place", "args": { "node": "n", "name": "theme", "id": "c" } }
+				]
+			}
+		},
+		{
+			"op": "placing",
+			"node": "n",
+			"name": "x",
+			"before": ["a", "b"],
+			"after": ["b", "a"],
+			"expect": { "asks": [] }
+		},
+		{
+			"op": "placing",
+			"node": "n",
+			"name": "x",
+			"before": ["b", "a", "b", "c"],
+			"after": ["c"],
+			"expect": {
+				"asks": [
+					{ "op": "unplace", "args": { "node": "n", "name": "x", "id": "b" } },
+					{ "op": "unplace", "args": { "node": "n", "name": "x", "id": "b" } },
+					{ "op": "unplace", "args": { "node": "n", "name": "x", "id": "a" } }
+				]
+			}
+		},
+		{
+			"op": "placing",
+			"node": "n",
+			"name": "x",
+			"before": [1, { "s": 1 }, "a"],
+			"after": [2, null, "a", "z"],
+			"expect": { "asks": [{ "op": "place", "args": { "node": "n", "name": "x", "id": "z" } }] }
+		},
+		{
+			"op": "placing",
+			"node": "n",
+			"name": "x",
+			"before": [],
+			"after": [],
+			"expect": { "asks": [] }
+		}
+	]
+}

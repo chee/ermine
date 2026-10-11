@@ -1,0 +1,140 @@
+{
+	"title": "a step's throw fails the run with its code; the next run that ends done clears it",
+	"steps": [
+		{
+			"op": "create",
+			"value": 0,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "if",
+						"test": {
+							"$eq": [
+								{
+									"$get": [
+										{
+											"$var": "x"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								0
+							]
+						},
+						"then": [
+							{
+								"do": "throw",
+								"code": "zero"
+							}
+						]
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "x"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": {
+									"error": "zero"
+								},
+								"time": 5,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 3
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": 1,
+								"time": 9
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

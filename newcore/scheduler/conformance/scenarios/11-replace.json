@@ -1,0 +1,89 @@
+{
+	"title": "replace runs a setup again, as replaced; its children matched by name",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "start",
+						"address": [],
+						"name": "k",
+						"program": {
+							"setup": [
+								{
+									"do": "return",
+									"value": 1
+								}
+							]
+						},
+						"var": "k"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$var": "k"
+						}
+					},
+					{
+						"do": "return",
+						"value": {
+							"$given": "name"
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "replace",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"@3",
+					"@3"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": "p",
+								"time": 11
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "replace",
+			"address": [
+				"nowhere"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		}
+	]
+}

@@ -1,0 +1,68 @@
+{
+	"title": "protect: a step not passed gives a refused item",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"op": "pass",
+					"name": "secret",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"id": "secret",
+			"expect": {
+				"ok": "secret"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "secret",
+			"child": "secret",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"secret"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"loaded": false,
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"secret"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		}
+	]
+}

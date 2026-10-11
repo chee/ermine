@@ -1,0 +1,168 @@
+{
+	"title": "the latest run: a node named run inside the process, written at each run's end",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "x"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"p",
+				"run"
+			],
+			"var": "r",
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "@6",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"run": 1,
+								"program": null,
+								"by": [
+									4
+								],
+								"reads": [
+									{
+										"op": "content",
+										"tracked": true,
+										"times": [
+											1,
+											2
+										],
+										"address": [
+											"a"
+										]
+									}
+								],
+								"wrote": [],
+								"rank": 0,
+								"ended": "done",
+								"after": [],
+								"equal": false
+							},
+							"time": 6
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": true
+				}
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "node",
+			"id": "@6",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"run": 2,
+								"program": null,
+								"by": [
+									8
+								],
+								"reads": [
+									{
+										"op": "content",
+										"tracked": true,
+										"times": [
+											8,
+											2
+										],
+										"address": [
+											"a"
+										]
+									}
+								],
+								"wrote": [],
+								"rank": 0,
+								"ended": "done",
+								"after": [],
+								"equal": false
+							},
+							"time": 10
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": true
+				}
+			}
+		}
+	]
+}

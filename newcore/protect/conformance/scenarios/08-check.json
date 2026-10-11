@@ -1,0 +1,43 @@
+{
+	"title": "check: asks in order; the first answer not yes and its place; all yes: yes, no at",
+	"steps": [
+		{
+			"op": "check",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"asks": [
+				{ "op": "pass", "args": { "node": "root", "name": "theme" } },
+				{ "op": "pass", "args": { "node": "mine", "name": "colors" } }
+			],
+			"nodes": { "r": { "value": [{ "op": "pass", "node": "mine", "allow": false }] } },
+			"expect": { "answer": { "no": { "code": "rule", "rule": 0 } }, "at": 1 }
+		},
+		{
+			"op": "check",
+			"policy": "anyone",
+			"actor": "bob",
+			"asks": [
+				{ "op": "pass", "args": { "node": "root", "name": "theme" } },
+				{ "op": "pass", "args": { "node": "mine", "name": "colors" } }
+			],
+			"nodes": {},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "check",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"asks": [],
+			"nodes": {},
+			"expect": { "answer": { "yes": true } }
+		},
+		{
+			"op": "check",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"asks": [{ "op": "read", "args": { "node": "n" } }],
+			"nodes": {},
+			"expect": { "answer": { "pending": true }, "at": 0 }
+		}
+	]
+}

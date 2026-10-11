@@ -1,0 +1,525 @@
+// mutate (newcore/mutate.ts), in C, on nt_value contents. Same rules, same order of checks.
+// Memory: what a patch touches is a copy made here (the "made" set), changed in place for the
+// rest of the call; everything else is shared and never freed. Values made here and dropped
+// again within the call are freed; values given are never.
+#include "mutate.h"
+
+#include <setjmp.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+const char *mu_code_name(int code) {
+	switch (code) {
+	case MU_OK: return "ok";
+	case MU_NOT_A_PATCH: return "not-a-patch";
+	case MU_NO_KEY: return "no-key";
+	case MU_RANGE: return "range";
+	case MU_WRONG_KIND: return "wrong-kind";
+	case MU_INTO_ITSELF: return "into-itself";
+	}
+	return "?";
+}
+
+// memory
+
+static void *grab(void *p, size_t n) {
+	void *q = realloc(p, n ? n : 1);
+	if (q == NULL) {
+		fputs("mutate: out of memory\n", stderr);
+		abort();
+	}
+	return q;
+}
+static char *dup(const char *s) {
+	size_t n = strlen(s) + 1;
+	return memcpy(grab(NULL, n), s, n);
+}
+
+// a set of pointers: the values made in this call
+typedef struct {
+	const void **slots;
+	size_t cap, used, dead;
+} pset;
+static const char gone_; // a deleted slot
+#define GONE ((const void *)&gone_)
+static size_t hash_of(const void *p) {
+	uint64_t x = (uint64_t)(uintptr_t)p;
+	x ^= x >> 17;
+	x *= 0x9E3779B97F4A7C15ull;
+	return (size_t)(x >> 20);
+}
+static void pset_add(pset *s, const void *p);
+static void pset_grow(pset *s) {
+	pset old = *s;
+	s->cap = old.cap ? old.cap * 2 : 64;
+	s->slots = grab(NULL, s->cap * sizeof *s->slots);
+	memset(s->slots, 0, s->cap * sizeof *s->slots);
+	s->used = s->dead = 0;
+	for (size_t i = 0; i < old.cap; i++)
+		if (old.slots[i] != NULL && old.slots[i] != GONE) pset_add(s, old.slots[i]);
+	free(old.slots);
+}
+static void pset_add(pset *s, const void *p) {
+	if ((s->used + s->dead + 1) * 2 > s->cap) pset_grow(s);
+	size_t h = hash_of(p) & (s->cap - 1);
+	while (s->slots[h] != NULL && s->slots[h] != GONE) h = (h + 1) & (s->cap - 1);
+	if (s->slots[h] == GONE) s->dead--;
+	s->slots[h] = p;
+	s->used++;
+}
+static int pset_has(const pset *s, const void *p) {
+	if (s->cap == 0 || p == NULL) return 0;
+	for (size_t h = hash_of(p) & (s->cap - 1); s->slots[h] != NULL; h = (h + 1) & (s->cap - 1))
+		if (s->slots[h] == p) return 1;
+	return 0;
+}
+// 1 when it was there
+static int pset_del(pset *s, const void *p) {
+	if (s->cap == 0 || p == NULL) return 0;
+	for (size_t h = hash_of(p) & (s->cap - 1); s->slots[h] != NULL; h = (h + 1) & (s->cap - 1)) {
+		if (s->slots[h] == p) {
+			s->slots[h] = GONE;
+			s->used--;
+			s->dead++;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+// the work of one call
+
+typedef struct {
+	nt_value *root; // NULL: absent
+	pset made;
+	jmp_buf jump;
+	int code;
+	int tell; // facts wanted
+	mu_fact seq; // the last splice's sequence, as it was
+} work;
+
+static void fail(work *w, int code) {
+	w->code = code;
+	longjmp(w->jump, 1);
+}
+
+// frees one made value, not what it holds that is shared
+static void shell_free(nt_value *v) {
+	if (v->type == NT_MAP)
+		for (size_t i = 0; i < v->count; i++) free(v->keys[i]);
+	free(v->items);
+	free(v->keys);
+	free(v->index);
+	free(v->str);
+	free(v);
+}
+// a value made here that is let go of, and what it holds that was made here
+static void drop(work *w, nt_value *v) {
+	if (!pset_del(&w->made, v)) return;
+	for (size_t i = 0; i < v->count; i++) drop(w, v->items[i]);
+	shell_free(v);
+}
+// a made list that only carried its items elsewhere
+static void drop_shell(work *w, nt_value *v) {
+	if (pset_del(&w->made, v)) shell_free(v);
+}
+
+static int is_list(const nt_value *v) { return v != NULL && v->type == NT_LIST; }
+static int is_map(const nt_value *v) { return v != NULL && v->type == NT_MAP; }
+
+static nt_value *made(work *w, nt_value *v) {
+	pset_add(&w->made, v);
+	return v;
+}
+static nt_value *made_list(work *w, size_t count) {
+	nt_value *l = made(w, nt_list());
+	if (count) {
+		l->items = grab(NULL, count * sizeof *l->items);
+		l->capacity = count;
+	}
+	return l;
+}
+// a new string of these bytes
+static nt_value *made_str(work *w, const char *a, size_t na, const char *b, size_t nb,
+	const char *c, size_t nc) {
+	char *buf = grab(NULL, na + nb + nc + 1);
+	memcpy(buf, a, na);
+	memcpy(buf + na, b, nb);
+	memcpy(buf + na + nb, c, nc);
+	buf[na + nb + nc] = 0;
+	nt_value *s = made(w, nt_str(buf));
+	free(buf);
+	return s;
+}
+
+// a copy to change in place: v itself when it was made here
+static nt_value *own(work *w, nt_value *v) {
+	if (pset_has(&w->made, v)) return v;
+	nt_value *c = made(w, v->type == NT_MAP ? nt_map() : nt_list());
+	if (v->count) {
+		c->items = grab(NULL, v->count * sizeof *c->items);
+		memcpy(c->items, v->items, v->count * sizeof *c->items);
+		c->capacity = c->count = v->count;
+		if (v->type == NT_MAP) {
+			c->keys = grab(NULL, v->count * sizeof *c->keys);
+			for (size_t i = 0; i < v->count; i++) c->keys[i] = dup(v->keys[i]);
+		}
+	}
+	return c;
+}
+
+// strings: position -> byte offset, the one place the unit is known (code points today).
+// the bytes where positions a and b start, and, when total is given, how many positions there
+// are; 0 when b is past the end
+static size_t next(const unsigned char *t, size_t i, size_t end) {
+	i++;
+	while (i < end && (t[i] & 0xC0) == 0x80) i++;
+	return i;
+}
+static int span_bytes(const nt_value *s, long a, long b, size_t *x, size_t *y, long *total) {
+	if (s->ascii) {
+		if ((size_t)a > s->bytes || (size_t)b > s->bytes) return 0;
+		*x = (size_t)a, *y = (size_t)b;
+		if (total) *total = (long)s->bytes;
+		return 1;
+	}
+	size_t i = 0;
+	long k = 0;
+	const unsigned char *t = (const unsigned char *)s->str;
+	// one position on from byte i
+	for (; k < a; k++, i = next(t, i, s->bytes))
+		if (i >= s->bytes) return 0;
+	*x = i;
+	for (; k < b; k++, i = next(t, i, s->bytes))
+		if (i >= s->bytes) return 0;
+	*y = i;
+	if (total) {
+		for (; i < s->bytes; k++) i = next(t, i, s->bytes);
+		*total = k;
+	}
+	return 1;
+}
+static long str_len(const nt_value *s) {
+	size_t x, y;
+	long n = 0;
+	span_bytes(s, 0, 0, &x, &y, &n);
+	return n;
+}
+
+// keys
+
+static int same_key(nt_key a, nt_key b) {
+	if (a.type != b.type) return 0;
+	return a.type == NT_NUM_KEY ? a.n == b.n : strcmp(a.s, b.s) == 0;
+}
+// where the key of a map is, or -1
+static long map_at(const nt_value *m, const char *key) {
+	nt_value *p = nt_get(m, key);
+	if (p == NULL) return -1;
+	for (size_t i = 0; i < m->count; i++)
+		if (m->items[i] == p && strcmp(m->keys[i], key) == 0) return (long)i;
+	return -1;
+}
+// the child pointer at k in v, which must be there
+static nt_value **slot(work *w, nt_value *v, nt_key k) {
+	if (is_list(v)) {
+		if (k.type != NT_NUM_KEY) fail(w, MU_WRONG_KIND);
+		if ((size_t)k.n >= v->count) fail(w, MU_NO_KEY);
+		return &v->items[k.n];
+	}
+	if (is_map(v)) {
+		if (k.type != NT_STR_KEY) fail(w, MU_WRONG_KIND);
+		long i = map_at(v, k.s);
+		if (i < 0) fail(w, MU_NO_KEY);
+		return &v->items[i];
+	}
+	fail(w, MU_WRONG_KIND);
+	return NULL;
+}
+// what is at path, unchanged
+static nt_value *get(work *w, const nt_key *path, size_t n) {
+	nt_value *v = w->root;
+	if (v == NULL && n) fail(w, MU_NO_KEY);
+	for (size_t i = 0; i < n; i++) v = *slot(w, v, path[i]);
+	return v;
+}
+static nt_value *copy_in(work *w, nt_value *v) {
+	if (v == NULL) fail(w, MU_NO_KEY);
+	if (!is_list(v) && !is_map(v)) fail(w, MU_WRONG_KIND);
+	return own(w, v);
+}
+// the container holding path's last key, made own along the way
+static nt_value *parent(work *w, const nt_key *path, size_t n) {
+	nt_value *v = w->root = copy_in(w, w->root);
+	for (size_t i = 0; i + 1 < n; i++) {
+		nt_value **s = slot(w, v, path[i]);
+		v = *s = copy_in(w, *s);
+	}
+	return v;
+}
+
+static void list_splice(nt_value *l, size_t a, size_t b, nt_value *const *ws, size_t wn) {
+	size_t tail = l->count - b, n = l->count - (b - a) + wn;
+	if (n > l->capacity) {
+		l->capacity = n;
+		l->items = grab(l->items, n * sizeof *l->items);
+	}
+	if (tail && wn != b - a) memmove(l->items + a + wn, l->items + b, tail * sizeof *l->items);
+	if (wn) memcpy(l->items + a, ws, wn * sizeof *ws);
+	l->count = n;
+}
+
+// what is at path becomes v (NULL: removed, absent at []); the old one is let go of when drop_old
+static void set(work *w, const nt_key *path, size_t n, nt_value *v, int drop_old) {
+	if (n == 0) {
+		nt_value *old = w->root;
+		w->root = v;
+		if (drop_old && old != v) drop(w, old);
+		return;
+	}
+	nt_value *at = parent(w, path, n);
+	nt_key k = path[n - 1];
+	if (is_list(at)) {
+		if (k.type != NT_NUM_KEY) fail(w, MU_WRONG_KIND);
+		if ((size_t)k.n >= at->count) fail(w, MU_NO_KEY);
+		nt_value *old = at->items[k.n];
+		if (v == NULL) list_splice(at, (size_t)k.n, (size_t)k.n + 1, NULL, 0);
+		else at->items[k.n] = v;
+		if (drop_old && old != v) drop(w, old);
+		return;
+	}
+	if (k.type != NT_STR_KEY) fail(w, MU_WRONG_KIND);
+	long i = map_at(at, k.s);
+	if (v != NULL && i < 0) {
+		nt_set(at, k.s, v);
+		return;
+	}
+	if (i < 0) return;
+	nt_value *old = at->items[i];
+	if (v != NULL) at->items[i] = v;
+	else {
+		free(at->keys[i]);
+		memmove(at->keys + i, at->keys + i + 1, (at->count - (size_t)i - 1) * sizeof *at->keys);
+		memmove(at->items + i, at->items + i + 1, (at->count - (size_t)i - 1) * sizeof *at->items);
+		at->count--;
+		free(at->index);
+		at->index = NULL;
+		at->slots = 0;
+	}
+	if (drop_old && old != v) drop(w, old);
+}
+
+// the span [a, b) of what is at path replaced by v (NULL: removed). taken: what was there, made,
+// when asked for; else it is let go of. count: a string's positions are counted, for seq
+static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_value *v,
+	nt_value **taken, int count) {
+	nt_value *s = get(w, path, n);
+	if (s == NULL || (s->type != NT_STR && s->type != NT_LIST)) fail(w, MU_WRONG_KIND);
+	if (a > b) fail(w, MU_RANGE);
+	nt_value *out;
+	if (s->type == NT_STR) {
+		if (v != NULL && v->type != NT_STR) fail(w, MU_WRONG_KIND);
+		size_t x, y;
+		long total = 0;
+		if (!span_bytes(s, a, b, &x, &y, count ? &total : NULL)) fail(w, MU_RANGE);
+		w->seq = (mu_fact){0, (size_t)total, 1};
+		if (taken) *taken = made_str(w, s->str + x, y - x, "", 0, "", 0);
+		out = made_str(w, s->str, x, v ? v->str : "", v ? v->bytes : 0, s->str + y, s->bytes - y);
+		set(w, path, n, out, 0);
+		drop(w, s);
+		if (v) drop(w, v);
+		return;
+	}
+	if ((size_t)b > s->count) fail(w, MU_RANGE);
+	if (v != NULL && v->type != NT_LIST) fail(w, MU_WRONG_KIND);
+	w->seq = (mu_fact){1, s->count, 1};
+	out = own(w, s);
+	size_t gone = (size_t)(b - a);
+	if (taken) {
+		*taken = made_list(w, gone);
+		memcpy((*taken)->items, out->items + a, gone * sizeof *out->items);
+		(*taken)->count = gone;
+	} else {
+		for (size_t i = 0; i < gone; i++) drop(w, out->items[a + i]);
+	}
+	list_splice(out, (size_t)a, (size_t)b, v ? v->items : NULL, v ? v->count : 0);
+	if (v) drop_shell(w, v);
+	set(w, path, n, out, 0);
+}
+
+// what notify reads at an unranged place, as the content is now; nothing checked
+static mu_fact fact(work *w, const nt_key *path, size_t n) {
+	if (n == 0) return (mu_fact){0, 0, w->root != NULL};
+	const nt_value *v = w->root;
+	for (size_t i = 0; i + 1 < n && v != NULL; i++) {
+		nt_key k = path[i];
+		if (is_list(v)) v = k.type == NT_NUM_KEY && (size_t)k.n < v->count ? v->items[k.n] : NULL;
+		else if (is_map(v)) v = k.type == NT_STR_KEY ? nt_get(v, k.s) : NULL;
+		else v = NULL;
+	}
+	nt_key k = path[n - 1];
+	if (is_list(v)) return (mu_fact){1, v->count, k.type == NT_NUM_KEY && (size_t)k.n < v->count};
+	return (mu_fact){0, 0, is_map(v) && k.type == NT_STR_KEY && nt_get(v, k.s) != NULL};
+}
+
+// takes what is at a place out; what it was. the sequence a ranged one left is seq
+static nt_value *take(work *w, const nt_place *p, int count) {
+	if (p->has_range) {
+		nt_value *t;
+		splice(w, p->path, p->length, p->from, p->to, NULL, &t, count);
+		return t;
+	}
+	nt_value *v = get(w, p->path, p->length);
+	set(w, p->path, p->length, NULL, 0);
+	return v;
+}
+
+// p's place lies inside what from takes: under its path, or in its span
+static int under(const nt_place *p, const nt_place *from) {
+	if (p->length < from->length) return 0;
+	for (size_t i = 0; i < from->length; i++)
+		if (!same_key(from->path[i], p->path[i])) return 0;
+	if (!from->has_range) return p->length > from->length;
+	if (p->length == from->length) return 0;
+	nt_key k = p->path[from->length];
+	return k.type == NT_NUM_KEY && k.n >= from->from && k.n < from->to;
+}
+
+static void apply(work *w, const nt_patch *p, mu_facts *out) {
+	const nt_place *pl = &p->place;
+	if (w->root == NULL && (pl->length || pl->has_range || !p->has_value)) fail(w, MU_NO_KEY);
+	if (p->has_move) {
+		const nt_place *from = &p->move;
+		if (under(pl, from)) fail(w, MU_INTO_ITSELF);
+		mu_fact was = {0};
+		if (w->tell && !from->has_range) was = fact(w, from->path, from->length);
+		nt_value *moved = take(w, from, w->tell);
+		if (w->tell && from->has_range) was = w->seq;
+		if (!pl->has_range) {
+			mu_fact place = {0};
+			if (w->tell) place = fact(w, pl->path, pl->length);
+			set(w, pl->path, pl->length, moved, 1);
+			if (w->tell) *out = (mu_facts){.place = place, .has_from = 1, .from = was};
+			return;
+		}
+		nt_value *v = get(w, pl->path, pl->length);
+		// one element into a list's span: as a list of one
+		nt_value *wv = moved;
+		int listy = is_list(v);
+		// a string moved into a string: its positions, before it is let go of
+		size_t size = from->has_range ? (size_t)(from->to - from->from)
+			: listy ? 1 : moved != NULL && moved->type == NT_STR ? (size_t)str_len(moved) : 0;
+		if (listy && !from->has_range) {
+			wv = made_list(w, 1);
+			wv->items[0] = moved;
+			wv->count = 1;
+		}
+		splice(w, pl->path, pl->length, pl->from, pl->to, wv, NULL, w->tell);
+		if (!w->tell) return;
+		*out = (mu_facts){.place = w->seq, .has_from = 1, .from = was, .has_size = 1, .size = size};
+		return;
+	}
+	nt_value *v = p->has_value ? (nt_value *)p->value : NULL;
+	if (pl->has_range) {
+		splice(w, pl->path, pl->length, pl->from, pl->to, v, NULL, w->tell);
+		if (w->tell) *out = (mu_facts){.place = w->seq};
+		return;
+	}
+	if (w->tell) *out = (mu_facts){.place = fact(w, pl->path, pl->length)};
+	if (v == NULL && p->has_value) fail(w, MU_NOT_A_PATCH);
+	// removing a missing map key: nothing
+	if (v == NULL && pl->length) {
+		nt_value *at = get(w, pl->path, pl->length - 1);
+		nt_key k = pl->path[pl->length - 1];
+		if (is_map(at) && k.type == NT_STR_KEY && nt_get(at, k.s) == NULL) return;
+	}
+	set(w, pl->path, pl->length, v, 1);
+}
+
+static int place_ok(const nt_place *p) {
+	for (size_t i = 0; i < p->length; i++) {
+		nt_key k = p->path[i];
+		if (k.type == NT_NUM_KEY ? k.n < 0 : k.type != NT_STR_KEY || k.s == NULL) return 0;
+	}
+	return !p->has_range || (p->from >= 0 && p->to >= 0);
+}
+static int shape(const nt_patch *p) {
+	if (!place_ok(&p->place)) return 0;
+	if (p->has_move) return !p->has_value && place_ok(&p->move);
+	return 1;
+}
+
+int mu_mutate(nd_node *node, mu_which which, const nt_patch *patches, size_t n, const void *change,
+	const mu_alloc *alloc, const mu_patched *patched, size_t *failed) {
+	// the object's versions on the node
+	nd_object *obj = &node->value;
+	nd_entry *entry = NULL;
+	if (which.kind == MU_INFO) {
+		for (size_t i = 0; i < node->info_length; i++)
+			if (strcmp(node->info[i].name, which.name) == 0) entry = &node->info[i];
+		obj = entry ? &entry->object : NULL;
+	}
+	size_t had = obj ? obj->length : 0;
+	const nd_version *before = obj ? obj->versions : NULL;
+
+	work w = {.root = had ? (nt_value *)before[0].content : NULL, .tell = patched != NULL};
+	mu_facts *seen = patched && n ? grab(NULL, n * sizeof *seen) : NULL;
+	volatile size_t i = 0;
+	if (setjmp(w.jump)) {
+		// what was made here is left to go
+		for (size_t j = 0; j < w.made.cap; j++) {
+			if (w.made.slots[j] != NULL && w.made.slots[j] != GONE) shell_free((nt_value *)w.made.slots[j]);
+		}
+		free(w.made.slots);
+		free(seen);
+		if (failed) *failed = i;
+		return w.code;
+	}
+	for (; i < n; i++) {
+		if (!shape(&patches[i])) fail(&w, MU_NOT_A_PATCH);
+		mu_facts f = {0};
+		apply(&w, &patches[i], &f);
+		if (seen) seen[i] = f;
+	}
+	free(w.made.slots);
+
+	// the new versions: the first becomes the new content, the rest as they were
+	size_t rest = had ? had - 1 : 0;
+	size_t count = rest + (w.root != NULL);
+	nd_version *vs = NULL;
+	if (count) {
+		vs = alloc->alloc(alloc->ctx, count * sizeof *vs);
+		size_t at = 0;
+		if (w.root != NULL) {
+			vs[0] = (nd_version){.content = w.root, .change = change, .because = had ? before[0].because : NULL};
+			at = 1;
+		}
+		if (rest) memcpy(vs + at, before + 1, rest * sizeof *vs);
+	}
+	if (which.kind == MU_VALUE) {
+		node->value = (nd_object){vs, count};
+	} else if (entry != NULL || count) {
+		// the entries array is made again, the old one left as it was
+		size_t at = entry ? (size_t)(entry - node->info) : node->info_length;
+		size_t total = node->info_length + (entry == NULL) - (count == 0);
+		nd_entry *es = total ? alloc->alloc(alloc->ctx, total * sizeof *es) : NULL;
+		size_t m = 0;
+		for (size_t j = 0; j < node->info_length; j++) {
+			if (j != at) es[m++] = node->info[j];
+			else if (count) es[m++] = (nd_entry){node->info[j].name, {vs, count}};
+		}
+		if (entry == NULL) {
+			char *name = alloc->alloc(alloc->ctx, strlen(which.name) + 1);
+			es[m++] = (nd_entry){strcpy(name, which.name), {vs, count}};
+		}
+		node->info = es;
+		node->info_length = total;
+	}
+	if (patched != NULL && patched->fn != NULL) {
+		for (size_t j = 0; j < n; j++) patched->fn(patched->ctx, &patches[j], &seen[j], node->id, which);
+	}
+	free(seen);
+	return MU_OK;
+}

@@ -1,0 +1,84 @@
+{
+	"title": "what is asked: pass, list, read, edit",
+	"steps": [
+		{
+			"op": "pass",
+			"route": [
+				{ "node": "root", "name": "theme", "id": "mine", "at": 0 },
+				{ "node": "mine", "name": "colors", "id": "c", "at": 0 }
+			],
+			"expect": {
+				"asks": [
+					{ "op": "pass", "args": { "node": "root", "name": "theme" } },
+					{ "op": "pass", "args": { "node": "mine", "name": "colors" } }
+				]
+			}
+		},
+		{ "op": "pass", "route": [], "expect": { "asks": [] } },
+		{
+			"op": "list",
+			"node": "home",
+			"expect": { "ask": { "op": "list", "args": { "node": "home" } } }
+		},
+		{
+			"op": "read",
+			"node": {
+				"id": "n",
+				"value": [{}],
+				"info": [["type", []], ["tags", 1]],
+				"children": [["notes", []]]
+			},
+			"expect": {
+				"asks": [
+					{ "op": "read", "args": { "node": "n", "object": "value" } },
+					{ "op": "read", "args": { "node": "n", "object": ["info", "type"] } },
+					{ "op": "read", "args": { "node": "n", "object": ["info", "tags"] } },
+					{ "op": "read", "args": { "node": "n", "object": ["children", "notes"] } }
+				]
+			}
+		},
+		{
+			"op": "read",
+			"node": { "id": "n", "value": [], "info": [], "children": [["b", []], ["a", []]] },
+			"expect": {
+				"asks": [
+					{ "op": "read", "args": { "node": "n", "object": ["children", "b"] } },
+					{ "op": "read", "args": { "node": "n", "object": ["children", "a"] } }
+				]
+			}
+		},
+		{
+			"op": "read",
+			"node": { "id": "n", "value": [], "info": [], "children": [] },
+			"expect": { "asks": [] }
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"node": "n",
+			"object": "value",
+			"expect": { "ask": { "op": "write", "args": { "node": "n", "object": "value", "at": 0 } } }
+		},
+		{
+			"op": "edit",
+			"edit": "pop",
+			"node": "n",
+			"object": ["children", "a"],
+			"at": [0, 2],
+			"expect": {
+				"ask": {
+					"op": "pop",
+					"args": { "node": "n", "object": ["children", "a"], "at": [0, 2] }
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "pinch",
+			"node": "n",
+			"object": "order",
+			"at": 3,
+			"expect": { "ask": { "op": "pinch", "args": { "node": "n", "object": "order", "at": 3 } } }
+		}
+	]
+}

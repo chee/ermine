@@ -1,0 +1,141 @@
+{
+	"title": "a batch runs what its operations marked once, after the last",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "x",
+			"expect": {
+				"ok": "x"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "x",
+			"child": "x",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"id": "y",
+			"expect": {
+				"ok": "y"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "y",
+			"child": "y",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"x"
+						],
+						"var": "a"
+					},
+					{
+						"do": "content",
+						"address": [
+							"y"
+						],
+						"var": "b"
+					},
+					{
+						"do": "log",
+						"value": "ran"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "a"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								{
+									"$get": [
+										{
+											"$var": "b"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@5"
+			}
+		},
+		{
+			"op": "batch",
+			"ops": [
+				{
+					"op": "write",
+					"address": [
+						"x"
+					],
+					"patches": [
+						{
+							"path": [],
+							"value": 2
+						}
+					]
+				},
+				{
+					"op": "write",
+					"address": [
+						"y"
+					],
+					"patches": [
+						{
+							"path": [],
+							"value": 2
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					10,
+					11
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"ran",
+					"ran"
+				]
+			}
+		}
+	]
+}

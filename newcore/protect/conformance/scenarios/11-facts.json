@@ -1,0 +1,115 @@
+{
+	"title": "facts and matches: what a rule is matched against",
+	"steps": [
+		{
+			"op": "facts",
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n", "object": "value" } },
+			"expect": { "facts": { "actor": "bob", "op": "read", "node": "n", "object": "value" } }
+		},
+		{
+			"op": "facts",
+			"actor": {
+				"actor": "bob",
+				"peer": "k1",
+				"person": "p",
+				"trusted": true,
+				"other": 1,
+				"code": [{ "process": "p1" }, { "process": "p2", "program": { "node": "prog" } }]
+			},
+			"ask": { "op": "place", "args": { "node": "n", "name": "x", "id": "c" } },
+			"expect": {
+				"facts": {
+					"actor": "bob",
+					"peer": "k1",
+					"person": "p",
+					"trusted": true,
+					"process": "p2",
+					"program": "prog",
+					"op": "place",
+					"node": "n",
+					"name": "x",
+					"id": "c"
+				}
+			}
+		},
+		{
+			"op": "facts",
+			"actor": { "code": [{ "process": 1, "program": { "node": 2 } }] },
+			"ask": { "op": "list", "args": { "node": "n" } },
+			"expect": {
+				"facts": {
+					"actor": { "code": [{ "process": 1, "program": { "node": 2 } }] },
+					"op": "list",
+					"node": "n"
+				}
+			}
+		},
+		{
+			"op": "facts",
+			"actor": { "code": ["p1"] },
+			"ask": { "op": "list", "args": { "node": "n" } },
+			"expect": { "facts": { "actor": { "code": ["p1"] }, "op": "list", "node": "n" } }
+		},
+		{
+			"op": "facts",
+			"actor": { "code": {} },
+			"ask": { "op": "list", "args": { "node": "n" } },
+			"expect": { "facts": { "actor": { "code": {} }, "op": "list", "node": "n" } }
+		},
+		{
+			"op": "matches",
+			"rule": { "allow": false },
+			"facts": { "op": "read" },
+			"expect": { "matches": true }
+		},
+		{
+			"op": "matches",
+			"rule": { "op": "read", "allow": true },
+			"facts": { "op": "read", "node": "n" },
+			"expect": { "matches": true }
+		},
+		{
+			"op": "matches",
+			"rule": { "name": "x", "allow": true },
+			"facts": { "op": "read" },
+			"expect": { "matches": false }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": { "a": [1, { "b": 2 }] }, "allow": true },
+			"facts": { "actor": { "a": [1, { "b": 2 }] } },
+			"expect": { "matches": true }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": { "a": [1, { "b": 2 }] }, "allow": true },
+			"facts": { "actor": { "a": [1, { "b": 2, "c": 3 }] } },
+			"expect": { "matches": false }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": [1, 2], "allow": true },
+			"facts": { "actor": [2, 1] },
+			"expect": { "matches": false }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": 1, "allow": true },
+			"facts": { "actor": "1" },
+			"expect": { "matches": false }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": 1, "allow": true },
+			"facts": { "actor": 1.0 },
+			"expect": { "matches": true }
+		},
+		{
+			"op": "matches",
+			"rule": { "actor": {}, "allow": true },
+			"facts": { "actor": [] },
+			"expect": { "matches": false }
+		}
+	]
+}

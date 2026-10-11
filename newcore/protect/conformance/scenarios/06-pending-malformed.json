@@ -1,0 +1,135 @@
+{
+	"title": "rules: not loaded: pending; no value or malformed: wrong-field, never thrown",
+	"steps": [
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {},
+			"expect": { "answer": { "pending": true } }
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": {} },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "rules are a list of rules"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": {} } },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "rules are a list of rules"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "allow": true }, 1] } },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "rules are a list of rules"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [[]] } },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "rules are a list of rules"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "allow": "yes" }] } },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "a rule's allow is true or false"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "node": "n" }] } },
+			"expect": {
+				"answer": {
+					"no": {
+						"code": "wrong-field",
+						"field": "rules",
+						"text": "a rule's allow is true or false"
+					}
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": { "r": { "value": [{ "who": "bob", "allow": true }] } },
+			"expect": {
+				"answer": {
+					"no": { "code": "wrong-field", "field": "rules", "text": "a rule has no field who" }
+				}
+			}
+		},
+		{
+			"op": "may",
+			"policy": { "rules": "r" },
+			"actor": "bob",
+			"ask": { "op": "read", "args": { "node": "n" } },
+			"nodes": {
+				"r": { "value": [{ "node": "n", "allow": true }, { "at": 0, "allow": true }] }
+			},
+			"expect": {
+				"answer": {
+					"no": { "code": "wrong-field", "field": "rules", "text": "a rule has no field at" }
+				}
+			}
+		}
+	]
+}

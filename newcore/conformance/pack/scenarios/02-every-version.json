@@ -1,0 +1,21 @@
+{
+	"title": "ids in every version of every list are reached, each once, in the order reached",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r", "value": [{ "content": null, "change": 1 }], "info": [],
+			"children": [
+				["home", [{ "content": ["a", "b"], "change": 1 }, { "content": ["c", "a"], "change": 2 }]],
+				["more", [{ "content": ["b", "d"], "change": 3 }]]
+			],
+			"header": { "time": 0, "actor": "host" }
+		},
+		{ "id": "a", "value": [], "info": [], "children": [["x", [{ "content": ["e", "r"], "change": 4 }]]], "header": {} },
+		{ "id": "b", "value": [], "info": [], "children": [], "header": {} },
+		{ "id": "c", "value": [], "info": [], "children": [], "header": {} },
+		{ "id": "d", "value": [], "info": [], "children": [], "header": {} },
+		{ "id": "e", "value": [], "info": [], "children": [], "header": {} },
+		{ "id": "far", "value": [{ "content": "not reached", "change": 0 }], "info": [], "children": [], "header": {} }
+	],
+	"expect": { "nodes": ["r", "a", "b", "c", "d", "e"], "missing": [] }
+}

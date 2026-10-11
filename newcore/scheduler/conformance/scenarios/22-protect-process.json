@@ -1,0 +1,133 @@
+{
+	"title": "protect: a process's write is asked as the process; refused, its run fails",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"op": "write",
+					"node": "out",
+					"process": "@6",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"value": 0,
+			"id": "out",
+			"expect": {
+				"ok": "out"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "out",
+			"child": "out",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "write",
+						"address": [
+							"out"
+						],
+						"patches": [
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@6"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"out"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "out",
+						"versions": [
+							{
+								"content": 0,
+								"time": 4
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": {
+									"error": "refused"
+								},
+								"time": 8,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 6
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "new",
+			"rules": [
+				{
+					"op": "place",
+					"node": "root",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"error": "refused"
+			}
+		}
+	]
+}

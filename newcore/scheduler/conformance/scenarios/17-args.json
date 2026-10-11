@@ -1,0 +1,101 @@
+{
+	"title": "arguments are nodes inside the process it reads",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"args": {
+				"n": 5
+			},
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"p",
+							"n"
+						],
+						"var": "n"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "n"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								1
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": 6,
+								"time": 5
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"p",
+				"n"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 7
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": 8,
+								"time": 9
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

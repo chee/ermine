@@ -1,0 +1,182 @@
+{
+	"title": "no-key: missing keys, indexes, and no versions",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				{
+					"content": {
+						"m": {},
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						"x",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 1
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"l",
+						4
+					]
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "mutate",
+			"which": "value",
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"fail": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [],
+					"info": []
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,8 @@
+{
+	"title": "a root with no lists: itself, nothing missing",
+	"root": "r",
+	"nodes": [
+		{ "id": "r", "value": [], "info": [], "children": [], "header": {} }
+	],
+	"expect": { "nodes": ["r"], "missing": [] }
+}
