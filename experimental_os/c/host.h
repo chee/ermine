@@ -37,10 +37,18 @@ int64_t hostNow(Host *host);
 void hostWake(Host *host, int64_t at);
 /** a line to the OS's log */
 void hostSay(Host *host, const char *format, ...) __attribute__((format(printf, 2, 3)));
-/** an operation as host code, with that agent (NULL: the machine's), through the scheduler; *out what its ok holds */
-ErmErr hostDo(Host *host, Json *agent, const char *op, Json *fields, Json **out);
+/** the program path a process's code is being found by, while a loader loads it, as text ("/programs/shell"): fresh, or NULL */
+char *hostFinding(Host *host);
+/** where in code, {file, line, function}, file from experimental_os/: one value a place, made once */
+Json *hostSite(const char *file, int line, const char *function);
+/** where it is written: a change's site (GRAPH.tex, The entry layer) */
+#define SITE hostSite(__FILE__, __LINE__, __func__)
+/** an operation as host code, with that agent (NULL: the machine's), through the scheduler; *out what its ok holds; a change carries site */
+ErmErr hostDoAt(Host *host, Json *site, Json *agent, const char *op, Json *fields, Json **out);
+#define hostDo(host, agent, op, fields, out) hostDoAt(host, SITE, agent, op, fields, out)
 /** an operation as the machine on the keeper, beneath protect, the wrapper and the scheduler: the host's own bookkeeping, never committed */
-ErmErr hostBare(Host *host, const char *op, Json *fields, Json **out);
+ErmErr hostBareAt(Host *host, Json *site, const char *op, Json *fields, Json **out);
+#define hostBare(host, op, fields, out) hostBareAt(host, SITE, op, fields, out)
 
 /**
  * a plane: pixels a driver keeps in its own memory, w × h, rows stride

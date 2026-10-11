@@ -21,8 +21,8 @@
 // [layers], with flips.
 //
 // The Mac menu bar's menus command is logged, [menus] n, each menu's title and items (the world
-// menu first, titled ermine), with their chords; a choice there is
-// !post {"irq": 33, "event": "menu", "n": n, "menu": m, "item": i}.
+// menu first, titled ermine), with their chords, (on) when checked, a submenu's items in { };
+// a choice there is !post {"irq": 33, "event": "menu", "n": n, "menu": m, "item": i, "sub"?: [j]}.
 //
 //   headless [--w W] [--h H] [--unit U] [--sd DIR] [--image DIR] [--runner FILE] [--fresh]
 
@@ -451,6 +451,21 @@ static int64_t area(const Json *r) {
 	return r ? (int64_t)(jsonGet(r, "w") ? jsonGet(r, "w")->number : 0) * (int64_t)(jsonGet(r, "h") ? jsonGet(r, "h")->number : 0) : 0;
 }
 
+/** a menu's items, logged: label and chord, (on) when checked, a submenu's in { } */
+static void menuItems(const Json *items) {
+	for (int k = 0; jsonIsArray(items) && k < items->array.count; k++) {
+		const Json *it = items->array.items[k];
+		const char *label = jsonText(jsonGet(it, "label")), *key = jsonText(jsonGet(it, "key"));
+		const Json *on = jsonGet(it, "on");
+		fprintf(stderr, " | %s%s%s%s", label ? label : "-", key ? " " : "", key ? key : "", on && on->type == JSON_BOOLEAN && on->boolean ? " (on)" : "");
+		if (jsonIsArray(jsonGet(it, "items"))) {
+			fprintf(stderr, " {");
+			menuItems(jsonGet(it, "items"));
+			fprintf(stderr, " }");
+		}
+	}
+}
+
 /** what the OS commands the hardware */
 static void command(void *data, const char *json) {
 	(void)data;
@@ -470,6 +485,42 @@ static void command(void *data, const char *json) {
 		fprintf(stderr, "[flip] %lld %gx%g %g\n", (long long)now(), jsonGet(d, "w") ? jsonGet(d, "w")->number : -1, jsonGet(d, "h") ? jsonGet(d, "h")->number : -1, jsonGet(c, "buffer")->number);
 	}
 	if (!op) return;
+	if (!strcmp(op, "keychain")) {
+		// the Mac's keychain, in memory: said by account, never the password
+		static struct {
+			char *account, *password;
+		} kept[16];
+		const char *act = jsonText(jsonGet(c, "act")), *account = jsonText(jsonGet(c, "account")), *password = jsonText(jsonGet(c, "password"));
+		if (!act || !account) return;
+		int at = -1, room = -1;
+		for (int i = 0; i < 16; i++) {
+			if (kept[i].account && !strcmp(kept[i].account, account)) at = i;
+			if (!kept[i].account && room < 0) room = i;
+		}
+		fprintf(stderr, "[keychain] %s %s%s\n", act, account, !strcmp(act, "get") ? (at >= 0 ? " (found)" : " (none)") : "");
+		if (!strcmp(act, "get")) {
+			Json *r = jsonObject();
+			jsonAdd(r, "irq", jsonInteger(66));
+			jsonAdd(r, "event", jsonString("keychain"));
+			jsonAdd(r, "account", jsonString(account));
+			jsonAdd(r, "password", at >= 0 ? jsonString(kept[at].password) : jsonNull());
+			char *text = jsonPrint(r);
+			post("%s", text);
+			free(text);
+		} else if (!strcmp(act, "set") && password) {
+			if (at < 0) at = room;
+			if (at < 0) return;
+			free(kept[at].account);
+			free(kept[at].password);
+			kept[at].account = strdup(account);
+			kept[at].password = strdup(password);
+		} else if (!strcmp(act, "drop") && at >= 0) {
+			free(kept[at].account);
+			free(kept[at].password);
+			kept[at].account = kept[at].password = NULL;
+		}
+		return;
+	}
 	if (!strcmp(op, "capture")) {
 		// a Mac window captured: its plane file mapped, half 0 a test colour, the view live and its first frame, as ScreenCaptureKit's would give
 		const char *path = jsonText(jsonGet(c, "path")), *view = jsonText(jsonGet(c, "view"));
@@ -707,10 +758,7 @@ static void command(void *data, const char *json) {
 		for (int i = 0; jsonIsArray(menus) && i < menus->array.count; i++) {
 			Json *m = menus->array.items[i], *items = jsonGet(m, "items");
 			fprintf(stderr, "%s%s:", i ? " ;; " : " ", jsonText(jsonGet(m, "title")) ? jsonText(jsonGet(m, "title")) : "?");
-			for (int k = 0; jsonIsArray(items) && k < items->array.count; k++) {
-				const char *label = jsonText(jsonGet(items->array.items[k], "label")), *key = jsonText(jsonGet(items->array.items[k], "key"));
-				fprintf(stderr, " | %s%s%s", label ? label : "-", key ? " " : "", key ? key : "");
-			}
+			menuItems(items);
 		}
 		fprintf(stderr, "\n");
 	} else if (!strcmp(op, "web") && jsonText(jsonGet(c, "url"))) {

@@ -18,3 +18,18 @@ core/graph/c/ermine-asan
 core/graph/c/json_test
 *.dSYM/
 core/graph/c/scratch/
+
+# compiled C test/bench binaries
+*_test
+!*_test.ts
+!*_test.c
+!*_test.h
+newcore/*/c/harness
+newcore/*/*/c/harness
+newcore/*/c/harness-check
+newcore/*/*/c/harness-check
+newcore/*/c/bench
+newcore/*/*/c/bench
+*.swp
+.swp
+.DS_Store

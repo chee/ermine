@@ -7,15 +7,22 @@
 #include <stddef.h>
 
 // content: null, bool, number, string (UTF-8; positions count code points), list, map (keys in
-// the order given). An absent value is a NULL pointer.
-typedef enum { NT_NULL, NT_BOOL, NT_NUM, NT_STR, NT_LIST, NT_MAP } nt_type;
+// the order given), bytes, typed array (encoding/ENCODING.tex). An absent value is a NULL pointer.
+// bytes are a leaf; a typed array is a sequence of its elements (its length: how many)
+typedef enum { NT_NULL, NT_BOOL, NT_NUM, NT_STR, NT_LIST, NT_MAP, NT_BYTES, NT_TYPED } nt_type;
+// a typed array's kind, in ENCODING.tex's order
+typedef enum {
+	NT_INT8, NT_UINT8, NT_INT16, NT_UINT16, NT_INT32, NT_UINT32, NT_INT64, NT_UINT64, NT_FLOAT32,
+	NT_FLOAT64,
+} nt_elements;
 typedef struct nt_value nt_value;
 struct nt_value {
 	nt_type type;
 	int bool_;
 	double num;
 	char *str;
-	// a string's: its bytes, and whether they are all ASCII (then a byte is a code point)
+	// a string's: its bytes, and whether they are all ASCII (then a byte is a code point).
+	// bytes' and a typed array's: data, bytes long; a typed array's elements little-endian
 	size_t bytes;
 	int ascii;
 	// a list's or a map's: count, items (a map's values), keys (a map's only)
@@ -26,6 +33,10 @@ struct nt_value {
 	// a big map's lookup table, made when first asked
 	size_t *index;
 	size_t slots;
+	unsigned char *data;
+	nt_elements kind;
+	// holders past the first: nt_ref adds one, nt_free lets one go
+	size_t refs;
 };
 
 nt_value *nt_null(void);
@@ -34,11 +45,23 @@ nt_value *nt_num(double n);
 nt_value *nt_str(const char *s);
 nt_value *nt_list(void);
 nt_value *nt_map(void);
-// takes v; a map's key set twice keeps its first place
+// copies n bytes
+nt_value *nt_bytes(const void *data, size_t n);
+// copies count elements of the kind, each little-endian
+nt_value *nt_typed(nt_elements kind, const void *data, size_t count);
+// one element's bytes: 1 ... 8
+size_t nt_size(nt_elements kind);
+// a typed array's elements
+size_t nt_length(const nt_value *typed);
+// takes v; a map's key set twice keeps its first place (the value there before let go of)
 void nt_push(nt_value *list, nt_value *v);
 void nt_set(nt_value *map, const char *key, nt_value *v);
 // NULL when absent
 nt_value *nt_get(const nt_value *map, const char *key);
+// one more holder of v, and so of all it holds; v. NULL: NULL. not thread-safe
+nt_value *nt_ref(nt_value *v);
+// lets one hold of v go: the last frees it, and lets go of what it holds. a tree never
+// nt_ref'd is freed whole, as it always was
 void nt_free(nt_value *v);
 
 // a path item: a key (number or string, never the same), or a span [a, b) last

@@ -1,0 +1,139 @@
+# Builds Subduction for newcore's C sync once, so no one has to compile Rust
+# to use it: newcore/c/subduction's no_std library with a C ABI
+# (libsubduction_c.a, subduction.h) for each target, with what else it must be
+# linked with (link.txt). Each lands on the release `newcore-subduction-c`,
+# which `make -C newcore/c/subduction fetch` downloads; then `make` there
+# only compiles C.
+#
+# - build: the library per target. riscv64gc must build (nothing pulls in
+#   std); riscv32imac may fail (subduction_core 0.18.2 uses AtomicU64).
+# - link: smoke.c and conformance/ (make test) against the library just
+#   built, on macOS (aarch64) and Linux (x86_64, aarch64).
+# - portable: the C meant for boards compiled for 32-bit RISC-V, freestanding.
+
+name: newcore-subduction
+
+on:
+  push:
+    paths:
+      - "newcore/c/subduction/**"
+      - ".github/workflows/newcore-subduction.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-none-elf
+          - os: ubuntu-latest
+            target: riscv32imac-unknown-none-elf
+            allowed: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.allowed == true }}
+    defaults:
+      run:
+        working-directory: newcore/c/subduction
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: newcore/c/subduction
+          key: ${{ matrix.target }}
+      - name: Build the library, and print what it must be linked with
+        run: |
+          cargo rustc --release --target ${{ matrix.target }} --lib -- --print native-static-libs 2> build.log || { cat build.log; exit 1; }
+          sed -n 's/.*native-static-libs: //p' build.log | tail -1 > link.txt
+          echo "link with: $(cat link.txt)"
+          ls -l target/${{ matrix.target }}/release/libsubduction_c.a
+      - name: Pack
+        run: |
+          mkdir -p out/subduction-c
+          cp target/${{ matrix.target }}/release/libsubduction_c.a subduction.h store.h platform.h link.txt out/subduction-c/
+          git rev-parse HEAD > out/subduction-c/commit.txt
+          tar -C out -czf subduction-c-${{ matrix.target }}.tar.gz subduction-c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: subduction-c-${{ matrix.target }}
+          path: newcore/c/subduction/subduction-c-${{ matrix.target }}.tar.gz
+
+  link:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: newcore/c/subduction
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: subduction-c-${{ matrix.target }}
+          path: newcore/c/subduction/build
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Link smoke.c and conformance/ against the library just built, and run them
+        run: |
+          mkdir -p lib
+          tar -xmzf build/subduction-c-${{ matrix.target }}.tar.gz -C lib --strip-components=1
+          make test
+
+  portable:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: newcore/c/subduction
+    steps:
+      - uses: actions/checkout@v4
+      - name: A 32-bit RISC-V GCC, with picolibc
+        run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-unknown-elf picolibc-riscv64-unknown-elf
+      - name: Compile the portable C for rv32imac, freestanding
+        run: |
+          for f in websocket.c store_memory.c; do
+            riscv64-unknown-elf-gcc --specs=picolibc.specs -march=rv32imac -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Os -c "$f" -o "/tmp/$(basename "$f" .c).o"
+            echo "$f: compiled"
+          done
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packs
+          merge-multiple: true
+      - name: Put each on the release newcore-subduction-c
+        run: |
+          ls -l packs
+          gh release view newcore-subduction-c --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 ||
+            gh release create newcore-subduction-c --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "Subduction for newcore's C sync (no_std, sans-IO)" \
+              --notes "libsubduction_c.a, its headers and link.txt for each target, built from newcore/c/subduction by .github/workflows/newcore-subduction.yml. Fetch with: make -C newcore/c/subduction fetch"
+          gh release upload newcore-subduction-c packs/*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber

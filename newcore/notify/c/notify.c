@@ -60,6 +60,24 @@ static nt_value *strn(const char *s, size_t n) {
 }
 nt_value *nt_str(const char *s) { return strn(s, strlen(s)); }
 nt_value *nt_list(void) { return make(NT_LIST); }
+nt_value *nt_bytes(const void *data, size_t n) {
+	nt_value *v = make(NT_BYTES);
+	v->data = xrealloc(NULL, n ? n : 1);
+	if (n) memcpy(v->data, data, n);
+	v->bytes = n;
+	return v;
+}
+size_t nt_size(nt_elements kind) {
+	static const unsigned char sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 4, 8};
+	return (unsigned)kind < sizeof sizes ? sizes[kind] : 1;
+}
+nt_value *nt_typed(nt_elements kind, const void *data, size_t count) {
+	nt_value *v = nt_bytes(data, count * nt_size(kind));
+	v->type = NT_TYPED;
+	v->kind = kind;
+	return v;
+}
+size_t nt_length(const nt_value *t) { return t->bytes / nt_size(t->kind); }
 nt_value *nt_map(void) { return make(NT_MAP); }
 void nt_push(nt_value *list, nt_value *v) {
 	GROW(list->items, list->count, list->capacity);
@@ -130,8 +148,16 @@ void nt_set(nt_value *map, const char *key, nt_value *v) {
 		}
 	}
 }
+nt_value *nt_ref(nt_value *v) {
+	if (v != NULL) v->refs++;
+	return v;
+}
 void nt_free(nt_value *v) {
 	if (v == NULL) return;
+	if (v->refs) {
+		v->refs--;
+		return;
+	}
 	for (size_t i = 0; i < v->count; i++) {
 		nt_free(v->items[i]);
 		if (v->type == NT_MAP) free(v->keys[i]);
@@ -140,10 +166,17 @@ void nt_free(nt_value *v) {
 	free(v->keys);
 	free(v->index);
 	free(v->str);
+	free(v->data);
 	free(v);
 }
 static nt_value *copy(const nt_value *v) {
 	if (v == NULL) return NULL;
+	if (v->type == NT_BYTES || v->type == NT_TYPED) {
+		nt_value *c = nt_bytes(v->data, v->bytes);
+		c->type = v->type;
+		c->kind = v->kind;
+		return c;
+	}
 	nt_value *c = make(v->type);
 	c->bool_ = v->bool_;
 	c->num = v->num;
@@ -180,6 +213,7 @@ static long len(const nt_value *v) {
 	if (v == NULL) return 0;
 	if (v->type == NT_STR) return v->ascii ? (long)v->bytes : (long)cps(v->str);
 	if (v->type == NT_LIST) return (long)v->count;
+	if (v->type == NT_TYPED) return (long)nt_length(v);
 	return 0;
 }
 // slice's [a, b) in 0..size, as Array.slice would have it
@@ -211,6 +245,11 @@ static nt_value *slice(const nt_value *v, long a, long b) {
 		nt_value *l = nt_list();
 		for (long i = a; i < b; i++) nt_push(l, copy(v->items[i]));
 		return l;
+	}
+	if (v->type == NT_TYPED) {
+		clamp(len(v), &a, &b);
+		size_t z = nt_size(v->kind);
+		return nt_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
 	}
 	return NULL;
 }
@@ -320,8 +359,10 @@ static view view_at(const nt_value *base, const nt_place *rm, const nt_key *keys
 	return w;
 }
 static int is_list(view w) { return w.v != NULL && w.v->type == NT_LIST; }
-// a map has the key
+// a map has the key; a typed array the index (as Object.hasOwn)
 static int view_has(view w, nt_key k) {
+	if (w.v != NULL && w.v->type == NT_TYPED)
+		return k.type == NT_NUM_KEY && k.n >= 0 && k.n < len(w.v) - w.cut_count;
 	if (w.v == NULL || w.v->type != NT_MAP) return 0;
 	if (w.dropped != NULL && same_map_key(*w.dropped, k)) return 0;
 	return child(w.v, k) != NULL;

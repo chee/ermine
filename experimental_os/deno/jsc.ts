@@ -18,12 +18,13 @@
 // are here, as small as programs need them; console says to the OS's log,
 // through __ermineSay.
 
-import { connect, type Map_, serve, vram, type Way } from "./tools.ts";
+import { connect, evaluator, type Map_, serve, vram, type Way } from "./tools.ts";
 
 type Native = typeof globalThis & {
   __ermineAsk?: Way;
   __ermineSay?: (text: string) => void;
   __ermineVram?: (id: number) => Uint32Array | null;
+  __ermineEval?: (source: string, url: string) => unknown;
   __ermine?: { serve: (frame: Map_) => Map_ };
 };
 const g = globalThis as Native;
@@ -35,6 +36,9 @@ connect(ask);
 const map = g.__ermineVram!;
 delete g.__ermineVram;
 vram(map);
+// a program evaluated with its URL, so its frames have file:line (jsc.c)
+evaluator(g.__ermineEval!);
+delete g.__ermineEval;
 g.__ermine = { serve };
 
 // --- UTF-8, as the WHATWG's TextEncoder and TextDecoder have it: a lone surrogate, or a byte that is no character, as U+FFFD

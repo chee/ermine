@@ -45,6 +45,12 @@
   },
   {
    "at": [],
+   "name": "Applications",
+   "id": "applications",
+   "value": null
+  },
+  {
+   "at": [],
    "name": "js",
    "id": "loader-js",
    "value": {
@@ -245,6 +251,17 @@
   },
   {
    "at": [
+    "drivers"
+   ],
+   "name": "stack",
+   "id": "drv-stack",
+   "value": {
+    "kind": "c",
+    "name": "stack"
+   }
+  },
+  {
+   "at": [
     "programs"
    ],
    "name": "cursor",
@@ -372,6 +389,14 @@
    "at": [
     "programs"
    ],
+   "name": "ermine",
+   "id": "prog-ermine",
+   "source": "programs/ermine.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
    "name": "macview",
    "id": "prog-macview",
    "source": "programs/macview.js"
@@ -407,6 +432,14 @@
    "name": "keys",
    "id": "prog-keys",
    "source": "programs/keys.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "panels",
+   "id": "prog-panels",
+   "source": "programs/panels.js"
   },
   {
    "at": [
@@ -471,6 +504,14 @@
    "name": "inspect",
    "id": "prog-inspect",
    "source": "programs/inspect.js"
+  },
+  {
+   "at": [
+    "programs"
+   ],
+   "name": "desk",
+   "id": "prog-desk",
+   "source": "programs/desk.js"
   },
   {
    "at": [
@@ -725,6 +766,14 @@
    "at": [
     "apps"
    ],
+   "name": "ermine",
+   "id": "apps-ermine",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
    "name": "macapps",
    "id": "apps-macapps",
    "value": null
@@ -797,6 +846,14 @@
    "at": [
     "apps"
    ],
+   "name": "panels",
+   "id": "apps-panels",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
    "name": "window",
    "id": "apps-window",
    "value": null
@@ -855,6 +912,23 @@
    ],
    "name": "inspect",
    "id": "apps-inspect",
+   "value": null
+  },
+  {
+   "at": [
+    "apps"
+   ],
+   "name": "desk",
+   "id": "apps-desk",
+   "value": null
+  },
+  {
+   "at": [
+    "apps",
+    "computer"
+   ],
+   "name": "layout",
+   "id": "computer-layout",
    "value": null
   },
   {
@@ -1131,6 +1205,543 @@
   },
   {
    "at": [
+    "home"
+   ],
+   "name": "desktop",
+   "id": "home-desktop",
+   "value": null
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Browser",
+   "id": "app-browser",
+   "value": {
+    "kind": "app",
+    "run": "browser",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kppppmmmmppppk.",
+      ".kpppmpmmpmpppk.",
+      ".kppmmmmmmmmppk.",
+      ".kppmpmmmmpmppk.",
+      ".kpppmpmmpmpppk.",
+      ".kppppmmmmppppk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Cat Clock",
+   "id": "app-cat-clock",
+   "value": {
+    "kind": "app",
+    "run": "catclock",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "i": 2761256,
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".....kkkkk......",
+      "...kkpppppkk....",
+      "..kppppippppk...",
+      ".kpppppipppppk..",
+      ".kpppppipppppk..",
+      "kppppppippppppk.",
+      "kppppppiiiipppk.",
+      "kpppppppppppppk.",
+      "kpppppppppppppk.",
+      "kpppppppppppppk.",
+      ".kpppppppppppk..",
+      ".kpppppppppppk..",
+      "..kpppppppppk...",
+      "...kkpppppkk....",
+      ".....kkkkk......"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Control Panels",
+   "id": "app-control-panels",
+   "value": {
+    "kind": "app",
+    "run": "panels",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "c": 13771850,
+      "i": 2761256,
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kpppkkkkpppppk.",
+      ".kpiikcckiiiipk.",
+      ".kpppkkkkpppppk.",
+      ".kppppppppppppk.",
+      ".kpppppppkkkkpk.",
+      ".kpiiiiiikcckpk.",
+      ".kpppppppkkkkpk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Graph",
+   "id": "app-graph",
+   "value": {
+    "kind": "app",
+    "run": "graph",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "c": 13771850,
+      "i": 2761256,
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kpccppppppccpk.",
+      ".kpcciiiiiiccpk.",
+      ".kppippppppippk.",
+      ".kpppippppipppk.",
+      ".kppppiccippppk.",
+      ".kpppppccpppppk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Inspector",
+   "id": "app-inspector",
+   "value": {
+    "kind": "app",
+    "run": "inspect",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      "....kkkkk.......",
+      "...kpppppk......",
+      "..kpppppppk.....",
+      "..kpppppppk.....",
+      "..kpppppppk.....",
+      "..kpppppppk.....",
+      "..kpppppppk.....",
+      "...kpppppk......",
+      "....kkkkkk......",
+      ".........kk.....",
+      "..........kk....",
+      "...........kk...",
+      "............kk..",
+      "................",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Keys",
+   "id": "app-keys",
+   "value": {
+    "kind": "app",
+    "run": "keys",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "c": 13771850,
+      "i": 2761256,
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      "................",
+      "................",
+      "..kkkkk..kkkkk..",
+      "..kpppk..kpppk..",
+      "..kpipk..kpcpk..",
+      "..kpppk..kpppk..",
+      "..kkkkk..kkkkk..",
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................",
+      "................",
+      "................",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Mac Apps",
+   "id": "app-mac-apps",
+   "value": {
+    "kind": "app",
+    "run": "macapps",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "b": 11042048,
+      "c": 13771850,
+      "i": 2761256,
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kpmmpiiiiiippk.",
+      ".kppppppppppppk.",
+      ".kpccpiiiiipppk.",
+      ".kppppppppppppk.",
+      ".kpbbpiiiiiiipk.",
+      ".kppppppppppppk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "My Computer",
+   "id": "app-my-computer",
+   "value": {
+    "kind": "app",
+    "run": "computer",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      "...kkkkkkkkkk...",
+      "...kppppppppk...",
+      "...kpkkkkkkpk...",
+      "...kpkmmmmkpk...",
+      "...kpkmmmmkpk...",
+      "...kpkmmmmkpk...",
+      "...kpkkkkkkpk...",
+      "...kppppppppk...",
+      "...kppkkkkppk...",
+      "...kppppppppk...",
+      "...kkkkkkkkkk...",
+      "...kppppppppk...",
+      "...kkkkkkkkkk...",
+      "................",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Paint",
+   "id": "app-paint",
+   "value": {
+    "kind": "app",
+    "run": "paint",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "b": 11042048,
+      "c": 13771850,
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kppccppppppppk.",
+      ".kpccccppbbpppk.",
+      ".kpccccpbbbbppk.",
+      ".kppccppbbbbppk.",
+      ".kpppppppbbpppk.",
+      ".kppmmmmppppppk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Plasma",
+   "id": "app-plasma",
+   "value": {
+    "kind": "app",
+    "run": "plasma",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "b": 11042048,
+      "c": 13771850,
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kccbbmmccbbmmk.",
+      ".kcbbmmccbbmmck.",
+      ".kbbmmccbbmmcck.",
+      ".kbmmccbbmmccbk.",
+      ".kmmccbbmmccbbk.",
+      ".kmccbbmmccbbmk.",
+      ".kccbbmmccbbmmk.",
+      ".kcbbmmccbbmmck.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Ermine",
+   "id": "app-ermine",
+   "value": {
+    "kind": "app",
+    "run": "ermine",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "k": 1841687,
+      "p": 15902645,
+      "w": 16777215
+     },
+     "rows": [
+      "................",
+      "..........kk....",
+      ".........kpk....",
+      "........kwwkkk..",
+      "........kwwwwwk.",
+      ".......kwwwkwwwk",
+      ".......kwwwwwwkk",
+      ".......kwwwwkkk.",
+      "........kwwwk...",
+      ".......kwwwwk...",
+      "......kwwwwwk...",
+      ".....kwwwwwwk...",
+      ".kk..kwwwkwwk...",
+      "kkkkkkwwwkwwk...",
+      "kkkkwwwwwkwwk...",
+      ".kkkkkkkkkkkk..."
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Shell",
+   "id": "app-shell",
+   "value": {
+    "kind": "app",
+    "run": "term",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "i": 2761256,
+      "k": 1841687,
+      "m": 1610603,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kiiiiiiiiiiiik.",
+      ".kipiiiiiiiiiik.",
+      ".kiipiiiiiiiiik.",
+      ".kiiipiiiiiiiik.",
+      ".kiipiiiiiiiiik.",
+      ".kipiiiiiiiiiik.",
+      ".kiiiiimmmmiiik.",
+      ".kiiiiiiiiiiiik.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "VNC",
+   "id": "app-vnc",
+   "value": {
+    "kind": "app",
+    "run": "vnc",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "c": 13771850,
+      "i": 2761256,
+      "k": 1841687,
+      "m": 1610603
+     },
+     "rows": [
+      "................",
+      "kkkkkkk.........",
+      "kmmmmmk.........",
+      "kmmmmmk.........",
+      "kmmmmmk.........",
+      "kkkkkkk.........",
+      "...k............",
+      "..kkk.i.........",
+      ".......i........",
+      "........i.......",
+      ".........kkkkkkk",
+      ".........kccccck",
+      ".........kccccck",
+      ".........kccccck",
+      ".........kkkkkkk",
+      "............k..."
+     ]
+    }
+   }
+  },
+  {
+   "at": [
+    "Applications"
+   ],
+   "name": "Workspace",
+   "id": "app-workspace",
+   "value": {
+    "kind": "app",
+    "run": "edit apps/workspace/text",
+    "icon": {
+     "kind": "picture",
+     "colors": {
+      "i": 2761256,
+      "k": 1841687,
+      "p": 16644330
+     },
+     "rows": [
+      "................",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      ".kppppppppppppk.",
+      ".kpiiiiiiiipppk.",
+      ".kppppppppppppk.",
+      ".kpiiiiiiiiiipk.",
+      ".kppppppppppppk.",
+      ".kpiiiiippppppk.",
+      ".kppppppppppppk.",
+      ".kppppppppppppk.",
+      ".kkkkkkkkkkkkkk.",
+      "................"
+     ]
+    }
+   }
+  },
+  {
+   "at": [
     "etc"
    ],
    "name": "uart0",
@@ -1330,6 +1941,13 @@
       "argv"
      ],
      "show": "argv"
+    },
+    "app": {
+     "label": "app",
+     "line": [
+      "run"
+     ],
+     "show": "icon"
     }
    }
   },
@@ -1400,7 +2018,529 @@
     "A-S-8": "window tag 8",
     "A-9": "view 9",
     "A-S-9": "window tag 9",
-    "s-i": "inspect"
+    "s-i": "inspect",
+    "s-S-slash": "/dev/wm/ctl point"
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "panels",
+   "id": "etc-panels",
+   "value": null
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Appearance",
+   "id": "panel-appearance",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Colours",
+      "control": "head"
+     },
+     {
+      "label": "colours",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "control": "colours"
+     },
+     {
+      "label": "Windows",
+      "control": "head"
+     },
+     {
+      "label": "Corner radius",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "radius"
+      ],
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 0
+     },
+     {
+      "label": "Frame",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "frame",
+       "width"
+      ],
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 1
+     },
+     {
+      "label": "Drop",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "drop",
+       "size"
+      ],
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 1
+     },
+     {
+      "label": "Stripes",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "stripes",
+       "on"
+      ],
+      "control": "check",
+      "default": true
+     },
+     {
+      "label": "Boxes",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "boxes",
+       "on"
+      ],
+      "control": "check",
+      "default": true
+     },
+     {
+      "label": "Title",
+      "at": [
+       "/",
+       "etc",
+       "theme"
+      ],
+      "key": [
+       "window",
+       "title",
+       "align"
+      ],
+      "control": "choice",
+      "choices": [
+       "left",
+       "center",
+       "right"
+      ],
+      "default": "center"
+     }
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Browser",
+   "id": "panel-browser",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Home",
+      "at": [
+       "/",
+       "etc",
+       "browser"
+      ],
+      "key": "home",
+      "control": "text"
+     },
+     {
+      "label": "Search",
+      "at": [
+       "/",
+       "etc",
+       "browser"
+      ],
+      "key": "search",
+      "control": "text"
+     },
+     {
+      "label": "Live pages",
+      "at": [
+       "/",
+       "etc",
+       "browser"
+      ],
+      "key": "live",
+      "control": "number",
+      "step": 1,
+      "min": 1,
+      "default": 6
+     }
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Desktop",
+   "id": "panel-desktop",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Picture",
+      "at": [
+       "/",
+       "etc",
+       "desktop",
+       "picture"
+      ],
+      "control": "picture",
+      "from": [
+       [
+        "/",
+        "home"
+       ],
+       [
+        "/",
+        "etc"
+       ]
+      ]
+     },
+     {
+      "label": "Fit",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": "fit",
+      "control": "choice",
+      "choices": [
+       "centre",
+       "fit",
+       "fill",
+       "stretch"
+      ],
+      "default": "centre"
+     },
+     {
+      "label": "Hint",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": "hint",
+      "control": "text"
+     },
+     {
+      "label": "Menu bar top",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": "top",
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 3
+     },
+     {
+      "label": "Menu bar ends",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": "pad",
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 12
+     },
+     {
+      "label": "Top corners",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": [
+       "corner",
+       "top"
+      ],
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 10
+     },
+     {
+      "label": "Bottom corners",
+      "at": [
+       "/",
+       "etc",
+       "desktop"
+      ],
+      "key": [
+       "corner",
+       "bottom"
+      ],
+      "control": "number",
+      "step": 1,
+      "min": 0,
+      "default": 0
+     }
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Keys",
+   "id": "panel-keys",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Key bindings",
+      "at": [
+       "/",
+       "etc",
+       "keys"
+      ],
+      "control": "button",
+      "text": "Open Keys\u2026",
+      "run": "keys"
+     }
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Mac",
+   "id": "panel-mac",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Take Over",
+      "at": [
+       "/",
+       "dev",
+       "display",
+       "mode"
+      ],
+      "key": "takeover",
+      "control": "check",
+      "run": "takeover"
+     },
+     {
+      "label": "Mac Windows",
+      "at": [
+       "/",
+       "dev",
+       "display",
+       "mode"
+      ],
+      "key": "windows",
+      "control": "check",
+      "run": "windows"
+     },
+     {
+      "label": "Mirror apps",
+      "at": [
+       "/",
+       "etc",
+       "mac"
+      ],
+      "key": "on",
+      "control": "check",
+      "default": true
+     },
+     {
+      "label": "Access",
+      "control": "head"
+     },
+     {
+      "label": "Accessibility",
+      "at": [
+       "/",
+       "dev",
+       "mac",
+       "status"
+      ],
+      "key": "ax",
+      "control": "show"
+     },
+     {
+      "label": "Screen Recording",
+      "at": [
+       "/",
+       "dev",
+       "mac",
+       "status"
+      ],
+      "key": "capture",
+      "control": "show"
+     },
+     {
+      "label": "Apps",
+      "at": [
+       "/",
+       "dev",
+       "mac",
+       "status"
+      ],
+      "key": "apps",
+      "control": "show"
+     },
+     {
+      "label": "Elements",
+      "at": [
+       "/",
+       "dev",
+       "mac",
+       "status"
+      ],
+      "key": "elements",
+      "control": "show"
+     },
+     {
+      "label": "Mac Apps",
+      "control": "button",
+      "text": "Open Mac Apps\u2026",
+      "run": "macapps"
+     }
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "panels"
+   ],
+   "name": "Sync",
+   "id": "panel-sync",
+   "value": {
+    "kind": "panel",
+    "rows": [
+     {
+      "label": "Server",
+      "at": [
+       "/",
+       "etc",
+       "sync"
+      ],
+      "key": "server",
+      "control": "text"
+     },
+     {
+      "label": "Link",
+      "control": "head"
+     },
+     {
+      "label": "Connected",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "connected",
+      "control": "show"
+     },
+     {
+      "label": "Server",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "server",
+      "control": "show"
+     },
+     {
+      "label": "Peer",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "peer",
+      "control": "show"
+     },
+     {
+      "label": "Documents",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "documents",
+      "control": "show"
+     },
+     {
+      "label": "Stage",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "stage",
+      "control": "show"
+     },
+     {
+      "label": "Error",
+      "at": [
+       "/",
+       "dev",
+       "sync",
+       "link"
+      ],
+      "key": "error",
+      "control": "show"
+     }
+    ]
    }
   },
   {
@@ -1411,76 +2551,93 @@
    "id": "etc-menu",
    "value": [
     {
-     "label": "My Computer",
-     "run": "computer"
-    },
-    {
-     "label": "a shell",
-     "run": "term"
-    },
-    {
-     "label": "a browser",
-     "run": "browser"
-    },
-    {
-     "label": "History…",
-     "run": "history"
-    },
-    {
-     "label": "the graph",
-     "run": "graph"
-    },
-    {
-     "label": "a workspace",
-     "run": "edit apps/workspace/text"
-    },
-    {
-     "label": "Keys",
-     "run": "keys"
-    },
-    {
-     "label": "Inspect the window",
-     "run": "inspect"
-    },
-    {
-     "label": "the window manager's policy",
-     "run": "edit programs/wmiirc"
-    },
-    {
-     "label": "the cursor, in Paint",
-     "run": "paint etc/cursors/arrow"
-    },
-    {
-     "label": "the cat clock",
-     "run": "catclock"
-    },
-    {
-     "label": "a plasma, in video memory",
-     "run": "plasma"
-    },
-    {
-     "label": "Mac windows",
-     "run": "windows",
-     "key": "M-C-w"
-    },
-    {
-     "label": "Take over",
-     "run": "takeover toggle"
-    },
-    {
-     "label": "Mac apps…",
-     "run": "macapps"
-    },
-    {
-     "label": "Another screen (VNC)…",
-     "run": "vnc"
+     "label": "Applications",
+     "from": [
+      "/",
+      "Applications"
+     ]
     },
     "-",
     {
-     "label": "power off",
+     "label": "Edit Window Policy",
+     "run": "edit programs/wmiirc"
+    },
+    {
+     "label": "Edit Cursor",
+     "run": "paint etc/cursors/arrow"
+    },
+    {
+     "label": "Point at\u2026",
+     "run": "/dev/wm/ctl point"
+    },
+    {
+     "label": "Clean Up Desktop",
+     "run": "/apps/desk/desk/on/menu clean"
+    },
+    "-",
+    {
+     "label": "Mac Windows",
+     "run": "windows toggle",
+     "key": "M-C-w",
+     "check": {
+      "from": [
+       "/",
+       "dev",
+       "display",
+       "mode"
+      ],
+      "key": "windows"
+     }
+    },
+    {
+     "label": "Take Over",
+     "run": "takeover toggle",
+     "check": {
+      "from": [
+       "/",
+       "dev",
+       "display",
+       "mode"
+      ],
+      "key": "takeover"
+     }
+    },
+    "-",
+    {
+     "label": "Power Off",
      "run": "power off"
     }
    ]
+  },
+  {
+   "at": [
+    "etc",
+    "menu"
+   ],
+   "name": "icon",
+   "id": "etc-menu-icon",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "x": 14828924
+    },
+    "rows": [
+     "   xx    xx   ",
+     "  x  x  x  x  ",
+     "  x  x  x  x  ",
+     "  x  x  x  x  ",
+     "  x  x  x  x  ",
+     "   x  xx  x   ",
+     "  xxxxxxxxxx  ",
+     " xxxxxxxxxxxx ",
+     " xx xxxxxx xx ",
+     " xxxxxxxxxxxx ",
+     " xxxxx  xxxxx ",
+     "  xxxxxxxxxx  ",
+     "   xxxxxxxx   ",
+     "  xx      xx  "
+    ]
+   }
   },
   {
    "at": [
@@ -1637,6 +2794,645 @@
      "  ox   ",
      " xoox  ",
      "ooo ooo"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "cursors"
+   ],
+   "name": "help",
+   "id": "cursor-help",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "o": 1053720,
+     "x": 16644330
+    },
+    "hot": [
+     0,
+     0
+    ],
+    "rows": [
+     "o                 ",
+     "oo           oooo ",
+     "oxo         oo  oo",
+     "oxxo            oo",
+     "oxxxo          oo ",
+     "oxxxxo        oo  ",
+     "oxxxxxo       oo  ",
+     "oxxxxxxo          ",
+     "oxxxxxxxo     oo  ",
+     "oxxxxxxxxo        ",
+     "oxxxxxoooo        ",
+     "oxxoxxo           ",
+     "oxo oxxo          ",
+     "oo  oxxo          ",
+     "o    oxxo         ",
+     "     oxxo         ",
+     "      oo          "
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc"
+   ],
+   "name": "ermine",
+   "id": "etc-ermine",
+   "value": {
+    "speed": 160,
+    "rate": 30,
+    "above": false,
+    "sleepy": 8,
+    "wander": 40,
+    "boot": false,
+    "frames": null
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-right-1",
+   "id": "ermine-run-right-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "........................",
+     "........................",
+     ".kk.....................",
+     "kkkk..............kk....",
+     "kkkkk............kpkkk..",
+     ".kkwwkkkkkkkkkkkkwwwwwk.",
+     "..kkwwwwwwwwwwwwwwwkwwwk",
+     "...kwwwwwwwwwwwwwwwwwwkk",
+     "....kwwwwwwwwwwwwwwwkk..",
+     ".....kwwkkkkkkkkkwwk....",
+     "....kwwk.........kwwk...",
+     "...kwwk...........kwwk..",
+     "..kkk.............kkkk.."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-right-2",
+   "id": "ermine-run-right-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "........................",
+     "........kkkkkkk.........",
+     ".......kwwwwwwwk........",
+     "......kwwwwwwwwwk.kk....",
+     ".....kwwwwwwwwwwwkpkkk..",
+     "..kkkwwwwkkkkwwwwwwwwwk.",
+     ".kkkwwwkk....kwwwwwkwwwk",
+     "kkkkwwk.......kwwwwwwwkk",
+     "kkk.kk........kwwwwwkk..",
+     ".kk..kwk......kwkkkk....",
+     ".....kwk.....kwk........",
+     ".....kwk.....kwk........",
+     ".....kkkk....kkkk......."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-upright-1",
+   "id": "ermine-run-upright-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "........................",
+     "..................kk.k..",
+     ".kk..............kpkkwk.",
+     "kkkk............kwwwwwwk",
+     "kkkkk......kkkkkwwwkwwkk",
+     ".kkwwkkkkkkwwwwwwwwwwk..",
+     "..kkwwwwwwwwwwwwwwwwk...",
+     "...kwwwwwwwwwwwwkwwk....",
+     "....kwwwwwwkkkkk.kwwkk..",
+     ".....kwwkkk.......kwwk..",
+     "....kwwk..........kkk...",
+     "...kwwk.................",
+     "..kkk..................."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-upright-2",
+   "id": "ermine-run-upright-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "...........kkkk.........",
+     "........kkkwwwwkk.kk.k..",
+     ".......kwwwwwwwwwkpkkwk.",
+     "......kwwwwwwwwwwwwwwwwk",
+     ".....kwwwwwkkwwwwwwkwwkk",
+     "..kkkwwwwkk..kwwwwwwwk..",
+     ".kkkwwwkk.....kwwwwwk...",
+     "kkkkwwk.......kwkkkk....",
+     "kkk.kk........kw........",
+     ".kk..kwk.....kwk........",
+     ".....kwk.....kwkk.......",
+     ".....kwk.....kkk........",
+     ".....kkkk..............."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-downright-1",
+   "id": "ermine-run-downright-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     ".kk.....................",
+     "kkkk....................",
+     "kkkkk...................",
+     ".kkww.............kk....",
+     "..kkwkkkkk.......kpkkk..",
+     "...kwwwwwwkkkkkkkwwwwwk.",
+     "....kwwwwwwwwwwwwwwkwwwk",
+     ".....wwwwwwwwwwwwwwwwwkk",
+     "....kkwwkkwwwwwwwwwwkk..",
+     "...kwwwk..kkkkkkkwwk....",
+     "..kkkwk..........kwwk...",
+     "..................kwwk..",
+     "..................kkkk.."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-downright-2",
+   "id": "ermine-run-downright-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "........kk..............",
+     ".......kwwkkkkk.........",
+     "......kwwwwwwwwk........",
+     "..kkkkwwwwwwwwwwk.kk....",
+     ".kkkwwwwwkwwwwwwwkpkkk..",
+     "kkkkwwwkk.kkkwwwwwwwwwk.",
+     "kkk.kwk......kwwwwwkwwwk",
+     ".kk..k........kwwwwwwwkk",
+     ".....kwk......kwwwwwkk..",
+     ".....kwk......kwkkkk....",
+     ".....kwk.....kwk........",
+     ".....kkkk....kwk........",
+     ".............kkkk......."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-up-1",
+   "id": "ermine-run-up-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     ".........kk..kk.........",
+     ".........kpkkpk.........",
+     ".........kwwwwk.........",
+     "........kwwwwwwk........",
+     ".........kwwwwk.........",
+     "........kkwwwwkk........",
+     ".......kwkwwwwkwk.......",
+     ".......kk.kwwk.kk.......",
+     "..........kwwk..........",
+     ".........kwwwwk.........",
+     "........kwwwwwwk........",
+     ".......kwkwwwwkwk.......",
+     ".......kk.kwwk.kk.......",
+     "..........kkkk..........",
+     "...........kk..........."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-up-2",
+   "id": "ermine-run-up-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     ".........kk..kk.........",
+     ".........kpkkpk.........",
+     ".........kwwwwk.........",
+     "........kwwwwwwk........",
+     ".........kwwwwk.........",
+     "........kwwwwwwk........",
+     "........kwwwwwwk........",
+     ".......kwwwwwwwwk.......",
+     ".......kwkwwwwkwk.......",
+     ".......kk.kwwk.kk.......",
+     "...........kwk..........",
+     "............kkk.........",
+     "...........kkkk.........",
+     "............kk.........."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-down-1",
+   "id": "ermine-run-down-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "g": 14211797,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........kk......kk......",
+     ".......kpwkkkkkkwpk.....",
+     "........kwwwwwwwwk......",
+     "........kwkwwwwkwk......",
+     "........kwwwwwwwwk......",
+     ".........kwwwwwwk.......",
+     "........kgkwwwwkgk......",
+     "........kwwkkkkwwk......",
+     "........kwwwwwwwwk......",
+     "........kwkwwwwkwk......",
+     "........kwkwwwwkwk......",
+     "........kkkwwwwkkk......",
+     "..........kwwk..........",
+     "...........kk..........."
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "run-down-2",
+   "id": "ermine-run-down-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "g": 14211797,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "........kk......kk......",
+     ".......kpwkkkkkkwpk.....",
+     "........kwwwwwwwwk......",
+     "........kwkwwwwkwk......",
+     "........kwwwwwwwwk......",
+     ".........kwwwwwwk.......",
+     "........kgkwwwwkgk......",
+     "........kwwkkkkwwk......",
+     ".......kwwwwwwwwwwk.....",
+     ".......kwkkwwwwkkwk.....",
+     ".......kk.kwwwwk.kk.....",
+     "...........kkkk.........",
+     "........................"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "alert",
+   "id": "ermine-alert",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     ".............kk.........",
+     "............kpkkkk......",
+     "............kwwwwwk.....",
+     "...........kwwwwkwwk....",
+     "...........kwwwwwwwkk...",
+     "............kwwwwwkk....",
+     "............kwwwwk......",
+     "...........kwwwwwkk.....",
+     "...........kwwwwkwwk....",
+     "...........kwwwwwkk.....",
+     "...........kwwwwwk......",
+     "..........kwwwwwwk......",
+     ".kk.......kwwwwwwk......",
+     "kkkkkkkkkkkwwwwwk.......",
+     "kkkkwwwwwwwwwwkwk.......",
+     ".kkkkkkkkkkkkkkkkk......"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "sit",
+   "id": "ermine-sit",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "..............kk........",
+     ".............kpk........",
+     "............kwwkkkk.....",
+     "............kwwwwwwk....",
+     "...........kwwwwkwwwk...",
+     "...........kwwwwwwwwkk..",
+     "...........kwwwwwkkkk...",
+     "............kwwwwk......",
+     "...........kwwwwwk......",
+     "..........kwwwwwwk......",
+     ".........kwwwwwwwk......",
+     ".kk......kwwwwwwwk......",
+     "kkkkkkkkkkwwwwkwwk......",
+     "kkkkwwwwwwwwwwkwwk......",
+     ".kkkkkkkkkkkkkkkkk......"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "wash-1",
+   "id": "ermine-wash-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "..............kk........",
+     ".............kpk........",
+     "............kwwkkkk.....",
+     "............kwwwwwwk....",
+     "...........kwwwwkkwwk...",
+     "...........kwwwwwwwwkk..",
+     "...........kwwwwwkkkck..",
+     "............kwwwwkwwk...",
+     "...........kwwwwkwwk....",
+     "..........kwwwwwwkk.....",
+     ".........kwwwwwwwk......",
+     ".kk......kwwwwwwwk......",
+     "kkkkkkkkkkwwwwkwwk......",
+     "kkkkwwwwwwwwwwkwwk......",
+     ".kkkkkkkkkkkkkkkkk......"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "wash-2",
+   "id": "ermine-wash-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "..............kk........",
+     ".............kpk........",
+     "............kwwkkkk.....",
+     "............kwwwwwwk....",
+     "...........kwwwwwkkwk...",
+     "...........kwwwwwwwwkk..",
+     "...........kwwwwwwkkck..",
+     "............kwwwwwkwck..",
+     "...........kwwwwwwkwk...",
+     "..........kwwwwwwwkk....",
+     ".........kwwwwwwwk......",
+     ".kk......kwwwwwwwk......",
+     "kkkkkkkkkkwwwwkwwk......",
+     "kkkkwwwwwwwwwwkwwk......",
+     ".kkkkkkkkkkkkkkkkk......"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "yawn",
+   "id": "ermine-yawn",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "c": 13771850,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "..............kk........",
+     ".............kpk........",
+     "............kwwkkkk.....",
+     "............kwwwwwwk....",
+     "...........kwwwkkwwwk...",
+     "...........kwwwwwwwkkk..",
+     "...........kwwwwwkcck...",
+     "............kwwwwwkkk...",
+     "...........kwwwwwk......",
+     "..........kwwwwwwk......",
+     ".........kwwwwwwwk......",
+     ".kk......kwwwwwwwk......",
+     "kkkkkkkkkkwwwwkwwk......",
+     "kkkkwwwwwwwwwwkwwk......",
+     ".kkkkkkkkkkkkkkkkk......"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "sleep-1",
+   "id": "ermine-sleep-1",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "g": 14211797,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "........................",
+     "........................",
+     "........................",
+     "...................kkkk.",
+     ".....................k..",
+     "....................k...",
+     "........kkkkkk.....kkkk.",
+     "......kkwwwwwwkk.kk.....",
+     ".....kwwwwwwwwwwkpwk....",
+     "....kwwwwwwwwwwwwwwwk...",
+     "...kwwwwwwwwwwwwkkwwwk..",
+     "...kwwwwwwwwwwwwwwwwwkk.",
+     "...kwwwgggggggggggkkkk..",
+     "...kwwgwwwwwwwwwwwkkkkk.",
+     "....kkkkkkkkkkkkkkkkkk..",
+     "........................"
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "ermine"
+   ],
+   "name": "sleep-2",
+   "id": "ermine-sleep-2",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "g": 14211797,
+     "k": 1841687,
+     "p": 15902645,
+     "w": 16777215
+    },
+    "rows": [
+     "....................kkkk",
+     "......................k.",
+     ".....................k..",
+     "....................kkkk",
+     "........................",
+     "........................",
+     "........kkkkkk..........",
+     "......kkwwwwwwkk.kk.....",
+     ".....kwwwwwwwwwwkpwk....",
+     "....kwwwwwwwwwwwwwwwk...",
+     "...kwwwwwwwwwwwwkkwwwk..",
+     "...kwwwwwwwwwwwwwwwwwkk.",
+     "...kwwwgggggggggggkkkk..",
+     "...kwwgwwwwwwwwwwwkkkkk.",
+     "....kkkkkkkkkkkkkkkkkk..",
+     "........................"
     ]
    }
   }
@@ -1819,6 +3615,14 @@
    ]
   },
   {
+   "start": [],
+   "name": "stack",
+   "program": [
+    "drivers",
+    "stack"
+   ]
+  },
+  {
    "start": [
     "apps",
     "console"
@@ -1877,6 +3681,18 @@
     "programs",
     "status"
    ]
+  },
+  {
+   "start": [
+    "apps",
+    "desk"
+   ],
+   "name": "desk",
+   "program": [
+    "programs",
+    "desk"
+   ],
+   "actor": "person"
   }
  ]
 }

@@ -196,7 +196,7 @@ static void site_of(const Json *j, ch_site *site) {
 }
 
 static void hex_of(const uint8_t *b, char *out) {
-	for (int i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", b[i]);
+	for (int i = 0; i < 32; i++) snprintf(out + 2 * i, 3, "%02x", b[i]);
 }
 
 size_t apply_versions(chains *c, const Json *object, apply_time time, void *context,

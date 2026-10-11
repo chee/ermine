@@ -13,8 +13,9 @@
 // call or a message in, and when the time erm_sd_run gave has passed, the
 // host calls erm_sd_run, then takes the events with erm_sd_poll and frees
 // each with erm_sd_free_event. Only plain bytes cross: ids, digests, topics
-// and keys are 32 bytes; a call copies what it is given. One thread at a
-// time, never two calls at once.
+// and keys are 32 bytes; a call copies what it is given, and is refused
+// (call number 0) when given NULL for a list or bytes with a nonzero count.
+// One thread at a time, never two calls at once.
 //
 // What Subduction holds is kept in the store the host gives (store.h). The
 // host defines platform.h's erm_host_random, erm_host_malloc,
@@ -103,7 +104,7 @@ void erm_sd_free_event(ErmSdEvent *event);
  * events and of erm_sd_received and erm_sd_closed: CONNECTED
  */
 uint64_t erm_sd_connect(ErmSd *sd, const char *service);
-/** a binary message that arrived on a connection */
+/** a binary message that arrived on a connection (NULL with a length: none) */
 void erm_sd_received(ErmSd *sd, uint64_t conn, const uint8_t *bytes, size_t length);
 /** the host's transport for a connection closed */
 void erm_sd_closed(ErmSd *sd, uint64_t conn);

@@ -1,7 +1,9 @@
 // mutate (newcore/opstreams/ts/mutate.ts), in C, on nt_value contents. Same rules, same order of checks.
 // Memory: what a patch touches is a copy made here (the "made" set), changed in place for the
 // rest of the call; everything else is shared and never freed. Values made here and dropped
-// again within the call are freed; values given are never.
+// again within the call are freed; values given are never. Once the call is good, the new content
+// takes its references (hold): a made value has its one holder, its parent; a shared one an nt_ref.
+// A children list is made into nt_values (its items: the "given" set) and back.
 #include "mutate.h"
 
 #include <setjmp.h>
@@ -94,6 +96,8 @@ static int pset_del(pset *s, const void *p) {
 typedef struct {
 	nt_value *root; // NULL: absent
 	pset made;
+	int list; // a children list
+	pset given; // a children list's items as given, each num its place there
 	jmp_buf jump;
 	int code;
 	int tell; // facts wanted
@@ -113,6 +117,7 @@ static void shell_free(nt_value *v) {
 	free(v->keys);
 	free(v->index);
 	free(v->str);
+	free(v->data);
 	free(v);
 }
 // a value made here that is let go of, and what it holds that was made here
@@ -132,6 +137,17 @@ static int is_map(const nt_value *v) { return v != NULL && v->type == NT_MAP; }
 static nt_value *made(work *w, nt_value *v) {
 	pset_add(&w->made, v);
 	return v;
+}
+// a new typed array of these bytes
+static nt_value *made_typed(work *w, nt_elements kind, const unsigned char *a, size_t na,
+	const unsigned char *b, size_t nb, const unsigned char *c, size_t nc) {
+	nt_value *t = made(w, nt_typed(kind, NULL, 0));
+	t->data = grab(t->data, na + nb + nc);
+	if (na) memcpy(t->data, a, na);
+	if (nb) memcpy(t->data + na, b, nb);
+	if (nc) memcpy(t->data + na + nb, c, nc);
+	t->bytes = na + nb + nc;
+	return t;
 }
 static nt_value *made_list(work *w, size_t count) {
 	nt_value *l = made(w, nt_list());
@@ -316,7 +332,8 @@ static void set(work *w, const nt_key *path, size_t n, nt_value *v, int drop_old
 static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_value *v,
 	nt_value **taken, int count) {
 	nt_value *s = get(w, path, n);
-	if (s == NULL || (s->type != NT_STR && s->type != NT_LIST)) fail(w, MU_WRONG_KIND);
+	if (s == NULL || (s->type != NT_STR && s->type != NT_LIST && s->type != NT_TYPED))
+		fail(w, MU_WRONG_KIND);
 	if (a > b) fail(w, MU_RANGE);
 	nt_value *out;
 	if (s->type == NT_STR) {
@@ -327,6 +344,19 @@ static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_val
 		w->seq = (mu_fact){0, (size_t)total, 1};
 		if (taken) *taken = made_str(w, s->str + x, y - x, "", 0, "", 0);
 		out = made_str(w, s->str, x, v ? v->str : "", v ? v->bytes : 0, s->str + y, s->bytes - y);
+		set(w, path, n, out, 0);
+		drop(w, s);
+		if (v) drop(w, v);
+		return;
+	}
+	if (s->type == NT_TYPED) {
+		size_t z = nt_size(s->kind), x = (size_t)a * z, y = (size_t)b * z;
+		if ((size_t)b > nt_length(s)) fail(w, MU_RANGE);
+		w->seq = (mu_fact){0, nt_length(s), 1};
+		if (v != NULL && (v->type != NT_TYPED || v->kind != s->kind)) fail(w, MU_WRONG_KIND);
+		if (taken) *taken = made_typed(w, s->kind, s->data + x, y - x, NULL, 0, NULL, 0);
+		out = made_typed(w, s->kind, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
+			s->bytes - y);
 		set(w, path, n, out, 0);
 		drop(w, s);
 		if (v) drop(w, v);
@@ -351,7 +381,7 @@ static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_val
 
 // what notify reads at an unranged place, as the content is now; nothing checked
 static mu_fact fact(work *w, const nt_key *path, size_t n) {
-	if (n == 0) return (mu_fact){0, 0, w->root != NULL};
+	if (n == 0) return (mu_fact){0, 0, w->root != NULL && !(w->list && is_list(w->root) && !w->root->count)};
 	const nt_value *v = w->root;
 	for (size_t i = 0; i + 1 < n && v != NULL; i++) {
 		nt_key k = path[i];
@@ -398,8 +428,9 @@ static void apply(work *w, const nt_patch *p, mu_facts *out) {
 		nt_value *moved = take(w, from, w->tell);
 		if (w->tell && from->has_range) was = w->seq;
 		if (!pl->has_range) {
+			// the whole onto itself: notify does not see the take, so the place is as it was
 			mu_fact place = {0};
-			if (w->tell) place = fact(w, pl->path, pl->length);
+			if (w->tell) place = !pl->length && !from->length ? was : fact(w, pl->path, pl->length);
 			set(w, pl->path, pl->length, moved, 1);
 			if (w->tell) *out = (mu_facts){.place = place, .has_from = 1, .from = was};
 			return;
@@ -410,7 +441,9 @@ static void apply(work *w, const nt_patch *p, mu_facts *out) {
 		int listy = is_list(v);
 		// a string moved into a string: its positions, before it is let go of
 		size_t size = from->has_range ? (size_t)(from->to - from->from)
-			: listy ? 1 : moved != NULL && moved->type == NT_STR ? (size_t)str_len(moved) : 0;
+			: listy ? 1
+			: moved != NULL && moved->type == NT_STR ? (size_t)str_len(moved)
+			: moved != NULL && moved->type == NT_TYPED ? nt_length(moved) : 0;
 		if (listy && !from->has_range) {
 			wv = made_list(w, 1);
 			wv->items[0] = moved;
@@ -451,71 +484,146 @@ static int shape(const nt_patch *p) {
 	return 1;
 }
 
+// the new content takes its references: a made value is held by its parent, a shared one gets
+// one more holder
+static void hold(work *w, nt_value *v) {
+	if (v == NULL) return;
+	if (!pset_has(&w->made, v)) {
+		nt_ref(v);
+		return;
+	}
+	for (size_t i = 0; i < v->count; i++) hold(w, v->items[i]);
+}
+
+// a children list's content, as nt_values: an id a string, a symbol a null of its own
+static nt_value *list_in(work *w, const nd_list *l) {
+	size_t n = l ? l->length : 0;
+	nt_value *r = made_list(w, n);
+	for (size_t i = 0; i < n; i++) {
+		nt_value *v = l->items[i].id ? nt_str(l->items[i].id) : nt_null();
+		v->num = (double)i;
+		pset_add(&w->given, v);
+		r->items[r->count++] = v;
+	}
+	return r;
+}
+// still a list, of ids and symbols it held
+static void list_ok(work *w) {
+	if (w->root == NULL) return;
+	if (!is_list(w->root)) fail(w, MU_WRONG_KIND);
+	for (size_t i = 0; i < w->root->count; i++) {
+		nt_value *v = w->root->items[i];
+		if (!pset_has(&w->given, v) && v->type != NT_STR) fail(w, MU_WRONG_KIND);
+	}
+}
+// and back, with the alloc; an item kept keeps its pointers
+static nd_list *list_out(work *w, const nd_list *was, const mu_alloc *alloc) {
+	nd_list *l = alloc->alloc(alloc->ctx, sizeof *l);
+	size_t n = w->root->count;
+	nd_item *items = n ? alloc->alloc(alloc->ctx, n * sizeof *items) : NULL;
+	for (size_t i = 0; i < n; i++) {
+		nt_value *v = w->root->items[i];
+		if (pset_has(&w->given, v)) items[i] = was->items[(size_t)v->num];
+		else {
+			char *id = alloc->alloc(alloc->ctx, v->bytes + 1);
+			memcpy(id, v->str, v->bytes + 1);
+			items[i] = (nd_item){id, NULL};
+		}
+	}
+	*l = (nd_list){items, n};
+	return l;
+}
+// what the call made, and a children list's items as given, let go of; values given never
+static void let_go(work *w) {
+	for (size_t j = 0; j < w->made.cap; j++)
+		if (w->made.slots[j] != NULL && w->made.slots[j] != GONE) shell_free((nt_value *)w->made.slots[j]);
+	for (size_t j = 0; j < w->given.cap; j++)
+		if (w->given.slots[j] != NULL && w->given.slots[j] != GONE) nt_free((nt_value *)w->given.slots[j]);
+	free(w->made.slots);
+	free(w->given.slots);
+}
+
 int mu_mutate(nd_node *node, mu_which which, const nt_patch *patches, size_t n, const void *change,
 	const mu_alloc *alloc, const mu_patched *patched, size_t *failed) {
 	// the object's versions on the node
+	int list = which.kind == MU_CHILDREN;
+	nd_entry **entries = list ? &node->children : &node->info;
+	size_t *entries_length = list ? &node->children_length : &node->info_length;
 	nd_object *obj = &node->value;
 	nd_entry *entry = NULL;
-	if (which.kind == MU_INFO) {
-		for (size_t i = 0; i < node->info_length; i++)
-			if (strcmp(node->info[i].name, which.name) == 0) entry = &node->info[i];
+	if (which.kind != MU_VALUE) {
+		for (size_t i = 0; i < *entries_length; i++)
+			if (strcmp((*entries)[i].name, which.name) == 0) entry = &(*entries)[i];
 		obj = entry ? &entry->object : NULL;
 	}
 	size_t had = obj ? obj->length : 0;
 	const nd_version *before = obj ? obj->versions : NULL;
 
-	work w = {.root = had ? (nt_value *)before[0].content : NULL, .tell = patched != NULL};
+	work w = {.root = had && !list ? (nt_value *)before[0].content : NULL, .list = list,
+		.tell = patched != NULL};
 	mu_facts *seen = patched && n ? grab(NULL, n * sizeof *seen) : NULL;
 	volatile size_t i = 0;
 	if (setjmp(w.jump)) {
 		// what was made here is left to go
-		for (size_t j = 0; j < w.made.cap; j++) {
-			if (w.made.slots[j] != NULL && w.made.slots[j] != GONE) shell_free((nt_value *)w.made.slots[j]);
-		}
-		free(w.made.slots);
+		let_go(&w);
 		free(seen);
 		if (failed) *failed = i;
 		return w.code;
 	}
+	// a list starts as []
+	if (list) w.root = list_in(&w, had ? before[0].content : NULL);
 	for (; i < n; i++) {
 		if (!shape(&patches[i])) fail(&w, MU_NOT_A_PATCH);
 		mu_facts f = {0};
 		apply(&w, &patches[i], &f);
+		if (list) list_ok(&w);
 		if (seen) seen[i] = f;
 	}
-	free(w.made.slots);
 
-	// the new versions: the first becomes the new content, the rest as they were
+	// the new versions: the first becomes the new content, the rest as they were. a list left
+	// with nothing: its first removed
+	int gone = w.root == NULL || (list && w.root->count == 0);
+	const void *content = NULL;
+	if (!gone && list) content = list_out(&w, had ? before[0].content : NULL, alloc);
+	else if (!gone) hold(&w, w.root);
 	size_t rest = had ? had - 1 : 0;
-	size_t count = rest + (w.root != NULL);
+	size_t count = rest + !gone;
 	nd_version *vs = NULL;
 	if (count) {
 		vs = alloc->alloc(alloc->ctx, count * sizeof *vs);
 		size_t at = 0;
-		if (w.root != NULL) {
-			vs[0] = (nd_version){.content = w.root, .change = change, .because = had ? before[0].because : NULL};
+		if (!gone) {
+			vs[0] = (nd_version){.content = content ? content : w.root, .change = change,
+				.because = had ? before[0].because : NULL};
 			at = 1;
 		}
 		if (rest) memcpy(vs + at, before + 1, rest * sizeof *vs);
+		// the new array's own holds of the contents it shares
+		for (size_t j = at; !list && j < count; j++) nt_ref((nt_value *)vs[j].content);
+	}
+	if (list) let_go(&w);
+	else {
+		free(w.made.slots);
+		free(w.given.slots);
 	}
 	if (which.kind == MU_VALUE) {
 		node->value = (nd_object){vs, count};
 	} else if (entry != NULL || count) {
 		// the entries array is made again, the old one left as it was
-		size_t at = entry ? (size_t)(entry - node->info) : node->info_length;
-		size_t total = node->info_length + (entry == NULL) - (count == 0);
+		size_t at = entry ? (size_t)(entry - *entries) : *entries_length;
+		size_t total = *entries_length + (entry == NULL) - (count == 0);
 		nd_entry *es = total ? alloc->alloc(alloc->ctx, total * sizeof *es) : NULL;
 		size_t m = 0;
-		for (size_t j = 0; j < node->info_length; j++) {
-			if (j != at) es[m++] = node->info[j];
-			else if (count) es[m++] = (nd_entry){node->info[j].name, {vs, count}};
+		for (size_t j = 0; j < *entries_length; j++) {
+			if (j != at) es[m++] = (*entries)[j];
+			else if (count) es[m++] = (nd_entry){(*entries)[j].name, {vs, count}};
 		}
 		if (entry == NULL) {
 			char *name = alloc->alloc(alloc->ctx, strlen(which.name) + 1);
 			es[m++] = (nd_entry){strcpy(name, which.name), {vs, count}};
 		}
-		node->info = es;
-		node->info_length = total;
+		*entries = es;
+		*entries_length = total;
 	}
 	if (patched != NULL && patched->fn != NULL) {
 		for (size_t j = 0; j < n; j++) patched->fn(patched->ctx, &patches[j], &seen[j], node->id, which);

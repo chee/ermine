@@ -14,7 +14,7 @@
 #   sh experimental_os/c/test/vnc_test.sh
 set -e
 here="$(cd "$(dirname "$0")" && pwd)"
-bin="$here/../../mac/build/test/headless"
+bin="${HEADLESS:-$here/../../mac/build/test/headless}"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/ermine-vnc-test-XXXXXX")"
 out="$tmp/out" err="$tmp/err"
 OPENSSL="${OPENSSL:-$(brew --prefix openssl@3 2>/dev/null)/bin/openssl}"
@@ -89,9 +89,9 @@ newest() {
 # the screen's top left in a shot: the window's content, the session's picture in it
 origin() {
 	from=$(size "$out")
-	echo "cat /dev/display/windows" >&3
-	waitfor "$out" "$name" "$from" 50
-	geo=$(last | perl -ne 'if (/"'"$name"'":\{([^}]*)\}/) { my $g = $1; my ($x) = $g =~ /"x":(-?\d+)/; my ($y) = $g =~ /"y":(-?\d+)/; print "$x $y" }')
+	echo "cat /dev/display/windows/$name" >&3
+	waitfor "$out" '"x":' "$from" 50
+	geo=$(last | perl -ne '1 while s/(?<=.)\{[^{}]*\}/0/; if (/"x":(-?\d+)/) { my $x = $1; my ($y) = /"y":(-?\d+)/; print "$x $y" }')
 	from=$(size "$out")
 	echo "cat /dev/vnc/sessions/$name" >&3
 	waitfor "$out" '"state"' "$from" 50
@@ -263,11 +263,12 @@ same "resized again"
 
 # --- the window resized: the view follows it
 run "call /apps/vnc/$pid/on/menu \"fit\"" "" "Fit again"
-run "wm window resize 600 360" "" "the window resized"
+run "wm resize $name 600 360" "" "the window resized"
 sleep 0.8
 run "cat /dev/vnc/views/$name" '"w":600' "the view, as wide as the window"
-run "cat /dev/vnc/sessions/$name" '"scale":1.75' "fit: the scale follows (300 × 180 in 600 × 315)"
-same=$(last)
+vh=$(last | perl -ne 'print $1 if /"h":(\d+)/')
+want=$(perl -e "my \$a = 600 / 300; my \$b = $vh / 180; print 0 + sprintf('%.3f', \$a < \$b ? \$a : \$b)")
+run "cat /dev/vnc/sessions/$name" "\"scale\":$want[,}]" "fit: the scale follows (300 × 180 in 600 × $vh)"
 
 # --- the sheet over a live screen: the plane let go while it is up, back after
 run "call /apps/vnc/$pid/on/menu \"connect\"" "" "Connection › Connect…, while live"
@@ -361,6 +362,69 @@ hand '!post {"irq": 34, "event": "key", "down": true, "code": 55, "key": "Meta",
 hand '!post {"irq": 34, "event": "key", "down": false, "code": 55, "key": "Meta", "text": "", "mods": [], "repeat": false}'
 heard "key 1 0xffe9" "cmd to a Mac: Alt_L" "$at"
 grep -rq "wonder land" "$tmp/sd" && bad "alice's password is on the card" || ok "alice's password is nowhere on the card"
+
+# --- Remember password: the Mac's keychain (headless keeps one in memory, says each act by its account)
+# the sheet's checkbox clicked, found in the window's access tree
+remember() {
+	from=$(size "$out")
+	echo "cat /dev/display/windows/$name" >&3
+	waitfor "$out" '"x":' "$from" 50
+	geo=$(last | perl -ne '1 while s/(?<=.)\{[^{}]*\}/0/; if (/"x":(-?\d+)/) { my $x = $1; my ($y) = /"y":(-?\d+)/; print "$x $y" }')
+	from=$(size "$out")
+	echo "cat /dev/display/layers/$name" >&3
+	waitfor "$out" '"access"' "$from" 50
+	at=$(last | grep '"access"' | python3 -c 'import json, sys
+def walk(n):
+	for k in n:
+		if k.get("role") == "checkbox": return k
+		f = walk(k.get("children", []))
+		if f: return f
+k = walk(json.loads(sys.stdin.readline())["access"])
+print(k["x"] + 4, k["y"] + 4)')
+	hand "!click $(( ${geo% *} + ${at% *} )) $(( ${geo#* } + ${at#* } ))"
+}
+serve f --version 3.8 --security vnc --password kept42 --w 120 --h 80
+run "wm run vnc 127.0.0.1:$port" "" "a server wanting a password, to remember"
+sleep 1
+run "ls /dev/vnc/sessions" "vnc-" "sessions"
+newest
+pid="@${name#vnc-}"
+run "cat /dev/vnc/sessions/$name" '"state":"password"' "it waits for a password"
+remember
+run "cat /apps/vnc/$pid/view" '"remember":true' "Remember password, checked"
+echo "!type kept42" >&3
+sleep 0.4
+at=$(size "$err")
+echo "!key Enter" >&3
+heard "auth ok" "taken"
+if waitfor "$err" "\[keychain\] set 127.0.0.1:$port" "$at" 50; then ok "live: the password kept in the keychain, as 127.0.0.1:$port"; else bad "not kept in the keychain"; fi
+run "cat /apps/vnc/connections/$pid" '"remember":true' "the connection remembers"
+run "call /apps/vnc/$pid/on/menu \"disconnect\"" "" "Disconnect"
+sleep 0.4
+at=$(size "$err") seen=$(size "$log")
+run "call /apps/vnc/$pid/on/menu \"connect\"" "" "Connect…, no password typed"
+hand "!key Enter"
+if waitfor "$err" "\[keychain\] get 127.0.0.1:$port (found)" "$at" 50; then ok "the keychain asked first"; else bad "the keychain not asked"; fi
+heard "auth ok" "its password taken" "$seen"
+sleep 0.4
+run "cat /dev/vnc/sessions/$name" '"state":"live"' "live, nothing typed"
+run "cat /apps/vnc/$pid/view" '"sheet":null' "and no sheet"
+grep -rq kept42 "$tmp/sd" && bad "the kept password on the card" || ok "the kept password nowhere on the card"
+grep -q kept42 "$out" "$err" && bad "the kept password in the log" || ok "nor in the OS's log"
+# unchecked: asked again, then taken out of the keychain once live
+run "call /apps/vnc/$pid/on/menu \"disconnect\"" "" "Disconnect"
+sleep 0.4
+run "call /apps/vnc/$pid/on/menu \"connect\"" "" "Connect…"
+remember
+run "cat /apps/vnc/$pid/view" '"remember":false' "Remember password, unchecked"
+hand "!key Enter"
+sleep 0.6
+run "cat /dev/vnc/sessions/$name" '"state":"password"' "the keychain not asked: a password wanted"
+echo "!type kept42" >&3
+sleep 0.4
+at=$(size "$err")
+echo "!key Enter" >&3
+if waitfor "$err" "\[keychain\] drop 127.0.0.1:$port" "$at" 50; then ok "live: taken out of the keychain"; else bad "not taken out"; fi
 
 # --- RFB 3.3, None
 serve e --version 3.3 --security none --w 100 --h 80

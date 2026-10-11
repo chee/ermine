@@ -27,6 +27,7 @@ watches the store's saves.
 | platform.h, platform_posix.c | the host's hooks: memory, randomness, clock, log, abort |
 | transport.h, websocket.c, transport_openssl.c | a WebSocket client (RFC 6455) in portable C over a stream; the desktop stream (POSIX sockets, OpenSSL) |
 | smoke.c | the library linked and alive: a commit stored and read back, no network |
+| conformance/ | `make test`: src/store.rs against Subduction's storage conformance helpers over both C stores, src/memory.rs over a word-aligned malloc, and the C ABI's and stores' own checks |
 
 **BLAKE3 twice.** The library carries its own BLAKE3, which exports the same
 `blake3_*` symbols as `newcore/c/blake3`. A program linking both renames the

@@ -14,7 +14,9 @@
     "npm:@lezer/highlight@1": "1.2.5",
     "npm:@noble/curves@1.9.7": "1.9.7",
     "npm:@noble/hashes@1.8.0": "1.8.0",
+    "npm:@preact/signals-core@1.14.4": "1.14.4",
     "npm:@preact/signals@2": "2.11.3_preact@10.29.8",
+    "npm:alien-signals@3.1.2": "3.1.2",
     "npm:codemirror@6": "6.0.2",
     "npm:fake-indexeddb@6": "6.2.5",
     "npm:linkedom@*": "0.18.13",
@@ -166,6 +168,9 @@
         "@preact/signals-core",
         "preact"
       ]
+    },
+    "alien-signals@3.1.2": {
+      "integrity": "sha512-d9dYqZTS90WLiU0I5c6DHj/HcKkF8ZyGN3G5x8wSbslulz70KOxaqCT0hQCo9KOyhVqzqGojvNdJXoTumZOtcw=="
     },
     "boolbase@2.0.0": {
       "integrity": "sha512-DkVaaQHymRhpYEYo9x1oo7Q7B0Y6KJUsjm3c9eTyFDby4MHLBTwZ6ZDWBel5zrYxj1WsZgC5oLpiz+93MluXeA=="

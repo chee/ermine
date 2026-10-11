@@ -54,7 +54,7 @@ struct Host {
 	ErmInterface graph, kept, protect, wrapped, top;
 	ErmSchedule *schedule;
 	ErmSync *sync;
-	Json *machine, *person, *personAgent, *site;
+	Json *machine, *person, *personAgent;
 	char *user;
 	ErmTime base, last;
 	int64_t started;    // µs, CLOCK_MONOTONIC, at boot
@@ -63,7 +63,10 @@ struct Host {
 	bool running;
 	ERM_LIST(Held) held;
 	Json *rules;        // /etc/rules as last read
+	ErmTime rulesAt;    // the graph's last time when it was read; -1: never
 	ErmRules may;
+	ErmCodeOf code;     // the reference code, which findCode wraps
+	Json *finding;      // the program path being found, while its loader loads
 	ERM_LIST(PlaneSource) planes; // hostPlanes'
 };
 
@@ -93,6 +96,25 @@ static int64_t monotonic(void) {
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
+/** a site, by where __FILE__ points and the line: the same value for one place, so a change's header costs no making */
+Json *hostSite(const char *file, int line, const char *function) {
+	static struct { const char *file; int line; Json *site; } sites[512];
+	unsigned k = (unsigned)(((uintptr_t)file >> 3) * 31 + (unsigned)line) % 512;
+	for (int i = 0; i < 512; i++, k = (k + 1) % 512) {
+		if (sites[k].file == file && sites[k].line == line) return sites[k].site;
+		if (sites[k].file) continue;
+		const char *at = NULL; // the last: a build's staged tree is inside another experimental_os/
+		for (const char *f = file; (f = strstr(f, "experimental_os/")); f++) at = f;
+		Json *site = jsonObject();
+		jsonAdd(site, "file", jsonString(at ? at : file));
+		jsonAdd(site, "line", jsonInteger(line));
+		jsonAdd(site, "function", jsonString(function));
+		sites[k].file = file, sites[k].line = line, sites[k].site = site;
+		return site;
+	}
+	return keyed("file", jsonString(file));
 }
 
 const ErmosConfig *hostConfig(Host *h) {
@@ -178,11 +200,11 @@ static Json *okOf(const ErmOp *op, const ErmResult *r) {
 }
 
 /** an operation through iface, with fields as a request's, as agent; changes carry the host's site */
-static ErmErr operate(Host *h, ErmInterface iface, Json *agent, const char *name, Json *fields, Json **out) {
+static ErmErr operate(ErmInterface iface, Json *site, Json *agent, const char *name, Json *fields, Json **out) {
 	*out = NULL;
 	ErmOpKind kind = kindOf(name);
 	if (kind == ERM_OPS) return ermDetail(ermInvalid("unsupported"), "op", jsonString(name));
-	if (ermOpIsChange(kind) && !jsonGet(fields, "site")) jsonAdd(fields, "site", jsonShallow(h->site));
+	if (ermOpIsChange(kind) && !jsonGet(fields, "site")) jsonAdd(fields, "site", site);
 	// a place with a value and no id is a making: the sync wrapper gets its id from the folder's lock (SYNC.tex, Making and mounting)
 	bool making = kind == ERM_OP_PLACE && !jsonGet(fields, "id") && jsonGet(fields, "value");
 	if (making) jsonAdd(fields, "id", jsonString(""));
@@ -201,7 +223,7 @@ static ErmErr operate(Host *h, ErmInterface iface, Json *agent, const char *name
 	return err;
 }
 
-ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) {
+ErmErr hostDoAt(Host *h, Json *site, Json *agent, const char *name, Json *fields, Json **out) {
 	*out = NULL;
 	if (!agent) agent = h->machine;
 	ErmRequest request = { fields, false, ermOk() };
@@ -213,7 +235,7 @@ ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) 
 		Json *program = ermRequestField(&request, "program", true);
 		const char *pname = ermRequestText(&request, "name", false, true);
 		const char *id = ermRequestText(&request, "id", false, false);
-		ErmStamp stamp = { .site = h->site };
+		ErmStamp stamp = { .site = site };
 		ErmResult r = { 0 };
 		// through the wrapper, which follows a document whose id the start gave
 		err = request.err.kind ? request.err : ermSyncStart(h->sync, &ctx, &stamp, &address, program, pname, id, &r);
@@ -224,12 +246,12 @@ ErmErr hostDo(Host *h, Json *agent, const char *name, Json *fields, Json **out) 
 		err = request.err.kind ? request.err : ermScheduleCall(h->schedule, &ctx, &address, args);
 	} else if (strcmp(name, "replace") == 0) {
 		ErmAddress address = ermRequestAddress(&request, "address");
-		ErmStamp stamp = { .site = h->site };
+		ErmStamp stamp = { .site = site };
 		ErmResult r = { 0 };
 		err = request.err.kind ? request.err : ermScheduleReplace(h->schedule, &ctx, &stamp, &address, &r);
 		if (!err.kind) *out = ermChangeAnswer(&r);
 	} else {
-		err = operate(h, h->top, agent, name, fields, out);
+		err = operate(h->top, site, agent, name, fields, out);
 	}
 	ErmErr ended = ermScheduleEnd(h->schedule, true);
 	return err.kind ? err : ended;
@@ -258,14 +280,14 @@ static const char *nodeId(Host *h, Json *address) {
  * address reaches, so it is made on the keeper and never committed, and the
  * parts that read what it changed run again (SCHEDULER Arrivals)
  */
-ErmErr hostBare(Host *h, const char *name, Json *fields, Json **out) {
+ErmErr hostBareAt(Host *h, Json *site, const char *name, Json *fields, Json **out) {
 	*out = NULL;
 	ErmOpKind kind = kindOf(name);
 	if (ermOpIsChange(kind)) {
 		ErmRequest request = { fields, false, ermOk() };
 		ErmOp op;
 		ErmStamp stamp;
-		if (!jsonGet(fields, "site")) jsonAdd(fields, "site", jsonShallow(h->site));
+		if (!jsonGet(fields, "site")) jsonAdd(fields, "site", site);
 		ermRequestOp(&request, kind, false, false, &op, &stamp);
 		if (request.err.kind) return request.err;
 		const char *at = nodeId(h, jsonGet(fields, "address"));
@@ -279,22 +301,24 @@ ErmErr hostBare(Host *h, const char *name, Json *fields, Json **out) {
 		if (!err.kind) *out = r.change ? okOf(&op, &r) : jsonNull();
 		return err.kind ? err : ended;
 	}
-	return operate(h, h->kept, h->machine, name, fields, out);
+	return operate(h->kept, site, h->machine, name, fields, out);
 }
 
-static ErmErr bare(Host *h, const char *name, Json *fields) {
+static ErmErr bareAt(Host *h, Json *site, const char *name, Json *fields) {
 	Json *out = NULL;
-	return hostBare(h, name, fields, &out);
+	return hostBareAt(h, site, name, fields, &out);
 }
+#define bare(h, name, fields) bareAt(h, SITE, name, fields)
 
-static void place(Host *h, Json *at, const char *name, const char *id, Json *value, bool ephemeral) {
+#define place(h, ...) placeAt(h, SITE, __VA_ARGS__)
+static void placeAt(Host *h, Json *site, Json *at, const char *name, const char *id, Json *value, bool ephemeral) {
 	Json *f = jsonObject();
 	jsonAdd(f, "address", at);
 	jsonAdd(f, "name", jsonString(name));
 	jsonAdd(f, "id", jsonString(id));
 	jsonAdd(f, "value", value);
 	if (ephemeral) jsonAdd(f, "ephemeral", jsonBoolean(true));
-	ErmErr err = bare(h, "place", f);
+	ErmErr err = bareAt(h, site, "place", f);
 	if (err.kind) {
 		char *why = jsonPrint(err.why);
 		hostSay(h, "place %s: %s", name, why);
@@ -302,12 +326,17 @@ static void place(Host *h, Json *at, const char *name, const char *id, Json *val
 	}
 }
 
-/** the value the address reaches, read as the machine on the keeper */
+/** the value the address reaches, read as the machine on the keeper: the
+ * read's first item, as nodeId reads, with no answer made of it (protect
+ * asks for /etc/rules at every step of every walk) */
 static Json *peek(Host *h, Json *address) {
-	Json *f = keyed("address", address), *out = NULL;
-	if (operate(h, h->kept, h->machine, "read", f, &out).kind) return NULL;
-	Json *items = jsonGet(out, "items");
-	return items && items->array.count ? jsonGet(items->array.items[0], "value") : NULL;
+	ErmRequest request = { keyed("address", address), false, ermOk() };
+	ErmOp read = { .kind = ERM_OP_READ, .address = ermRequestAddress(&request, "address") };
+	if (request.err.kind) return NULL;
+	ErmCtx ctx = { .agent = h->machine };
+	ErmResult r = { 0 };
+	if (h->kept.vt->op(h->kept.self, &ctx, &(ErmStamp){ 0 }, &read, &r).kind || !r.items.count) return NULL;
+	return r.items.items[0].kind == ERM_ITEM_VALUE ? r.items.items[0].value : NULL;
 }
 
 // --- protect: /etc/rules, read again when it changes
@@ -317,7 +346,10 @@ static ErmAnswer may(void *data, Json *agent, const char *process, const char *o
 	// the lock's first, naming the document's access node as what it read (SYNC.tex, The access node), then the rules'
 	ErmAnswer lock = ermSyncMay(h->sync, agent, process, op, args);
 	if (lock.kind != ERM_YES) return lock;
-	Json *list = peek(h, names("/", "etc", "rules", NULL));
+	// read again only when the graph changed since (ermGraphLast rises with every change)
+	ErmTime now = ermGraphLast(h->graph);
+	Json *list = h->rulesAt == now ? h->rules : peek(h, names("/", "etc", "rules", NULL));
+	h->rulesAt = now;
 	if (list != h->rules) {
 		h->rules = list;
 		h->may.list = NULL;
@@ -617,6 +649,39 @@ static void moment(void *data, Json *m) {
 // --- the scheduler's top: the sync wrapper, which is made over the scheduler, so after it
 
 /**
+ * Whether a change goes beneath the sync wrapper. One on an ephemeral node
+ * under an ephemeral node (a driver's mirror, a program's window) makes no
+ * commit: the wrapper would only send a presence message, dropped unless
+ * the document it is under is synced (peer.c messages), and show the sync
+ * process's value again. So unless the route to it passes a document synced
+ * now, it goes beneath the wrapper, to protect. The node (a write) or the
+ * parent (a place of an ephemeral node, an unplace) is looked at bare,
+ * through the keeper, what that read allocates let go. A place by name, a
+ * document, always goes through.
+ */
+static bool beneath(Host *h, const ErmCtx *ctx, const ErmOp *op) {
+	if (!h->wrapped.vt) return false;
+	bool parent = op->kind == ERM_OP_PLACE || op->kind == ERM_OP_UNPLACE;
+	if (op->kind == ERM_OP_PLACE && !op->ephemeral) return false;
+	if (!parent && op->kind != ERM_OP_WRITE) return false;
+	ErmOp read = { .kind = ERM_OP_READ, .address = op->address };
+	ErmCtx rc = { .agent = h->machine, .process = ctx->process, .at = ctx->at };
+	ErmResult r = { 0 };
+	bool bare = false;
+	if (!h->kept.vt->op(h->kept.self, &rc, &(ErmStamp){ 0 }, &read, &r).kind && r.items.count == 1 && r.items.items[0].kind == ERM_ITEM_VALUE) {
+		ErmItem *item = &r.items.items[0];
+		bare = item->ephemeral;
+		for (int i = 0; bare && item->ups < 0 && i < item->route.count; i++) {
+			if (peerLinked(h, item->route.items[i].node)) bare = false;
+		}
+	}
+	// a value item's route is its own copy of the steps (graph.c routeWith), what the steps hold is shared
+	if (r.items.count == 1 && r.items.items[0].kind == ERM_ITEM_VALUE && r.items.items[0].ups < 0) free(r.items.items[0].route.items);
+	free(r.items.items);
+	return bare;
+}
+
+/**
  * A program's making: the scheduler reads a place's fields as a request's,
  * which name an id, so a program gives "" for a node it makes by name, and it
  * goes on to the wrapper with none, as the conformance harness's making does
@@ -625,7 +690,7 @@ static void moment(void *data, Json *m) {
  */
 static ErmErr laterOp(void *self, const ErmCtx *ctx, const ErmStamp *stamp, const ErmOp *op, ErmResult *out) {
 	Host *h = self;
-	ErmInterface to = h->wrapped.vt ? h->wrapped : h->protect;
+	ErmInterface to = h->wrapped.vt && !beneath(h, ctx, op) ? h->wrapped : h->protect;
 	if (op->kind == ERM_OP_PLACE && op->id && !*op->id && op->value && !op->ephemeral) {
 		ErmOp making = *op;
 		making.id = NULL;
@@ -642,13 +707,38 @@ static void laterForget(void *self, const char *reader) {
 
 static const ErmVtable laterVtable = { laterOp, laterForget };
 
+/** the reference code, the path it finds held for the loader (hostFinding) */
+static ErmFound findCode(void *data, const char *pid, Json *path, const ErmPartApi *view) {
+	Host *h = data;
+	Json *was = h->finding;
+	h->finding = path;
+	ErmFound found = h->code.find(h->code.data, pid, path, view);
+	h->finding = was;
+	return found;
+}
+
+char *hostFinding(Host *h) {
+	Json *p = h->finding;
+	if (!jsonIsArray(p)) return NULL;
+	size_t n = 1;
+	for (int i = 0; i < p->array.count; i++) n += strlen(jsonText(p->array.items[i]) ? jsonText(p->array.items[i]) : "") + 1;
+	char *t = calloc(n, 1);
+	for (int i = 0; i < p->array.count; i++) {
+		const char *s = jsonText(p->array.items[i]);
+		if (!s) continue;
+		if (*t && strcmp(s, "/") && t[strlen(t) - 1] != '/') strcat(t, "/");
+		strcat(t, s);
+	}
+	return t;
+}
+
 // --- booting
 
 Host *hostBoot(const ErmosConfig *config) {
 	Host *h = calloc(1, sizeof *h);
+	h->rulesAt = -1;
 	h->config = *config;
 	h->started = monotonic();
-	h->site = parse("{\"file\": \"experimental_os/c/host.c\", \"line\": 1}");
 	char *why = NULL;
 	h->dt = config->dt ? jsonParse(config->dt, strlen(config->dt), &why) : NULL;
 	if (!jsonIsObject(h->dt)) {
@@ -687,9 +777,10 @@ Host *hostBoot(const ErmosConfig *config) {
 	loaders[0] = (ErmLoader){ "c", h, loadC };
 	loaders[1] = jsLoader(h);
 	loaders[2] = execLoader(h);
+	h->code = ermReferenceCode(loaders, 3);
 	ErmScheduleOptions options = {
 		.graph = h->kept,
-		.code = ermReferenceCode(loaders, 3),
+		.code = { findCode, h },
 		.given = { "given", h, loadGiven },
 		.clock = { next, h },
 		.hooks = { moment, h },

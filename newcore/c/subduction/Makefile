@@ -8,6 +8,7 @@
 #   make fetch      download lib/ for this machine (gh, signed in to chee/ermine)
 #   make            smoke, linked against the library, and run
 #   make crate      build the library here instead, and its link.txt
+#   make test       conformance/: the Rust's checks (cargo) and the C's, against the library
 #   make clean
 
 CC ?= cc
@@ -43,6 +44,21 @@ else
 	./smoke
 endif
 
+# conformance/: src/store.rs against Subduction's storage conformance and src/memory.rs over a
+# word-aligned malloc (cargo, std); then the C: a port's erm_host_abort that returns must not
+# compile, NULL lists are refused, store_files.c syncs its folders, the portable C allocates only
+# through platform.h
+test: smoke
+	cd conformance && cargo test -q
+	@if $(CC) $(CFLAGS) -Werror -I. -c conformance/abort_returns.c -o /dev/null 2>/dev/null; then \
+		echo "abort_returns: an erm_host_abort that returns compiles" >&2; exit 1; else echo "abort_returns: refused"; fi
+	@mkdir -p build
+	$(CC) $(CFLAGS) -I. -o build/null_lists conformance/null_lists.c store_memory.c platform_posix.c $(LIBRARY) $(LINK)
+	build/null_lists
+	$(CC) $(CFLAGS) -I. -o build/files_sync conformance/files_sync.c platform_posix.c
+	build/files_sync
+	cd conformance && CC=$(CC) ./allocates.sh
+
 fetch:
 	@test -n "$(TARGET)" || { echo "no pack is built for $(UNAME): make crate" >&2; exit 1; }
 	@mkdir -p build
@@ -61,4 +77,4 @@ crate:
 clean:
 	rm -rf build smoke
 
-.PHONY: fetch crate clean
+.PHONY: test fetch crate clean

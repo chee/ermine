@@ -44,6 +44,9 @@ run() {
 also() {
 	if tail -c +"$((from + 1))" "$out" | perl -pe 's/\e\[[0-9;]*m//g' | grep -q -- "$1"; then ok "$2"; else bad "$2 (wanted $1)"; fi
 }
+none() {
+	if tail -c +"$((from + 1))" "$out" | perl -pe 's/\e\[[0-9;]*m//g' | grep -q -- "$1"; then bad "$2 (did not want $1)"; else ok "$2"; fi
+}
 # hand "line": typed, nothing to wait for but a moment
 hand() {
 	echo "$1" >&3
@@ -72,13 +75,16 @@ waitfor "$err" '"op":"web","id":"web-@*[0-9]*-0","path":"[^"]*ermine-[0-9]*.web.
 name=$(perl -ne 'print "$1\n" if /"op":"web","id":"(web-\@?\d+-0)","path"/' "$err" | tail -1)
 waitfor "$err" "\[webshow\] $name 720x[0-9]*" "$from" 100 && ok "webshow: the compositor tells the page its size" || bad "no webshow"
 sleep 0.5
-run "cat /dev/web/pages/$name" '"frame":{"h":[0-9]*,"n":1,"w":720,"plane":[0-9]*}' "the page's frame, in its node"
-also '"title":"example.org"' "the page's title"
+run "cat /dev/web/pages/$name/frame" '{"h":[0-9]*,"n":1,"w":720,"plane":[0-9]*}' "the page's frame, in its own node"
+run "cat /dev/web/pages/$name" '"title":"example.org"' "the page's title"
+none '"frame"' "no frame in the page's node"
 grep -q '"op":"overlay"\|"op":"webmirror"' "$err" && bad "an overlay or webmirror sent" || ok "no overlay, no webmirror"
 
 # where the window is: its page's top left on the screen
-run "cat /dev/display/windows" "browser-" "the window, in /dev/display/windows"
-geo=$(last | perl -ne 'if (/"browser-\@?\d+":\{([^}]*)\}/) { my $g = $1; my ($x) = $g =~ /"x":(-?\d+)/; my ($y) = $g =~ /"y":(-?\d+)/; print "$x $y" }')
+run "ls /dev/display/windows" "browser-" "the window, in /dev/display/windows"
+layer=$(last | perl -ne 'print "$1\n" if /^(browser-\@?\d+)\s/' | head -1)
+run "cat /dev/display/windows/$layer" '"x":' "the window's own node"
+geo=$(last | perl -ne '1 while s/(?<=.)\{[^{}]*\}/0/; if (/"x":(-?\d+)/) { my $x = $1; my ($y) = /"y":(-?\d+)/; print "$x $y" }')
 lx=${geo% *} ly=${geo#* }
 [ -n "$lx" ] && ok "the window at $lx,$ly" || bad "no window place"
 
@@ -99,7 +105,7 @@ n=$(count "$tmp/b.ppm" cc0000)
 [ "$n" = 2000 ] && ok "the dirty rectangle drawn: 50 × 40" || bad "the dirty rectangle: $n pixels of cc0000, wanted 2000"
 painted=$(perl -ne 'print "$1\n" if /\[stats\] page (?:layers|flip): \d+, \d+ bytes, (\d+) pixels/' "$err" | tail -1)
 [ -n "$painted" ] && [ "$painted" -le 4000 ] && ok "only the dirty rectangle painted ($painted pixels)" || bad "painted ${painted:-?} pixels for a 2000-pixel change"
-run "cat /dev/web/pages/$name" '"dirty":{"h":40,"w":50,"x":10,"y":20}' "the frame's dirty, in the page's node"
+run "cat /dev/web/pages/$name/frame" '"dirty":{"h":40,"w":50,"x":10,"y":20}' "the frame's dirty, in its node"
 
 # --- input: what the window is given over the page goes to the page, in its pixels
 px=$((lx + 100)) py=$((ly + 200))
@@ -205,6 +211,10 @@ run "cat /apps/browser/$pid/view" '"here":{}' "forward: the newest, e"
 # the popup: every tab's history, searched
 hand "!key y cmd"
 run "ls /dev/display/layers" "browser-$pid-history" "cmd-y: the history popup, a layer of its own"
+run "cat /dev/display/layers/browser-$pid-history" '"e.org"' "the popup's entries"
+# each row's leftmost address or title, the row found by its address
+set -- $(last | perl -ne 'while (/"x":(\d+),"y":(\d+),"op":"text","clip":\{[^}]*\},"font":"[^"]*","text":"([^"]*\.org)"/g) { my ($x, $r, $t) = ($1, $2, $3); $l{$r} = $x if !defined $l{$r} || $x < $l{$r}; $y{$1} //= $r if $t =~ /^([bce])\.org$/ } END { print "$l{$y{b}} $l{$y{c}} $l{$y{e}}" }')
+[ "$#" = 3 ] && [ "$2" = "$3" ] && [ "$2" -gt "$1" ] && ok "the popup as History: c and e both set in under b" || bad "the popup's depths (b, c, e: $*)"
 echo "!type c.org" >&3
 sleep 0.5
 run "cat /dev/display/layers/browser-$pid-history" '"c.org"' "typed: the entries found"
@@ -238,6 +248,11 @@ run "ls /dev/display/layers" "history-@" "its layer"
 hl=$(last | perl -ne 'print "$1\n" if /^(history-\@\d+)\s/' | head -1)
 run "cat /dev/display/layers/$hl" '"e.org"' "every tab's entries, the branch too"
 also '"b2.org"' "the new tab's"
+# tab 0: example → b → c, back to b, on to e: b's fork, c then e, each set in one under it
+tree=$(last | grep '"title":"History"' | tail -1 | perl -ne 'while (/"x":(\d+),"y":\d+,"op":"text","clip":\{[^}]*\},"font":"text","text":"([bce])\.org"/g) { print "$2$1 " }')
+case "$tree" in "b"*" c"*" e"*) ;; *) tree= ;; esac
+set -- $tree
+[ -n "$tree" ] && [ "${2#c}" = "${3#e}" ] && [ "${2#c}" -gt "${1#b}" ] && ok "the tree: c then e, both set in under b" || bad "the tree's order (b, c, e: $tree)"
 # an older browser's window: its tabs inside its document, made nodes of their own once
 run 'mk /apps/browser/tabs/old {"tabs":[{"id":3,"url":"https://old.org","title":"Old","state":"c3Q="}],"at":0,"n":4,"closed":[{"url":"https://gone.org","title":"Gone","at":0}]}' "t=" "an older browser's window"
 from=$(size "$err")

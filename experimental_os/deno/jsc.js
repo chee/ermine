@@ -751,6 +751,12 @@
     selection: () => selection,
     type: () => type
   });
+  var CLIP = [
+    "/",
+    "dev",
+    "clip",
+    "text"
+  ];
   var NAMES = {
     Enter: "return",
     Tab: "tab",
@@ -1090,6 +1096,39 @@
         while (b < t.length && t[b] === " ") b++;
         return a === b ? f : change(f, t.slice(0, a) + t.slice(b), a);
       }
+      case "s-a":
+        return Object.assign(f, {
+          mark: 0,
+          pos: t.length,
+          goal: null
+        });
+      case "s-c":
+      case "s-x": {
+        if (!o.api) return null;
+        if (!sel) return f;
+        o.api.write({
+          address: CLIP,
+          patches: [
+            {
+              type: "snapshot",
+              value: {
+                text: t.slice(sel[0], sel[1])
+              }
+            }
+          ]
+        });
+        return c === "s-x" ? change(f, t.slice(0, sel[0]) + t.slice(sel[1]), sel[0]) : f;
+      }
+      case "s-v": {
+        if (!o.api) return null;
+        let text = o.api.read({
+          address: CLIP
+        })[0]?.value?.text;
+        if (typeof text !== "string") return f;
+        text = text.replace(/\r\n?/g, "\n");
+        if (!o.lines) text = text.trim().replace(/\s*\n\s*/g, " ");
+        return insert(f, text);
+      }
     }
     return null;
   }
@@ -1102,7 +1141,7 @@
     }
     if (!r.down) return null;
     const c = chord(r);
-    const typing = r.text && !/[\x00-\x1f\x7f\uf700-\uf8ff]/.test(r.text) && !/(^|-)[MCA]-/.test(c) && r.key !== "Enter" && r.key !== "Tab";
+    const typing = r.text && !/[\x00-\x1f\x7f\uf700-\uf8ff]/.test(r.text) && !/(^|-)[MCAs]-/.test(c) && r.key !== "Enter" && r.key !== "Tab";
     if (typing) return insert(field, r.text);
     return key(field, c, o);
   }
@@ -1111,12 +1150,19 @@
   var views_exports = {};
   __export(views_exports, {
     addressOf: () => addressOf,
+    away: () => away,
+    changes: () => changes,
     clock: () => clock,
+    did: () => did,
+    head: () => head,
+    ids: () => ids,
+    itemOf: () => itemOf,
     make: () => make,
     ops: () => ops,
     order: () => order,
     short: () => short,
     shown: () => shown,
+    site: () => site,
     size: () => size,
     who: () => who
   });
@@ -1158,7 +1204,10 @@
     ...v
   ];
   var shown = (a) => "/" + a.filter((n) => n !== "/").join("/");
-  var short = (pid) => typeof pid === "string" && pid.length > 9 && pid.startsWith("@") ? "@\u2026" + pid.slice(-6) : String(pid);
+  var short = (pid) => {
+    const p = typeof pid === "string" ? pid.replace(/\/[0-9a-f]{64}$/, "") : pid;
+    return typeof p === "string" && p.length > 9 && p.startsWith("@") ? "@\u2026" + p.slice(-6) : String(p);
+  };
   var isColour = (v, key2, ctx) => Number.isInteger(v) && v >= 0 && v <= 16777215 && (/colou?r|paper|ink|line|chrome|desk|grain|^bg$|^fg$|fill|^hi$|^lo$|select|lemon|cherry|rose|mint|lilac|sky|teal|peach|butter|riso|acme|^tag$|check|mark|swatch/i.test(String(key2 ?? "")) || ctx === "colors");
   var hex = (v, n = 6) => v.toString(16).padStart(n, "0");
   var bytesOf = (v) => v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
@@ -1193,8 +1242,201 @@
     const code = Array.isArray(a.code) ? [
       ...a.code
     ].reverse() : [];
-    const via = code.slice(0, 3).map((k) => `${short(pids[k.process] ?? k.process)}${k.handler ? " on/" + k.handler : k.run ? " run " + k.run : ""}`);
+    const via = code.slice(0, 3).map((k) => `${short(pids[k.process] ?? pids[k.program?.node] ?? k.process)}${k.handler ? " on/" + k.handler : k.run ? " run " + k.run : ""}`);
     return `${typeof a.actor === "string" ? a.actor : typeof a === "string" ? a : "?"}${via.length ? " via " + via.join(" \u2190 ") : ""}${code.length > 3 ? " \u2190 \u2026" : ""}`;
+  };
+  var site = (s) => s && typeof s.file === "string" ? `${s.file}${s.line != null ? ":" + s.line : ""}` : null;
+  var head = (i, o = {}) => {
+    const c = i?.change;
+    if (!c) return "no change: the root's first value";
+    const k = i.commit;
+    const when = k && !i.ephemeral ? `#${k.lamport} \xB7 ${k.signer === o.device ? "this device" : String(k.signer ?? "?").slice(0, 8)}` : clock(c.time);
+    return [
+      when,
+      who(c, o.pids),
+      site(c.site)
+    ].filter(Boolean).join(" \xB7 ");
+  };
+  var ids = (api) => {
+    const pids = {};
+    const dir = (a) => {
+      try {
+        return api.directory({
+          address: a
+        }).directory ?? [];
+      } catch {
+        return [];
+      }
+    };
+    for (const [n, items] of dir([
+      "/",
+      "programs"
+    ])) for (const i of items) if (i.id) pids[i.id] = n;
+    for (const [n, items] of dir([
+      "/",
+      "drivers"
+    ])) for (const i of items) if (i.id) pids[i.id] = n;
+    for (const [app] of dir([
+      "/",
+      "apps"
+    ])) for (const [, items] of dir([
+      "/",
+      "apps",
+      app
+    ])) for (const i of items) if (i.ephemeral && i.id?.startsWith("@")) pids[i.id] = app;
+    for (const [n] of dir([
+      "/",
+      "dev",
+      "wm",
+      "client"
+    ])) {
+      try {
+        const v = api.read({
+          address: [
+            "/",
+            "dev",
+            "wm",
+            "client",
+            n
+          ]
+        })[0]?.value;
+        const start = v?.start ?? {}, program = Array.isArray(start.program) ? start.program.at(-1) : typeof start.program === "string" ? start.program.split("/").at(-1) : null;
+        if (v?.pid) pids[v.pid] = typeof start.name === "string" && !start.name.startsWith("@") ? start.name : program ?? n;
+      } catch {
+      }
+    }
+    let device;
+    try {
+      device = api.read({
+        address: [
+          "/",
+          "dev",
+          "sync",
+          "device"
+        ]
+      })[0]?.value?.key;
+    } catch {
+    }
+    return {
+      pids,
+      device
+    };
+  };
+  var did = (c) => {
+    if (c?.kind === "write") {
+      return (c.patches ?? []).map((p) => p.type === "snapshot" && !(p.path ?? []).length ? "snapshot" : `${p.type} ${[
+        ...p.path ?? [],
+        ...p.key !== void 0 ? [
+          p.key
+        ] : []
+      ].join(".")}`).join(", ") || "write";
+    }
+    return `${c?.kind ?? "?"}${c?.name !== void 0 ? " " + c.name : ""}`;
+  };
+  var itemOf = (c) => ({
+    change: {
+      time: c?.seen,
+      agent: c?.agent,
+      site: c?.site,
+      process: c?.process,
+      cause: c?.cause
+    },
+    commit: {
+      lamport: c?.lamport,
+      signer: c?.signer,
+      name: c?.commit
+    }
+  });
+  var changes = (h, key2 = []) => {
+    const cs = Array.isArray(h?.changes) ? h.changes : [];
+    const at = (v, k) => k.reduce((x, n) => x === null || x === void 0 ? void 0 : x[n], v);
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const on = (p) => {
+      const path = [
+        ...p.path ?? [],
+        ...p.key !== void 0 ? [
+          p.key
+        ] : []
+      ];
+      return path.every((n, i) => i >= key2.length || String(n) === String(key2[i])) || key2.every((n, i) => String(n) === String(path[i]));
+    };
+    const out = [];
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i], prev = i ? cs[i - 1] : null;
+      if (key2.length && c.kind !== "write") continue;
+      if (key2.length && "value" in c && (!prev || "value" in prev)) {
+        if (same(at(c.value, key2), prev ? at(prev.value, key2) : void 0)) continue;
+      } else if (key2.length && !(c.patches ?? []).some(on)) continue;
+      out.push(c);
+    }
+    return out.reverse();
+  };
+  var away = (address) => {
+    let doc = null, dir = null, docs = [], marked = /* @__PURE__ */ new Set();
+    const leave = (api) => {
+      if (dir === null || !doc) return;
+      const seen = {
+        ...doc.seen ?? {}
+      };
+      for (const d of docs) seen[d.id] = d.lamport;
+      const next = {
+        seen,
+        dirs: {
+          ...doc.dirs ?? {},
+          [dir]: true
+        }
+      };
+      if (JSON.stringify(next) === JSON.stringify(doc)) return;
+      try {
+        if (api.read({
+          address
+        }).length) api.write({
+          address,
+          patches: [
+            {
+              type: "snapshot",
+              value: next
+            }
+          ]
+        });
+        else {
+          if (!api.read({
+            address: address.slice(0, -1)
+          }).length) api.place({
+            address: address.slice(0, -2),
+            name: address.at(-2),
+            value: null
+          });
+          api.place({
+            address: address.slice(0, -1),
+            name: address.at(-1),
+            value: next
+          });
+        }
+        doc = next;
+      } catch {
+      }
+    };
+    return {
+      at(api, path, now) {
+        if (!doc) doc = api.read({
+          address
+        })[0]?.value ?? {
+          seen: {},
+          dirs: {}
+        };
+        const k = "/" + path.join("/");
+        if (k !== dir) {
+          leave(api);
+          const was = doc.seen ?? {};
+          marked = new Set(doc.dirs?.[k] ? now.filter((d) => was[d.id] === void 0 || d.lamport > was[d.id]).map((d) => d.id) : []);
+          dir = k;
+        }
+        docs = now;
+        return marked;
+      },
+      leave
+    };
   };
   var ops = (list) => {
     const n = {};
@@ -2194,9 +2436,683 @@
       short,
       clock,
       who,
+      head,
+      ids,
+      site,
+      did,
+      itemOf,
+      changes,
+      away,
       ops,
       size
     };
+  }
+
+  // experimental_os/deno/icons.ts
+  var icons_exports = {};
+  __export(icons_exports, {
+    clean: () => clean,
+    dropped: () => dropped,
+    folder: () => folder,
+    keyed: () => keyed,
+    layout: () => layout,
+    make: () => make2,
+    nearest: () => nearest,
+    spots: () => spots
+  });
+  var isPicture = (v) => v?.kind === "picture" && Array.isArray(v.rows);
+  var ICONS = {
+    folder: [
+      "................",
+      "................",
+      "..kkkkk.........",
+      ".kyyyyyk........",
+      "kkkkkkkkkkkkkkk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kyyyyyyyyyyyyyk.",
+      "kkkkkkkkkkkkkkk.",
+      "................",
+      "................"
+    ],
+    text: [
+      "..kkkkkkkkk.....",
+      "..kpppppppkk....",
+      "..kpppppppkpk...",
+      "..kpppppppkkkk..",
+      "..kpkkkkpppppk..",
+      "..kppppppppppk..",
+      "..kpkkkkkkkppk..",
+      "..kppppppppppk..",
+      "..kpkkkkkkpppk..",
+      "..kppppppppppk..",
+      "..kpkkkkkkkppk..",
+      "..kppppppppppk..",
+      "..kpkkkkkppppk..",
+      "..kppppppppppk..",
+      "..kkkkkkkkkkkk..",
+      "................"
+    ],
+    data: [
+      "..kkkkkkkkk.....",
+      "..kpppppppkk....",
+      "..kpppppppkpk...",
+      "..kpppppppkkkk..",
+      "..kppppppppppk..",
+      "..kppcpppcpppk..",
+      "..kpcppppcpppk..",
+      "..kpcpppppcppk..",
+      "..kcppppppcppk..",
+      "..kpcpppppcppk..",
+      "..kpcppppcpppk..",
+      "..kppcpppcpppk..",
+      "..kppppppppppk..",
+      "..kppppppppppk..",
+      "..kkkkkkkkkkkk..",
+      "................"
+    ],
+    program: [
+      ".......kk.......",
+      "......kcck......",
+      ".....kcccck.....",
+      "....kccppcck....",
+      "...kccpkkpcck...",
+      "..kccpkppkpcck..",
+      ".kccpkppppkpcck.",
+      "kccpkppppppkpcck",
+      "kccpkppppppkpcck",
+      ".kccpkppppkpcck.",
+      "..kccpkppkpcck..",
+      "...kccpkkpcck...",
+      "....kccppcck....",
+      ".....kcccck.....",
+      "......kcck......",
+      ".......kk......."
+    ],
+    trash: [
+      "................",
+      "......kkkk......",
+      "..kkkkkkkkkkkk..",
+      "..kppppppppppk..",
+      "..kkkkkkkkkkkk..",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "....kkkkkkkk....",
+      "................"
+    ],
+    full: [
+      "...kkkk.kkk.....",
+      "..kppppkpppk....",
+      "..kpkpkkppkpk...",
+      "..kkkkkkkkkkkk..",
+      "..kppppppppppk..",
+      "..kkkkkkkkkkkk..",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "...kpkpkpkpkk...",
+      "....kkkkkkkk....",
+      "................"
+    ],
+    pending: [
+      "..d.d.d.d.d.....",
+      "................",
+      "..d.......d.d...",
+      "................",
+      "..d.........d...",
+      "................",
+      "..d.........d...",
+      "................",
+      "..d.........d...",
+      "................",
+      "..d.........d...",
+      "................",
+      "..d.........d...",
+      "................",
+      "..d.d.d.d.d.d...",
+      "................"
+    ],
+    refused: [
+      "..kkkkkkkkk.....",
+      "..kpppppppkk....",
+      "..kpppppppkpk...",
+      "..kpppppppkkkk..",
+      "..kppppppppppk..",
+      "..kpcppppppcpk..",
+      "..kppcppppcppk..",
+      "..kpppcppcpppk..",
+      "..kppppccppppk..",
+      "..kpppcppcpppk..",
+      "..kppcppppcppk..",
+      "..kpcppppppcpk..",
+      "..kppppppppppk..",
+      "..kppppppppppk..",
+      "..kkkkkkkkkkkk..",
+      "................"
+    ]
+  };
+  var dark = (c) => (c >> 1 & 8355711) + (c >> 2 & 4144959);
+  function make2(blit, style) {
+    const C = style.colours;
+    const kind = (e) => {
+      const v = e.value;
+      if (e.name === "Trash" && e.at.join("/") === "home") return "trash";
+      if (e.kids) return "folder";
+      if (isPicture(v)) return "picture";
+      if (v?.kind === "app" && typeof v.run === "string") return "app";
+      if (v === null || v === void 0) return "folder";
+      if (typeof v === "string") return "text";
+      if (typeof v === "object" && ([
+        "js",
+        "c",
+        "exec",
+        "pty"
+      ].includes(v.kind) || v.loader)) return "program";
+      return "data";
+    };
+    const entry = (api, at, n, items) => {
+      const e = {
+        at,
+        name: n,
+        ids: items.map((x) => x.id),
+        e: items.some((x) => x.ephemeral),
+        kids: 0,
+        value: null
+      };
+      if (items.length && items.every((x) => x.pending)) return {
+        ...e,
+        kind: "pending"
+      };
+      try {
+        const it = api.read({
+          address: [
+            "/",
+            ...at,
+            n
+          ]
+        })[0];
+        e.value = it?.value ?? null;
+        e.commit = it && !it.ephemeral ? it.commit ?? null : null;
+        e.kids = (api.directory({
+          address: [
+            "/",
+            ...at,
+            n
+          ]
+        }).directory ?? []).length;
+      } catch {
+        return {
+          ...e,
+          kind: "refused"
+        };
+      }
+      return {
+        ...e,
+        kind: kind(e)
+      };
+    };
+    const describe = (e) => {
+      const more = [
+        e.ids.length > 1 ? `${e.ids.length} members` : null,
+        e.e ? "ephemeral" : null
+      ].filter((x) => x);
+      const what = {
+        folder: `folder, ${e.kids} ${e.kids === 1 ? "item" : "items"}${e.kids && e.value !== null ? ", with a value" : ""}`,
+        trash: e.kids ? `the Trash, ${e.kids} thrown away` : "the Trash, empty",
+        text: `note, ${e.value?.length ?? 0} characters`,
+        picture: `${e.value?.tile ? "pattern" : "picture"}, ${e.value?.rows?.[0]?.length ?? 0} \xD7 ${e.value?.rows?.length ?? 0}`,
+        program: `program (${e.value?.kind ?? e.value?.loader})`,
+        app: `application, runs ${e.value?.run}`,
+        data: "data",
+        pending: "arriving: it shows when it comes",
+        refused: "refused"
+      }[e.kind];
+      return [
+        what,
+        ...more
+      ].join(", ");
+    };
+    const art = (f, v, x, y, scale, clip) => {
+      v.rows.forEach((row, j) => {
+        let i = 0;
+        while (i < row.length) {
+          let k = i;
+          while (k < row.length && row[k] === row[i]) k++;
+          const color = v.colors?.[row[i]];
+          if (typeof color === "number") blit.fill(f, x + i * scale, y + j * scale, (k - i) * scale, scale, color, clip);
+          i = k;
+        }
+      });
+    };
+    const pattern = (v, scale) => {
+      const w = Math.max(...v.rows.map((r) => r.length)), h = v.rows.length;
+      const form = blit.form(w * scale, h * scale, C.desk);
+      v.rows.forEach((row, j) => [
+        ...row
+      ].forEach((ch, i) => {
+        const color = v.colors?.[ch];
+        if (typeof color === "number") blit.fill(form, i * scale, j * scale, scale, scale, color);
+      }));
+      return form;
+    };
+    const framed = (f, v, x, y, w, h) => {
+      const clip = {
+        x,
+        y,
+        w,
+        h
+      };
+      if (v.tile) return blit.tile(f, x, y, w, h, pattern(v, Math.max(1, Math.floor(w / 32))), "copy", clip);
+      const pw = Math.max(...v.rows.map((r) => r.length)), ph = v.rows.length;
+      const scale = Math.max(1, Math.floor(Math.min(w / pw, h / ph)));
+      art(f, v, x + Math.floor((w - pw * scale) / 2), y + Math.floor((h - ph * scale) / 2), scale, clip);
+    };
+    const icon = (f, e, x, y, on) => {
+      const u = style.u, S = 2 * u;
+      if (e.kind === "picture") {
+        blit.fill(f, x + S, y + S, 14 * S, 14 * S, on ? dark(C.paper) : C.paper);
+        framed(f, e.value, x + 2 * S, y + 2 * S, 12 * S, 12 * S);
+        blit.frame(f, x + S, y + S, 14 * S, 14 * S, C.line);
+        for (let i = 1; i < u; i++) blit.frame(f, x + S + i, y + S + i, 14 * S - 2 * i, 14 * S - 2 * i, C.line);
+        if (on) blit.fill(f, x + S, y + 15 * S, 14 * S, S, C.line);
+        return;
+      }
+      if (e.kind === "app" && isPicture(e.value.icon)) {
+        const v = e.value.icon;
+        art(f, on ? {
+          ...v,
+          colors: Object.fromEntries(Object.entries(v.colors ?? {}).map(([k, c]) => [
+            k,
+            dark(c)
+          ]))
+        } : v, x, y, S);
+        return;
+      }
+      const rows = ICONS[e.kind === "trash" && e.kids ? "full" : e.kind === "app" ? "program" : e.kind] ?? ICONS.data;
+      const tint = {
+        k: C.line,
+        p: C.paper,
+        y: C.lemon,
+        c: C.cherry,
+        d: C.dim
+      };
+      art(f, {
+        rows,
+        colors: Object.fromEntries(Object.entries(tint).map(([k, c]) => [
+          k,
+          on && k !== "k" ? dark(c) : c
+        ]))
+      }, x, y, S);
+      if (e.kind === "folder" && e.value !== null && e.kids) {
+        blit.fill(f, x + 9 * S, y + 6 * S, 5 * S, 6 * S, C.paper);
+        blit.frame(f, x + 9 * S, y + 6 * S, 5 * S, 6 * S, C.line);
+      }
+    };
+    const start = (api, folder2, program, d) => {
+      const op = {
+        address: [
+          "/",
+          "apps",
+          folder2
+        ],
+        program,
+        ...d ? {
+          data: d
+        } : {}
+      };
+      const launch = api.read({
+        address: [
+          "/",
+          "dev",
+          "wm",
+          "launch"
+        ]
+      })[0]?.value;
+      return Array.isArray(launch) ? api.call({
+        address: launch,
+        args: [
+          op
+        ]
+      }) : api.start(op);
+    };
+    const open = (api, path, e) => {
+      if (e.kind === "pending") return `${e.name} is still arriving`;
+      if (e.kind === "refused") return `${e.name}: refused`;
+      if (e.kind === "folder" || e.kind === "trash" || e.kind === "picture") start(api, "computer", "programs/computer", {
+        path
+      });
+      else if (e.kind === "app") {
+        const ctl = api.read({
+          address: [
+            "/",
+            "dev",
+            "wm",
+            "ctl"
+          ]
+        })[0]?.value;
+        if (!Array.isArray(ctl)) return `${e.name}: no window manager to run it`;
+        api.call({
+          address: ctl,
+          args: [
+            `run ${e.value.run}`
+          ]
+        });
+      } else if (path.join("/") === "etc/keys") start(api, "keys", "programs/keys");
+      else start(api, "edit", "programs/edit", {
+        path
+      });
+      return null;
+    };
+    const move = (api, e, to, toname, index) => {
+      const from = [
+        "/",
+        ...e.at
+      ];
+      if (e.e) return api.move({
+        address: from,
+        name: e.name,
+        id: e.ids[0],
+        to,
+        toname
+      });
+      api.place({
+        address: to,
+        name: toname,
+        id: e.ids[0],
+        ...index !== void 0 ? {
+          index
+        } : {}
+      });
+      return api.unplace({
+        address: from,
+        name: e.name,
+        id: e.ids[0]
+      });
+    };
+    const free = (api, at, n) => {
+      const names2 = (api.directory({
+        address: [
+          "/",
+          ...at
+        ]
+      }).directory ?? []).map(([k2]) => k2);
+      let k = n, i = 2;
+      while (names2.includes(k)) k = `${n} ${i++}`;
+      return k;
+    };
+    const link = (api, e, to, toname) => api.place({
+      address: to,
+      name: toname,
+      id: e.ids[0]
+    });
+    const into = (api, e, at, linked = false) => {
+      const n = free(api, at, e.name);
+      (linked ? link : move)(api, e, [
+        "/",
+        ...at
+      ], n);
+      return n;
+    };
+    return {
+      kind,
+      entry,
+      describe,
+      art,
+      pattern,
+      framed,
+      icon,
+      isPicture,
+      open,
+      start,
+      move,
+      free,
+      link,
+      into
+    };
+  }
+  function folder(api, path) {
+    if (!path.length) return "/";
+    try {
+      return api.directory({
+        address: [
+          "/",
+          ...path.slice(0, -1)
+        ],
+        name: path[path.length - 1]
+      }).items?.[0]?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+  var layout = {
+    /** a layout's address: an id is a name less its ermine:// (and any / in it) */
+    at: (id) => [
+      "/",
+      "apps",
+      "computer",
+      "layout",
+      id === "/" ? "root" : id.replace(/^ermine:\/\//, "").replaceAll("/", "\u2215")
+    ],
+    /** made the first time: /apps/computer/layout, a folder */
+    ready(api) {
+      if (!api.read({
+        address: [
+          "/",
+          "apps",
+          "computer",
+          "layout"
+        ]
+      }).length) api.place({
+        address: [
+          "/",
+          "apps",
+          "computer"
+        ],
+        name: "layout",
+        value: null
+      });
+    },
+    /** one icon's spot (points) in a folder's layout, its desk's or its icons: a drop from elsewhere, written once */
+    put(api, folder2, part, id, at) {
+      layout.ready(api);
+      const address = layout.at(folder2), was = api.read({
+        address
+      })[0]?.value;
+      if (was?.[part] && typeof was[part] === "object") api.write({
+        address,
+        patches: [
+          {
+            type: "set",
+            path: [
+              part
+            ],
+            key: id,
+            value: at
+          }
+        ]
+      });
+      else if (was) api.write({
+        address,
+        patches: [
+          {
+            type: "set",
+            path: [],
+            key: part,
+            value: {
+              [id]: at
+            }
+          }
+        ]
+      });
+      else api.place({
+        address: address.slice(0, -1),
+        name: address[address.length - 1],
+        value: {
+          [part]: {
+            [id]: at
+          }
+        }
+      });
+    }
+  };
+  function dropped(api, x, y, skip) {
+    const WINDOWS = [
+      "/",
+      "dev",
+      "display",
+      "windows"
+    ];
+    let best = null;
+    for (const [n] of api.directory({
+      address: WINDOWS
+    }).directory ?? []) {
+      const l = api.read({
+        address: [
+          ...WINDOWS,
+          n
+        ]
+      })[0]?.value;
+      if (!l || l.hidden || !l.w || l.title == null && n !== "desk") continue;
+      const f = l.parts?.frame ?? {
+        x: 0,
+        y: 0,
+        w: l.w,
+        h: l.h
+      };
+      if (x < l.x + f.x || x >= l.x + f.x + f.w || y < l.y + f.y || y >= l.y + f.y + f.h) continue;
+      if (!best || (l.z ?? 0) > (best.z ?? 0)) best = {
+        ...l,
+        name: n
+      };
+    }
+    if (!best || best.name === skip) return null;
+    if (best.name === "desk") return {
+      path: [
+        "home",
+        "desktop"
+      ],
+      layer: "desk",
+      desk: true
+    };
+    const o = best.owner;
+    if (!Array.isArray(o) || o.at(-2) !== "computer") return null;
+    const path = api.read({
+      address: [
+        ...o.slice(0, -1),
+        "at",
+        o.at(-1)
+      ]
+    })[0]?.value?.path;
+    return Array.isArray(path) ? {
+      path,
+      layer: best.name,
+      desk: false
+    } : null;
+  }
+  var overlaps = (a, b, cell) => Math.abs(a[0] - b[0]) < cell.w && Math.abs(a[1] - b[1]) < cell.h;
+  function keyed(entries) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const e of entries) {
+      const id = e.ids[0];
+      e.key = seen.has(id) ? `${id}#${e.name}` : id;
+      seen.add(id);
+    }
+    return entries;
+  }
+  function spots(ids2, saved, slot, cell) {
+    const out = /* @__PURE__ */ new Map(), taken = [];
+    for (const id of ids2) if (saved[id]) taken.push(saved[id]), out.set(id, saved[id]);
+    let i = 0;
+    for (const id of ids2) {
+      if (out.has(id)) continue;
+      let at = null;
+      for (; ; i++) {
+        const s = slot(i);
+        if (!s) {
+          at = slot(Math.max(0, i - 1)) ?? [
+            0,
+            0
+          ];
+          break;
+        }
+        if (!taken.some((t) => overlaps(t, s, cell))) {
+          at = s;
+          break;
+        }
+      }
+      taken.push(at);
+      out.set(id, at);
+    }
+    return out;
+  }
+  function clean(spots2, slot, cell) {
+    const slots = [];
+    for (let i = 0; slots.length < spots2.size * 4 + 16; i++) {
+      const s = slot(i);
+      if (!s) break;
+      slots.push(s);
+    }
+    const used = /* @__PURE__ */ new Set(), out = /* @__PURE__ */ new Map();
+    const order2 = [
+      ...spots2
+    ].sort(([, a], [, b]) => a[1] - b[1] || a[0] - b[0]);
+    for (const [id, [x, y]] of order2) {
+      let best = -1, d = Infinity;
+      slots.forEach(([sx, sy], k) => {
+        const dk = Math.hypot((sx - x) / cell.w, (sy - y) / cell.h);
+        if (!used.has(k) && dk < d) [best, d] = [
+          k,
+          dk
+        ];
+      });
+      if (best < 0) out.set(id, [
+        x,
+        y
+      ]);
+      else {
+        used.add(best);
+        out.set(id, slots[best]);
+      }
+    }
+    return out;
+  }
+  function nearest(spots2, from, dx, dy) {
+    const all = [
+      ...spots2
+    ];
+    if (!all.length) return null;
+    const at = from !== null ? spots2.get(from) : void 0;
+    if (!at) return [
+      ...all
+    ].sort(([, a], [, b]) => a[1] - b[1] || a[0] - b[0])[0][0];
+    let best = null, d = Infinity;
+    for (const [id, [x, y]] of all) {
+      if (id === from) continue;
+      const along = (x - at[0]) * dx + (y - at[1]) * dy, across = Math.abs((x - at[0]) * dy) + Math.abs((y - at[1]) * dx);
+      if (along <= 0) continue;
+      const dk = along + 2 * across;
+      if (dk < d) [best, d] = [
+        id,
+        dk
+      ];
+    }
+    return best ?? from;
   }
 
   // experimental_os/deno/tools.ts
@@ -2213,6 +3129,11 @@
   var mapping = null;
   function vram(f) {
     mapping = f;
+  }
+  var evaluate = (source, url) => (0, eval)(`${source}
+//# sourceURL=${url}`);
+  function evaluator(f) {
+    evaluate = f;
   }
   var Thrown = class extends Error {
     why;
@@ -2398,7 +3319,21 @@
           ...rest,
           program
         }));
-        if (data !== void 0) {
+        if (data !== void 0 && !answer.change) {
+          ask(pid, api, "write", up2({
+            address: [
+              ...rest.address,
+              String(rest.name ?? answer.id),
+              "data"
+            ],
+            patches: [
+              {
+                type: "snapshot",
+                value: data
+              }
+            ]
+          }));
+        } else if (data !== void 0) {
           const id = String(answer.change.id);
           const name = String(rest.name ?? id);
           ask(pid, api, "place", up2({
@@ -2496,6 +3431,7 @@
       },
       readline: readline_exports,
       views: views_exports,
+      icons: icons_exports,
       front
     };
   }
@@ -2673,7 +3609,10 @@
     if ("load" in frame) {
       try {
         const body = String(frame.source).replace(/\bexport\s+default\s+/, "return ");
-        const setup = new Function(body)();
+        const url = typeof frame.url === "string" ? frame.url : `js/${frame.load}`;
+        urls.add(url);
+        const setup = evaluate(`(function () {${body}
+})`, url)();
         if (typeof setup !== "function") throw new TypeError("a program's default export is its setup");
         codes.set(String(frame.load), setup);
         return {
@@ -2681,10 +3620,7 @@
         };
       } catch (e) {
         return {
-          threw: {
-            code: "thrown",
-            text: String(e.message ?? e)
-          }
+          threw: thrown(e)
         };
       }
     }
@@ -2740,10 +3676,32 @@
     }
   }
   function thrown(e) {
-    return e instanceof Thrown ? e.why : {
+    if (e instanceof Thrown) return e.why;
+    const why = {
       code: "thrown",
       text: String(e?.message ?? e)
     };
+    const site2 = siteOf(e?.stack);
+    if (site2) why.site = site2;
+    return why;
+  }
+  var urls = /* @__PURE__ */ new Set();
+  function siteOf(stack) {
+    if (typeof stack !== "string") return null;
+    for (const l of stack.split("\n")) {
+      const m = l.match(/^\s*(?:at\s+)?(?:(.*?)@|(.*?)\s+\()?(.+?):(\d+):\d+\)?\s*$/);
+      if (!m || !urls.has(m[3])) continue;
+      const fn = m[1] ?? m[2];
+      return fn ? {
+        file: m[3],
+        line: Number(m[4]),
+        function: fn
+      } : {
+        file: m[3],
+        line: Number(m[4])
+      };
+    }
+    return null;
   }
   var cancelled = /* @__PURE__ */ new Set();
   var lastPid = "";
@@ -2773,6 +3731,8 @@
   var map = g.__ermineVram;
   delete g.__ermineVram;
   vram(map);
+  evaluator(g.__ermineEval);
+  delete g.__ermineEval;
   g.__ermine = {
     serve
   };

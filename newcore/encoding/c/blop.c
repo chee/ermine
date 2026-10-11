@@ -158,7 +158,7 @@ static const char *check(const Json *b) {
 		const char *k = b->object.members[i].key;
 		size_t n = b->object.members[i].keyLength;
 		if (known(k, n)) continue;
-		if (stray == NULL || n < strayLength || n == strayLength && memcmp(k, stray, n) < 0)
+		if (stray == NULL || n < strayLength || (n == strayLength && memcmp(k, stray, n) < 0))
 			stray = k, strayLength = n;
 	}
 	if (stray != NULL) return stray;

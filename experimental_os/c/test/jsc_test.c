@@ -44,6 +44,11 @@ uint32_t *vramHold(int64_t id, size_t *bytes, void **ref) {
 void vramDrop(void *ref) {
 	(void)ref;
 }
+// no loader finding code here: no program's url
+char *hostFinding(Host *host) {
+	(void)host;
+	return NULL;
+}
 static char said[4096];
 void hostSay(Host *host, const char *format, ...) {
 	(void)host;
@@ -245,7 +250,7 @@ int main(int argc, char **argv) {
 	CHECK(callHandler("date", NULL, &out).kind == ERM_THROWN, "a class's object returned is no value: thrown");
 	CHECK(callHandler("cycle", NULL, &out).kind == ERM_THROWN, "a value that holds itself: thrown");
 	err = callHandler("mistake", NULL, &out);
-	CHECK(err.kind == ERM_THROWN && same(err.why, "{\"code\": \"thrown\", \"text\": \"oops\"}"), "a program's mistake is thrown, with its text");
+	CHECK(err.kind == ERM_THROWN && same(err.why, "{\"code\": \"thrown\", \"site\": {\"file\": \"js/js1\", \"line\": 13}, \"text\": \"oops\"}"), "a program's mistake is thrown, with its text and line");
 	err = callHandler("refused", NULL, &out);
 	CHECK(err.kind == ERM_THROWN && same(err.why, "{\"code\": \"not-found\", \"text\": \"nothing there\", \"kind\": \"invalid\"}"), "an operation's error not caught is the part's, as the OS said it");
 	CHECK(!callHandler("caught", NULL, &out).kind && same(out, "\"nothing there\""), "an operation's error is thrown in the program");
