@@ -1,8 +1,8 @@
 #!/bin/sh
-# builds sync's C harnesses (id, seal, chain, apply, commit, fragment) with newcore's Makefile; CHECK=1: the harness-checks, with the
+# builds sync's C harnesses (id, seal, chain, apply, commit, fragment, transport) with newcore's Makefile; CHECK=1: the harness-checks, with the
 # address and undefined-behaviour sanitizers
 set -e
 cd "$(dirname "$0")/../.."
-bins="sync/c/id-harness sync/c/seal-harness sync/c/chain-harness sync/c/apply-harness sync/c/commit-harness sync/c/fragment-harness"
+bins="sync/c/id-harness sync/c/seal-harness sync/c/chain-harness sync/c/apply-harness sync/c/commit-harness sync/c/fragment-harness sync/c/transport-harness"
 [ "$CHECK" = 1 ] && bins=$(for b in $bins; do printf '%s-check ' "$b"; done)
 make -s $bins
