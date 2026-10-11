@@ -1,0 +1,8 @@
+{
+	"title": "an integer, where numbers are floats: not-a-node",
+	"bytes": "a5626964616164696e666f806576616c75658066686561646572a16474696d6501686368696c6472656e80",
+	"expect": {
+		"code": "not-a-node"
+	},
+	"node": true
+}

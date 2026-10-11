@@ -1,0 +1,223 @@
+{
+	"title": "ephemeral nodes: made by an owner, placed and moved only by one, released with it",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "box",
+			"child": "box",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "box",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"ephemeral": true,
+			"expect": {
+				"error": "not-a-process"
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"owner": "p",
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"as": "p",
+			"value": 1,
+			"ephemeral": true,
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"owned": "p",
+						"id": "@3"
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "@3",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 3
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": true,
+					"owner": "p"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "e",
+			"child": "@3",
+			"expect": {
+				"error": "not-a-process"
+			}
+		},
+		{
+			"op": "insert",
+			"as": "p",
+			"id": "root",
+			"name": "e",
+			"child": "@3",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "e",
+			"index": 0,
+			"toid": "box",
+			"toname": "e",
+			"expect": {
+				"error": "not-a-process"
+			}
+		},
+		{
+			"op": "move",
+			"as": "p",
+			"id": "root",
+			"name": "e",
+			"index": 0,
+			"toid": "box",
+			"toname": "e",
+			"expect": {
+				"ok": [
+					5,
+					6
+				]
+			}
+		},
+		{
+			"op": "create",
+			"as": "p",
+			"value": 2,
+			"id": "mine",
+			"expect": {
+				"ok": "mine"
+			}
+		},
+		{
+			"op": "node",
+			"id": "mine",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 2,
+							"time": 7
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": 3,
+			"expect": {
+				"ok": "@8"
+			}
+		},
+		{
+			"op": "own",
+			"id": "@11",
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"id": "@11",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "own",
+			"id": "mine",
+			"owner": "q",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"owned": "q",
+						"id": "mine"
+					}
+				]
+			}
+		},
+		{
+			"op": "release",
+			"id": "@3",
+			"expect": {
+				"ok": 9
+			}
+		},
+		{
+			"op": "release",
+			"id": "mine",
+			"expect": {
+				"ok": 10
+			}
+		},
+		{
+			"op": "release",
+			"id": "@11",
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"released": "@3",
+						"owner": "p"
+					},
+					{
+						"released": "mine",
+						"owner": "q"
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "@3",
+			"expect": {
+				"ok": null
+			}
+		}
+	]
+}

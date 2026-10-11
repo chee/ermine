@@ -1,0 +1,21 @@
+{
+	"title": "a symbol in a list: cannot-carry, the id of the node holding it",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r",
+			"value": [],
+			"info": [],
+			"children": [["home", [{ "content": ["s"], "change": 1 }]]],
+			"header": {}
+		},
+		{
+			"id": "s",
+			"value": [],
+			"info": [],
+			"children": [["x", [{ "content": [{ "symbol": "#" }], "change": 1 }]]],
+			"header": {}
+		}
+	],
+	"expect": { "code": "cannot-carry", "id": "s" }
+}

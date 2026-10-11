@@ -1,0 +1,22 @@
+{
+	"title": "a reader pulled, then read twice by its puller: one link; pulled again in the next run: kept, not duplicated",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "p", "to": "q" },
+		{ "op": "track", "from": "p", "to": "q" },
+		{ "op": "end", "from": "p" },
+		{ "op": "begin", "from": "p" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "p", "to": "q" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["q"] },
+		{ "op": "reads", "of": "q", "expect": ["a"] },
+		{ "op": "readers", "of": "q", "expect": ["p"] },
+		{ "op": "readers", "of": "a", "expect": ["q"] }
+	]
+}

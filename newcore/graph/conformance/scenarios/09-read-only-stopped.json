@@ -1,0 +1,178 @@
+{
+	"title": "a read-only interface reads but makes nothing; a stopped one does nothing",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 1,
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "c",
+			"writes": false,
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "c",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 1,
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"as": "c",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": "read-only"
+			}
+		},
+		{
+			"op": "insert",
+			"as": "c",
+			"id": "root",
+			"name": "b",
+			"child": "a",
+			"expect": {
+				"error": "read-only"
+			}
+		},
+		{
+			"op": "create",
+			"as": "c",
+			"value": 1,
+			"expect": {
+				"error": "read-only"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "stop",
+			"as": "c",
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"as": "c",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"error": "stopped"
+			}
+		},
+		{
+			"op": "write",
+			"as": "c",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": "stopped"
+			}
+		},
+		{
+			"op": "bind",
+			"as": "w",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"as": "w",
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"as": "w",
+			"value": 1,
+			"expect": {
+				"error": "stopped"
+			}
+		},
+		{
+			"op": "remove",
+			"as": "w",
+			"id": "root",
+			"name": "a",
+			"index": 0,
+			"expect": {
+				"error": "stopped"
+			}
+		},
+		{
+			"op": "bind",
+			"as": "w",
+			"expect": {}
+		},
+		{
+			"op": "remove",
+			"as": "w",
+			"id": "root",
+			"name": "a",
+			"index": 0,
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "look",
+			"as": "nobody",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"error": "no-interface"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 3
+			}
+		}
+	]
+}

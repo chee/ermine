@@ -1,0 +1,18 @@
+{
+	"title": "U+0000 in an id, a name, a reader and a site: carried as any other character",
+	"root": "r\u0000",
+	"nodes": [
+		{
+			"id": "r\u0000",
+			"value": [{ "content": "a\u0000b", "change": 1 }],
+			"info": [["t\u0000", [{ "content": 1, "change": 1 }]]],
+			"children": [["h\u0000me", [{ "content": ["\u0000", "gone\u0000"], "change": 1 }]]],
+			"header": {
+				"reader": "\u0000",
+				"site": { "file": "a\u0000.ts", "line": 1, "function": "\u0000f" }
+			}
+		},
+		{ "id": "\u0000", "value": [], "info": [], "children": [], "header": {} }
+	],
+	"expect": { "nodes": ["r\u0000", "\u0000"], "missing": ["gone\u0000"] }
+}

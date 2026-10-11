@@ -1,0 +1,288 @@
+{
+	"title": "reading a node's names is marked by a new name, not by what a name holds or by info",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"children": {
+				"x": [
+					"b"
+				]
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "b",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "intro",
+			"id": "c",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"as": "p",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					"x"
+				]
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "t"
+				}
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "insert",
+			"id": "a",
+			"name": "x",
+			"child": "c",
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "insert",
+			"id": "a",
+			"name": "y",
+			"child": "c",
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 7,
+							"node": "a",
+							"which": [
+								"children",
+								"y"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"id": "a",
+			"name": "y",
+			"to": "z",
+			"expect": {
+				"ok": [
+					8,
+					9
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 8,
+							"node": "a",
+							"which": [
+								"children",
+								"y"
+							]
+						}
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 9,
+							"node": "a",
+							"which": [
+								"children",
+								"z"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "q",
+			"track": "q",
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"as": "q",
+			"address": [
+				"a"
+			],
+			"name": "x",
+			"expect": {
+				"ok": [
+					{
+						"id": "b",
+						"loaded": true
+					},
+					{
+						"id": "c",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "remove",
+			"id": "a",
+			"name": "x",
+			"index": 0,
+			"expect": {
+				"ok": 10
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "q",
+						"by": {
+							"actor": "host",
+							"time": 10,
+							"node": "a",
+							"which": [
+								"children",
+								"x"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "pop",
+			"id": "a",
+			"name": "x",
+			"slotindex": 0,
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 11,
+							"node": "a",
+							"which": [
+								"children",
+								"x"
+							]
+						}
+					},
+					{
+						"marked": "q",
+						"by": {
+							"actor": "host",
+							"time": 11,
+							"node": "a",
+							"which": [
+								"children",
+								"x"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {
+						"title": [
+							{
+								"content": "t",
+								"time": 5
+							}
+						]
+					},
+					"children": {
+						"z": [
+							{
+								"content": [
+									"c"
+								],
+								"time": 9
+							}
+						]
+					},
+					"ephemeral": false
+				}
+			}
+		}
+	]
+}

@@ -18,7 +18,7 @@
 
 #include "../../c/node.h"
 #include "../../notify/c/notify.h"
-#include "../../places/c/places.h"
+#include "../../graph/places/c/places.h"
 #include "../../protect/c/protect.h"
 
 typedef struct sc_sched sc_sched;
@@ -50,8 +50,6 @@ sc_fn *sc_live_fn(const nt_value *v); // NULL if not live
 
 // whether two values are the same (Object.is)
 int sc_is(const nt_value *a, const nt_value *b);
-// a copy as the scheduler writes it; a live value, or a value holding one: itself
-nt_value *sc_copy(const nt_value *v);
 
 // code: a setup (setup set), or a compute with an optional effect
 typedef struct {

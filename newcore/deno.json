@@ -3,17 +3,17 @@
 	"exports": {
 		"./trackgraph": "./trackgraph.ts",
 		"./notify": "./notify.ts",
-		"./node": "./node.ts",
-		"./change": "./change.ts",
-		"./because": "./because.ts",
-		"./stacktrace": "./stacktrace.ts",
-		"./squish": "./squish.ts",
-		"./mutate": "./mutate.ts",
-		"./places": "./places.ts",
-		"./table": "./table.ts",
-		"./pack": "./pack.ts",
+		"./node": "./nodes/node.ts",
+		"./change": "./nodes/change.ts",
+		"./because": "./nodes/because.ts",
+		"./stacktrace": "./nodes/stacktrace.ts",
+		"./squish": "./opstreams/squish.ts",
+		"./mutate": "./opstreams/mutate.ts",
+		"./places": "./graph/places.ts",
+		"./table": "./graph/table.ts",
+		"./pack": "./encoding/pack.ts",
 		"./protect": "./protect.ts",
-		"./scheduler": "./scheduler.ts"
+		"./scheduler": "./scheduler/scheduler.ts"
 	},
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env",
@@ -31,5 +31,5 @@
 		"semiColons": false,
 		"useTabs": true
 	},
-	"exclude": ["dist", "c", "*/c"]
+	"exclude": ["dist", "c", "*/c", "*/*/c"]
 }

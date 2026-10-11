@@ -15,30 +15,33 @@ DENO = deno test --quiet --allow-run --allow-read --allow-env
 trackgraph_src = c/trackgraph.c c/harness.c
 node_src = c/node.c c/shown.c c/node_harness.c
 pack_src = c/node.c c/shown.c c/pack.c c/pack_harness.c
-change_src = change/c/change.c change/c/harness.c
-because_src = because/c/because.c because/c/harness.c
-squish_src = squish/c/squish.c squish/c/harness.c
+change_src = nodes/change/c/change.c nodes/change/c/harness.c
+because_src = nodes/because/c/because.c nodes/because/c/harness.c
+squish_src = opstreams/squish/c/squish.c opstreams/squish/c/harness.c
 notify_src = notify/c/notify.c notify/c/harness.c
-places_src = places/c/places.c places/c/harness.c c/node.c
+places_src = graph/places/c/places.c graph/places/c/harness.c c/node.c
 protect_src = protect/c/protect.c protect/c/harness.c
-mutate_src = mutate/c/mutate.c mutate/c/harness.c notify/c/notify.c c/node.c
+mutate_src = opstreams/mutate/c/mutate.c opstreams/mutate/c/harness.c notify/c/notify.c c/node.c
+graph_src = graph/c/graph.c graph/c/harness.c \
+	graph/places/c/places.c notify/c/notify.c c/trackgraph.c protect/c/protect.c opstreams/mutate/c/mutate.c c/node.c
 scheduler_src = scheduler/c/scheduler.c scheduler/c/steps.c scheduler/c/harness.c \
-	places/c/places.c notify/c/notify.c c/trackgraph.c protect/c/protect.c mutate/c/mutate.c
+	graph/places/c/places.c notify/c/notify.c c/trackgraph.c protect/c/protect.c opstreams/mutate/c/mutate.c
 
 # name: binary, sources, the suite, its env var, and what C skips
 trackgraph = c/harness
 node = c/node-harness
 pack = c/pack-harness
-change = change/c/harness
-because = because/c/harness
-squish = squish/c/harness
+change = nodes/change/c/harness
+because = nodes/because/c/harness
+squish = opstreams/squish/c/harness
 notify = notify/c/harness
-places = places/c/harness
+places = graph/places/c/harness
 protect = protect/c/harness
-mutate = mutate/c/harness
+mutate = opstreams/mutate/c/harness
+graph = graph/c/harness
 scheduler = scheduler/c/harness
 
-LIBS = trackgraph node pack change because squish notify places protect mutate scheduler
+LIBS = trackgraph node pack change because squish notify places protect mutate graph scheduler
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -54,21 +57,22 @@ endef
 $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 
 # headers: any change rebuilds what includes them
-$(HARNESSES) $(CHECKS): $(wildcard c/*.h */c/*.h)
+$(HARNESSES) $(CHECKS): $(wildcard c/*.h */c/*.h */*/c/*.h)
 
 # suite, env var, skips
 trackgraph_test = conformance/conformance_test.ts TRACKGRAPH_HARNESS
-node_test = conformance/node/ NODE_HARNESS
-pack_test = conformance/pack/ PACK_HARNESS
-change_test = conformance/change/ CHANGE_HARNESS
-because_test = because/conformance/ BECAUSE_HARNESS
-squish_test = squish/conformance/ SQUISH_HARNESS
+node_test = nodes/node/conformance/ NODE_HARNESS
+pack_test = encoding/pack/conformance/ PACK_HARNESS
+change_test = nodes/change/conformance/ CHANGE_HARNESS
+because_test = nodes/because/conformance/ BECAUSE_HARNESS
+squish_test = opstreams/squish/conformance/ SQUISH_HARNESS
 notify_test = notify/conformance/ NOTIFY_HARNESS
-places_test = places/conformance/ PLACES_HARNESS
+places_test = graph/places/conformance/ PLACES_HARNESS
 protect_test = protect/conformance/ PROTECT_HARNESS
-mutate_test = mutate/conformance/ MUTATE_HARNESS
+mutate_test = opstreams/mutate/conformance/ MUTATE_HARNESS
+graph_test = graph/conformance/ GRAPH_HARNESS
 scheduler_test = scheduler/conformance/ SCHEDULER_HARNESS
-# places/c has no write by path; nt_value has no typed arrays
+# graph/places/c has no write by path; nt_value has no typed arrays
 skips = PLACES_SKIP=13-write.json MUTATE_SKIP=04-typed-arrays.json
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check

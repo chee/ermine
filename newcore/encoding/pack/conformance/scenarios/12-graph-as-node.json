@@ -1,0 +1,8 @@
+{
+	"title": "a graph decoded as one node: not-a-node",
+	"bytes": "a364726f6f746172656e6f64657380676d697373696e6780",
+	"expect": {
+		"code": "not-a-node"
+	},
+	"node": true
+}

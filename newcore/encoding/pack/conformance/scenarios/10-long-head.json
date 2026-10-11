@@ -1,0 +1,7 @@
+{
+	"title": "a head longer than it needs to be: not-a-graph",
+	"bytes": "a364726f6f74780172656e6f64657380676d697373696e6780",
+	"expect": {
+		"code": "not-a-graph"
+	}
+}

@@ -1,4 +1,4 @@
-// Shown nodes on the line protocol (newcore/conformance/node/harness.ts), for the C harnesses:
+// Shown nodes on the line protocol (newcore/nodes/node/conformance/harness.ts), for the C harnesses:
 // reading JSON as spans of the line, and writing it. Content, change, because, actor and cause are
 // kept as their JSON text and written back as is; in a list, {"symbol": name} is a symbol.
 #include "shown.h"
@@ -72,7 +72,9 @@ const char *skip(const char *p) {
 
 void utf8(char **out, unsigned long c) {
 	char *o = *out;
-	if (c < 0x80) *o++ = (char)c;
+	// U+0000 held as C0 80, as json.h holds it
+	if (c == 0) *o++ = (char)0xC0, *o++ = (char)0x80;
+	else if (c < 0x80) *o++ = (char)c;
 	else if (c < 0x800) *o++ = (char)(0xC0 | c >> 6), *o++ = (char)(0x80 | (c & 0x3F));
 	else if (c < 0x10000)
 		*o++ = (char)(0xE0 | c >> 12), *o++ = (char)(0x80 | (c >> 6 & 0x3F)),
@@ -222,7 +224,8 @@ void text(const char *s) {
 	putchar('"');
 	for (; *s; s++) {
 		unsigned char c = (unsigned char)*s;
-		if (c == '"' || c == '\\') printf("\\%c", c);
+		if (c == 0xC0 && (unsigned char)s[1] == 0x80) fputs("\\u0000", stdout), s++;
+		else if (c == '"' || c == '\\') printf("\\%c", c);
 		else if (c < 0x20) printf("\\u%04x", c);
 		else putchar(c);
 	}
@@ -245,7 +248,7 @@ void versions(nd_object o, int lists) {
 			}
 			putchar(']');
 		} else fputs(v->content, stdout);
-		printf(",\"change\":%s", (const char *)v->change);
+		if (v->change) printf(",\"change\":%s", (const char *)v->change);
 		if (v->because) printf(",\"because\":%s", (const char *)v->because);
 		putchar('}');
 	}

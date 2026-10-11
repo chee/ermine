@@ -1,0 +1,119 @@
+{
+	"title": "protect's reads of its rules are the reader's: a rules change marks those it refused",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"actor": "eve",
+					"op": "read",
+					"node": "a",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "rules",
+			"child": "rules",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 1,
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "bind",
+			"as": "eve",
+			"agent": "eve",
+			"track": "eve",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "eve",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"rules"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": []
+				}
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "eve",
+						"by": {
+							"actor": "host",
+							"time": 5,
+							"node": "rules",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"as": "eve",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 1,
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

@@ -25,8 +25,8 @@
 //   {"$add":[a,b]}  {"$eq":[a,b]}  {"$not":e}  {"$len":e}
 //   {"$steps":[..]}     a function (live): a handler; called with what a handler call is given
 //   {"$quote":x}        x as it is
-import type { Code } from "../../scheduler.ts"
-import { PENDING } from "../../scheduler.ts"
+import type { Code } from "../scheduler.ts"
+import { PENDING } from "../scheduler.ts"
 import { json, operate } from "./normal.ts"
 
 export class Thrown extends Error {

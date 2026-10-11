@@ -1,4 +1,4 @@
-// A graph from a root, as bytes (newcore/PACK.tex), in C. Same shape as pack.ts: one CBOR item,
+// A graph from a root, as bytes (newcore/PACK.tex), in C. Same shape as pack.ts: one canonical CBOR item,
 // {root, nodes, missing}. Values (content outside lists, change, because, actor, cause) are the
 // caller's: written and read by its codec, never read here.
 #ifndef PACK_H
@@ -11,6 +11,7 @@ typedef enum {
 	PK_NOTHING_THERE,
 	PK_CANNOT_CARRY,
 	PK_NOT_A_GRAPH,
+	PK_NOT_A_NODE,
 	PK_NO_MEMORY,
 } pk_code;
 
@@ -52,10 +53,17 @@ pk_code pk_walk(const char *root, pk_get get, void *context, pk_graph *out);
 // encode: PK_CANNOT_CARRY, *id the node's (id may be NULL)
 pk_code pk_pack(const char *root, pk_get get, void *context, const pk_codec *codec,
 	pk_bytes *out, const char **id);
-// new nodes, by nd_make, headers as written. Definite lengths only; anything else, or a shape
+// new nodes, by nd_make, headers as written. Only the canonical encoding is read (ENCODING.tex:
+// shortest heads, definite lengths, floats not integers, keys in order); anything else, or a shape
 // that is not a graph: PK_NOT_A_GRAPH
 pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out);
-// what walk or unpack allocated
+// one node alone, as a graph's nodes are written, appended to out. A symbol in a list, or a value
+// the codec cannot encode: PK_CANNOT_CARRY
+pk_code pk_encode(const nd_node *node, const pk_codec *codec, pk_bytes *out);
+// the node back, as encode wrote it: out->nodes[0] (length 1, root its id), a new node, headers
+// as written. Anything else, or a shape that is not a node: PK_NOT_A_NODE. pk_free it
+pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out);
+// what walk, unpack or decode allocated
 void pk_free(pk_graph *g);
 
 #endif

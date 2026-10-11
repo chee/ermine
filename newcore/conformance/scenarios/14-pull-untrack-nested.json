@@ -1,0 +1,17 @@
+{
+	"title": "a nested reader untracked while the outer runs: the outer's reads are untouched",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "track", "from": "q", "to": "b" },
+		{ "op": "untrack", "from": "q" },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["a", "b"] },
+		{ "op": "reads", "of": "q", "expect": [] },
+		{ "op": "readers", "of": "a", "expect": ["p"] },
+		{ "op": "readers", "of": "b", "expect": ["p"] }
+	]
+}

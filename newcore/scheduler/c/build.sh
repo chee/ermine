@@ -8,5 +8,5 @@ if [ "$CHECK" = 1 ]; then
 	flags="-std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer"
 	out=harness-check
 fi
-cc $flags -o $out scheduler.c steps.c harness.c ../../places/c/places.c ../../notify/c/notify.c \
-	../../c/trackgraph.c ../../protect/c/protect.c ../../mutate/c/mutate.c -lm
+cc $flags -o $out scheduler.c steps.c harness.c ../../graph/places/c/places.c ../../notify/c/notify.c \
+	../../c/trackgraph.c ../../protect/c/protect.c ../../opstreams/mutate/c/mutate.c -lm

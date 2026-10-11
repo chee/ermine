@@ -1,0 +1,340 @@
+{
+	"title": "one write of several patches: a reader marked once per patch that reaches what it read",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": {
+				"n": 0,
+				"m": 0
+			},
+			"info": {
+				"style": {
+					"x": 0,
+					"y": 0
+				}
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "p",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": {
+									"n": 0,
+									"m": 0
+								},
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 3,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 3,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				},
+				{
+					"path": [
+						"k"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "q",
+			"track": "q",
+			"expect": {}
+		},
+		{
+			"op": "info",
+			"as": "q",
+			"address": [
+				"a"
+			],
+			"name": "style",
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": {
+									"x": 0,
+									"y": 0
+								},
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "style",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "q",
+						"by": {
+							"actor": "host",
+							"time": 5,
+							"node": "a",
+							"which": [
+								"info",
+								"style"
+							]
+						}
+					},
+					{
+						"marked": "q",
+						"by": {
+							"actor": "host",
+							"time": 5,
+							"node": "a",
+							"which": [
+								"info",
+								"style"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"do": [
+				{
+					"op": "write",
+					"address": [
+						"a"
+					],
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 4
+						},
+						{
+							"path": [
+								"m"
+							],
+							"value": 4
+						}
+					]
+				},
+				{
+					"op": "set",
+					"address": [
+						"a"
+					],
+					"name": "style",
+					"patches": [
+						{
+							"path": [
+								"x"
+							],
+							"value": 2
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					6,
+					7
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "sched",
+							"time": 6,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": "sched",
+							"time": 6,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "q",
+						"by": {
+							"actor": "sched",
+							"time": 7,
+							"node": "a",
+							"which": [
+								"info",
+								"style"
+							]
+						}
+					}
+				]
+			}
+		}
+	]
+}

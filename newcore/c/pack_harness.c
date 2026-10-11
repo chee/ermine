@@ -1,212 +1,49 @@
-// The C pack on the line protocol (newcore/conformance/pack/harness.ts): one JSON request per
-// line in, one answer per line out. Values are kept as their JSON text (shown.c); the codec writes
-// that JSON as CBOR and reads CBOR back as JSON: maps with text keys, arrays, texts, numbers,
-// true, false, null. Bytes are hex.
+// The C pack on the line protocol (newcore/encoding/pack/conformance/harness.ts): one JSON request per
+// line in, one answer per line out. Values are kept as their JSON text (shown.c), in their JSON
+// form (ENCODING.tex: "/" for bytes, typed arrays, NaN and the infinities); the codec writes that
+// as canonical CBOR (json.c, cbor.c) and reads CBOR back as it. Bytes are hex.
+#include "cbor.h"
+#include "json.h"
 #include "pack.h"
 #include "shown.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// --- the codec: JSON text to CBOR ---
-
-static void head(pk_bytes *b, int major, uint64_t n) {
-	uint8_t h[9];
-	size_t size = n < 24 ? 0 : n <= 0xff ? 1 : n <= 0xffff ? 2 : n <= 0xffffffff ? 4 : 8;
-	int ai = size == 0 ? (int)n : size == 1 ? 24 : size == 2 ? 25 : size == 4 ? 26 : 27;
-	h[0] = (uint8_t)(major << 5 | ai);
-	for (size_t i = 0; i < size; i++) h[1 + i] = (uint8_t)(n >> 8 * (size - 1 - i));
-	pk_put(b, h, 1 + size);
-}
-
-static void dbl(pk_bytes *b, double d) {
-	uint64_t bits;
-	memcpy(&bits, &d, 8);
-	uint8_t h[9] = {0xfb};
-	for (int i = 0; i < 8; i++) h[1 + i] = (uint8_t)(bits >> 8 * (7 - i));
-	pk_put(b, h, 9);
-}
-
-static void cbor(const char *p, pk_bytes *b) {
-	p = space(p);
-	if (*p == '"') {
-		char *s = string(p);
-		head(b, 3, strlen(s));
-		pk_put(b, s, strlen(s));
-	} else if (*p == '[') {
-		const char **xs;
-		size_t n = items(p, &xs);
-		head(b, 4, n);
-		for (size_t i = 0; i < n; i++) cbor(xs[i], b);
-	} else if (*p == '{') {
-		size_t n = 0;
-		for (const char *q = space(p + 1); *q == '"'; n++) {
-			q = space(skip(space(skip(q)) + 1));
-			if (*q == ',') q = space(q + 1);
-		}
-		head(b, 5, n);
-		for (const char *q = space(p + 1); *q == '"';) {
-			char *name = string(q);
-			head(b, 3, strlen(name));
-			pk_put(b, name, strlen(name));
-			q = space(space(skip(q)) + 1);
-			cbor(q, b);
-			q = space(skip(q));
-			if (*q == ',') q = space(q + 1);
-		}
-	} else if (strncmp(p, "true", 4) == 0) pk_put(b, "\xf5", 1);
-	else if (strncmp(p, "false", 5) == 0) pk_put(b, "\xf4", 1);
-	else if (strncmp(p, "null", 4) == 0) pk_put(b, "\xf6", 1);
-	else {
-		// as cbor-x writes numbers: an integer in 32 bits, else a double
-		const char *end = skip(p);
-		int whole = 1;
-		for (const char *q = p; q < end; q++)
-			if (*q == '.' || *q == 'e' || *q == 'E') whole = 0;
-		double d = strtod(p, NULL);
-		if (whole && d >= 0 && d <= 0xffffffff) head(b, 0, (uint64_t)strtoull(p, NULL, 10));
-		else if (whole && d < 0 && d >= -4294967296.0) head(b, 1, (uint64_t)(-1 - strtoll(p, NULL, 10)));
-		else dbl(b, d);
-	}
-}
+// --- the codec: JSON text to canonical CBOR, and back (json.c, cbor.c) ---
 
 static int encode(void *context, const void *value, pk_bytes *out) {
 	(void)context;
 	if (value == NULL) return 1;
-	cbor(value, out);
-	return 0;
-}
-
-// --- the codec: CBOR to JSON text ---
-
-typedef struct {
-	char *data;
-	size_t length, capacity;
-} out;
-
-static void add(out *o, const char *s, size_t n) {
-	if (o->length + n + 1 > o->capacity) {
-		while (o->length + n + 1 > o->capacity) o->capacity = o->capacity ? o->capacity * 2 : 64;
-		o->data = realloc(o->data, o->capacity);
-		if (o->data == NULL) fail("out of memory");
+	char *why = NULL;
+	Json *x = jsonParse(value, strlen(value), &why);
+	if (x == NULL) return free(why), 1;
+	// the "/" forms: bytes, typed arrays, numbers JSON cannot write
+	if (!jsonDecode(&x, false)) return jsonFree(x), 1;
+	size_t n = 0;
+	const char *reason;
+	int bad = !cborEncode(x, NULL, 0, &n, &reason);
+	if (!bad) {
+		unsigned char *bytes = take(n);
+		cborEncode(x, bytes, n, &n, &reason);
+		pk_put(out, bytes, n);
 	}
-	memcpy(o->data + o->length, s, n);
-	o->length += n;
-	o->data[o->length] = 0;
-}
-static void adds(out *o, const char *s) {
-	add(o, s, strlen(s));
-}
-
-typedef struct {
-	const uint8_t *p, *end;
-} in;
-
-// a head: its major type, *arg, *ai; -1 at the end
-static int next(in *r, uint64_t *arg, int *ai) {
-	if (r->p >= r->end) return -1;
-	uint8_t b = *r->p++;
-	*ai = b & 31;
-	*arg = 0;
-	if (*ai < 24) *arg = (uint64_t)*ai;
-	else if (*ai <= 27) {
-		size_t n = (size_t)1 << (*ai - 24);
-		if ((size_t)(r->end - r->p) < n) return -1;
-		for (size_t i = 0; i < n; i++) *arg = *arg << 8 | *r->p++;
-	} else return -1;
-	return b >> 5;
-}
-
-static double half(uint64_t h) {
-	int e = (int)(h >> 10 & 0x1f);
-	double m = (double)(h & 0x3ff);
-	double v = e == 0 ? ldexp(m, -24) : e == 31 ? (m ? NAN : INFINITY) : ldexp(m + 1024, e - 25);
-	return h & 0x8000 ? -v : v;
-}
-
-static void quoted(out *o, const uint8_t *s, size_t n) {
-	add(o, "\"", 1);
-	for (size_t i = 0; i < n; i++) {
-		char e[8];
-		if (s[i] == '"' || s[i] == '\\') e[0] = '\\', e[1] = (char)s[i], add(o, e, 2);
-		else if (s[i] < 0x20) snprintf(e, sizeof e, "\\u%04x", s[i]), adds(o, e);
-		else add(o, (const char *)&s[i], 1);
-	}
-	add(o, "\"", 1);
-}
-
-// 0: written; nonzero: not JSON this reads
-static int json(in *r, out *o) {
-	uint64_t n;
-	int ai, major = next(r, &n, &ai);
-	char num[40];
-	switch (major) {
-	case 0: snprintf(num, sizeof num, "%llu", (unsigned long long)n), adds(o, num); return 0;
-	case 1: snprintf(num, sizeof num, "-%llu", (unsigned long long)n + 1), adds(o, num); return 0;
-	case 3:
-		if ((uint64_t)(r->end - r->p) < n) return 1;
-		quoted(o, r->p, (size_t)n);
-		r->p += n;
-		return 0;
-	case 4:
-		add(o, "[", 1);
-		for (uint64_t i = 0; i < n; i++) {
-			if (i) add(o, ",", 1);
-			if (json(r, o)) return 1;
-		}
-		add(o, "]", 1);
-		return 0;
-	case 5:
-		add(o, "{", 1);
-		for (uint64_t i = 0; i < n; i++) {
-			if (i) add(o, ",", 1);
-			const uint8_t *at = r->p;
-			uint64_t k;
-			int kai;
-			if (next(r, &k, &kai) != 3) return 1;
-			r->p = at;
-			if (json(r, o)) return 1;
-			add(o, ":", 1);
-			if (json(r, o)) return 1;
-		}
-		add(o, "}", 1);
-		return 0;
-	case 7: {
-		if (ai == 20) return adds(o, "false"), 0;
-		if (ai == 21) return adds(o, "true"), 0;
-		if (ai == 22) return adds(o, "null"), 0;
-		double d;
-		if (ai == 25) d = half(n);
-		else if (ai == 26) {
-			float f;
-			uint32_t u = (uint32_t)n;
-			memcpy(&f, &u, 4);
-			d = f;
-		} else if (ai == 27) memcpy(&d, &n, 8);
-		else return 1;
-		if (!isfinite(d)) adds(o, "null");
-		else if (d == floor(d) && fabs(d) < 1e21) snprintf(num, sizeof num, "%.0f", d), adds(o, num);
-		else snprintf(num, sizeof num, "%.17g", d), adds(o, num);
-		return 0;
-	}
-	default: return 1;
-	}
+	jsonFree(x);
+	return bad;
 }
 
 static int decode(void *context, const uint8_t *item, size_t length, const void **value) {
 	(void)context;
-	in r = {item, item + length};
-	out o = {0};
-	int bad = json(&r, &o) || r.p != r.end;
-	if (!bad) {
-		char *s = take(o.length + 1);
-		memcpy(s, o.data, o.length + 1);
-		*value = s;
-	}
-	free(o.data);
-	return bad;
+	Json *x = cborDecode(item, length, NULL, NULL);
+	if (x == NULL) return 1;
+	char *printed = jsonPrint(x);
+	char *s = take(strlen(printed) + 1);
+	strcpy(s, printed);
+	free(printed);
+	jsonFree(x);
+	*value = s;
+	return 0;
 }
 
 static const pk_codec codec = {encode, decode, NULL};
@@ -242,7 +79,7 @@ static void unload(table t) {
 
 // --- answers ---
 
-static const char *codes[] = {"", "nothing-there", "cannot-carry", "not-a-graph", "no-memory"};
+static const char *codes[] = {"", "nothing-there", "cannot-carry", "not-a-graph", "not-a-node", "no-memory"};
 
 static void error(pk_code code, const char *id) {
 	printf("{\"code\":\"%s\"", codes[code]);
@@ -291,19 +128,50 @@ static void pack(const char *line) {
 	unload(t);
 }
 
-static void unpack(const char *line) {
-	const char *hex = string(field(line, "bytes"));
-	size_t n = strlen(hex) / 2;
-	uint8_t *bytes = take(n);
-	for (size_t i = 0; i < n; i++) {
+static uint8_t *unhex(const char *hex, size_t *n) {
+	*n = strlen(hex) / 2;
+	uint8_t *bytes = take(*n);
+	for (size_t i = 0; i < *n; i++) {
 		unsigned x;
 		if (sscanf(hex + 2 * i, "%2x", &x) != 1) fail("bad hex");
 		bytes[i] = (uint8_t)x;
 	}
+	return bytes;
+}
+
+static void unpack(const char *line) {
+	size_t n;
+	uint8_t *bytes = unhex(string(field(line, "bytes")), &n);
 	pk_graph g;
 	pk_code code = pk_unpack(bytes, n, &codec, &g);
 	if (code == PK_OK) graph(&g);
 	else error(code, NULL);
+	pk_free(&g);
+}
+
+static void encode_op(const char *line) {
+	const nd_node *n = parse_node(field(line, "node"));
+	pk_bytes b = {0};
+	pk_code code = pk_encode(n, &codec, &b);
+	if (code == PK_OK) {
+		fputs("{\"bytes\":\"", stdout);
+		for (size_t i = 0; i < b.length; i++) printf("%02x", b.data[i]);
+		puts("\"}");
+	} else error(code, n->id);
+	free(b.data);
+	nd_free((nd_node *)n);
+}
+
+static void decode_op(const char *line) {
+	size_t n;
+	uint8_t *bytes = unhex(string(field(line, "bytes")), &n);
+	pk_graph g;
+	pk_code code = pk_decode(bytes, n, &codec, &g);
+	if (code == PK_OK) {
+		fputs("{\"node\":", stdout);
+		show_node(g.nodes[0]);
+		puts("}");
+	} else error(code, NULL);
 	pk_free(&g);
 }
 
@@ -318,10 +186,12 @@ int main(void) {
 		if (strcmp(name, "walk") == 0) walk(line);
 		else if (strcmp(name, "pack") == 0) pack(line);
 		else if (strcmp(name, "unpack") == 0) unpack(line);
+		else if (strcmp(name, "encode") == 0) encode_op(line);
+		else if (strcmp(name, "decode") == 0) decode_op(line);
 		else printf("{\"error\":\"unknown op %s\"}\n", name);
-		fflush(stdout);
 		clear();
 	}
+	fflush(stdout);
 	free(line);
 	finish();
 	return 0;

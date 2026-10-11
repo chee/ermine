@@ -8,3 +8,6 @@ node-harness
 node-harness-check
 pack-harness
 pack-harness-check
+cbor-test
+cbor-test-check
+pack-bench

@@ -1,0 +1,150 @@
+{
+	"title": "make: fresh ids from the time, never one loaded; given ids as they are",
+	"steps": [
+		{
+			"op": "make",
+			"value": 1,
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "make",
+			"expect": {
+				"ok": "@2"
+			}
+		},
+		{
+			"op": "node",
+			"id": "@1",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 1
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "@2",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "intro",
+			"id": "@4",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "make",
+			"value": "x",
+			"expect": {
+				"ok": "@4-1"
+			}
+		},
+		{
+			"op": "node",
+			"id": "@4-1",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "x",
+							"time": 4
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "make",
+			"id": "named",
+			"value": [
+				1
+			],
+			"expect": {
+				"ok": "named"
+			}
+		},
+		{
+			"op": "node",
+			"id": "named",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": [
+								1
+							],
+							"time": 5
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "create",
+			"value": {
+				"a": 1
+			},
+			"expect": {
+				"ok": "@6"
+			}
+		},
+		{
+			"op": "create",
+			"id": "c2",
+			"expect": {
+				"ok": "c2"
+			}
+		},
+		{
+			"op": "node",
+			"id": "c2",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"named"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 7
+			}
+		}
+	]
+}

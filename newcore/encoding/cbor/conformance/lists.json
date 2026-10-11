@@ -1,0 +1,641 @@
+[
+	{
+		"from": "values-events-binary.json#4 (as lists)",
+		"value": {
+			"/": {
+				"float32": [
+					3.1415927410125732,
+					"-Infinity"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float32": [
+					3.1415927410125732,
+					"-Infinity"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-events-binary.json#5 (as lists)",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint64": [
+								"18446744073709551615"
+							]
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint64": [
+								"18446744073709551615"
+							]
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#2 (as lists)",
+		"value": {
+			"/": {
+				"int32": [
+					1,
+					2,
+					3
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int32": [
+					1,
+					2,
+					3
+				]
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#5 (as lists)",
+		"value": {
+			"/": {
+				"int32": [
+					4
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int32": [
+					4
+				]
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#13 (as lists)",
+		"value": {
+			"/": {
+				"uint8": [
+					1,
+					2
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": [
+					1,
+					2
+				]
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#20 (as lists)",
+		"value": {
+			"/": {
+				"uint8": [
+					1,
+					2,
+					3
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": [
+					1,
+					2,
+					3
+				]
+			}
+		}
+	},
+	{
+		"from": "values-malformed-typed.json#26 (as lists)",
+		"value": {
+			"t": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			}
+		},
+		"back": {
+			"t": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#2 (as lists)",
+		"value": {
+			"/": {
+				"int64": [
+					"-9223372036854775808",
+					"9007199254740993"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int64": [
+					"-9223372036854775808",
+					"9007199254740993"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#3 (as lists)",
+		"value": {
+			"/": {
+				"float32": [
+					3.1415927410125732,
+					"NaN",
+					-0.0
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float32": [
+					3.1415927410125732,
+					"NaN",
+					-0.0
+				]
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#4 (as lists)",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint16": [
+								65535
+							]
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint16": [
+								65535
+							]
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#11 (as lists)",
+		"value": {
+			"/": {
+				"int64": [
+					"1"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int64": [
+					"1"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#4 (as lists)",
+		"value": {
+			"/": {
+				"float64": [
+					1.5,
+					"Infinity"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float64": [
+					1.5,
+					"Infinity"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6 (as lists)",
+		"value": {
+			"/": {
+				"float32": [
+					0.5,
+					-0.0
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float32": [
+					0.5,
+					-0.0
+				]
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6 (as lists)",
+		"value": {
+			"/": {
+				"uint64": [
+					"18446744073709551615"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint64": [
+					"18446744073709551615"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#8 (as lists)",
+		"value": [
+			{
+				"/": {
+					"bytes": "aGVsbG8"
+				}
+			},
+			{
+				"/": {
+					"int8": [
+						-1
+					]
+				}
+			},
+			{
+				"/": {
+					"map": {
+						"/": {
+							"/": {
+								"bytes": ""
+							}
+						}
+					}
+				}
+			}
+		],
+		"back": [
+			{
+				"/": {
+					"bytes": "aGVsbG8"
+				}
+			},
+			{
+				"/": {
+					"int8": [
+						-1
+					]
+				}
+			},
+			{
+				"/": {
+					"map": {
+						"/": {
+							"/": {
+								"bytes": ""
+							}
+						}
+					}
+				}
+			}
+		]
+	},
+	{
+		"from": "values-typed-floats.json#1 (as lists)",
+		"value": {
+			"/": {
+				"float64": [
+					1.5,
+					-0.0,
+					0,
+					"NaN",
+					"Infinity",
+					"-Infinity",
+					0.1,
+					1e+300,
+					-2.5e-300
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float64": [
+					1.5,
+					-0.0,
+					0,
+					"NaN",
+					"Infinity",
+					"-Infinity",
+					0.1,
+					1e+300,
+					-2.5e-300
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-floats.json#3 (as lists)",
+		"value": {
+			"/": {
+				"float32": [
+					-2.5,
+					-0.0,
+					0,
+					"NaN",
+					"Infinity",
+					"-Infinity",
+					0.5
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float32": [
+					-2.5,
+					-0.0,
+					0,
+					"NaN",
+					"Infinity",
+					"-Infinity",
+					0.5
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-int64.json#1 (as lists)",
+		"value": {
+			"/": {
+				"int64": [
+					"-9223372036854775808",
+					"-9007199254740993",
+					"0",
+					"9007199254740993",
+					"9223372036854775807"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int64": [
+					"-9223372036854775808",
+					"-9007199254740993",
+					"0",
+					"9007199254740993",
+					"9223372036854775807"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-int64.json#3 (as lists)",
+		"value": {
+			"/": {
+				"uint64": [
+					"0",
+					"9007199254740993",
+					"18446744073709551615"
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint64": [
+					"0",
+					"9007199254740993",
+					"18446744073709551615"
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#1 (as lists)",
+		"value": {
+			"/": {
+				"int8": [
+					-128,
+					0,
+					127
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int8": [
+					-128,
+					0,
+					127
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#3 (as lists)",
+		"value": {
+			"/": {
+				"uint8": [
+					0,
+					255
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": [
+					0,
+					255
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#5 (as lists)",
+		"value": {
+			"/": {
+				"int16": [
+					-32768,
+					0,
+					32767
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int16": [
+					-32768,
+					0,
+					32767
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#7 (as lists)",
+		"value": {
+			"/": {
+				"uint16": [
+					0,
+					65535
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint16": [
+					0,
+					65535
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#9 (as lists)",
+		"value": {
+			"/": {
+				"int32": [
+					-2147483648,
+					0,
+					2147483647
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"int32": [
+					-2147483648,
+					0,
+					2147483647
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#11 (as lists)",
+		"value": {
+			"/": {
+				"uint32": [
+					0,
+					4294967295
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint32": [
+					0,
+					4294967295
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#13 (as lists)",
+		"value": {
+			"/": {
+				"int8": []
+			}
+		},
+		"back": {
+			"/": {
+				"int8": []
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#1 (as lists)",
+		"value": {
+			"/": {
+				"float32": [
+					1.5,
+					"NaN",
+					-0.0
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float32": [
+					1.5,
+					"NaN",
+					-0.0
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#3 (as lists)",
+		"value": {
+			"/": {
+				"float64": [
+					"NaN",
+					1
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"float64": [
+					"NaN",
+					1
+				]
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#18 (as lists)",
+		"value": {
+			"/": {
+				"uint32": [
+					4290772992
+				]
+			}
+		},
+		"back": {
+			"/": {
+				"uint32": [
+					4290772992
+				]
+			}
+		}
+	}
+]

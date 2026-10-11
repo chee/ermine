@@ -1,0 +1,121 @@
+{
+	"title": "an interface keeping what it wrote: the times of its changes, in order",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 0,
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "w",
+			"wrote": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"as": "w",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "rename",
+			"as": "w",
+			"id": "root",
+			"name": "a",
+			"to": "b",
+			"expect": {
+				"ok": [
+					4,
+					5
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "create",
+			"as": "w",
+			"value": 1,
+			"expect": {
+				"ok": "@7"
+			}
+		},
+		{
+			"op": "wrote",
+			"as": "w",
+			"expect": {
+				"ok": [
+					3,
+					4,
+					5
+				]
+			}
+		},
+		{
+			"op": "wrote",
+			"as": "w",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "write",
+			"as": "w",
+			"address": [
+				"nope"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "wrote",
+			"as": "w",
+			"expect": {
+				"ok": []
+			}
+		}
+	]
+}

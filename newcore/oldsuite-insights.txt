@@ -1,0 +1,36 @@
+newcore scheduler.ts against the old schedule suite (conformance/scenarios/schedule, 135)
+2026-10-11. adapter: an old-protocol harness over createScheduler, in a scratchpad (not kept)
+
+strict: 50 pass, 45 fail, 40 unsupported
+times ignored: 60 pass, 35 fail
+
+unsupported (40)
+  subscribe/take: 22 (no subscriptions)
+  test-reset with old rules (11) or budget (2)
+  test-reload: 1
+  place/write/read as a process (process/at): 4
+
+failures from the old design or the adapter
+  clock numbering: 10 (newcore spends ticks on status versions, outros)
+  marked lists: ~10 (write/insert return no marks; rebuilt from moments, lossy)
+  old ideas newcore lacks: ~10 (loader nodes, per-request agent, chroot,
+    reads-record and item shapes)
+  old graph rules not checked: 5 (one-place, ephemeral-parent, wrong-field detail,
+    re-placing an id duplicates it instead of moving)
+  old gone-list quirks: 4 (duplicates, order)
+
+real differences in newcore
+  1. a request that throws runs no rounds (scheduler.ts request(): rounds drain
+     only after fn() returns). a handler's changes before its throw leave readers
+     due until some later request. old suite ran them before returning.
+     fix: drain in the finally.
+  2. a write with no patches marks nobody. old suite marked readers.  (decide)
+  3. a path-started process's first run has no program in its agent: runAgent
+     is built before the finder sets p.program. later runs fine.  (bug)
+  4. a killed ephemeral node's id stays in its list, reads back pending.
+     old suite removed it.  (decide)
+  5. the code finder takes the path as given; the old one searched up from the
+     process's place. the host's job now, probably fine.
+
+also: status is its own first version (because place "status") and is mirrored
+in change.actor.code; the adapter reshaped it back to old form without trouble.

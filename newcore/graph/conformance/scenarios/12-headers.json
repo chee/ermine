@@ -1,0 +1,216 @@
+{
+	"title": "a change's header: the agent, reader, cause, and the host's site when asked",
+	"steps": [
+		{
+			"op": "new",
+			"site": {
+				"file": "host.js",
+				"line": 3
+			},
+			"actor": {
+				"actor": "me",
+				"person": "someone"
+			},
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 0,
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "p",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 0,
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": {
+								"actor": "me",
+								"person": "someone"
+							},
+							"site": {
+								"file": "host.js",
+								"line": 3
+							},
+							"time": 3,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "w",
+			"agent": "worker",
+			"reader": "@9",
+			"cause": {
+				"why": "because"
+			},
+			"site": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"as": "w",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "worker",
+							"reader": "@9",
+							"cause": {
+								"why": "because"
+							},
+							"site": {
+								"file": "host.js",
+								"line": 3
+							},
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "n",
+			"agent": "plain",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"as": "n",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "plain",
+							"time": 5,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "release",
+			"id": "a",
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"released": "a"
+					},
+					{
+						"marked": "p",
+						"by": {
+							"actor": {
+								"actor": "me",
+								"person": "someone"
+							},
+							"time": 6,
+							"node": "a",
+							"which": "loaded"
+						}
+					}
+				]
+			}
+		}
+	]
+}

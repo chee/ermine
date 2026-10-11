@@ -1,0 +1,392 @@
+{
+	"title": "protect: asked as the agent; a refused item has no node and why; a refused change throws",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"actor": "eve",
+					"op": "read",
+					"node": "secret",
+					"allow": false
+				},
+				{
+					"actor": "eve",
+					"op": "write",
+					"allow": false
+				},
+				{
+					"actor": "eve",
+					"op": "pass",
+					"name": "locked",
+					"allow": false
+				},
+				{
+					"actor": "eve",
+					"op": "list",
+					"node": "root",
+					"allow": false
+				},
+				{
+					"actor": "eve",
+					"op": "place",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "secret",
+			"child": "secret",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "open",
+			"child": "open",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "locked",
+			"child": "open",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "intro",
+			"id": "secret",
+			"value": "s",
+			"info": {
+				"title": "t"
+			},
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "intro",
+			"id": "open",
+			"value": "o",
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "bind",
+			"as": "eve",
+			"agent": "eve",
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"as": "eve",
+			"address": [
+				"secret"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"loaded": false,
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"as": "eve",
+			"address": [
+				"secret"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"as": "eve",
+			"address": [
+				"secret"
+			],
+			"name": "title",
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"as": "eve",
+			"address": [
+				"open"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "open",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"as": "eve",
+			"address": [
+				"locked"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "open",
+						"loaded": false,
+						"refused": {
+							"code": "rule",
+							"rule": 2
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"as": "eve",
+			"address": [],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "children",
+			"as": "eve",
+			"address": [
+				"open"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "write",
+			"as": "eve",
+			"address": [
+				"open"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "rule",
+					"rule": 1
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"as": "eve",
+			"id": "open",
+			"name": "k",
+			"child": "secret",
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "rule",
+					"rule": 4
+				}
+			}
+		},
+		{
+			"op": "rename",
+			"as": "eve",
+			"id": "root",
+			"name": "open",
+			"to": "shut",
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "rule",
+					"rule": 4
+				}
+			}
+		},
+		{
+			"op": "move",
+			"as": "eve",
+			"id": "root",
+			"name": "open",
+			"index": 0,
+			"toid": "open",
+			"toname": "k",
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "rule",
+					"rule": 4
+				}
+			}
+		},
+		{
+			"op": "pop",
+			"as": "eve",
+			"id": "root",
+			"name": "open",
+			"slotindex": 0,
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "remove",
+			"as": "eve",
+			"id": "root",
+			"name": "secret",
+			"index": 0,
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "asking",
+			"actor": "eve",
+			"asks": [
+				{
+					"op": "write",
+					"args": {
+						"node": "open",
+						"object": "value"
+					}
+				}
+			],
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "rule",
+					"rule": 1
+				}
+			}
+		},
+		{
+			"op": "asking",
+			"actor": "bob",
+			"asks": [
+				{
+					"op": "write",
+					"args": {
+						"node": "open",
+						"object": "value"
+					}
+				}
+			],
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"secret"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "release",
+			"id": "rules",
+			"expect": {
+				"ok": 9
+			}
+		},
+		{
+			"op": "look",
+			"as": "eve",
+			"address": [
+				"locked"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "open",
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"locked"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "pending"
+				}
+			}
+		},
+		{
+			"op": "asking",
+			"actor": "bob",
+			"asks": [
+				{
+					"op": "list",
+					"args": {
+						"node": "root"
+					}
+				}
+			],
+			"expect": {
+				"error": "refused",
+				"why": {
+					"code": "pending"
+				}
+			}
+		}
+	]
+}

@@ -282,10 +282,8 @@ pr_value pr_facts(pr_arena *a, const pr_value *actor, const char *op, const pr_v
 }
 
 int pr_matches(const pr_value *rule, const pr_value *facts) {
-	// as the reference takes the keys of any value: a list's are its indexes, a string's its characters
-	if (rule->kind == PR_LIST) return rule->n == 0;
-	if (rule->kind == PR_STR) return rule->n == 0;
-	if (rule->kind != PR_MAP) return rule->kind != PR_NULL;
+	// a rule is a map; anything else matches nothing
+	if (rule->kind != PR_MAP) return 0;
 	for (size_t i = 0; i < rule->n; i++) {
 		if (!strcmp(rule->keys[i], "allow")) continue;
 		const pr_value *v = pr_get(facts, rule->keys[i]);

@@ -13,7 +13,7 @@
 #include <string.h>
 
 #include "../../c/trackgraph.h"
-#include "../../mutate/c/mutate.h"
+#include "../../opstreams/mutate/c/mutate.h"
 
 // memory: an arena, and growing things in it
 
@@ -462,15 +462,6 @@ sc_fn *sc_live_fn(const nt_value *v) {
 	if (v == NULL || v->type != NT_NULL || v->count != LIVE_TAG) return NULL;
 	return (sc_fn *)(void *)v->keys;
 }
-static int live_in(const nt_value *v) {
-	if (v == NULL) return 0;
-	if (sc_live_fn(v)) return 1;
-	if (v->type != NT_LIST && v->type != NT_MAP) return 0;
-	for (size_t i = 0; i < v->count; i++)
-		if (live_in(v->items[i])) return 1;
-	return 0;
-}
-
 int sc_is(const nt_value *a, const nt_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
@@ -482,33 +473,6 @@ int sc_is(const nt_value *a, const nt_value *b) {
 		return a->num == b->num && signbit(a->num) == signbit(b->num);
 	case NT_STR: return a->bytes == b->bytes && !memcmp(a->str, b->str, a->bytes);
 	default: return 0;
-	}
-}
-
-nt_value *sc_copy(const nt_value *v) {
-	if (v == NULL) return NULL;
-	if (live_in(v)) return (nt_value *)v;
-	switch (v->type) {
-	case NT_NULL: return nt_null();
-	case NT_BOOL: return nt_bool(v->bool_);
-	case NT_NUM: return nt_num(v->num);
-	case NT_STR: {
-		nt_value *c = nt_str(v->str);
-		if (c->bytes != v->bytes) { // embedded NULs are not carried
-			c->bytes = strlen(c->str);
-		}
-		return c;
-	}
-	case NT_LIST: {
-		nt_value *c = nt_list();
-		for (size_t i = 0; i < v->count; i++) nt_push(c, sc_copy(v->items[i]));
-		return c;
-	}
-	default: {
-		nt_value *c = nt_map();
-		for (size_t i = 0; i < v->count; i++) nt_set(c, v->keys[i], sc_copy(v->items[i]));
-		return c;
-	}
 	}
 }
 
@@ -1352,7 +1316,7 @@ static void write_value(sc_sched *s, sc_proc *p, const nt_value *value, nt_value
 	size_t count = len > at ? len : at + 1;
 	nd_version *vs = amem(s, count * sizeof *vs);
 	if (len) memcpy(vs, node->value.versions, len * sizeof *vs);
-	vs[at] = (nd_version){is_live(value) ? value : sc_copy(value), change, NULL};
+	vs[at] = (nd_version){value, change, NULL};
 	node->value = (nd_object){vs, count};
 	chg_end(s, &c, 1);
 	if (!same_status(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);

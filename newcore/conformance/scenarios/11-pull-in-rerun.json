@@ -1,0 +1,23 @@
+{
+	"title": "a rerun with a run nested in it: the outer keeps what it reads again, drops the rest; the nested run's reads are its own",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "track", "from": "p", "to": "c" },
+		{ "op": "end", "from": "p" },
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "b" },
+		{ "op": "track", "from": "q", "to": "c" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "p", "to": "c" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["a", "c"] },
+		{ "op": "reads", "of": "q", "expect": ["b", "c"] },
+		{ "op": "readers", "of": "a", "expect": ["p"] },
+		{ "op": "readers", "of": "b", "expect": ["q"] },
+		{ "op": "readers", "of": "c", "expect": ["q", "p"] }
+	]
+}

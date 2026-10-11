@@ -1,0 +1,292 @@
+{
+	"title": "reads: look, lookup, children, content, info through the host",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "b",
+			"child": "b",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "b",
+			"child": "gone",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 1,
+			"info": {
+				"title": "A"
+			},
+			"children": {
+				"x": [
+					"b"
+				]
+			},
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "intro",
+			"id": "b",
+			"value": {
+				"k": [
+					1,
+					2
+				]
+			},
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "b",
+						"loaded": true
+					},
+					{
+						"id": "gone",
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"path": [
+				"x"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "lookups",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "b",
+						"loaded": true
+					},
+					{
+						"id": "gone",
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": [
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"name": "b",
+			"expect": {
+				"ok": [
+					{
+						"id": "b",
+						"loaded": true
+					},
+					{
+						"id": "gone",
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 1,
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "b",
+						"versions": [
+							{
+								"content": {
+									"k": [
+										1,
+										2
+									]
+								},
+								"time": 0
+							}
+						]
+					},
+					{
+						"id": "gone"
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"address": [
+				"a"
+			],
+			"name": "title",
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": "A",
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"address": [
+				"a"
+			],
+			"name": "none",
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"nope"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				".."
+			],
+			"expect": {
+				"error": "above-root"
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 0
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "A",
+								"time": 0
+							}
+						]
+					},
+					"children": {
+						"x": [
+							{
+								"content": [
+									"b"
+								],
+								"time": 0
+							}
+						]
+					},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "gone",
+			"expect": {
+				"ok": null
+			}
+		}
+	]
+}

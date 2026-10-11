@@ -1,0 +1,386 @@
+{
+	"title": "the graph's changing: an own owner is not marked; snap tells objects whole",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": {
+				"n": 0
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "p",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": {
+									"n": 0
+								},
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "q",
+			"track": "q",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "q",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": {
+									"n": 0
+								},
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"reader": "p",
+			"own": "p",
+			"tag": "t1",
+			"do": [
+				{
+					"op": "write",
+					"address": [
+						"a"
+					],
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 1
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					3
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "q",
+						"by": {
+							"actor": "sched",
+							"reader": "p",
+							"time": 3,
+							"node": "a",
+							"which": "value"
+						},
+						"tag": "t1"
+					}
+				]
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"own": "q",
+			"snap": [
+				[
+					"a",
+					"value"
+				]
+			],
+			"do": [
+				{
+					"op": "versions",
+					"id": "a",
+					"which": "value",
+					"contents": [
+						{
+							"status": 1
+						},
+						{
+							"n": 1
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					4
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "sched",
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"status": 1
+							},
+							"time": 4
+						},
+						{
+							"content": {
+								"n": 1
+							},
+							"time": 4
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"snap": [
+				[
+					"a",
+					"value"
+				]
+			],
+			"do": [],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"snap": [
+				[
+					"a",
+					[
+						"info",
+						"x"
+					]
+				]
+			],
+			"do": [
+				{
+					"op": "versions",
+					"id": "a",
+					"which": [
+						"info",
+						"x"
+					],
+					"contents": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					5
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"do": [
+				{
+					"op": "write",
+					"address": [
+						"a"
+					],
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 2
+						}
+					]
+				},
+				{
+					"op": "insert",
+					"id": "root",
+					"name": "b",
+					"child": "a"
+				}
+			],
+			"expect": {
+				"ok": [
+					6,
+					7
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "sched",
+							"time": 6,
+							"node": "a",
+							"which": "value"
+						}
+					},
+					{
+						"marked": "q",
+						"by": {
+							"actor": "sched",
+							"time": 6,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"do": [
+				{
+					"op": "write",
+					"address": [
+						"a"
+					],
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": 3
+						}
+					]
+				},
+				{
+					"op": "remove",
+					"id": "root",
+					"name": "zzz",
+					"index": 0
+				}
+			],
+			"expect": {
+				"error": "range"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"status": 1,
+								"n": 3
+							},
+							"time": 8
+						},
+						{
+							"content": {
+								"n": 1
+							},
+							"time": 4
+						}
+					],
+					"info": {
+						"x": [
+							{
+								"content": 1,
+								"time": 5
+							}
+						]
+					},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 8
+			}
+		}
+	]
+}

@@ -20,9 +20,9 @@
 // the process's place, its first item's first version a program; none there: pending.
 // a moment: as SCHEDULER.tex's, a read's without its items, an error as its code.
 // an error: {"error": code} (normal.ts); the harness goes on.
-import createNode from "../../node.ts"
+import createNode from "../../nodes/node.ts"
 import { rules } from "../../protect.ts"
-import { type Api, createScheduler, type Finder, type Moment, PENDING } from "../../scheduler.ts"
+import { type Api, createScheduler, type Finder, type Moment, PENDING } from "../scheduler.ts"
 import { code, json, operate, version } from "./normal.ts"
 import { load, program } from "./steps.ts"
 

@@ -1,0 +1,241 @@
+{
+	"title": "writes: each change takes the next time, and the node shows it",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": {
+				"n": 1
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "b",
+			"value": 2,
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "hi"
+				}
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "b",
+			"child": "b",
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "b",
+			"child": "a",
+			"index": 0,
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {},
+					"children": {
+						"a": [
+							{
+								"content": [
+									"a"
+								],
+								"time": 1
+							}
+						],
+						"b": [
+							{
+								"content": [
+									"a",
+									"b"
+								],
+								"time": 7
+							}
+						]
+					},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "b",
+			"index": 0,
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "b",
+			"to": "c",
+			"expect": {
+				"ok": [
+					9,
+					10
+				]
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "c",
+			"index": 0,
+			"toid": "a",
+			"toname": "kids",
+			"expect": {
+				"ok": [
+					11,
+					12
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {},
+					"children": {
+						"a": [
+							{
+								"content": [
+									"a"
+								],
+								"time": 1
+							}
+						]
+					},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"n": 5
+							},
+							"time": 4
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "hi",
+								"time": 5
+							}
+						]
+					},
+					"children": {
+						"kids": [
+							{
+								"content": [
+									"b"
+								],
+								"time": 12
+							}
+						]
+					},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 12
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"missing"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "..",
+			"child": "b",
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 12
+			}
+		}
+	]
+}

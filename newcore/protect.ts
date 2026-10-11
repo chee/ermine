@@ -1,4 +1,4 @@
-// who may do what (core/protect/PROTECT.tex), and nothing else. only the scheduler calls it: it
+// who may do what (PROTECT.tex), and nothing else. only the scheduler calls it: it
 // asks before each operation, and gives the actor what the answers allow. nothing here reads the
 // graph: a policy's own reads go through the read the scheduler gives, which it tracks.
 
@@ -183,6 +183,7 @@ export function facts(actor: unknown, op: string, args: Args): Record<string, un
 
 // every field a rule gives equals the ask's; one the ask lacks never matches
 export function matches(rule: Record<string, unknown>, f: Record<string, unknown>): boolean {
+	if (!isMap(rule)) return false
 	for (const k of Object.keys(rule)) {
 		if (k === "allow" || rule[k] === undefined) continue
 		if (!Object.hasOwn(f, k) || !equal(rule[k], f[k])) return false
@@ -199,13 +200,23 @@ function malformed(list: unknown): string | undefined {
 	}
 }
 
+// each list's check, once per value: a new value is a new object, so the same object is the same
+// list. "" when well formed
+const checked = new WeakMap<object, string>()
+function wrongOf(list: unknown): string | undefined {
+	if (list === null || typeof list !== "object") return malformed(list)
+	let wrong = checked.get(list)
+	if (wrong === undefined) checked.set(list, wrong = malformed(list) ?? "")
+	return wrong || undefined
+}
+
 // a may reading its rules from the value of the node rulesAt, through read, at each ask: the
 // first rule matching wins; none: allowed. not loaded: pending; not a list of rules: refused
 export function rules(rulesAt: string): May {
 	return (actor, op, args, read) => {
 		const got = read(rulesAt)
 		if (got === undefined) return { pending: true }
-		const wrong = malformed(got.value)
+		const wrong = wrongOf(got.value)
 		if (wrong) return { no: { code: "wrong-field", field: "rules", text: wrong } }
 		const list = got.value as Record<string, unknown>[]
 		const f = facts(actor, op, args)

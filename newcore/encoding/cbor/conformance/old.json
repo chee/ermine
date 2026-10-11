@@ -1,0 +1,1857 @@
+[
+	{
+		"from": "values-bytes.json#1",
+		"value": {
+			"/": {
+				"bytes": "aGVsbG8"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "aGVsbG8"
+			}
+		}
+	},
+	{
+		"from": "values-bytes.json#3",
+		"value": {
+			"/": {
+				"bytes": "+/8"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "+/8"
+			}
+		}
+	},
+	{
+		"from": "values-bytes.json#5",
+		"value": {
+			"/": {
+				"bytes": ""
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": ""
+			}
+		}
+	},
+	{
+		"from": "values-bytes.json#7",
+		"value": {
+			"img": {
+				"/": {
+					"bytes": "AP+AAQ"
+				}
+			},
+			"l": [
+				{
+					"/": {
+						"bytes": "aGk"
+					}
+				},
+				{
+					"/": {
+						"bytes": "aGVsbG8gd29ybGQ"
+					}
+				}
+			],
+			"s": "aGk"
+		},
+		"back": {
+			"img": {
+				"/": {
+					"bytes": "AP+AAQ"
+				}
+			},
+			"l": [
+				{
+					"/": {
+						"bytes": "aGk"
+					}
+				},
+				{
+					"/": {
+						"bytes": "aGVsbG8gd29ybGQ"
+					}
+				}
+			],
+			"s": "aGk"
+		}
+	},
+	{
+		"from": "values-check-order.json#1",
+		"value": 0,
+		"back": 0
+	},
+	{
+		"from": "values-check-order.json#2",
+		"value": {
+			"/": {
+				"bytes": "eA=="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#3",
+		"value": {
+			"/": {
+				"int16": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#4",
+		"value": {
+			"/": {
+				"float32": "AADA/w"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#5",
+		"value": {
+			"/": {
+				"uint8": "AR"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#6",
+		"value": {
+			"/": {
+				"blob": 1
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#8",
+		"value": {
+			"/": {
+				"uint8": [
+					1
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#9",
+		"value": {
+			"/": {
+				"float64": "AQAAAAAA8H8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#10",
+		"value": {
+			"/": {
+				"bytes": "eA=="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-check-order.json#11",
+		"value": {
+			"/": {}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-events-binary.json#1",
+		"value": {
+			"b": {
+				"/": {
+					"bytes": "aGU"
+				}
+			}
+		},
+		"back": {
+			"b": {
+				"/": {
+					"bytes": "aGU"
+				}
+			}
+		}
+	},
+	{
+		"from": "values-events-binary.json#3",
+		"value": {
+			"/": {
+				"bytes": "bGxv"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "bGxv"
+			}
+		}
+	},
+	{
+		"from": "values-events-binary.json#4",
+		"value": {
+			"/": {
+				"float32": "2w9JQAAAgP8"
+			}
+		},
+		"back": {
+			"/": {
+				"float32": "2w9JQAAAgP8"
+			}
+		}
+	},
+	{
+		"from": "values-events-binary.json#5",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint64": "//////////8"
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint64": "//////////8"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#1",
+		"value": {
+			"v": [
+				1,
+				2,
+				3
+			]
+		},
+		"back": {
+			"v": [
+				1,
+				2,
+				3
+			]
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#2",
+		"value": {
+			"/": {
+				"int32": "AQAAAAIAAAADAAAA"
+			}
+		},
+		"back": {
+			"/": {
+				"int32": "AQAAAAIAAAADAAAA"
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#5",
+		"value": {
+			"/": {
+				"int32": "BAAAAA"
+			}
+		},
+		"back": {
+			"/": {
+				"int32": "BAAAAA"
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#7",
+		"value": [
+			1,
+			2,
+			3,
+			4
+		],
+		"back": [
+			1,
+			2,
+			3,
+			4
+		]
+	},
+	{
+		"from": "values-list-typed-switch.json#10",
+		"value": [
+			5
+		],
+		"back": [
+			5
+		]
+	},
+	{
+		"from": "values-list-typed-switch.json#12",
+		"value": [
+			1,
+			2
+		],
+		"back": [
+			1,
+			2
+		]
+	},
+	{
+		"from": "values-list-typed-switch.json#13",
+		"value": {
+			"/": {
+				"uint8": "AQI"
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": "AQI"
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#15",
+		"value": {
+			"/": {
+				"bytes": "AQI"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "AQI"
+			}
+		}
+	},
+	{
+		"from": "values-list-typed-switch.json#18",
+		"value": [
+			1,
+			2
+		],
+		"back": [
+			1,
+			2
+		]
+	},
+	{
+		"from": "values-list-typed-switch.json#20",
+		"value": [
+			3
+		],
+		"back": [
+			3
+		]
+	},
+	{
+		"from": "values-list-typed-switch.json#20",
+		"value": {
+			"/": {
+				"uint8": "AQID"
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": "AQID"
+			}
+		}
+	},
+	{
+		"from": "values-live-outside.json#1",
+		"value": {
+			"/": {
+				"live": "canvas"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#2",
+		"value": {
+			"x": {
+				"/": {
+					"live": "canvas"
+				}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#3",
+		"value": [
+			{
+				"/": {
+					"live": "canvas"
+				}
+			}
+		],
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#5",
+		"value": {
+			"m": {},
+			"l": []
+		},
+		"back": {
+			"m": {},
+			"l": []
+		}
+	},
+	{
+		"from": "values-live-outside.json#6",
+		"value": {
+			"/": {
+				"live": "canvas"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#7",
+		"value": {
+			"/": {
+				"live": "canvas"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#8",
+		"value": [
+			{
+				"/": {
+					"live": "socket"
+				}
+			}
+		],
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#9",
+		"value": {
+			"x": {
+				"/": {
+					"live": "canvas"
+				}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-live-outside.json#15",
+		"value": {
+			"/": {
+				"live": "canvas"
+			}
+		},
+		"back": {
+			"/": {
+				"live": "canvas"
+			}
+		}
+	},
+	{
+		"from": "values-lone-surrogate.json#1",
+		"value": "x\ud800y",
+		"refused": true
+	},
+	{
+		"from": "values-lone-surrogate.json#2",
+		"value": {
+			"k\udc00": 1
+		},
+		"refused": true
+	},
+	{
+		"from": "values-lone-surrogate.json#7",
+		"value": "x\ud83d\ude00y",
+		"back": "x\ud83d\ude00y"
+	},
+	{
+		"from": "values-lone-surrogate.json#8",
+		"value": {
+			"m": {}
+		},
+		"back": {
+			"m": {}
+		}
+	},
+	{
+		"from": "values-lone-surrogate.json#9",
+		"value": "\ud800",
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#1",
+		"value": {
+			"/": {
+				"bytes": "aGVsbG8="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#2",
+		"value": {
+			"/": {
+				"bytes": "aGk="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#3",
+		"value": {
+			"/": {
+				"bytes": "aGk=="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#4",
+		"value": {
+			"/": {
+				"bytes": "aGVsb"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#5",
+		"value": {
+			"/": {
+				"bytes": "-_8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#6",
+		"value": {
+			"/": {
+				"bytes": "aGV sbG8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#7",
+		"value": {
+			"/": {
+				"bytes": "aGk!"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#8",
+		"value": {
+			"/": {
+				"bytes": 5
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#9",
+		"value": {
+			"/": {
+				"bytes": [
+					"aGk"
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#10",
+		"value": {
+			"/": {
+				"bytes": null
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#11",
+		"value": {
+			"/": {
+				"bytes": {
+					"b": "aGk"
+				}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#12",
+		"value": {
+			"x": [
+				{
+					"/": {
+						"bytes": "aGk="
+					}
+				}
+			]
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#15",
+		"value": {
+			"b": {
+				"/": {
+					"bytes": "aGU"
+				}
+			}
+		},
+		"back": {
+			"b": {
+				"/": {
+					"bytes": "aGU"
+				}
+			}
+		}
+	},
+	{
+		"from": "values-malformed-bytes.json#16",
+		"value": {
+			"/": {
+				"bytes": "aGk="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#17",
+		"value": {
+			"/": {
+				"bytes": "-_8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#18",
+		"value": {
+			"/": {
+				"bytes": "bGxv="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-bytes.json#20",
+		"value": {
+			"/": {
+				"bytes": "bGxv"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "bGxv"
+			}
+		}
+	},
+	{
+		"from": "values-malformed-slash.json#1",
+		"value": {
+			"/": "x"
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#2",
+		"value": {
+			"/": null
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#3",
+		"value": {
+			"/": 1
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#4",
+		"value": {
+			"/": []
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#5",
+		"value": {
+			"/": [
+				{
+					"/": {
+						"bytes": "aGk"
+					}
+				}
+			]
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#6",
+		"value": {
+			"/": {}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#7",
+		"value": {
+			"/": {
+				"blob": "aGk"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#8",
+		"value": {
+			"/": {
+				"bytes": "aGk",
+				"int8": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#9",
+		"value": {
+			"/": {
+				"int8": "AQ",
+				"uint8": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#10",
+		"value": {
+			"/": {
+				"map": 5
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#11",
+		"value": {
+			"/": {
+				"map": null
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#12",
+		"value": {
+			"k": {
+				"/": {}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#13",
+		"value": [
+			1,
+			{
+				"/": "x"
+			}
+		],
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#14",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {}
+					}
+				}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#16",
+		"value": {
+			"m": {},
+			"l": []
+		},
+		"back": {
+			"m": {},
+			"l": []
+		}
+	},
+	{
+		"from": "values-malformed-slash.json#17",
+		"value": {
+			"/": {}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#18",
+		"value": {
+			"/": "x"
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-slash.json#19",
+		"value": [
+			{
+				"/": {
+					"kind": 1
+				}
+			}
+		],
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#1",
+		"value": {
+			"/": {
+				"float16": "AAA"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#2",
+		"value": {
+			"/": {
+				"Float32": "AACAPw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#3",
+		"value": {
+			"/": {
+				"int": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#4",
+		"value": {
+			"/": {
+				"uint128": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#5",
+		"value": {
+			"/": {
+				"int8": [
+					1,
+					2
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#6",
+		"value": {
+			"/": {
+				"float32": [
+					1.5
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#7",
+		"value": {
+			"/": {
+				"int64": [
+					"1"
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#8",
+		"value": {
+			"/": {
+				"int8": 1
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#9",
+		"value": {
+			"/": {
+				"float64": null
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#10",
+		"value": {
+			"/": {
+				"int8": {
+					"0": 1
+				}
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#11",
+		"value": {
+			"/": {
+				"uint8": "AQI="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#12",
+		"value": {
+			"/": {
+				"uint8": "-_8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#13",
+		"value": {
+			"/": {
+				"uint8": "AQ I"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#14",
+		"value": {
+			"/": {
+				"uint8": "AQIDB"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#15",
+		"value": {
+			"/": {
+				"uint8": "AR"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#16",
+		"value": {
+			"/": {
+				"int16": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#17",
+		"value": {
+			"/": {
+				"uint16": "AQID"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#18",
+		"value": {
+			"/": {
+				"int32": "AQID"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#19",
+		"value": {
+			"/": {
+				"uint32": "AQIDBAU"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#20",
+		"value": {
+			"/": {
+				"float32": "AACAPwAA"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#21",
+		"value": {
+			"/": {
+				"int64": "AQIDBAUGBw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#22",
+		"value": {
+			"/": {
+				"uint64": "AQIDBAUGBwgJ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#23",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA8D8AAAA"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#24",
+		"value": {
+			"k": [
+				{
+					"/": {
+						"uint16": "AQ"
+					}
+				}
+			]
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#26",
+		"value": {
+			"t": {
+				"/": {
+					"int8": "AQ"
+				}
+			}
+		},
+		"back": {
+			"t": {
+				"/": {
+					"int8": "AQ"
+				}
+			}
+		}
+	},
+	{
+		"from": "values-malformed-typed.json#27",
+		"value": {
+			"/": {
+				"int16": "AQ"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#28",
+		"value": {
+			"/": {
+				"int8": [
+					0
+				]
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-malformed-typed.json#29",
+		"value": {
+			"/": {
+				"uint64": "AQ=="
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-reload-binary.json#1",
+		"value": {
+			"/": {
+				"bytes": "AP+AAQ"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "AP+AAQ"
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#2",
+		"value": {
+			"/": {
+				"int64": "AAAAAAAAAIABAAAAAAAgAA"
+			}
+		},
+		"back": {
+			"/": {
+				"int64": "AAAAAAAAAIABAAAAAAAgAA"
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#3",
+		"value": {
+			"/": {
+				"float32": "2w9JQAAAwH8AAACA"
+			}
+		},
+		"back": {
+			"/": {
+				"float32": "2w9JQAAAwH8AAACA"
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#4",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint16": "//8"
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"uint16": "//8"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#5",
+		"value": {
+			"/": {
+				"bytes": "aGk"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "aGk"
+			}
+		}
+	},
+	{
+		"from": "values-reload-binary.json#11",
+		"value": {
+			"/": {
+				"int64": "AQAAAAAAAAA"
+			}
+		},
+		"back": {
+			"/": {
+				"int64": "AQAAAAAAAAA"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#1",
+		"value": null,
+		"back": null
+	},
+	{
+		"from": "values-set-snapshot-binary.json#2",
+		"value": {
+			"/": {
+				"bytes": "aGVsbG8"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "aGVsbG8"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#4",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA+D8AAAAAAADwfw"
+			}
+		},
+		"back": {
+			"/": {
+				"float64": "AAAAAAAA+D8AAAAAAADwfw"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6",
+		"value": {},
+		"back": {}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6",
+		"value": {
+			"/": {
+				"bytes": "aGk"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "aGk"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6",
+		"value": {
+			"/": {
+				"float32": "AAAAPwAAAIA"
+			}
+		},
+		"back": {
+			"/": {
+				"float32": "AAAAPwAAAIA"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6",
+		"value": {
+			"/": {
+				"uint64": "//////////8"
+			}
+		},
+		"back": {
+			"/": {
+				"uint64": "//////////8"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#6",
+		"value": [],
+		"back": []
+	},
+	{
+		"from": "values-set-snapshot-binary.json#8",
+		"value": [
+			{
+				"/": {
+					"bytes": "aGVsbG8"
+				}
+			},
+			{
+				"/": {
+					"int8": "/w"
+				}
+			},
+			{
+				"/": {
+					"map": {
+						"/": {
+							"/": {
+								"bytes": ""
+							}
+						}
+					}
+				}
+			}
+		],
+		"back": [
+			{
+				"/": {
+					"bytes": "aGVsbG8"
+				}
+			},
+			{
+				"/": {
+					"int8": "/w"
+				}
+			},
+			{
+				"/": {
+					"map": {
+						"/": {
+							"/": {
+								"bytes": ""
+							}
+						}
+					}
+				}
+			}
+		]
+	},
+	{
+		"from": "values-set-snapshot-binary.json#8",
+		"value": {
+			"/": {
+				"bytes": "+/8"
+			}
+		},
+		"back": {
+			"/": {
+				"bytes": "+/8"
+			}
+		}
+	},
+	{
+		"from": "values-set-snapshot-binary.json#10",
+		"value": [
+			{
+				"/": {
+					"bytes": "eA"
+				}
+			}
+		],
+		"back": [
+			{
+				"/": {
+					"bytes": "eA"
+				}
+			}
+		]
+	},
+	{
+		"from": "values-slash-map.json#1",
+		"value": {
+			"/": {
+				"map": {
+					"/": 1
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": 1
+				}
+			}
+		}
+	},
+	{
+		"from": "values-slash-map.json#3",
+		"value": {
+			"/": 1,
+			"x": 2
+		},
+		"back": {
+			"/": 1,
+			"x": 2
+		}
+	},
+	{
+		"from": "values-slash-map.json#5",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"bytes": "aGk"
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"bytes": "aGk"
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-slash-map.json#7",
+		"value": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"map": {
+								"/": null
+							}
+						}
+					}
+				}
+			}
+		},
+		"back": {
+			"/": {
+				"map": {
+					"/": {
+						"/": {
+							"map": {
+								"/": null
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	{
+		"from": "values-slash-map.json#9",
+		"value": [
+			{
+				"/": {
+					"map": {
+						"/": "x"
+					}
+				}
+			},
+			{
+				"k": {
+					"/": {
+						"map": {
+							"/": [
+								1
+							]
+						}
+					}
+				}
+			}
+		],
+		"back": [
+			{
+				"/": {
+					"map": {
+						"/": "x"
+					}
+				}
+			},
+			{
+				"k": {
+					"/": {
+						"map": {
+							"/": [
+								1
+							]
+						}
+					}
+				}
+			}
+		]
+	},
+	{
+		"from": "values-slash-map.json#11",
+		"value": {},
+		"back": {}
+	},
+	{
+		"from": "values-slash-map.json#12",
+		"value": "v",
+		"back": "v"
+	},
+	{
+		"from": "values-slash-map.json#14",
+		"value": 1,
+		"back": 1
+	},
+	{
+		"from": "values-typed-floats.json#1",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA+D8AAAAAAAAAgAAAAAAAAAAAAAAAAAAA+H8AAAAAAADwfwAAAAAAAPD/mpmZmZmZuT+cdQCIPOQ3fi8wt7OnybqB"
+			}
+		},
+		"back": {
+			"/": {
+				"float64": "AAAAAAAA+D8AAAAAAAAAgAAAAAAAAAAAAAAAAAAA+H8AAAAAAADwfwAAAAAAAPD/mpmZmZmZuT+cdQCIPOQ3fi8wt7OnybqB"
+			}
+		}
+	},
+	{
+		"from": "values-typed-floats.json#3",
+		"value": {
+			"/": {
+				"float32": "AAAgwAAAAIAAAAAAAADAfwAAgH8AAID/AAAAPw"
+			}
+		},
+		"back": {
+			"/": {
+				"float32": "AAAgwAAAAIAAAAAAAADAfwAAgH8AAID/AAAAPw"
+			}
+		}
+	},
+	{
+		"from": "values-typed-int64.json#1",
+		"value": {
+			"/": {
+				"int64": "AAAAAAAAAID////////f/wAAAAAAAAAAAQAAAAAAIAD/////////fw"
+			}
+		},
+		"back": {
+			"/": {
+				"int64": "AAAAAAAAAID////////f/wAAAAAAAAAAAQAAAAAAIAD/////////fw"
+			}
+		}
+	},
+	{
+		"from": "values-typed-int64.json#3",
+		"value": {
+			"/": {
+				"uint64": "AAAAAAAAAAABAAAAAAAgAP//////////"
+			}
+		},
+		"back": {
+			"/": {
+				"uint64": "AAAAAAAAAAABAAAAAAAgAP//////////"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#1",
+		"value": {
+			"/": {
+				"int8": "gAB/"
+			}
+		},
+		"back": {
+			"/": {
+				"int8": "gAB/"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#3",
+		"value": {
+			"/": {
+				"uint8": "AP8"
+			}
+		},
+		"back": {
+			"/": {
+				"uint8": "AP8"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#5",
+		"value": {
+			"/": {
+				"int16": "AIAAAP9/"
+			}
+		},
+		"back": {
+			"/": {
+				"int16": "AIAAAP9/"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#7",
+		"value": {
+			"/": {
+				"uint16": "AAD//w"
+			}
+		},
+		"back": {
+			"/": {
+				"uint16": "AAD//w"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#9",
+		"value": {
+			"/": {
+				"int32": "AAAAgAAAAAD///9/"
+			}
+		},
+		"back": {
+			"/": {
+				"int32": "AAAAgAAAAAD///9/"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#11",
+		"value": {
+			"/": {
+				"uint32": "AAAAAP////8"
+			}
+		},
+		"back": {
+			"/": {
+				"uint32": "AAAAAP////8"
+			}
+		}
+	},
+	{
+		"from": "values-typed-integers.json#13",
+		"value": {
+			"/": {
+				"int8": ""
+			}
+		},
+		"back": {
+			"/": {
+				"int8": ""
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#1",
+		"value": {
+			"/": {
+				"float32": "AADAPwAAwH8AAACA"
+			}
+		},
+		"back": {
+			"/": {
+				"float32": "AADAPwAAwH8AAACA"
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#3",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA+H8AAAAAAADwPw"
+			}
+		},
+		"back": {
+			"/": {
+				"float64": "AAAAAAAA+H8AAAAAAADwPw"
+			}
+		}
+	},
+	{
+		"from": "values-typed-nan.json#5",
+		"value": {
+			"/": {
+				"float32": "AADA/w"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#6",
+		"value": {
+			"/": {
+				"float32": "AQDAfw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#7",
+		"value": {
+			"/": {
+				"float32": "AACgfw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#8",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA+P8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#9",
+		"value": {
+			"/": {
+				"float64": "AQAAAAAA8H8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#10",
+		"value": {
+			"/": {
+				"float64": "AQAAAAAA+H8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#11",
+		"value": {
+			"k": [
+				{
+					"/": {
+						"float32": "AADAPwAAwP8"
+					}
+				}
+			]
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#13",
+		"value": {
+			"/": {
+				"float32": "AACgfw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#14",
+		"value": {
+			"/": {
+				"float32": "AQDAfw"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#15",
+		"value": {
+			"/": {
+				"float64": "AAAAAAAA+P8"
+			}
+		},
+		"refused": true
+	},
+	{
+		"from": "values-typed-nan.json#18",
+		"value": {
+			"/": {
+				"uint32": "AADA/w"
+			}
+		},
+		"back": {
+			"/": {
+				"uint32": "AADA/w"
+			}
+		}
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#1",
+		"value": 0,
+		"back": 0
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#3",
+		"value": 0,
+		"back": 0
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#5",
+		"value": 0,
+		"back": 0
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#7",
+		"value": {
+			"/": {
+				"number": "NaN"
+			}
+		},
+		"back": {
+			"/": {
+				"number": "NaN"
+			}
+		}
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#9",
+		"value": [
+			0,
+			0,
+			{
+				"/": {
+					"number": "Infinity"
+				}
+			},
+			{
+				"/": {
+					"number": "-Infinity"
+				}
+			},
+			{
+				"/": {
+					"number": "NaN"
+				}
+			},
+			{
+				"k": 0
+			}
+		],
+		"back": [
+			0,
+			0,
+			{
+				"/": {
+					"number": "Infinity"
+				}
+			},
+			{
+				"/": {
+					"number": "-Infinity"
+				}
+			},
+			{
+				"/": {
+					"number": "NaN"
+				}
+			},
+			{
+				"k": 0
+			}
+		]
+	},
+	{
+		"from": "decided-numbers-negative-zero.json#13",
+		"value": 0,
+		"back": 0
+	}
+]

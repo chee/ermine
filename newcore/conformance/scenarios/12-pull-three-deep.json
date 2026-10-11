@@ -1,0 +1,24 @@
+{
+	"title": "runs nest three deep: each reader's reads are its own, in its own order",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "b" },
+		{ "op": "begin", "from": "r" },
+		{ "op": "track", "from": "r", "to": "c" },
+		{ "op": "end", "from": "r" },
+		{ "op": "track", "from": "q", "to": "r" },
+		{ "op": "track", "from": "q", "to": "d" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "p", "to": "q" },
+		{ "op": "track", "from": "p", "to": "e" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["a", "q", "e"] },
+		{ "op": "reads", "of": "q", "expect": ["b", "r", "d"] },
+		{ "op": "reads", "of": "r", "expect": ["c"] },
+		{ "op": "readers", "of": "q", "expect": ["p"] },
+		{ "op": "readers", "of": "r", "expect": ["q"] },
+		{ "op": "readers", "of": "c", "expect": ["r"] }
+	]
+}

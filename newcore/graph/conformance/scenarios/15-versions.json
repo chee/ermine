@@ -1,0 +1,302 @@
+{
+	"title": "writing a version not the first, or a span of them: told whole",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": {
+				"n": 0
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "p",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": {
+									"n": 0
+								},
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"slotindex": 0,
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 3,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"m"
+					],
+					"value": 2
+				}
+			],
+			"slotindex": [
+				0,
+				1
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 4,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "new"
+				}
+			],
+			"slotindex": [
+				0,
+				1
+			],
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 5,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "new",
+							"time": 5
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "two"
+				}
+			],
+			"slotindex": 1,
+			"expect": {
+				"error": "range"
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "sched",
+			"snap": [
+				[
+					"a",
+					"value"
+				]
+			],
+			"do": [
+				{
+					"op": "versions",
+					"id": "a",
+					"which": "value",
+					"contents": [
+						{
+							"s": 0
+						},
+						{
+							"t": 0
+						}
+					]
+				}
+			],
+			"expect": {
+				"ok": [
+					6
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "sched",
+							"time": 6,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"value": 1
+				}
+			],
+			"slotindex": 1,
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 7,
+							"node": "a",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": {
+								"s": 0
+							},
+							"time": 6
+						},
+						{
+							"content": {
+								"t": 1
+							},
+							"time": 7
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		}
+	]
+}
