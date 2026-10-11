@@ -1,0 +1,16 @@
+{
+	"title": "layer, place and why, as given",
+	"steps": [
+		{
+			"op": "create",
+			"layer": "sync",
+			"place": { "side": 1 },
+			"why": { "peer": "b", "heads": ["h1", "h2"] },
+			"expect": {
+				"layer": "sync",
+				"place": { "side": 1 },
+				"why": { "peer": "b", "heads": ["h1", "h2"] }
+			}
+		}
+	]
+}

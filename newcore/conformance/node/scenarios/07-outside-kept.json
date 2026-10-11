@@ -1,0 +1,18 @@
+{
+	"title": "outside with a site given: the given one, as from storage",
+	"steps": [
+		{
+			"op": "make",
+			"id": "a",
+			"header": { "time": 0, "actor": "me", "site": { "file": "file:///old.ts", "line": 3 } },
+			"outside": true,
+			"expect": {
+				"id": "a",
+				"value": [],
+				"info": [],
+				"children": [],
+				"header": { "time": 0, "actor": "me", "site": { "file": "file:///old.ts", "line": 3 } }
+			}
+		}
+	]
+}

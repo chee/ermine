@@ -1,0 +1,231 @@
+{
+	"title": "lookup of a path: the nearest place it is whole",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"t0"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"t1"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "t0",
+					"children": [
+						[
+							"colors",
+							[
+								{
+									"content": [
+										"c0"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "t1",
+					"children": []
+				},
+				{
+					"id": "c0",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme",
+				"colors"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "c0",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "t0",
+								"at": 0
+							},
+							{
+								"node": "t0",
+								"name": "colors",
+								"id": "c0",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "lookups",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme",
+				"colors"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "c0",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "t0",
+								"at": 0
+							},
+							{
+								"node": "t0",
+								"name": "colors",
+								"id": "c0",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "t1",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "t1",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "lookups",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "t1",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "t1",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					},
+					{
+						"id": "t0",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "t0",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme",
+				"nope"
+			],
+			"expect": {
+				"items": []
+			}
+		}
+	]
+}

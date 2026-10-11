@@ -1,0 +1,59 @@
+{
+	"title": "columns back to patches",
+	"steps": [
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"], ["u", 1]],
+				"path": [0, 3, 1, 2],
+				"shape": [3, 3, 2, 1, 0, 1],
+				"from": [0, 1, 1, 2],
+				"size": [0, 3],
+				"value": ["a", "b", "c", 7],
+				"move": []
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "a" },
+					{ "path": ["t"], "range": [1, 1], "value": "b" },
+					{ "path": ["t"], "range": [2, 2], "value": "c" },
+					{ "path": ["u", 1], "value": 7 },
+					{ "path": ["u", 1] }
+				]
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 4],
+				"shape": [1, 1, 5, 1, 2, 1, 3, 1],
+				"from": [2, 1, -2, 1, 1, 1],
+				"size": [3, 1, 0, 1, 1, 1],
+				"value": [0, "x"],
+				"move": [{ "path": ["t"], "range": [4, 6] }]
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [2, 5] },
+					{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [4, 6] } },
+					{ "path": ["t"], "value": 0 },
+					{ "path": ["t"], "range": [1, 2], "value": "x" }
+				]
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [],
+				"path": [],
+				"shape": [],
+				"from": [],
+				"size": [],
+				"value": [],
+				"move": []
+			},
+			"expect": { "patches": [] }
+		}
+	]
+}

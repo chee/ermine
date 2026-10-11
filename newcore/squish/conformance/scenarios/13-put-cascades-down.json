@@ -1,0 +1,40 @@
+{
+	"title": "a put kills as far back as patches are under it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a", "b"], "value": 1 },
+				{ "path": ["a", "c"], "value": 2 },
+				{ "path": ["a", "d"], "value": 3 },
+				{ "path": ["a"], "value": 9 }
+			],
+			"expect": { "patches": [{ "path": ["a"], "value": 9 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["z"], "value": 0 },
+				{ "path": ["a", "b"], "value": 1 },
+				{ "path": ["a", "c"], "value": 2 },
+				{ "path": ["a"], "value": 9 }
+			],
+			"expect": { "patches": [{ "path": ["z"], "value": 0 }, { "path": ["a"], "value": 9 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a", "b"], "value": 1 },
+				{ "path": ["z"], "value": 0 },
+				{ "path": ["a"], "value": 9 }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["a", "b"], "value": 1 },
+					{ "path": ["z"], "value": 0 },
+					{ "path": ["a"], "value": 9 }
+				]
+			}
+		}
+	]
+}

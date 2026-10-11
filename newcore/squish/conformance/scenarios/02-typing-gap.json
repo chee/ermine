@@ -1,0 +1,57 @@
+{
+	"title": "a gap, or another place, keeps them apart",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [2, 2], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "a" },
+					{ "path": ["t"], "range": [2, 2], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [1, 1], "value": "a" },
+				{ "path": ["t"], "range": [0, 0], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [1, 1], "value": "a" },
+					{ "path": ["t"], "range": [0, 0], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["u"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "a" },
+					{ "path": ["u"], "range": [1, 1], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["x", 1], "range": [0, 0], "value": "a" },
+				{ "path": ["x", "1"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["x", 1], "range": [0, 0], "value": "a" },
+					{ "path": ["x", "1"], "range": [1, 1], "value": "b" }
+				]
+			}
+		}
+	]
+}

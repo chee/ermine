@@ -1,0 +1,10 @@
+{ "title": "a move carries a chased item; reads by position fire", "start": { "items": ["x", "y", "z", "w", "v"] }, "steps": [
+  { "op": "read", "name": "w", "path": ["items", 3], "chase": true },
+  { "op": "read", "name": "three", "path": ["items", 3] },
+  { "op": "read", "name": "x", "path": ["items", 0], "chase": true },
+  { "op": "read", "name": "v", "path": ["items", 4], "chase": true },
+  { "op": "patch", "patch": { "path": ["items"], "range": [0, 0], "move": { "path": ["items", 3] } }, "expect": { "w": ["moved"], "three": ["value"], "x": ["moved"] } },
+  { "op": "where", "name": "w", "expect": { "path": ["items", 0], "value": "w", "live": true } },
+  { "op": "where", "name": "x", "expect": { "path": ["items", 1], "value": "x", "live": true } },
+  { "op": "where", "name": "v", "expect": { "path": ["items", 4], "value": "v", "live": true } }
+] }

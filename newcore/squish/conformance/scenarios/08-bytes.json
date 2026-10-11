@@ -1,0 +1,35 @@
+{
+	"title": "bytes join and cut",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [1] } },
+				{ "path": ["b"], "range": [1, 1], "value": { "$bytes": [2, 3] } }
+			],
+			"expect": {
+				"patches": [{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [1, 2, 3] } }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [1, 2, 3] } },
+				{ "path": ["b"], "range": [1, 2] }
+			],
+			"expect": {
+				"patches": [{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [1, 3] } }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [0, 255] } },
+				{ "path": ["b"], "range": [2, 2], "value": { "$bytes": [] } }
+			],
+			"expect": {
+				"patches": [{ "path": ["b"], "range": [0, 0], "value": { "$bytes": [0, 255] } }]
+			}
+		}
+	]
+}

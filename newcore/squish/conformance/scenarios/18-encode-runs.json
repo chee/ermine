@@ -1,0 +1,41 @@
+{
+	"title": "equal paths once, runs of equal numbers",
+	"steps": [
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" },
+				{ "path": ["t"], "range": [2, 2], "value": "c" },
+				{ "path": ["u", 1], "value": 7 },
+				{ "path": ["u", 1] }
+			],
+			"expect": {
+				"columns": {
+					"paths": [["t"], ["u", 1]],
+					"path": [0, 3, 1, 2],
+					"shape": [3, 3, 2, 1, 0, 1],
+					"from": [0, 1, 1, 2],
+					"size": [0, 3],
+					"value": ["a", "b", "c", 7],
+					"move": []
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"patches": [],
+			"expect": {
+				"columns": {
+					"paths": [],
+					"path": [],
+					"shape": [],
+					"from": [],
+					"size": [],
+					"value": [],
+					"move": []
+				}
+			}
+		}
+	]
+}

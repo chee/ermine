@@ -1,0 +1,244 @@
+{
+	"title": "content and info: every version, per item",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										"gone",
+										"a",
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"children": [],
+					"value": [
+						{
+							"content": 1,
+							"change": {
+								"time": 2
+							}
+						},
+						{
+							"content": 0,
+							"change": {
+								"time": 0
+							},
+							"because": {
+								"layer": "x",
+								"place": 1
+							}
+						}
+					],
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "A",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "b",
+					"children": [],
+					"value": [
+						{
+							"content": {
+								"deep": [
+									1,
+									"two"
+								]
+							},
+							"change": {
+								"time": 0
+							}
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "gone",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "gone",
+								"at": 0
+							}
+						],
+						"loaded": false
+					},
+					{
+						"id": "a",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "a",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": 1,
+								"change": {
+									"time": 2
+								}
+							},
+							{
+								"content": 0,
+								"change": {
+									"time": 0
+								},
+								"because": {
+									"layer": "x",
+									"place": 1
+								}
+							}
+						]
+					},
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "b",
+								"at": 2
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": {
+									"deep": [
+										1,
+										"two"
+									]
+								},
+								"change": {
+									"time": 0
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"name": "title",
+			"expect": {
+				"items": [
+					{
+						"id": "gone",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "gone",
+								"at": 0
+							}
+						],
+						"loaded": false
+					},
+					{
+						"id": "a",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "a",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "A",
+								"change": {
+									"time": 0
+								}
+							}
+						]
+					},
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "b",
+								"at": 2
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "r",
+						"route": [],
+						"loaded": true,
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": [
+				"nope"
+			],
+			"expect": {
+				"items": []
+			}
+		}
+	]
+}

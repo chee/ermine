@@ -1,0 +1,72 @@
+{
+	"title": "a root not loaded: pending, and nothing below it",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "r",
+						"route": [],
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"a"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"a"
+			],
+			"as": "h",
+			"expect": {
+				"names": [
+					"a"
+				],
+				"trail": []
+			}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "r",
+						"route": [],
+						"loaded": false
+					}
+				]
+			}
+		}
+	]
+}

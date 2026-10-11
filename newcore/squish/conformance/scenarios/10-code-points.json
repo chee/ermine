@@ -1,0 +1,42 @@
+{
+	"title": "a string's places are code points",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "😀" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "😀b" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "😀😀" },
+				{ "path": ["t"], "range": [1, 2] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "😀" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "é😀" },
+				{ "path": ["t"], "range": [1, 2], "value": "ü" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "éü" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "😀" },
+				{ "path": ["t"], "range": [2, 2], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "😀" },
+					{ "path": ["t"], "range": [2, 2], "value": "b" }
+				]
+			}
+		}
+	]
+}

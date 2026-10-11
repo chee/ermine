@@ -1,0 +1,219 @@
+{
+	"title": "look: pending in place; a walk passes ids without the next name",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"gone",
+										"m2",
+										"d5"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "m2",
+					"children": [
+						[
+							"colors",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "d5",
+					"children": [
+						[
+							"fonts",
+							[
+								{
+									"content": [
+										"f"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"children": []
+				},
+				{
+					"id": "f",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "gone",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "gone",
+								"at": 0
+							}
+						],
+						"loaded": false
+					},
+					{
+						"id": "m2",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "m2",
+								"at": 1
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "d5",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "d5",
+								"at": 2
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"theme",
+				"fonts"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "f",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "d5",
+								"at": 2
+							},
+							{
+								"node": "d5",
+								"name": "fonts",
+								"id": "f",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"theme",
+				"colors"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "c",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "m2",
+								"at": 1
+							},
+							{
+								"node": "m2",
+								"name": "colors",
+								"id": "c",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"theme"
+			],
+			"address": [
+				"fonts"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "f",
+						"route": [
+							{
+								"node": "d5",
+								"name": "fonts",
+								"id": "f",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"theme",
+				"nope"
+			],
+			"expect": {
+				"items": []
+			}
+		}
+	]
+}

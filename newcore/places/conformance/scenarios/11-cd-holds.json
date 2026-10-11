@@ -1,0 +1,209 @@
+{
+	"title": "cd: a trail holds its nodes when names above it move",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"x",
+							[
+								{
+									"content": [
+										"x"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "x",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"home",
+				"chee"
+			],
+			"as": "h",
+			"expect": {
+				"names": [
+					"home",
+					"chee"
+				],
+				"trail": [
+					"root",
+					"home",
+					"chee"
+				]
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "home",
+			"index": 0,
+			"toid": "root",
+			"toname": "house",
+			"expect": {
+				"changes": [
+					{
+						"time": 1,
+						"actor": "me",
+						"node": "root"
+					},
+					{
+						"time": 2,
+						"actor": "me",
+						"node": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "h",
+			"address": [
+				"x"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "chee",
+								"name": "x",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"chee"
+			],
+			"address": [
+				"x"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "lookup",
+			"here": "h",
+			"path": [
+				"house"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "home",
+						"route": [
+							{
+								"node": "root",
+								"name": "house",
+								"id": "home",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "outro",
+			"id": "home",
+			"expect": {}
+		},
+		{
+			"op": "lookup",
+			"here": "h",
+			"path": [
+				"house"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"here": "h",
+			"address": [
+				"x"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "chee",
+								"name": "x",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,540 @@
+{
+	"title": "cd: a trail; reads from it; .. backs up it",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"home",
+				"chee"
+			],
+			"as": "chee",
+			"depend": true,
+			"expect": {
+				"names": [
+					"home",
+					"chee"
+				],
+				"trail": [
+					"root",
+					"home",
+					"chee"
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"chee"
+						]
+					],
+					[
+						"chee",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "chee",
+			"address": [
+				"notes"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "notes",
+						"route": [
+							{
+								"node": "chee",
+								"name": "notes",
+								"id": "notes",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"chee",
+						"loaded"
+					],
+					[
+						"chee",
+						[
+							"children",
+							"notes"
+						]
+					],
+					[
+						"notes",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"here": "chee",
+			"path": [
+				"theme"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"chee",
+						"loaded"
+					],
+					[
+						"chee",
+						[
+							"children",
+							"theme"
+						]
+					],
+					[
+						"home",
+						[
+							"children",
+							"theme"
+						]
+					],
+					[
+						"plum",
+						"loaded"
+					],
+					[
+						"butter",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "lookups",
+			"here": "chee",
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 1
+					},
+					{
+						"id": "classic",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "classic",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "cd",
+			"here": "chee",
+			"address": [
+				"notes"
+			],
+			"as": "notes",
+			"expect": {
+				"names": [
+					"home",
+					"chee",
+					"notes"
+				],
+				"trail": [
+					"root",
+					"home",
+					"chee",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "cd",
+			"here": "chee",
+			"address": [
+				".."
+			],
+			"as": "up",
+			"depend": true,
+			"expect": {
+				"names": [
+					"home"
+				],
+				"trail": [
+					"root",
+					"home"
+				],
+				"said": []
+			}
+		},
+		{
+			"op": "cd",
+			"here": "chee",
+			"address": [
+				"..",
+				"theme"
+			],
+			"as": "theme",
+			"expect": {
+				"names": [
+					"home",
+					"theme"
+				],
+				"trail": [
+					"root",
+					"home",
+					"plum"
+				]
+			}
+		},
+		{
+			"op": "cd",
+			"here": "chee",
+			"address": [
+				"nobody",
+				"x"
+			],
+			"as": "lost",
+			"expect": {
+				"names": [
+					"home",
+					"chee",
+					"nobody",
+					"x"
+				],
+				"trail": [
+					"root",
+					"home",
+					"chee"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "lost",
+			"address": [],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"here": "chee",
+			"address": [
+				"/",
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "classic",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "classic",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"here": "notes",
+			"address": [
+				"editor"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "editor",
+						"route": [
+							{
+								"node": "notes",
+								"name": "editor",
+								"id": "editor",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"here": "chee",
+			"address": [],
+			"expect": {
+				"names": [
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "cd",
+			"address": [],
+			"as": "root",
+			"expect": {
+				"names": [],
+				"trail": [
+					"root"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "root",
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "root",
+						"route": [],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "root",
+			"address": [
+				".."
+			],
+			"expect": {
+				"fail": "above-root"
+			}
+		}
+	]
+}

@@ -1,0 +1,12 @@
+{
+	"title": "why null: a value, kept",
+	"steps": [
+		{
+			"op": "create",
+			"layer": "sync",
+			"place": 0,
+			"why": null,
+			"expect": { "layer": "sync", "place": 0, "why": null }
+		}
+	]
+}

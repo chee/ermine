@@ -1,0 +1,7 @@
+{ "title": "a stopped read hears nothing", "start": { "items": ["x", "y"] }, "steps": [
+  { "op": "read", "name": "a", "path": ["items", 0] },
+  { "op": "read", "name": "b", "path": ["items", 0] },
+  { "op": "stop", "name": "a" },
+  { "op": "patch", "patch": { "path": ["items", 0], "value": "z" }, "expect": { "b": ["value"] } },
+  { "op": "where", "name": "a", "expect": { "live": false } }
+] }

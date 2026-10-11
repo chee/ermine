@@ -1,0 +1,21 @@
+{
+	"title": "a replace inside what was just typed is one insert",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "abc" },
+				{ "path": ["t"], "range": [4, 5], "value": "XY" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "aXYc" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 5], "value": "ab" },
+				{ "path": ["t"], "range": [4, 5], "value": "z" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 5], "value": "az" }] }
+		}
+	]
+}

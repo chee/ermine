@@ -1,0 +1,12 @@
+{
+	"title": "a node read again in the same run: nothing",
+	"steps": [
+		{ "op": "begin", "from": "v" },
+		{ "op": "track", "from": "v", "to": "a" },
+		{ "op": "track", "from": "v", "to": "b" },
+		{ "op": "track", "from": "v", "to": "a" },
+		{ "op": "end", "from": "v" },
+		{ "op": "reads", "of": "v", "expect": ["a", "b"] },
+		{ "op": "readers", "of": "a", "expect": ["v"] }
+	]
+}

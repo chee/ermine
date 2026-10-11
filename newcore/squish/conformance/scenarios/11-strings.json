@@ -1,0 +1,23 @@
+{
+	"title": "text comes back as it went in",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a\n\"q\"\\ü✓\t" },
+				{ "path": ["t"], "range": [9, 9], "value": "\u0001" }
+			],
+			"expect": {
+				"patches": [{ "path": ["t"], "range": [0, 0], "value": "a\n\"q\"\\ü✓\t\u0001" }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "" },
+				{ "path": ["t"], "range": [0, 0], "value": "" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "" }] }
+		}
+	]
+}

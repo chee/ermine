@@ -1,0 +1,9 @@
+{ "title": "a span moved: what is there leaves first, the gap is found in what is left", "start": { "items": ["a", "b", "c", "d", "e", "f"] }, "steps": [
+  { "op": "read", "name": "b", "path": ["items", 1], "chase": true },
+  { "op": "read", "name": "bc", "path": ["items", [1, 3]], "chase": true },
+  { "op": "read", "name": "f", "path": ["items", 5], "chase": true },
+  { "op": "patch", "patch": { "path": ["items"], "range": [4, 4], "move": { "path": ["items"], "range": [1, 3] } }, "expect": { "b": ["moved"], "bc": ["moved"], "f": ["moved"] } },
+  { "op": "where", "name": "b", "expect": { "path": ["items", 4], "value": "b", "live": true } },
+  { "op": "where", "name": "bc", "expect": { "path": ["items", [4, 6]], "value": ["b", "c"], "live": true } },
+  { "op": "where", "name": "f", "expect": { "path": ["items", 3], "value": "f", "live": true } }
+] }

@@ -1,0 +1,374 @@
+{
+	"title": "look: by name from the place, from /, and back with ..",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"address": [
+				"editor"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "editor",
+						"route": [
+							{
+								"node": "notes",
+								"name": "editor",
+								"id": "editor",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"address": [
+				"/",
+				"home",
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "root",
+								"name": "home",
+								"id": "home",
+								"at": 0
+							},
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "root",
+								"name": "home",
+								"id": "home",
+								"at": 0
+							},
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"address": [
+				"..",
+				"..",
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "notes",
+						"route": [
+							{
+								"node": "chee",
+								"name": "notes",
+								"id": "notes",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "root",
+						"route": [],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"/"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "root",
+						"route": [],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home"
+			],
+			"address": [
+				"chee",
+				"notes"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "notes",
+						"route": [
+							{
+								"node": "home",
+								"name": "chee",
+								"id": "chee",
+								"at": 0
+							},
+							{
+								"node": "chee",
+								"name": "notes",
+								"id": "notes",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home"
+			],
+			"address": [
+				"nobody"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"nobody"
+			],
+			"address": [],
+			"expect": {
+				"items": []
+			}
+		}
+	]
+}

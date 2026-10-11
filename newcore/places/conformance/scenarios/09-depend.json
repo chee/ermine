@@ -1,0 +1,741 @@
+{
+	"title": "depend: each place read, in the order read",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home"
+			],
+			"address": [
+				"chee"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "chee",
+						"route": [
+							{
+								"node": "home",
+								"name": "chee",
+								"id": "chee",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"chee"
+						]
+					],
+					[
+						"chee",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home"
+			],
+			"path": [
+				"theme"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"theme"
+						]
+					],
+					[
+						"plum",
+						"loaded"
+					],
+					[
+						"butter",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"chee"
+			],
+			"path": [
+				"notes",
+				"editor"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "editor",
+						"route": [
+							{
+								"node": "chee",
+								"name": "notes",
+								"id": "notes",
+								"at": 0
+							},
+							{
+								"node": "notes",
+								"name": "editor",
+								"id": "editor",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"chee"
+						]
+					],
+					[
+						"chee",
+						"loaded"
+					],
+					[
+						"chee",
+						[
+							"children",
+							"notes"
+						]
+					],
+					[
+						"notes",
+						"loaded"
+					],
+					[
+						"notes",
+						[
+							"children",
+							"editor"
+						]
+					],
+					[
+						"editor",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"home"
+			],
+			"depend": true,
+			"expect": {
+				"names": [
+					"chee",
+					"theme",
+					"tools"
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children"
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"home"
+			],
+			"name": "theme",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "root",
+								"name": "home",
+								"id": "home",
+								"at": 0
+							},
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "root",
+								"name": "home",
+								"id": "home",
+								"at": 0
+							},
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"theme"
+						]
+					],
+					[
+						"plum",
+						"loaded"
+					],
+					[
+						"butter",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "content",
+			"place": [
+				"home"
+			],
+			"address": [
+				"tools"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "tools",
+						"route": [
+							{
+								"node": "home",
+								"name": "tools",
+								"id": "tools",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"tools"
+						]
+					],
+					[
+						"tools",
+						"loaded"
+					],
+					[
+						"tools",
+						"value"
+					]
+				]
+			}
+		},
+		{
+			"op": "info",
+			"place": [
+				"home"
+			],
+			"address": [
+				"tools"
+			],
+			"name": "title",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "tools",
+						"route": [
+							{
+								"node": "home",
+								"name": "tools",
+								"id": "tools",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				],
+				"said": [
+					[
+						"root",
+						"loaded"
+					],
+					[
+						"root",
+						[
+							"children",
+							"home"
+						]
+					],
+					[
+						"home",
+						"loaded"
+					],
+					[
+						"home",
+						[
+							"children",
+							"tools"
+						]
+					],
+					[
+						"tools",
+						"loaded"
+					],
+					[
+						"tools",
+						[
+							"info",
+							"title"
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"gone",
+										"m2",
+										"d5"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "m2",
+					"children": [
+						[
+							"colors",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "d5",
+					"children": [
+						[
+							"fonts",
+							[
+								{
+									"content": [
+										"f"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"children": []
+				},
+				{
+					"id": "f",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"theme",
+				"fonts"
+			],
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "f",
+						"route": [
+							{
+								"node": "r",
+								"name": "theme",
+								"id": "d5",
+								"at": 2
+							},
+							{
+								"node": "d5",
+								"name": "fonts",
+								"id": "f",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"r",
+						"loaded"
+					],
+					[
+						"r",
+						[
+							"children",
+							"theme"
+						]
+					],
+					[
+						"gone",
+						"loaded"
+					],
+					[
+						"m2",
+						"loaded"
+					],
+					[
+						"m2",
+						[
+							"children",
+							"fonts"
+						]
+					],
+					[
+						"d5",
+						"loaded"
+					],
+					[
+						"d5",
+						[
+							"children",
+							"fonts"
+						]
+					],
+					[
+						"f",
+						"loaded"
+					]
+				]
+			}
+		}
+	]
+}

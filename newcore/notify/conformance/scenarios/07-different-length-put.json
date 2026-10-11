@@ -1,0 +1,10 @@
+{ "title": "a put of another length over chased items: kept while inside what was put, else gone; later ones move", "start": { "items": ["a", "b", "c", "d", "e", "f"] }, "steps": [
+  { "op": "read", "name": "c", "path": ["items", 2], "chase": true },
+  { "op": "read", "name": "d", "path": ["items", 3], "chase": true },
+  { "op": "read", "name": "f", "path": ["items", 5], "chase": true },
+  { "op": "patch", "patch": { "path": ["items"], "range": [2, 4], "value": ["p"] }, "expect": { "c": ["value"], "d": ["gone"], "f": ["moved"] } },
+  { "op": "where", "name": "c", "expect": { "path": ["items", 2], "value": "p", "live": true } },
+  { "op": "where", "name": "f", "expect": { "path": ["items", 4], "value": "f", "live": true } },
+  { "op": "patch", "patch": { "path": ["items"], "range": [2, 3], "value": ["q", "r", "s"] }, "expect": { "c": ["value"], "f": ["moved"] } },
+  { "op": "where", "name": "f", "expect": { "path": ["items", 6], "value": "f", "live": true } }
+] }

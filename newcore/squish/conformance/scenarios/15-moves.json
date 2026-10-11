@@ -1,0 +1,74 @@
+{
+	"title": "a move is never joined, killed or joined across",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [5, 5], "value": "a" },
+				{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+				{ "path": ["t"], "range": [5, 5], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [5, 5], "value": "a" },
+					{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+					{ "path": ["t"], "range": [5, 5], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+				{ "path": ["t"], "value": "z" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+					{ "path": ["t"], "value": "z" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+				{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } },
+					{ "path": ["t"], "range": [0, 0], "move": { "path": ["t"], "range": [1, 2] } }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "move": { "path": ["t"], "range": [3, 4] } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "a" },
+					{ "path": ["t"], "range": [1, 1], "move": { "path": ["t"], "range": [3, 4] } }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a"], "value": 1 },
+				{ "path": ["a"], "move": { "path": ["b"] } },
+				{ "path": ["a"], "value": 2 }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["a"], "value": 1 },
+					{ "path": ["a"], "move": { "path": ["b"] } },
+					{ "path": ["a"], "value": 2 }
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,18 @@
+{
+	"title": "nothing checked: an empty layer, odd places",
+	"steps": [
+		{
+			"op": "create",
+			"layer": "",
+			"place": -1,
+			"why": "",
+			"expect": { "layer": "", "place": -1, "why": "" }
+		},
+		{
+			"op": "create",
+			"layer": "ü ✓\n",
+			"place": 1.5,
+			"expect": { "layer": "ü ✓\n", "place": 1.5 }
+		}
+	]
+}

@@ -1,0 +1,26 @@
+{
+	"title": "from is the step from the last ranged patch's from",
+	"steps": [
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"], "range": [10, 11] },
+				{ "path": ["t"], "range": [10, 11] },
+				{ "path": ["t"], "range": [9, 10] },
+				{ "path": ["t"], "range": [9, 10] },
+				{ "path": ["t"], "range": [20, 21] }
+			],
+			"expect": {
+				"columns": {
+					"paths": [["t"]],
+					"path": [0, 5],
+					"shape": [1, 5],
+					"from": [10, 1, 0, 1, -1, 1, 0, 1, 11, 1],
+					"size": [1, 5],
+					"value": [],
+					"move": []
+				}
+			}
+		}
+	]
+}

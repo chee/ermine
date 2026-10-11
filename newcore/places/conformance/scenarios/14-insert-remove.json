@@ -1,0 +1,579 @@
+{
+	"title": "insert: an id in a list; remove: ids out; pop: versions dropped whole",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "a",
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "b",
+			"index": 0,
+			"expect": {
+				"change": {
+					"time": 2,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "c",
+			"index": 1,
+			"expect": {
+				"change": {
+					"time": 3,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "d",
+			"index": [
+				0,
+				2
+			],
+			"expect": {
+				"change": {
+					"time": 4,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"d",
+										"a"
+									],
+									"change": {
+										"time": 4,
+										"actor": "me",
+										"node": "root"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "e",
+			"index": [
+				1,
+				5
+			],
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "nope",
+			"name": "kids",
+			"child": "e",
+			"expect": {
+				"fail": "nothing-there"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a/b",
+			"child": "e",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"v": 0
+									}
+								},
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"v": 1
+									}
+								},
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"v": 2
+									}
+								}
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "x",
+			"index": 0,
+			"slotindex": 1,
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "y",
+			"slotindex": [
+				0,
+				2
+			],
+			"expect": {
+				"change": {
+					"time": 2,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a",
+										"y"
+									],
+									"change": {
+										"time": 2,
+										"actor": "me",
+										"node": "root"
+									}
+								},
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"v": 2
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "kids",
+			"child": "z",
+			"index": 0,
+			"slotindex": 2,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "pop",
+			"id": "root",
+			"name": "kids",
+			"slotindex": 1,
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 3,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "pop",
+			"id": "root",
+			"name": "kids",
+			"slotindex": [
+				0,
+				1
+			],
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 4,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": []
+				}
+			}
+		},
+		{
+			"op": "pop",
+			"id": "root",
+			"name": "kids",
+			"slotindex": 0,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a",
+										"b",
+										"c",
+										"d"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": 1,
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": [
+				0,
+				2
+			],
+			"expect": {
+				"change": {
+					"time": 2,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"d"
+									],
+									"change": {
+										"time": 2,
+										"actor": "me",
+										"node": "root"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": 1,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": [
+				0,
+				0
+			],
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"expect": {
+				"change": {
+					"time": 3,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": []
+				}
+			}
+		},
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"v": 0
+									}
+								},
+								{
+									"content": [
+										"b",
+										"x"
+									],
+									"change": {
+										"v": 1
+									}
+								},
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"v": 2
+									}
+								}
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"slotindex": 1,
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"v": 0
+									}
+								},
+								{
+									"content": [
+										"x"
+									],
+									"change": {
+										"time": 1,
+										"actor": "me",
+										"node": "root"
+									}
+								},
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"v": 2
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "remove",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"slotindex": [
+				1,
+				3
+			],
+			"expect": {
+				"change": {
+					"time": 2,
+					"actor": "me",
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"v": 0
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		}
+	]
+}

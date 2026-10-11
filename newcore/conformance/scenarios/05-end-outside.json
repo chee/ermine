@@ -1,0 +1,10 @@
+{
+	"title": "end outside a run: nothing",
+	"steps": [
+		{ "op": "add", "from": "ui", "to": "a" },
+		{ "op": "end", "from": "ui" },
+		{ "op": "reads", "of": "ui", "expect": ["a"] },
+		{ "op": "end", "from": "nobody" },
+		{ "op": "reads", "of": "nobody", "expect": [] }
+	]
+}

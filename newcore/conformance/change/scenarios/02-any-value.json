@@ -1,0 +1,32 @@
+{
+	"title": "actor and cause: any value, kept as given",
+	"steps": [
+		{
+			"op": "make",
+			"node": "a",
+			"header": {
+				"time": 1,
+				"actor": { "name": "chee", "keys": [1, 2, null] },
+				"cause": [true, { "why": "undo" }]
+			},
+			"expect": {
+				"time": 1,
+				"actor": { "name": "chee", "keys": [1, 2, null] },
+				"cause": [true, { "why": "undo" }],
+				"node": "a"
+			}
+		},
+		{
+			"op": "make",
+			"node": "a",
+			"header": { "time": 1, "actor": null, "cause": false },
+			"expect": { "time": 1, "actor": null, "cause": false, "node": "a" }
+		},
+		{
+			"op": "make",
+			"node": "a",
+			"header": { "time": 1, "actor": "\"quoted\" \\ é 🦊\n" },
+			"expect": { "time": 1, "actor": "\"quoted\" \\ é 🦊\n", "node": "a" }
+		}
+	]
+}

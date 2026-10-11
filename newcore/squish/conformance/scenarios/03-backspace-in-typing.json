@@ -1,0 +1,45 @@
+{
+	"title": "a delete inside what was just typed shortens it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "ab" },
+				{ "path": ["t"], "range": [4, 5] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "a" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "ab" },
+				{ "path": ["t"], "range": [3, 4] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "b" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "abc" },
+				{ "path": ["t"], "range": [4, 5] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "ac" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "a" },
+				{ "path": ["t"], "range": [3, 4] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "ab" },
+				{ "path": ["t"], "range": [3, 5] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "" }] }
+		}
+	]
+}

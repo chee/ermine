@@ -1,0 +1,558 @@
+{
+	"title": "write: the value, set: an info, at the item an address reaches",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"gone",
+										"a"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"gone",
+										"a",
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "b",
+					"children": [],
+					"value": [
+						{
+							"content": {
+								"x": 1
+							},
+							"change": {
+								"v": 0
+							}
+						},
+						{
+							"content": 2,
+							"change": {
+								"v": 1
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"v": 2
+							}
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"place": [
+				"home"
+			],
+			"address": [
+				"notes"
+			],
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "b"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "b",
+			"expect": {
+				"node": {
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"x": 2
+							},
+							"change": {
+								"time": 1,
+								"actor": "me",
+								"node": "b"
+							}
+						},
+						{
+							"content": 2,
+							"change": {
+								"v": 1
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"v": 2
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			}
+		},
+		{
+			"op": "set",
+			"place": [
+				"home"
+			],
+			"address": [],
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "home"
+				}
+			],
+			"expect": {
+				"change": {
+					"time": 2,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"node": {
+					"id": "a",
+					"value": [],
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "home",
+									"change": {
+										"time": 2,
+										"actor": "me",
+										"node": "a"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"home"
+			],
+			"as": "h",
+			"expect": {
+				"names": [
+					"home"
+				],
+				"trail": [
+					"root",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"here": "h",
+			"address": [
+				"notes"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": "whole"
+				}
+			],
+			"slotindex": 1,
+			"expect": {
+				"change": {
+					"time": 3,
+					"actor": "me",
+					"node": "b"
+				}
+			}
+		},
+		{
+			"op": "content",
+			"here": "h",
+			"address": [
+				"notes"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "a",
+								"name": "notes",
+								"id": "b",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": {
+									"x": 2
+								},
+								"change": {
+									"time": 1,
+									"actor": "me",
+									"node": "b"
+								}
+							},
+							{
+								"content": "whole",
+								"change": {
+									"time": 3,
+									"actor": "me",
+									"node": "b"
+								}
+							},
+							{
+								"content": 3,
+								"change": {
+									"v": 2
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 9
+				}
+			],
+			"index": 2,
+			"slotindex": [
+				0,
+				2
+			],
+			"expect": {
+				"change": {
+					"time": 4,
+					"actor": "me",
+					"node": "b"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "b",
+			"expect": {
+				"node": {
+					"id": "b",
+					"value": [
+						{
+							"content": 9,
+							"change": {
+								"time": 4,
+								"actor": "me",
+								"node": "b"
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"v": 2
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			}
+		},
+		{
+			"op": "set",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "A"
+				}
+			],
+			"index": 1,
+			"expect": {
+				"change": {
+					"time": 5,
+					"actor": "me",
+					"node": "a"
+				}
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"name": "title",
+			"expect": {
+				"items": [
+					{
+						"id": "gone",
+						"route": [
+							{
+								"node": "root",
+								"name": "kids",
+								"id": "gone",
+								"at": 0
+							}
+						],
+						"loaded": false
+					},
+					{
+						"id": "a",
+						"route": [
+							{
+								"node": "root",
+								"name": "kids",
+								"id": "a",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "A",
+								"change": {
+									"time": 5,
+									"actor": "me",
+									"node": "a"
+								}
+							}
+						]
+					},
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "root",
+								"name": "kids",
+								"id": "b",
+								"at": 2
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"index": 1,
+			"expect": {
+				"fail": "no-key"
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"patches": [],
+			"index": 0,
+			"expect": {
+				"fail": "nothing-there"
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"patches": [],
+			"index": 3,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"kids"
+			],
+			"patches": [],
+			"index": 2,
+			"slotindex": 4,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": [
+				"nope"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "nothing-there"
+			}
+		},
+		{
+			"op": "set",
+			"place": [],
+			"address": [
+				"home"
+			],
+			"name": "..",
+			"patches": [],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "write",
+			"place": [
+				"home"
+			],
+			"address": [
+				"notes"
+			],
+			"patches": [
+				{
+					"path": [
+						"no",
+						"where"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "wrong-kind"
+			}
+		},
+		{
+			"op": "node",
+			"id": "b",
+			"expect": {
+				"node": {
+					"id": "b",
+					"value": [
+						{
+							"content": 9,
+							"change": {
+								"time": 4,
+								"actor": "me",
+								"node": "b"
+							}
+						},
+						{
+							"content": 3,
+							"change": {
+								"v": 2
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			}
+		}
+	]
+}

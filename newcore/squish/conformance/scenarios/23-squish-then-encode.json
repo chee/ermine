@@ -1,0 +1,28 @@
+{
+	"title": "the two compose",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "ab" }] }
+		},
+		{
+			"op": "encode",
+			"patches": [{ "path": ["t"], "range": [0, 0], "value": "ab" }],
+			"expect": {
+				"columns": {
+					"paths": [["t"]],
+					"path": [0, 1],
+					"shape": [3, 1],
+					"from": [0, 1],
+					"size": [0, 1],
+					"value": ["ab"],
+					"move": []
+				}
+			}
+		}
+	]
+}

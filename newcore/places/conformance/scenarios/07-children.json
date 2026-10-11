@@ -1,0 +1,199 @@
+{
+	"title": "children: names first seen first; a name's items node by node",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										"gone",
+										"m",
+										"d"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "m",
+					"children": [
+						[
+							"colors",
+							[
+								{
+									"content": [
+										"c1"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"fonts",
+							[
+								{
+									"content": [
+										"f1"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "d",
+					"children": [
+						[
+							"fonts",
+							[
+								{
+									"content": [
+										"f2"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"sizes",
+							[
+								{
+									"content": [
+										"s"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c1",
+					"children": []
+				},
+				{
+					"id": "f1",
+					"children": []
+				},
+				{
+					"id": "f2",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"expect": {
+				"names": [
+					"colors",
+					"fonts",
+					"sizes"
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"name": "fonts",
+			"expect": {
+				"items": [
+					{
+						"id": "f1",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "m",
+								"at": 1
+							},
+							{
+								"node": "m",
+								"name": "fonts",
+								"id": "f1",
+								"at": 0
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "f2",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "d",
+								"at": 2
+							},
+							{
+								"node": "d",
+								"name": "fonts",
+								"id": "f2",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"name": "nope",
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [],
+			"expect": {
+				"names": [
+					"t"
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"nope"
+			],
+			"expect": {
+				"names": []
+			}
+		}
+	]
+}

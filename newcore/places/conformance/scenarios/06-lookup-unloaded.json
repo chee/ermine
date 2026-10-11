@@ -1,0 +1,117 @@
+{
+	"title": "lookup: a list with nothing loaded is passed",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"x",
+							[
+								{
+									"content": [
+										"x0"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"children": [
+						[
+							"x",
+							[
+								{
+									"content": [
+										"gone"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "x0",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"a"
+			],
+			"path": [
+				"x"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x0",
+						"route": [
+							{
+								"node": "r",
+								"name": "x",
+								"id": "x0",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "lookups",
+			"place": [
+				"a"
+			],
+			"path": [
+				"x"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x0",
+						"route": [
+							{
+								"node": "r",
+								"name": "x",
+								"id": "x0",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 1
+					}
+				]
+			}
+		}
+	]
+}

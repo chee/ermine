@@ -1,0 +1,18 @@
+{
+	"title": "a rerun drops what it did not read again, and puts new reads at the cursor",
+	"steps": [
+		{ "op": "begin", "from": "v" },
+		{ "op": "track", "from": "v", "to": "a" },
+		{ "op": "track", "from": "v", "to": "b" },
+		{ "op": "track", "from": "v", "to": "c" },
+		{ "op": "end", "from": "v" },
+		{ "op": "begin", "from": "v" },
+		{ "op": "track", "from": "v", "to": "a" },
+		{ "op": "track", "from": "v", "to": "x" },
+		{ "op": "track", "from": "v", "to": "c" },
+		{ "op": "end", "from": "v" },
+		{ "op": "reads", "of": "v", "expect": ["a", "x", "c"] },
+		{ "op": "readers", "of": "b", "expect": [] },
+		{ "op": "readers", "of": "x", "expect": ["v"] }
+	]
+}

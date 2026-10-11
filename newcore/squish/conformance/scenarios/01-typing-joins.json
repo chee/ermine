@@ -1,0 +1,28 @@
+{
+	"title": "inserts that follow each other are one insert",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "a" },
+				{ "path": ["t"], "range": [4, 4], "value": "b" },
+				{ "path": ["t"], "range": [5, 5], "value": "c" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "abc" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [2, 2], "value": "cd" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "abcd" }] }
+		},
+		{ "op": "squish", "patches": [], "expect": { "patches": [] } },
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [3, 3], "value": "a" }],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "a" }] }
+		}
+	]
+}

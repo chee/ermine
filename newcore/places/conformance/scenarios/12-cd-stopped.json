@@ -1,0 +1,333 @@
+{
+	"title": "cd: a walk stopped part way reaches only steps it took; . is the trail's",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"home",
+				"nobody"
+			],
+			"as": "s",
+			"expect": {
+				"names": [
+					"home",
+					"nobody"
+				],
+				"trail": [
+					"root"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "s",
+			"address": [
+				"..",
+				"theme"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home",
+				"nobody"
+			],
+			"address": [
+				"..",
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"gone",
+										"m2",
+										"d5"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "m2",
+					"children": [
+						[
+							"colors",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "d5",
+					"children": [
+						[
+							"fonts",
+							[
+								{
+									"content": [
+										"f"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"children": []
+				},
+				{
+					"id": "f",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"theme"
+			],
+			"as": "t",
+			"expect": {
+				"names": [
+					"theme"
+				],
+				"trail": [
+					"r",
+					"m2"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "t",
+			"address": [
+				"fonts"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"theme"
+			],
+			"address": [
+				"fonts"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "f",
+						"route": [
+							{
+								"node": "d5",
+								"name": "fonts",
+								"id": "f",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		}
+	]
+}

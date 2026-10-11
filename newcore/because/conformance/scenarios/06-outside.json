@@ -1,0 +1,20 @@
+{
+	"title": "outside: a site, the caller's",
+	"steps": [
+		{
+			"op": "create",
+			"layer": "sync",
+			"place": 0,
+			"outside": true,
+			"expect": { "layer": "sync", "place": 0, "site": true }
+		},
+		{
+			"op": "create",
+			"layer": "sync",
+			"place": 0,
+			"why": 1,
+			"outside": true,
+			"expect": { "layer": "sync", "place": 0, "why": 1, "site": true }
+		}
+	]
+}

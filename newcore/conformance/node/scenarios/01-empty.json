@@ -1,0 +1,10 @@
+{
+	"title": "no contents: no versions, no names, an empty header",
+	"steps": [
+		{
+			"op": "make",
+			"id": "a",
+			"expect": { "id": "a", "value": [], "info": [], "children": [], "header": {} }
+		}
+	]
+}

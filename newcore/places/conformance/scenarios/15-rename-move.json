@@ -1,0 +1,348 @@
+{
+	"title": "rename keeps the slot; move within a list is one change, across two",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"one",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"two",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"three",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "box",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "two",
+			"to": "deux",
+			"expect": {
+				"changes": [
+					{
+						"time": 1,
+						"actor": "me",
+						"node": "root"
+					},
+					{
+						"time": 2,
+						"actor": "me",
+						"node": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"one",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"deux",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 2,
+										"actor": "me",
+										"node": "root"
+									}
+								}
+							]
+						],
+						[
+							"three",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "one",
+			"to": "three",
+			"expect": {
+				"fail": "already-there"
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "nope",
+			"to": "x",
+			"expect": {
+				"fail": "nothing-there"
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "one",
+			"to": "..",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a",
+										"b",
+										"c"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "box",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 2,
+			"toid": "root",
+			"toname": "kids",
+			"toindex": 0,
+			"expect": {
+				"changes": [
+					{
+						"time": 1,
+						"actor": "me",
+						"node": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"toid": "box",
+			"toname": "in",
+			"expect": {
+				"changes": [
+					{
+						"time": 2,
+						"actor": "me",
+						"node": "root"
+					},
+					{
+						"time": 3,
+						"actor": "me",
+						"node": "box"
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"toid": "box",
+			"toname": "in",
+			"toindex": 5,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"toid": "box",
+			"toname": "..",
+			"toindex": 0,
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": -1,
+			"toid": "box",
+			"toname": "in",
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"toid": "box",
+			"toname": "in",
+			"toindex": -1,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "kids",
+			"index": 0,
+			"toid": "root",
+			"toname": "kids",
+			"toindex": -1,
+			"expect": {
+				"fail": "range"
+			}
+		},
+		{
+			"op": "node",
+			"id": "root",
+			"expect": {
+				"node": {
+					"id": "root",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"a",
+										"b"
+									],
+									"change": {
+										"time": 2,
+										"actor": "me",
+										"node": "root"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "box",
+			"expect": {
+				"node": {
+					"id": "box",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"in",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 3,
+										"actor": "me",
+										"node": "box"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		}
+	]
+}

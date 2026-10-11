@@ -1,0 +1,370 @@
+{
+	"title": "lookup: the nearest, up to the root; lookups: every one",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 2
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "lookups",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "plum",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "plum",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 2
+					},
+					{
+						"id": "butter",
+						"route": [
+							{
+								"node": "home",
+								"name": "theme",
+								"id": "butter",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 2
+					},
+					{
+						"id": "classic",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "classic",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"path": [
+				"tools"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "tools",
+						"route": [
+							{
+								"node": "home",
+								"name": "tools",
+								"id": "tools",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"chee",
+				"notes"
+			],
+			"path": [
+				"nothing"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "classic",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "classic",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home"
+			],
+			"path": [],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"chee",
+				"nobody"
+			],
+			"path": [
+				"tools"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "tools",
+						"route": [
+							{
+								"node": "home",
+								"name": "tools",
+								"id": "tools",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [
+				"home",
+				"nobody"
+			],
+			"path": [
+				"theme"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "classic",
+						"route": [
+							{
+								"node": "root",
+								"name": "theme",
+								"id": "classic",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		}
+	]
+}

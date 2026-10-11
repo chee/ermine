@@ -1,0 +1,25 @@
+{
+	"title": "ranges after a put at the same path are not joined with it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "value": "ab" },
+				{ "path": ["t"], "range": [2, 2], "value": "c" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "value": "ab" },
+					{ "path": ["t"], "range": [2, 2], "value": "c" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "value": "ab" }, { "path": ["t"], "range": [0, 1] }],
+			"expect": {
+				"patches": [{ "path": ["t"], "value": "ab" }, { "path": ["t"], "range": [0, 1] }]
+			}
+		}
+	]
+}

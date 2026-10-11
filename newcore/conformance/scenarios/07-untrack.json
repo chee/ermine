@@ -1,0 +1,14 @@
+{
+	"title": "untrack one, then all",
+	"steps": [
+		{ "op": "add", "from": "v", "to": "a" },
+		{ "op": "add", "from": "v", "to": "b" },
+		{ "op": "add", "from": "v", "to": "c" },
+		{ "op": "untrack", "from": "v", "to": "b" },
+		{ "op": "reads", "of": "v", "expect": ["a", "c"] },
+		{ "op": "readers", "of": "b", "expect": [] },
+		{ "op": "untrack", "from": "v" },
+		{ "op": "reads", "of": "v", "expect": [] },
+		{ "op": "readers", "of": "a", "expect": [] }
+	]
+}

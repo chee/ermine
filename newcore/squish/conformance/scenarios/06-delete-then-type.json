@@ -1,0 +1,35 @@
+{
+	"title": "a delete then an insert at its start is one replace",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [2, 2], "value": "xy" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [2, 5], "value": "xy" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [3, 3], "value": "xy" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [2, 5] },
+					{ "path": ["t"], "range": [3, 3], "value": "xy" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [2, 2], "value": "x" },
+				{ "path": ["t"], "range": [3, 3], "value": "y" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [2, 5], "value": "xy" }] }
+		}
+	]
+}

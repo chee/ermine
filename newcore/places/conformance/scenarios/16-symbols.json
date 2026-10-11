@@ -1,0 +1,167 @@
+{
+	"title": "symbols in a list are no items, and stay in the list",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										{
+											"$symbol": "s"
+										},
+										"a",
+										{
+											"$symbol": "s"
+										},
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"children": []
+				},
+				{
+					"id": "b",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "a",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "a",
+								"at": 1
+							}
+						],
+						"loaded": true
+					},
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "b",
+								"at": 3
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "a",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "a",
+								"at": 1
+							}
+						],
+						"loaded": true,
+						"up": 0
+					},
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "r",
+								"name": "t",
+								"id": "b",
+								"at": 3
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "insert",
+			"id": "r",
+			"name": "t",
+			"child": "c",
+			"index": 1,
+			"expect": {
+				"change": {
+					"time": 1,
+					"actor": "me",
+					"node": "r"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "r",
+			"expect": {
+				"node": {
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										{
+											"$symbol": "s"
+										},
+										"c",
+										"a",
+										{
+											"$symbol": "s"
+										},
+										"b"
+									],
+									"change": {
+										"time": 1,
+										"actor": "me",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				}
+			}
+		}
+	]
+}

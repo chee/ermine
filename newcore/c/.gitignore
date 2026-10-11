@@ -1,0 +1,8 @@
+harness
+harness-check
+fuzz
+corpus/
+crash-*
+*.dSYM
+node-harness
+node-harness-check

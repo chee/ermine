@@ -1,0 +1,10 @@
+{
+	"title": "add appends, or does nothing when there",
+	"steps": [
+		{ "op": "add", "from": "ui", "to": "a" },
+		{ "op": "add", "from": "ui", "to": "b" },
+		{ "op": "add", "from": "ui", "to": "a" },
+		{ "op": "reads", "of": "ui", "expect": ["a", "b"] },
+		{ "op": "readers", "of": "a", "expect": ["ui"] }
+	]
+}

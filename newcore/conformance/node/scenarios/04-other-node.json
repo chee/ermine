@@ -1,0 +1,17 @@
+{
+	"title": "nothing checked: a version whose change names another node is kept",
+	"steps": [
+		{
+			"op": "make",
+			"id": "a",
+			"contents": { "value": [{ "content": 1, "change": { "time": 0, "actor": "me", "node": "z" } }] },
+			"expect": {
+				"id": "a",
+				"value": [{ "content": 1, "change": { "time": 0, "actor": "me", "node": "z" } }],
+				"info": [],
+				"children": [],
+				"header": {}
+			}
+		}
+	]
+}

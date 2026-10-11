@@ -1,0 +1,18 @@
+{
+	"title": "outside: the site of the call, when the header gives none; \"*\" is any site of the harness",
+	"steps": [
+		{
+			"op": "make",
+			"id": "a",
+			"outside": true,
+			"expect": { "id": "a", "value": [], "info": [], "children": [], "header": { "site": "*" } }
+		},
+		{
+			"op": "make",
+			"id": "b",
+			"header": { "time": 1, "actor": "me" },
+			"outside": true,
+			"expect": { "id": "b", "value": [], "info": [], "children": [], "header": { "time": 1, "actor": "me", "site": "*" } }
+		}
+	]
+}

@@ -1,0 +1,281 @@
+{
+	"title": "wrong-field and above-root",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root",
+					"children": [
+						[
+							"home",
+							[
+								{
+									"content": [
+										"home"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"classic"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "home",
+					"children": [
+						[
+							"chee",
+							[
+								{
+									"content": [
+										"chee"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"theme",
+							[
+								{
+									"content": [
+										"plum",
+										"butter"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"tools",
+							[
+								{
+									"content": [
+										"tools"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "chee",
+					"children": [
+						[
+							"notes",
+							[
+								{
+									"content": [
+										"notes"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "notes",
+					"children": [
+						[
+							"editor",
+							[
+								{
+									"content": [
+										"editor"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "plum",
+					"children": []
+				},
+				{
+					"id": "butter",
+					"children": []
+				},
+				{
+					"id": "classic",
+					"children": []
+				},
+				{
+					"id": "tools",
+					"children": []
+				},
+				{
+					"id": "editor",
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a",
+				".."
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a",
+				"/"
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"."
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"a/b"
+			],
+			"address": [],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"."
+			],
+			"address": [],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				".."
+			],
+			"expect": {
+				"fail": "above-root"
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home"
+			],
+			"address": [
+				"..",
+				".."
+			],
+			"expect": {
+				"fail": "above-root"
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"home"
+			],
+			"address": [
+				"/",
+				".."
+			],
+			"expect": {
+				"fail": "above-root"
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"a/b"
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"theme",
+				".."
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [],
+			"name": "..",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": [],
+			"name": "x/y",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		}
+	]
+}

@@ -1,0 +1,8 @@
+{ "title": "a key moved: a chase under it follows; both maps' keys", "start": { "meta": { "a": { "x": 1 }, "b": 2 } }, "steps": [
+  { "op": "read", "name": "x", "path": ["meta", "a", "x"], "chase": true },
+  { "op": "read", "name": "meta", "path": ["meta"] },
+  { "op": "read", "name": "ax", "path": ["meta", "a", "x"] },
+  { "op": "read", "name": "cx", "path": ["meta", "c", "x"] },
+  { "op": "patch", "patch": { "path": ["meta", "c"], "move": { "path": ["meta", "a"] } }, "expect": { "x": ["moved"], "meta": ["keys"], "ax": ["value"], "cx": ["value"] } },
+  { "op": "where", "name": "x", "expect": { "path": ["meta", "c", "x"], "value": 1, "live": true } }
+] }

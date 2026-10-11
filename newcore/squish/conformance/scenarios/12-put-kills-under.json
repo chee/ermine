@@ -1,0 +1,55 @@
+{
+	"title": "a put or a removal at a place kills earlier patches at or under it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a", "b"], "value": 1 },
+				{ "path": ["a", "c"], "range": [0, 0], "value": "x" },
+				{ "path": ["a"], "value": {} }
+			],
+			"expect": { "patches": [{ "path": ["a"], "value": {} }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a"], "value": 1 },
+				{ "path": ["b"], "value": 2 },
+				{ "path": ["b"], "value": 3 }
+			],
+			"expect": { "patches": [{ "path": ["a"], "value": 1 }, { "path": ["b"], "value": 3 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["a", "b"], "value": 1 }, { "path": ["a"] }],
+			"expect": { "patches": [{ "path": ["a"] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["a"] }, { "path": ["a"], "value": 1 }],
+			"expect": { "patches": [{ "path": ["a"], "value": 1 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a"], "range": [2, 2], "value": "x" },
+				{ "path": ["a"], "value": "y" }
+			],
+			"expect": { "patches": [{ "path": ["a"], "value": "y" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["a"], "value": 1 }, { "path": ["a", "b"], "value": 2 }],
+			"expect": {
+				"patches": [{ "path": ["a"], "value": 1 }, { "path": ["a", "b"], "value": 2 }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["a", "b"], "value": 1 }, { "path": ["a", "c"], "value": 2 }],
+			"expect": {
+				"patches": [{ "path": ["a", "b"], "value": 1 }, { "path": ["a", "c"], "value": 2 }]
+			}
+		}
+	]
+}

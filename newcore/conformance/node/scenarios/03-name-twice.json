@@ -1,0 +1,20 @@
+{
+	"title": "nothing checked: a name given twice keeps its first place and the last versions",
+	"steps": [
+		{
+			"op": "make",
+			"id": "a",
+			"contents": {
+				"info": [["x", [{ "content": 1, "change": 0 }]], ["y", [{ "content": 2, "change": 0 }]], ["x", [{ "content": 3, "change": 0 }]]],
+				"children": [["l", [{ "content": ["b"], "change": 0 }]], ["m", []], ["l", [{ "content": ["c"], "change": 0 }]]]
+			},
+			"expect": {
+				"id": "a",
+				"value": [],
+				"info": [["x", [{ "content": 3, "change": 0 }]], ["y", [{ "content": 2, "change": 0 }]]],
+				"children": [["l", [{ "content": ["c"], "change": 0 }]], ["m", []]],
+				"header": {}
+			}
+		}
+	]
+}

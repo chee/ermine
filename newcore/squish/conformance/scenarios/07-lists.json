@@ -1,0 +1,29 @@
+{
+	"title": "lists join and cut as strings do, their elements any values",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [1] },
+				{ "path": ["l"], "range": [1, 1], "value": [2, 3] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [0, 0], "value": [1, 2, 3] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [{ "a": 1 }, null] },
+				{ "path": ["l"], "range": [1, 2] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [0, 0], "value": [{ "a": 1 }] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [[1], [2]] },
+				{ "path": ["l"], "range": [2, 2], "value": [[3]] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [0, 0], "value": [[1], [2], [3]] }] }
+		}
+	]
+}
