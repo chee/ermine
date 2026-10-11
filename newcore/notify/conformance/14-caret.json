@@ -1,12 +1,54 @@
-{ "title": "a caret is an empty span: an insert on it pushes it, or not, by its edges", "start": { "text": "ab" }, "steps": [
-  { "op": "read", "name": "pushed", "path": ["text", [1, 1]], "chase": true, "edges": ["out", "out"] },
-  { "op": "read", "name": "stays", "path": ["text", [1, 1]], "chase": true, "edges": ["in", "out"] },
-  { "op": "read", "name": "grows", "path": ["text", [1, 1]], "chase": true, "edges": ["in", "in"] },
-  { "op": "patch", "patch": { "path": ["text"], "range": [1, 1], "value": "xy" }, "expect": { "pushed": ["moved"], "grows": ["value", "moved"] } },
-  { "op": "where", "name": "pushed", "expect": { "path": ["text", [3, 3]], "value": "", "live": true } },
-  { "op": "where", "name": "stays", "expect": { "path": ["text", [1, 1]], "value": "", "live": true } },
-  { "op": "where", "name": "grows", "expect": { "path": ["text", [1, 3]], "value": "xy", "live": true } },
-  { "op": "patch", "patch": { "path": ["text"], "range": [0, 4] }, "expect": { "pushed": ["moved"], "stays": ["moved"], "grows": ["value", "moved"] } },
-  { "op": "where", "name": "pushed", "expect": { "path": ["text", [0, 0]], "live": true } },
-  { "op": "where", "name": "grows", "expect": { "path": ["text", [0, 0]], "live": true } }
-] }
+{
+	"title": "a caret is an empty span: an insert on it pushes it, or not, by its edges",
+	"start": { "text": "ab" },
+	"steps": [
+		{
+			"op": "read",
+			"name": "pushed",
+			"path": ["text", [1, 1]],
+			"chase": true,
+			"edges": ["out", "out"]
+		},
+		{
+			"op": "read",
+			"name": "stays",
+			"path": ["text", [1, 1]],
+			"chase": true,
+			"edges": ["in", "out"]
+		},
+		{
+			"op": "read",
+			"name": "grows",
+			"path": ["text", [1, 1]],
+			"chase": true,
+			"edges": ["in", "in"]
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [1, 1], "value": "xy" },
+			"expect": { "pushed": ["moved"], "grows": ["value", "moved"] }
+		},
+		{
+			"op": "where",
+			"name": "pushed",
+			"expect": { "path": ["text", [3, 3]], "value": "", "live": true }
+		},
+		{
+			"op": "where",
+			"name": "stays",
+			"expect": { "path": ["text", [1, 1]], "value": "", "live": true }
+		},
+		{
+			"op": "where",
+			"name": "grows",
+			"expect": { "path": ["text", [1, 3]], "value": "xy", "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [0, 4] },
+			"expect": { "pushed": ["moved"], "stays": ["moved"], "grows": ["value", "moved"] }
+		},
+		{ "op": "where", "name": "pushed", "expect": { "path": ["text", [0, 0]], "live": true } },
+		{ "op": "where", "name": "grows", "expect": { "path": ["text", [0, 0]], "live": true } }
+	]
+}

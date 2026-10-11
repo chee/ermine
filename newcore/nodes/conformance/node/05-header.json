@@ -29,7 +29,13 @@
 			"op": "make",
 			"id": "b",
 			"header": { "time": 0, "actor": "me" },
-			"expect": { "id": "b", "value": [], "info": [], "children": [], "header": { "time": 0, "actor": "me" } }
+			"expect": {
+				"id": "b",
+				"value": [],
+				"info": [],
+				"children": [],
+				"header": { "time": 0, "actor": "me" }
+			}
 		}
 	]
 }

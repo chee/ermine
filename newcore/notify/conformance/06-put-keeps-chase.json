@@ -1,8 +1,24 @@
-{ "title": "a put over a chased item keeps it; only removal ends it", "start": { "items": ["x", "y", "z", "w"] }, "steps": [
-  { "op": "read", "name": "c", "path": ["items", 3], "chase": true },
-  { "op": "patch", "patch": { "path": ["items"], "range": [3, 4], "value": ["q"] }, "expect": { "c": ["value"] } },
-  { "op": "where", "name": "c", "expect": { "path": ["items", 3], "value": "q", "live": true } },
-  { "op": "patch", "patch": { "path": ["items", 3], "value": "p" }, "expect": { "c": ["value"] } },
-  { "op": "patch", "patch": { "path": ["items", 3] }, "expect": { "c": ["gone"] } },
-  { "op": "where", "name": "c", "expect": { "live": false } }
-] }
+{
+	"title": "a put over a chased item keeps it; only removal ends it",
+	"start": { "items": ["x", "y", "z", "w"] },
+	"steps": [
+		{ "op": "read", "name": "c", "path": ["items", 3], "chase": true },
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [3, 4], "value": ["q"] },
+			"expect": { "c": ["value"] }
+		},
+		{
+			"op": "where",
+			"name": "c",
+			"expect": { "path": ["items", 3], "value": "q", "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items", 3], "value": "p" },
+			"expect": { "c": ["value"] }
+		},
+		{ "op": "patch", "patch": { "path": ["items", 3] }, "expect": { "c": ["gone"] } },
+		{ "op": "where", "name": "c", "expect": { "live": false } }
+	]
+}

@@ -1,12 +1,28 @@
-{ "title": "a key removed: its readers, the map's keys; a chase on it is gone", "start": { "title": "a", "n": 1 }, "steps": [
-  { "op": "read", "name": "title", "path": ["title"] },
-  { "op": "read", "name": "root", "path": [] },
-  { "op": "read", "name": "chased", "path": ["title"], "chase": true },
-  { "op": "read", "name": "n", "path": ["n"] },
-  { "op": "patch", "patch": { "path": ["title"] }, "expect": { "title": ["value"], "root": ["keys"], "chased": ["gone"] } },
-  { "op": "where", "name": "title", "expect": { "path": ["title"], "live": true } },
-  { "op": "where", "name": "chased", "expect": { "live": false } },
-  { "op": "patch", "patch": { "path": ["title"], "value": "b" }, "expect": { "title": ["value"], "root": ["keys"] } },
-  { "op": "patch", "patch": { "path": ["title"], "value": "c" }, "expect": { "title": ["value"] } },
-  { "op": "patch", "patch": { "path": ["gone"] }, "expect": {} }
-] }
+{
+	"title": "a key removed: its readers, the map's keys; a chase on it is gone",
+	"start": { "title": "a", "n": 1 },
+	"steps": [
+		{ "op": "read", "name": "title", "path": ["title"] },
+		{ "op": "read", "name": "root", "path": [] },
+		{ "op": "read", "name": "chased", "path": ["title"], "chase": true },
+		{ "op": "read", "name": "n", "path": ["n"] },
+		{
+			"op": "patch",
+			"patch": { "path": ["title"] },
+			"expect": { "title": ["value"], "root": ["keys"], "chased": ["gone"] }
+		},
+		{ "op": "where", "name": "title", "expect": { "path": ["title"], "live": true } },
+		{ "op": "where", "name": "chased", "expect": { "live": false } },
+		{
+			"op": "patch",
+			"patch": { "path": ["title"], "value": "b" },
+			"expect": { "title": ["value"], "root": ["keys"] }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["title"], "value": "c" },
+			"expect": { "title": ["value"] }
+		},
+		{ "op": "patch", "patch": { "path": ["gone"] }, "expect": {} }
+	]
+}

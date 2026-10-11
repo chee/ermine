@@ -136,7 +136,8 @@ function make(q: Q) {
 			events.push(e)
 		},
 		owned: (o, id) => void events.push({ owned: o, id }),
-		released: (id, o) => void events.push(o === undefined ? { released: id } : { released: id, owner: o }),
+		released: (id, o) =>
+			void events.push(o === undefined ? { released: id } : { released: id, owner: o }),
 	})
 	if (q.rules) g.intro(nodeOf({ id: "rules", value: q.rules }))
 	bind("host", { site: q.site !== undefined })
@@ -158,7 +159,9 @@ function inner(q: Q): unknown {
 			return change.time
 		}
 		case "insert":
-			return times(p.insert(q.id, q.name, q.child, q.index ?? undefined, q.slotindex ?? undefined))
+			return times(
+				p.insert(q.id, q.name, q.child, q.index ?? undefined, q.slotindex ?? undefined),
+			)
 		case "remove":
 			return times(p.remove(q.id, q.name, q.index, q.slotindex ?? undefined))
 		case "pop":
@@ -168,9 +171,26 @@ function inner(q: Q): unknown {
 		case "move":
 			return times(p.move(q.id, q.name, q.index, q.toid, q.toname, q.toindex ?? undefined))
 		case "write":
-			return times(p.write([], q.address, q.patches as Patch[], q.index ?? undefined, q.slotindex ?? undefined))
+			return times(
+				p.write(
+					[],
+					q.address,
+					q.patches as Patch[],
+					q.index ?? undefined,
+					q.slotindex ?? undefined,
+				),
+			)
 		case "set":
-			return times(p.set([], q.address, q.name, q.patches as Patch[], q.index ?? undefined, q.slotindex ?? undefined))
+			return times(
+				p.set(
+					[],
+					q.address,
+					q.name,
+					q.patches as Patch[],
+					q.index ?? undefined,
+					q.slotindex ?? undefined,
+				),
+			)
 	}
 	throw Object.assign(new Error(`unknown op ${q.op}`), { code: "unknown-op" })
 }
@@ -213,7 +233,12 @@ function answer(q: Q): unknown {
 			return time
 		}
 		case "make":
-			return g.make(q.id ?? undefined, q.value, { actor: q.actor ?? host }, q.value !== undefined)
+			return g.make(
+				q.id ?? undefined,
+				q.value,
+				{ actor: q.actor ?? host },
+				q.value !== undefined,
+			)
 		case "own":
 			g.own(q.id, q.owner ?? undefined)
 			return undefined
@@ -261,7 +286,8 @@ function answer(q: Q): unknown {
 
 make({})
 
-const out = (v: unknown) => Deno.stdout.writeSync(new TextEncoder().encode(JSON.stringify(v) + "\n"))
+const out = (v: unknown) =>
+	Deno.stdout.writeSync(new TextEncoder().encode(JSON.stringify(v) + "\n"))
 const lines = Deno.stdin.readable.pipeThrough(new TextDecoderStream())
 let buffer = ""
 for await (const chunk of lines) {

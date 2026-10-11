@@ -120,6 +120,24 @@ export type Bind<O> = {
 // what a tracked reader is given: depend to track with, and its trackgraph node's begin/end/untrack
 export type Reader = { depend: Depend; begin(): void; end(): void; untrack(): void }
 
+// what tracks reads (default: trackgraph.ts): a node per owner and per spot read; a run's reads
+// between begin and end; the owners reading a spot
+export type Tracker<W, T> = {
+	node(owner: W): T
+	begin(t: T): void
+	track(t: T, to: T): void
+	end(t: T): void
+	untrack(t: T): void
+	owners(t: T): readonly W[]
+}
+// what a tracker's node is made for: an owner, or a spot (a part of a node read)
+export type Tracked<O> = { owner: O } | { spot: { id: string; part: Part } }
+
+function trackgraph<W>(): Tracker<W, Track<W>> {
+	const t = createTrackgraph<W>()
+	return { ...t, owners: (n) => t.readers(n).map((l) => l.from.owner) }
+}
+
 export type Options<O> = {
 	// the root's id; the host introduces its node, or one is made holding nothing
 	root: string
@@ -137,6 +155,9 @@ export type Options<O> = {
 	owned?: (owner: O, id: string) => void
 	// a node gone, and its owner if ephemeral: before its loaded readers are marked
 	released?: (id: string, owner: O | undefined) => void
+	// what tracks reads; default trackgraph.ts
+	// deno-lint-ignore no-explicit-any
+	tracker?: Tracker<Tracked<O>, any>
 	// the host's site for its changes; default read off the call stack
 	site?: () => Site | undefined
 }
@@ -175,7 +196,7 @@ const whichKey = (w: Which) => (typeof w === "string" ? w : w.join("\u0000"))
 const pathOf = (w: Which): string[] => (typeof w === "string" ? [w] : [...w])
 
 // a spot: a part of a node something read; a trackgraph node's owner: an owner, or a spot
-type Spot<O> = { id: string; part: Part; key: string; track: Track<Own<O>>; watch?: Watch }
+type Spot<O> = { id: string; part: Part; key: string; track: unknown; watch?: Watch }
 type Own<O> = { owner: O } | { spot: Spot<O> }
 
 // a map as a plain object's own keys, read through
@@ -198,7 +219,7 @@ export function createGraph<O>(options: Options<O>) {
 	const may = options.may ?? anyone
 
 	const table = createTable<unknown, Change>()
-	const tracks = createTrackgraph<Own<O>>()
+	const tracks = (options.tracker ?? trackgraph()) as Tracker<Own<O>, unknown>
 
 	// who the changes now being made are by; set around each operation
 	let acting: Acting | undefined
@@ -252,7 +273,7 @@ export function createGraph<O>(options: Options<O>) {
 		const key = partKey(id, part)
 		let s = spots.get(key)
 		if (s) return s
-		s = { id, part, key, track: undefined as unknown as Track<Own<O>> }
+		s = { id, part, key, track: undefined }
 		s.track = tracks.node({ spot: s })
 		spots.set(key, s)
 		let of = spotsOf.get(id)
@@ -281,8 +302,7 @@ export function createGraph<O>(options: Options<O>) {
 	// readers of a spot: marked by the change being told
 	function fire(s: Spot<O>) {
 		if (!telling) return
-		for (const l of [...tracks.readers(s.track)]) {
-			const o = l.from.owner
+		for (const o of tracks.owners(s.track)) {
 			if (!("owner" in o) || o.owner === telling.own) continue
 			options.marked?.(o.owner, telling.by, telling.tag)
 		}

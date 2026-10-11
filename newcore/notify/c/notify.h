@@ -8,8 +8,9 @@
 
 // content: null, bool, number, string (UTF-8; positions count code points), list, map (keys in
 // the order given), bytes, typed array (encoding/ENCODING.tex). An absent value is a NULL pointer.
-// bytes are a leaf; a typed array is a sequence of its elements (its length: how many)
-typedef enum { NT_NULL, NT_BOOL, NT_NUM, NT_STR, NT_LIST, NT_MAP, NT_BYTES, NT_TYPED } nt_type;
+// bytes are a leaf; a typed array is a sequence of its elements (its length: how many); a stand-in
+// (what a live value is sent as) is a leaf holding its kind, any value, as its one item
+typedef enum { NT_NULL, NT_BOOL, NT_NUM, NT_STR, NT_LIST, NT_MAP, NT_BYTES, NT_TYPED, NT_STAND } nt_type;
 // a typed array's kind, in ENCODING.tex's order
 typedef enum {
 	NT_INT8, NT_UINT8, NT_INT16, NT_UINT16, NT_INT32, NT_UINT32, NT_INT64, NT_UINT64, NT_FLOAT32,
@@ -49,6 +50,8 @@ nt_value *nt_map(void);
 nt_value *nt_bytes(const void *data, size_t n);
 // copies count elements of the kind, each little-endian
 nt_value *nt_typed(nt_elements kind, const void *data, size_t count);
+// takes the kind (any value): a stand-in, a leaf, its kind its one item
+nt_value *nt_stand(nt_value *kind);
 // one element's bytes: 1 ... 8
 size_t nt_size(nt_elements kind);
 // a typed array's elements

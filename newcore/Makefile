@@ -18,7 +18,7 @@ pack_src = nodes/c/node.c nodes/c/shown.c encoding/c/pack.c encoding/c/pack_harn
 cbor_src = encoding/c/cbor_test.c encoding/c/cbor.c encoding/c/json.c
 blop_src = encoding/c/blop.c encoding/c/blop_harness.c encoding/c/json.c encoding/c/cbor.c $(blake3_src)
 id_src = sync/c/id.c sync/c/id_harness.c encoding/c/json.c encoding/c/cbor.c $(blake3_src)
-seal_src = sync/c/seal.c sync/c/seal_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) c/ed25519/ed25519.c sync/c/sha2.c
+seal_src = sync/c/seal.c sync/c/seal_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) c/ed25519/ed25519.c c/ed25519/sha2.c
 chain_src = sync/c/chain.c sync/c/apply.c sync/c/chain_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
 	opstreams/c/mutate.c notify/c/notify.c nodes/c/node.c nodes/c/change.c nodes/c/because.c
 apply_src = sync/c/chain.c sync/c/apply.c sync/c/apply_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
@@ -102,8 +102,8 @@ protect_test = PROTECT_HARNESS conformance/protect/
 mutate_test = MUTATE_HARNESS conformance/mutate/
 graph_test = GRAPH_HARNESS conformance/graph/
 scheduler_test = SCHEDULER_HARNESS conformance/scheduler/
-# graph/c's places has no write by path; nt_value has no typed arrays
-skips = PLACES_SKIP=13-write.json MUTATE_SKIP=04-typed-arrays.json
+# graph/c's places has no write by path
+skips = PLACES_SKIP=13-write.json COMMIT_SKIP=29-live-stand-in.json,30-live-actor-cause.json
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check
 define run

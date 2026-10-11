@@ -135,9 +135,9 @@ Json *jsonTyped(JsonKind kind, const void *data, size_t count) {
 	return value;
 }
 
-Json *jsonLive(const char *kind) {
-	Json *value = jsonString(kind);
-	value->type = JSON_LIVE;
+Json *jsonStand(Json *kind) {
+	Json *value = make(JSON_STAND);
+	value->stand.kind = kind;
 	return value;
 }
 
@@ -205,9 +205,9 @@ Json *jsonShallow(const Json *value) {
 		case JSON_TYPED:
 			jsonFree(copy);
 			return jsonTyped(value->typed.kind, value->typed.data, value->typed.count);
-		case JSON_LIVE:
+		case JSON_STAND:
 			jsonFree(copy);
-			return (Json *)value; // a live value is the one thing it is
+			return jsonStand(value->stand.kind);
 		default:
 			*copy = *value;
 			break;
@@ -232,8 +232,10 @@ void jsonFree(Json *value) {
 	if (value) push(&stack, value);
 	while (stack.count) {
 		Json *at = (Json *)stack.items[--stack.count];
-		if (at->type == JSON_STRING || at->type == JSON_LIVE) {
+		if (at->type == JSON_STRING) {
 			free(at->string);
+		} else if (at->type == JSON_STAND) {
+			if (at->stand.kind) push(&stack, at->stand.kind);
 		} else if (at->type == JSON_BYTES) {
 			free(at->bytes.data);
 		} else if (at->type == JSON_TYPED) {
@@ -332,8 +334,9 @@ bool jsonEqual(const Json *a, const Json *b) {
 			equal = x->bytes.length == y->bytes.length && (!x->bytes.length || memcmp(x->bytes.data, y->bytes.data, x->bytes.length) == 0);
 		} else if (x->type == JSON_TYPED) {
 			equal = sameElements(x, y);
-		} else if (x->type == JSON_LIVE) {
-			equal = x == y;
+		} else if (x->type == JSON_STAND) {
+			push(&stack, x->stand.kind);
+			push(&stack, y->stand.kind);
 		} else if (x->type == JSON_STRING) {
 			equal = x->stringLength == y->stringLength && memcmp(x->string, y->string, x->stringLength) == 0;
 		} else if (x->type == JSON_ARRAY) {
@@ -474,17 +477,17 @@ static bool isSlashMap(const Json *value) {
 	return jsonIsObject(value) && value->object.count == 1 && isKey(&value->object.members[0], "/");
 }
 
-/** the value one "/" form other than map stands for: bytes, a number, a live value (when `live`), or a typed array; NULL when malformed */
-static Json *formOf(const JsonMember *form, bool live) {
+/** the value one "/" form other than map stands for: bytes, a number, a stand-in (its kind still to decode), or a typed array; NULL when malformed */
+static Json *formOf(const JsonMember *form) {
 	double number;
 	if (isKey(form, "bytes")) return bytesOf(form->value);
 	if (isKey(form, "number")) return numberWord(form->value, &number) ? jsonNumber(number) : NULL;
-	if (isKey(form, "live")) return live && jsonIsString(form->value) ? jsonLive(form->value->string) : NULL;
+	if (isKey(form, "live")) return jsonStand(form->value);
 	return typedOf(form->key, form->keyLength, form->value);
 }
 
 // No recursion: the places still to decode are kept on a stack of their own.
-bool jsonDecode(Json **value, bool live) {
+bool jsonDecode(Json **value) {
 	Json ***stack = NULL;
 	int count = 0, capacity = 0;
 	stack = growArray(stack, count, &capacity, sizeof *stack);
@@ -514,9 +517,14 @@ bool jsonDecode(Json **value, bool live) {
 					stack[count++] = &map->object.members[0].value;
 				}
 			} else {
-				Json *made = formOf(&form->object.members[0], live && at == value);
+				Json *made = formOf(&form->object.members[0]);
 				ok = made != NULL;
 				if (ok) *at = made;
+				if (ok && made->type == JSON_STAND) {
+					// its kind is decoded in turn
+					stack = growArray(stack, count, &capacity, sizeof *stack);
+					stack[count++] = &made->stand.kind;
+				}
 			}
 		} else if (jsonIsObject(here)) {
 			for (int i = 0; ok && i < here->object.count; i++) {
@@ -1093,7 +1101,7 @@ static void putElements(Bytes *bytes, const Json *value) {
 	putText(bytes, "]");
 }
 
-/** a scalar, bytes, a typed array or a live value in its JSON form */
+/** a scalar, bytes, a typed array in its JSON form */
 static void putScalar(Bytes *bytes, const Json *value) {
 	switch (value->type) {
 		case JSON_NULL:
@@ -1120,11 +1128,6 @@ static void putScalar(Bytes *bytes, const Json *value) {
 			putElements(bytes, value);
 			putText(bytes, "}}");
 			break;
-		case JSON_LIVE:
-			putText(bytes, "{\"/\":{\"live\":");
-			putString(bytes, value->string, value->stringLength);
-			putText(bytes, "}}");
-			break;
 		default:
 			break;
 	}
@@ -1148,6 +1151,10 @@ char *jsonPrint(const Json *value) {
 			putBytes(&bytes, value->type == JSON_ARRAY ? "[" : "{", 1);
 			stack = growArray(stack, depth, &capacity, sizeof *stack);
 			stack[depth++] = (Printing){ value, 0 };
+		} else if (value->type == JSON_STAND) {
+			putText(&bytes, "{\"/\":{\"live\":");
+			stack = growArray(stack, depth, &capacity, sizeof *stack);
+			stack[depth++] = (Printing){ value, 0 };
 		} else {
 			putScalar(&bytes, value);
 		}
@@ -1156,6 +1163,11 @@ char *jsonPrint(const Json *value) {
 		while (depth && !value) {
 			Printing *top = &stack[depth - 1];
 			const Json *container = top->container;
+			if (container->type == JSON_STAND) {
+				if (top->next) putText(&bytes, "}}"), depth--;
+				else value = container->stand.kind, top->next++;
+				continue;
+			}
 			bool list = container->type == JSON_ARRAY;
 			if (top->next == (list ? container->array.count : container->object.count)) {
 				putBytes(&bytes, list ? "]" : "}", 1);

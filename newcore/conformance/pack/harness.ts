@@ -8,7 +8,15 @@
 //   {op: "encode", node}: one node alone; {op: "decode", bytes}
 // answers: {graph: {root, nodes, missing}}, {node}, {bytes}, or {code, id?} for a PackError
 import createNode, { type Header, type List, type Node, type Version } from "../../nodes/ts/node.ts"
-import { decode, encode, type Graph, pack, PackError, unpack, walk } from "../../encoding/ts/pack.ts"
+import {
+	decode,
+	encode,
+	type Graph,
+	pack,
+	PackError,
+	unpack,
+	walk,
+} from "../../encoding/ts/pack.ts"
 import { createTable } from "../../graph/ts/table.ts"
 import { FormError, fromJson, line, toJson } from "./form.ts"
 

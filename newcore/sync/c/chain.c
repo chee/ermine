@@ -28,6 +28,7 @@ struct chains {
 	char *node;
 	chain_check check;
 	void *context;
+	void (*release)(void *slot);
 	entry *entries;
 	size_t length, capacity;
 	// open addressing over entries, by the name's first bytes: index + 1, 0 empty
@@ -59,9 +60,14 @@ chains *chain_create(const char *node, chain_check check, void *context) {
 	return c;
 }
 
+void chain_release(chains *c, void (*release)(void *slot)) {
+	c->release = release;
+}
+
 void chain_free(chains *c) {
 	if (c == NULL) return;
 	for (size_t i = 0; i < c->length; i++) {
+		if (c->release && c->entries[i].slot) c->release(c->entries[i].slot);
 		free(c->entries[i].parents);
 		free(c->entries[i].on);
 		free(c->entries[i].waiters);

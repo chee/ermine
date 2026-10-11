@@ -1,10 +1,32 @@
-{ "title": "deep hears under its path; plain does not", "start": { "rows": [{ "v": "a" }, { "v": "b" }] }, "steps": [
-  { "op": "read", "name": "plain", "path": ["rows"] },
-  { "op": "read", "name": "deep", "path": ["rows"], "deep": true },
-  { "op": "read", "name": "rootdeep", "path": [], "deep": true },
-  { "op": "read", "name": "row1", "path": ["rows", 1] },
-  { "op": "read", "name": "v0", "path": ["rows", 0, "v"] },
-  { "op": "patch", "patch": { "path": ["rows", 0, "v"], "value": "c" }, "expect": { "deep": ["value"], "rootdeep": ["value"], "v0": ["value"] } },
-  { "op": "patch", "patch": { "path": ["rows", 0, "x"], "value": 1 }, "expect": { "deep": ["value"], "rootdeep": ["value"] } },
-  { "op": "patch", "patch": { "path": ["rows"], "range": [0, 1] }, "expect": { "plain": ["length"], "deep": ["value", "length"], "rootdeep": ["value"], "row1": ["value"], "v0": ["value"] } }
-] }
+{
+	"title": "deep hears under its path; plain does not",
+	"start": { "rows": [{ "v": "a" }, { "v": "b" }] },
+	"steps": [
+		{ "op": "read", "name": "plain", "path": ["rows"] },
+		{ "op": "read", "name": "deep", "path": ["rows"], "deep": true },
+		{ "op": "read", "name": "rootdeep", "path": [], "deep": true },
+		{ "op": "read", "name": "row1", "path": ["rows", 1] },
+		{ "op": "read", "name": "v0", "path": ["rows", 0, "v"] },
+		{
+			"op": "patch",
+			"patch": { "path": ["rows", 0, "v"], "value": "c" },
+			"expect": { "deep": ["value"], "rootdeep": ["value"], "v0": ["value"] }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["rows", 0, "x"], "value": 1 },
+			"expect": { "deep": ["value"], "rootdeep": ["value"] }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["rows"], "range": [0, 1] },
+			"expect": {
+				"plain": ["length"],
+				"deep": ["value", "length"],
+				"rootdeep": ["value"],
+				"row1": ["value"],
+				"v0": ["value"]
+			}
+		}
+	]
+}

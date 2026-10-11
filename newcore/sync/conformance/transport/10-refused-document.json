@@ -1,0 +1,120 @@
+{
+	"title": "a blop of another document in this tree: refused document",
+	"steps": [
+		{
+			"request": {
+				"op": "reset"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "a",
+				"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+			},
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "b",
+				"seed": "0202020202020202020202020202020202020202020202020202020202020202"
+			},
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "link",
+				"a": "a",
+				"b": "b"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "put",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"head": "762294f37f14deafdc39ece9b8aa32a7e86d5537952fa66b763dc37afbb61418",
+				"parents": [
+					"4444444444444444444444444444444444444444444444444444444444444444"
+				],
+				"blob": "a3666368616e676558cba8646e6f6465784965726d696e653a2f2f65376661356365303062313664363835623861326235646538303161663938333861353538306534343762646261636665333731613133303061343930376433656163746f726161656e6f6e6365480000001000000000666f626a6563746576616c7565667369676e657258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565f93c00667369676e657258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c697369676e61747572655840efc1018bdc43596e6fdb1720d0eb689410f8e68e9a9b96e78a5bf4d70127a28c58184cf07e3869f74b8b6600452647e2ffccb6f3809703ffec27b3694c78390b"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "pump"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {
+				"heads": [],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "762294f37f14deafdc39ece9b8aa32a7e86d5537952fa66b763dc37afbb61418",
+							"refused": "document"
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {
+				"heads": [],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "762294f37f14deafdc39ece9b8aa32a7e86d5537952fa66b763dc37afbb61418",
+							"refused": "document"
+						}
+					]
+				}
+			}
+		}
+	]
+}

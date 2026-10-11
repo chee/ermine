@@ -1,7 +1,23 @@
-{ "title": "strings count code points", "start": { "text": "🦊ab" }, "steps": [
-  { "op": "read", "name": "a", "path": ["text", [1, 2]], "chase": true },
-  { "op": "read", "name": "whole", "path": ["text"] },
-  { "op": "patch", "patch": { "path": ["text"], "range": [0, 0], "value": "🐰" }, "expect": { "a": ["moved"], "whole": ["value", "length"] } },
-  { "op": "where", "name": "a", "expect": { "path": ["text", [2, 3]], "value": "a", "live": true } },
-  { "op": "patch", "patch": { "path": ["text"], "range": [0, 1], "value": "x" }, "expect": { "whole": ["value"] } }
-] }
+{
+	"title": "strings count code points",
+	"start": { "text": "🦊ab" },
+	"steps": [
+		{ "op": "read", "name": "a", "path": ["text", [1, 2]], "chase": true },
+		{ "op": "read", "name": "whole", "path": ["text"] },
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [0, 0], "value": "🐰" },
+			"expect": { "a": ["moved"], "whole": ["value", "length"] }
+		},
+		{
+			"op": "where",
+			"name": "a",
+			"expect": { "path": ["text", [2, 3]], "value": "a", "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [0, 1], "value": "x" },
+			"expect": { "whole": ["value"] }
+		}
+	]
+}

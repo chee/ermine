@@ -34,7 +34,9 @@ type Step = Request & { expect: Omit<Answer, "error"> }
 
 for await (const f of Deno.readDir(`${here}../../opstreams/conformance/squish`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../opstreams/conformance/squish/${f.name}`)) as {
+	const { title, steps } = JSON.parse(
+		await Deno.readTextFile(`${here}../../opstreams/conformance/squish/${f.name}`),
+	) as {
 		title: string
 		steps: Step[]
 	}

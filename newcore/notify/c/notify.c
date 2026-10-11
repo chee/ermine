@@ -2,6 +2,7 @@
 // Only listened places are walked: reads sit in a trie of their paths.
 #include "notify.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,6 +66,11 @@ nt_value *nt_bytes(const void *data, size_t n) {
 	v->data = xrealloc(NULL, n ? n : 1);
 	if (n) memcpy(v->data, data, n);
 	v->bytes = n;
+	return v;
+}
+nt_value *nt_stand(nt_value *kind) {
+	nt_value *v = make(NT_STAND);
+	nt_push(v, kind);
 	return v;
 }
 size_t nt_size(nt_elements kind) {
@@ -1286,8 +1292,48 @@ int nt_span(const nt_read *r, long *a, long *b) {
 	if (r->has_span) *a = r->sa, *b = r->sb;
 	return r->has_span;
 }
+// one typed array element as a number (a 64-bit integer: as the nearest double; notify.ts has a bigint)
+static nt_value *element(const nt_value *t, size_t i) {
+	size_t z = nt_size(t->kind);
+	uint64_t u = 0;
+	for (size_t j = 0; j < z; j++) u |= (uint64_t)t->data[i * z + j] << (8 * j);
+	switch (t->kind) {
+	case NT_INT8: return nt_num((int8_t)u);
+	case NT_UINT8: return nt_num((uint8_t)u);
+	case NT_INT16: return nt_num((int16_t)u);
+	case NT_UINT16: return nt_num((uint16_t)u);
+	case NT_INT32: return nt_num((int32_t)u);
+	case NT_UINT32: return nt_num((uint32_t)u);
+	case NT_INT64: return nt_num((double)(int64_t)u);
+	case NT_UINT64: return nt_num((double)u);
+	case NT_FLOAT32: {
+		uint32_t b = (uint32_t)u;
+		float f;
+		memcpy(&f, &b, 4);
+		return nt_num(f);
+	}
+	default: {
+		double d;
+		memcpy(&d, &u, 8);
+		return nt_num(d);
+	}
+	}
+}
 nt_value *nt_value_of(const nt_read *r) {
 	const nt_value *v = at(r->n->get(r->n->ctx), r->keys, r->nkeys);
+	// a typed array's one element, as notify.ts's v[k]: a number key, or a string of one
+	if (v == NULL && r->nkeys && !r->has_span) {
+		const nt_value *t = at(r->n->get(r->n->ctx), r->keys, r->nkeys - 1);
+		nt_key k = r->keys[r->nkeys - 1];
+		long i = -1;
+		if (k.type == NT_NUM_KEY) i = k.n;
+		else if (k.s[0] >= '0' && k.s[0] <= '9' && (k.s[0] != '0' || k.s[1] == 0)) {
+			char *end;
+			i = strtol(k.s, &end, 10);
+			if (*end) i = -1;
+		}
+		if (t != NULL && t->type == NT_TYPED && i >= 0 && (size_t)i < nt_length(t)) return element(t, (size_t)i);
+	}
 	return r->has_span ? slice(v, r->sa, r->sb) : copy(v);
 }
 

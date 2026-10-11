@@ -22,11 +22,23 @@
 // an error: {"error": code} (normal.ts); the harness goes on.
 import createNode from "../../nodes/ts/node.ts"
 import { rules } from "../../protect/ts/protect.ts"
-import { type Api, createScheduler, type Finder, type Moment, PENDING } from "../../scheduler/ts/scheduler.ts"
+import {
+	type Api,
+	createScheduler as reference,
+	type Finder,
+	type Moment,
+	PENDING,
+} from "../../scheduler/ts/scheduler.ts"
+import { createScheduler as push } from "../../scheduler/ts/push.ts"
+import { createScheduler as alien } from "../../scheduler/ts/alien.ts"
 import { code, json, operate, version } from "./normal.ts"
 import { load, program } from "./steps.ts"
 
-type S = ReturnType<typeof createScheduler>
+// SCHEDULER=push or alien: the push-pull schedulers (push.ts, alien.ts)
+const createScheduler =
+	({ push, alien } as Record<string, typeof reference>)[Deno.env.get("SCHEDULER") ?? ""] ??
+		reference
+type S = ReturnType<typeof reference>
 
 let moments: unknown[] = []
 let clock = { time: 0 }

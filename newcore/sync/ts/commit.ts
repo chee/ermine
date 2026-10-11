@@ -1,6 +1,7 @@
 // a change made on this device as a blop: which parents, base and Lamport number, and what of its
 // header leaves the device (COMMIT.tex). Not sealed, not taken in: the blop only
 import type { Blop, Patch } from "../../encoding/ts/blop.ts"
+import { Stand } from "../../encoding/ts/cbor.ts"
 import type { Header } from "../../nodes/ts/change.ts"
 import type { Site } from "../../nodes/ts/stacktrace.ts"
 import { side } from "./apply.ts"
@@ -24,6 +25,53 @@ export class CommitError extends Error {
 	constructor(readonly code: Code) {
 		super(code)
 	}
+}
+
+// a live value (ENCODING.tex): a symbol, a function, a Map, any class's object other than a
+// Stand, typed arrays and ArrayBuffer
+function isLive(x: unknown): boolean {
+	if (typeof x === "symbol" || typeof x === "function") return true
+	if (x === null || typeof x !== "object") return false
+	if (x instanceof Stand || x instanceof ArrayBuffer || ArrayBuffer.isView(x)) return false
+	if (Array.isArray(x)) return false
+	const proto = Object.getPrototypeOf(x)
+	return proto !== Object.prototype && proto !== null
+}
+
+// x with each live value in it written as a stand-in over kind(it), null with no kind given; x
+// itself where it holds none (and where it holds itself, for encoding to refuse)
+export function standIns(
+	x: unknown,
+	kind?: (live: unknown) => unknown,
+	open = new Set<object>(),
+): unknown {
+	if (isLive(x)) return new Stand((kind?.(x) ?? null) as never)
+	if (
+		x === null || typeof x !== "object" || x instanceof Stand || x instanceof ArrayBuffer ||
+		ArrayBuffer.isView(x) || open.has(x)
+	) return x
+	open.add(x)
+	let out: unknown = x
+	if (Array.isArray(x)) {
+		const items = x.map((e) => standIns(e, kind, open))
+		if (items.some((e, i) => e !== x[i])) out = items
+	} else {
+		const keys = Object.keys(x), made: Record<string, unknown> = {}
+		let changed = false
+		for (const k of keys) {
+			const v = standIns((x as Record<string, unknown>)[k], kind, open)
+			if (v !== (x as Record<string, unknown>)[k]) changed = true
+			Object.defineProperty(made, k, {
+				value: v,
+				enumerable: true,
+				writable: true,
+				configurable: true,
+			})
+		}
+		if (changed) out = made
+	}
+	open.delete(x)
+	return out
 }
 
 // bytewise
@@ -56,7 +104,9 @@ function share(site: Site, roots: string[]): Site {
 	return { ...site, file: rest.length ? rest.join("/") : path[path.length - 1] ?? site.file }
 }
 
-// the blop for the change at `at`; CommitError "range" when no version is there, or none to pop
+// the blop for the change at `at`; CommitError "range" when no version is there, or none to pop.
+// kind: the host's, optional: what a live value in the patches, the actor or the cause is
+// written as a stand-in over (COMMIT.tex); null with none
 export function commit(
 	chains: Chains,
 	change: Commitment,
@@ -64,6 +114,7 @@ export function commit(
 	// deno-lint-ignore no-explicit-any
 	roots: any, // the source roots, strings; the line protocol hands them untyped
 	random: (n: number) => Uint8Array,
+	kind?: (live: unknown) => unknown,
 ): Blop {
 	// the versions' heads: those that have a side
 	const heads: Head[] = chains.heads(change.object).filter((h) =>
@@ -95,16 +146,16 @@ export function commit(
 	const blop: Blop = {
 		node: change.node,
 		object: change.object,
-		actor: change.header.actor,
+		actor: standIns(change.header.actor, kind),
 		signer: change.signer,
 		nonce: random(8),
 		parents,
 		lamport: 1 + Math.max(0, ...used.map((h) => h.blop.lamport)),
-		patches,
+		patches: standIns(patches, kind) as Patch[],
 	}
 	if (change.header.reader !== undefined) blop.reader = change.header.reader
 	if (change.header.site !== undefined) blop.site = share(change.header.site, roots)
-	if (change.header.cause !== undefined) blop.cause = change.header.cause
+	if (change.header.cause !== undefined) blop.cause = standIns(change.header.cause, kind)
 	if (base !== undefined) blop.base = base.name
 	if (combine) blop.combine = true
 	return blop

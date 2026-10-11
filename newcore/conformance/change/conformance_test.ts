@@ -51,7 +51,9 @@ function check(got: Change | undefined, expect: Step["expect"], at: string) {
 
 for await (const f of Deno.readDir(`${here}../../nodes/conformance/change`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../nodes/conformance/change/${f.name}`)) as {
+	const { title, steps } = JSON.parse(
+		await Deno.readTextFile(`${here}../../nodes/conformance/change/${f.name}`),
+	) as {
 		title: string
 		steps: Step[]
 	}

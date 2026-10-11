@@ -1,11 +1,43 @@
-{ "title": "a chased span: moves, grows by an insert inside, shrinks by a removal", "start": { "items": ["a", "b", "c", "d", "e", "f", "g"] }, "steps": [
-  { "op": "read", "name": "s", "path": ["items", [3, 5]], "chase": true },
-  { "op": "patch", "patch": { "path": ["items"], "range": [0, 0], "value": ["0", "1"] }, "expect": { "s": ["moved"] } },
-  { "op": "where", "name": "s", "expect": { "path": ["items", [5, 7]], "value": ["d", "e"], "live": true } },
-  { "op": "patch", "patch": { "path": ["items"], "range": [6, 6], "value": ["i"] }, "expect": { "s": ["value", "moved"] } },
-  { "op": "where", "name": "s", "expect": { "path": ["items", [5, 8]], "value": ["d", "i", "e"], "live": true } },
-  { "op": "patch", "patch": { "path": ["items"], "range": [6, 7] }, "expect": { "s": ["value", "moved"] } },
-  { "op": "where", "name": "s", "expect": { "path": ["items", [5, 7]], "value": ["d", "e"], "live": true } },
-  { "op": "patch", "patch": { "path": ["items"], "range": [5, 6], "value": ["D"] }, "expect": { "s": ["value"] } },
-  { "op": "patch", "patch": { "path": ["items"], "range": [8, 9] }, "expect": {} }
-] }
+{
+	"title": "a chased span: moves, grows by an insert inside, shrinks by a removal",
+	"start": { "items": ["a", "b", "c", "d", "e", "f", "g"] },
+	"steps": [
+		{ "op": "read", "name": "s", "path": ["items", [3, 5]], "chase": true },
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [0, 0], "value": ["0", "1"] },
+			"expect": { "s": ["moved"] }
+		},
+		{
+			"op": "where",
+			"name": "s",
+			"expect": { "path": ["items", [5, 7]], "value": ["d", "e"], "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [6, 6], "value": ["i"] },
+			"expect": { "s": ["value", "moved"] }
+		},
+		{
+			"op": "where",
+			"name": "s",
+			"expect": { "path": ["items", [5, 8]], "value": ["d", "i", "e"], "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [6, 7] },
+			"expect": { "s": ["value", "moved"] }
+		},
+		{
+			"op": "where",
+			"name": "s",
+			"expect": { "path": ["items", [5, 7]], "value": ["d", "e"], "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [5, 6], "value": ["D"] },
+			"expect": { "s": ["value"] }
+		},
+		{ "op": "patch", "patch": { "path": ["items"], "range": [8, 9] }, "expect": {} }
+	]
+}

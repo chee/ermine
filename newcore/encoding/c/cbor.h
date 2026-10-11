@@ -23,11 +23,13 @@
 //   int16 77, int32 78, int64 79, float32 85, float64 86. A float element
 //   that is NaN is written as the one quiet NaN of its width (float32
 //   0x7fc00000, float64 0x7ff8000000000000), since all NaNs are one NaN.
-// - A live value has no encoding: encoding one is an error.
+// - A stand-in (what a live value is sent as) as tag 11111111 (da00a98ac7)
+//   over its kind, any value; json.h holds it as JSON_STAND. C has no live
+//   values: it carries stand-ins as data.
 //
 // Decoding accepts exactly what the encoder writes and nothing else: an
 // integer, a head longer than it need be, an indefinite length, an unknown
-// tag or simple value, a number in a longer float than holds it, any other
+// tag (the stand-in's only in its head da00a98ac7) or simple value, a number in a longer float than holds it, any other
 // NaN, a map whose keys are not text strings in strictly increasing order,
 // text that is not UTF-8, a typed array whose byte string is not a whole
 // number of elements, a NaN element other than the one above, or bytes left
@@ -52,7 +54,7 @@
  * length in *length, even when that is more than `capacity` (then only the
  * first `capacity` bytes are written: call again with room for *length; out
  * may be NULL when capacity is 0). False when the value has no encoding (a
- * live value, a string that is not UTF-8, a map holding a key twice), with a
+ * string that is not UTF-8, a map holding a key twice), with a
  * reason, a static string, in *why; *length is then meaningless.
  */
 bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *length, const char **why);

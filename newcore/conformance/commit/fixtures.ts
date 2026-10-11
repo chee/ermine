@@ -6,6 +6,7 @@
 // model (../apply/model.ts) and against the local change, mutate.ts on the versions before,
 // reordered as COMMIT.tex's After says. commit.ts and apply.ts are never imported.
 import { assertEquals } from "@std/assert"
+import { Stand } from "../../encoding/ts/cbor.ts"
 import { toJson } from "../pack/form.ts"
 import {
 	add,
@@ -54,6 +55,9 @@ type Want = {
 	patches?: unknown[]
 	// the site the blop carries, when the header has one
 	site?: Record<string, unknown>
+	// the actor and cause the blop carries, where the header's hold a live value (a marker)
+	actor?: unknown
+	cause?: unknown
 }
 // a commit step, and the blop expected (named, so it can be added after)
 function commit(c: Commit, want: Want): [Step, B] {
@@ -69,10 +73,10 @@ function commit(c: Commit, want: Want): [Step, B] {
 		combine: want.combine,
 		lamport: want.lamport,
 		patches: want.patches ?? patches,
-		actor: header.actor,
+		actor: "actor" in want ? want.actor : header.actor,
 		reader: header.reader,
 		site: want.site,
-		cause: header.cause,
+		cause: "cause" in want ? want.cause : header.cause,
 		signer,
 		nonce,
 	})
@@ -696,6 +700,65 @@ for (const [name, title, cases] of SITES) {
 			add(P),
 			add(Q),
 			versions(all, "value", both),
+		],
+	)
+}
+
+// ---- a live value in the patches: a stand-in in the blop
+// {"$live": kind} is the marker the reference harness makes a live value of (harness.ts); an
+// implementation with no live values skips these two (COMMIT_SKIP)
+{
+	const live = (kind: unknown) => ({ $live: kind })
+	const c: Commit = {
+		at: { version: 0 },
+		patches: put({
+			canvas: live("canvas"),
+			shape: live({ url: "x", w: 2 }),
+			bare: live(null),
+			list: [1, live("in a list")],
+			plain: { "$live": 1, other: 2 },
+		}),
+	}
+	const stood = {
+		canvas: new Stand("canvas"),
+		shape: new Stand({ url: "x", w: 2 }),
+		bare: new Stand(null),
+		list: [1, new Stand("in a list")],
+		plain: { "$live": 1, other: 2 },
+	}
+	const [s, X] = commit(c, { parents: [], lamport: 1, patches: put(stood) })
+	local("value", [], { ...c, patches: put(stood) }, X, [[X, stood]])
+	scenario(
+		"live-stand-in",
+		"a live value in the patches is written as a stand-in over the host's kind(value), null with none; it syncs as data",
+		[
+			create(),
+			s,
+			add(X),
+			versions([X], "value", [[X, stood]]),
+		],
+	)
+}
+
+// ---- a live value as the actor or the cause
+{
+	const header: Header = { time: 77, actor: { $live: "device" }, cause: { why: { $live: null } } }
+	const c: Commit = { at: { version: 0 }, patches: put(1), header }
+	const [s, X] = commit(c, {
+		parents: [],
+		lamport: 1,
+		actor: new Stand("device"),
+		cause: { why: new Stand(null) },
+	})
+	local("value", [], c, X, [[X, 1]])
+	scenario(
+		"live-actor-cause",
+		"a live value in the actor or the cause is written as a stand-in too",
+		[
+			create(),
+			s,
+			add(X),
+			versions([X], "value", [[X, 1]]),
 		],
 	)
 }

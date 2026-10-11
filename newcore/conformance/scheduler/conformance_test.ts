@@ -29,11 +29,13 @@ async function ask(requests: Request[]): Promise<Answer[]> {
 
 type Step = Request & { expect: Answer }
 
-const files = [...Deno.readDirSync(`${here}../../scheduler/conformance`)].map((f) => f.name).filter((n) =>
-	n.endsWith(".json")
+const files = [...Deno.readDirSync(`${here}../../scheduler/conformance`)].map((f) => f.name).filter(
+	(n) => n.endsWith(".json"),
 ).sort()
 for (const name of files) {
-	const { title, steps } = JSON.parse(Deno.readTextFileSync(`${here}../../scheduler/conformance/${name}`)) as {
+	const { title, steps } = JSON.parse(
+		Deno.readTextFileSync(`${here}../../scheduler/conformance/${name}`),
+	) as {
 		title: string
 		steps: Step[]
 	}

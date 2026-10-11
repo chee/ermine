@@ -39,7 +39,9 @@ type Step = Request & { expect: Answer }
 
 for await (const f of Deno.readDir(`${here}../../opstreams/conformance/mutate`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../opstreams/conformance/mutate/${f.name}`)) as {
+	const { title, steps } = JSON.parse(
+		await Deno.readTextFile(`${here}../../opstreams/conformance/mutate/${f.name}`),
+	) as {
 		title: string
 		steps: Step[]
 	}
@@ -99,11 +101,19 @@ function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 			return { path: ["m", KEYS[pick(3)]] }
 		case 6:
 			return l.length
-				? { path: ["l"], range: [i % l.length, i % l.length], move: { path: ["l", pick(l.length)] } }
+				? {
+					path: ["l"],
+					range: [i % l.length, i % l.length],
+					move: { path: ["l", pick(l.length)] },
+				}
 				: { path: ["l"], range: [0, 0], value: [1, 2, 3] }
 		case 7:
 			return l.length > 1
-				? { path: ["l"], range: [0, 0], move: { path: ["l"], range: [1, 1 + pick(l.length - 1)] } }
+				? {
+					path: ["l"],
+					range: [0, 0],
+					move: { path: ["l"], range: [1, 1 + pick(l.length - 1)] },
+				}
 				: { path: ["l", 0], value: 0 }
 		case 8:
 			return l.length
@@ -134,7 +144,10 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference, facts as 
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const pick = rand(seed)
 		const n = createNode<unknown, Change>("a", {
-			value: [{ content: { l: [1, 2, 3], s: "ab", m: { a: 1 } }, change: createChange("a", { time: 0, actor: "host" }) }],
+			value: [{
+				content: { l: [1, 2, 3], s: "ab", m: { a: 1 } },
+				change: createChange("a", { time: 0, actor: "host" }),
+			}],
 		})
 		const patches: Patch[] = [], good: Patch[] = []
 		for (let k = 0; k < STEPS; k++) {
@@ -149,9 +162,13 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference, facts as 
 		}
 		const requests: Request[] = [start]
 		for (const p of patches) {
-			requests.push({ op: "mutate", which: "value", patches: [p], patched: true }, { op: "node" })
+			requests.push({ op: "mutate", which: "value", patches: [p], patched: true }, {
+				op: "node",
+			})
 		}
-		requests.push(start, { op: "mutate", which: "value", patches: good, patched: true }, { op: "node" })
+		requests.push(start, { op: "mutate", which: "value", patches: good, patched: true }, {
+			op: "node",
+		})
 		const mine = await ask(requests)
 		if (command.join(" ") !== reference) {
 			assertEquals(mine, await ask(requests, reference.split(" ")), `seed ${seed}`)

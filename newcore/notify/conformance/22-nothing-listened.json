@@ -1,5 +1,13 @@
-{ "title": "nothing read: nothing heard", "start": { "items": ["x"] }, "steps": [
-  { "op": "patch", "patch": { "path": ["items"], "range": [0, 0], "value": ["q"] }, "expect": {} },
-  { "op": "read", "name": "other", "path": ["title"] },
-  { "op": "patch", "patch": { "path": ["items", 0] }, "expect": {} }
-] }
+{
+	"title": "nothing read: nothing heard",
+	"start": { "items": ["x"] },
+	"steps": [
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [0, 0], "value": ["q"] },
+			"expect": {}
+		},
+		{ "op": "read", "name": "other", "path": ["title"] },
+		{ "op": "patch", "patch": { "path": ["items", 0] }, "expect": {} }
+	]
+}

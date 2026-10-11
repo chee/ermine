@@ -12,7 +12,13 @@
 			"id": "b",
 			"header": { "time": 1, "actor": "me" },
 			"outside": true,
-			"expect": { "id": "b", "value": [], "info": [], "children": [], "header": { "time": 1, "actor": "me", "site": "*" } }
+			"expect": {
+				"id": "b",
+				"value": [],
+				"info": [],
+				"children": [],
+				"header": { "time": 1, "actor": "me", "site": "*" }
+			}
 		}
 	]
 }

@@ -42,7 +42,9 @@ function match(got: Shown, want: Shown, at: string) {
 
 for await (const f of Deno.readDir(`${here}../../nodes/conformance/node`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../nodes/conformance/node/${f.name}`)) as {
+	const { title, steps } = JSON.parse(
+		await Deno.readTextFile(`${here}../../nodes/conformance/node/${f.name}`),
+	) as {
 		title: string
 		steps: Step[]
 	}
@@ -89,7 +91,9 @@ Deno.test(`fuzz: ${SEEDS} seeds against the model`, async () => {
 			const v: Version = {
 				content: list
 					? Array.from({ length: pick(4) }, () => pick(4) ? NAMES[pick(4)] : { symbol: "s" })
-					: pick(3) ? pick(100) : { k: [pick(9), "x"] },
+					: pick(3)
+					? pick(100)
+					: { k: [pick(9), "x"] },
 				change: { time: pick(1000), actor: NAMES[pick(4)], node: "n" },
 			}
 			if (pick(3) === 0) v.because = ["b", pick(5)]
@@ -97,7 +101,10 @@ Deno.test(`fuzz: ${SEEDS} seeds against the model`, async () => {
 		}
 		const versions = (list: boolean) => Array.from({ length: pick(3) }, () => version(list))
 		const named = (list: boolean) =>
-			Array.from({ length: pick(6) }, () => [NAMES[pick(4)], versions(list)] as [string, Version[]])
+			Array.from(
+				{ length: pick(6) },
+				() => [NAMES[pick(4)], versions(list)] as [string, Version[]],
+			)
 		const value = versions(false), info = named(false), children = named(true)
 		const header: Record<string, unknown> = {}
 		if (pick(2)) header.time = pick(1 << 30)

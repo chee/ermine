@@ -3,6 +3,7 @@
 #include "notify.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -98,6 +99,7 @@ bad:
 	s->why = "bad string";
 	return NULL;
 }
+static nt_value *beyond(nt_value *m);
 static nt_value *value(parser *s) {
 	skip(s);
 	char c = *s->p;
@@ -133,7 +135,7 @@ static nt_value *value(parser *s) {
 				s->p++;
 				continue;
 			}
-			if (*s->p++ == (map ? '}' : ']')) return v;
+			if (*s->p++ == (map ? '}' : ']')) return map ? beyond(v) : v;
 			goto bad;
 		bad_key:
 			free(key);
@@ -183,6 +185,144 @@ static void number(double d) {
 	}
 	fputs(buf, stdout);
 }
+// values beyond JSON (encoding/ENCODING.tex, in JSON): bytes {"/":{"bytes":b64}}, unpadded; a
+// typed array {"/":{kind:[...]}}, 64-bit elements as decimal strings, a float's NaN and
+// infinities as words; a stand-in {"/":{"live":kind}}
+
+static const char *kinds[] = {"int8", "uint8", "int16", "uint16", "int32", "uint32", "int64",
+	"uint64", "float32", "float64"};
+static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+// one element, little-endian, from a JSON number or string (as a typed array takes a number:
+// truncated, then wrapped); 0 when it is neither
+static void put(unsigned char *at, nt_elements kind, const nt_value *x) {
+	double d = 0;
+	uint64_t u = 0;
+	int big = kind == NT_INT64 || kind == NT_UINT64;
+	if (x->type == NT_STR) {
+		if (strcmp(x->str, "NaN") == 0) d = NAN;
+		else if (strcmp(x->str, "Infinity") == 0) d = INFINITY;
+		else if (strcmp(x->str, "-Infinity") == 0) d = -INFINITY;
+		else if (big) u = x->str[0] == '-' ? (uint64_t)strtoll(x->str, NULL, 10) : strtoull(x->str, NULL, 10);
+		else d = strtod(x->str, NULL);
+	} else if (x->type == NT_NUM) d = x->num;
+	if (kind == NT_FLOAT32) {
+		float f = (float)d;
+		uint32_t b;
+		memcpy(&b, &f, 4);
+		u = b;
+	} else if (kind == NT_FLOAT64) memcpy(&u, &d, 8);
+	else if (!(big && x->type == NT_STR)) {
+		d = isfinite(d) ? trunc(d) : 0;
+		if (!big) {
+			double r = fmod(d, 4294967296.0);
+			u = (uint64_t)(r < 0 ? r + 4294967296.0 : r);
+		} else if (d < 0) u = d > -9.2e18 ? (uint64_t)(int64_t)d : 0;
+		else u = d < 1.8e19 ? (uint64_t)d : 0;
+	}
+	for (size_t i = 0; i < nt_size(kind); i++) at[i] = (unsigned char)(u >> (8 * i));
+}
+static uint64_t raw(const nt_value *t, size_t i) {
+	size_t z = nt_size(t->kind);
+	uint64_t u = 0;
+	for (size_t j = 0; j < z; j++) u |= (uint64_t)t->data[i * z + j] << (8 * j);
+	return u;
+}
+// an element as a number (64-bit integers: raw)
+static double element(const nt_value *t, size_t i) {
+	uint64_t u = raw(t, i);
+	switch (t->kind) {
+	case NT_INT8: return (int8_t)u;
+	case NT_UINT8: return (uint8_t)u;
+	case NT_INT16: return (int16_t)u;
+	case NT_UINT16: return (uint16_t)u;
+	case NT_INT32: return (int32_t)u;
+	case NT_UINT32: return (uint32_t)u;
+	case NT_FLOAT32: {
+		uint32_t b = (uint32_t)u;
+		float f;
+		memcpy(&f, &b, 4);
+		return f;
+	}
+	case NT_FLOAT64: {
+		double d;
+		memcpy(&d, &u, 8);
+		return d;
+	}
+	default: return (double)u;
+	}
+}
+static nt_value *typed_of(nt_elements kind, const nt_value *list) {
+	unsigned char *buf = grab(list->count * 8);
+	for (size_t i = 0; i < list->count; i++) put(buf + i * nt_size(kind), kind, list->items[i]);
+	nt_value *t = nt_typed(kind, buf, list->count);
+	free(buf);
+	return t;
+}
+// a map in ENCODING.tex's JSON form: the value it stands for, m let go of; else m
+static nt_value *beyond(nt_value *m) {
+	const nt_value *in = m->count == 1 && strcmp(m->keys[0], "/") == 0 ? m->items[0] : NULL;
+	if (in == NULL || in->type != NT_MAP || in->count != 1) return m;
+	const nt_value *x = in->items[0];
+	nt_value *v = NULL;
+	if (strcmp(in->keys[0], "live") == 0) {
+		// the kind is kept, m's other holds let go of
+		nt_ref((nt_value *)x);
+		v = nt_stand((nt_value *)x);
+		nt_free(m);
+		return v;
+	}
+	if (strcmp(in->keys[0], "bytes") == 0 && x->type == NT_STR) {
+		unsigned char *buf = grab(x->bytes);
+		size_t n = 0, bits = 0;
+		uint32_t acc = 0;
+		for (const char *c = x->str; *c && *c != '='; c++) {
+			const char *d = strchr(b64, *c);
+			if (d == NULL) {
+				free(buf);
+				return m;
+			}
+			acc = acc << 6 | (uint32_t)(d - b64), bits += 6;
+			if (bits >= 8) bits -= 8, buf[n++] = (unsigned char)(acc >> bits);
+		}
+		v = nt_bytes(buf, n);
+		free(buf);
+	}
+	for (size_t k = 0; v == NULL && k < sizeof kinds / sizeof *kinds; k++)
+		if (strcmp(in->keys[0], kinds[k]) == 0 && x->type == NT_LIST) v = typed_of((nt_elements)k, x);
+	if (v == NULL) return m;
+	nt_free(m);
+	return v;
+}
+static void print_bytes(const nt_value *v) {
+	fputs("{\"/\":{\"bytes\":\"", stdout);
+	for (size_t i = 0; i < v->bytes; i += 3) {
+		uint32_t acc = (uint32_t)v->data[i] << 16;
+		if (i + 1 < v->bytes) acc |= (uint32_t)v->data[i + 1] << 8;
+		if (i + 2 < v->bytes) acc |= v->data[i + 2];
+		size_t n = v->bytes - i < 3 ? v->bytes - i + 1 : 4;
+		for (size_t j = 0; j < n; j++) putchar(b64[(acc >> (18 - 6 * j)) & 63]);
+	}
+	fputs("\"}}", stdout);
+}
+static void print_elements(const nt_value *v) {
+	putchar('[');
+	for (size_t i = 0; i < nt_length(v); i++) {
+		if (i) putchar(',');
+		double d = element(v, i);
+		if (v->kind == NT_INT64) printf("\"%lld\"", (long long)(int64_t)raw(v, i));
+		else if (v->kind == NT_UINT64) printf("\"%llu\"", (unsigned long long)raw(v, i));
+		else if (isnan(d)) fputs("\"NaN\"", stdout);
+		else if (isinf(d)) fputs(d > 0 ? "\"Infinity\"" : "\"-Infinity\"", stdout);
+		else number(d);
+	}
+	putchar(']');
+}
+static void print_typed(const nt_value *v) {
+	printf("{\"/\":{\"%s\":", kinds[v->kind]);
+	print_elements(v);
+	fputs("}}", stdout);
+}
 static void print(const nt_value *v) {
 	switch (v->type) {
 	case NT_NULL: fputs("null", stdout); break;
@@ -207,6 +347,13 @@ static void print(const nt_value *v) {
 		}
 		putchar('}');
 		break;
+	case NT_STAND:
+		fputs("{\"/\":{\"live\":", stdout);
+		print(v->items[0]);
+		fputs("}}", stdout);
+		break;
+	case NT_BYTES: print_bytes(v); break;
+	case NT_TYPED: print_typed(v); break;
 	}
 }
 static void error(const char *why) {

@@ -1,0 +1,179 @@
+{
+	"title": "ephemeral blops heard and taken in to their own layer, never stored",
+	"steps": [
+		{
+			"request": {
+				"op": "reset"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "a",
+				"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+			},
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "b",
+				"seed": "0202020202020202020202020202020202020202020202020202020202020202"
+			},
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "link",
+				"a": "a",
+				"b": "b"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 188
+					}
+				],
+				"actor": "a",
+				"nonce": "000000bd00000000",
+				"layer": "ephemeral"
+			},
+			"expect": {
+				"name": "a3b8fb469d91d22e5b95aafa333e67da1edae785995f46432691feb6a17890b7",
+				"stored": "1bccbaf205b90a0781344a783da57a6a9f8d60b7a9f6fb5b0d8baa34464c3a9c"
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 189
+					}
+				],
+				"actor": "a",
+				"nonce": "000000be00000000",
+				"layer": "ephemeral"
+			},
+			"expect": {
+				"name": "06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43",
+				"stored": "1b9209592de749c46fcc1bd9529ffd581527517772fb8fe00197d07b756639c4"
+			}
+		},
+		{
+			"request": {
+				"op": "pump"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"layer": "ephemeral"
+			},
+			"expect": {
+				"heads": [
+					"06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
+				],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"layer": "ephemeral"
+			},
+			"expect": {
+				"heads": [
+					"06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
+				],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {
+				"heads": [],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "stored",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "stored",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": []
+		}
+	]
+}

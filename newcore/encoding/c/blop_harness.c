@@ -48,7 +48,7 @@ static Json **slot(Json *request, const char *key) {
 static void encode_op(Json *request) {
 	Json **blop = slot(request, "blop");
 	// a form that stands for none: cannot be carried
-	if (blop == NULL || !jsonDecode(blop, false)) {
+	if (blop == NULL || !jsonDecode(blop)) {
 		puts("{\"code\":\"cannot-carry\"}");
 		return;
 	}

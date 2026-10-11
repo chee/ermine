@@ -1,7 +1,15 @@
-{ "title": "a put at the whole: every read hears value; chases keep their paths", "start": { "a": { "b": 1 }, "items": ["x"] }, "steps": [
-  { "op": "read", "name": "b", "path": ["a", "b"] },
-  { "op": "read", "name": "root", "path": [] },
-  { "op": "read", "name": "x", "path": ["items", 0], "chase": true },
-  { "op": "patch", "patch": { "path": [], "value": { "items": [] } }, "expect": { "b": ["value"], "root": ["value"], "x": ["value"] } },
-  { "op": "where", "name": "x", "expect": { "path": ["items", 0], "live": true } }
-] }
+{
+	"title": "a put at the whole: every read hears value; chases keep their paths",
+	"start": { "a": { "b": 1 }, "items": ["x"] },
+	"steps": [
+		{ "op": "read", "name": "b", "path": ["a", "b"] },
+		{ "op": "read", "name": "root", "path": [] },
+		{ "op": "read", "name": "x", "path": ["items", 0], "chase": true },
+		{
+			"op": "patch",
+			"patch": { "path": [], "value": { "items": [] } },
+			"expect": { "b": ["value"], "root": ["value"], "x": ["value"] }
+		},
+		{ "op": "where", "name": "x", "expect": { "path": ["items", 0], "live": true } }
+	]
+}

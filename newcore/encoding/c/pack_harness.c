@@ -20,7 +20,7 @@ static int encode(void *context, const void *value, pk_bytes *out) {
 	Json *x = jsonParse(value, strlen(value), &why);
 	if (x == NULL) return free(why), 1;
 	// the "/" forms: bytes, typed arrays, numbers JSON cannot write
-	if (!jsonDecode(&x, false)) return jsonFree(x), 1;
+	if (!jsonDecode(&x)) return jsonFree(x), 1;
 	size_t n = 0;
 	const char *reason;
 	int bad = !cborEncode(x, NULL, 0, &n, &reason);

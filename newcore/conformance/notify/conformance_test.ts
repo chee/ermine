@@ -11,7 +11,13 @@ const here = new URL(".", import.meta.url).pathname
 const command = (Deno.env.get("NOTIFY_HARNESS") ?? `deno run --quiet ${here}harness.ts`).split(" ")
 
 type Request = Record<string, unknown> & { op: string }
-type Answer = { error?: string; heard?: Record<string, string[]>; path?: V; value?: V; live?: boolean }
+type Answer = {
+	error?: string
+	heard?: Record<string, string[]>
+	path?: V
+	value?: V
+	live?: boolean
+}
 
 async function ask(requests: Request[]): Promise<Answer[]> {
 	const child = new Deno.Command(command[0], {
@@ -52,7 +58,9 @@ function session() {
 	}
 	return {
 		async send(requests: Request[]): Promise<Answer[]> {
-			await w.write(new TextEncoder().encode(requests.map((r) => JSON.stringify(r)).join("\n") + "\n"))
+			await w.write(
+				new TextEncoder().encode(requests.map((r) => JSON.stringify(r)).join("\n") + "\n"),
+			)
 			const out: Answer[] = []
 			for (const _ of requests) out.push(JSON.parse(await line()))
 			return out
@@ -66,12 +74,16 @@ function session() {
 }
 
 const sorted = (h: Record<string, string[]> = {}) =>
-	Object.fromEntries(Object.entries(h).map(([k, v]) => [k, [...v].sort()]).sort(([a], [b]) => a < b ? -1 : 1))
+	Object.fromEntries(
+		Object.entries(h).map(([k, v]) => [k, [...v].sort()]).sort(([a], [b]) => a < b ? -1 : 1),
+	)
 
 // scenarios: a patch step gives no content after; it is worked out here
 for await (const f of Deno.readDir(`${here}../../notify/conformance`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, start, steps } = JSON.parse(await Deno.readTextFile(`${here}../../notify/conformance/${f.name}`)) as {
+	const { title, start, steps } = JSON.parse(
+		await Deno.readTextFile(`${here}../../notify/conformance/${f.name}`),
+	) as {
 		title: string
 		start: V
 		steps: (Request & { expect?: Answer & Record<string, unknown> })[]
@@ -92,8 +104,9 @@ for await (const f of Deno.readDir(`${here}../../notify/conformance`)) {
 			const at = `step ${i}: ${JSON.stringify(s)}`
 			assertEquals(a.error, undefined, at)
 			if (s.expect === undefined) return
-			if (s.op === "patch") assertEquals(sorted(a.heard), sorted(s.expect as Record<string, string[]>), at)
-			else {
+			if (s.op === "patch") {
+				assertEquals(sorted(a.heard), sorted(s.expect as Record<string, string[]>), at)
+			} else {
 				for (const k of Object.keys(s.expect)) {
 					assertEquals((a as Record<string, unknown>)[k], s.expect[k], `${at}: ${k}`)
 				}
@@ -142,12 +155,15 @@ const chars = (s: string) => Array.from(s)
 const elems = (v: V): V[] => typeof v === "string" ? chars(v) : Array.isArray(v) ? v : []
 const sameList = (a: V[], b: V[]) => a.length === b.length && a.every((x, i) => x === b[i])
 const keyEq = (a: Key, b: Key) => a === b
-const prefix = (p: readonly Key[], of: readonly Key[]) => p.length <= of.length && p.every((k, i) => keyEq(k, of[i]))
+const prefix = (p: readonly Key[], of: readonly Key[]) =>
+	p.length <= of.length && p.every((k, i) => keyEq(k, of[i]))
 const places = (p: Patch): Place[] => p.move ? [p.move, p] : [p]
 
 // every place of the patch inside the content at K: under it, or a span of the sequence at K
 function within(p: Patch, K: readonly Key[]): boolean {
-	return places(p).every((q) => prefix(K, q.path) && (q.path.length > K.length || q.range !== undefined))
+	return places(p).every((q) =>
+		prefix(K, q.path) && (q.path.length > K.length || q.range !== undefined)
+	)
 }
 // every place strictly under one element of the list at K
 function underElements(p: Patch, K: readonly Key[]): boolean {
@@ -165,7 +181,9 @@ function moveFloor(p: Patch): { seq: readonly Key[]; floor: number } | null {
 
 function anchorOf(c: V, keys: readonly Key[]): string | null {
 	const [top, k] = keys
-	if (top === "items" && keys.length === 2) return typeof at(c, keys) === "string" ? at(c, keys) as string : null
+	if (top === "items" && keys.length === 2) {
+		return typeof at(c, keys) === "string" ? at(c, keys) as string : null
+	}
 	if (top === "rows" && keys.length >= 2) {
 		const row = at(c, ["rows", k]) as { id: string } | undefined
 		return row ? row.id : null
@@ -274,7 +292,9 @@ function generate(seed: number) {
 			return { path: ["rows"], range: [g, g], move: { path: ["rows", pick(R)] } }
 		}
 		if (k < 82) return { path: ["meta", `k${pick(5)}`], value: fresh() }
-		if (k < 85) return metaKeys.length ? { path: ["meta", metaKeys[pick(metaKeys.length)]] } : null
+		if (k < 85) {
+			return metaKeys.length ? { path: ["meta", metaKeys[pick(metaKeys.length)]] } : null
+		}
 		if (k < 89) {
 			if (!metaKeys.length) return null
 			const from = metaKeys[pick(metaKeys.length)]
@@ -364,11 +384,16 @@ function expect(w: Watch, p: Patch, before: Content, after: Content): Expect {
 
 	if (!w.chase && !w.span) {
 		const changed = !same(b, a)
-		if (w.deep ? changed : changed && !(within(p, K) && typeof b !== "string")) kinds.push("value")
-		else if (byMove || whole) allowed.push("value")
-		if (seqLike(b) && seqLike(a) && within(p, K) && elems(b).length !== elems(a).length) kinds.push("length")
+		if (w.deep ? changed : changed && !(within(p, K) && typeof b !== "string")) {
+			kinds.push("value")
+		} else if (byMove || whole) allowed.push("value")
+		if (seqLike(b) && seqLike(a) && within(p, K) && elems(b).length !== elems(a).length) {
+			kinds.push("length")
+		}
 		if (isMap(b) && isMap(a) && within(p, K)) {
-			if (!sameList(Object.keys(b as object).sort(), Object.keys(a as object).sort())) kinds.push("keys")
+			if (!sameList(Object.keys(b as object).sort(), Object.keys(a as object).sort())) {
+				kinds.push("keys")
+			}
 		}
 		return { kinds, allowed, keys: K }
 	}
@@ -377,7 +402,9 @@ function expect(w: Watch, p: Patch, before: Content, after: Content): Expect {
 		const [s, e] = w.span
 		const changed = !sameList(elems(slice(b, s, e)), elems(slice(a, s, e)))
 		if (changed && (w.deep || !underElements(p, K))) kinds.push("value")
-		else if (whole || fl !== null && sameList(fl.seq as V[], K as V[]) && e > fl.floor) allowed.push("value")
+		else if (whole || fl !== null && sameList(fl.seq as V[], K as V[]) && e > fl.floor) {
+			allowed.push("value")
+		}
 		return { kinds, allowed, keys: K }
 	}
 
@@ -388,7 +415,9 @@ function expect(w: Watch, p: Patch, before: Content, after: Content): Expect {
 			const now = at(after, found)
 			if (K.length > 2 && !same(now, b)) kinds.push("value")
 			if (isMap(b) && isMap(now) && !p.move && within(p, found)) {
-				if (!sameList(Object.keys(b as object).sort(), Object.keys(now as object).sort())) kinds.push("keys")
+				if (!sameList(Object.keys(b as object).sort(), Object.keys(now as object).sort())) {
+					kinds.push("keys")
+				}
 			}
 			return { kinds, allowed, keys: found }
 		}
@@ -435,7 +464,9 @@ function expect(w: Watch, p: Patch, before: Content, after: Content): Expect {
 				if (j < s2 || j >= e2) return `${String(x)} was held, now at ${j}, outside`
 			}
 			for (const x of now) {
-				if (old.has(x) && !held.includes(x) && !moving.has(x)) return `${String(x)} came in from outside`
+				if (old.has(x) && !held.includes(x) && !moving.has(x)) {
+					return `${String(x)} came in from outside`
+				}
 			}
 			if (carried && !sameList(now, held)) return "carried, but not what it held"
 			if (insertAt !== null && held.length > 0) {
@@ -483,7 +514,11 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, against the content`, async
 			if (p === null) continue
 			const before = content
 			const after = apply(content, p) as Content
-			const requests = [...pending, { op: "patch", patch: p, value: after }, ...watches.map((w) => ({ op: "where", name: w.name }))]
+			const requests = [
+				...pending,
+				{ op: "patch", patch: p, value: after },
+				...watches.map((w) => ({ op: "where", name: w.name })),
+			]
 			pending = []
 			const answers = await h.send(requests)
 			const said = `seed ${seed} step ${step}: ${JSON.stringify(p)}`
@@ -494,7 +529,9 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, against the content`, async
 			watches.forEach((w, i) => {
 				const where = answers[base + 1 + i]
 				const hd = heard[w.name] ?? []
-				const at_ = `${said}\n  read ${JSON.stringify(request(w))}\n  heard ${JSON.stringify(hd)}, where ${JSON.stringify(where)}`
+				const at_ = `${said}\n  read ${JSON.stringify(request(w))}\n  heard ${
+					JSON.stringify(hd)
+				}, where ${JSON.stringify(where)}`
 				const e = expect(w, p, before, after)
 				if (e.check) {
 					assertEquals(e.check(where, hd), null, at_)
@@ -502,7 +539,9 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, against the content`, async
 					w.span = (where.path as V[])[w.keys.length] as [number, number]
 					assertEquals(where.value, slice(at(after, w.keys), w.span[0], w.span[1]), at_)
 					// kept by a put that left it past the end: let it go
-					if (w.span[1] > elems(at(after, w.keys)).length) return void pending.push({ op: "stop", name: w.name })
+					if (w.span[1] > elems(at(after, w.keys)).length) {
+						return void pending.push({ op: "stop", name: w.name })
+					}
 					keep.push(w)
 					return
 				}

@@ -3,25 +3,42 @@
 
 #include "../../opstreams/c/mutate.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// the side kept for a blop taken in: held here until the chains let it go (apply_release)
 typedef struct {
-	const nt_value *side;
+	nt_value *side;
 } kept;
+
+// what one call of mutate makes with the alloc given: all let go at once
+typedef struct block {
+	struct block *next;
+	max_align_t align;
+} block;
+static void *arena_grab(void *context, size_t n) {
+	block **head = context, *b = malloc(sizeof *b + n);
+	if (b == NULL) abort();
+	b->next = *head;
+	*head = b;
+	return b + 1;
+}
+static void arena_free(block *head) {
+	while (head) {
+		block *next = head->next;
+		free(head);
+		head = next;
+	}
+}
 
 static void *grab(size_t n) {
 	void *p = malloc(n ? n : 1);
 	if (p == NULL) abort();
 	return p;
 }
-static void *plain(void *context, size_t n) {
-	(void)context;
-	return grab(n);
-}
-
-// a patch's value as nt_value holds it; NULL for what it cannot
+// a patch's value as nt_value holds it, new; NULL for what it cannot
 static nt_value *convert(const Json *j) {
 	nt_value *v, *item;
 	switch (j->type) {
@@ -29,6 +46,11 @@ static nt_value *convert(const Json *j) {
 	case JSON_BOOLEAN: return nt_bool(j->boolean);
 	case JSON_NUMBER: return nt_num(j->number);
 	case JSON_STRING: return nt_str(j->string);
+	case JSON_BYTES: return nt_bytes(j->bytes.data, j->bytes.length);
+	case JSON_TYPED: return nt_typed((nt_elements)j->typed.kind, j->typed.data, j->typed.count);
+	case JSON_STAND:
+		if ((item = convert(j->stand.kind)) == NULL) return NULL;
+		return nt_stand(item);
 	case JSON_ARRAY:
 		v = nt_list();
 		for (int i = 0; i < j->array.count; i++) {
@@ -96,8 +118,10 @@ static bool bytes(const Json *j) {
 	return j != NULL && j->type == JSON_BYTES && j->bytes.length == 32;
 }
 
-// the side after the blop's patches into *out; false: they do not apply
-static bool after(chains *c, const Json *blop, const nt_value **out) {
+// the side after the blop's patches into *out, one hold of it the caller's (nt_free); false: they
+// do not apply
+static bool after(chains *c, const Json *blop, nt_value **out) {
+	*out = NULL;
 	const Json *base = jsonGet(blop, "base"), *parents = jsonGet(blop, "parents");
 	if (base == NULL && parents && parents->type == JSON_ARRAY && parents->array.count) {
 		base = parents->array.items[0];
@@ -131,38 +155,41 @@ static bool after(chains *c, const Json *blop, const nt_value **out) {
 
 	bool applied = false;
 	if (ok) {
-		// a children list is mutated as an info object holding a list: a list starts as [], and
-		// a list left empty is no side; not a list at the end is wrong-kind
 		bool value = object->type == JSON_STRING;
 		bool children = !value && strcmp(object->array.items[0]->string, "children") == 0;
 		const char *name = value ? NULL : object->array.items[1]->string;
-		if (children && before == NULL) before = nt_list();
-		nd_version version = {.content = before, .change = blop};
+		block *blocks = NULL;
+		mu_alloc alloc = {arena_grab, &blocks};
+		// a children list goes in as an nd_list
+		nd_version version = {.content = children && before ? (const void *)mu_list_to(before, &alloc) : before,
+			.change = blop};
 		nd_object versions = {&version, before ? 1 : 0};
 		nd_entry entry = {name, versions};
 		nd_node node = {.id = "n"};
 		if (value) node.value = versions;
+		else if (children) node.children = &entry, node.children_length = 1;
 		else node.info = &entry, node.info_length = 1;
-		mu_which which = value ? (mu_which){MU_VALUE, NULL} : (mu_which){MU_INFO, name};
-		mu_alloc alloc = {plain, NULL};
+		mu_which which = value ? (mu_which){MU_VALUE, NULL}
+			: (mu_which){children ? MU_CHILDREN : MU_INFO, name};
 		size_t failed;
 		if (mu_mutate(&node, which, patches, n, blop, &alloc, NULL, &failed) == MU_OK) {
-			const nt_value *side = NULL;
-			if (value && node.value.length) side = node.value.versions[0].content;
-			else if (!value && node.info_length && node.info[0].object.length) {
-				side = node.info[0].object.versions[0].content;
+			const nd_object *left = value ? &node.value
+				: children ? (node.children_length ? &node.children[0].object : NULL)
+				: node.info_length ? &node.info[0].object : NULL;
+			if (left && left->length) {
+				const void *content = left->versions[0].content;
+				// the new version's own hold is the caller's; a list is made again from its items
+				*out = children ? mu_list_of(content) : (nt_value *)content;
 			}
 			applied = true;
-			if (children && side && (side->type != NT_LIST || side->count == 0)) {
-				applied = side->type == NT_LIST;
-				side = NULL;
-			}
-			*out = side;
 		}
+		arena_free(blocks);
 	}
 	for (size_t i = 0; i < n && i < made; i++) {
 		free_place(&patches[i].place);
 		if (patches[i].has_move) free_place(&patches[i].move);
+		// the new side holds what it shares of them
+		nt_free((nt_value *)patches[i].value);
 	}
 	free(patches);
 	return applied;
@@ -173,17 +200,24 @@ const nt_value *apply_side(chains *c, const uint8_t name[32]) {
 	if (slot == NULL) return NULL;
 	if (*slot == NULL) {
 		kept *k = grab(sizeof *k);
-		k->side = NULL;
 		after(c, chain_get(c, name), &k->side);
 		*slot = k;
 	}
 	return ((kept *)*slot)->side;
 }
 
+void apply_release(void *slot) {
+	kept *k = slot;
+	nt_free(k->side);
+	free(k);
+}
+
 bool apply_check(void *context, chains *c, const Json *blop) {
 	(void)context;
-	const nt_value *side;
-	return after(c, blop, &side);
+	nt_value *side;
+	bool applies = after(c, blop, &side);
+	nt_free(side);
+	return applies;
 }
 
 // a site as the blop holds it; column 0 and function NULL when not given

@@ -82,6 +82,8 @@ static void expectBoth(const char *name, const Json *value, const char *hex) {
 	free(out);
 }
 
+static void expectRejected(const char *hex, const char *what);
+
 static int argc_default;
 
 static void vectors(const char *path) {
@@ -111,8 +113,13 @@ static void vectors(const char *path) {
 		Json *vector = list->array.items[i];
 		Json *value = jsonGet(vector, "value");
 		const char *hex = jsonText(jsonGet(vector, "cbor"));
+		if (!value && hex && jsonGet(vector, "refused")) {
+			// no value: the bytes are no encoding
+			expectRejected(hex, jsonText(jsonGet(vector, "refused")));
+			continue;
+		}
 		char *name = jsonPrint(value);
-		if (!value || !hex || !jsonDecode(&value, false)) {
+		if (!value || !hex || !jsonDecode(&value)) {
 			printf("FAIL vector %d (%s) is malformed\n", i, name);
 			failures++;
 		} else {
@@ -280,13 +287,13 @@ static void rejected(void) {
 	expectRejected("d855440100c0ff", "a float32 NaN other than the one");
 	expectRejected("d85648010000000000f87f", "a float64 NaN other than the one");
 	expectRejected("d840", "a tag with nothing after it");
+	expectRejected("db0000000000a98ac7f6", "the stand-in's tag in an eight-byte head");
+	expectRejected("da00a98ac7", "a stand-in with no kind");
+	expectRejected("da00a98ac7f6f6", "bytes after a stand-in");
+	expectRejected("da00a98ac6f6", "the tag one below the stand-in's");
 }
 
 static void unencodable(void) {
-	expectNoEncoding("a live value", jsonLive("canvas"));
-	Json *list = jsonArray();
-	jsonPush(list, jsonLive("canvas"));
-	expectNoEncoding("a live value in a list", list);
 	char *why = NULL;
 	expectNoEncoding("a lone surrogate", jsonParse("\"\\ud800\"", strlen("\"\\ud800\""), &why));
 	Json *twice = jsonObject();
@@ -295,6 +302,20 @@ static void unencodable(void) {
 	expectNoEncoding("a key twice", twice);
 	Json *key = jsonParse("{\"\\udfff\": 1}", strlen("{\"\\udfff\": 1}"), &why);
 	expectNoEncoding("a lone surrogate key", key);
+}
+
+static void stands(void) {
+	// a stand-in holding a stand-in, in a list: it comes back, equal and in the same bytes
+	Json *list = jsonArray();
+	jsonPush(list, jsonStand(jsonString("canvas")));
+	jsonPush(list, jsonStand(jsonStand(jsonNull())));
+	roundTrip("stand-ins in a list", list);
+	Json *kind = jsonObject();
+	jsonAdd(kind, "url", jsonString("x"));
+	Json *one = jsonStand(kind);
+	expectTrue("stand-ins of equal kinds are equal", jsonEqual(one, jsonShallow(one)));
+	expectTrue("stand-ins of other kinds are not", !jsonEqual(one, jsonStand(jsonNull())));
+	expectTrue("a stand-in is not its kind", !jsonEqual(one, kind));
 }
 
 static void shortBuffer(void) {
@@ -345,6 +366,7 @@ int main(int argc, char **argv) {
 	numbers();
 	rejected();
 	unencodable();
+	stands();
 	shortBuffer();
 	keys();
 	deep();

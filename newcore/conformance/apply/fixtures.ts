@@ -3,6 +3,7 @@
 // Each scenario one session (session.ts has the protocol). Sides, versions and add's answers are
 // written by hand from APPLY.tex and CHAIN.tex; model.ts checks the versions against a small
 // model built on mutate.ts. apply.ts is never imported.
+import { Stand } from "../../encoding/ts/cbor.ts"
 import {
 	add,
 	type B,
@@ -380,6 +381,26 @@ const LIST: Which = ["children", "kids"]
 		add(W, { waiting: [A.name] }),
 		side(W, none),
 	])
+}
+
+// ---- a stand-in in a side is kept as data (no live given)
+{
+	const kept = { canvas: new Stand("canvas"), shape: new Stand({ url: "x", w: 2 }), n: 1 }
+	const A = mk({ patches: put(kept), actor: new Stand("device") })
+	const B = mk({ parents: [A], patches: set(["n"], new Stand(null)) })
+	const content = { ...kept, n: new Stand(null) }
+	scenario(
+		"stand-in-data",
+		"a stand-in in an incoming blop's patches (or its actor) is held as data in the side: it comes back as it was, and patches go on past it",
+		[
+			create(),
+			add(A),
+			side(A, kept),
+			add(B),
+			side(B, content),
+			versions([A, B], "value", [[B, content]]),
+		],
+	)
 }
 
 await write(new URL("../../sync/conformance/apply/", import.meta.url))

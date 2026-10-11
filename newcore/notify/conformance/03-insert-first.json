@@ -1,8 +1,24 @@
-{ "title": "insert first: later indices fire by position; a chased item moves", "start": { "items": ["x", "y", "z", "w", "v"] }, "steps": [
-  { "op": "read", "name": "three", "path": ["items", 3] },
-  { "op": "read", "name": "w", "path": ["items", 3], "chase": true },
-  { "op": "read", "name": "zero", "path": ["items", 0] },
-  { "op": "patch", "patch": { "path": ["items"], "range": [0, 0], "value": ["t"] }, "expect": { "three": ["value"], "w": ["moved"], "zero": ["value"] } },
-  { "op": "where", "name": "w", "expect": { "path": ["items", 4], "value": "w", "live": true } },
-  { "op": "where", "name": "three", "expect": { "path": ["items", 3], "value": "z", "live": true } }
-] }
+{
+	"title": "insert first: later indices fire by position; a chased item moves",
+	"start": { "items": ["x", "y", "z", "w", "v"] },
+	"steps": [
+		{ "op": "read", "name": "three", "path": ["items", 3] },
+		{ "op": "read", "name": "w", "path": ["items", 3], "chase": true },
+		{ "op": "read", "name": "zero", "path": ["items", 0] },
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [0, 0], "value": ["t"] },
+			"expect": { "three": ["value"], "w": ["moved"], "zero": ["value"] }
+		},
+		{
+			"op": "where",
+			"name": "w",
+			"expect": { "path": ["items", 4], "value": "w", "live": true }
+		},
+		{
+			"op": "where",
+			"name": "three",
+			"expect": { "path": ["items", 3], "value": "z", "live": true }
+		}
+	]
+}

@@ -1,7 +1,19 @@
-{ "title": "a deep span hears under the elements it holds", "start": { "rows": [{ "v": 0 }, { "v": 1 }, { "v": 2 }, { "v": 3 }] }, "steps": [
-  { "op": "read", "name": "deep", "path": ["rows", [1, 3]], "deep": true },
-  { "op": "read", "name": "plain", "path": ["rows", [1, 3]] },
-  { "op": "patch", "patch": { "path": ["rows", 1, "v"], "value": 9 }, "expect": { "deep": ["value"] } },
-  { "op": "patch", "patch": { "path": ["rows", 3, "v"], "value": 9 }, "expect": {} },
-  { "op": "patch", "patch": { "path": ["rows", 2], "value": { "v": 5 } }, "expect": { "deep": ["value"], "plain": ["value"] } }
-] }
+{
+	"title": "a deep span hears under the elements it holds",
+	"start": { "rows": [{ "v": 0 }, { "v": 1 }, { "v": 2 }, { "v": 3 }] },
+	"steps": [
+		{ "op": "read", "name": "deep", "path": ["rows", [1, 3]], "deep": true },
+		{ "op": "read", "name": "plain", "path": ["rows", [1, 3]] },
+		{
+			"op": "patch",
+			"patch": { "path": ["rows", 1, "v"], "value": 9 },
+			"expect": { "deep": ["value"] }
+		},
+		{ "op": "patch", "patch": { "path": ["rows", 3, "v"], "value": 9 }, "expect": {} },
+		{
+			"op": "patch",
+			"patch": { "path": ["rows", 2], "value": { "v": 5 } },
+			"expect": { "deep": ["value"], "plain": ["value"] }
+		}
+	]
+}

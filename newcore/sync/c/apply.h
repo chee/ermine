@@ -3,8 +3,11 @@
 // first version, to its base's side. Sides are notify/c's values (nt_value).
 //
 // Memory: a side is kept for as long as its blop is taken in, and shares structure with the sides
-// before it (mu_mutate frees nothing), so none is freed before the process ends.
-// Values nt_value cannot hold (bytes, typed arrays, live values) in a patch: the patches do not apply.
+// before it by reference (nt_ref; mutate.h has the ownership rule), so each is let go of alone.
+// A side is held by the chains it is kept in: chain_release(c, apply_release) makes chain_free
+// let them all go. What apply_side and apply_versions give back is borrowed from there.
+// Bytes and typed arrays in a patch are carried as they are. A live value in a patch is held
+// nowhere here: the patches do not apply.
 #ifndef APPLY_H
 #define APPLY_H
 
@@ -16,6 +19,8 @@
 
 // a blop's side, or NULL: not taken in, or emptied
 const nt_value *apply_side(chains *c, const uint8_t name[32]);
+// a slot apply_side set in the chains (chain_release): lets the side go
+void apply_release(void *slot);
 // whether the blop's patches apply to its base's side; a chain_check
 bool apply_check(void *context, chains *c, const Json *blop);
 

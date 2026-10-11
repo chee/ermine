@@ -4,7 +4,9 @@
 		{
 			"op": "make",
 			"id": "a",
-			"contents": { "value": [{ "content": 1, "change": { "time": 0, "actor": "me", "node": "z" } }] },
+			"contents": {
+				"value": [{ "content": 1, "change": { "time": 0, "actor": "me", "node": "z" } }]
+			},
 			"expect": {
 				"id": "a",
 				"value": [{ "content": 1, "change": { "time": 0, "actor": "me", "node": "z" } }],

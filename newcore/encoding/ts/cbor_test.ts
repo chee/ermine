@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import { CborError, decode, encode, type Value } from "./cbor.ts"
+import { CborError, decode, encode, Stand, type Value } from "./cbor.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => new Uint8Array(s.match(/../g)?.map((x) => parseInt(x, 16)) ?? [])
@@ -20,6 +20,8 @@ function same(a: unknown, b: unknown): boolean {
 			y = Array.from(b as unknown as ArrayLike<unknown>)
 		return x.length === y.length && x.every((e, i) => same(e, y[i]))
 	}
+	if (a instanceof Stand) return b instanceof Stand && same(a.kind, b.kind)
+	if (b instanceof Stand) return false
 	if (Array.isArray(a)) {
 		return Array.isArray(b) && a.length === b.length && a.every((e, i) => same(e, b[i]))
 	}
@@ -76,6 +78,14 @@ const VECTORS: [string, Value, string][] = [
 	["float32", new Float32Array([1.5]), "d855440000c03f"],
 	["float64", new Float64Array([1]), "d85648000000000000f03f"],
 	["empty float64", new Float64Array(0), "d85640"],
+	["a stand-in", new Stand("canvas"), "da00a98ac76663616e766173"],
+	["a stand-in of null", new Stand(null), "da00a98ac7f6"],
+	["a stand-in of a map", new Stand({ w: 2, url: "x" }), "da00a98ac7a26177f940006375726c6178"],
+	[
+		"a stand-in of a stand-in in a list",
+		[new Stand(new Stand("a"))],
+		"81da00a98ac7da00a98ac76161",
+	],
 	["typed arrays in a map", { u: new Uint8Array([7]), b: bytes(7) }, "a2616241076175d8404107"],
 ]
 
@@ -154,6 +164,9 @@ const REJECTED: [string, string][] = [
 	["a big-endian tag", "d84142000100"],
 	["a typed array tag head longer than needed", "d9004042 0102"],
 	["a typed array over a list", "d84080"],
+	["the stand-in's tag in an eight-byte head", "db0000000000a98ac7f6"],
+	["a stand-in with no kind", "da00a98ac7"],
+	["a stand-in's tag head longer than needed", "db0000000000a98ac76161"],
 	["a typed array with part of an element", "d8454101"],
 	["a typed array with a long bytes head", "d840580102"],
 	["a tagged tag", "d840d84040"],
@@ -329,6 +342,7 @@ function fromJson(x: unknown): Value {
 	const keys = Object.keys(x)
 	if (keys.length === 1 && keys[0] === "/") {
 		const [[tag, body]] = Object.entries((x as { "/": object })["/"])
+		if (tag === "live") return new Stand(fromJson(body))
 		if (tag === "bytes") {
 			return Uint8Array.from(atob(body as string), (c) => c.charCodeAt(0)).buffer
 		}

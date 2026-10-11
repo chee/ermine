@@ -1,0 +1,256 @@
+// The reference transport.ts on the line protocol: one JSON request per line in, one answer per
+// line out, in order. Several devices in one process, linked by in-memory pipes (TRANSPORT.tex).
+// Values (patches, actor) in their JSON form (../pack/form.ts); names, stored ids, keys, seeds,
+// nonces and blobs as lowercase hex; a document an ermine:// id (ID.tex); an object as BLOP.tex
+// writes it; layer "stored" (the default) or "ephemeral". Lock: "unlocked" only. A scenario starts
+// with reset.
+//   {op: "reset"}                    -> {}  every device closed, every link gone
+//   {op: "device", name, seed}       -> {key}  a device signing with the Ed25519 key of seed (32
+//                                       bytes): its peer id and its blops' signer are key
+//   {op: "follow", device, doc}      -> {}  doc followed: synced with every peer, subscribe true,
+//                                       its ephemeral topic subscribed; from now on, with each
+//                                       peer linked too
+//   {op: "link", a, b}               -> {}  an in-memory pipe, the handshake done (a initiates,
+//                                       where roles exist); each side's followed documents then
+//                                       synced with the other as follow says
+//   {op: "unlink", a, b}             -> {}  the pipe gone: nothing more crosses (offline)
+//   {op: "commit", device, doc, object, patches, actor, nonce, at?, layer?}
+//                                    -> {name, stored}  a change made through COMMIT.tex's commit
+//                                       (at: the version, default 0; roots none; time 0; random
+//                                       hands out nonce, 8 bytes), sealed (SEAL.tex) with the
+//                                       device's signer, then given to the device: stored, taken
+//                                       in and added as a loose commit; ephemeral, taken in to the
+//                                       ephemeral layer and published. name: the blop's; stored:
+//                                       the seal's stored id
+//   {op: "put", device, doc, head, parents, blob}
+//                                    -> {}  addCommit(tree, head, parents, blob) as given, nothing
+//                                       checked or taken in first: how a hand-made loose commit
+//                                       (bad seal, head not the stored id, ...) gets in
+//   {op: "pump"}                     -> {}  everything runs until quiet: no message crossing, no
+//                                       taking in or fragment building left
+//   {op: "state", device, doc, object?, layer?}
+//                                    -> {heads, chain: {waiting, refused}, taking: {waiting,
+//                                       refused}}
+//        heads: the object's (default "value") heads' names, in the agreed order (CHAIN.tex)
+//        chain: the layer's chains' waiting() and refused(), as CHAIN.tex gives them
+//        taking: Taking in's own (TRANSPORT.tex), each list sorted by its first field:
+//          waiting: [{commit, waiting: [names]}]  step 5: the parents (blop names, in parents
+//                   order) whose seals are not here
+//          refused: [{commit, refused: code}]     code lock|shape|signature|stored|document|
+//                                                  parents
+//                 | [{fragment, refused: code}]   a fragment refused whole (FRAGMENT.tex)
+//          commit: a loose commit's head; for what has no commit (a fragment's member, an
+//          ephemeral blop), the stored id of its seal
+//   {op: "fragments", device, doc}   -> [{head, members, boundary}]  the fragments here (made or
+//                                       taken in, FRAGMENT.tex), sorted by head, lists sorted;
+//                                       stored ids. Checkpoints left out: one taken in holds 12
+//                                       bytes of each
+//   {op: "stored", device, doc}      -> [ids]  the loose commits Subduction holds of the tree
+//                                       (getCommits), heads, sorted
+//   anything that throws             -> {error: message}
+// Another implementation joins by speaking this (TRANSPORT_HARNESS).
+//
+// transport.ts is not written yet; this shim assumes:
+//   createDevice({signer}) -> Device; signer SEAL.tex's {key, sign}; the lock "unlocked"
+//   Device:
+//     connect(transport, initiator: boolean): Promise<void>  Subduction's Transport
+//                                             (sendBytes/recvBytes/disconnect/onDisconnect); the
+//                                             handshake, then the followed documents synced with it
+//     disconnect(key): Promise<void>          the peer with that key
+//     follow(doc): Promise<void>
+//     chains(doc, layer): Chains              the document's chains of that layer (CHAIN.tex)
+//     add(sealed): Promise<void>              a stored blop of this device's: taken in, then
+//                                             addCommit, then fragments built (FRAGMENT.tex)
+//     publish(sealed): Promise<void>          an ephemeral one: taken in, then publishEphemeral
+//     put(doc, head, parents, blob): Promise<void>   addCommit as given
+//     taking(doc, layer): {waiting, refused}  as state's taking, hex
+//     fragments(doc): {head, members, boundary, checkpoints}[]  ids as Uint8Array
+//     stored(doc): Promise<Uint8Array[]>
+//     idle(): Promise<void>                   resolves when no taking in or building is left
+//     close(): Promise<void>
+import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
+import type { Transport } from "npm:@automerge/subduction@0.23.0"
+import { createDevice } from "../../sync/ts/transport.ts"
+import { commit } from "../../sync/ts/commit.ts"
+import { seal, stored } from "../../sync/ts/seal.ts"
+import { encode, name } from "../../encoding/ts/blop.ts"
+import { fromJson, line } from "../pack/form.ts"
+
+type Request = Record<string, unknown> & { op: string }
+// deno-lint-ignore no-explicit-any
+type Device = any
+
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
+const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
+const sorted = (xs: Iterable<Uint8Array>) => [...xs].map(hex).sort()
+
+// a pipe: what one end sends the other receives, in order, while it is open; moved counts
+// messages, so pump knows when nothing crosses
+let moved = 0
+type End = Transport & { other?: End; queue: Uint8Array[]; waiting: ((b: Uint8Array) => void)[] }
+function pipe(): { ends: [End, End]; cut(): void } {
+	let open = true
+	const make = (): End => {
+		const end: End = {
+			queue: [],
+			waiting: [],
+			sendBytes(bytes) {
+				if (!open) return Promise.reject(new Error("unlinked"))
+				moved++
+				const o = end.other!, w = o.waiting.shift()
+				if (w) w(bytes.slice())
+				else o.queue.push(bytes.slice())
+				return Promise.resolve()
+			},
+			recvBytes() {
+				const b = end.queue.shift()
+				if (b) return Promise.resolve(b)
+				if (!open) return Promise.reject(new Error("unlinked"))
+				return new Promise((r) => end.waiting.push(r))
+			},
+			disconnect() {
+				open = false
+				return Promise.resolve()
+			},
+			onDisconnect() {},
+		}
+		return end
+	}
+	const a = make(), b = make()
+	a.other = b, b.other = a
+	return { ends: [a, b], cut: () => (open = false) }
+}
+
+type Held = { device: Device; key: Uint8Array; secret: Uint8Array }
+let devices = new Map<string, Held>()
+let links = new Map<string, { cut(): void }>()
+const of = (n: unknown) => {
+	const d = devices.get(n as string)
+	if (!d) throw new Error(`no device ${n}`)
+	return d
+}
+const pair = (a: unknown, b: unknown) => [a, b].sort().join(" ")
+
+async function pump() {
+	let quiet = 0, last = -1
+	for (let round = 0; round < 2000; round++) {
+		await Promise.all([...devices.values()].map((d) => d.device.idle()))
+		await new Promise((r) => setTimeout(r, 2))
+		if (moved === last) {
+			if (++quiet >= 5) return
+		} else quiet = 0, last = moved
+	}
+	throw new Error("never quiet")
+}
+
+async function answer(r: Request): Promise<unknown> {
+	switch (r.op) {
+		case "reset":
+			for (const l of links.values()) l.cut()
+			await Promise.all([...devices.values()].map((d) => d.device.close()))
+			devices = new Map(), links = new Map()
+			return {}
+		case "device": {
+			const secret = unhex(r.seed as string)
+			const key = ed25519.getPublicKey(secret)
+			const signer = { key, sign: (m: Uint8Array) => Promise.resolve(ed25519.sign(m, secret)) }
+			devices.set(r.name as string, { device: createDevice({ signer }), key, secret })
+			return { key: hex(key) }
+		}
+		case "follow":
+			await of(r.device).device.follow(r.doc)
+			return {}
+		case "link": {
+			const a = of(r.a), b = of(r.b)
+			const p = pipe()
+			links.set(pair(r.a, r.b), p)
+			await Promise.all([a.device.connect(p.ends[0], true), b.device.connect(p.ends[1], false)])
+			return {}
+		}
+		case "unlink": {
+			const a = of(r.a), b = of(r.b)
+			links.get(pair(r.a, r.b))?.cut()
+			links.delete(pair(r.a, r.b))
+			await Promise.all([a.device.disconnect(b.key), b.device.disconnect(a.key)])
+			return {}
+		}
+		case "commit": {
+			const d = of(r.device)
+			const layer = (r.layer ?? "stored") as string
+			const nonce = unhex(r.nonce as string)
+			const blop = commit(
+				d.device.chains(r.doc, layer),
+				{
+					node: r.doc as string,
+					object: fromJson(r.object) as never,
+					patches: fromJson(r.patches) as never,
+					header: { time: 0, actor: fromJson(r.actor) },
+					signer: d.key,
+				},
+				(r.at ?? 0) as number,
+				[],
+				() => nonce,
+			)
+			const bytes = encode(blop)
+			const sealed = await seal(bytes, {
+				key: d.key,
+				sign: (m) => Promise.resolve(ed25519.sign(m, d.secret)),
+			})
+			if (layer === "ephemeral") await d.device.publish(sealed)
+			else await d.device.add(sealed)
+			return { name: hex(name(bytes)), stored: hex(stored(sealed)) }
+		}
+		case "put":
+			await of(r.device).device.put(
+				r.doc,
+				unhex(r.head as string),
+				(r.parents as string[]).map(unhex),
+				unhex(r.blob as string),
+			)
+			return {}
+		case "pump":
+			await pump()
+			return {}
+		case "state": {
+			const d = of(r.device).device, layer = (r.layer ?? "stored") as string
+			const chains = d.chains(r.doc, layer)
+			return {
+				heads: chains.heads(fromJson(r.object ?? "value")).map((h: { name: Uint8Array }) =>
+					hex(h.name)
+				),
+				chain: { waiting: chains.waiting(), refused: chains.refused() },
+				taking: d.taking(r.doc, layer),
+			}
+		}
+		case "fragments":
+			return of(r.device).device.fragments(r.doc).map((
+				f: { head: Uint8Array; members: Uint8Array[]; boundary: Uint8Array[] },
+			) => ({ head: hex(f.head), members: sorted(f.members), boundary: sorted(f.boundary) }))
+				.sort((a: { head: string }, b: { head: string }) => a.head < b.head ? -1 : 1)
+		case "stored":
+			return sorted(await of(r.device).device.stored(r.doc))
+		default:
+			return { error: `unknown op ${r.op}` }
+	}
+}
+
+const out = Deno.stdout.writable.getWriter()
+const encoder = new TextEncoder()
+let buffer = ""
+for await (const chunk of Deno.stdin.readable.pipeThrough(new TextDecoderStream())) {
+	buffer += chunk
+	let i
+	while ((i = buffer.indexOf("\n")) !== -1) {
+		const l = buffer.slice(0, i)
+		buffer = buffer.slice(i + 1)
+		if (l.trim() === "") continue
+		let a: unknown
+		try {
+			a = await answer(JSON.parse(l))
+		} catch (e) {
+			a = { error: String((e as Error)?.message ?? e) }
+		}
+		await out.write(encoder.encode(line(a) + "\n"))
+	}
+}
+Deno.exit(0)

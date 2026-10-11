@@ -32,7 +32,13 @@ function splice(seq: V, a: number, b: number, put: V): V {
 	return (seq as V[]).toSpliced(a, b - a, ...(put as V[]))
 }
 function remove(v: V, p: Place): V {
-	if (p.range) return edit(v, p.path, (s) => splice(s, p.range![0], p.range![1], typeof s === "string" ? "" : []))
+	if (p.range) {
+		return edit(
+			v,
+			p.path,
+			(s) => splice(s, p.range![0], p.range![1], typeof s === "string" ? "" : []),
+		)
+	}
 	if (p.path.length === 0) return undefined
 	const k = p.path[p.path.length - 1]
 	return edit(v, p.path.slice(0, -1), (o) => {
@@ -44,7 +50,11 @@ function remove(v: V, p: Place): V {
 // one: a single thing moved into a list's gap is one element there
 function put(v: V, p: Place, what: V, one: boolean): V {
 	if (p.range) {
-		return edit(v, p.path, (s) => splice(s, p.range![0], p.range![1], one && Array.isArray(s) ? [what] : what))
+		return edit(
+			v,
+			p.path,
+			(s) => splice(s, p.range![0], p.range![1], one && Array.isArray(s) ? [what] : what),
+		)
 	}
 	return edit(v, p.path, () => what)
 }

@@ -1,11 +1,57 @@
-{ "title": "edges: an insert exactly at a chased span's start or end comes in or stays out", "start": { "text": "hello world" }, "steps": [
-  { "op": "read", "name": "sel", "path": ["text", [0, 5]], "chase": true, "edges": ["out", "in"] },
-  { "op": "read", "name": "out", "path": ["text", [0, 5]], "chase": true, "edges": ["out", "out"] },
-  { "op": "read", "name": "in", "path": ["text", [0, 5]], "chase": true, "edges": ["in", "in"] },
-  { "op": "patch", "patch": { "path": ["text"], "range": [5, 5], "value": "!" }, "expect": { "sel": ["value", "moved"], "in": ["value", "moved"] } },
-  { "op": "where", "name": "sel", "expect": { "path": ["text", [0, 6]], "value": "hello!", "live": true } },
-  { "op": "where", "name": "out", "expect": { "path": ["text", [0, 5]], "value": "hello", "live": true } },
-  { "op": "patch", "patch": { "path": ["text"], "range": [0, 0], "value": ">" }, "expect": { "sel": ["moved"], "out": ["moved"], "in": ["value", "moved"] } },
-  { "op": "where", "name": "sel", "expect": { "path": ["text", [1, 7]], "value": "hello!", "live": true } },
-  { "op": "where", "name": "in", "expect": { "path": ["text", [0, 7]], "value": ">hello!", "live": true } }
-] }
+{
+	"title": "edges: an insert exactly at a chased span's start or end comes in or stays out",
+	"start": { "text": "hello world" },
+	"steps": [
+		{
+			"op": "read",
+			"name": "sel",
+			"path": ["text", [0, 5]],
+			"chase": true,
+			"edges": ["out", "in"]
+		},
+		{
+			"op": "read",
+			"name": "out",
+			"path": ["text", [0, 5]],
+			"chase": true,
+			"edges": ["out", "out"]
+		},
+		{
+			"op": "read",
+			"name": "in",
+			"path": ["text", [0, 5]],
+			"chase": true,
+			"edges": ["in", "in"]
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [5, 5], "value": "!" },
+			"expect": { "sel": ["value", "moved"], "in": ["value", "moved"] }
+		},
+		{
+			"op": "where",
+			"name": "sel",
+			"expect": { "path": ["text", [0, 6]], "value": "hello!", "live": true }
+		},
+		{
+			"op": "where",
+			"name": "out",
+			"expect": { "path": ["text", [0, 5]], "value": "hello", "live": true }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["text"], "range": [0, 0], "value": ">" },
+			"expect": { "sel": ["moved"], "out": ["moved"], "in": ["value", "moved"] }
+		},
+		{
+			"op": "where",
+			"name": "sel",
+			"expect": { "path": ["text", [1, 7]], "value": "hello!", "live": true }
+		},
+		{
+			"op": "where",
+			"name": "in",
+			"expect": { "path": ["text", [0, 7]], "value": ">hello!", "live": true }
+		}
+	]
+}

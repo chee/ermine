@@ -1,6 +1,14 @@
-{ "title": "a put above a chased item keeps its path, even when nothing is there now", "start": { "items": ["x", "y", "z", "w"] }, "steps": [
-  { "op": "read", "name": "c", "path": ["items", 3], "chase": true },
-  { "op": "read", "name": "list", "path": ["items"] },
-  { "op": "patch", "patch": { "path": ["items"], "value": ["a"] }, "expect": { "c": ["value"], "list": ["value"] } },
-  { "op": "where", "name": "c", "expect": { "path": ["items", 3], "live": true } }
-] }
+{
+	"title": "a put above a chased item keeps its path, even when nothing is there now",
+	"start": { "items": ["x", "y", "z", "w"] },
+	"steps": [
+		{ "op": "read", "name": "c", "path": ["items", 3], "chase": true },
+		{ "op": "read", "name": "list", "path": ["items"] },
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "value": ["a"] },
+			"expect": { "c": ["value"], "list": ["value"] }
+		},
+		{ "op": "where", "name": "c", "expect": { "path": ["items", 3], "live": true } }
+	]
+}

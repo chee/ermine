@@ -28,11 +28,11 @@ async function ask(command: string[], requests: Record<string, unknown>[]): Prom
 	return answers
 }
 
-// dir: the scenarios; subject: the harness command
-export async function run(dir: string, subject: string[]) {
+// dir: the scenarios; subject: the harness command; skip: scenario files it does not speak
+export async function run(dir: string, subject: string[], skip: ReadonlySet<string> = new Set()) {
 	const files: { name: string; s: Scenario }[] = []
 	for await (const f of Deno.readDir(dir)) {
-		if (!f.name.endsWith(".json")) continue
+		if (!f.name.endsWith(".json") || skip.has(f.name)) continue
 		files.push({ name: f.name, s: JSON.parse(await Deno.readTextFile(`${dir}/${f.name}`)) })
 	}
 	files.sort((a, b) => a.name.localeCompare(b.name))

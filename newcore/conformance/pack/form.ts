@@ -1,8 +1,10 @@
 // values in their JSON form (ENCODING.tex), as the C harness's json.c writes them: JSON for
 // what JSON holds; {"/": {"bytes": b64}}, {"/": {"number": "NaN" | "Infinity" | "-Infinity"}},
 // {"/": {kind: [elements]}} for a typed array, 64-bit elements as decimal strings, a float's NaN
-// and infinities as the words; {"/": {"map": {"/": x}}} for a map whose one key is "/". Base64:
+// and infinities as the words; {"/": {"live": kind}} for a stand-in; {"/": {"map": {"/": x}}} for a map whose one key is "/". Base64:
 // the standard alphabet, unpadded. -0 is written -0
+import { Stand } from "../../encoding/ts/cbor.ts"
+
 const KINDS: { [kind: string]: { new (b: ArrayBuffer): ArrayBufferView } } = {
 	int8: Int8Array,
 	uint8: Uint8Array,
@@ -40,6 +42,7 @@ export function toJson(x: unknown): unknown {
 			[NAMES.get(x.constructor)!]: elements.map((e) => isWord(e) ? e["/"].number : e),
 		})
 	}
+	if (x instanceof Stand) return slash({ live: toJson(x.kind) })
 	if (Array.isArray(x)) return x.map(toJson)
 	const keys = Object.keys(x)
 	if (keys.length === 1 && keys[0] === "/") {
@@ -122,6 +125,7 @@ export function fromJson(x: unknown): unknown {
 		if (keys.length !== 1) return no("form")
 		const [tag] = keys, body = (form as Record<string, unknown>)[tag]
 		if (tag === "map") return isSlashMap(body) ? { "/": fromJson(body["/"]) } : no("map")
+		if (tag === "live") return new Stand(fromJson(body) as never)
 		if (tag === "bytes") return bytesOf(body)
 		if (tag === "number") {
 			return typeof body === "string" && body in WORDS ? WORDS[body] : no("number")

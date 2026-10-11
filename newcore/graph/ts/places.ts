@@ -1,17 +1,17 @@
 // a root, and from it a hierarchy: walks by name, look, lookup (LIBRARY.tex), and placing ids
 // in lists. nothing kept between calls, nothing tracked: each place read is said to depend,
 // and the caller (the scheduler) tracks. placing is patches to lists, by mutate.ts: each a change
-import createChange, {type Change, type Header} from "../../nodes/ts/change.ts"
-import mutate, {type Which} from "../../opstreams/ts/mutate.ts"
-import createNode, {type List, type Node, type Version} from "../../nodes/ts/node.ts"
-import type {Patch} from "../../notify/ts/notify.ts"
+import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
+import mutate, { type Which } from "../../opstreams/ts/mutate.ts"
+import createNode, { type List, type Node, type Version } from "../../nodes/ts/node.ts"
+import type { Patch } from "../../notify/ts/notify.ts"
 
 // where a read is: names from the root, walked from the root each read
 export type Place = readonly string[]
 
 // inside: a place, and the trail cd made, the ids its walk took, the root first; with it,
 // reads start from those nodes and walk only the address's own names
-type Spot = {names: Place; trail?: readonly string[]}
+type Spot = { names: Place; trail?: readonly string[] }
 
 // an optional first "/", any number of "..", then names
 export type Address = readonly string[]
@@ -27,7 +27,7 @@ export type Part =
 export type Depend = (id: string, part: Part) => void
 
 // why an item was given: the node whose list it was, the name, the id taken, its position
-export type Step = {node: string; name: string; id: string; at: number}
+export type Step = { node: string; name: string; id: string; at: number }
 
 // node: none if not loaded, pending
 // route: a step per name of the address; a lookup's, the step to its list
@@ -40,7 +40,7 @@ export type Item<V, H> = {
 }
 
 // an item with one object of its node: every version; none if the item is pending
-export type Read<V, H> = Item<V, H> & {versions?: Version<V, H>[]}
+export type Read<V, H> = Item<V, H> & { versions?: Version<V, H>[] }
 
 // get: the node of an id, or none if it is not loaded
 export type Get<V, H> = (id: string) => Node<V, H> | undefined
@@ -58,7 +58,7 @@ export type Code =
 export class PlacesError extends Error {
 	constructor(
 		readonly code: Code,
-		readonly id?: string
+		readonly id?: string,
 	) {
 		super(id === undefined ? code : `${code} (${id})`)
 	}
@@ -80,8 +80,7 @@ function list<V, H>(n: Node<V, H>, name: string): List | undefined {
 }
 
 // the list's length, none: 0
-const size = <V, H>(n: Node<V, H>, name: string) =>
-	n.children.get(name)?.[0]?.content.length ?? 0
+const size = <V, H>(n: Node<V, H>, name: string) => n.children.get(name)?.[0]?.content.length ?? 0
 
 // the entry of name to slot, the rest in order; in place, so holders of the node see it
 // the names' order is no object (GRAPH.tex, Children): moved outside any change
@@ -98,21 +97,21 @@ function slot<V, H>(n: Node<V, H>, name: string, at: number) {
 export function createPlaces<V, H>(
 	get: Get<V, H>,
 	root: string,
-	options: Options = {}
+	options: Options = {},
 ) {
 	type N = Node<V, H>
-	const {fallback} = options
+	const { fallback } = options
 
 	// the names an address reaches, from the root, and how many are the address's own
 	function resolve(
 		place: Spot,
-		address: Address
-	): {names: string[]; own: number; base: number} {
-		for (const n of place.names)
+		address: Address,
+	): { names: string[]; own: number; base: number } {
+		for (const n of place.names) {
 			if (never(n)) throw new PlacesError("wrong-field")
+		}
 		let i = 0
-		const names =
-			address[0] === "/" ? [] : place.names.slice()
+		const names = address[0] === "/" ? [] : place.names.slice()
 		if (address[0] === "/") i = 1
 		for (; address[i] === ".."; i++) {
 			if (names.length === 0) throw new PlacesError("above-root")
@@ -124,7 +123,7 @@ export function createPlaces<V, H>(
 			if (never(address[i])) throw new PlacesError("wrong-field")
 			names.push(address[i])
 		}
-		return {names, own, base}
+		return { names, own, base }
 	}
 
 	// down the names from the node of id start (the root, or a trail's); taken: the nodes gone
@@ -136,20 +135,20 @@ export function createPlaces<V, H>(
 		depend?: Depend,
 		start = root,
 		from = 0,
-		pick = true
+		pick = true,
 	) {
 		const taken: N[] = []
 		const steps: Step[] = []
 		depend?.(start, "loaded")
 		let at = get(start)
-		if (at === undefined) return {taken, steps, last: undefined}
+		if (at === undefined) return { taken, steps, last: undefined }
 		taken.push(at)
 		for (let k = from; k < names.length; k++) {
 			const name = names[k]
 			// past the first name, said when the id was asked for it
 			if (k === from) depend?.(at.id, ["children", name])
 			const ids = list(at, name)
-			if (ids === undefined) return {taken, steps, last: undefined}
+			if (ids === undefined) return { taken, steps, last: undefined }
 			if (k === names.length - 1) {
 				// the place's . : the first loaded
 				if (pick) {
@@ -160,11 +159,11 @@ export function createPlaces<V, H>(
 						const n = get(id)
 						if (n === undefined) continue
 						taken.push(n)
-						steps.push({node: at.id, name, id, at: j})
+						steps.push({ node: at.id, name, id, at: j })
 						break
 					}
 				}
-				return {taken, steps, last: {node: at.id, name, ids}}
+				return { taken, steps, last: { node: at.id, name, ids } }
 			}
 			const next = names[k + 1]
 			let found: N | undefined
@@ -177,14 +176,14 @@ export function createPlaces<V, H>(
 				depend?.(id, ["children", next])
 				if (list(n, next) === undefined) continue
 				found = n
-				steps.push({node: at.id, name, id, at: j})
+				steps.push({ node: at.id, name, id, at: j })
 				break
 			}
-			if (found === undefined) return {taken, steps, last: undefined}
+			if (found === undefined) return { taken, steps, last: undefined }
 			taken.push(found)
 			at = found
 		}
-		return {taken, steps, last: undefined}
+		return { taken, steps, last: undefined }
 	}
 
 	function items(
@@ -193,14 +192,14 @@ export function createPlaces<V, H>(
 		ids: List,
 		route: Step[],
 		depend?: Depend,
-		up?: number
+		up?: number,
 	): Item<V, H>[] {
 		const out: Item<V, H>[] = []
 		for (let j = 0; j < ids.length; j++) {
 			const id = ids[j]
 			if (typeof id !== "string") continue
 			depend?.(id, "loaded")
-			const item: Item<V, H> = {id, route: [...route, {node, name, id, at: j}]}
+			const item: Item<V, H> = { id, route: [...route, { node, name, id, at: j }] }
 			const n = get(id)
 			if (n !== undefined) item.node = n
 			if (up !== undefined) item.up = up
@@ -213,16 +212,14 @@ export function createPlaces<V, H>(
 	function look(
 		place: Spot,
 		address: Address,
-		depend = fallback
+		depend = fallback,
 	): Item<V, H>[] {
-		const {names, own, base} = resolve(place, address)
+		const { names, own, base } = resolve(place, address)
 		if (names.length === 0) {
 			depend?.(root, "loaded")
 			const n = get(root)
 			return [
-				n === undefined
-					? {id: root, route: []}
-					: {id: root, route: [], node: n},
+				n === undefined ? { id: root, route: [] } : { id: root, route: [], node: n },
 			]
 		}
 		// with a trail: from the node the last kept name reached, or its parent for none of
@@ -230,10 +227,9 @@ export function createPlaces<V, H>(
 		const trail = place.trail
 		const from = own > 0 ? base : base - 1
 		if (trail !== undefined && from >= trail.length) return []
-		const w =
-			trail === undefined
-				? walk(names, depend, root, 0, false)
-				: walk(names, depend, trail[from], from, false)
+		const w = trail === undefined
+			? walk(names, depend, root, 0, false)
+			: walk(names, depend, trail[from], from, false)
 		if (w.last === undefined) return []
 		// the steps down to the last list, the address's own names only
 		const walked = names.length - (trail === undefined ? 0 : from)
@@ -263,7 +259,7 @@ export function createPlaces<V, H>(
 				depend?.(id, ["children", next])
 				if (list(c, next) === undefined) continue
 				found = c
-				steps.push({node: at.id, name, id, at: j})
+				steps.push({ node: at.id, name, id, at: j })
 				break
 			}
 			if (found === undefined) return undefined
@@ -272,7 +268,7 @@ export function createPlaces<V, H>(
 		const name = path[path.length - 1]
 		if (path.length === 1) depend?.(at.id, ["children", name])
 		const ids = list(at, name)
-		return ids === undefined ? undefined : {steps, node: at.id, name, ids}
+		return ids === undefined ? undefined : { steps, node: at.id, name, ids }
 	}
 
 	// the nodes the place's walk went through, from its . up to its start: in each, path, down
@@ -280,21 +276,20 @@ export function createPlaces<V, H>(
 		place: Spot,
 		path: readonly string[],
 		all: boolean,
-		depend = fallback
+		depend = fallback,
 	): Item<V, H>[] {
 		for (const name of path) if (never(name)) throw new PlacesError("wrong-field")
 		const out: Item<V, H>[] = []
 		if (path.length === 0) return out
-		const {names} = resolve(place, [])
-		const taken =
-			place.trail === undefined
-				? walk(names, depend).taken
-				: along(place.trail, depend)
+		const { names } = resolve(place, [])
+		const taken = place.trail === undefined
+			? walk(names, depend).taken
+			: along(place.trail, depend)
 		for (let i = taken.length - 1; i >= 0; i--) {
 			const d = down(taken[i], path, depend)
 			if (d === undefined) continue
 			const found = items(d.node, d.name, d.ids, d.steps, depend, taken.length - 1 - i)
-			if (!found.some(it => it.node !== undefined)) continue
+			if (!found.some((it) => it.node !== undefined)) continue
 			if (!all) return found
 			out.push(...found)
 		}
@@ -318,19 +313,19 @@ export function createPlaces<V, H>(
 	function enter(
 		address: Address,
 		from: Spot,
-		depend = fallback
+		depend = fallback,
 	): Spot {
-		const {names, own, base} = resolve(from, address)
+		const { names, own, base } = resolve(from, address)
 		const was = from.trail
 		let trail: string[]
-		if (was === undefined) trail = walk(names, depend).taken.map(n => n.id)
+		if (was === undefined) trail = walk(names, depend).taken.map((n) => n.id)
 		// back up the trail, or past its end: the steps it took, no walk
 		else if (own === 0 || base >= was.length) trail = was.slice(0, base + 1)
 		else {
 			const w = walk(names, depend, was[base], base)
-			trail = [...was.slice(0, base), ...w.taken.map(n => n.id)]
+			trail = [...was.slice(0, base), ...w.taken.map((n) => n.id)]
 		}
-		return {names, trail}
+		return { names, trail }
 	}
 
 	// the nearest path of names whose last list holds a loaded node; none given: none
@@ -346,7 +341,7 @@ export function createPlaces<V, H>(
 		place: Spot,
 		address: Address,
 		name?: string,
-		depend = fallback
+		depend = fallback,
 	) {
 		if (name !== undefined && never(name)) throw new PlacesError("wrong-field")
 		const out: Item<V, H>[] = []
@@ -360,8 +355,9 @@ export function createPlaces<V, H>(
 			}
 			depend?.(it.id, ["children", name])
 			const ids = list(it.node, name)
-			if (ids !== undefined)
+			if (ids !== undefined) {
 				out.push(...items(it.id, name, ids, it.route, depend))
+			}
 		}
 		return name === undefined ? [...seen] : out
 	}
@@ -384,12 +380,13 @@ export function createPlaces<V, H>(
 
 	// one object of a node: its versions, and putting new ones; none left: the name gone
 	function versions(n: C, which: Which) {
-		if (which === "value")
+		if (which === "value") {
 			return {
 				get: () => n.value,
 				set: (vs: C["value"]) => void (n.value = vs),
-				scratch: (base: C["value"]) => createNode<V, Change>(n.id, {value: base}),
+				scratch: (base: C["value"]) => createNode<V, Change>(n.id, { value: base }),
 			}
+		}
 		const map = (which[0] === "info" ? n.info : n.children) as Map<
 			string,
 			C["value"]
@@ -397,10 +394,8 @@ export function createPlaces<V, H>(
 		const name = which[1]
 		return {
 			get: () => map.get(name) ?? [],
-			set: (vs: C["value"]) =>
-				void (vs.length === 0 ? map.delete(name) : map.set(name, vs)),
-			scratch: (base: C["value"]) =>
-				createNode<V, Change>(n.id, {[which[0]]: [[name, base]]}),
+			set: (vs: C["value"]) => void (vs.length === 0 ? map.delete(name) : map.set(name, vs)),
+			scratch: (base: C["value"]) => createNode<V, Change>(n.id, { [which[0]]: [[name, base]] }),
 		}
 	}
 
@@ -410,13 +405,12 @@ export function createPlaces<V, H>(
 		n: C,
 		which: Which,
 		slots: Span,
-		patches: (content: unknown) => Patch[]
+		patches: (content: unknown) => Patch[],
 	): Change {
 		const o = versions(n, which)
 		const vs = o.get()
 		const [from, to] = typeof slots === "number" ? [slots, slots + 1] : slots
-		const ok =
-			vs.length === 0 ? from === 0 && to <= 1 : from < to && to <= vs.length
+		const ok = vs.length === 0 ? from === 0 && to <= 1 : from < to && to <= vs.length
 		if (!ok || from < 0) throw new PlacesError("range", n.id)
 		const base = vs.slice(from, from + 1)
 		const scratch = o.scratch(base)
@@ -425,7 +419,7 @@ export function createPlaces<V, H>(
 			scratch,
 			which,
 			patches(base[0]?.content ?? (list ? [] : undefined)),
-			by()
+			by(),
 		)
 		const made = versions(scratch, which).get()
 		o.set([...vs.slice(0, from), ...made, ...vs.slice(to)])
@@ -438,20 +432,20 @@ export function createPlaces<V, H>(
 		name: string,
 		ids: List,
 		index?: Span,
-		slotindex: Span = 0
+		slotindex: Span = 0,
 	): Change {
 		if (never(name)) throw new PlacesError("wrong-field", n.id)
-		return edit(n, ["children", name], slotindex, content => {
+		return edit(n, ["children", name], slotindex, (content) => {
 			const have = content as List
-			const [a, b] =
-				index === undefined
-					? [have.length, have.length]
-					: typeof index === "number"
-						? [index, index]
-						: index
-			if (a < 0 || a > b || b > have.length)
+			const [a, b] = index === undefined
+				? [have.length, have.length]
+				: typeof index === "number"
+				? [index, index]
+				: index
+			if (a < 0 || a > b || b > have.length) {
 				throw new PlacesError("range", n.id)
-			return [{path: [], range: [a, b], value: ids}]
+			}
+			return [{ path: [], range: [a, b], value: ids }]
 		})
 	}
 
@@ -462,7 +456,7 @@ export function createPlaces<V, H>(
 		name: string,
 		child: string,
 		index?: Span,
-		slotindex?: Span
+		slotindex?: Span,
 	) => place(held(id), name, [child], index, slotindex)
 
 	// the ids at index taken out of id's list of name, leaving nothing in their place: one change
@@ -471,16 +465,16 @@ export function createPlaces<V, H>(
 		id: Parent,
 		name: string,
 		index: Span,
-		slotindex: Span = 0
+		slotindex: Span = 0,
 	): Change {
 		return cut(held(id), name, index, slotindex)
 	}
 	function cut(n: C, name: string, index: Span, slotindex: Span = 0): Change {
-		return edit(n, ["children", name], slotindex, content => {
+		return edit(n, ["children", name], slotindex, (content) => {
 			const have = content as List
 			const [a, b] = typeof index === "number" ? [index, index + 1] : index
 			if (a < 0 || a >= b || b > have.length) throw new PlacesError("range", n.id)
-			return [{path: [], range: [a, b]}]
+			return [{ path: [], range: [a, b] }]
 		})
 	}
 
@@ -489,10 +483,10 @@ export function createPlaces<V, H>(
 	function pop(id: Parent, name: string, slotindex: Span): Change {
 		const n = held(id)
 		const vs = n.children.get(name) ?? []
-		const [from, to] =
-			typeof slotindex === "number" ? [slotindex, slotindex + 1] : slotindex
-		if (from < 0 || from >= to || to > vs.length)
+		const [from, to] = typeof slotindex === "number" ? [slotindex, slotindex + 1] : slotindex
+		if (from < 0 || from >= to || to > vs.length) {
 			throw new PlacesError("range", n.id)
+		}
 		const next = [...vs.slice(0, from), ...vs.slice(to)]
 		if (next.length === 0) n.children.delete(name)
 		else n.children.set(name, next)
@@ -508,7 +502,7 @@ export function createPlaces<V, H>(
 		const ids = n.children.get(name)?.[0]?.content
 		if (ids === undefined) throw new PlacesError("nothing-there", n.id)
 		const at = [...n.children.keys()].indexOf(name)
-		const gone = mutate(n, ["children", name], [{path: []}], by())
+		const gone = mutate(n, ["children", name], [{ path: [] }], by())
 		const put = place(n, to, ids)
 		slot(n, to, at)
 		return [gone, put]
@@ -522,15 +516,16 @@ export function createPlaces<V, H>(
 		index: number,
 		toid: Parent,
 		toname: string,
-		toindex?: number
+		toindex?: number,
 	): Change[] {
 		const from = held(id)
 		const to = held(toid)
 		// all checked before the first change, so a failed move changes nothing
 		if (never(toname)) throw new PlacesError("wrong-field", to.id)
 		const ids = from.children.get(name)?.[0]?.content
-		if (ids === undefined || index < 0 || index >= ids.length)
+		if (ids === undefined || index < 0 || index >= ids.length) {
 			throw new PlacesError("range", from.id)
+		}
 		const same = from === to && name === toname
 		const room = size(to, toname) - (same ? 1 : 0)
 		const at = toindex ?? room
@@ -539,7 +534,7 @@ export function createPlaces<V, H>(
 			const patch = {
 				path: [],
 				range: [at, at] as [number, number],
-				move: {path: [index]},
+				move: { path: [index] },
 			}
 			return [mutate(from, ["children", name], [patch], by())]
 		}
@@ -553,14 +548,13 @@ export function createPlaces<V, H>(
 		place: Spot,
 		address: Address,
 		part: "value" | readonly ["info", string],
-		depend?: Depend
+		depend?: Depend,
 	): Read<V, H>[] {
 		const out: Read<V, H>[] = look(place, address, depend)
 		for (const it of out) {
 			if (it.node === undefined) continue
 			depend?.(it.id, part)
-			it.versions =
-				part === "value" ? it.node.value : (it.node.info.get(part[1]) ?? [])
+			it.versions = part === "value" ? it.node.value : (it.node.info.get(part[1]) ?? [])
 		}
 		return out
 	}
@@ -570,7 +564,7 @@ export function createPlaces<V, H>(
 		place: Spot,
 		address: Address,
 		name: string,
-		depend = fallback
+		depend = fallback,
 	) {
 		if (never(name)) throw new PlacesError("wrong-field")
 		return read(place, address, ["info", name], depend)
@@ -581,10 +575,10 @@ export function createPlaces<V, H>(
 	const quiet: Depend = () => {}
 	function at(place: Spot, address: Address, index?: number): C {
 		const items = look(place, address, quiet)
-		const it =
-			index === undefined ? items.find(it => it.node) : items[index]
-		if (index !== undefined && (index < 0 || it === undefined))
+		const it = index === undefined ? items.find((it) => it.node) : items[index]
+		if (index !== undefined && (index < 0 || it === undefined)) {
 			throw new PlacesError("range")
+		}
 		if (it?.node === undefined) throw new PlacesError("nothing-there", it?.id)
 		return it.node as unknown as C
 	}
@@ -594,7 +588,7 @@ export function createPlaces<V, H>(
 		address: Address,
 		patches: Iterable<Patch>,
 		index?: number,
-		slotindex: Span = 0
+		slotindex: Span = 0,
 	): Change {
 		const n = at(place, address, index)
 		return edit(n, "value", slotindex, () => [...patches])
@@ -606,7 +600,7 @@ export function createPlaces<V, H>(
 		name: string,
 		patches: Iterable<Patch>,
 		index?: number,
-		slotindex: Span = 0
+		slotindex: Span = 0,
 	): Change {
 		if (never(name)) throw new PlacesError("wrong-field")
 		const n = at(place, address, index)
@@ -618,69 +612,64 @@ export function createPlaces<V, H>(
 		return {
 			names: spot.names,
 			trail: spot.trail!,
-			cd: (address: Address, depend = fallback) =>
-				here(enter(address, spot, depend)),
+			cd: (address: Address, depend = fallback) => here(enter(address, spot, depend)),
 			look: (address: Address, depend?: Depend) => look(spot, address, depend),
-			lookup: (path: readonly string[], depend?: Depend) =>
-				lookup(spot, path, depend),
-			lookups: (path: readonly string[], depend?: Depend) =>
-				lookups(spot, path, depend),
+			lookup: (path: readonly string[], depend?: Depend) => lookup(spot, path, depend),
+			lookups: (path: readonly string[], depend?: Depend) => lookups(spot, path, depend),
 			children: (address: Address, name?: string, depend?: Depend) =>
 				children(spot, address, name, depend),
-			content: (address: Address, depend?: Depend) =>
-				content(spot, address, depend),
+			content: (address: Address, depend?: Depend) => content(spot, address, depend),
 			info: (address: Address, name: string, depend?: Depend) =>
 				info(spot, address, name, depend),
 			write: (
 				address: Address,
 				patches: Iterable<Patch>,
 				index?: number,
-				slotindex?: Span
+				slotindex?: Span,
 			) => write(spot, address, patches, index, slotindex),
 			set: (
 				address: Address,
 				name: string,
 				patches: Iterable<Patch>,
 				index?: number,
-				slotindex?: Span
+				slotindex?: Span,
 			) => set(spot, address, name, patches, index, slotindex),
 		}
 	}
 
 	return {
-		cd: (address: Address, depend = fallback) =>
-			here(enter(address, {names: []}, depend)),
+		cd: (address: Address, depend = fallback) => here(enter(address, { names: [] }, depend)),
 		look: (place: Place, address: Address, depend?: Depend) =>
-			look({names: place}, address, depend),
+			look({ names: place }, address, depend),
 		lookup: (place: Place, path: readonly string[], depend?: Depend) =>
-			lookup({names: place}, path, depend),
+			lookup({ names: place }, path, depend),
 		lookups: (place: Place, path: readonly string[], depend?: Depend) =>
-			lookups({names: place}, path, depend),
+			lookups({ names: place }, path, depend),
 		children: (
 			place: Place,
 			address: Address,
 			name?: string,
-			depend?: Depend
-		) => children({names: place}, address, name, depend),
+			depend?: Depend,
+		) => children({ names: place }, address, name, depend),
 		content: (place: Place, address: Address, depend?: Depend) =>
-			content({names: place}, address, depend),
+			content({ names: place }, address, depend),
 		info: (place: Place, address: Address, name: string, depend?: Depend) =>
-			info({names: place}, address, name, depend),
+			info({ names: place }, address, name, depend),
 		write: (
 			place: Place,
 			address: Address,
 			patches: Iterable<Patch>,
 			index?: number,
-			slotindex?: Span
-		) => write({names: place}, address, patches, index, slotindex),
+			slotindex?: Span,
+		) => write({ names: place }, address, patches, index, slotindex),
 		set: (
 			place: Place,
 			address: Address,
 			name: string,
 			patches: Iterable<Patch>,
 			index?: number,
-			slotindex?: Span
-		) => set({names: place}, address, name, patches, index, slotindex),
+			slotindex?: Span,
+		) => set({ names: place }, address, name, patches, index, slotindex),
 		insert,
 		remove,
 		pop,

@@ -52,6 +52,8 @@ typedef struct {
 
 // the chains of one node, empty
 chains *chain_create(const char *node, chain_check check, void *context);
+// what chain_free calls with each slot (chain_slot) the caller set, to let it go; none by default
+void chain_release(chains *c, void (*release)(void *slot));
 void chain_free(chains *c);
 // the steps of CHAIN.tex, Adding; names: free with chain_row_free
 chain_row chain_add(chains *c, const Json *blop, const uint8_t name[32]);

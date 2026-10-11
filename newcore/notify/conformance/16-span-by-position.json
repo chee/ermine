@@ -1,8 +1,32 @@
-{ "title": "a span read by position hears only what reaches it", "start": { "items": ["x", "y", "z", "w", "v"] }, "steps": [
-  { "op": "read", "name": "s", "path": ["items", [3, 5]] },
-  { "op": "patch", "patch": { "path": ["items"], "range": [0, 1], "value": ["q"] }, "expect": {} },
-  { "op": "patch", "patch": { "path": ["items"], "range": [5, 5], "value": ["q"] }, "expect": {} },
-  { "op": "patch", "patch": { "path": ["items", 4], "value": "p" }, "expect": { "s": ["value"] } },
-  { "op": "patch", "patch": { "path": ["items"], "range": [0, 0], "value": ["q"] }, "expect": { "s": ["value"] } },
-  { "op": "where", "name": "s", "expect": { "path": ["items", [3, 5]], "value": ["z", "w"], "live": true } }
-] }
+{
+	"title": "a span read by position hears only what reaches it",
+	"start": { "items": ["x", "y", "z", "w", "v"] },
+	"steps": [
+		{ "op": "read", "name": "s", "path": ["items", [3, 5]] },
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [0, 1], "value": ["q"] },
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [5, 5], "value": ["q"] },
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items", 4], "value": "p" },
+			"expect": { "s": ["value"] }
+		},
+		{
+			"op": "patch",
+			"patch": { "path": ["items"], "range": [0, 0], "value": ["q"] },
+			"expect": { "s": ["value"] }
+		},
+		{
+			"op": "where",
+			"name": "s",
+			"expect": { "path": ["items", [3, 5]], "value": ["z", "w"], "live": true }
+		}
+	]
+}

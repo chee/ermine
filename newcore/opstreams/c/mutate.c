@@ -495,26 +495,223 @@ static void hold(work *w, nt_value *v) {
 	for (size_t i = 0; i < v->count; i++) hold(w, v->items[i]);
 }
 
-// a children list's content, as nt_values: an id a string, a symbol a null of its own
+// An item that is neither an id nor a symbol (mutate.h) is a symbol item named by this text:
+// \x01, then the value: n; t; f; d + 16 hex digits of the double; s<len>:<bytes>; l<count>:<items>;
+// m<count>:<<keylen>:<key><value>...>; b<len>:<hex>; x<kind> (a stand-in over its kind's text); y<kind>:<len>:<hex> (a typed array, len bytes)
+static const char hexd[] = "0123456789abcdef";
+typedef struct {
+	char *p;
+	size_t n, cap;
+} text;
+static void put(text *t, const void *data, size_t n) {
+	if (t->n + n + 1 > t->cap) t->p = grab(t->p, t->cap = (t->n + n + 1) * 2);
+	memcpy(t->p + t->n, data, n);
+	t->n += n;
+}
+// tag (if any), n, and a colon
+static void put_size(text *t, char tag, size_t n) {
+	char buf[32];
+	size_t k = (size_t)snprintf(buf, sizeof buf, "%zu:", n);
+	if (tag) put(t, &tag, 1);
+	put(t, buf, k);
+}
+static void put_hex(text *t, const unsigned char *d, size_t n) {
+	for (size_t i = 0; i < n; i++) put(t, &hexd[d[i] >> 4], 1), put(t, &hexd[d[i] & 15], 1);
+}
+static void encode(text *t, const nt_value *v) {
+	switch (v->type) {
+	case NT_NULL: put(t, "n", 1); break;
+	case NT_BOOL: put(t, v->bool_ ? "t" : "f", 1); break;
+	case NT_NUM: {
+		uint64_t u;
+		char buf[20];
+		memcpy(&u, &v->num, 8);
+		put(t, buf, (size_t)snprintf(buf, sizeof buf, "d%016llx", (unsigned long long)u));
+		break;
+	}
+	case NT_STR:
+		put_size(t, 's', v->bytes);
+		put(t, v->str, v->bytes);
+		break;
+	case NT_LIST:
+		put_size(t, 'l', v->count);
+		for (size_t i = 0; i < v->count; i++) encode(t, v->items[i]);
+		break;
+	case NT_MAP:
+		put_size(t, 'm', v->count);
+		for (size_t i = 0; i < v->count; i++) {
+			put_size(t, 0, strlen(v->keys[i]));
+			put(t, v->keys[i], strlen(v->keys[i]));
+			encode(t, v->items[i]);
+		}
+		break;
+	case NT_STAND:
+		put(t, "x", 1);
+		encode(t, v->items[0]);
+		break;
+	case NT_BYTES:
+		put_size(t, 'b', v->bytes);
+		put_hex(t, v->data, v->bytes);
+		break;
+	case NT_TYPED: {
+		char buf[32];
+		put(t, buf, (size_t)snprintf(buf, sizeof buf, "y%d:%zu:", (int)v->kind, v->bytes));
+		put_hex(t, v->data, v->bytes);
+		break;
+	}
+	}
+}
+// the text of a non-id item, made with the alloc
+static char *item_text(const nt_value *v, const mu_alloc *alloc) {
+	text t = {0};
+	put(&t, "\x01", 1);
+	encode(&t, v);
+	char *r = alloc->alloc(alloc->ctx, t.n + 1);
+	memcpy(r, t.p, t.n);
+	r[t.n] = 0;
+	free(t.p);
+	return r;
+}
+// reading it back; NULL when it is no such text. every value made is in the made set (what a
+// failed read made is let go of with the rest at the end)
+static int size_in(const char **s, const char *end, size_t *n) {
+	if (*s >= end || **s < '0' || **s > '9') return 0;
+	size_t x = 0;
+	for (; *s < end && **s >= '0' && **s <= '9'; (*s)++) x = x * 10 + (size_t)(**s - '0');
+	if (*s >= end || **s != ':') return 0;
+	(*s)++;
+	*n = x;
+	return 1;
+}
+static int hex_in(const char **s, const char *end, size_t n, unsigned char *out) {
+	if ((size_t)(end - *s) / 2 < n) return 0;
+	for (size_t i = 0; i < n; i++, *s += 2) {
+		const char *a = memchr(hexd, (*s)[0], 16), *b = memchr(hexd, (*s)[1], 16);
+		if (!a || !b) return 0;
+		out[i] = (unsigned char)((a - hexd) << 4 | (b - hexd));
+	}
+	return 1;
+}
+static nt_value *decode(work *w, const char **s, const char *end) {
+	if (*s >= end) return NULL;
+	char c = *(*s)++;
+	size_t n;
+	switch (c) {
+	case 'n': return made(w, nt_null());
+	case 't': return made(w, nt_bool(1));
+	case 'f': return made(w, nt_bool(0));
+	case 'd': {
+		unsigned char b[8];
+		double d;
+		if (!hex_in(s, end, 8, b)) return NULL;
+		uint64_t u = 0;
+		for (int i = 0; i < 8; i++) u = u << 8 | b[i];
+		memcpy(&d, &u, 8);
+		return made(w, nt_num(d));
+	}
+	case 's': {
+		if (!size_in(s, end, &n) || (size_t)(end - *s) < n) return NULL;
+		char *buf = grab(NULL, n + 1);
+		memcpy(buf, *s, n);
+		buf[n] = 0;
+		*s += n;
+		nt_value *v = made(w, nt_str(buf));
+		free(buf);
+		return v;
+	}
+	case 'l':
+	case 'm': {
+		if (!size_in(s, end, &n)) return NULL;
+		nt_value *v = made(w, c == 'l' ? nt_list() : nt_map());
+		for (size_t i = 0; i < n; i++) {
+			char *key = NULL;
+			if (c == 'm') {
+				size_t k;
+				if (!size_in(s, end, &k) || (size_t)(end - *s) < k) return NULL;
+				key = grab(NULL, k + 1);
+				memcpy(key, *s, k);
+				key[k] = 0;
+				*s += k;
+			}
+			nt_value *item = decode(w, s, end);
+			if (item == NULL) return free(key), NULL;
+			if (c == 'l') nt_push(v, item);
+			else nt_set(v, key, item), free(key);
+		}
+		return v;
+	}
+	case 'x': {
+		nt_value *kind = decode(w, s, end);
+		return kind == NULL ? NULL : made(w, nt_stand(kind));
+	}
+	case 'b': {
+		if (!size_in(s, end, &n) || (size_t)(end - *s) / 2 < n) return NULL;
+		unsigned char *buf = grab(NULL, n);
+		if (!hex_in(s, end, n, buf)) return free(buf), NULL;
+		nt_value *v = made(w, nt_bytes(buf, n));
+		free(buf);
+		return v;
+	}
+	case 'y': {
+		if (*s >= end || **s < '0' || **s > '9') return NULL;
+		int kind = *(*s)++ - '0';
+		if (*s >= end || *(*s)++ != ':' || !size_in(s, end, &n) || (size_t)(end - *s) / 2 < n) return NULL;
+		size_t z = nt_size((nt_elements)kind);
+		unsigned char *buf = grab(NULL, n);
+		if (n % z || !hex_in(s, end, n, buf)) return free(buf), NULL;
+		nt_value *v = made(w, nt_typed((nt_elements)kind, buf, n / z));
+		free(buf);
+		return v;
+	}
+	}
+	return NULL;
+}
+// the value a non-id item stands for, made fresh (in w's made set when w is given: the call's
+// own to hold or drop); NULL when it is a plain symbol
+static nt_value *item_of(work *w, const char *symbol) {
+	if (symbol == NULL || symbol[0] != '\x01') return NULL;
+	const char *s = symbol + 1, *end = symbol + strlen(symbol);
+	work t = {0};
+	nt_value *v = decode(&t, &s, end);
+	int ok = v != NULL && s == end;
+	for (size_t j = 0; j < t.made.cap; j++) {
+		nt_value *m = (nt_value *)t.made.slots[j];
+		if (m == NULL || m == GONE) continue;
+		if (ok && w) pset_add(&w->made, m);
+		else if (!ok) shell_free(m);
+	}
+	free(t.made.slots);
+	return ok ? v : NULL;
+}
+
+// a children list's content, as nt_values: an id a string, a symbol a null of its own, any other
+// item (its text above) the value it stands for
 static nt_value *list_in(work *w, const nd_list *l) {
 	size_t n = l ? l->length : 0;
 	nt_value *r = made_list(w, n);
 	for (size_t i = 0; i < n; i++) {
-		nt_value *v = l->items[i].id ? nt_str(l->items[i].id) : nt_null();
+		nt_value *v = l->items[i].id ? nt_str(l->items[i].id) : item_of(w, l->items[i].symbol);
+		if (v != NULL && !l->items[i].id) {
+			r->items[r->count++] = v;
+			continue;
+		}
+		if (v == NULL) v = nt_null();
 		v->num = (double)i;
 		pset_add(&w->given, v);
 		r->items[r->count++] = v;
 	}
 	return r;
 }
-// still a list, of ids and symbols it held
+// still a list
 static void list_ok(work *w) {
-	if (w->root == NULL) return;
-	if (!is_list(w->root)) fail(w, MU_WRONG_KIND);
-	for (size_t i = 0; i < w->root->count; i++) {
-		nt_value *v = w->root->items[i];
-		if (!pset_has(&w->given, v) && v->type != NT_STR) fail(w, MU_WRONG_KIND);
-	}
+	if (w->root != NULL && !is_list(w->root)) fail(w, MU_WRONG_KIND);
+}
+// an item not given: a string an id, else its text
+static nd_item item_out(const nt_value *v, const mu_alloc *alloc) {
+	if (v->type != NT_STR) return (nd_item){NULL, item_text(v, alloc)};
+	char *id = alloc->alloc(alloc->ctx, v->bytes + 1);
+	memcpy(id, v->str, v->bytes + 1);
+	return (nd_item){id, NULL};
 }
 // and back, with the alloc; an item kept keeps its pointers
 static nd_list *list_out(work *w, const nd_list *was, const mu_alloc *alloc) {
@@ -524,14 +721,26 @@ static nd_list *list_out(work *w, const nd_list *was, const mu_alloc *alloc) {
 	for (size_t i = 0; i < n; i++) {
 		nt_value *v = w->root->items[i];
 		if (pset_has(&w->given, v)) items[i] = was->items[(size_t)v->num];
-		else {
-			char *id = alloc->alloc(alloc->ctx, v->bytes + 1);
-			memcpy(id, v->str, v->bytes + 1);
-			items[i] = (nd_item){id, NULL};
-		}
+		else items[i] = item_out(v, alloc);
 	}
 	*l = (nd_list){items, n};
 	return l;
+}
+nd_list *mu_list_to(const nt_value *list, const mu_alloc *alloc) {
+	nd_list *l = alloc->alloc(alloc->ctx, sizeof *l);
+	size_t n = list->count;
+	nd_item *items = n ? alloc->alloc(alloc->ctx, n * sizeof *items) : NULL;
+	for (size_t i = 0; i < n; i++) items[i] = item_out(list->items[i], alloc);
+	*l = (nd_list){items, n};
+	return l;
+}
+nt_value *mu_list_of(const nd_list *l) {
+	nt_value *r = nt_list();
+	for (size_t i = 0; l && i < l->length; i++) {
+		nt_value *v = l->items[i].id ? nt_str(l->items[i].id) : item_of(NULL, l->items[i].symbol);
+		nt_push(r, v ? v : nt_null());
+	}
+	return r;
 }
 // what the call made, and a children list's items as given, let go of; values given never
 static void let_go(work *w) {

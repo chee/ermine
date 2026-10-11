@@ -63,6 +63,9 @@ static Json *json_of(const nt_value *v) {
 	case NT_BOOL: return jsonBoolean(v->bool_);
 	case NT_NUM: return jsonNumber(v->num);
 	case NT_STR: return jsonStringOfLength(v->str, v->bytes);
+	case NT_BYTES: return jsonBytes(v->data, v->bytes);
+	case NT_TYPED: return jsonTyped((JsonKind)v->kind, v->data, nt_length(v));
+	case NT_STAND: return jsonStand(json_of(v->items[0]));
 	case NT_LIST:
 		j = jsonArray();
 		for (size_t i = 0; i < v->count; i++) jsonPush(j, json_of(v->items[i]));
@@ -169,13 +172,14 @@ int main(void) {
 		else if (strcmp(op, "create") == 0) {
 			chain_free(current);
 			current = chain_create(jsonText(jsonGet(request, "node")), apply_check, NULL);
+			chain_release(current, apply_release);
 			puts("{}");
 		} else if (strcmp(op, "add") == 0 && text && unhex(text, name, 32)) {
 			Json **slot = NULL;
 			for (int i = 0; i < request->object.count; i++) {
 				if (strcmp(request->object.members[i].key, "blop") == 0) slot = &request->object.members[i].value;
 			}
-			if (slot == NULL || !jsonDecode(slot, false)) fputs("bad blop\n", stderr), exit(1);
+			if (slot == NULL || !jsonDecode(slot)) fputs("bad blop\n", stderr), exit(1);
 			chain_row r = chain_add(current, *slot, name);
 			row(&r);
 			putchar('\n');
@@ -208,7 +212,7 @@ int main(void) {
 			commit_at at;
 			const Json *r = jsonGet(request, "roots");
 			const char *random = jsonText(jsonGet(request, "random"));
-			if (slot == NULL || !jsonDecode(slot, false) || !at_of(jsonGet(request, "at"), &at) || r == NULL ||
+			if (slot == NULL || !jsonDecode(slot) || !at_of(jsonGet(request, "at"), &at) || r == NULL ||
 					r->type != JSON_ARRAY || random == NULL) {
 				fputs("bad commit\n", stderr), exit(1);
 			}
@@ -231,6 +235,7 @@ int main(void) {
 		if (free_request) jsonFree(request);
 	}
 	fflush(stdout);
+	chain_free(current);
 	free(line);
 	return 0;
 }

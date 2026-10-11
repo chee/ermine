@@ -15,6 +15,9 @@
 //            i, [from, to], or {pop: i | [from, to]} (PLACES.tex's slotindex)
 //        roots: the source roots, strings
 //        random: hex; random(n) hands out its next n bytes, in order
+//        a live value, which JSON cannot hold: {"$live": kind} in the change (harness.ts of commit/);
+//        the blop has {"/": {"live": kind}}, a stand-in, there. An implementation with no live
+//        values skips those scenarios (COMMIT_SKIP)
 //        a refusal: an error with code, answered {code}
 // Another implementation joins by speaking this.
 import { createChains } from "../../sync/ts/chain.ts"

@@ -1,0 +1,927 @@
+[
+ {
+  "name": "a/cellx",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 7.459834000000001,
+  "run": {
+   "min": 0.6187707499999995,
+   "median": 0.7608437499999994,
+   "samples": [
+    2.0764374999999973,
+    1.3074270000000006,
+    0.7608437499999994,
+    0.7569477499999984,
+    0.6187707499999995
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1302096,
+   "after": 1612112
+  }
+ },
+ {
+  "name": "a/dynamic/simple",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 8.7975,
+  "run": {
+   "min": 0.11245830000000012,
+   "median": 0.19039789999999995,
+   "samples": [
+    0.3005229,
+    0.19236249999999977,
+    0.19039789999999995,
+    0.11245830000000012,
+    0.12267705000000007
+   ]
+  },
+  "iterations": 20,
+  "check": "ok",
+  "heap": {
+   "built": 1063128,
+   "after": 1380560
+  },
+  "report": {
+   "count": 715,
+   "effects": 97
+  }
+ },
+ {
+  "name": "a/dynamic/dynamic",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 11.198290999999998,
+  "run": {
+   "min": 0.46135419999999955,
+   "median": 0.5140292000000002,
+   "samples": [
+    0.6452332999999996,
+    0.5102083000000007,
+    0.5748417000000003,
+    0.5140292000000002,
+    0.46135419999999955
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 1256584,
+   "after": 1619688
+  },
+  "report": {
+   "count": 1205,
+   "effects": 60
+  }
+ },
+ {
+  "name": "a/dynamic/web",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 10.218416999999999,
+  "run": {
+   "min": 0.6366980000000009,
+   "median": 0.7539374999999993,
+   "samples": [
+    0.9726145000000006,
+    0.7539374999999993,
+    0.650271,
+    0.7723227500000007,
+    0.6366980000000009
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 2065120,
+   "after": 2404536
+  },
+  "report": {
+   "count": 547,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/dense",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 12.052541999999999,
+  "run": {
+   "min": 1.1434895000000012,
+   "median": 1.4981042500000008,
+   "samples": [
+    1.4663854999999995,
+    1.92282275,
+    2.5077914999999997,
+    1.4981042500000008,
+    1.1434895000000012
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1633752,
+   "after": 1993864
+  },
+  "report": {
+   "count": 780,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 9.976833,
+  "run": {
+   "min": 0.7942499999999981,
+   "median": 1.2610729999999997,
+   "samples": [
+    1.2610729999999997,
+    1.524968750000001,
+    1.3912499999999994,
+    1.03848975,
+    0.7942499999999981
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 1527600,
+   "after": 1848864
+  },
+  "report": {
+   "count": 1036,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/dynamic/mixed",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 13.507374999999996,
+  "run": {
+   "min": 1.1805937499999999,
+   "median": 1.5935207499999997,
+   "samples": [
+    1.884708250000001,
+    1.7537289999999999,
+    1.5935207499999997,
+    1.1805937499999999,
+    1.3133332499999995
+   ]
+  },
+  "iterations": 4,
+  "check": "ok",
+  "heap": {
+   "built": 2021864,
+   "after": 2412048
+  },
+  "report": {
+   "count": 1213,
+   "effects": 24
+  }
+ },
+ {
+  "name": "a/kairo/avoidable",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.635957999999999,
+  "run": {
+   "min": 0.019478750000000034,
+   "median": 0.026584160000000027,
+   "samples": [
+    0.05177583999999996,
+    0.04401582999999995,
+    0.026584160000000027,
+    0.019478750000000034,
+    0.020889160000000045
+   ]
+  },
+  "iterations": 100,
+  "check": "ok",
+  "heap": {
+   "built": 465584,
+   "after": 1086496
+  },
+  "report": {
+   "c3runs": 0,
+   "effects": 0
+  }
+ },
+ {
+  "name": "a/kairo/broad",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 5.4695,
+  "run": {
+   "min": 0.09070084000000009,
+   "median": 0.11348333999999995,
+   "samples": [
+    0.23998999999999995,
+    0.09070084000000009,
+    0.10049916000000024,
+    0.1441233200000002,
+    0.11348333999999995
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 700088,
+   "after": 1045632
+  },
+  "report": {
+   "effects": 1500
+  }
+ },
+ {
+  "name": "a/kairo/deep",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 3.3519579999999998,
+  "run": {
+   "min": 0.04544166000000004,
+   "median": 0.050883340000000034,
+   "samples": [
+    0.10601416000000001,
+    0.06771249999999995,
+    0.04968581999999998,
+    0.04544166000000004,
+    0.050883340000000034
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 476864,
+   "after": 888968
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/diamond",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.299917000000001,
+  "run": {
+   "min": 0.06364583999999979,
+   "median": 0.08132000000000005,
+   "samples": [
+    0.126545,
+    0.08132000000000005,
+    0.07198915999999997,
+    0.06364583999999979,
+    0.08648916000000013
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 474032,
+   "after": 915656
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/mux",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "both",
+  "build": 7.357916999999997,
+  "run": {
+   "min": 0.17919164999999992,
+   "median": 0.1894510500000001,
+   "samples": [
+    0.19642605,
+    0.1894510500000001,
+    0.17957710000000002,
+    0.25551144999999986,
+    0.17919164999999992
+   ]
+  },
+  "iterations": 40,
+  "check": "ok",
+  "heap": {
+   "built": 1738384,
+   "after": 2087048
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/kairo/repeated",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "graph",
+  "build": 2.942,
+  "run": {
+   "min": 0.04024084000000002,
+   "median": 0.04263915999999995,
+   "samples": [
+    0.04983750000000001,
+    0.046950839999999945,
+    0.04241332,
+    0.04024084000000002,
+    0.04263915999999995
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 298096,
+   "after": 906416
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/triangle",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.079542,
+  "run": {
+   "min": 0.08994416000000001,
+   "median": 0.10259166000000007,
+   "samples": [
+    0.12087583999999993,
+    0.10259166000000007,
+    0.11667999999999992,
+    0.08994416000000001,
+    0.09805915999999983
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 694520,
+   "after": 1037768
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/unstable",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.090083,
+  "run": {
+   "min": 0.05517082000000002,
+   "median": 0.08038083999999998,
+   "samples": [
+    0.0978333400000001,
+    0.08038083999999998,
+    0.08648083999999998,
+    0.05772331999999992,
+    0.05517082000000002
+   ]
+  },
+  "iterations": 50,
+  "check": "ok",
+  "heap": {
+   "built": 359464,
+   "after": 904824
+  },
+  "report": {
+   "effects": 300
+  }
+ },
+ {
+  "name": "a/kairo/mol",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.102125000000001,
+  "run": {
+   "min": 0.2808957999999997,
+   "median": 0.33693330000000044,
+   "samples": [
+    0.35431250000000036,
+    0.3749499999999998,
+    0.3168625000000006,
+    0.33693330000000044,
+    0.2808957999999997
+   ]
+  },
+  "iterations": 10,
+  "check": "ok",
+  "heap": {
+   "built": 588312,
+   "after": 940552
+  },
+  "report": {
+   "effects": 240
+  }
+ },
+ {
+  "name": "a/s/create/0to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.03087499999999821,
+  "run": {
+   "min": 0.7202083333333343,
+   "median": 0.7634163333333319,
+   "samples": [
+    1.061194333333333,
+    0.9898056666666678,
+    0.7634163333333319,
+    0.7304303333333356,
+    0.7202083333333343
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 777472
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.031166999999999945,
+  "run": {
+   "min": 1.248138666666667,
+   "median": 1.6403193333333352,
+   "samples": [
+    2.6849723333333344,
+    1.4483060000000023,
+    1.6403193333333352,
+    1.248138666666667,
+    2.3079443333333316
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 4090104
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.04287500000000222,
+  "run": {
+   "min": 1.0138053333333374,
+   "median": 1.7782916666666655,
+   "samples": [
+    2.0939856666666685,
+    2.161125333333333,
+    1.772069333333332,
+    1.7782916666666655,
+    1.0138053333333374
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 4184536
+  },
+  "report": {
+   "computations": 20
+  }
+ },
+ {
+  "name": "a/s/create/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.028832999999998776,
+  "run": {
+   "min": 0.8390833333333347,
+   "median": 1.0810696666666668,
+   "samples": [
+    1.0810696666666668,
+    1.2567363333333315,
+    1.7129029999999996,
+    1.0078193333333327,
+    0.8390833333333347
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 4003800
+  },
+  "report": {
+   "computations": 10
+  }
+ },
+ {
+  "name": "a/s/create/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.03091699999999875,
+  "run": {
+   "min": 0.8343056666666703,
+   "median": 0.9244030000000004,
+   "samples": [
+    0.9244030000000004,
+    0.9972083333333318,
+    0.8825836666666665,
+    0.8343056666666703,
+    1.0940419999999993
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 4230400
+  },
+  "report": {
+   "computations": 1
+  }
+ },
+ {
+  "name": "a/s/create/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.03708299999999909,
+  "run": {
+   "min": 1.1789726666666667,
+   "median": 1.3536530000000038,
+   "samples": [
+    2.307417000000001,
+    1.3536530000000038,
+    1.1789726666666667,
+    1.4632776666666676,
+    1.3468330000000013
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 2845960
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.040333000000000396,
+  "run": {
+   "min": 0.9464029999999989,
+   "median": 1.2677086666666664,
+   "samples": [
+    1.5665140000000015,
+    1.2259166666666654,
+    1.2677086666666664,
+    1.3050973333333313,
+    0.9464029999999989
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 1723488
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to8",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.027707999999996957,
+  "run": {
+   "min": 0.9756663333333341,
+   "median": 1.1623473333333318,
+   "samples": [
+    1.3573890000000024,
+    1.2659720000000025,
+    0.9756663333333341,
+    1.0949589999999982,
+    1.1623473333333318
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 1334096
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/create/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 0.03220799999999713,
+  "run": {
+   "min": 0.8433749999999994,
+   "median": 1.2077636666666673,
+   "samples": [
+    1.637680333333332,
+    1.708763666666665,
+    1.0269723333333332,
+    1.2077636666666673,
+    0.8433749999999994
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 2152,
+   "after": 1050256
+  },
+  "report": {
+   "computations": 40
+  }
+ },
+ {
+  "name": "a/s/update/1to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 7.095832999999999,
+  "run": {
+   "min": 0.610569333333333,
+   "median": 0.9141526666666664,
+   "samples": [
+    1.157638666666666,
+    0.9254583333333315,
+    0.8974859999999983,
+    0.9141526666666664,
+    0.610569333333333
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1790640,
+   "after": 2160368
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/2to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 6.0695830000000015,
+  "run": {
+   "min": 0.4311529999999995,
+   "median": 0.5683749999999984,
+   "samples": [
+    1.1928333333333339,
+    1.495110999999999,
+    0.5683749999999984,
+    0.48172233333333264,
+    0.4311529999999995
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1332008,
+   "after": 1625064
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/4to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 5.5327090000000005,
+  "run": {
+   "min": 0.44031966666666733,
+   "median": 0.6389026666666666,
+   "samples": [
+    0.7180136666666664,
+    0.7141666666666661,
+    0.5913056666666657,
+    0.6389026666666666,
+    0.44031966666666733
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1166320,
+   "after": 1556072
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1000to1",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 4.827166999999999,
+  "run": {
+   "min": 0.3392916666666655,
+   "median": 0.4323750000000004,
+   "samples": [
+    0.5507779999999988,
+    0.4323750000000004,
+    0.9375696666666661,
+    0.3622916666666664,
+    0.3392916666666655
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 832840,
+   "after": 1481392
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to2",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 6.304667000000002,
+  "run": {
+   "min": 0.6830973333333338,
+   "median": 0.9026250000000005,
+   "samples": [
+    1.0132916666666674,
+    0.9026250000000005,
+    1.048014000000002,
+    0.7385416666666652,
+    0.6830973333333338
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1587896,
+   "after": 1921088
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to4",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 6.767042,
+  "run": {
+   "min": 0.523166666666666,
+   "median": 0.6181943333333327,
+   "samples": [
+    1.1356803333333332,
+    1.0158193333333354,
+    0.6181943333333327,
+    0.606680666666667,
+    0.523166666666666
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1488928,
+   "after": 1857072
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/update/1to1000",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 7.848291000000003,
+  "run": {
+   "min": 0.5280556666666669,
+   "median": 1.0928889999999996,
+   "samples": [
+    1.1478886666666668,
+    1.2554026666666662,
+    1.0928889999999996,
+    0.6429306666666671,
+    0.5280556666666669
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 1237144,
+   "after": 1747672
+  },
+  "report": {
+   "effects": 19
+  }
+ },
+ {
+  "name": "a/s/teardown",
+  "group": "A",
+  "size": "small",
+  "framework": "newcore",
+  "measures": "scheduler",
+  "build": 3.083207999999999,
+  "run": {
+   "min": 0.06501400000000028,
+   "median": 0.11941666666666606,
+   "samples": [
+    0.16204166666666828,
+    0.1316666666666677,
+    0.11941666666666606,
+    0.06745833333333213,
+    0.06501400000000028
+   ]
+  },
+  "iterations": 3,
+  "check": "ok",
+  "heap": {
+   "built": 438328,
+   "after": 1388760
+  }
+ }
+]

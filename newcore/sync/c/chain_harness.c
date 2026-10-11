@@ -98,6 +98,7 @@ int main(void) {
 		else if (strcmp(op, "create") == 0) {
 			chain_free(current);
 			current = chain_create(jsonText(jsonGet(request, "node")), check, NULL);
+			chain_release(current, apply_release);
 			checks = 0;
 			puts("{}");
 		} else if (strcmp(op, "add") == 0 && text && unhex(text, name)) {
@@ -106,7 +107,7 @@ int main(void) {
 			for (int i = 0; i < request->object.count; i++) {
 				if (strcmp(request->object.members[i].key, "blop") == 0) slot = &request->object.members[i].value;
 			}
-			if (blop == NULL || !jsonDecode(slot, false)) fputs("bad blop\n", stderr), exit(1);
+			if (blop == NULL || !jsonDecode(slot)) fputs("bad blop\n", stderr), exit(1);
 			chain_row r = chain_add(current, *slot, name);
 			row(&r, false);
 			putchar('\n');
@@ -152,6 +153,7 @@ int main(void) {
 		if (free_request) jsonFree(request);
 	}
 	fflush(stdout);
+	chain_free(current);
 	free(line);
 	return 0;
 }

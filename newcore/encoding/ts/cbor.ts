@@ -9,10 +9,13 @@
 //   uint8 64, uint16 69, uint32 70, uint64 71, int8 72, int16 77, int32 78,
 //   int64 79, float32 85, float64 86; a NaN element is written as the quiet
 //   NaN with no payload (7fc00000, 7ff8000000000000)
-// - a live value has no encoding
+// - a stand-in, what a live value is sent as: tag 11111111 (head da00a98ac7)
+//   over its kind, any value; a live value itself has no encoding
 //
 // Bytes are an ArrayBuffer; a typed array is its own class, a Uint8Array
 // being a uint8 typed array. Decoding accepts exactly what encoding gives.
+// A stand-in is the class Stand, holding its kind; a symbol, a function, a Map,
+// any other class's object is live.
 
 /** A value as this codec holds it. */
 export type Value =
@@ -22,6 +25,7 @@ export type Value =
 	| string
 	| ArrayBuffer
 	| Typed
+	| Stand
 	| readonly Value[]
 	| { readonly [key: string]: Value }
 
@@ -36,6 +40,13 @@ export type Typed =
 	| BigUint64Array
 	| Float32Array
 	| Float64Array
+
+/** What a live value is sent as (ENCODING.tex): tag 11111111 over its `kind`, any value. */
+export class Stand {
+	constructor(readonly kind: Value) {}
+}
+
+const STAND = 11111111
 
 /** What cannot be encoded, or bytes that are not an encoding. */
 export class CborError extends Error {
@@ -258,6 +269,10 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		out.head(2, x.byteLength)
 		return out.bytes(new Uint8Array(x))
 	}
+	if (x instanceof Stand) {
+		out.head(6, STAND)
+		return value(out, x.kind, open, depth + 1)
+	}
 	if (ArrayBuffer.isView(x)) {
 		const kind = BY_CLASS.get(x.constructor)
 		if (!kind) throw new CborError(`a ${x.constructor.name} is not a value`)
@@ -445,7 +460,9 @@ function read(input: In): Value {
 			return map
 		}
 		case 6: {
-			const kind = BY_TAG.get(input.arg(info))
+			const tag = input.arg(info)
+			if (tag === STAND) return new Stand(read(input))
+			const kind = BY_TAG.get(tag)
 			if (!kind) throw wrong("a tag that is not a typed array's")
 			input.need(1)
 			const bb = input.b[input.at++]

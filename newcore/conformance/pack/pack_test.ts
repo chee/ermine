@@ -107,7 +107,9 @@ async function check(scenarios: Scenario[], name: (i: number) => string) {
 
 for await (const f of Deno.readDir(`${here}../../encoding/conformance/pack`)) {
 	if (!f.name.endsWith(".json")) continue
-	const s = JSON.parse(await Deno.readTextFile(`${here}../../encoding/conformance/pack/${f.name}`)) as Scenario
+	const s = JSON.parse(
+		await Deno.readTextFile(`${here}../../encoding/conformance/pack/${f.name}`),
+	) as Scenario
 	Deno.test(`${f.name}: ${s.title}`, async () => {
 		if (s.bytes !== undefined) {
 			const [a] = await ask(subject, [{ op: s.node ? "decode" : "unpack", bytes: s.bytes }])

@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "npm:@automerge/subduction@0.23.0": "0.23.0",
     "npm:@noble/curves@1.9.7": "1.9.7",
     "npm:@noble/hashes@1.4.0": "1.4.0",
     "npm:@noble/hashes@1.8.0": "1.8.0",
@@ -22,6 +23,9 @@
     }
   },
   "npm": {
+    "@automerge/subduction@0.23.0": {
+      "integrity": "sha512-daTtDStLmrUbt1R9yqzBr4B+Hn5PcKUzqQ3eScR0cwMQ2dZS9OxLZ5TyRYHU+685nEKlXEzRgxOZxQPUg+GsTA=="
+    },
     "@cbor-extract/cbor-extract-darwin-arm64@2.2.2": {
       "integrity": "sha512-ZKZ/F8US7JR92J4DMct6cLW/Y66o2K576+zjlEN/MevH70bFIsB10wkZEQPLzl2oNh2SMGy55xpJ9JoBRl5DOA==",
       "os": ["darwin"],

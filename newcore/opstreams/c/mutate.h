@@ -4,11 +4,14 @@
 // Content: a value or info object's version content is an nt_value * (NULL: absent); bytes are
 // leaves, a typed array a sequence spliced only with one of its own kind. A children list's
 // content is an nd_list (nodes/c's model, as places/c reads it): for the patches it is seen as an
-// nt_value list, an id a string and a symbol a leaf no patch can make (null, as one compares).
+// nt_value list: an id a string, a symbol a leaf of its own (a null; a null a patch gives is none).
 // A list starts as []; one left with nothing removes the first version; the content stays a list
-// (else wrong-kind), and each item an id or a symbol it held (else wrong-kind: mutate.ts takes
-// anything). The new nd_list, its items and new ids are made with the alloc given; an item it
-// kept keeps its id or symbol pointer.
+// (else wrong-kind); its items may be anything (as mutate.ts). An item that is not an id (a
+// string) or a symbol is an nd_item with symbol set and id NULL, its symbol the text "\x01" and the
+// value written out (mutate.c: encode), read back into the value next call; a symbol that is
+// not such text stays a symbol, and a symbol starting \x01 is so reserved. The new nd_list, its
+// items, new ids and such texts are made with the alloc given; an item it kept keeps its id or
+// symbol pointer (an item of that text is made again, equal).
 //
 // Memory: nothing given is changed. What a patch touches is new (made with notify/c's
 // constructors), the rest is shared with the content before and with the patches' values. A copy
@@ -68,6 +71,12 @@ typedef struct {
 	void *(*alloc)(void *ctx, size_t size); // never NULL; never freed here
 	void *ctx;
 } mu_alloc;
+
+// a children list as nt_values, and back (as mu_mutate sees it: ids strings, other items the value
+// they stand for, a symbol a null). Apart from a call: the first a new list, nt_free it; the second
+// made with the alloc given
+nt_value *mu_list_of(const nd_list *list);
+nd_list *mu_list_to(const nt_value *list, const mu_alloc *alloc);
 
 // the patches, in order, to the object's first version, as one change: change is the caller's,
 // kept in the new first version (its because kept as it was). none there: a put at [] makes it;
