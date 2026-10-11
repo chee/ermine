@@ -203,6 +203,17 @@
    "at": [
     "drivers"
    ],
+   "name": "sock",
+   "id": "drv-sock",
+   "value": {
+    "kind": "c",
+    "name": "sock"
+   }
+  },
+  {
+   "at": [
+    "drivers"
+   ],
    "name": "mac",
    "id": "drv-mac",
    "value": {
@@ -541,6 +552,14 @@
    ],
    "name": "pty",
    "id": "dev-pty",
+   "value": null
+  },
+  {
+   "at": [
+    "dev"
+   ],
+   "name": "sock",
+   "id": "dev-sock",
    "value": null
   },
   {
@@ -1214,9 +1233,9 @@
     "A-f": "computer",
     "A-e": "edit apps/workspace/text",
     "A-S-c": "window close",
-    "M-w": "window close",
+    "s-w": "window close",
     "A-m": "window minimize",
-    "M-m": "window minimize",
+    "s-m": "window minimize",
     "A-S-m": "window restore",
     "A-tab": "select next",
     "A-S-tab": "select prev",
@@ -1250,7 +1269,7 @@
     "A-S-8": "window tag 8",
     "A-9": "view 9",
     "A-S-9": "window tag 9",
-    "M-i": "inspect"
+    "s-i": "inspect"
    }
   },
   {
@@ -1308,6 +1327,10 @@
      "label": "Mac windows",
      "run": "windows",
      "key": "M-C-w"
+    },
+    {
+     "label": "Take over",
+     "run": "takeover toggle"
     },
     {
      "label": "Mac apps…",
@@ -1399,6 +1422,82 @@
      "         oxxxxo",
      "        oxxxxxo",
      "         ooooo "
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "cursors"
+   ],
+   "name": "pointer",
+   "id": "cursor-pointer",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "o": 1053720,
+     "x": 16644330
+    },
+    "hot": [
+     5,
+     0
+    ],
+    "rows": [
+     "     oo         ",
+     "    oxxo        ",
+     "    oxxo        ",
+     "    oxxo        ",
+     "    oxxooo      ",
+     "    oxxoxxooo   ",
+     "    oxxoxxoxxoo ",
+     "ooo oxxoxxoxxoxo",
+     "oxxooxxxxxxxxoxo",
+     "oxxxoxxxxxxxxxxo",
+     " oxxxxxxxxxxxxxo",
+     "  oxxxxxxxxxxxxo",
+     "  oxxxxxxxxxxxo ",
+     "   oxxxxxxxxxxo ",
+     "   oxxxxxxxxxo  ",
+     "    oxxxxxxxxo  ",
+     "    oooooooooo  "
+    ]
+   }
+  },
+  {
+   "at": [
+    "etc",
+    "cursors"
+   ],
+   "name": "text",
+   "id": "cursor-text",
+   "value": {
+    "kind": "picture",
+    "colors": {
+     "o": 1053720,
+     "x": 16644330
+    },
+    "hot": [
+     3,
+     8
+    ],
+    "rows": [
+     "ooo ooo",
+     " xoox  ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     "  ox   ",
+     " xoox  ",
+     "ooo ooo"
     ]
    }
   }
@@ -1534,6 +1633,17 @@
    "program": [
     "drivers",
     "pty"
+   ]
+  },
+  {
+   "start": [
+    "dev",
+    "sock"
+   ],
+   "name": "driver",
+   "program": [
+    "drivers",
+    "sock"
    ]
   },
   {

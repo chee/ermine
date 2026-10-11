@@ -781,20 +781,24 @@
   };
   var MODS = [
     [
-      "cmd",
-      "M"
+      "alt",
+      "A"
     ],
     [
       "ctrl",
       "C"
     ],
     [
-      "alt",
-      "A"
+      "fn",
+      "H"
     ],
     [
       "shift",
       "S"
+    ],
+    [
+      "cmd",
+      "s"
     ]
   ];
   function keyName(key2) {
@@ -807,14 +811,14 @@
       keyName(String(r.key ?? ""))
     ].join("-");
   }
-  function normal(text) {
+  function normal(text, meta = "A") {
     const parts = String(text).trim().split("-");
     let key2 = parts.pop() ?? "";
     if (key2 === "" && parts.length && parts.at(-1) === "") {
       parts.pop();
       key2 = "-";
     }
-    const mods = new Set(parts.map((p) => p.toUpperCase()));
+    const mods = new Set(parts.map((p) => p === "m" ? meta : p === "M" || p === "s" ? "s" : p === "S" ? "S" : p.toUpperCase()));
     return [
       ...MODS.map(([, c]) => c).filter((c) => mods.has(c)),
       keyName(key2)
@@ -912,10 +916,10 @@
       "A-right",
       "C-left",
       "C-right",
-      "M-left",
-      "M-right",
-      "M-up",
-      "M-down",
+      "s-left",
+      "s-right",
+      "s-up",
+      "s-down",
       "C-a",
       "C-e",
       "C-b",
@@ -956,11 +960,11 @@
     switch (c) {
       case "C-a":
       case "home":
-      case "M-left":
+      case "s-left":
         return move(o.lines ? lineStart(t, p) : 0);
       case "C-e":
       case "end":
-      case "M-right":
+      case "s-right":
         return move(o.lines ? lineEnd(t, p) : t.length);
       case "C-b":
       case "left":
@@ -982,9 +986,9 @@
       case "C-n":
       case "down":
         return vertical(1);
-      case "M-up":
+      case "s-up":
         return move(0);
-      case "M-down":
+      case "s-down":
         return move(t.length);
       case "backspace":
       case "C-h":
@@ -1007,7 +1011,7 @@
         return kill(f, p, e === p && e < t.length ? e + 1 : e, was);
       }
       case "C-u":
-      case "M-backspace":
+      case "s-backspace":
         return kill(f, o.lines ? lineStart(t, p) : 0, p, was);
       case "C-y": {
         if (!f.ring.length) return f;
@@ -2269,9 +2273,19 @@
     ascent;
     role;
     #pages;
+    // pages not here, asked for once a part: a part measuring a character whose page has not come (or never will, as
+    // a font without it) reads and asks once, not at each measure; the next part looks again
+    #missed;
+    // pages asked for: once each, as the driver keeps what it was asked (drv_font.c); a page it cannot make is not asked again
+    #asked;
     constructor(value) {
       this.value = value;
       this.#pages = /* @__PURE__ */ new Map();
+      this.#missed = {
+        part: null,
+        pages: /* @__PURE__ */ new Set()
+      };
+      this.#asked = /* @__PURE__ */ new Set();
       this.h = value.h;
       this.ascent = value.ascent;
       this.role = value.font;
@@ -2280,6 +2294,11 @@
       const had = this.#pages.get(n);
       if (had) return had;
       if (!current) return void 0;
+      if (this.#missed.part !== current) this.#missed = {
+        part: current,
+        pages: /* @__PURE__ */ new Set()
+      };
+      if (this.#missed.pages.has(n)) return void 0;
       const { pid, api } = current;
       const at = [
         "/",
@@ -2294,6 +2313,9 @@
       }).items;
       const p = items[0]?.value;
       if (!p) {
+        this.#missed.pages.add(n);
+        if (this.#asked.has(n)) return void 0;
+        this.#asked.add(n);
         try {
           ask(pid, api, "call", {
             address: [

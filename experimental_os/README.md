@@ -9,7 +9,7 @@ and the OS owns the screen. An experiment: nothing here is in a paper.
 
 ```
 mac/METAL.md          the contract between the metal and the OS
-mac/metal/            the metal, in Swift: window, input, devices, the font ROM and the font chip; build.sh builds ermine-mac
+mac/metal/            the metal, in Swift: window, input, devices, the font ROM and the font chip; build.sh builds ermineOS (ermine-mac a link to it)
 typescript/main.ts    the OS's entry; the metal runs it, or --headless
 typescript/host.ts    core 0: the SD card, the stack, /hw from the device tree, the drain, the loop
 typescript/procs.ts   the scheduler: processes in the setup shape (WHAT-IS-A-PROCESS.tex, layout A)
@@ -32,11 +32,18 @@ image/programs/       shell, term (a window with a shell), browser, graph (the g
 ## Run it
 
 ```
-experimental_os/mac/metal/build.sh        # once: builds experimental_os/mac/ermineOS
+sh experimental_os/mac/metal/build.sh -q   # builds experimental_os/mac/ermineOS (without -q it says each step)
 experimental_os/mac/ermineOS               # from a terminal: that terminal is the serial line
 experimental_os/mac/ermineOS -- --fresh    # a fresh SD card: the image makes it again
 experimental_os/mac/ermineOS --os "deno run -A --quiet experimental_os/typescript/main.ts"   # the TypeScript OS
+sh experimental_os/mac/app.sh              # builds (build.sh -q), then the app, mac/build/ermineOS.app, signed
+sh experimental_os/mac/agent.sh start --fullscreen --take-over   # the app always running: at login, and again when it ends
+experimental_os/bin/ermine-shell           # a shell of the running ermineOS, in this terminal (~/.ermine/shell.sock)
 ```
+
+The app and the agent are mac/METAL.md's (The app, and keeping it running).
+Run by the agent, ermineOS has no serial line; `bin/ermine-shell` is the way
+in from a terminal.
 
 ermineOS is the C OS (ERMINEOS.md): core's C graph, protect and scheduler,
 with drivers in C and the JavaScript programs run by deno, which must be on
@@ -47,13 +54,15 @@ Subduction's library (minutes). Its card is `~/.ermine/card`: the device's
 key and Subduction's store, from which each boot takes the graph back. A
 card from before sync (graph.cbor) is left as it is, unread, and the image
 makes the card again. The TypeScript OS's is `~/.ermine/sd`.
-With no window: `experimental_os/c/test/headless.sh`, then
+With no window: `sh experimental_os/c/test/headless.sh`, then
 `experimental_os/mac/build/test/headless --fresh`, its stdin the serial
-line, a line starting `!` a hand on the machine (c/test/headless.c).
+line, a line starting `!` a hand on the machine (c/test/headless.c). The
+tests: `c/test/*_test.sh` (os, blit, ed25519, jsc, web, mac) and `deno test -A
+experimental_os/deno/runner_test.ts`.
 
 The rest of this README describes the TypeScript OS, which the C one is
-taking over from. `--fullscreen` and `--windows` work for both; windows
-mode is not in the C compositor yet.
+taking over from; ERMINEOS.md is the C one's. `--fullscreen` and
+`--windows` work for both.
 
 A card an older image made is brought up to date at boot. Whatever the
 image made and no one has changed since gets the newer version, and anything
@@ -132,8 +141,8 @@ blown-up screen of points.
   ermine's windows into a Mac window, among your others. Ctrl-Cmd-W again
   brings back the monitor. Move one, and `why /dev/display/layers/<it>` says
   the Mac moved it (irq 33).
-- **The browser** is real WebKit. In windows mode it sits inside its Mac
-  window, and on the monitor it's an overlay plane. The toolbar is ermine's:
+- **The browser** is real WebKit, drawn off screen in ermineOS's own
+  process and composed as any window is. The toolbar is ermine's:
   cmd-l to type an address, cmd-[ and cmd-] for back and forward. From a
   shell, `browse <url>`. `cat /dev/web/pages/*` shows what WebKit says. A
   page can post to the graph with `window.ermine.post(...)`, which lands in
@@ -265,13 +274,12 @@ machine redraws in it.
 ## What building it ran into
 
 
-- **A browser on the monitor is an overlay, until it is covered.** WebKit
-  draws itself above the frame buffer, live, as a graphics card's video
-  overlay does. While a window above covers any of it, the metal moves it
-  under the frame buffer, where it goes on drawing. Its pixels are copied
-  into a page plane a dozen times a second, and the compositor blits them at
-  its window's depth. Its clicks and keys go to WebKit, not through the
-  graph, except the OS's chords.
+- **A page is a plane.** Each WebKit view is in a window of its own off
+  every screen; its snapshots, taken a refresh apart while they change,
+  go into a plane, and the compositor draws them where its window's layer
+  says, covered and shadowed as anything is. Overlays were tried first: live
+  above the frame buffer, mirrored a dozen times a second while covered.
+  What the window is given over the page goes to WebKit as the Mac's events.
 - **Records before their driver.** The metal reports each device's state as
   soon as it starts, before any driver has claimed its line. The drain keeps
   such records pending and hands them over when an owner appears, as a

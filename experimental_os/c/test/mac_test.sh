@@ -19,7 +19,7 @@ mkfifo "$tmp/in"
 os=$!
 exec 3> "$tmp/in"
 failed=0
-trap 'exec 3>&-; wait $os 2>/dev/null; [ -n "$KEEP" ] || rm -rf "$tmp"' EXIT
+trap 'exec 3>&-; wait $os 2>/dev/null || true; [ -n "$KEEP" ] || rm -rf "$tmp"' EXIT
 
 now() { perl -MTime::HiRes=time -e 'printf "%.3f\n", time'; }
 plain() { perl -pe 's/\e\[[0-9;]*m//g; s/\r//g' "$1"; }

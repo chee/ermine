@@ -6,6 +6,7 @@
 //
 //   !key Enter [mods...]   !type text   !click x y   !move x y   !drag x0 y0 x1 y1   !post {record}
 //   !compose text   !commit text   !shot file.ppm   !wait ms   !stats label
+//   !page id rrggbb [x y w h]   a web page's next frame: that rectangle (all of it) painted, with dirty
 //
 // !stats says what the OS commanded since the last: each op's count, bytes
 // and the pixels it had the metal copy; then counts again.
@@ -44,7 +45,7 @@
 
 static int W = 800, H = 500, U = 1;
 static uint32_t *buffers[2];
-static uint32_t *planes[2]; // web pages' planes: a page mirrored is a test colour, as no page draws here
+static uint32_t *planes[2]; // the device tree's page planes, unused: a web page's plane is its driver's file
 static struct {
 	int buffer, w, h;
 } shown;
@@ -86,13 +87,20 @@ static struct Tile {
 	int bx, by, bw, bh;
 } tiles[256];
 static int ntiles;
-/** web pages placed in tiles (overlay with layer): each shows as the mirror's test colour, live, in its tile, as WebKit's view would */
+/** web pages: each one's plane file, mapped, as the metal maps it; no engine draws here, so a page is a
+ * test colour, 0x3366cc, at the size the compositor shows it, and !page paints a rectangle into its next frame */
 static struct Page {
-	char id[128], layer[128];
-	int x, y, w, h;
-	bool visible;
+	char id[128];
+	uint32_t *bits;
+	int mw, mh, w, h, half;
+	int64_t n, took;
 } pages[16];
 static int npages;
+
+static struct Page *pageOf(const char *id) {
+	for (int i = 0; id && i < npages; i++) if (!strcmp(pages[i].id, id)) return &pages[i];
+	return NULL;
+}
 
 static struct Tile *tileOf(const char *id) {
 	for (int i = 0; i < ntiles; i++) if (!strcmp(tiles[i].id, id)) return &tiles[i];
@@ -215,13 +223,6 @@ static void stack(uint32_t *out) {
 				if (p != 0xff000000u && t->x + x >= 0 && t->x + x < W) out[(t->y + y) * W + t->x + x] = p;
 			}
 		}
-		for (int k = 0; k < npages; k++) {
-			struct Page *pg = &pages[k];
-			if (!pg->visible || strcmp(pg->layer, t->id)) continue;
-			for (int y = pg->y; y < pg->y + pg->h && y < t->h; y++)
-				for (int x = pg->x; x < pg->x + pg->w && x < t->w; x++)
-					if (y >= 0 && x >= 0 && t->y + y >= 0 && t->y + y < H && t->x + x >= 0 && t->x + x < W) out[(t->y + y) * W + t->x + x] = 0x3366cc;
-		}
 	}
 }
 
@@ -236,12 +237,6 @@ static void sendMode(void) {
 	post("{\"irq\": 33, \"event\": \"mode\", \"w\": %d, \"h\": %d, \"scale\": %g, \"unit\": %d, \"screen\": \"none\", \"fullscreen\": false, \"windows\": %s, \"layers\": %s, \"takeover\": %s}", W, H, 1.0 / U, U,
 	     windowsMode ? "true" : "false", stacking ? "true" : "false", takeover ? "true" : "false");
 }
-
-/** the page being mirrored, as the Mac's webmirror copies it fps times a second */
-static struct {
-	char id[128];
-	int64_t slot, fps;
-} mirror;
 
 static int64_t now(void) {
 	static int64_t start;
@@ -370,31 +365,6 @@ static void command(void *data, const char *json) {
 	char *why = NULL;
 	Json *c = jsonParse(json, strlen(json), &why);
 	const char *op = jsonText(jsonGet(c, "op"));
-	if (op && !strcmp(op, "overlay") && jsonText(jsonGet(c, "layer"))) {
-		// a page in a tile: where, to stack it there
-		const char *id = jsonText(jsonGet(c, "id"));
-		pthread_mutex_lock(&lock);
-		int k = 0;
-		while (k < npages && strcmp(pages[k].id, id ? id : "")) k++;
-		if (k < 16) {
-			if (k == npages) npages++;
-			struct Page *pg = &pages[k];
-			snprintf(pg->id, sizeof pg->id, "%s", id ? id : "");
-			snprintf(pg->layer, sizeof pg->layer, "%s", jsonText(jsonGet(c, "layer")));
-			pg->x = (int)number(c, "x", 0), pg->y = (int)number(c, "y", 0), pg->w = (int)number(c, "w", 0), pg->h = (int)number(c, "h", 0);
-			Json *v = jsonGet(c, "visible");
-			pg->visible = !v || v->type != JSON_BOOLEAN || v->boolean;
-		}
-		pthread_mutex_unlock(&lock);
-	}
-	if (op && !strcmp(op, "overlay") && !jsonText(jsonGet(c, "layer"))) {
-		// out of a tile (hidden, or placed over the frame buffer)
-		const char *id = jsonText(jsonGet(c, "id"));
-		pthread_mutex_lock(&lock);
-		for (int k = 0; k < npages; k++)
-			if (!strcmp(pages[k].id, id ? id : "")) pages[k] = pages[--npages];
-		pthread_mutex_unlock(&lock);
-	}
 	if (op && !strcmp(op, "layers")) {
 		if (getenv("HEADLESS_LAYERSLOG")) fprintf(stderr, "[metal] %.400s\n", json);
 		count(op, strlen(json), layers(c));
@@ -450,18 +420,70 @@ static void command(void *data, const char *json) {
 		     "\"x\": 100, \"y\": 100, \"w\": 320, \"h\": 200}}]}", name);
 		return;
 	}
-	if (!strcmp(op, "webmirror")) {
-		// a page's pixels copied to its plane: here a colour, and a frame record, as WebKit's copy would give
-		int64_t slot = (int64_t)(jsonGet(c, "slot") ? jsonGet(c, "slot")->number : -1), fps = (int64_t)(jsonGet(c, "fps") ? jsonGet(c, "fps")->number : 0);
-		fprintf(stderr, "[metal] %.120s\n", json);
-		if (slot >= 0 && slot < 2 && fps > 0) {
-			for (int i = 0; i < W * H; i++) planes[slot][i] = 0x3366cc;
-			post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"slot\": %lld, \"w\": %d, \"h\": %d, \"n\": 1}", jsonText(jsonGet(c, "id")), (long long)slot, W, H);
-		}
-		// and again at its fps, as the Mac copies a live page, until it is stopped
+	if (!strcmp(op, "web") && jsonText(jsonGet(c, "path"))) {
+		// a page made: its plane file mapped, as the metal maps it
+		const char *id = jsonText(jsonGet(c, "id")), *path = jsonText(jsonGet(c, "path"));
+		int mw = (int)number(c, "maxw", 0), mh = (int)number(c, "maxh", 0);
+		int fd = open(path, O_RDWR);
+		size_t bytes = (size_t)mw * (size_t)mh * 4 * 2;
+		uint32_t *bits = fd >= 0 && bytes ? mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) : MAP_FAILED;
+		if (fd >= 0) close(fd);
+		if (bits != MAP_FAILED && id && npages < 16) {
+			unlink(path);
+			pthread_mutex_lock(&lock);
+			struct Page *pg = &pages[npages++];
+			*pg = (struct Page){ .bits = bits, .mw = mw, .mh = mh, .half = 1 };
+			snprintf(pg->id, sizeof pg->id, "%s", id);
+			pthread_mutex_unlock(&lock);
+		} else fprintf(stderr, "[web] no plane %s\n", path ? path : "?");
+		if (jsonText(jsonGet(c, "state"))) fprintf(stderr, "[web] %s brought back from its state (%zu bytes)\n", id ? id : "?", strlen(jsonText(jsonGet(c, "state"))));
+	}
+	if (!strcmp(op, "webshow")) {
+		// shown at a new size: a whole frame of the test colour, as the engine's first at that size
+		const char *id = jsonText(jsonGet(c, "id"));
+		int w = (int)number(c, "w", 0), h = (int)number(c, "h", 0);
+		fprintf(stderr, "[webshow] %s %dx%d\n", id ? id : "?", w, h);
 		pthread_mutex_lock(&lock);
-		snprintf(mirror.id, sizeof mirror.id, "%s", jsonText(jsonGet(c, "id")) ? jsonText(jsonGet(c, "id")) : "");
-		mirror.slot = slot, mirror.fps = slot >= 0 && slot < 2 ? fps : 0;
+		struct Page *pg = pageOf(id);
+		bool fresh = pg && w > 0 && h > 0 && w <= pg->mw && h <= pg->mh && (w != pg->w || h != pg->h);
+		int64_t n = 0;
+		int half = 0;
+		if (fresh) {
+			half = pg->half = 1 - pg->half;
+			uint32_t *dst = pg->bits + (size_t)half * (size_t)pg->mw * (size_t)pg->mh;
+			for (int y = 0; y < h; y++)
+				for (int x = 0; x < w; x++) dst[(size_t)y * (size_t)pg->mw + x] = 0x3366cc;
+			pg->w = w, pg->h = h;
+			n = ++pg->n;
+		}
+		pthread_mutex_unlock(&lock);
+		if (fresh) post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"n\": %lld, \"half\": %d, \"w\": %d, \"h\": %d}", id, (long long)n, half, w, h);
+		return;
+	}
+	if (!strcmp(op, "webtook")) {
+		pthread_mutex_lock(&lock);
+		struct Page *pg = pageOf(jsonText(jsonGet(c, "id")));
+		if (pg) pg->took = (int64_t)number(c, "n", 0);
+		pthread_mutex_unlock(&lock);
+		count(op, strlen(json), 0);
+		fprintf(stderr, "[webtook] %s %lld\n", pg ? pg->id : "?", (long long)number(c, "n", 0));
+		return;
+	}
+	if (!strcmp(op, "webinput") || !strcmp(op, "webdo")) {
+		// said; an act answered done, as the page's script would
+		fprintf(stderr, "[%s] %.300s\n", op, json);
+		if (!strcmp(op, "webdo"))
+			post("{\"irq\": 49, \"event\": \"done\", \"id\": \"%s\", \"req\": %lld}", jsonText(jsonGet(c, "id")) ? jsonText(jsonGet(c, "id")) : "", (long long)number(c, "req", 0));
+		return;
+	}
+	if (!strcmp(op, "webclose")) {
+		fprintf(stderr, "[metal] %.120s\n", json);
+		pthread_mutex_lock(&lock);
+		struct Page *pg = pageOf(jsonText(jsonGet(c, "id")));
+		if (pg) {
+			munmap(pg->bits, (size_t)pg->mw * (size_t)pg->mh * 4 * 2);
+			*pg = pages[--npages];
+		}
 		pthread_mutex_unlock(&lock);
 		return;
 	}
@@ -662,27 +684,42 @@ static void shot(const char *path) {
 }
 
 static void key(const char *name, const char *mods) {
-	char text[8] = "";
-	if (strlen(name) == 1) snprintf(text, sizeof text, "%s", name);
+	char text[8] = "", quoted[8] = "";
+	// a quote or a backslash typed, escaped in the record's JSON
+	if (strlen(name) == 1) snprintf(quoted, sizeof quoted, "%s%s", *name == '"' || *name == '\\' ? "\\" : "", name);
+	if (*quoted) strcpy(text, quoted);
 	else if (!strcmp(name, "Enter")) strcpy(text, "\\r");
 	for (int down = 1; down >= 0; down--)
 		post("{\"irq\": 34, \"event\": \"key\", \"down\": %s, \"code\": 0, \"key\": \"%s\", \"text\": \"%s\", \"mods\": [%s], \"repeat\": false}",
-		     down ? "true" : "false", name, down ? text : "", mods);
+		     down ? "true" : "false", *quoted ? quoted : name, down ? text : "", mods);
 }
 
-/** the mirror's frames, fps a second, while one is asked for */
-static void *mirroring(void *arg) {
-	(void)arg;
-	for (;;) {
-		pthread_mutex_lock(&lock);
-		int64_t fps = mirror.fps, slot = mirror.slot;
-		char id[128];
-		memcpy(id, mirror.id, sizeof id);
+/** !page id color [x y w h]: the page's next frame, its last with that rectangle (all of it, without one) painted, said with dirty */
+static void paintPage(const char *rest) {
+	char id[128];
+	unsigned color = 0;
+	int x = 0, y = 0, w = -1, h = -1;
+	if (sscanf(rest, "%127s %x %d %d %d %d", id, &color, &x, &y, &w, &h) < 2) return;
+	pthread_mutex_lock(&lock);
+	struct Page *pg = pageOf(id);
+	if (!pg || pg->w <= 0) {
 		pthread_mutex_unlock(&lock);
-		if (fps > 0) post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"slot\": %lld, \"w\": %d, \"h\": %d, \"n\": 1}", id, (long long)slot, W, H);
-		usleep(fps > 0 ? (useconds_t)(1000000 / fps) : 50000);
+		fprintf(stderr, "[page] %s not shown\n", id);
+		return;
 	}
-	return NULL;
+	if (w < 0) x = 0, y = 0, w = pg->w, h = pg->h;
+	if (pg->took != pg->n) fprintf(stderr, "[page] %s: frame %lld not taken yet\n", id, (long long)pg->n);
+	size_t half = (size_t)pg->mw * (size_t)pg->mh;
+	uint32_t *last = pg->bits + (size_t)pg->half * half, *next = pg->bits + (size_t)(1 - pg->half) * half;
+	for (int r = 0; r < pg->h; r++) memcpy(next + (size_t)r * (size_t)pg->mw, last + (size_t)r * (size_t)pg->mw, (size_t)pg->w * 4);
+	for (int r = y; r < y + h && r < pg->h; r++)
+		for (int k = x; k < x + w && k < pg->w; k++) next[(size_t)r * (size_t)pg->mw + k] = color;
+	pg->half = 1 - pg->half;
+	int64_t n = ++pg->n;
+	int fh = pg->half, fw = pg->w, fhh = pg->h;
+	pthread_mutex_unlock(&lock);
+	post("{\"irq\": 49, \"event\": \"frame\", \"id\": \"%s\", \"n\": %lld, \"half\": %d, \"w\": %d, \"h\": %d, \"dirty\": {\"x\": %d, \"y\": %d, \"w\": %d, \"h\": %d}}", id,
+	     (long long)n, fh, fw, fhh, x, y, w, h);
 }
 
 int main(int argc, char **argv) {
@@ -703,11 +740,16 @@ int main(int argc, char **argv) {
 		if (asprintf(&dir, "%s/ermine-headless-XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp") > 0 && mkdtemp(dir)) setenv("XDG_RUNTIME_DIR", dir, 1);
 		free(dir);
 	}
+	// and the shell's socket (drv_sock.c), never the person's ~/.ermine/shell.sock
+	if (!getenv("ERMINE_SOCK")) {
+		char *dir = NULL, *path = NULL;
+		if (asprintf(&dir, "%s/ermine-headless-XXXXXX", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp") > 0 && mkdtemp(dir) && asprintf(&path, "%s/shell.sock", dir) > 0)
+			setenv("ERMINE_SOCK", path, 1);
+		free(dir);
+		free(path);
+	}
 	buffers[0] = calloc((size_t)(W * H), 4);
 	buffers[1] = calloc((size_t)(W * H), 4);
-	pthread_t mirrorThread;
-	pthread_create(&mirrorThread, NULL, mirroring, NULL);
-	pthread_detach(mirrorThread);
 	planes[0] = calloc((size_t)(W * H), 4);
 	planes[1] = calloc((size_t)(W * H), 4);
 	char *font = rom(8 * U, 16 * U);
@@ -744,6 +786,7 @@ int main(int argc, char **argv) {
 		if (!strcmp(word, "wait")) usleep((useconds_t)atoi(rest) * 1000);
 		else if (!strcmp(word, "shot")) shot(rest);
 		else if (!strcmp(word, "stats")) report(rest);
+		else if (!strcmp(word, "page")) paintPage(rest);
 		else if (!strcmp(word, "type")) {
 			for (char *c = rest; *c; c++) {
 				char k[2] = { *c, 0 };
