@@ -1,10 +1,10 @@
-// deno bench newcore/header_bench.ts
+// deno bench newcore/nodes/ts/header_bench.ts
 // the change's whole header (change.ts) through mutate and places: two fields against five
-import createChange, { type Change } from "./nodes/change.ts"
-import createNode from "./nodes/node.ts"
-import mutate from "./opstreams/mutate.ts"
-import { createPlaces } from "./graph/places.ts"
-import { createTable } from "./graph/table.ts"
+import createChange, { type Change } from "./change.ts"
+import createNode from "./node.ts"
+import mutate from "../../opstreams/ts/mutate.ts"
+import { createPlaces } from "../../graph/ts/places.ts"
+import { createTable } from "../../graph/ts/table.ts"
 
 const small = { time: 1, actor: "me" }
 const whole = {

@@ -1,0 +1,36 @@
+{
+	"title": "base missing with two parents",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [
+			{
+				"/": {
+					"bytes": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8"
+				}
+			},
+			{
+				"/": {
+					"bytes": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8"
+				}
+			}
+		],
+		"lamport": 2,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "base"
+	}
+}

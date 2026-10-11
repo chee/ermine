@@ -191,7 +191,7 @@ static void on_moment(void *ctx, const sc_moment *m) {
 		nt_set(o, "tracked", nt_bool(m->tracked));
 		break;
 	case SC_ENDS: {
-		static const char *const ended[] = {"done", "pending", "failed", "stopped", "parked"};
+		static const char *const ended[] = {"done", "pending", "failed", "stopped", "looping"};
 		nt_set(o, "ends", nt_str(m->id));
 		if (m->has_run) nt_set(o, "run", nt_num((double)m->run));
 		if (m->handler) nt_set(o, "handler", nt_str(m->handler));

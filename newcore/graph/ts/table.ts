@@ -1,6 +1,6 @@
 // nodes held in memory, by id: loaded or not (GRAPH.tex, create and free)
 // placing them is places.ts's: table is about ids
-import type { Node } from "../nodes/node.ts"
+import type { Node } from "../../nodes/ts/node.ts"
 
 export type Code = "nothing-there" | "already-there"
 

@@ -1,0 +1,57 @@
+{
+	"title": "the same built from d: b {b c}, d {d}",
+	"names": {
+		"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459": "b",
+		"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56": "d",
+		"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12": "c"
+	},
+	"request": {
+		"op": "build",
+		"commits": [
+			{
+				"id": "4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+				"parents": []
+			},
+			{
+				"id": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+				"parents": [
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+				]
+			},
+			{
+				"id": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+				"parents": [
+					"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+				]
+			}
+		],
+		"heads": [
+			"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56"
+		],
+		"known": []
+	},
+	"expect": {
+		"fragments": [
+			{
+				"head": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+				"members": [
+					"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+				],
+				"boundary": [],
+				"checkpoints": []
+			},
+			{
+				"head": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+				"members": [
+					"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56"
+				],
+				"boundary": [
+					"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459"
+				],
+				"checkpoints": []
+			}
+		]
+	}
+}

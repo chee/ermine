@@ -6,10 +6,16 @@
 // an owner is anything that reads tracked (the scheduler's processes); the graph knows nothing of
 // it but that it read, and tells marked when a change reached what it read. ephemeral nodes may
 // have an owner too. protect is asked as the actor before each operation through bound.
-import createChange, { type Change, type Header } from "../nodes/change.ts"
-import type { Which } from "../opstreams/mutate.ts"
-import createNode, { type Node, type Version } from "../nodes/node.ts"
-import { createNotify, type Facts, facts, type Patch, type Read as Watch } from "../notify.ts"
+import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
+import type { Which } from "../../opstreams/ts/mutate.ts"
+import createNode, { type Node, type Version } from "../../nodes/ts/node.ts"
+import {
+	createNotify,
+	type Facts,
+	facts,
+	type Patch,
+	type Read as Watch,
+} from "../../notify/ts/notify.ts"
 import {
 	type Address,
 	createPlaces,
@@ -32,10 +38,10 @@ import {
 	placing,
 	read as readAsks,
 	type Which as Object,
-} from "../protect.ts"
-import { capture, type Site } from "../nodes/stacktrace.ts"
+} from "../../protect/ts/protect.ts"
+import { capture, type Site } from "../../nodes/ts/stacktrace.ts"
 import { createTable } from "./table.ts"
-import { createTrackgraph, type Node as Track } from "../trackgraph.ts"
+import { createTrackgraph, type Node as Track } from "../../trackgraph/ts/trackgraph.ts"
 
 type N = Node<unknown, Change>
 type V = Version<unknown, Change>
@@ -172,6 +178,19 @@ const pathOf = (w: Which): string[] => (typeof w === "string" ? [w] : [...w])
 type Spot<O> = { id: string; part: Part; key: string; track: Track<Own<O>>; watch?: Watch }
 type Own<O> = { owner: O } | { spot: Spot<O> }
 
+// a map as a plain object's own keys, read through
+function through(m: ReadonlyMap<string, unknown>): Record<string, unknown> {
+	return new Proxy({}, {
+		get: (_, k) => (typeof k === "string" ? m.get(k) : undefined),
+		has: (_, k) => typeof k === "string" && m.has(k),
+		ownKeys: () => [...m.keys()],
+		getOwnPropertyDescriptor: (_, k) =>
+			typeof k === "string" && m.has(k)
+				? { value: m.get(k), enumerable: true, configurable: true, writable: false }
+				: undefined,
+	})
+}
+
 export function createGraph<O>(options: Options<O>) {
 	const clock = options.clock ?? { time: 0 }
 	const fresh = options.id ?? pidOf
@@ -217,21 +236,16 @@ export function createGraph<O>(options: Options<O>) {
 	const spotsOf = new Map<string, Set<Spot<O>>>()
 	const notifies = new Map<string, ReturnType<typeof createNotify>>()
 
-	// a node as notify walks it: plain maps, every version
-	function view(n: N, path?: string[], vs?: V[]): Record<string, unknown> {
-		const out: Record<string, unknown> = {
-			value: n.value,
-			info: Object.fromEntries(n.info),
-			children: Object.fromEntries(n.children),
-		}
-		if (path === undefined) return out
-		if (path[0] === "value") out.value = vs ?? []
-		else {
-			const m = out[path[0]] as Record<string, unknown>
-			if (vs === undefined || vs.length === 0) delete m[path[1]]
-			else m[path[1]] = vs
-		}
-		return out
+	// a node as notify walks it, every version: info and children read through to the node's
+	// maps, never copied
+	function view(n: N): Record<string, unknown> {
+		return { value: n.value, info: through(n.info), children: through(n.children) }
+	}
+
+	// one object of a node before a patch at path, as facts reads it: that path alone
+	function before(path: string[], vs: V[] | undefined): Record<string, unknown> {
+		if (path[0] === "value") return { value: vs ?? [] }
+		return { [path[0]]: vs === undefined || vs.length === 0 ? {} : { [path[1]]: vs } }
 	}
 
 	function spot(id: string, part: Part): Spot<O> {
@@ -285,7 +299,7 @@ export function createGraph<O>(options: Options<O>) {
 		const now = versionsOf(n, which)
 		if ((old?.length ?? 0) === 0 && now.length === 0) return
 		const patch: Patch = now.length ? { path, value: now } : { path }
-		tell(n.id, patch, () => facts(patch, view(n, path, old)))
+		tell(n.id, patch, () => facts(patch, before(path, old)))
 	}
 
 	function versionsOf(n: N, which: Which): V[] {
@@ -528,6 +542,23 @@ export function createGraph<O>(options: Options<O>) {
 		return [...passing(it.route), edit("write", it.id, object, slotindex ?? 0)]
 	}
 
+	// how a write is told to notify: by its patches; none, the object whole, as its version is new
+	// all the same, so what read it is marked
+	function empty(
+		ps: Patch[],
+		pl: Place,
+		address: Address,
+		index: number | undefined,
+		object: Which,
+		slotindex: Span | undefined,
+	): { slot?: number | null; snap?: [string, Which][] } {
+		const at = slotindex === undefined ? 0 : typeof slotindex === "number" ? slotindex : null
+		if (ps.length) return { slot: at }
+		const items = places.look(pl, address)
+		const it = index === undefined ? items.find((i) => i.node) : items[index]
+		return { snap: it?.node ? [[it.id, object]] : [] }
+	}
+
 	// placing an id: and reading it, where its node is loaded
 	function placed(
 		node: string,
@@ -635,20 +666,24 @@ export function createGraph<O>(options: Options<O>) {
 					address,
 					name,
 				}) as ReturnType<Api["info"]>,
-			write: (address, patches, index, slotindex) =>
-				w(
+			write: (address, patches, index, slotindex) => {
+				const ps = [...patches]
+				return w(
 					"write",
-					() => places.write(pl, address, patches, index, slotindex),
-					{ slot: slot(slotindex) },
+					() => places.write(pl, address, ps, index, slotindex),
+					empty(ps, pl, address, index, "value", slotindex),
 					() => writing(pl, address, index, "value", slotindex),
-				),
-			set: (address, name, patches, index, slotindex) =>
-				w(
+				)
+			},
+			set: (address, name, patches, index, slotindex) => {
+				const ps = [...patches]
+				return w(
 					"set",
-					() => places.set(pl, address, name, patches, index, slotindex),
-					{ slot: slot(slotindex) },
+					() => places.set(pl, address, name, ps, index, slotindex),
+					empty(ps, pl, address, index, ["info", name], slotindex),
 					() => writing(pl, address, index, ["info", name], slotindex),
-				),
+				)
+			},
 			insert: (id, name, child, index, slotindex) => {
 				mayPlace(child)
 				return w(

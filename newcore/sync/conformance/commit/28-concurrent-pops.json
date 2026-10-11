@@ -1,0 +1,791 @@
+{
+	"title": "two devices pop different versions: each chose another; after the exchange both choices show",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WAAAAFgAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WQAAAFkAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "b"
+						}
+					]
+				},
+				"name": "0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WgAAAFoAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "c"
+						}
+					]
+				},
+				"name": "cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"pop": 0
+				},
+				"roots": [],
+				"random": "c0cbeb0b2b4b6b8b"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wMvrCytLa4s"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wMvrCytLa4s"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca": 1087,
+					"0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9": 1088,
+					"cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf": 1089,
+					"d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b": 1090
+				}
+			},
+			"expect": [
+				{
+					"content": "b",
+					"change": {
+						"actor": "me",
+						"time": 1090,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WAAAAFgAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WQAAAFkAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "b"
+						}
+					]
+				},
+				"name": "0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WgAAAFoAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "c"
+						}
+					]
+				},
+				"name": "cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg"
+						}
+					}
+				},
+				"at": {
+					"pop": 1
+				},
+				"roots": [],
+				"random": "c0a4c4e404244464"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wKTE5AQkRGQ"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wKTE5AQkRGQ"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wMvrCytLa4s"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca": 1087,
+					"0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9": 1088,
+					"cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf": 1089,
+					"d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b": 1090,
+					"183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70": 1091
+				}
+			},
+			"expect": [
+				{
+					"content": "b",
+					"change": {
+						"actor": "me",
+						"time": 1090,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				},
+				{
+					"content": "c",
+					"change": {
+						"actor": "me",
+						"time": 1091,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70"
+						},
+						"why": {
+							"signer": "0808080808080808080808080808080808080808080808080808080808080808"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WAAAAFgAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WQAAAFkAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "b"
+						}
+					]
+				},
+				"name": "0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "WgAAAFoAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "igy0cfVaXRRzpKWfFeXejZnD8UY6k88xH+jRptzmuco"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "c"
+						}
+					]
+				},
+				"name": "cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wMvrCytLa4s"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wKTE5AQkRGQ"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "CpF7Q56I4oHvCBB0pqxsUCIiGLEf2ZDFv5TfLZ1BAek"
+							}
+						},
+						{
+							"/": {
+								"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+							}
+						}
+					],
+					"base": {
+						"/": {
+							"bytes": "y0wuZFqEE+k87tEIYpEZPQxpg723MwE5XYFAf5e04L8"
+						}
+					},
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"8a0cb471f55a5d1473a4a59f15e5de8d99c3f1463a93cf311fe8d1a6dce6b9ca": 1087,
+					"0a917b439e88e281ef081074a6ac6c50222218b11fd990c5bf94df2d9d4101e9": 1088,
+					"cb4c2e645a8413e93ceed1086291193d0c6983bdb73301395d81407f97b4e0bf": 1089,
+					"d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b": 1090,
+					"183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70": 1091
+				}
+			},
+			"expect": [
+				{
+					"content": "b",
+					"change": {
+						"actor": "me",
+						"time": 1090,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "d50f36b55df888a04afeb9d9c140199d82ee4f4a84aa7457edee2974278f2a9b"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				},
+				{
+					"content": "c",
+					"change": {
+						"actor": "me",
+						"time": 1091,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "183d241a544ce6d5d5544c015df883d34dbc56008a47267b8271ed8abb41ac70"
+						},
+						"why": {
+							"signer": "0808080808080808080808080808080808080808080808080808080808080808"
+						}
+					}
+				}
+			]
+		}
+	]
+}

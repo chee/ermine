@@ -1,0 +1,24 @@
+{
+	"title": "object missing",
+	"blop": {
+		"node": "n",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "object"
+	}
+}

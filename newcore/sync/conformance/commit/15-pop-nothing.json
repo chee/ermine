@@ -1,0 +1,102 @@
+{
+	"title": "popping nothing: range, no blop",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "OgAAADoAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "e5c4358a06270dbc62ce55d113ab558d982295ec59dc481f3666b8020167d68a"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"pop": [
+						0,
+						0
+					]
+				},
+				"roots": [],
+				"random": "c000000000000000"
+			},
+			"expect": {
+				"code": "range"
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"pop": [
+						1,
+						1
+					]
+				},
+				"roots": [],
+				"random": "c000000000000000"
+			},
+			"expect": {
+				"code": "range"
+			}
+		}
+	]
+}

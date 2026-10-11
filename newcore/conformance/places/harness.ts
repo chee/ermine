@@ -27,10 +27,10 @@
 // { op: "move", id, name, index, toid, toname, toindex? } → { changes }
 //
 // a PlacesError, MutateError or TableError: { fail: code }. Anything else wrong: { error }
-import { MutateError } from "../../../opstreams/mutate.ts"
-import createNode, { type List, type Node } from "../../../nodes/node.ts"
-import { createPlaces, type Item, type Part, PlacesError, type Read } from "../../places.ts"
-import { createTable, TableError } from "../../table.ts"
+import { MutateError } from "../../opstreams/ts/mutate.ts"
+import createNode, { type List, type Node } from "../../nodes/ts/node.ts"
+import { createPlaces, type Item, type Part, PlacesError, type Read } from "../../graph/ts/places.ts"
+import { createTable, TableError } from "../../graph/ts/table.ts"
 
 type N = Node<unknown, unknown>
 type Json = unknown

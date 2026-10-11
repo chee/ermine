@@ -1,0 +1,142 @@
+{
+	"title": "an empty span: range, no blop",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "KAAAACgAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 0
+						}
+					]
+				},
+				"name": "207c57bf6a8f62e1e5469fc472585e25d03168e0a5dc7663a7718f56fd22fb6d"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "KQAAACkAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				},
+				"name": "a1bcd69d7078e52c9055700699a2f42f7d2cd089453b8c028c237a1539381606"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 2
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"span": [
+						1,
+						1
+					]
+				},
+				"roots": [],
+				"random": "c000000000000000"
+			},
+			"expect": {
+				"code": "range"
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 2
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"span": [
+						0,
+						0
+					]
+				},
+				"roots": [],
+				"random": "c000000000000000"
+			},
+			"expect": {
+				"code": "range"
+			}
+		}
+	]
+}

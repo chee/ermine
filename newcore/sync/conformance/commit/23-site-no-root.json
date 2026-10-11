@@ -1,0 +1,208 @@
+{
+	"title": "under no root: its last part",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"header": {
+						"time": 1,
+						"actor": "me",
+						"site": {
+							"file": "/w/proj/src/a.ts",
+							"line": 9,
+							"column": 1
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [],
+				"random": "c07898b8d8f81838"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"site": {
+						"file": "a.ts",
+						"line": 9,
+						"column": 1
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wHiYuNj4GDg"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"header": {
+						"time": 1,
+						"actor": "me",
+						"site": {
+							"file": "/w/proj/src/a.ts",
+							"line": 9,
+							"column": 1
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [
+					"/x"
+				],
+				"random": "c0517191b1d1f111"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"site": {
+						"file": "a.ts",
+						"line": 9,
+						"column": 1
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wFFxkbHR8RE"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"header": {
+						"time": 1,
+						"actor": "me",
+						"site": {
+							"file": "/w/project/a.ts",
+							"line": 9,
+							"column": 1
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [
+					"/w/proj"
+				],
+				"random": "c02a4a6a8aaacaea"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"site": {
+						"file": "a.ts",
+						"line": 9,
+						"column": 1
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wCpKaoqqyuo"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		}
+	]
+}

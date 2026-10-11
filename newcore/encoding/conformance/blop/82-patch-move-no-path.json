@@ -1,0 +1,35 @@
+{
+	"title": "patch move without path",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": [
+			{
+				"path": [],
+				"move": {
+					"range": [
+						0,
+						1
+					]
+				}
+			}
+		]
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "patches"
+	}
+}

@@ -3,7 +3,7 @@
 //
 // { op: "create", layer, place, why?, outside? }  →  { because }
 // why left out of the request: not given. outside: the harness's own call is the site.
-import createBecause from "../../because.ts"
+import createBecause from "../../nodes/ts/because.ts"
 
 type Request = { op: string; layer?: string; place?: unknown; why?: unknown; outside?: boolean }
 

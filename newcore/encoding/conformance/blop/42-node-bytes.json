@@ -1,0 +1,29 @@
+{
+	"title": "node as bytes is not a string",
+	"blop": {
+		"node": {
+			"/": {
+				"bytes": "AAECAw"
+			}
+		},
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "node"
+	}
+}

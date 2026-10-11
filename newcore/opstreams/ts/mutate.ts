@@ -1,9 +1,9 @@
 // patches applied to one object of a node, as one change (GRAPH.tex, Patches and Edits)
 // what a patch touches is new, the rest is shared; a copy made here may change in place,
 // since only the end is ever seen. any patch invalid: it throws, and nothing changes
-import createChange, { type Change, type Header } from "../nodes/change.ts"
-import type { Node } from "../nodes/node.ts"
-import type { Fact, Facts, Key, Patch } from "../notify.ts"
+import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
+import type { Node } from "../../nodes/ts/node.ts"
+import type { Fact, Facts, Key, Patch } from "../../notify/ts/notify.ts"
 import { count, type Hint, joins, near, walk } from "./walk.ts"
 
 // which object: the value, an info name, or a name's list

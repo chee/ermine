@@ -1,6 +1,6 @@
 // GRAPH.tex's patches on plain values (maps, lists, strings), for the tests only: notify never
 // applies a patch, the harness is given the content after it. Shares what it does not touch.
-import type { Key, Patch, Place } from "../../notify.ts"
+import type { Key, Patch, Place } from "../../notify/ts/notify.ts"
 
 export type V = unknown
 

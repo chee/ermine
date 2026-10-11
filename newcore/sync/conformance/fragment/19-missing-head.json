@@ -1,0 +1,28 @@
+{
+	"title": "walk from h, not here",
+	"names": {
+		"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459": "b",
+		"00ba02f11c4c8016f2647040da1d2613b52373944a7233c9c05f91c95e715261": "h",
+		"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5": "a"
+	},
+	"request": {
+		"op": "walk",
+		"commits": [
+			{
+				"id": "cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5",
+				"parents": []
+			},
+			{
+				"id": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+				"parents": [
+					"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+				]
+			}
+		],
+		"head": "00ba02f11c4c8016f2647040da1d2613b52373944a7233c9c05f91c95e715261",
+		"known": []
+	},
+	"expect": {
+		"error": "missing"
+	}
+}

@@ -1,4 +1,4 @@
-// deno bench newcore/opstreams/walk_bench.ts
+// deno bench newcore/opstreams/ts/walk_bench.ts
 // walk.ts, the string positions notify, mutate and squish share: code points against UTF-16
 // units, and other ways of walking to try against it
 import { assertEquals } from "@std/assert"

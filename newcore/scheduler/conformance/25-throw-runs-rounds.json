@@ -1,0 +1,211 @@
+{
+	"title": "a request that throws still runs what its changes made due, before its error goes back",
+	"steps": [
+		{
+			"op": "create",
+			"value": 0,
+			"id": "count",
+			"expect": {
+				"ok": "count"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "count",
+			"child": "count",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "create",
+						"ephemeral": true,
+						"var": "on"
+					},
+					{
+						"do": "insert",
+						"id": {
+							"$given": "self"
+						},
+						"name": "on",
+						"child": {
+							"$var": "on"
+						}
+					},
+					{
+						"do": "create",
+						"ephemeral": true,
+						"value": {
+							"$steps": [
+								{
+									"do": "content",
+									"address": [
+										"count"
+									],
+									"var": "c"
+								},
+								{
+									"do": "write",
+									"address": [
+										"count"
+									],
+									"patches": [
+										{
+											"path": [],
+											"value": {
+												"$add": [
+													{
+														"$get": [
+															{
+																"$var": "c"
+															},
+															0,
+															"versions",
+															0,
+															"content"
+														]
+													},
+													{
+														"$given": "args"
+													}
+												]
+											}
+										}
+									]
+								},
+								{
+									"do": "throw",
+									"code": "boom"
+								}
+							]
+						},
+						"var": "h"
+					},
+					{
+						"do": "insert",
+						"id": {
+							"$var": "on"
+						},
+						"name": "add",
+						"child": {
+							"$var": "h"
+						}
+					},
+					{
+						"do": "return",
+						"value": null
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "d",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"count"
+						],
+						"var": "c"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$add": [
+								{
+									"$get": [
+										{
+											"$var": "c"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								},
+								{
+									"$get": [
+										{
+											"$var": "c"
+										},
+										0,
+										"versions",
+										0,
+										"content"
+									]
+								}
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@12"
+			}
+		},
+		{
+			"op": "call",
+			"address": [
+				"p",
+				"on",
+				"add"
+			],
+			"args": 3,
+			"actor": "me",
+			"person": "someone",
+			"trusted": true,
+			"expect": {
+				"error": "boom"
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"d"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@12",
+						"versions": [
+							{
+								"content": 6,
+								"time": 18
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"id": "count",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 3,
+							"time": 17
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		}
+	]
+}

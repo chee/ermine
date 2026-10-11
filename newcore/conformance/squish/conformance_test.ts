@@ -5,8 +5,8 @@
 // what the originals make, and they are never more. With SQUISH_HARNESS set, the reference is run
 // too and must give the same patches: how far squishing goes is part of the library.
 import { assert, assertEquals } from "@std/assert"
-import { apply, at, type V } from "../../../notify/conformance/apply.ts"
-import type { Key, Patch } from "../../../notify.ts"
+import { apply, at, type V } from "../notify/apply.ts"
+import type { Key, Patch } from "../../notify/ts/notify.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet ${here}harness.ts`
@@ -32,9 +32,9 @@ async function ask(requests: Request[], cmd = command): Promise<Answer[]> {
 
 type Step = Request & { expect: Omit<Answer, "error"> }
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../opstreams/conformance/squish`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../opstreams/conformance/squish/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

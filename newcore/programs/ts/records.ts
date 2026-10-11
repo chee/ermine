@@ -2,12 +2,11 @@
 // a version in front of its value; its value; its latest run, the value of a node named run inside
 // it. and who those changes are by: the process's agent, a step added to its starter's.
 //
-import createBecause from "../nodes/because.ts"
-import createChange, { type Change } from "../nodes/change.ts"
-import { type Graph, GraphError } from "../graph/graph.ts"
-import mutate from "../opstreams/mutate.ts"
-import { encode, type Value } from "../encoding/cbor.ts"
-import type { Version } from "../nodes/node.ts"
+import createBecause from "../../nodes/ts/because.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
+import { type Graph, GraphError } from "../../graph/ts/graph.ts"
+import mutate from "../../opstreams/ts/mutate.ts"
+import type { Version } from "../../nodes/ts/node.ts"
 
 type V = Version<unknown, Change>
 
@@ -56,17 +55,35 @@ export function stepped(a: unknown, add: Record<string, unknown>): Agent {
 
 export const isLive = (v: unknown) => typeof v === "function" || typeof v === "symbol"
 
-// two statuses are the same when their canonical encodings are; one with no encoding (a live
-// value thrown) is the same only as itself
-export function sameStatus(a: Status, b: Status): boolean {
-	if (a === b) return true
-	try {
-		const x = encode(a as Value), y = encode(b as Value)
-		return x.length === y.length && x.every((n, i) => n === y[i])
-	} catch {
-		return false
+// two values are the same when their members are: bytes and typed arrays by their elements, a
+// typed array only as one of its own kind; a live value only as itself
+export function same(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true
+	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
+	if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false
+	if (a instanceof ArrayBuffer) {
+		return same(new Uint8Array(a), new Uint8Array(b as ArrayBuffer))
 	}
+	if (ArrayBuffer.isView(a)) {
+		const x = a as unknown as ArrayLike<unknown>, y = b as unknown as ArrayLike<unknown>
+		if (x.length !== y.length) return false
+		for (let i = 0; i < x.length; i++) if (!Object.is(x[i], y[i])) return false
+		return true
+	}
+	if (Array.isArray(a)) {
+		const y = b as unknown[]
+		if (a.length !== y.length) return false
+		for (let i = 0; i < a.length; i++) if (!same(a[i], y[i])) return false
+		return true
+	}
+	const x = a as Record<string, unknown>, y = b as Record<string, unknown>
+	const keys = Object.keys(x)
+	if (keys.length !== Object.keys(y).length) return false
+	for (const k of keys) if (!Object.hasOwn(y, k) || !same(x[k], y[k])) return false
+	return true
 }
+
+export const sameStatus = (a: Status, b: Status): boolean => same(a, b)
 
 // an error as a status holds it
 export function errorOf(e: unknown): unknown {
@@ -78,6 +95,18 @@ export function errorOf(e: unknown): unknown {
 		return out
 	}
 	return e
+}
+
+// what a run tells of itself in the latest run
+export type Ran = {
+	n: number
+	given: readonly { by: { time?: number } }[]
+	reads: unknown[]
+	wrote: number[]
+	rank: number
+	stopped?: { id: string }
+	equal?: boolean
+	causes?: unknown
 }
 
 export function createRecords<P extends Recorded>(g: Graph<P>) {
@@ -149,15 +178,32 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		if (!sameStatus(st, p.status)) status(p, st, n, tag)
 	}
 
-	// the latest run: the value of a node named run inside the process, made the first time.
-	// answers the node's id when it made one
+	// the latest run: the value of a node named run inside the process, made the first time. what
+	// it holds: the run's number, program, the times of the changes that marked it, its reads and
+	// writes, rank, how it ended, the processes it is after. answers the node's id when it made one
 	function run(
 		p: P,
-		n: number,
-		value: Record<string, unknown>,
-		tag?: unknown,
+		r: Ran,
+		ended: string,
+		error: unknown,
+		after: string[],
 	): string | undefined {
 		if (p.state !== "running" || !g.get(p.id)) return
+		const n = r.n
+		const tag = r.causes
+		const value: Record<string, unknown> = {
+			run: n,
+			program: p.program ?? null,
+			by: r.given.map((k) => k.by.time),
+			reads: r.reads,
+			wrote: r.wrote,
+			rank: r.rank,
+			ended,
+			after,
+		}
+		if (ended === "stopped" && r.stopped) value.waits = r.stopped.id
+		if (r.equal !== undefined) value.equal = r.equal
+		if (error !== undefined) value.error = error
 		const agent = agentOf(p, { run: n, status: p.status })
 		const who = { actor: agent, reader: p.id }
 		const how = { own: p, tag }

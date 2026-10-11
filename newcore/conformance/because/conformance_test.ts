@@ -39,9 +39,9 @@ function check(got: Because, expect: Step["expect"] & object, at: string) {
 	assert(!/(^|\/)(because|stacktrace)\.\w+$/.test(site.file as string), `${at}: not ours`)
 }
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../nodes/conformance/because`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../nodes/conformance/because/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

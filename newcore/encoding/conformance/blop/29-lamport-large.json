@@ -1,0 +1,25 @@
+{
+	"title": "lamport a large safe integer",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 9007199254740991,
+		"patches": []
+	},
+	"expect": {
+		"bytes": "a8646e6f6465616e656163746f726161656e6f6e636548090a0b0c0d0e0f10666f626a6563746576616c7565667369676e657258200102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20676c616d706f7274fb433fffffffffffff67706172656e747380677061746368657380",
+		"name": "6e08e32848da5e20a1784595331469358761391a2c4d92b47575dcdd83f721f1"
+	}
+}

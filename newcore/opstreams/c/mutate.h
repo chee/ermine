@@ -1,4 +1,4 @@
-// Patches applied to one object of a node, as one change (newcore/opstreams/mutate.ts, MUTATE.tex), in C.
+// Patches applied to one object of a node, as one change (newcore/opstreams/ts/mutate.ts, MUTATE.tex), in C.
 // Same rules as mutate.ts, on notify/c's values (nt_value) and patches (nt_patch).
 //
 // Content: a value or info object's version content is an nt_value * (NULL: absent). A children
@@ -17,8 +17,8 @@
 
 #include <stddef.h>
 
-#include "../../../c/node.h"
-#include "../../../notify/c/notify.h"
+#include "../../nodes/c/node.h"
+#include "../../notify/c/notify.h"
 
 enum {
 	MU_OK = 0,

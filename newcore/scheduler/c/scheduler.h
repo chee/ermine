@@ -1,4 +1,4 @@
-// The scheduler (newcore/scheduler.ts, SCHEDULER.tex), in C. Same order of operations as the
+// The scheduler (newcore/scheduler/ts/scheduler.ts, SCHEDULER.tex), in C. Same order of operations as the
 // reference: every change, node made, intro, outro and release ticks the clock where scheduler.ts
 // does. It holds the table, places, a trackgraph and one notify per node, and hooks them up; the
 // host's interface is below.
@@ -16,9 +16,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../c/node.h"
+#include "../../nodes/c/node.h"
 #include "../../notify/c/notify.h"
-#include "../../graph/places/c/places.h"
+#include "../../graph/c/places.h"
 #include "../../protect/c/protect.h"
 
 typedef struct sc_sched sc_sched;
@@ -82,7 +82,7 @@ const sc_change *sc_change_new(sc_sched *s, int64_t time, const char *node);
 // the version of a status has this because
 extern const char sc_status_because[];
 
-typedef enum { SC_DONE, SC_PENDING, SC_FAILED, SC_STOPPED, SC_PARKED } sc_ended;
+typedef enum { SC_DONE, SC_PENDING, SC_FAILED, SC_STOPPED, SC_LOOPING } sc_ended;
 
 // the moments (SCHEDULER.tex, Hooks)
 typedef enum { SC_DUE, SC_STARTS, SC_READS, SC_ENDS } sc_moment_kind;

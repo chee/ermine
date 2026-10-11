@@ -1,0 +1,30 @@
+{
+	"title": "nonce a Uint16Array is not bytes",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"uint16": [
+					0,
+					0,
+					0,
+					0
+				]
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "nonce"
+	}
+}

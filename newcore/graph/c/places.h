@@ -1,4 +1,4 @@
-// Finding items by path, and placing ids in lists (newcore/graph/places.ts, PLACES.tex), in C. Same
+// Finding items by path, and placing ids in lists (newcore/graph/ts/places.ts, PLACES.tex), in C. Same
 // rules as places.ts. Nothing kept between calls, nothing tracked: each read is said to depend.
 // Writing by path is not here: it needs a mutate.
 #ifndef PLACES_H
@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../../c/node.h"
+#include "../../nodes/c/node.h"
 
 // what a read rests on: an id being loaded, its value, one of its info objects (name), or its
 // lists: PL_CHILDREN with no name is which names it has, with one the list of that name

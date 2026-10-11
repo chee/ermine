@@ -1,0 +1,108 @@
+{
+	"title": "because: the head's lamport, name and signer, not its parent's",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "OQAAADkAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 0
+						}
+					]
+				},
+				"name": "4335262b486104cb4436a95837f063fa56c748137ff16b5852c2391fc173ac9b"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "OgAAADoAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "QzUmK0hhBMtENqlYN/Bj+lbHSBN/8WtYUsI5H8FzrJs"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				},
+				"name": "65f2da33656681b583667e39557776133de91b72d702d78943fa620375d47924"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"4335262b486104cb4436a95837f063fa56c748137ff16b5852c2391fc173ac9b": 1056,
+					"65f2da33656681b583667e39557776133de91b72d702d78943fa620375d47924": 1057
+				}
+			},
+			"expect": [
+				{
+					"content": 1,
+					"change": {
+						"actor": "a",
+						"time": 1057,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "65f2da33656681b583667e39557776133de91b72d702d78943fa620375d47924"
+						},
+						"why": {
+							"signer": "0303030303030303030303030303030303030303030303030303030303030303"
+						}
+					}
+				}
+			]
+		}
+	]
+}

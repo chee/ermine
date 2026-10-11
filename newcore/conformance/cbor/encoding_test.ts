@@ -7,7 +7,7 @@
 // as a list (the designer, 10-11), so those vectors fail by design. And the old graph held a live
 // stand-in as a whole value, in memory, never encoded; pack encodes, and a live value has none
 import { assertEquals } from "@std/assert"
-import { line } from "../../pack/conformance/form.ts"
+import { line } from "../pack/form.ts"
 
 const TYPED = /"(u?int(8|16|32|64)|float(32|64))":/
 const expected = (v: Vector) =>
@@ -15,12 +15,12 @@ const expected = (v: Vector) =>
 	(TYPED.test(line(v.value)) || TYPED.test(line(v.back)) || line(v.value).includes('"live":'))
 
 const here = new URL(".", import.meta.url).pathname
-const reference = `deno run --quiet --allow-env ${here}../../pack/conformance/harness.ts`.split(" ")
+const reference = `deno run --quiet --allow-env ${here}../pack/harness.ts`.split(" ")
 const other = Deno.env.get("PACK_HARNESS")?.split(" ")
 
 type Vector = { from: string; value: unknown; back?: unknown; refused?: true }
 const read = async (f: string): Promise<Vector[]> =>
-	JSON.parse(await Deno.readTextFile(`${here}${f}`))
+	JSON.parse(await Deno.readTextFile(`${here}../../encoding/conformance/cbor/${f}`))
 // lists.json: old.json's typed arrays made again as lists of their elements, all to agree
 const old = await read("old.json"), lists = await read("lists.json")
 const vectors = [...old, ...lists]

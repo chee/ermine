@@ -1,0 +1,239 @@
+{
+	"title": "node not this one: refused node, before waiting (step 2 before 4); its child stuck",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "other",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "DQAAAA0AAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": []
+				},
+				"name": "7749a2dc91664d0d912ca8b8a2eb5174c7db85432ab5c760f6af3f11a87d60f8"
+			},
+			"expect": {
+				"refused": "node"
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "other",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "DwAAAA8AAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "sHCRd1rVrwkigmQJVIkhDDj9onhK5oG7+Xhows6mSqM"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": []
+				},
+				"name": "62d98cb9b1f6587e37e5927cdbbc0c3b460d71ff5b962395966efb2c9c59fbc6"
+			},
+			"expect": {
+				"refused": "node"
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "EAAAABAAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": []
+				},
+				"name": "b23874b1433f8f42ce70ac05300a1842f2603b4522219a809380b905be2ce190"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "other",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "EQAAABEAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "sjh0sUM/j0LOcKwFMAoYQvJgO0UiIZqAk4C5Bb4s4ZA"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": []
+				},
+				"name": "215773186766a217b61e386a65693a50d05aa9caa666a01a03bb55e2e134ef70"
+			},
+			"expect": {
+				"refused": "node"
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "EgAAABIAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "d0mi3JFmTQ2RLKi4outRdMfbhUMqtcdg9q8/Eah9YPg"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": []
+				},
+				"name": "4ce6306302206df668abe619c39458ad2c678bac13ac7c0c94de51cf34224b25"
+			},
+			"expect": {
+				"stuck": [
+					"7749a2dc91664d0d912ca8b8a2eb5174c7db85432ab5c760f6af3f11a87d60f8"
+				]
+			}
+		},
+		{
+			"request": {
+				"op": "heads",
+				"object": "value"
+			},
+			"expect": [
+				{
+					"name": "b23874b1433f8f42ce70ac05300a1842f2603b4522219a809380b905be2ce190",
+					"blop": {
+						"node": "n",
+						"object": "value",
+						"actor": "a",
+						"signer": {
+							"/": {
+								"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+							}
+						},
+						"nonce": {
+							"/": {
+								"bytes": "EAAAABAAAAA"
+							}
+						},
+						"parents": [],
+						"lamport": 1,
+						"patches": []
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "get",
+				"name": "7749a2dc91664d0d912ca8b8a2eb5174c7db85432ab5c760f6af3f11a87d60f8"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "get",
+				"name": "215773186766a217b61e386a65693a50d05aa9caa666a01a03bb55e2e134ef70"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "waiting"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "refused"
+			},
+			"expect": [
+				{
+					"name": "215773186766a217b61e386a65693a50d05aa9caa666a01a03bb55e2e134ef70",
+					"refused": "node"
+				},
+				{
+					"name": "4ce6306302206df668abe619c39458ad2c678bac13ac7c0c94de51cf34224b25",
+					"stuck": [
+						"7749a2dc91664d0d912ca8b8a2eb5174c7db85432ab5c760f6af3f11a87d60f8"
+					]
+				},
+				{
+					"name": "62d98cb9b1f6587e37e5927cdbbc0c3b460d71ff5b962395966efb2c9c59fbc6",
+					"refused": "node"
+				},
+				{
+					"name": "7749a2dc91664d0d912ca8b8a2eb5174c7db85432ab5c760f6af3f11a87d60f8",
+					"refused": "node"
+				}
+			]
+		}
+	]
+}

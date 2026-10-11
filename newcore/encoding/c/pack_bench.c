@@ -1,4 +1,4 @@
-// Bench for pack and the canonical CBOR codec (compare newcore/encoding/pack_bench.ts): same workloads.
+// Bench for pack and the canonical CBOR codec (compare newcore/encoding/ts/pack_bench.ts): same workloads.
 // Values are Json (json.h); the codec is cborEncode / cborDecode. Not built with the sanitizers.
 #define _POSIX_C_SOURCE 200809L
 #include "cbor.h"

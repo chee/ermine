@@ -7,25 +7,20 @@
 // compute whose value is acted on. no history: each process's value and status are versions of its
 // node's value, its latest run a node named run inside it; four moments go to the hooks.
 // what scheduler() answers is the host's interface.
-import type { Change } from "../nodes/change.ts"
-import {
-	type Acting,
-	type Api,
-	type By,
-	createGraph,
-	GraphError,
-	type Read,
-} from "../graph/graph.ts"
-import type { Node, Version } from "../nodes/node.ts"
-import type { Address, Depend, Item, Place, Step } from "../graph/places.ts"
-import { type Ask, edit, type May, pass as passing } from "../protect.ts"
-import { createCode } from "../programs/code.ts"
-import { createHandlers } from "../programs/handlers.ts"
-import { createProcesses } from "../programs/processes.ts"
+import type { Change } from "../../nodes/ts/change.ts"
+import { type Acting, type By, createGraph, GraphError, type Read } from "../../graph/ts/graph.ts"
+import type { Node, Version } from "../../nodes/ts/node.ts"
+import type { Address, Depend, Item, Place, Step } from "../../graph/ts/places.ts"
+import { type Ask, edit, type May, pass as passing } from "../../protect/ts/protect.ts"
+import { createCode } from "../../programs/ts/code.ts"
+import { createHandlers } from "../../programs/ts/handlers.ts"
+import { createProcesses } from "../../programs/ts/processes.ts"
+import { createProcessApi } from "../../programs/ts/process-api.ts"
+import { type Cause, createCauses } from "./causes.ts"
+import { isPromise, same, valueOf, whyNew } from "./helpers.ts"
 import { createOrder } from "./order.ts"
 import {
 	type CallOp,
-	Cause,
 	type Ctx,
 	type Ended,
 	type Fn,
@@ -44,10 +39,10 @@ import {
 	normal,
 	sameStatus,
 	type Status,
-} from "../programs/records.ts"
-import type { Site } from "../nodes/stacktrace.ts"
+} from "../../programs/ts/records.ts"
+import type { Site } from "../../nodes/ts/stacktrace.ts"
 
-export type { Api, By } from "../graph/graph.ts"
+export type { Api, By } from "../../graph/ts/graph.ts"
 export {
 	type CallOp,
 	type Code,
@@ -59,7 +54,7 @@ export {
 	type StartOp,
 } from "./types.ts"
 import type { Finder, Hook } from "./types.ts"
-export { GraphError as SchedulerError, pidOf } from "../graph/graph.ts"
+export { GraphError as SchedulerError, pidOf } from "../../graph/ts/graph.ts"
 
 type N = Node<unknown, Change>
 type V = Version<unknown, Change>
@@ -96,25 +91,6 @@ class Stop {
 	constructor(readonly at: Proc) {}
 }
 
-const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
-
-const isPromise = (v: unknown) =>
-	v !== null && (typeof v === "object" || typeof v === "function") &&
-	typeof (v as { then?: unknown }).then === "function"
-const isMap = (v: unknown) =>
-	v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype
-
-// why an effect part ran: its value not the same (SCHEDULER.tex, Processes, Why)
-function whyNew(v: unknown, given: boolean): string {
-	if (given) return "not equal by its comparison"
-	if (Array.isArray(v)) return "a new list"
-	if (v instanceof Uint8Array) return "new bytes"
-	if (ArrayBuffer.isView(v)) return "a new typed array"
-	if (isMap(v)) return "a new map"
-	if (typeof v === "object" && v !== null || isLive(v)) return "a new live value"
-	return "not equal"
-}
-
 export function createScheduler(options: Options) {
 	const clock = options.clock ?? { time: 0 }
 	const hooks = options.hooks ?? []
@@ -133,7 +109,15 @@ export function createScheduler(options: Options) {
 		},
 		owned: (p, id) => void p.owned.push(id),
 		released: (id, owner) => {
-			if (owner) owner.owned = owner.owned.filter((x) => x !== id)
+			// a kill releases newest first: the last, popped
+			if (owner) {
+				const o = owner.owned
+				if (o[o.length - 1] === id) o.pop()
+				else {
+					const i = o.lastIndexOf(id)
+					if (i >= 0) o.splice(i, 1)
+				}
+			}
 			const r = runs.get(id)
 			if (r) {
 				runs.delete(id)
@@ -151,8 +135,7 @@ export function createScheduler(options: Options) {
 
 	let depth = 0
 	let inRound = false
-	const ran = new Set<string>()
-	const stamped: Kept[] = []
+	const causes = createCauses()
 
 	const pass = (m: Moment) => {
 		for (const h of hooks) h(m)
@@ -166,31 +149,6 @@ export function createScheduler(options: Options) {
 		if (p?.state === "running") processes.kill([p], cause)
 	}
 
-	// causes and loops
-
-	function caused(c: Cause | undefined, id: string): boolean {
-		if (!c || !ran.has(id)) return false
-		const seen = new Set<Cause>([c])
-		const stack = [c]
-		while (stack.length) {
-			const x = stack.pop()!
-			if (x.id === id) return true
-			for (const q of x.parents) if (!seen.has(q)) (seen.add(q), stack.push(q))
-		}
-		return false
-	}
-	function idsOf(c: Cause): string[] {
-		const ids = new Set<string>()
-		const seen = new Set<Cause>([c])
-		const stack = [c]
-		while (stack.length) {
-			const x = stack.pop()!
-			ids.add(x.id)
-			for (const q of x.parents) if (!seen.has(q)) (seen.add(q), stack.push(q))
-		}
-		return [...ids].sort(byCodePoint)
-	}
-
 	// records: status, value and the latest run, written at the process's node
 
 	const records = createRecords<Proc>(g)
@@ -201,38 +159,19 @@ export function createScheduler(options: Options) {
 		if (!sameStatus(status, p.status)) records.status(p, status)
 	}
 
-	// the latest run, as records writes it
-	function writeRun(p: Proc, run: Run, ended: Ended, error?: unknown) {
-		const value: Record<string, unknown> = {
-			run: run.n,
-			program: p.program ?? null,
-			by: run.given.map((k) => k.by.time),
-			reads: run.reads,
-			wrote: run.wrote,
-			rank: run.rank,
-			ended,
-			after: afterOf(p),
-		}
-		if (ended === "stopped" && run.stopped) value.waits = run.stopped.id
-		if (run.equal !== undefined) value.equal = run.equal
-		if (error !== undefined) value.error = error
-		const made = records.run(p, run.n, value, run.causes)
-		if (made !== undefined) runs.set(made, p)
-	}
-
 	// marks
 
-	function mark(q: Proc, change: By, causes?: Cause) {
+	function mark(q: Proc, change: By, by?: Cause) {
 		if (!q.kept.has(change.time!)) {
-			const k: Kept = { by: change, causes }
+			const k: Kept = { by: change, causes: by }
 			q.kept.set(change.time!, k)
-			if (causes) stamped.push(k)
+			causes.keep(k)
 		}
-		const loop = caused(causes, q.id)
-		q.looping = loop ? idsOf(causes!) : undefined
-		if (q.parked) {
+		const loop = causes.loop(by, q.id)
+		q.loop = loop
+		if (q.looping) {
 			if (loop) return
-			q.parked = false
+			q.looping = false
 		}
 		becomes(q, change.time!)
 	}
@@ -314,28 +253,15 @@ export function createScheduler(options: Options) {
 		return out
 	}
 
-	// what every interface of a process binds: its actor, pid, place
-	function processApi(
-		ctx: Ctx,
-		o: { tracked?: boolean; writes: boolean; alive: () => boolean },
-	): Api {
-		const p = ctx.p
-		const depend = o.tracked ? p.track.depend : undefined
-		return g.bound({
-			place: p.place,
-			agent: ctx.agent,
-			reader: p.id,
-			cause: ctx.cause,
-			depend,
-			writes: o.writes,
-			alive: o.alive,
-			owner: p,
-			tag: ctx.causes,
-			wrote: ctx.run?.wrote,
-			reading: (op, f, args) => reading(op, f, depend, ctx, args),
-			around: request,
-		})
-	}
+	// the process api: what each part of a process is given
+
+	const given = createProcessApi(g, {
+		reading,
+		request,
+		starter: (ctx, alive) => processes.starter(ctx, alive),
+		callerOf: (ctx) => handlers.callerOf(ctx),
+		cleaner: (p, alive) => processes.cleaner(p, alive),
+	})
 
 	// protect, as the programs side is given it: one check for each thing it does, never protect
 	// itself. each passes the item's route, then asks the one thing
@@ -365,11 +291,11 @@ export function createScheduler(options: Options) {
 		procs,
 		records,
 		mayStart,
-		api: processApi,
+		cleanup: given.cleanup,
 		started: (p) => order.started(p),
 		due(p, k) {
 			p.kept.set(k.by.time!, k)
-			if (k.causes) stamped.push(k)
+			causes.keep(k)
 			becomes(p, k.by.time!)
 		},
 		mark,
@@ -384,12 +310,11 @@ export function createScheduler(options: Options) {
 		},
 		gone: (p) => order.gone(p),
 	})
-	const { start, starter, replacing, part, partCall, settleChildren, cleaner, cleanups } =
-		processes
+	const { start, replacing, part, partCall, settleChildren, cleanups } = processes
 
 	// code, when a program is a path
 
-	const code = createCode({ finder, api: processApi, part })
+	const code = createCode({ finder, view: given.view, part })
 
 	// handler calls
 
@@ -397,8 +322,7 @@ export function createScheduler(options: Options) {
 		g,
 		pass,
 		mayCall,
-		api: processApi,
-		starter,
+		given: given.handler,
 		part,
 		request,
 		busy: () => inRound || processes.active() > 0,
@@ -406,17 +330,6 @@ export function createScheduler(options: Options) {
 	})
 
 	// runs
-
-	const same = (p: Proc, v: unknown) =>
-		p.last !== undefined && (p.equal ? p.equal(v, p.last.value) : Object.is(v, p.last.value))
-
-	// a value a part may give: anything but undefined; a setup's not a promise
-	function valueOf(v: unknown, setup: boolean): unknown {
-		if (v === undefined || setup && isPromise(v)) {
-			throw new GraphError("wrong-field", "value: a part gives a value")
-		}
-		return v
-	}
 
 	// a run's first half: code, if the program is a path; then a compute runs, and a setup or an
 	// effect's part waits for the second half
@@ -433,29 +346,33 @@ export function createScheduler(options: Options) {
 		order.delete(p.id)
 		order.waits(p, undefined)
 		const n = ++p.runs
-		const given = [...p.kept.values()]
-		const parents = new Set<Cause>()
-		for (const k of given) if (k.causes) parents.add(k.causes)
-		const causes = new Cause(p.id, [...parents])
-		ran.add(p.id)
+		const kept = [...p.kept.values()]
+		const caused = causes.run(p.id, kept)
 		const run: Run = {
 			p,
 			n,
 			mark: markTime,
 			rank,
-			given,
-			causes,
+			given: kept,
+			causes: caused,
 			reads: [],
 			wrote: [],
 			values: new Set(),
 			replaced: p.replaced,
-			looping: p.looping,
+			loop: p.loop,
 		}
-		p.looping = undefined
+		p.loop = undefined
 		pass({ starts: p.id, run: n, rank })
 		p.track.begin()
 		try {
-			const ctx: Ctx = { p, agent: runAgent(p, n), base: { run: n }, run, compute: true, causes }
+			const ctx: Ctx = {
+				p,
+				agent: runAgent(p, n),
+				base: { run: n },
+				run,
+				compute: true,
+				causes: caused,
+			}
 			const found = code.find(ctx)
 			if (found === "stopped") return stop(run)
 			if (found === "pending") return finish(run, "pending")
@@ -472,15 +389,9 @@ export function createScheduler(options: Options) {
 			const cctx: Ctx = { ...ctx, call: partCall(p, "compute", run.replaced) }
 			let open = true
 			const out = part(p, () =>
-				(c.compute as (g: unknown) => unknown)({
-					api: processApi(cctx, { tracked: true, writes: false, alive: () => open }),
-					peep: processApi(cctx, { writes: false, alive: () => open }),
-					start: starter(cctx, () => open),
-					by: given.map((k) => k.by),
-					pending: PENDING,
-					self: p.id,
-					name: p.name,
-				}))
+				(c.compute as (g: unknown) => unknown)(
+					given.compute(cctx, kept.map((k) => k.by), () => open),
+				))
 			open = false
 			if (run.stopped) return stop(run)
 			if ("error" in out) return finish(run, "failed", out.error)
@@ -510,9 +421,9 @@ export function createScheduler(options: Options) {
 			return finish(run, "failed", e)
 		}
 		run.equal = equals
-		if (run.looping && !equals) {
+		if (run.loop && !equals) {
 			run.value = value
-			return finish(run, "parked")
+			return finish(run, "looping")
 		}
 		if (!equals) {
 			run.why = p.last === undefined ? "a first value" : whyNew(value, p.equal !== undefined)
@@ -575,27 +486,19 @@ export function createScheduler(options: Options) {
 		}
 		if (run.part === "effect") ctx.cause = run.why
 		let alive = true
-		const given: Record<string, unknown> = {
-			api: processApi(ctx, { writes: true, alive: () => alive }),
-			start: starter(ctx, () => alive),
-			call: handlers.callerOf(ctx),
-			onCleanup: cleaner(p, () => alive),
-			self: p.id,
-			name: p.name,
-		}
 		const c = p.code!
 		if (run.part === "effect") {
-			given.value = run.value
-			if (p.previous) given.previous = p.previous.value
 			const effect = (c as { effect: Fn }).effect
-			const out = part(p, () => (effect as (g: unknown) => unknown)(given))
+			const e = given.effect(ctx, () => alive, run.value, p.previous)
+			const out = part(p, () => (effect as (g: unknown) => unknown)(e))
 			alive = false
 			p.previous = { value: run.value }
 			if ("error" in out) error ??= out.error
 			else if (p.state === "running") settleChildren(ctx)
 			return finish(run, error === undefined ? "done" : "failed", error)
 		}
-		const out = part(p, () => (c as (g: unknown) => unknown)(given))
+		const setup = given.setup(ctx, () => alive)
+		const out = part(p, () => (c as (g: unknown) => unknown)(setup))
 		alive = false
 		p.setup = true
 		if ("error" in out) return finish(run, "failed", error ?? out.error)
@@ -628,34 +531,27 @@ export function createScheduler(options: Options) {
 				for (const k of run.given) p.kept.delete(k.by.time!)
 				p.replaced = false
 			}
-			if (ended === "parked") p.parked = true
+			if (ended === "looping") p.looping = true
 			if (ended !== "stopped") order.sees(p, run.values)
 			if (ended !== "pending" && ended !== "stopped") p.since = order.at(p.id)
 			const status: Status = {}
 			if (ended === "pending" || ended === "stopped") status.pending = p.since ?? run.mark
 			if (ended === "failed") status.error = json
-			if (ended === "parked") {
-				const loop: { through: string[]; value?: unknown } = { through: run.looping ?? [p.id] }
+			if (ended === "looping") {
+				const loop: { through: string[]; value?: unknown } = { through: run.loop ?? [p.id] }
 				if (!isLive(run.value)) loop.value = run.value
 				status.loop = loop
 			}
 			if (run.shown) status.new = run.shown.value
 			if (!sameStatus(status, p.status)) records.status(p, status, run.n, run.causes)
-			writeRun(p, run, ended, json)
+			const made = records.run(p, run, ended, json, order.after(p))
+			if (made !== undefined) runs.set(made, p)
 		}
 		const ends: Moment = { ends: p.id, run: run.n, ended }
 		if (ended === "stopped" && run.stopped) ends.waits = run.stopped.id
 		if (run.equal !== undefined) ends.equal = run.equal
 		if (json !== undefined) ends.error = json
 		pass(ends)
-	}
-
-	// what a process is after, as its latest run shows it
-	function afterOf(p: Proc): string[] {
-		const out = new Set<string>()
-		for (const id of p.values) if (id !== p.id && procs.get(id)?.state === "running") out.add(id)
-		if (p.after && p.after !== p && p.after.state === "running") out.add(p.after.id)
-		return [...out].sort(byCodePoint)
 	}
 
 	// requests and rounds
@@ -677,9 +573,15 @@ export function createScheduler(options: Options) {
 	function request<T>(fn: () => T): T {
 		if (depth > 0 || processes.active() > 0) return fn()
 		depth++
-		let out: T
+		let out: T | undefined
+		// a request that throws still runs what its changes made due; then its error goes on
+		let failed: { e: unknown } | undefined
 		try {
-			out = fn()
+			try {
+				out = fn()
+			} catch (e) {
+				failed = { e }
+			}
 			while (order.size() || queue.length || waiting.length) round()
 		} finally {
 			depth--
@@ -687,11 +589,10 @@ export function createScheduler(options: Options) {
 				const p = procs.get(id)
 				if (p?.state === "running") pendingAt(p)
 			}
-			for (const k of stamped) k.causes = undefined
-			stamped.length = 0
-			if (!queue.length) ran.clear()
+			causes.end(queue.length > 0)
 		}
-		return out
+		if (failed) throw failed.e
+		return out as T
 	}
 
 	// the host's interface
@@ -738,15 +639,7 @@ export function createScheduler(options: Options) {
 			})
 		},
 		batch(fn: () => void) {
-			let thrown: { e: unknown } | undefined
-			request(() => {
-				try {
-					fn()
-				} catch (e) {
-					thrown = { e }
-				}
-			})
-			if (thrown) throw thrown.e
+			request(fn)
 		},
 	}
 }

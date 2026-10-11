@@ -1,0 +1,28 @@
+{
+	"title": "bytes(id) gives the 32 bytes its hex says; is(id) is true",
+	"ask": [
+		{
+			"op": "bytes",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine://01a9a988d62f18288425fa75de87810294bb21da9c02bca00125795036b0c367"
+		}
+	],
+	"expect": [
+		{
+			"bytes": "0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"is": true
+		},
+		{
+			"bytes": "01a9a988d62f18288425fa75de87810294bb21da9c02bca00125795036b0c367"
+		}
+	]
+}

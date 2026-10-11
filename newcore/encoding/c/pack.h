@@ -1,10 +1,10 @@
-// A graph from a root, as bytes (newcore/PACK.tex), in C. Same shape as pack.ts: one canonical CBOR item,
+// A graph from a root, as bytes (newcore/encoding/PACK.tex), in C. Same shape as pack.ts: one canonical CBOR item,
 // {root, nodes, missing}. Values (content outside lists, change, because, actor, cause) are the
 // caller's: written and read by its codec, never read here.
 #ifndef PACK_H
 #define PACK_H
 
-#include "node.h"
+#include "../../nodes/c/node.h"
 
 typedef enum {
 	PK_OK,

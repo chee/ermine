@@ -1,0 +1,70 @@
+{
+	"title": "side of a name never added, or waiting: none",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "b5e746ec953dbc42d6d517df2d694a7eca733891c62f39818e13e05173a73262"
+			},
+			"expect": {
+				"none": true
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "PAAAADwAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "tedG7JU9vELW1RffLWlKfspzOJHGLzmBjhPgUXOnMmI"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				},
+				"name": "262565ade2b11b49c2dec47db20818f9e6d538375f40fe67b883bcb71aa86331"
+			},
+			"expect": {
+				"waiting": [
+					"b5e746ec953dbc42d6d517df2d694a7eca733891c62f39818e13e05173a73262"
+				]
+			}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "262565ade2b11b49c2dec47db20818f9e6d538375f40fe67b883bcb71aa86331"
+			},
+			"expect": {
+				"none": true
+			}
+		}
+	]
+}

@@ -1,0 +1,261 @@
+{
+	"title": "stuck: refused() names every refused or stuck parent, the same blops children first",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RQAAAEUAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "kJiHWJ3unN76A3vPfP82+eyk/35oC5eYeJtJNuCNKuo"
+							}
+						}
+					],
+					"lamport": 5,
+					"patches": []
+				},
+				"name": "91f8a0a7968e61a3eb0dcd5f19971d9f8319da59bd999f6390bb7eafd74976f1"
+			},
+			"expect": {
+				"waiting": [
+					"909887589dee9cdefa037bcf7cff36f9eca4ff7e680b9798789b4936e08d2aea"
+				]
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RAAAAEQAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "FZmeoGPnLgsWWkytgrzepaq7xyRRCBF+q3RicMbjWgI"
+							}
+						},
+						{
+							"/": {
+								"bytes": "IrefUZBigFkvhOmGm/2OOsF5XHPLM70y8dFmKWM2tw0"
+							}
+						}
+					],
+					"lamport": 4,
+					"patches": [],
+					"base": {
+						"/": {
+							"bytes": "IrefUZBigFkvhOmGm/2OOsF5XHPLM70y8dFmKWM2tw0"
+						}
+					}
+				},
+				"name": "909887589dee9cdefa037bcf7cff36f9eca4ff7e680b9798789b4936e08d2aea"
+			},
+			"expect": {
+				"waiting": [
+					"15999ea063e72e0b165a4cad82bcdea5aabbc7245108117eab746270c6e35a02",
+					"22b79f51906280592f84e9869bfd8e3ac1795c73cb33bd32f1d166296336b70d"
+				]
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QQAAAEEAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": []
+				},
+				"name": "e75d676344fa3cf458beddc784bbd39efa33ce94da2ea7509c2d4012226d5262"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QgAAAEIAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "511nY0T6PPRYvt3HhLvTnvozzpTaLqdQnC1AEiJtUmI"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": []
+				},
+				"name": "22b79f51906280592f84e9869bfd8e3ac1795c73cb33bd32f1d166296336b70d"
+			},
+			"expect": {
+				"refused": "lamport"
+			}
+		},
+		{
+			"request": {
+				"op": "waiting"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QwAAAEMAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "511nY0T6PPRYvt3HhLvTnvozzpTaLqdQnC1AEiJtUmI"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [
+								"q",
+								"r"
+							],
+							"value": 1
+						}
+					]
+				},
+				"name": "15999ea063e72e0b165a4cad82bcdea5aabbc7245108117eab746270c6e35a02"
+			},
+			"expect": {
+				"refused": "patches"
+			}
+		},
+		{
+			"request": {
+				"op": "waiting"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "refused"
+			},
+			"expect": [
+				{
+					"name": "15999ea063e72e0b165a4cad82bcdea5aabbc7245108117eab746270c6e35a02",
+					"refused": "patches"
+				},
+				{
+					"name": "22b79f51906280592f84e9869bfd8e3ac1795c73cb33bd32f1d166296336b70d",
+					"refused": "lamport"
+				},
+				{
+					"name": "909887589dee9cdefa037bcf7cff36f9eca4ff7e680b9798789b4936e08d2aea",
+					"stuck": [
+						"15999ea063e72e0b165a4cad82bcdea5aabbc7245108117eab746270c6e35a02",
+						"22b79f51906280592f84e9869bfd8e3ac1795c73cb33bd32f1d166296336b70d"
+					]
+				},
+				{
+					"name": "91f8a0a7968e61a3eb0dcd5f19971d9f8319da59bd999f6390bb7eafd74976f1",
+					"stuck": [
+						"909887589dee9cdefa037bcf7cff36f9eca4ff7e680b9798789b4936e08d2aea"
+					]
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "heads",
+				"object": "value"
+			},
+			"expect": [
+				{
+					"name": "e75d676344fa3cf458beddc784bbd39efa33ce94da2ea7509c2d4012226d5262",
+					"blop": {
+						"node": "n",
+						"object": "value",
+						"actor": "a",
+						"signer": {
+							"/": {
+								"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+							}
+						},
+						"nonce": {
+							"/": {
+								"bytes": "QQAAAEEAAAA"
+							}
+						},
+						"parents": [],
+						"lamport": 1,
+						"patches": []
+					}
+				}
+			]
+		}
+	]
+}

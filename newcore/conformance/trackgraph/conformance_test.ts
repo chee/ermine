@@ -27,9 +27,9 @@ async function ask(requests: Request[]): Promise<{ names?: string[]; error?: str
 
 const once = (names: string[]) => [...new Set(names)]
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../trackgraph/conformance`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../trackgraph/conformance/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

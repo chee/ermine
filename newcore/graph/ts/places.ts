@@ -1,10 +1,10 @@
 // a root, and from it a hierarchy: walks by name, look, lookup (LIBRARY.tex), and placing ids
 // in lists. nothing kept between calls, nothing tracked: each place read is said to depend,
 // and the caller (the scheduler) tracks. placing is patches to lists, by mutate.ts: each a change
-import createChange, {type Change, type Header} from "../nodes/change.ts"
-import mutate, {type Which} from "../opstreams/mutate.ts"
-import createNode, {type List, type Node, type Version} from "../nodes/node.ts"
-import type {Patch} from "../notify.ts"
+import createChange, {type Change, type Header} from "../../nodes/ts/change.ts"
+import mutate, {type Which} from "../../opstreams/ts/mutate.ts"
+import createNode, {type List, type Node, type Version} from "../../nodes/ts/node.ts"
+import type {Patch} from "../../notify/ts/notify.ts"
 
 // where a read is: names from the root, walked from the root each read
 export type Place = readonly string[]

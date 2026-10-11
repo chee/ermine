@@ -1,7 +1,7 @@
 // The reference change library on the line protocol: one JSON request per line in, one answer
 // per line out, in order. {op: "make", node, header, outside?} → {change}. Another
 // implementation joins by speaking this.
-import createChange, { type Header } from "../../change.ts"
+import createChange, { type Header } from "../../nodes/ts/change.ts"
 
 type Request = { op: string; node?: string; header?: Header; outside?: boolean }
 

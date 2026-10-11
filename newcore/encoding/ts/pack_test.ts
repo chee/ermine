@@ -1,8 +1,8 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import createNode, { type Node } from "../nodes/node.ts"
+import createNode, { type Node } from "../../nodes/ts/node.ts"
 import { encode as encodeValue } from "./cbor.ts"
 import { decode, encode, pack, PackError, unpack, walk } from "./pack.ts"
-import { createTable } from "../graph/table.ts"
+import { createTable } from "../../graph/ts/table.ts"
 
 const code = (f: () => unknown) => (assertThrows(f, PackError) as PackError).code
 const at = <C>(content: C) => ({ content, change: { time: 1, actor: "a", node: "x" } })

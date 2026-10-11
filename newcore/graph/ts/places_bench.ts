@@ -1,6 +1,6 @@
 // a read's own depend (#1) against a fallback asking for the running reader each place (#3);
 // depend only counts: tracking is the scheduler's
-import createNode, { type Node } from "../nodes/node.ts"
+import createNode, { type Node } from "../../nodes/ts/node.ts"
 import { createPlaces, type Depend } from "./places.ts"
 
 // fixed counts: the first benches otherwise run during warmup

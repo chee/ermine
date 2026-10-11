@@ -5,7 +5,7 @@
 // what each read should hear is seen by comparing the content before and after a patch.
 import { assertEquals } from "@std/assert"
 import { apply, at, slice, type V } from "./apply.ts"
-import type { Key, Patch, Place } from "../../notify.ts"
+import type { Key, Patch, Place } from "../../notify/ts/notify.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const command = (Deno.env.get("NOTIFY_HARNESS") ?? `deno run --quiet ${here}harness.ts`).split(" ")
@@ -69,9 +69,9 @@ const sorted = (h: Record<string, string[]> = {}) =>
 	Object.fromEntries(Object.entries(h).map(([k, v]) => [k, [...v].sort()]).sort(([a], [b]) => a < b ? -1 : 1))
 
 // scenarios: a patch step gives no content after; it is worked out here
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../notify/conformance`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, start, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, start, steps } = JSON.parse(await Deno.readTextFile(`${here}../../notify/conformance/${f.name}`)) as {
 		title: string
 		start: V
 		steps: (Request & { expect?: Answer & Record<string, unknown> })[]

@@ -1,4 +1,4 @@
-// deno bench newcore/protect_bench.ts
+// deno bench newcore/protect/ts/protect_bench.ts
 // one ask against rules: by list length and where the match is; what an actor costs; check along
 // a route; the ask builders. baselines: anyone, and facts alone
 import {

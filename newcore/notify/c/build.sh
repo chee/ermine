@@ -1,15 +1,8 @@
 #!/bin/sh
-# builds the C harness; CHECK=1 builds harness-check, with the address and undefined-behaviour sanitizers
+# builds notify's C harnesses (notify) with newcore's Makefile; CHECK=1: the harness-checks, with the
+# address and undefined-behaviour sanitizers
 set -e
-cd "$(dirname "$0")"
-flags="-std=c11 -O2 -Wall -Wextra -Wpedantic"
-out=harness
-if [ "$CHECK" = 1 ]; then
-	flags="-std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer"
-	out=harness-check
-fi
-cc $flags -o $out notify.c harness.c -lm
-# the benchmark (newcore/notify_bench.ts's cases), -O2 only
-if [ "$CHECK" != 1 ]; then
-	cc -std=c11 -O2 -Wall -Wextra -Wpedantic -o bench notify.c bench.c
-fi
+cd "$(dirname "$0")/../.."
+bins="notify/c/notify-harness"
+[ "$CHECK" = 1 ] && bins=$(for b in $bins; do printf '%s-check ' "$b"; done)
+make -s $bins

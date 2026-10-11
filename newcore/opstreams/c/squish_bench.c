@@ -1,4 +1,4 @@
-// The workloads of newcore/opstreams/squish_bench.ts: N patches each, made once, then squished, encoded
+// The workloads of newcore/opstreams/ts/squish_bench.ts: N patches each, made once, then squished, encoded
 // and decoded R times; the mean per run. BENCH=1 ./build.sh && ./bench
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>

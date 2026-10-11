@@ -1,4 +1,4 @@
-// The C trackgraph on the line protocol (newcore/conformance/harness.ts): one JSON request per
+// The C trackgraph on the line protocol (newcore/conformance/trackgraph/harness.ts): one JSON request per
 // line in, one answer per line out. A node's owner is its name. Reads only the fixed shape the
 // tests send: a flat object of string fields.
 #include "trackgraph.h"

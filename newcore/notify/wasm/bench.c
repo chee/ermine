@@ -80,7 +80,7 @@ export void init(void) {
 	lastfirst = (nt_patch){.place = {items_p, 1, 1, 0, 0}, .has_move = 1, .move = {last_p, 2, 0, 0, 0}};
 }
 
-// in the order of newcore/notify_bench.ts
+// in the order of newcore/notify/ts/notify_bench.ts
 static const nt_patch *patch_of(int i) {
 	const nt_patch *ps[] = {&first, &field, &first, &append, &middle, &first, &append, &lastfirst,
 		&field, &newkey, &typed, &typed0};

@@ -1,11 +1,11 @@
-// The C pack on the line protocol (newcore/encoding/pack/conformance/harness.ts): one JSON request per
+// The C pack on the line protocol (newcore/conformance/pack/harness.ts): one JSON request per
 // line in, one answer per line out. Values are kept as their JSON text (shown.c), in their JSON
 // form (ENCODING.tex: "/" for bytes, typed arrays, NaN and the infinities); the codec writes that
 // as canonical CBOR (json.c, cbor.c) and reads CBOR back as it. Bytes are hex.
 #include "cbor.h"
 #include "json.h"
 #include "pack.h"
-#include "shown.h"
+#include "../../nodes/c/shown.h"
 
 #include <stdio.h>
 #include <stdlib.h>

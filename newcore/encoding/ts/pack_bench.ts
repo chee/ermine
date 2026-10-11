@@ -1,11 +1,11 @@
-// deno bench --allow-env newcore/encoding/pack_bench.ts
+// deno bench --allow-env newcore/encoding/ts/pack_bench.ts
 // pack and the canonical codec (ENCODING.tex) against cbor-x, the speed to reach: cbor-x writes
 // no canonical form (integers, keys as made), so it is a bound, not a rival
 import { Encoder } from "cbor-x"
 import * as cbor from "./cbor.ts"
-import createNode, { type Node } from "../nodes/node.ts"
+import createNode, { type Node } from "../../nodes/ts/node.ts"
 import { decode, encode, pack, unpack } from "./pack.ts"
-import { createTable } from "../graph/table.ts"
+import { createTable } from "../../graph/ts/table.ts"
 
 const x = new Encoder({ useRecords: false })
 const at = <C>(content: C) => ({ content, change: { time: 1760000000000, actor: "a", node: "x" } })

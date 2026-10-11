@@ -1,7 +1,7 @@
 // a graph from a root, or one node, as bytes in the canonical encoding (ENCODING.tex), and back
 // reachable: by any version of any list, not only the first; nothing loaded here, nothing placed
 import * as cbor from "./cbor.ts"
-import createNode, { type Header, type List, type Node, type Version } from "../nodes/node.ts"
+import createNode, { type Header, type List, type Node, type Version } from "../../nodes/ts/node.ts"
 
 // get: the node of an id, or none if it is not loaded (table.ts's get)
 export type Get<V, H> = (id: string) => Node<V, H> | undefined

@@ -1,4 +1,4 @@
-// Making a because (newcore/BECAUSE.tex), in C.
+// Making a because (newcore/nodes/BECAUSE.tex), in C.
 #include "because.h"
 
 bc_because bc_make(const char *layer, const void *place, const void *why, const bc_site *outside) {

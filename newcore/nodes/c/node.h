@@ -1,4 +1,4 @@
-// Making a node (newcore/NODE.tex), in C. Same shape as node.ts.
+// Making a node (newcore/nodes/NODE.tex), in C. Same shape as node.ts.
 #ifndef NODE_H
 #define NODE_H
 

@@ -6,7 +6,7 @@
 // a part's start of a child named as one it started in the same part before gives that child
 // again. killing: newest first, children, cleanups, its ephemeral nodes, then untracked; a process
 // busy in a part is killed when the part ends.
-import type { Change } from "../nodes/change.ts"
+import type { Change } from "../../nodes/ts/change.ts"
 import {
 	type Acting,
 	type Api,
@@ -15,10 +15,10 @@ import {
 	GraphError,
 	ours,
 	type Reader,
-} from "../graph/graph.ts"
-import type { Address, Place, Step } from "../graph/places.ts"
+} from "../../graph/ts/graph.ts"
+import type { Address, Place, Step } from "../../graph/ts/places.ts"
 import { normal, type Records, type Status, stepped } from "./records.ts"
-import { capture, type Site } from "../nodes/stacktrace.ts"
+import { capture, type Site } from "../../nodes/ts/stacktrace.ts"
 import type {
 	Cause,
 	Child,
@@ -31,7 +31,7 @@ import type {
 	Proc,
 	Run,
 	StartOp,
-} from "../scheduler/types.ts"
+} from "../../scheduler/ts/types.ts"
 
 // the names from the root an address reaches from a place
 function absolute(place: Place, address: Address): string[] {
@@ -58,7 +58,8 @@ export function createProcesses(o: {
 		id?: string,
 	): void
 	// the interface a process's part is given (scheduler.ts)
-	api(ctx: Ctx, o: { writes: boolean; alive: () => boolean }): Api
+	// what a cleanup is given (process-api.ts)
+	cleanup(ctx: Ctx, alive: () => boolean, killed: boolean): { killed: boolean; api: Api }
 	// the scheduler's: a new process; due by the change that placed it; marked; being killed
 	// (out of the order, its waiting run ended); gone
 	started(p: Proc): void
@@ -159,7 +160,7 @@ export function createProcesses(o: {
 			status: {},
 			values: new Set(),
 			cleanups: [],
-			parked: false,
+			looping: false,
 			state: "running",
 			busy: 0,
 			track: undefined as unknown as Reader,
@@ -293,8 +294,8 @@ export function createProcesses(o: {
 				causes: run?.causes,
 			}
 			let alive = true
-			const api = o.api(ctx, { writes: true, alive: () => alive })
-			const done = part(p, () => f({ killed, api }))
+			const given = o.cleanup(ctx, () => alive, killed)
+			const done = part(p, () => f(given))
 			alive = false
 			if ("error" in done && first === undefined) first = done.error
 		}

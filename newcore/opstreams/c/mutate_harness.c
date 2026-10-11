@@ -1,4 +1,4 @@
-// The C mutate on the line protocol (newcore/opstreams/mutate/conformance/harness.ts): one JSON request per
+// The C mutate on the line protocol (newcore/conformance/mutate/harness.ts): one JSON request per
 // line in, one answer per line out. Parses and prints the JSON itself (as notify/c/harness.c).
 // Typed arrays are not here: nt_value has none, so those scenarios are skipped (MUTATE_SKIP).
 #include "mutate.h"

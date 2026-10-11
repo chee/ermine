@@ -1,4 +1,4 @@
-// The cases of newcore/notify_bench.ts, in C. Times nt_patched() only: the content is made once,
+// The cases of newcore/notify/ts/notify_bench.ts, in C. Times nt_patched() only: the content is made once,
 // the patch never applied. Each case runs until it has taken a fifth of a second (at least 3 runs).
 #include "notify.h"
 

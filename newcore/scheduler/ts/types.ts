@@ -1,8 +1,10 @@
 // the scheduler's types, shared by the scheduler (scheduler.ts) and the programs side
 // (../programs/): a process, a run, what a part runs as. one definition each.
-import type { Api, By, Reader } from "../graph/graph.ts"
-import type { Address, Place } from "../graph/places.ts"
-import type { Agent, Status } from "../programs/records.ts"
+import type { Api, By, Reader } from "../../graph/ts/graph.ts"
+import type { Address, Place } from "../../graph/ts/places.ts"
+import type { Agent, Status } from "../../programs/ts/records.ts"
+import type { Cause } from "./causes.ts"
+export type { Cause } from "./causes.ts"
 
 // what a part, handler or cleanup is: a function called with one map
 export type Fn = (given: never) => unknown
@@ -18,7 +20,7 @@ export type Process = { id: string; name: string; place: Place; program: Address
 // the host's: finds a process's code by its program's path, reading through view (tracked)
 export type Finder = (process: Process, view: Api) => Found | typeof PENDING
 
-export type Ended = "done" | "pending" | "failed" | "stopped" | "parked"
+export type Ended = "done" | "pending" | "failed" | "stopped" | "looping"
 
 // the moments (SCHEDULER.tex, Hooks)
 export type Moment =
@@ -43,11 +45,6 @@ export type Moment =
 		waits?: string
 	}
 export type Hook = (moment: Moment) => void
-
-// what caused a run in its request: its process, and the causes of each change that marked it
-export class Cause {
-	constructor(readonly id: string, readonly parents: readonly Cause[]) {}
-}
 
 export type Kept = { by: By; causes?: Cause }
 
@@ -94,8 +91,8 @@ export type Proc = {
 	after?: Proc
 	previous?: { value: unknown }
 	run?: string
-	parked: boolean
-	looping?: string[]
+	looping: boolean
+	loop?: string[]
 	state: "running" | "killing" | "gone"
 	busy: number
 	track: Reader
@@ -118,7 +115,7 @@ export type Run = {
 	shown?: { value: unknown }
 	stopped?: Proc
 	replaced: boolean
-	looping?: string[]
+	loop?: string[]
 }
 
 export type PartCall = { part: string; before: Child[]; matched: Set<Child>; replaced: boolean }

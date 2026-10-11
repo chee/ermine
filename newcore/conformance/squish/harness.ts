@@ -5,7 +5,7 @@
 // { op: "encode", patches }  →  { columns }
 // { op: "decode", columns }  →  { patches }
 // bytes, which JSON has none of: {"$bytes": [0, 255, ...]} (a Uint8Array)
-import { decode, encode, squish } from "../../squish.ts"
+import { decode, encode, squish } from "../../opstreams/ts/squish.ts"
 
 type Request = { op: string; patches?: never[]; columns?: never }
 

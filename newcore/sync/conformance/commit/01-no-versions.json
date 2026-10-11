@@ -1,0 +1,141 @@
+{
+	"title": "an object with no versions: parents [], lamport 1, no base",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {}
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"v": 1
+							}
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [],
+				"random": "c020406080a0c0e0"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wCBAYICgwOA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"v": 1
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wCBAYICgwOA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"v": 1
+							}
+						}
+					]
+				},
+				"name": "b06b1838a3849d1d75f4b6ef8c452da5479bf523c158af26e2e45b3b18cf7c5c"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"b06b1838a3849d1d75f4b6ef8c452da5479bf523c158af26e2e45b3b18cf7c5c": 1000
+				}
+			},
+			"expect": [
+				{
+					"content": {
+						"v": 1
+					},
+					"change": {
+						"actor": "me",
+						"time": 1000,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "b06b1838a3849d1d75f4b6ef8c452da5479bf523c158af26e2e45b3b18cf7c5c"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				}
+			]
+		}
+	]
+}

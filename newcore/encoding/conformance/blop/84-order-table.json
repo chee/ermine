@@ -1,0 +1,25 @@
+{
+	"title": "table order: node's kind beats signer's size",
+	"blop": {
+		"node": 5,
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHg"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "node"
+	}
+}

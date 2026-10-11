@@ -18,7 +18,7 @@ import {
 	type Patch,
 	type Path,
 	type Read,
-} from "../../notify.ts"
+} from "../../notify/ts/notify.ts"
 
 let content: unknown
 let notify = createNotify(() => content)

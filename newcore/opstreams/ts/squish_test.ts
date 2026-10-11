@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert"
-import type { Patch } from "../notify.ts"
+import type { Patch } from "../../notify/ts/notify.ts"
 import createSquish, { decode, encode, squish } from "./squish.ts"
 
 const ins = (at: number, value: unknown, path: (string | number)[] = ["t"]): Patch => ({
@@ -163,8 +163,8 @@ Deno.test("squish: a long list typed into a list is one insert", () => {
 // and a lone high meeting a lone low makes one pair, a position fewer); never for UTF-16 units,
 // where a pair is two units however it was made
 import mutate, { MutateError } from "./mutate.ts"
-import createNode from "../nodes/node.ts"
-import createChange, { type Change } from "../nodes/change.ts"
+import createNode from "../../nodes/ts/node.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
 
 const host = createChange("a", { time: 0, actor: "host" })
 const whole = ["a", "é", "😀", "中", "xy", "👍🏽"]

@@ -1,0 +1,21 @@
+{
+	"title": "signer a string",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": "k",
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "signer"
+	}
+}

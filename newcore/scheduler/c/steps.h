@@ -1,4 +1,4 @@
-// Programs as data (newcore/scheduler/conformance/steps.ts, normal.ts), in C: the step language a
+// Programs as data (newcore/conformance/scheduler/steps.ts, normal.ts), in C: the step language a
 // conformance harness interprets, and the JSON forms of what the scheduler gives. See steps.ts
 // for the language.
 #ifndef STEPS_H

@@ -1,0 +1,33 @@
+{
+	"title": "actor a typed array (tag 64)",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": {
+			"/": {
+				"uint8": [
+					1,
+					2,
+					3
+				]
+			}
+		},
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"bytes": "a8646e6f6465616e656163746f72d84043010203656e6f6e636548090a0b0c0d0e0f10666f626a6563746576616c7565667369676e657258200102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20676c616d706f7274f93c0067706172656e747380677061746368657380",
+		"name": "de4c937038433de732ecf6258c473cd718df1bc115901caa971408a0d9b2faa7"
+	}
+}

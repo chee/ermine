@@ -6,10 +6,10 @@
 // the harness alone, then all that were valid in one change, with facts asked. Whatever answers
 // must equal the reference's answers, and its facts must equal notify.ts's facts(patch, before).
 import { assert, assertEquals } from "@std/assert"
-import createChange, { type Change } from "../../../nodes/change.ts"
-import createNode from "../../../nodes/node.ts"
-import mutate, { MutateError } from "../../mutate.ts"
-import { facts, type Patch } from "../../../notify.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
+import createNode from "../../nodes/ts/node.ts"
+import mutate, { MutateError } from "../../opstreams/ts/mutate.ts"
+import { facts, type Patch } from "../../notify/ts/notify.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet ${here}harness.ts`
@@ -37,9 +37,9 @@ async function ask(requests: Request[], cmd = command): Promise<Answer[]> {
 
 type Step = Request & { expect: Answer }
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../opstreams/conformance/mutate`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../opstreams/conformance/mutate/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

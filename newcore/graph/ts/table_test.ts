@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import createNode from "../nodes/node.ts"
+import createNode from "../../nodes/ts/node.ts"
 import { createTable, TableError } from "./table.ts"
 
 const code = (f: () => unknown) => (assertThrows(f, TableError) as TableError).code

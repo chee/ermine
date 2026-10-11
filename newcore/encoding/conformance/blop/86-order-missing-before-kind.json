@@ -1,0 +1,20 @@
+{
+	"title": "table order: a missing actor beats a bad nonce",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": "x",
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "actor"
+	}
+}

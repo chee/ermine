@@ -1,0 +1,209 @@
+{
+	"title": "each object its own chain and versions; an object with none: []",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "LwAAAC8AAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "v"
+						}
+					]
+				},
+				"name": "27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": [
+						"info",
+						"title"
+					],
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "MAAAADAAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "t"
+						}
+					]
+				},
+				"name": "658144656bf41a945a661363b64723329862914c917b71147c5ef37540a0584a"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": [
+						"info",
+						"title"
+					],
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "MQAAADEAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ZYFEZWv0GpRaZhNjtkcjMphikUyRe3EUfF7zdUCgWEo"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "u"
+						}
+					]
+				},
+				"name": "b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9": 1046,
+					"658144656bf41a945a661363b64723329862914c917b71147c5ef37540a0584a": 1047,
+					"b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe": 1048
+				}
+			},
+			"expect": [
+				{
+					"content": "v",
+					"change": {
+						"actor": "a",
+						"time": 1046,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": [
+					"info",
+					"title"
+				],
+				"times": {
+					"27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9": 1046,
+					"658144656bf41a945a661363b64723329862914c917b71147c5ef37540a0584a": 1047,
+					"b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe": 1048
+				}
+			},
+			"expect": [
+				{
+					"content": "u",
+					"change": {
+						"actor": "a",
+						"time": 1048,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": [
+					"info",
+					"other"
+				],
+				"times": {
+					"27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9": 1046,
+					"658144656bf41a945a661363b64723329862914c917b71147c5ef37540a0584a": 1047,
+					"b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe": 1048
+				}
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": [
+					"children",
+					"kids"
+				],
+				"times": {
+					"27cf0e7e981fe364385964fb3fbc9b377b6afc55531ce422ad2c23bc18cd65d9": 1046,
+					"658144656bf41a945a661363b64723329862914c917b71147c5ef37540a0584a": 1047,
+					"b6310638b17faf0da478f0a504471d2e35426aba3c3cbd8bf1b9475909c4c8fe": 1048
+				}
+			},
+			"expect": []
+		}
+	]
+}

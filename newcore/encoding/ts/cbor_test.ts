@@ -347,7 +347,7 @@ function fromJson(x: unknown): Value {
 Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 	// one set of vectors for every codec
 	const text = await Deno.readTextFile(
-		new URL("./cbor/conformance/vectors.json", import.meta.url),
+		new URL("../conformance/cbor/vectors.json", import.meta.url),
 	)
 	const doc = JSON.parse(text)
 	const list: { [k: string]: unknown }[] = Array.isArray(doc) ? doc : doc.vectors

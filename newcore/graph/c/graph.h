@@ -1,4 +1,4 @@
-// The graph (newcore/graph/graph.ts), in C: the libraries hooked up. It holds the table, places, a
+// The graph (newcore/graph/ts/graph.ts), in C: the libraries hooked up. It holds the table, places, a
 // trackgraph and one notify per node; no library knows another. places says what a read rested
 // on (depend), the graph tracks it in the trackgraph and asks that node's notify to watch it;
 // the graph tells the node's notify of each change, and notify's reads mark the owners that read
@@ -18,9 +18,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../c/node.h"
+#include "../../nodes/c/node.h"
 #include "../../notify/c/notify.h"
-#include "../places/c/places.h"
+#include "places.h"
 #include "../../protect/c/protect.h"
 
 typedef struct gr_graph gr_graph;

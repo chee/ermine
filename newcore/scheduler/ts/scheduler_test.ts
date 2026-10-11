@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createNode from "../nodes/node.ts"
-import { rules as protectRules } from "../protect.ts"
+import createNode from "../../nodes/ts/node.ts"
+import { rules as protectRules } from "../../protect/ts/protect.ts"
 import { type Api, createScheduler, type Moment, PENDING, SchedulerError } from "./scheduler.ts"
 
 function host(o: { id?: (t: number) => string } = {}) {

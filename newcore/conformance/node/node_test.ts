@@ -40,9 +40,9 @@ function match(got: Shown, want: Shown, at: string) {
 	assertEquals(got, want, at)
 }
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../nodes/conformance/node`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../nodes/conformance/node/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

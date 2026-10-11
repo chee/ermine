@@ -1,0 +1,49 @@
+{
+	"title": "walk from d: the boundary b is not here",
+	"names": {
+		"0000f0926182453af3b385739f3420262b42df97d16bb630fd69ef6084eb37b3": "y",
+		"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459": "b",
+		"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56": "d",
+		"1ff6a6dc3c4be68eab4193a0642713da81a5e1e964b15766194819f348a4af75": "x",
+		"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12": "c",
+		"d66c163efe11fc8eae3a83e4fcc6a662f9ba716f723e32603ce578e397b8c7e1": "z"
+	},
+	"request": {
+		"op": "walk",
+		"commits": [
+			{
+				"id": "4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+				"parents": [
+					"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459"
+				]
+			},
+			{
+				"id": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+				"parents": [
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+				]
+			},
+			{
+				"id": "1ff6a6dc3c4be68eab4193a0642713da81a5e1e964b15766194819f348a4af75",
+				"parents": []
+			},
+			{
+				"id": "0000f0926182453af3b385739f3420262b42df97d16bb630fd69ef6084eb37b3",
+				"parents": [
+					"1ff6a6dc3c4be68eab4193a0642713da81a5e1e964b15766194819f348a4af75"
+				]
+			},
+			{
+				"id": "d66c163efe11fc8eae3a83e4fcc6a662f9ba716f723e32603ce578e397b8c7e1",
+				"parents": [
+					"0000f0926182453af3b385739f3420262b42df97d16bb630fd69ef6084eb37b3"
+				]
+			}
+		],
+		"head": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+		"known": []
+	},
+	"expect": {
+		"error": "missing"
+	}
+}

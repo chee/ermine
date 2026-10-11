@@ -45,12 +45,12 @@
 //
 // a by: the change's header as JSON (time, actor, reader?, site?, cause?) and node, which?.
 // an error: {"error":code}; a refusal also "why": protect's. the harness goes on.
-import createChange, { type Change } from "../../nodes/change.ts"
-import createNode from "../../nodes/node.ts"
-import { type Patch } from "../../notify.ts"
-import { rules } from "../../protect.ts"
-import { type Bind, createGraph, type Graph, type Reader } from "../graph.ts"
-import { type Which } from "../../opstreams/mutate.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
+import createNode from "../../nodes/ts/node.ts"
+import { type Patch } from "../../notify/ts/notify.ts"
+import { rules } from "../../protect/ts/protect.ts"
+import { type Bind, createGraph, type Graph, type Reader } from "../../graph/ts/graph.ts"
+import { type Which } from "../../opstreams/ts/mutate.ts"
 import { code, json, operate, version } from "./normal.ts"
 
 type O = string

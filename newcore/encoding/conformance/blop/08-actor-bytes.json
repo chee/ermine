@@ -1,0 +1,29 @@
+{
+	"title": "actor bytes",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": {
+			"/": {
+				"bytes": "oKGiow"
+			}
+		},
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"bytes": "a8646e6f6465616e656163746f7244a0a1a2a3656e6f6e636548090a0b0c0d0e0f10666f626a6563746576616c7565667369676e657258200102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20676c616d706f7274f93c0067706172656e747380677061746368657380",
+		"name": "48934b39734510e3689c480eb642f35962bb5853c8138638b53533799c546e05"
+	}
+}

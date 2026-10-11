@@ -1,4 +1,4 @@
-// deno bench newcore/notify_bench.ts
+// deno bench newcore/notify/ts/notify_bench.ts
 // patched() only: the content is made once, the patch never applied (notify never applies one)
 import { createNotify, facts, type Patch } from "./notify.ts"
 

@@ -1,0 +1,26 @@
+{
+	"title": "cause null is a value",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": [],
+		"cause": null
+	},
+	"expect": {
+		"bytes": "a9646e6f6465616e656163746f726161656361757365f6656e6f6e636548090a0b0c0d0e0f10666f626a6563746576616c7565667369676e657258200102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20676c616d706f7274f93c0067706172656e747380677061746368657380",
+		"name": "e2860de9fa94af8cc5e599fb374f5dd5d19aa80c727fa6889fea1f374ae8ad5d"
+	}
+}

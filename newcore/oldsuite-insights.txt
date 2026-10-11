@@ -20,11 +20,11 @@ failures from the old design or the adapter
   old gone-list quirks: 4 (duplicates, order)
 
 real differences in newcore
-  1. a request that throws runs no rounds (scheduler.ts request(): rounds drain
+  1. FIXED 10-11 (TS and C; scenario 25-throw-runs-rounds). a request that throws runs no rounds (scheduler.ts request(): rounds drain
      only after fn() returns). a handler's changes before its throw leave readers
      due until some later request. old suite ran them before returning.
      fix: drain in the finally.
-  2. a write with no patches marks nobody. old suite marked readers.  (decide)
+  2. FIXED 10-11 (TS; C already did; scenario 26-empty-write-marks). a write with no patches marks nobody. old suite marked readers.  (decide)
   3. a path-started process's first run has no program in its agent: runAgent
      is built before the finder sets p.program. later runs fine.  (bug)
   4. a killed ephemeral node's id stays in its list, reads back pending.
@@ -34,3 +34,6 @@ real differences in newcore
 
 also: status is its own first version (because place "status") and is mirrored
 in change.actor.code; the adapter reshaped it back to old form without trouble.
+
+after the fixes (10-11): strict 53 pass, 42 fail, 40 unsupported. newly passing:
+effects-handler-error, rounds-running-read, rounds-beyond-json.

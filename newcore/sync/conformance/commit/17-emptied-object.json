@@ -1,0 +1,203 @@
+{
+	"title": "an object whose only head has no side has no versions: parents [], lamport 1",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "PwAAAD8AAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "2f636dd9b788078e613adca8982b559a503651f028067d6a853535d5ffd28843"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QAAAAEAAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "L2Nt2beIB45hOtyomCtVmlA2UfAoBn1qhTU11f/SiEM"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": []
+						}
+					]
+				},
+				"name": "6ececbea507ffe6ee9c8e28c8e920c2a95ede816f9b0c5a98e57df49a26882d9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"2f636dd9b788078e613adca8982b559a503651f028067d6a853535d5ffd28843": 1062,
+					"6ececbea507ffe6ee9c8e28c8e920c2a95ede816f9b0c5a98e57df49a26882d9": 1063
+				}
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [],
+				"random": "c0fe1e3e5e7e9ebe"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wP4ePl5+nr4"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wP4ePl5+nr4"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					]
+				},
+				"name": "62f9e6007adb823351be2c5e828260d2daeb8441e223ce59c91e6050c9b6d6e0"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"2f636dd9b788078e613adca8982b559a503651f028067d6a853535d5ffd28843": 1062,
+					"6ececbea507ffe6ee9c8e28c8e920c2a95ede816f9b0c5a98e57df49a26882d9": 1063,
+					"62f9e6007adb823351be2c5e828260d2daeb8441e223ce59c91e6050c9b6d6e0": 1064
+				}
+			},
+			"expect": [
+				{
+					"content": "again",
+					"change": {
+						"actor": "me",
+						"time": 1064,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "62f9e6007adb823351be2c5e828260d2daeb8441e223ce59c91e6050c9b6d6e0"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				}
+			]
+		}
+	]
+}

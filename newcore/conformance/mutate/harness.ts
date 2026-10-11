@@ -15,10 +15,10 @@
 // Typed arrays in JSON: { "$Uint8Array": [1, 2] } (Int8, Uint16, Int16, Uint32, Int32 too). An
 // implementation without them skips those scenarios (MUTATE_SKIP).
 // Anything not understood: { error }.
-import { type Change } from "../../../nodes/change.ts"
-import createNode, { type Node, type Version } from "../../../nodes/node.ts"
-import mutate, { MutateError, type Which } from "../../mutate.ts"
-import type { Facts, Patch } from "../../../notify.ts"
+import { type Change } from "../../nodes/ts/change.ts"
+import createNode, { type Node, type Version } from "../../nodes/ts/node.ts"
+import mutate, { MutateError, type Which } from "../../opstreams/ts/mutate.ts"
+import type { Facts, Patch } from "../../notify/ts/notify.ts"
 
 // deno-lint-ignore no-explicit-any
 type Request = Record<string, any>

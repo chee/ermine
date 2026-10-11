@@ -1,0 +1,86 @@
+{
+	"title": "a root's side: its patches on an object with no versions",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "AQAAAAEAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"a": 1
+							}
+						}
+					]
+				},
+				"name": "dab81fa42a367224da4765b9333adb271eb78b03790979bac35f9764a7adb0b9"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "dab81fa42a367224da4765b9333adb271eb78b03790979bac35f9764a7adb0b9"
+			},
+			"expect": {
+				"side": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"dab81fa42a367224da4765b9333adb271eb78b03790979bac35f9764a7adb0b9": 1000
+				}
+			},
+			"expect": [
+				{
+					"content": {
+						"a": 1
+					},
+					"change": {
+						"actor": "a",
+						"time": 1000,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "dab81fa42a367224da4765b9333adb271eb78b03790979bac35f9764a7adb0b9"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		}
+	]
+}

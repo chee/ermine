@@ -1,14 +1,14 @@
-// deno bench newcore/opstreams/mutate_bench.ts
+// deno bench newcore/opstreams/ts/mutate_bench.ts
 // mutate against a fork of cabbages (mutate/cabbages.ts): the same patches, the same result
 // mutate: what is touched copied, the old content kept, all or nothing
 // cabbages: in place; "cabbages, cloned": a structuredClone first, so the old content is kept
 import { assertEquals } from "@std/assert"
 import { apply } from "./mutate/cabbages.ts"
-import createChange, { type Change } from "../nodes/change.ts"
-import createNode from "../nodes/node.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
+import createNode from "../../nodes/ts/node.ts"
 import mutate from "./mutate.ts"
 import { squish } from "./squish.ts"
-import type { Patch } from "../notify.ts"
+import type { Patch } from "../../notify/ts/notify.ts"
 
 const N = 10_000
 const rnd = (() => {

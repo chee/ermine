@@ -6,6 +6,8 @@
 // starts and goes; order changes nothing else of a process.
 import rank from "./rank.ts"
 
+type Entry<P> = { p: P; rank: number; mark: number }
+
 export type Ordered<P> = { id: string; values: Set<string>; after?: P; state: string }
 
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
@@ -39,37 +41,88 @@ export function createOrder<P extends Ordered<P>>(
 		return rankOf ??= rank([...all()].filter((p) => p.state === "running"), edges)
 	}
 
+	// the due as a heap, by rank, then mark, then id; made against heapRanks
+	const heap: Entry<P>[] = []
+	let heapRanks: Map<P, number> | undefined
+	const less = (a: Entry<P>, b: Entry<P>) =>
+		a.rank !== b.rank
+			? a.rank < b.rank
+			: a.mark !== b.mark
+			? a.mark < b.mark
+			: byCodePoint(a.p.id, b.p.id) < 0
+	function push(e: Entry<P>) {
+		let i = heap.push(e) - 1
+		while (i > 0) {
+			const up = (i - 1) >> 1
+			if (!less(e, heap[up])) break
+			heap[i] = heap[up]
+			i = up
+		}
+		heap[i] = e
+	}
+	function pop(): Entry<P> {
+		const top = heap[0]
+		const last = heap.pop()!
+		if (heap.length) {
+			let i = 0
+			for (;;) {
+				let c = 2 * i + 1
+				if (c >= heap.length) break
+				if (c + 1 < heap.length && less(heap[c + 1], heap[c])) c++
+				if (!less(heap[c], last)) break
+				heap[i] = heap[c]
+				i = c
+			}
+			heap[i] = last
+		}
+		return top
+	}
+	const enter = (id: string, mark: number) => {
+		const p = get(id)
+		if (heapRanks && p) push({ p, rank: heapRanks.get(p) ?? 0, mark })
+	}
+
 	return {
 		// the due, by id: the time each was made due at
 		at: (id: string) => due.get(id),
 		has: (id: string) => due.has(id),
-		set: (id: string, time: number) => void due.set(id, time),
+		set: (id: string, time: number) => {
+			due.set(id, time)
+			enter(id, time)
+		},
 		delete: (id: string) => void due.delete(id),
 		size: () => due.size,
 		ids: () => [...due.keys()],
 
 		rank: (p: P) => ranks().get(p) ?? 0,
 
+		// the ids of the running processes p is after, sorted
+		after: (p: P) => [...new Set(edges(p).map((q) => q.id))].sort(byCodePoint),
+
 		// the due process to run: not waiting after a due one; lowest rank, then earliest made due,
 		// then id
 		next(): { p: P; rank: number } {
 			const rank = ranks()
-			let best: P | undefined
-			let bestMark = 0
-			for (const [id, m] of due) {
-				const p = get(id)!
-				if (p.after && due.has(p.after.id)) continue
-				const r = rank.get(p) ?? 0
-				const b = best && (rank.get(best) ?? 0)
-				if (
-					!best || r < b! ||
-					(r === b && (m < bestMark || (m === bestMark && byCodePoint(p.id, best.id) < 0)))
-				) {
-					best = p
-					bestMark = m
-				}
+			// the heap is remade when the ranks are; a popped entry no longer due at its mark is stale
+			if (heapRanks !== rank || heap.length > 4 * due.size + 64) {
+				heapRanks = rank
+				heap.length = 0
+				for (const [id, m] of due) push({ p: get(id)!, rank: rank.get(get(id)!) ?? 0, mark: m })
 			}
-			return { p: best!, rank: rank.get(best!) ?? 0 }
+			const waiting: Entry<P>[] = []
+			let best: Entry<P> | undefined
+			while (heap.length) {
+				const e = pop()
+				if (due.get(e.p.id) !== e.mark) continue
+				if (e.p.after && due.has(e.p.after.id)) {
+					waiting.push(e)
+					continue
+				}
+				best = e
+				break
+			}
+			for (const e of waiting) push(e)
+			return { p: best!.p, rank: best!.rank }
 		},
 
 		started(p: P) {

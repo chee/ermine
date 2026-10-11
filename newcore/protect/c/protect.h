@@ -1,4 +1,4 @@
-// Who may do what (newcore/PROTECT.tex), in C. Same shape as protect.ts. Only the scheduler calls it.
+// Who may do what (newcore/protect/PROTECT.tex), in C. Same shape as protect.ts. Only the scheduler calls it.
 // Nothing here reads the graph: a policy's own reads go through the read the caller gives.
 //
 // memory: the caller owns it. everything the library builds (values, asks, answers' whys, rule

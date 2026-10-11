@@ -1,0 +1,133 @@
+{
+	"title": "not of the form: bytes refuses (not-an-id), is false: upper-case hex; one upper-case digit; wrong prefix; another scheme; no prefix; 63 hex digits; 65 hex digits; a digit not hex; empty",
+	"ask": [
+		{
+			"op": "bytes",
+			"id": "ermine://0C8C6F9648E6A9D929CF6D0CD4A04D186434B25D9B58DC1C984D4F31B85217CE"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0C8C6F9648E6A9D929CF6D0CD4A04D186434B25D9B58DC1C984D4F31B85217CE"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217cE"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217cE"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine:/0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "is",
+			"id": "ermine:/0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "bytes",
+			"id": "automerge://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "is",
+			"id": "automerge://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "bytes",
+			"id": "0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "is",
+			"id": "0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217c"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217c"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce0"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce0"
+		},
+		{
+			"op": "bytes",
+			"id": "ermine://0c8c6f9648g6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "is",
+			"id": "ermine://0c8c6f9648g6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+		},
+		{
+			"op": "bytes",
+			"id": ""
+		},
+		{
+			"op": "is",
+			"id": ""
+		}
+	],
+	"expect": [
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		},
+		{
+			"code": "not-an-id"
+		},
+		{
+			"is": false
+		}
+	]
+}

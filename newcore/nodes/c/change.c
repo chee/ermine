@@ -1,4 +1,4 @@
-// Making a change (newcore/CHANGE.tex), in C.
+// Making a change (newcore/nodes/CHANGE.tex), in C.
 #include "change.h"
 
 ch_change ch_make(const char *node, ch_header header, const ch_site *outside) {

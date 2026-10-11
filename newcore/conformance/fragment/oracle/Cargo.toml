@@ -1,0 +1,13 @@
+# The fragment oracle: Subduction's own build_fragment_store and fragment
+# (sedimentree_core 0.14.2, the version layers/subduction pins), with its
+# default depth metric CountLeadingZeroBytes, over a DAG read from stdin.
+# no_std collections (BTreeMap/BTreeSet): deterministic. ../fixtures.ts runs it.
+
+[package]
+name = "fragment_oracle"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+sedimentree_core = { version = "=0.14.2", default-features = false }

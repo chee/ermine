@@ -1,5 +1,5 @@
 // libFuzzer target: the input bytes are a sequence of operations over a few nodes, applied to
-// the trackgraph and to a small model (newcore/conformance/model.ts, in C). After every step:
+// the trackgraph and to a small model (newcore/conformance/trackgraph/model.ts, in C). After every step:
 // reads and readers agree with the model (duplicates removed on both sides, each at its first
 // place: the model makes them too, when a run reads a node out of order), and
 // the laws hold (symmetry; a link's at is its slot; holes counted; the last reader a link).

@@ -1,4 +1,4 @@
-// The C node on the line protocol (newcore/nodes/node/conformance/harness.ts): one JSON request per
+// The C node on the line protocol (newcore/conformance/node/harness.ts): one JSON request per
 // line in, one answer per line out. Content, change, because, actor and cause are kept as their
 // JSON text and written back as is; in a list, {"symbol": name} is a symbol.
 #include "shown.h"

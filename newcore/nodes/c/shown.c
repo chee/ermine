@@ -1,4 +1,4 @@
-// Shown nodes on the line protocol (newcore/nodes/node/conformance/harness.ts), for the C harnesses:
+// Shown nodes on the line protocol (newcore/conformance/node/harness.ts), for the C harnesses:
 // reading JSON as spans of the line, and writing it. Content, change, because, actor and cause are
 // kept as their JSON text and written back as is; in a list, {"symbol": name} is a symbol.
 #include "shown.h"

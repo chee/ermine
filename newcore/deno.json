@@ -1,19 +1,19 @@
 {
 	"name": "@ermine/newcore",
 	"exports": {
-		"./trackgraph": "./trackgraph.ts",
-		"./notify": "./notify.ts",
-		"./node": "./nodes/node.ts",
-		"./change": "./nodes/change.ts",
-		"./because": "./nodes/because.ts",
-		"./stacktrace": "./nodes/stacktrace.ts",
-		"./squish": "./opstreams/squish.ts",
-		"./mutate": "./opstreams/mutate.ts",
-		"./places": "./graph/places.ts",
-		"./table": "./graph/table.ts",
-		"./pack": "./encoding/pack.ts",
-		"./protect": "./protect.ts",
-		"./scheduler": "./scheduler/scheduler.ts"
+		"./trackgraph": "./trackgraph/ts/trackgraph.ts",
+		"./notify": "./notify/ts/notify.ts",
+		"./node": "./nodes/ts/node.ts",
+		"./change": "./nodes/ts/change.ts",
+		"./because": "./nodes/ts/because.ts",
+		"./stacktrace": "./nodes/ts/stacktrace.ts",
+		"./squish": "./opstreams/ts/squish.ts",
+		"./mutate": "./opstreams/ts/mutate.ts",
+		"./places": "./graph/ts/places.ts",
+		"./table": "./graph/ts/table.ts",
+		"./pack": "./encoding/ts/pack.ts",
+		"./protect": "./protect/ts/protect.ts",
+		"./scheduler": "./scheduler/ts/scheduler.ts"
 	},
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env",
@@ -31,5 +31,5 @@
 		"semiColons": false,
 		"useTabs": true
 	},
-	"exclude": ["dist", "c", "*/c", "*/*/c"]
+	"exclude": ["dist", "*/c"]
 }

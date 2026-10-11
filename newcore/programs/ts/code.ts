@@ -2,7 +2,7 @@
 // process, read only and tracked, so a change to what it read runs the process again. what it finds
 // becomes the process's code when the process has none yet or is replaced; otherwise a different
 // program, an error or nothing found shows in its status as new.
-import type { Api } from "../graph/graph.ts"
+import type { Api } from "../../graph/ts/graph.ts"
 import { errorOf } from "./records.ts"
 import {
 	type Ctx,
@@ -11,15 +11,12 @@ import {
 	PENDING,
 	type Proc,
 	type Process,
-} from "../scheduler/types.ts"
+} from "../../scheduler/ts/types.ts"
 
 export function createCode(o: {
 	finder?: Finder
-	// the interface a process's part is given (scheduler.ts)
-	api(
-		ctx: Ctx,
-		o: { tracked?: boolean; writes: boolean; alive: () => boolean },
-	): Api
+	// what the finder reads through (process-api.ts)
+	view(ctx: Ctx, alive: () => boolean): Api
 	// a part run as the process (processes.ts)
 	part(p: Proc, fn: () => unknown): { value: unknown } | { error: unknown }
 }) {
@@ -39,7 +36,7 @@ export function createCode(o: {
 		const run = ctx.run!
 		if (!p.path) return
 		let alive = true
-		const view = o.api(ctx, { tracked: true, writes: false, alive: () => alive })
+		const view = o.view(ctx, () => alive)
 		const found = o.part(p, () => o.finder!(processOf(p), view))
 		alive = false
 		if (run.stopped) return "stopped"

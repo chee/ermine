@@ -1,0 +1,26 @@
+{
+	"title": "a key not in the table",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": [],
+		"extra": 1
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "extra"
+	}
+}

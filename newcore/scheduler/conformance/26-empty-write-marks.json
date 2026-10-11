@@ -1,0 +1,228 @@
+{
+	"title": "a write with no patches makes a new version, and marks what read the object",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "d",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "c"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$len": {
+								"$get": [
+									{
+										"$var": "c"
+									},
+									0,
+									"versions"
+								]
+							}
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@3",
+						"by": 4
+					},
+					{
+						"starts": "@3",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@3",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@3",
+						"by": 8
+					},
+					{
+						"starts": "@3",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"reads": "@3",
+						"run": 2,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "note",
+			"patches": [
+				{
+					"path": [],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"ok": 10
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "e",
+			"program": {
+				"compute": [
+					{
+						"do": "info",
+						"address": [
+							"a"
+						],
+						"name": "note",
+						"var": "n"
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@11"
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@11",
+						"by": 12
+					},
+					{
+						"starts": "@11",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@11",
+						"run": 1,
+						"op": "info",
+						"tracked": true
+					},
+					{
+						"ends": "@11",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "note",
+			"patches": [],
+			"expect": {
+				"ok": 16
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@11",
+						"by": 16
+					},
+					{
+						"starts": "@11",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"reads": "@11",
+						"run": 2,
+						"op": "info",
+						"tracked": true
+					},
+					{
+						"ends": "@11",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		}
+	]
+}

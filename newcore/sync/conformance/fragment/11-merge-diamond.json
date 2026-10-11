@@ -1,0 +1,63 @@
+{
+	"title": "a ← b, c ← d(1): d {a b c d}",
+	"names": {
+		"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56": "d",
+		"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12": "c",
+		"acdd96e25c2543dbe9995be7c3904d22b9e9ff8219c35eb5cde68e1709942b0a": "b",
+		"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5": "a",
+		"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b": "e"
+	},
+	"request": {
+		"op": "build",
+		"commits": [
+			{
+				"id": "cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5",
+				"parents": []
+			},
+			{
+				"id": "acdd96e25c2543dbe9995be7c3904d22b9e9ff8219c35eb5cde68e1709942b0a",
+				"parents": [
+					"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+				]
+			},
+			{
+				"id": "4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+				"parents": [
+					"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+				]
+			},
+			{
+				"id": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+				"parents": [
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+					"acdd96e25c2543dbe9995be7c3904d22b9e9ff8219c35eb5cde68e1709942b0a"
+				]
+			},
+			{
+				"id": "e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b",
+				"parents": [
+					"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56"
+				]
+			}
+		],
+		"heads": [
+			"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b"
+		],
+		"known": []
+	},
+	"expect": {
+		"fragments": [
+			{
+				"head": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+				"members": [
+					"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+					"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+					"acdd96e25c2543dbe9995be7c3904d22b9e9ff8219c35eb5cde68e1709942b0a",
+					"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+				],
+				"boundary": [],
+				"checkpoints": []
+			}
+		]
+	}
+}

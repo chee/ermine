@@ -1,4 +1,4 @@
-// deno bench newcore/nodes/change_bench.ts
+// deno bench newcore/nodes/ts/change_bench.ts
 // outside's capture against a plain make; baselines: the object alone, capture alone
 import createChange, { type Header } from "./change.ts"
 import { capture } from "./stacktrace.ts"

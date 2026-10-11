@@ -1,6 +1,6 @@
 // The reference trackgraph on the line protocol: one JSON request per line in, one answer per
 // line out, in order. A node's owner is its name. Another implementation joins by speaking this.
-import { createTrackgraph, type Node } from "../trackgraph.ts"
+import { createTrackgraph, type Node } from "../../trackgraph/ts/trackgraph.ts"
 
 const g = createTrackgraph<string>()
 const nodes = new Map<string, Node<string>>()

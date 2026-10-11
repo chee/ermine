@@ -1,4 +1,4 @@
-// The scheduler (newcore/scheduler.ts), in C. Ported in the same order of operations: the clock
+// The scheduler (newcore/scheduler/ts/scheduler.ts), in C. Ported in the same order of operations: the clock
 // ticks wherever scheduler.ts's does. Comments say what the reference's say, tersely.
 //
 // notify is told object-level patches: the whole object at ["value"], ["info", name] or
@@ -12,8 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../c/trackgraph.h"
-#include "../../opstreams/mutate/c/mutate.h"
+#include "../../trackgraph/c/trackgraph.h"
+#include "../../opstreams/c/mutate.h"
 
 // memory: an arena, and growing things in it
 
@@ -183,9 +183,9 @@ struct sc_proc {
 	int has_previous;
 	const nt_value *previous;
 	const char *run;
-	int parked;
-	int has_looping;
-	vec looping; // const char *
+	int looping;
+	int has_loop;
+	vec loop; // const char *
 	int state; // 0 running, 1 killing, 2 gone
 	int busy;
 	tg_node *track;
@@ -224,8 +224,8 @@ struct sc_run {
 	const nt_value *shown;
 	sc_proc *stopped;
 	int replaced;
-	int has_looping;
-	vec looping;
+	int has_loop;
+	vec loop;
 };
 
 typedef struct {
@@ -478,76 +478,26 @@ int sc_is(const nt_value *a, const nt_value *b) {
 
 static int is_live(const nt_value *v) { return sc_live_fn(v) != NULL; }
 
-// a growing string, for comparing statuses
-typedef struct {
-	char *s;
-	size_t n, cap;
-} sbuf;
-static void sput(sbuf *b, const char *x, size_t n) {
-	if (b->n + n + 1 > b->cap) {
-		b->cap = (b->n + n + 1) * 2;
-		b->s = realloc(b->s, b->cap);
-		if (!b->s) die("out of memory");
+// two values are the same when their members are; a live value only as itself. a status
+// (SCHEDULER.tex, Status) is a map of pending, error, new, loop; empty: the value is current
+static int same_value(const nt_value *a, const nt_value *b) {
+	if (a == b) return 1;
+	if (a == NULL || b == NULL || a->type != b->type) return 0;
+	if (a->type == NT_LIST) {
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++)
+			if (!same_value(a->items[i], b->items[i])) return 0;
+		return 1;
 	}
-	memcpy(b->s + b->n, x, n);
-	b->n += n;
-	b->s[b->n] = 0;
-}
-static void jwrite(sbuf *b, const nt_value *v) {
-	char t[40];
-	if (v == NULL || v->type == NT_NULL) sput(b, is_live(v) ? "\"<live>\"" : "null", is_live(v) ? 8 : 4);
-	else if (v->type == NT_BOOL) sput(b, v->bool_ ? "true" : "false", v->bool_ ? 4 : 5);
-	else if (v->type == NT_NUM) {
-		if (v->num == floor(v->num) && fabs(v->num) < 1e15) snprintf(t, sizeof t, "%.0f", v->num);
-		else snprintf(t, sizeof t, "%.17g", v->num);
-		sput(b, t, strlen(t));
-	} else if (v->type == NT_STR) {
-		sput(b, "\"", 1);
-		for (size_t i = 0; i < v->bytes; i++) {
-			char c = v->str[i];
-			if (c == '"' || c == '\\') sput(b, "\\", 1);
-			sput(b, &c, 1);
+	if (a->type == NT_MAP) {
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++) {
+			nt_value *y = nt_get(b, a->keys[i]);
+			if (!y || !same_value(a->items[i], y)) return 0;
 		}
-		sput(b, "\"", 1);
-	} else if (v->type == NT_LIST) {
-		sput(b, "[", 1);
-		for (size_t i = 0; i < v->count; i++) {
-			if (i) sput(b, ",", 1);
-			jwrite(b, v->items[i]);
-		}
-		sput(b, "]", 1);
-	} else {
-		sput(b, "{", 1);
-		for (size_t i = 0; i < v->count; i++) {
-			if (i) sput(b, ",", 1);
-			sput(b, "\"", 1);
-			sput(b, v->keys[i], strlen(v->keys[i]));
-			sput(b, "\":", 2);
-			jwrite(b, v->items[i]);
-		}
-		sput(b, "}", 1);
+		return 1;
 	}
-}
-static int json_same(const nt_value *a, const nt_value *b) {
-	sbuf x = {0}, y = {0};
-	jwrite(&x, a);
-	jwrite(&y, b);
-	int same = !strcmp(x.s, y.s);
-	free(x.s);
-	free(y.s);
-	return same;
-}
-
-// a status (SCHEDULER.tex, Status): a map of pending, error, new, loop; empty: the value is
-// current. two statuses are the same when their fields are
-static int same_status(const nt_value *a, const nt_value *b) {
-	for (size_t i = 0; i < a->count; i++) {
-		nt_value *y = nt_get(b, a->keys[i]);
-		if (!y || !json_same(a->items[i], y)) return 0;
-	}
-	for (size_t i = 0; i < b->count; i++)
-		if (!nt_get(a, b->keys[i])) return 0;
-	return 1;
+	return sc_is(a, b);
 }
 
 // errors
@@ -1319,7 +1269,7 @@ static void write_value(sc_sched *s, sc_proc *p, const nt_value *value, nt_value
 	vs[at] = (nd_version){value, change, NULL};
 	node->value = (nd_object){vs, count};
 	chg_end(s, &c, 1);
-	if (!same_status(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);
+	if (!same_value(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);
 }
 
 static void pending_at(sc_sched *s, sc_proc *p) {
@@ -1335,7 +1285,7 @@ static void pending_at(sc_sched *s, sc_proc *p) {
 		} else nt_set(st, p->status->keys[i], p->status->items[i]);
 	}
 	if (!put) nt_set(st, "pending", nt_num((double)since));
-	if (!same_status(st, p->status)) write_status(s, p, st, p->runs, NULL, 0);
+	if (!same_value(st, p->status)) write_status(s, p, st, p->runs, NULL, 0);
 }
 
 // a node made, as the acting one: loaded, not yet placed
@@ -1391,15 +1341,15 @@ static void after_of(sc_sched *s, sc_proc *p, vec *out) {
 	if (out->n) qsort(out->v, out->n, sizeof *out->v, cmp_str);
 }
 
-static const char *const ENDED[] = {"done", "pending", "failed", "stopped", "parked"};
-// the enum's order is done pending failed stopped parked; sc_ended names them differently
+static const char *const ENDED[] = {"done", "pending", "failed", "stopped", "looping"};
+// the enum's order is done pending failed stopped looping; sc_ended names them differently
 static const char *ended_name(sc_ended e) {
 	switch (e) {
 	case SC_DONE: return "done";
 	case SC_PENDING: return "pending";
 	case SC_FAILED: return "failed";
 	case SC_STOPPED: return "stopped";
-	default: return "parked";
+	default: return "looping";
 	}
 }
 
@@ -1511,15 +1461,15 @@ static void mark(sc_sched *s, sc_proc *q, const sc_change *change, sc_cause *cau
 		if (causes) vpush(s, &s->stamped, k);
 	}
 	int loop = caused(s, causes, q->id);
-	q->has_looping = 0;
+	q->has_loop = 0;
 	if (loop) {
-		q->has_looping = 1;
-		q->looping = (vec){0};
-		ids_of(s, causes, &q->looping);
+		q->has_loop = 1;
+		q->loop = (vec){0};
+		ids_of(s, causes, &q->loop);
 	}
-	if (q->parked) {
+	if (q->looping) {
 		if (loop) return;
-		q->parked = 0;
+		q->looping = 0;
 	}
 	becomes(s, q, change->time);
 }
@@ -2708,7 +2658,7 @@ static void finish(sc_sched *s, sc_run *run, sc_ended ended, const sc_error *err
 			}
 			p->replaced = 0;
 		}
-		if (ended == SC_PARKED) p->parked = 1;
+		if (ended == SC_LOOPING) p->looping = 1;
 		if (ended != SC_STOPPED) sees(s, p, &run->values);
 		if (ended != SC_PENDING && ended != SC_STOPPED) {
 			int64_t *d = om_get(&s->due, p->id);
@@ -2719,18 +2669,18 @@ static void finish(sc_sched *s, sc_run *run, sc_ended ended, const sc_error *err
 		if (ended == SC_PENDING || ended == SC_STOPPED)
 			nt_set(status, "pending", nt_num((double)(p->has_since ? p->since : run->mark)));
 		if (ended == SC_FAILED) nt_set(status, "error", error_value(error));
-		if (ended == SC_PARKED) {
+		if (ended == SC_LOOPING) {
 			nt_value *loop = nt_map();
 			nt_value *through = nt_list();
-			if (run->has_looping)
-				for (size_t i = 0; i < run->looping.n; i++) nt_push(through, nt_str(run->looping.v[i]));
+			if (run->has_loop)
+				for (size_t i = 0; i < run->loop.n; i++) nt_push(through, nt_str(run->loop.v[i]));
 			else nt_push(through, nt_str(p->id));
 			nt_set(loop, "through", through);
 			if (!is_live(run->value)) nt_set(loop, "value", (nt_value *)run->value);
 			nt_set(status, "loop", loop);
 		}
 		if (run->has_shown) nt_set(status, "new", (nt_value *)run->shown ? (nt_value *)run->shown : nt_null());
-		if (!same_status(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);
+		if (!same_value(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);
 		write_run(s, p, run, ended, error);
 	}
 	sc_moment m = {.kind = SC_ENDS, .id = p->id, .has_run = 1, .run = run->n, .ended = ended};
@@ -2766,9 +2716,9 @@ static void computed(sc_sched *s, sc_run *run, sc_ctx *cctx, nt_value *v) {
 	int equals = same(p, v);
 	run->has_equal = 1;
 	run->equal = equals;
-	if (run->has_looping && !equals) {
+	if (run->has_loop && !equals) {
 		run->value = v;
-		{ finish(s, run, SC_PARKED, NULL, 0); return; }
+		{ finish(s, run, SC_LOOPING, NULL, 0); return; }
 	}
 	if (!equals) {
 		run->why = !p->has_last ? "a first value" : why_new(v, p->equal != NULL);
@@ -2897,9 +2847,9 @@ static void first(sc_sched *s, sc_proc *p, long picked) {
 	run->given = given;
 	run->causes = causes;
 	run->replaced = p->replaced;
-	run->has_looping = p->has_looping;
-	run->looping = p->looping;
-	p->has_looping = 0;
+	run->has_loop = p->has_loop;
+	run->loop = p->loop;
+	p->has_loop = 0;
 	sc_moment m = {.kind = SC_STARTS, .id = p->id, .has_run = 1, .run = n, .has_rank = 1, .rank = rank};
 	pass(s, &m);
 	tg_begin(p->track);
@@ -3073,10 +3023,10 @@ static int round_(sc_sched *s) {
 static const sc_error *request(sc_sched *s, req_fn fn, void *ctx) {
 	if (s->depth > 0 || s->active > 0) return fn(ctx);
 	s->depth++;
+	// a request that fails still runs what its changes made due; then its error goes on
 	const sc_error *out = fn(ctx);
-	if (!out)
-		while (s->due.live || s->qhead < s->nqueue)
-			if (!round_(s)) break;
+	while (s->due.live || s->qhead < s->nqueue)
+		if (!round_(s)) break;
 	s->depth--;
 	vec ids = {0};
 	for (size_t i = 0; i < s->due.n; i++)

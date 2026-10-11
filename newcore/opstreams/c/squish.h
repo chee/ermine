@@ -1,4 +1,4 @@
-// Squishing patches, and patches as columns (newcore/opstreams/squish.ts), in C. Same rules as squish.ts.
+// Squishing patches, and patches as columns (newcore/opstreams/ts/squish.ts), in C. Same rules as squish.ts.
 // Never applies a patch and never needs the content.
 #ifndef SQUISH_H
 #define SQUISH_H

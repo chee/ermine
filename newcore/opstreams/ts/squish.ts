@@ -1,7 +1,7 @@
 // patches pushed in, fewer patches out; and patches as columns, run-length encoded
 // patches are GRAPH.tex's: this reads them, never applies them, and never needs the content
 // squishing keeps the end result and drops the in-between: only an edit's end is ever seen
-import type { Key, Patch, Span } from "../notify.ts"
+import type { Key, Patch, Span } from "../../notify/ts/notify.ts"
 import { count } from "./walk.ts"
 
 type Ranged = Patch & { range: Span }

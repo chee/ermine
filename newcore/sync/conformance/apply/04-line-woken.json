@@ -1,0 +1,134 @@
+{
+	"title": "a blop waiting for its parent: its side once both are taken in",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "BwAAAAcAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "7IShcjszg+wvfvTiWdiU26NcnXKvAbMchDNI13J1Xgc"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								1,
+								1
+							],
+							"value": "x"
+						}
+					]
+				},
+				"name": "b4a297f77c2ad5eee842487647dbfbce9897caa3a105530e38c6c5d771fec013"
+			},
+			"expect": {
+				"waiting": [
+					"ec84a1723b3383ec2f7ef4e259d894dba35c9d72af01b31c843348d772755e07"
+				]
+			}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "b4a297f77c2ad5eee842487647dbfbce9897caa3a105530e38c6c5d771fec013"
+			},
+			"expect": {
+				"none": true
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "BgAAAAYAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "ab"
+						}
+					]
+				},
+				"name": "ec84a1723b3383ec2f7ef4e259d894dba35c9d72af01b31c843348d772755e07"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "b4a297f77c2ad5eee842487647dbfbce9897caa3a105530e38c6c5d771fec013"
+			},
+			"expect": {
+				"side": "axb"
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"ec84a1723b3383ec2f7ef4e259d894dba35c9d72af01b31c843348d772755e07": 1005,
+					"b4a297f77c2ad5eee842487647dbfbce9897caa3a105530e38c6c5d771fec013": 1006
+				}
+			},
+			"expect": [
+				{
+					"content": "axb",
+					"change": {
+						"actor": "a",
+						"time": 1006,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "b4a297f77c2ad5eee842487647dbfbce9897caa3a105530e38c6c5d771fec013"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		}
+	]
+}

@@ -1,9 +1,9 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import createChange, { type Change } from "../nodes/change.ts"
-import createNode from "../nodes/node.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
+import createNode from "../../nodes/ts/node.ts"
 import mutate, { MutateError } from "./mutate.ts"
 import { squish } from "./squish.ts"
-import { createNotify, type Facts, facts, type Patch } from "../notify.ts"
+import { createNotify, type Facts, facts, type Patch } from "../../notify/ts/notify.ts"
 
 // a fuzz's numbers: xorshift (an LCG's low bits repeat, so % k of one is patterned)
 const xs = (x: number) => {

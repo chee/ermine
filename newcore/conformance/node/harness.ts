@@ -1,7 +1,7 @@
 // The reference node.ts on the line protocol: one JSON request per line in, one answer per line
 // out, in order. Content, change, because, actor and cause are any JSON, given back as is; in a
 // list, {"symbol": name} is a symbol. Another implementation joins by speaking this.
-import make, { type Header, type List, type Node, type Version } from "../../node.ts"
+import make, { type Header, type List, type Node, type Version } from "../../nodes/ts/node.ts"
 
 type V = Version<unknown, unknown>
 type Request = {

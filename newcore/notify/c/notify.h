@@ -1,4 +1,4 @@
-// notify (newcore/notify.ts), in C. A patch and its facts (or the content before it), into fine-grained
+// notify (newcore/notify/ts/notify.ts), in C. A patch and its facts (or the content before it), into fine-grained
 // notifies on the reads of that content. Same shape as notify.ts.
 // Out of memory aborts: nothing here returns it.
 #ifndef NOTIFY_H

@@ -1,4 +1,4 @@
-// The graph (newcore/graph/graph.ts), in C. See graph.h. The order of operations is the reference's: the
+// The graph (newcore/graph/ts/graph.ts), in C. See graph.h. The order of operations is the reference's: the
 // clock ticks wherever graph.ts's does. Comments say what the reference's say, tersely.
 //
 // notify is told object-level patches: the whole object at ["value"], ["info", name] or
@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../c/trackgraph.h"
-#include "../../opstreams/mutate/c/mutate.h"
+#include "../../trackgraph/c/trackgraph.h"
+#include "../../opstreams/c/mutate.h"
 
 // memory: an arena, and growing things in it
 

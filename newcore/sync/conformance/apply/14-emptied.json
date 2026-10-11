@@ -1,0 +1,99 @@
+{
+	"title": "a removal at []: no side; the only head gives no version",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "IgAAACIAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"v": 0
+							}
+						}
+					]
+				},
+				"name": "6dad407eb49e7206a1966855f862431e2ad5215b8020f1461f1c9bf59d725586"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "IwAAACMAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ba1AfrSecgahlmhV+GJDHirVIVuAIPFGHxyb9Z1yVYY"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": []
+						}
+					]
+				},
+				"name": "7ab3a4a7c4aef8e0699e998a28febc8aa106ed357c412e9e9d8dc545b03dcf32"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "7ab3a4a7c4aef8e0699e998a28febc8aa106ed357c412e9e9d8dc545b03dcf32"
+			},
+			"expect": {
+				"none": true
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"6dad407eb49e7206a1966855f862431e2ad5215b8020f1461f1c9bf59d725586": 1033,
+					"7ab3a4a7c4aef8e0699e998a28febc8aa106ed357c412e9e9d8dc545b03dcf32": 1034
+				}
+			},
+			"expect": []
+		}
+	]
+}

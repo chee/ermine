@@ -14,7 +14,7 @@
 //   insert {id, name, child, index?, slotindex?}  remove {id, name, index, slotindex?}
 //   pop {id, name, slotindex}  rename {id, name, to}  move {id, name, index, toid, toname, toindex?}
 //   create {value?, id?, ephemeral?}             answers the new node's id
-import type { Api } from "../scheduler.ts"
+import type { Api } from "../../scheduler/ts/scheduler.ts"
 
 export const LIVE = "<live>"
 

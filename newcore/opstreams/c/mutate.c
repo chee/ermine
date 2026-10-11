@@ -1,4 +1,4 @@
-// mutate (newcore/opstreams/mutate.ts), in C, on nt_value contents. Same rules, same order of checks.
+// mutate (newcore/opstreams/ts/mutate.ts), in C, on nt_value contents. Same rules, same order of checks.
 // Memory: what a patch touches is a copy made here (the "made" set), changed in place for the
 // rest of the call; everything else is shared and never freed. Values made here and dropped
 // again within the call are freed; values given are never.

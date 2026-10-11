@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import createNode, { type List, type Node } from "../nodes/node.ts"
-import createChange, { type Change } from "../nodes/change.ts"
+import createNode, { type List, type Node } from "../../nodes/ts/node.ts"
+import createChange, { type Change } from "../../nodes/ts/change.ts"
 import { createTable } from "./table.ts"
 import { createPlaces, type Part, PlacesError } from "./places.ts"
 

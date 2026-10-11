@@ -1,4 +1,4 @@
-// Making a change (newcore/CHANGE.tex), in C. Same shape as change.ts.
+// Making a change (newcore/nodes/CHANGE.tex), in C. Same shape as change.ts.
 #ifndef CHANGE_H
 #define CHANGE_H
 

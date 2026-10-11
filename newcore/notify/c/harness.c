@@ -1,4 +1,4 @@
-// The C notify on the line protocol (newcore/notify/conformance/harness.ts): one JSON request per
+// The C notify on the line protocol (newcore/conformance/notify/harness.ts): one JSON request per
 // line in, one answer per line out. Parses and prints the JSON itself.
 #include "notify.h"
 

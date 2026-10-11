@@ -32,7 +32,7 @@ import {
 	read,
 	rules,
 	type Which,
-} from "../../protect.ts"
+} from "../../protect/ts/protect.ts"
 
 export type Policy = "anyone" | { rules: string } | { first: Policy[] } | { answer: Answer }
 // deno-lint-ignore no-explicit-any

@@ -1,4 +1,4 @@
-// Making a because (newcore/BECAUSE.tex), in C. Same shape as because.ts.
+// Making a because (newcore/nodes/BECAUSE.tex), in C. Same shape as because.ts.
 #ifndef BECAUSE_H
 #define BECAUSE_H
 

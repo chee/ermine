@@ -1,6 +1,6 @@
 // cbor_test.c: checks cbor.c (ENCODING.tex). c/build.sh builds it as cbor-test.
 //
-// The fixed vectors are newcore/encoding/cbor/conformance/vectors.json, a list of
+// The fixed vectors are newcore/encoding/conformance/cbor/vectors.json, a list of
 // {"value": <its JSON form, ENCODING.tex>, "cbor": "<hex>"}, so every codec checks
 // against the same bytes: each value encodes to exactly its bytes, and the
 // bytes decode to a value equal to it. Then round trips, rejected inputs,
@@ -86,8 +86,8 @@ static int argc_default;
 
 static void vectors(const char *path) {
 	FILE *file = fopen(path, "rb");
-	// run from newcore/c, or from newcore
-	if (!file && argc_default) file = fopen("encoding/cbor/conformance/vectors.json", "rb");
+	// run from newcore/encoding/c, or from newcore
+	if (!file && argc_default) file = fopen("encoding/conformance/cbor/vectors.json", "rb");
 	if (!file) {
 		printf("FAIL cannot open %s\n", path);
 		failures++;
@@ -341,7 +341,7 @@ static void deep(void) {
 
 int main(int argc, char **argv) {
 	argc_default = argc <= 1;
-	vectors(argc > 1 ? argv[1] : "../encoding/cbor/conformance/vectors.json");
+	vectors(argc > 1 ? argv[1] : "../conformance/cbor/vectors.json");
 	numbers();
 	rejected();
 	unencodable();

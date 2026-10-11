@@ -1,0 +1,130 @@
+{
+	"title": "looping: an effect writing what its compute read",
+	"steps": [
+		{
+			"op": "create",
+			"value": 0,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						],
+						"var": "x"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$get": [
+								{
+									"$var": "x"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "x"
+								},
+								0,
+								"versions",
+								0,
+								"content"
+							]
+						}
+					}
+				],
+				"effect": [
+					{
+						"do": "write",
+						"address": [
+							"a"
+						],
+						"patches": [
+							{
+								"path": [],
+								"value": {
+									"$add": [
+										{
+											"$given": "value"
+										},
+										1
+									]
+								}
+							}
+						]
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					0,
+					1
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@3",
+						"versions": [
+							{
+								"content": {
+									"loop": {
+										"through": [
+											"@3"
+										],
+										"value": 1
+									}
+								},
+								"time": 9,
+								"status": true
+							},
+							{
+								"content": 0,
+								"time": 5
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

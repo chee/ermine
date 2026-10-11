@@ -2,10 +2,10 @@
 // reaches it by address, asked of protect as the caller, and runs it as itself: the caller's agent
 // with a step naming the process that placed it and the handler. a call made while a round or a
 // part runs is checked now and run after; otherwise it is its own request.
-import { type Api, type Graph, GraphError } from "../graph/graph.ts"
-import type { Address, Place, Step } from "../graph/places.ts"
+import { type Graph, GraphError } from "../../graph/ts/graph.ts"
+import type { Address, Place, Step } from "../../graph/ts/places.ts"
 import { type Agent, errorOf, normal } from "./records.ts"
-import type { CallOp, Cause, Ctx, Moment, Proc, StartOp } from "../scheduler/types.ts"
+import type { CallOp, Cause, Ctx, Moment, Proc } from "../../scheduler/ts/types.ts"
 
 export type From = { place: Place; agent: unknown; causes?: Cause }
 
@@ -14,10 +14,8 @@ export function createHandlers(o: {
 	pass(m: Moment): void
 	// protect, as the scheduler gives it: may actor call the handler at item. refused: throws
 	mayCall(actor: unknown, item: { id: string; route: Step[] }): void
-	// the interface a process's part is given (scheduler.ts)
-	api(ctx: Ctx, o: { writes: boolean; alive: () => boolean }): Api
-	// start, as a part is given it (processes.ts)
-	starter(ctx: Ctx, alive: () => boolean): (op: StartOp) => unknown
+	// what a handler is given (process-api.ts)
+	given(ctx: Ctx, alive: () => boolean, args: unknown): Record<string, unknown>
 	// a part run as the process (processes.ts)
 	part(p: Proc, fn: () => unknown): { value: unknown } | { error: unknown }
 	// the scheduler's: a request, whether one may start now, and what runs after
@@ -56,14 +54,7 @@ export function createHandlers(o: {
 		return () => {
 			o.pass({ starts: definer.id, handler })
 			let alive = true
-			const given: Record<string, unknown> = {
-				api: o.api(ctx, { writes: true, alive: () => alive }),
-				start: o.starter(ctx, () => alive),
-				call: callerOf(ctx),
-				self: definer.id,
-				name: definer.name,
-			}
-			if (op.args !== undefined) given.args = op.args
+			const given = o.given(ctx, () => alive, op.args)
 			const done = o.part(definer, () => (f as (g: unknown) => unknown)(given))
 			alive = false
 			const ends: Moment = {

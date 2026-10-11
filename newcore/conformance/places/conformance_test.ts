@@ -34,9 +34,9 @@ async function ask(requests: Request[], cmd = command): Promise<Answer[]> {
 
 type Step = Request & { expect: Answer }
 
-for await (const f of Deno.readDir(`${here}scenarios`)) {
+for await (const f of Deno.readDir(`${here}../../graph/conformance/places`)) {
 	if (!f.name.endsWith(".json")) continue
-	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}scenarios/${f.name}`)) as {
+	const { title, steps } = JSON.parse(await Deno.readTextFile(`${here}../../graph/conformance/places/${f.name}`)) as {
 		title: string
 		steps: Step[]
 	}

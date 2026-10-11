@@ -1,0 +1,31 @@
+{
+	"title": "a parent of the wrong size",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [
+			{
+				"/": {
+					"bytes": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHg"
+				}
+			}
+		],
+		"lamport": 1,
+		"patches": []
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "parents"
+	}
+}

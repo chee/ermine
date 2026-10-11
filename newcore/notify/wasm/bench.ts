@@ -1,7 +1,7 @@
 // deno run --allow-read --allow-run newcore/notify/wasm/bench.ts
 // The same twelve cases, three ways: notify.ts, notify.c as wasm (both timed by the same loop
 // here, in V8), and notify.c native (its own bench, ../c/bench). patched() only, every time.
-import { createNotify, facts, type Patch } from "../../notify.ts"
+import { createNotify, facts, type Patch } from "../ts/notify.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const N = 10_000

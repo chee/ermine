@@ -1,0 +1,41 @@
+{
+	"title": "parents repeated",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [
+			{
+				"/": {
+					"bytes": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8"
+				}
+			},
+			{
+				"/": {
+					"bytes": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8"
+				}
+			}
+		],
+		"lamport": 2,
+		"patches": [],
+		"base": {
+			"/": {
+				"bytes": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8"
+			}
+		}
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "parents"
+	}
+}

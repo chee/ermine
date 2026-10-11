@@ -1,0 +1,41 @@
+{
+	"title": "parents unsorted beats base not among them",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [
+			{
+				"/": {
+					"bytes": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8"
+				}
+			},
+			{
+				"/": {
+					"bytes": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8"
+				}
+			}
+		],
+		"lamport": 2,
+		"patches": [],
+		"base": {
+			"/": {
+				"bytes": "MDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk8"
+			}
+		}
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "parents"
+	}
+}

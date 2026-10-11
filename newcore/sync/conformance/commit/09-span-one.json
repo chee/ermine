@@ -1,0 +1,280 @@
+{
+	"title": "a span of one: parents [its head], no base, no combine",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "JAAAACQAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"v": 0
+							}
+						}
+					]
+				},
+				"name": "289cedae9157803b010c76598f0e096b1fc158017fb507c9110c360719af1793"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "JQAAACUAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "KJztrpFXgDsBDHZZjw4Jax/BWAF/tQfJEQw2BxmvF5M"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [
+								"v"
+							],
+							"value": 1
+						}
+					]
+				},
+				"name": "483a1e203d9c4606898ab1b922a47c95dfc5a1ff4bc1918c530cc7c5e6509785"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "JgAAACYAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "KJztrpFXgDsBDHZZjw4Jax/BWAF/tQfJEQw2BxmvF5M"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [
+								"v"
+							],
+							"value": 2
+						}
+					]
+				},
+				"name": "50fa0f477c78547c16cc3e84c0a92c46e5af60f459f41fe5e0c8f3998ce2f2e4"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [
+								"one"
+							],
+							"value": true
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"span": [
+						1,
+						2
+					]
+				},
+				"roots": [],
+				"random": "c0e80828486888a8"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wOgIKEhoiKg"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "SDoeID2cRgaJirG5IqR8ld/Fof9LwZGMUwzHxeZQl4U"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [
+								"one"
+							],
+							"value": true
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wOgIKEhoiKg"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "SDoeID2cRgaJirG5IqR8ld/Fof9LwZGMUwzHxeZQl4U"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [
+								"one"
+							],
+							"value": true
+						}
+					]
+				},
+				"name": "0ab3fa2a1045bfa2df8fc1d33d79f797f183a75c151d41969f375b1f627d9d00"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"289cedae9157803b010c76598f0e096b1fc158017fb507c9110c360719af1793": 1035,
+					"483a1e203d9c4606898ab1b922a47c95dfc5a1ff4bc1918c530cc7c5e6509785": 1036,
+					"50fa0f477c78547c16cc3e84c0a92c46e5af60f459f41fe5e0c8f3998ce2f2e4": 1037,
+					"0ab3fa2a1045bfa2df8fc1d33d79f797f183a75c151d41969f375b1f627d9d00": 1038
+				}
+			},
+			"expect": [
+				{
+					"content": {
+						"v": 1,
+						"one": true
+					},
+					"change": {
+						"actor": "me",
+						"time": 1038,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "0ab3fa2a1045bfa2df8fc1d33d79f797f183a75c151d41969f375b1f627d9d00"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				},
+				{
+					"content": {
+						"v": 2
+					},
+					"change": {
+						"actor": "a",
+						"time": 1037,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "50fa0f477c78547c16cc3e84c0a92c46e5af60f459f41fe5e0c8f3998ce2f2e4"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		}
+	]
+}

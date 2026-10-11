@@ -1,4 +1,4 @@
-// notify (newcore/notify.ts), in C. Same shape, same names where C allows.
+// notify (newcore/notify/ts/notify.ts), in C. Same shape, same names where C allows.
 // Only listened places are walked: reads sit in a trie of their paths.
 #include "notify.h"
 

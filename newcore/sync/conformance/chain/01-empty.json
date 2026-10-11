@@ -1,0 +1,48 @@
+{
+	"title": "empty: no heads, nothing to get, nothing waiting or refused",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "heads",
+				"object": "value"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "heads",
+				"object": [
+					"info",
+					"t"
+				]
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "get",
+				"name": "9c44a5b8ed8963b5ca0c54817221eb0c0af64d48132f872e09c9475621bade88"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "waiting"
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "refused"
+			},
+			"expect": []
+		}
+	]
+}
