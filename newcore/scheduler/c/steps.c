@@ -486,11 +486,6 @@ static const sc_error *start_step(rctx *r, const nt_value *st, nt_value **idout)
 		if (e) return e;
 		op.id = x->type == NT_STR ? x->str : NULL;
 	}
-	if (nt_get(st, "args")) {
-		e = eval(r, nt_get(st, "args"), &x);
-		if (e) return e;
-		op.args = x;
-	}
 	const char *id;
 	e = sc_given_start(r->g, &op, &id);
 	if (e) return e;

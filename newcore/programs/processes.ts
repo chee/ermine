@@ -2,7 +2,7 @@
 // (code, or a path the host's code finds). this file makes them, runs their parts, and kills them;
 // when they run is the scheduler's, told through the hooks given.
 //
-// start: names checked, protect asked, the node made, its arguments nodes inside it, then placed.
+// start: its name checked, protect asked, the node made, then placed.
 // a part's start of a child named as one it started in the same part before gives that child
 // again. killing: newest first, children, cleanups, its ephemeral nodes, then untracked; a process
 // busy in a part is killed when the part ends.
@@ -132,16 +132,10 @@ export function createProcesses(o: {
 			return a
 		})()
 		if (ctx?.cause !== undefined) who.cause = ctx.cause
-		// names: checked before anything is made
-		for (
-			const k of [
-				...Object.keys(op.args ?? {}),
-				...(op.name === undefined ? [] : [op.name]),
-			]
-		) {
-			if (k === "." || k === ".." || k.includes("/")) {
-				throw new GraphError("wrong-field", `start: ${k} is no name`)
-			}
+		// its name: checked before anything is made
+		const k = op.name
+		if (k !== undefined && (k === "." || k === ".." || k.includes("/"))) {
+			throw new GraphError("wrong-field", `start: ${k} is no name`)
 		}
 		o.mayStart(who.actor, where, op.name, op.id)
 		const pid = g.make(op.id, null, who)
@@ -188,12 +182,6 @@ export function createProcesses(o: {
 				replaced: caller.replacements,
 			})
 			g.own(pid, caller)
-		}
-		// its arguments: nodes inside it, its own
-		for (const [k, v] of Object.entries(op.args ?? {})) {
-			const id = g.make(undefined, v, who)
-			g.own(id, p)
-			g.changing(who, { tag: ctx?.causes }, () => g.places.insert(pid, k, id))
 		}
 		const change = g.changing(
 			who,

@@ -174,7 +174,6 @@ typedef struct {
 	sc_code code;
 	const char *name; // NULL: the pid
 	const char *id;
-	const nt_value *args; // a map, or NULL
 	int (*equal)(const nt_value *a, const nt_value *b);
 	const char *const *place; // where the address is read from; default the root
 	size_t nplace;

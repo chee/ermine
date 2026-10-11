@@ -13,7 +13,7 @@
 //   {"do":"throw","code":s}                       ends the part with an error of that code
 //   {"do":"if","test":e,"then":[..],"else":[..]?}
 //   {"do":"cleanup","steps":[..]}                 onCleanup; told killed as {"$given":"killed"}
-//   {"do":"start","address":e,"program":e,...}    name, id, args; var: the pid
+//   {"do":"start","address":e,"program":e,...}    name, id; var: the pid
 //   {"do":"call","address":e,"args":e?}           var: the handler's answer
 //   {"do":op,...,"peep":b?}                       op: an interface's (normal.ts), as the harness's
 //
@@ -135,7 +135,7 @@ function steps(list: unknown[], given: Given, vars: Vars, log: Log) {
 					address: ev(s.address),
 					program: program(ev(s.program), log),
 				}
-				for (const f of ["name", "id", "args"]) if (s[f] !== undefined) op[f] = ev(s[f])
+				for (const f of ["name", "id"]) if (s[f] !== undefined) op[f] = ev(s[f])
 				set(given.start(op).id)
 				break
 			}

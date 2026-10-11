@@ -6,6 +6,7 @@ import createBecause from "../nodes/because.ts"
 import createChange, { type Change } from "../nodes/change.ts"
 import { type Graph, GraphError } from "../graph/graph.ts"
 import mutate from "../opstreams/mutate.ts"
+import { encode, type Value } from "../encoding/cbor.ts"
 import type { Version } from "../nodes/node.ts"
 
 type V = Version<unknown, Change>
@@ -55,16 +56,16 @@ export function stepped(a: unknown, add: Record<string, unknown>): Agent {
 
 export const isLive = (v: unknown) => typeof v === "function" || typeof v === "symbol"
 
-// two statuses are the same when their fields are; errors when their messages are
+// two statuses are the same when their canonical encodings are; one with no encoding (a live
+// value thrown) is the same only as itself
 export function sameStatus(a: Status, b: Status): boolean {
-	const keys = new Set([...Object.keys(a), ...Object.keys(b)])
-	for (const k of keys) {
-		const x = (a as Record<string, unknown>)[k]
-		const y = (b as Record<string, unknown>)[k]
-		if (x === undefined || y === undefined) return false
-		if (JSON.stringify(x) !== JSON.stringify(y)) return false
+	if (a === b) return true
+	try {
+		const x = encode(a as Value), y = encode(b as Value)
+		return x.length === y.length && x.every((n, i) => n === y[i])
+	} catch {
+		return false
 	}
-	return true
 }
 
 // an error as a status holds it

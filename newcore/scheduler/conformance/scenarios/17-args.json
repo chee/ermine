@@ -1,13 +1,10 @@
 {
-	"title": "arguments are nodes inside the process it reads",
+	"title": "arguments are no special thing: a read inside the process, pending until written",
 	"steps": [
 		{
 			"op": "start",
 			"address": [],
 			"name": "p",
-			"args": {
-				"n": 5
-			},
 			"program": {
 				"compute": [
 					{
@@ -17,6 +14,24 @@
 							"n"
 						],
 						"var": "n"
+					},
+					{
+						"do": "if",
+						"test": {
+							"$eq": [
+								{
+									"$len": {
+										"$var": "n"
+									}
+								},
+								0
+							]
+						},
+						"then": [
+							{
+								"do": "pending"
+							}
+						]
 					},
 					{
 						"do": "return",
@@ -54,8 +69,51 @@
 						"id": "@1",
 						"versions": [
 							{
+								"content": {
+									"pending": 2
+								},
+								"time": 3,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "create",
+			"value": 5,
+			"id": "n",
+			"expect": {
+				"ok": "n"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "@1",
+			"name": "n",
+			"child": "n",
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
 								"content": 6,
-								"time": 5
+								"time": 8
 							}
 						]
 					}
@@ -75,7 +133,7 @@
 				}
 			],
 			"expect": {
-				"ok": 8
+				"ok": 11
 			}
 		},
 		{
@@ -90,7 +148,7 @@
 						"versions": [
 							{
 								"content": 8,
-								"time": 9
+								"time": 12
 							}
 						]
 					}

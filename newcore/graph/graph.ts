@@ -139,7 +139,6 @@ export type Options<O> = {
 export const ours: ReadonlySet<string> = new Set(
 	[
 		"graph/graph.ts",
-		"scheduler.ts",
 		"scheduler/scheduler.ts",
 		"scheduler/order.ts",
 		"scheduler/run.ts",

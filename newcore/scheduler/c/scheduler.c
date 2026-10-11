@@ -2287,23 +2287,6 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 		vpush(s, &caller->children, ch);
 		owns(s, caller, pid);
 	}
-	// its arguments: nodes inside it, its own
-	if (op->args && op->args->type == NT_MAP) {
-		for (size_t i = 0; i < op->args->count; i++) {
-			const char *id;
-			e = make_node(s, NULL, op->args->items[i], &who, 1, &id);
-			if (e) return e;
-			om_set(s, &s->ephemeral, id, (void *)1);
-			owns(s, p, id);
-			chg c;
-			chg_begin(s, &c, &who, ctx ? ctx->causes : NULL, NULL, NULL);
-			chg_target(s, &c, pid, 2, op->args->keys[i], -1);
-			const void *ch;
-			code = pl_insert(&s->places, pid, sc_dup(s, op->args->keys[i]), id, NULL, NULL, &ch);
-			chg_end(s, &c, code == PL_OK);
-			if (code) return pl_error(s, code, pid);
-		}
-	}
 	chg c;
 	chg_begin(s, &c, &who, ctx ? ctx->causes : NULL, NULL, ctx ? ctx->run : NULL);
 	chg_target(s, &c, where->id, 2, p->name, -1);

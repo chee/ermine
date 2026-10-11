@@ -5,7 +5,7 @@
 //                                         "rules" is made (intro), placed in the root, then given
 //                                         them, and protect reads them (protect.ts rules)   → {}
 //   {"op":op,...}                         a host operation (normal.ts), as the host     → {"ok":a}
-//   {"op":"start","address":a,"program":p,"name"?,"id"?,"args"?}                    → {"ok":pid}
+//   {"op":"start","address":a,"program":p,"name"?,"id"?}                           → {"ok":pid}
 //   {"op":"call","address":a,"args"?,"actor"?,"person"?,"trusted"?}            → {"ok":answer}
 //   {"op":"replace","address":a}                                                  → {"ok":null}
 //   {"op":"outro","id":id}                                                        → {"ok":null}
@@ -84,7 +84,7 @@ function answer(q: Record<string, any>): unknown {
 				address: q.address,
 				program: program(q.program, log),
 			}
-			for (const f of ["name", "id", "args"]) if (q[f] !== undefined) op[f] = q[f]
+			for (const f of ["name", "id"]) if (q[f] !== undefined) op[f] = q[f]
 			return s.start(op as never).id
 		}
 		case "call": {

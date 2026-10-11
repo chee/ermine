@@ -336,7 +336,6 @@ static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
 		nt_value *x;
 		if ((x = nt_get(q, "name")) && x->type == NT_STR) so.name = x->str;
 		if ((x = nt_get(q, "id")) && x->type == NT_STR) so.id = x->str;
-		if ((x = nt_get(q, "args"))) so.args = x;
 		const char *id;
 		e = sc_start(sched, &so, &id);
 		if (e) return e;

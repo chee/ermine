@@ -139,7 +139,6 @@ export type StartOp = {
 	program: Address | Code
 	name?: string
 	id?: string
-	args?: Record<string, unknown>
 	equal?: (a: unknown, b: unknown) => boolean
 	// the host's: where the address is read from; default the root
 	place?: Place
