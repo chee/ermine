@@ -128,7 +128,7 @@ export function version(b: B, content: Side): unknown {
 	for (const k of ["reader", "site", "cause"]) if (k in b.blop) header[k] = b.blop[k]
 	header.time = b.time
 	return toJson({
-		content,
+		...(content === NONE ? {} : { content }),
 		change: createChange("n", header as never),
 		because: createBecause("sync", { lamport: b.lamport, name: b.name }, {
 			signer: hex(b.blop.signer as Uint8Array),
@@ -137,10 +137,11 @@ export function version(b: B, content: Side): unknown {
 }
 // the versions written by hand, [head, content] in order, checked against the model
 export function versions(all: B[], object: Which, hand: [B, Side][]): unknown[] {
-	const model = heads(all, object).flatMap((h) => {
-		const s = side(all, h)
-		return s === NONE ? [] : [[h.name, s]]
-	})
+	// every head is a version, a removal as content NONE; a removal as the only head: none
+	const hs = heads(all, object)
+	const model = hs.length === 1 && side(all, hs[0]) === NONE
+		? []
+		: hs.map((h) => [h.name, side(all, h)])
 	assertEquals(hand.map(([b, c]) => [b.name, c]), model, "hand-written versions disagree")
 	return hand.map(([b, c]) => version(b, c))
 }

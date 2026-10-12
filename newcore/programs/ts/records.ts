@@ -226,8 +226,7 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		if (!there) {
 			if (status) records.status(p, status, n, tag)
 			const who = { actor: agentAt(p, n, p.status), reader: p.id }
-			const id = g.make(undefined, value, who)
-			g.own(id, p)
+			const id = g.make(undefined, value, who, true, p)
 			p.run = id
 			g.changing(who, { own: p, tag }, () => g.places.insert(p.id, "run", id))
 			return id

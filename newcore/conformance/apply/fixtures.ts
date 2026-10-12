@@ -244,13 +244,13 @@ const LIST: Which = ["children", "kids"]
 	const B = mk({ parents: [A], patches: removal })
 	const C = mk({ parents: [A], patches: set(["v"], 1) })
 	const D = mk({ parents: [A], patches: set(["v"], 2) })
-	const hand = desc(B, C, D).filter((h) => h !== B).map((h): [B, unknown] => [
+	const hand = desc(B, C, D).map((h): [B, unknown] => [
 		h,
-		h === C ? { v: 1 } : { v: 2 },
+		h === B ? none : h === C ? { v: 1 } : { v: 2 },
 	])
 	scenario(
 		"emptied-racing",
-		"three heads of one lamport, one emptied: it gives no version, the others in agreed order",
+		"three heads of one lamport, one emptied: a version with no content, in agreed order",
 		[create(), add(A), add(B), add(C), add(D), versions([A, B, C, D], "value", hand)],
 	)
 }
@@ -289,7 +289,31 @@ const LIST: Which = ["children", "kids"]
 		side(C, ["z"]),
 		add(B),
 		side(B, none),
-		versions([A, B, C], LIST, [[C, ["z"]]]),
+		versions(
+			[A, B, C],
+			LIST,
+			desc(B, C).map((h): [typeof h, unknown] => [h, h === B ? none : ["z"]]),
+		),
+	])
+}
+
+// ---- a removal racing an edit: both show
+{
+	const A = mk({ patches: put({ v: 0 }) })
+	const B = mk({ parents: [A], patches: removal })
+	const C = mk({ parents: [A], patches: set(["v"], 1) })
+	scenario("removal-racing", "a removal racing an edit: two versions, one with no content", [
+		create(),
+		add(A),
+		add(C),
+		versions([A, C], "value", [[C, { v: 1 }]]),
+		add(B),
+		side(B, none),
+		versions(
+			[A, B, C],
+			"value",
+			desc(B, C).map((h): [typeof h, unknown] => [h, h === B ? none : { v: 1 }]),
+		),
 	])
 }
 

@@ -1,0 +1,323 @@
+{
+	"title": "by id: the host and a process read a node whole and by id; as gives a cause; host changes carry the site it gives",
+	"steps": [
+		{
+			"op": "new",
+			"site": {
+				"file": "host.c",
+				"line": 7
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "header",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"time": 1,
+					"site": {
+						"file": "host.c",
+						"line": 7
+					}
+				}
+			}
+		},
+		{
+			"op": "whole",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 1
+						}
+					],
+					"info": {},
+					"children": {}
+				}
+			}
+		},
+		{
+			"op": "whole",
+			"id": "gone",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "look",
+			"address": "a",
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": "a",
+			"expect": {
+				"ok": [
+					{
+						"id": "a",
+						"versions": [
+							{
+								"content": 1,
+								"time": 1
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "as",
+			"cause": {
+				"why": "x"
+			},
+			"do": {
+				"op": "write",
+				"address": "a",
+				"patches": [
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "header",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"time": 2,
+					"cause": {
+						"why": "x"
+					},
+					"site": {
+						"file": "host.c",
+						"line": 7
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"address": "a",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "header",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"time": 3,
+					"site": {
+						"file": "host.c",
+						"line": 7
+					}
+				}
+			}
+		},
+		{
+			"op": "set",
+			"address": "a",
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "A"
+				}
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "whole",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 3,
+							"time": 3
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "A",
+								"time": 4
+							}
+						]
+					},
+					"children": {}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"address": "gone",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "create",
+			"value": 5,
+			"id": "far",
+			"expect": {
+				"ok": "far"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "whole",
+						"id": "far",
+						"var": "n"
+					},
+					{
+						"do": "log",
+						"value": "ran"
+					},
+					{
+						"do": "return",
+						"value": {
+							"$get": [
+								{
+									"$var": "n"
+								},
+								"value",
+								0,
+								"content"
+							]
+						}
+					}
+				]
+			},
+			"expect": {
+				"ok": "@6"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"ran"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": 5,
+								"time": 8
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": "far",
+			"patches": [
+				{
+					"path": [],
+					"value": 6
+				}
+			],
+			"expect": {
+				"ok": 11
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"ran"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": 6,
+								"time": 12
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "insert",
+			"id": "far",
+			"name": "kids",
+			"child": "a",
+			"expect": {
+				"ok": 14
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					"ran"
+				]
+			}
+		}
+	]
+}

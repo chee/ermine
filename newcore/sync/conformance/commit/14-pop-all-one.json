@@ -1,0 +1,188 @@
+{
+	"title": "pop the only version: parents [it], no base, a removal at []",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "OAAAADgAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "06a5e7417d37f883d6cfe747de68a31c91e64dd41d57ac4821210a59c9066d43"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "OQAAADkAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "BqXnQX03+IPWz+dH3mijHJHmTdQdV6xIISEKWckGbUM"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"value": "b"
+						}
+					]
+				},
+				"name": "79b5ce2fab71be02cecfb8053cabdc7789b7d4a08efd910c0c9edacd541c41cc"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"pop": 0
+				},
+				"roots": [],
+				"random": "c04c6c8cacccec0c"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wExsjKzM7Aw"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ebXOL6txvgLOz7gFPKvcd4m31KCO/ZEMDJ7azVQcQcw"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": []
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wExsjKzM7Aw"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ebXOL6txvgLOz7gFPKvcd4m31KCO/ZEMDJ7azVQcQcw"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": []
+						}
+					]
+				},
+				"name": "0592524cdc7ebaadbd5d55a4ccb30c149cdd82ec2362fb16bd6eef8ab9a18394"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "0592524cdc7ebaadbd5d55a4ccb30c149cdd82ec2362fb16bd6eef8ab9a18394"
+			},
+			"expect": {
+				"none": true
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"06a5e7417d37f883d6cfe747de68a31c91e64dd41d57ac4821210a59c9066d43": 1055,
+					"79b5ce2fab71be02cecfb8053cabdc7789b7d4a08efd910c0c9edacd541c41cc": 1056,
+					"0592524cdc7ebaadbd5d55a4ccb30c149cdd82ec2362fb16bd6eef8ab9a18394": 1057
+				}
+			},
+			"expect": []
+		}
+	]
+}

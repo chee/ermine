@@ -2,6 +2,8 @@ import { capture, type Site } from "./stacktrace.ts"
 
 // one version of an object: its content, the change that made it, why it is there
 // change and because: the caller's, never read here
+// content is absent (undefined at runtime) in a version that is a removal among racing heads
+// (sync/APPLY.tex); readers that take every version guard it
 export type Version<C, H> = { content: C; change: H; because?: unknown }
 
 // a list: ids in order, and symbols, which name no node

@@ -1032,6 +1032,10 @@ static bool events(transport *t) {
 // -- the device
 
 transport *transport_create(const uint8_t seed[32], const ErmStore *store) {
+	return transport_create_told(seed, store, NULL, NULL);
+}
+
+transport *transport_create_told(const uint8_t seed[32], const ErmStore *store, void (*listener)(void *context, const transport_arrival *arrival), void *context) {
 	transport *t = calloc(1, sizeof *t);
 	if (t == NULL) abort();
 	t->inner = *store;
@@ -1040,6 +1044,7 @@ transport *transport_create(const uint8_t seed[32], const ErmStore *store) {
 	t->join = 30000;
 	t->sd = erm_sd_new(seed, erm_host_now(), &t->store);
 	if (t->sd == NULL) abort();
+	if (listener) transport_arrived(t, listener, context);
 	// everything the store holds is taken in before any connection
 	load(t);
 	return t;

@@ -33,6 +33,9 @@ const range = (from: number) => Uint8Array.from({ length: 32 }, (_, i) => from +
 const DOC = id("unlocked", range(0x20))
 const MADE = hex(range(0x40))
 const X = id("unlocked", range(0x40))
+// a process's run node: made with range(0x60)
+const RUN_MADE = hex(range(0x60))
+const RUN = id("unlocked", range(0x60))
 
 // a device: its key, and how many blops it has made (its nonces: COMMIT.tex's random, harness.ts)
 type Dev = { name: string; seed: Uint8Array; key: Uint8Array; k: number }
@@ -95,6 +98,12 @@ const version = (b: Made, content: unknown) => ({
 		why: { signer: hex(b.by.key) },
 	},
 })
+
+// a removal among other heads: a version with no content (APPLY.tex)
+const removed = (b: Made) => {
+	const { content: _, ...rest } = version(b, null)
+	return rest
+}
 
 // a record (WIRING.tex Out); header without time
 const record = (
@@ -271,7 +280,7 @@ scenario(
 )
 scenario(
 	"rename-first-version",
-	"a rename moves the first version only: the second stays under the old name, on both",
+	"a rename moves the first version only: the second stays under the old name, with the removal beside it, on both",
 	() => {
 		const pa = [{ path: [], range: [0, 0], value: ["x"] }]
 		const pb = [{ path: [], range: [0, 0], value: ["y"] }]
@@ -280,7 +289,7 @@ scenario(
 		const [first, second] = agreed(ax, by)
 		const content = (b: Made) => (b === ax ? ["x"] : ["y"])
 		// the old name's first version removed: a's nonce before the new name's
-		blop(A, DOC, ["children", "old"], [{ path: [] }], [first])
+		const rm = blop(A, DOC, ["children", "old"], [{ path: [] }], [first])
 		const rn = blop(A, DOC, ["children", "new"], [{
 			path: [],
 			range: [0, 0],
@@ -303,7 +312,8 @@ scenario(
 					value: content(first),
 				}], 0),
 			]),
-			...both(DOC, ["children", "old"], [version(second, content(second))]),
+			// the removal is a head too: a version with no content, first (lamport 2), then the second
+			...both(DOC, ["children", "old"], [removed(rm), version(second, content(second))]),
 			...both(DOC, ["children", "new"], [version(rn, content(first))]),
 		]
 	},
@@ -547,6 +557,39 @@ scenario(
 		]
 	},
 	"layers: B shows the ephemeral layer's versions; which layer's versions an object shows is open",
+)
+
+// ---- a process
+scenario(
+	"process",
+	"a process started on a device: its node's value change is a record, ephemeral, and crosses as an ephemeral blop",
+	() => {
+		const put = (v: unknown) => [{ path: [], value: v }]
+		return [
+			...apart(),
+			host(B, "create", { id: X }, { id: X }),
+			follow(A, X),
+			follow(B, X),
+			link(A, B),
+			host(A, "start", { value: 7, made: [MADE, RUN_MADE] }, { id: X }),
+			pump(),
+			// made with null, then its setup's value put in, then its run node placed
+			records(A, [
+				{ object: "value", patches: put(null), at: 0, ephemeral: true },
+				{ object: "value", patches: put(7), at: 0, ephemeral: true },
+				{
+					object: ["children", "run"],
+					patches: [{ path: [], range: [0, 0], value: [RUN] }],
+					at: 0,
+					ephemeral: true,
+				},
+			], { node: X, only: ["object", "patches", "at", "ephemeral"] }),
+			read(A, X, "value", [{ content: 7 }], ["content"]),
+			read(B, X, "value", [{ content: 7 }], ["content"]),
+			{ request: { op: "stored", device: "a", doc: X }, expect: [] },
+			{ request: { op: "stored", device: "b", doc: X }, expect: [] },
+		]
+	},
 )
 
 // ---- the change versions makes

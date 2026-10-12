@@ -130,6 +130,40 @@ nt_value *st_version(sc_sched *s, const nd_version *v) {
 	return m;
 }
 
+// a list's version: its ids, a null for a symbol
+static nt_value *list_version(const nd_version *v) {
+	const nd_list *l = v->content;
+	nt_value *m = nt_map(), *c = nt_list();
+	for (size_t i = 0; l && i < l->length; i++)
+		nt_push(c, l->items[i].id ? nt_str(l->items[i].id) : nt_null());
+	nt_set(m, "content", c);
+	const sc_change *ch = v->change;
+	nt_set(m, "time", ch ? nt_num((double)ch->time) : nt_null());
+	return m;
+}
+
+static nt_value *entries(sc_sched *s, const nd_entry *es, size_t n, int list) {
+	nt_value *m = nt_map();
+	for (size_t i = 0; i < n; i++) {
+		nt_value *l = nt_list();
+		for (size_t j = 0; j < es[i].object.length; j++) {
+			const nd_version *v = &es[i].object.versions[j];
+			nt_push(l, list ? list_version(v) : st_version(s, v));
+		}
+		nt_set(m, es[i].name, l);
+	}
+	return m;
+}
+
+nt_value *st_node(sc_sched *s, const nd_node *n) {
+	nt_value *m = nt_map(), *vs = nt_list();
+	for (size_t i = 0; i < n->value.length; i++) nt_push(vs, st_version(s, &n->value.versions[i]));
+	nt_set(m, "value", vs);
+	nt_set(m, "info", entries(s, n->info, n->info_length, 0));
+	nt_set(m, "children", entries(s, n->children, n->children_length, 1));
+	return m;
+}
+
 // content: the item has an object's versions (content, info); else look's
 nt_value *st_item(sc_sched *s, const sc_item *it, int content) {
 	nt_value *m = nt_map();
@@ -159,6 +193,54 @@ nt_value *st_item(sc_sched *s, const sc_item *it, int content) {
 		nt_set(m, "refused", w);
 	}
 	return m;
+}
+
+nt_value *st_pr_json(const pr_value *v) {
+	switch (v->kind) {
+	case PR_BOOL: return nt_bool(v->yes);
+	case PR_NUM: return nt_num(v->num);
+	case PR_STR: return nt_str(v->str);
+	case PR_LIST: {
+		nt_value *l = nt_list();
+		for (size_t i = 0; i < v->n; i++) nt_push(l, st_pr_json(&v->items[i]));
+		return l;
+	}
+	case PR_MAP: {
+		nt_value *m = nt_map();
+		for (size_t i = 0; i < v->n; i++) nt_set(m, v->keys[i], st_pr_json(&v->items[i]));
+		return m;
+	}
+	}
+	return nt_null();
+}
+
+static pr_value pr_of(pr_arena *a, const nt_value *v) {
+	switch (v->type) {
+	case NT_BOOL: return pr_bool(v->bool_);
+	case NT_NUM: return pr_num(v->num);
+	case NT_STR: return pr_str(a, v->str, v->bytes);
+	case NT_LIST: {
+		pr_value l = pr_list();
+		for (size_t i = 0; i < v->count; i++) pr_push(a, &l, pr_of(a, v->items[i]));
+		return l;
+	}
+	case NT_MAP: {
+		pr_value m = pr_map();
+		for (size_t i = 0; i < v->count; i++) {
+			pr_value k = pr_str(a, v->keys[i], strlen(v->keys[i]));
+			pr_put(a, &m, k.str, pr_of(a, v->items[i]));
+		}
+		return m;
+	}
+	default: return pr_null();
+	}
+}
+
+const pr_value *st_pr(sc_sched *s, const nt_value *v) {
+	pr_arena *a = sc_pr_arena(s);
+	pr_value *out = pr_alloc(a, sizeof *out);
+	*out = pr_of(a, v);
+	return out;
 }
 
 // the interpreter
@@ -460,6 +542,15 @@ static const char *const *names_of(sc_sched *s, const nt_value *l, size_t *n) {
 	return out;
 }
 
+// an address, or an id given as a string (places.h, pl_id)
+static const char *const *where_of(sc_sched *s, const nt_value *a, size_t *n) {
+	if (a == NULL || a->type != NT_STR) return names_of(s, a, n);
+	const char **out = sc_alloc(s, 2 * sizeof *out);
+	out[0] = pl_id, out[1] = a->str;
+	*n = 2;
+	return out;
+}
+
 const sc_error *st_program(st_env *env, const nt_value *p, sc_startop *op) {
 	if (p && p->type == NT_LIST) {
 		op->has_path = 1;
@@ -702,7 +793,7 @@ const sc_error *st_operate(sc_sched *s, sc_api *api, const char *op, const nt_va
 	size_t n, np;
 	const nt_value *address = nt_get(f, "address");
 	const char *const *names = NULL;
-	if (address) names = names_of(s, address, &n);
+	if (address) names = where_of(s, address, &n);
 	else n = 0;
 	nt_patch *ps;
 	long idx;
@@ -718,12 +809,35 @@ const sc_error *st_operate(sc_sched *s, sc_api *api, const char *op, const nt_va
 	const char *name = (x = nt_get(f, "name")) && x->type == NT_STR ? x->str : NULL;
 	if (!strcmp(op, "look") || !strcmp(op, "lookup") || !strcmp(op, "lookups")) {
 		const nt_value *path = !strcmp(op, "look") ? address : nt_get(f, "path");
-		names = names_of(s, path, &n);
+		names = !strcmp(op, "look") ? where_of(s, path, &n) : names_of(s, path, &n);
 		e = !strcmp(op, "look") ? sc_look(api, names, n, &items)
 			: !strcmp(op, "lookup") ? sc_lookup(api, names, n, &items)
 			: sc_lookups(api, names, n, &items);
 		if (e) return e;
 		*out = items_json(s, &items, 0);
+		return NULL;
+	}
+	if (!strcmp(op, "whole")) {
+		const nd_node *nd;
+		e = sc_node(api, id ? id : "", &nd);
+		if (e) return e;
+		*out = nd ? st_node(s, nd) : nt_null();
+		return NULL;
+	}
+	if (!strcmp(op, "as")) {
+		const nt_value *d = nt_get(f, "do"), *c = nt_get(f, "cause");
+		const nt_value *inner = d ? nt_get(d, "op") : NULL;
+		return st_operate(s, sc_as(api, c ? st_pr(s, c) : NULL),
+			inner && inner->type == NT_STR ? inner->str : "", d, out);
+	}
+	if (!strcmp(op, "names")) {
+		const nt_value *pt = nt_get(f, "part");
+		pl_namelist nl;
+		e = sc_names_of(api, names, n, pt && pt->type == NT_STR ? pt->str : "", &nl);
+		if (e) return e;
+		nt_value *l = nt_list();
+		for (size_t i = 0; i < nl.n; i++) nt_push(l, nt_str(nl.names[i]));
+		*out = l;
 		return NULL;
 	}
 	if (!strcmp(op, "children")) {

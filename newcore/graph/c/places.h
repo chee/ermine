@@ -10,11 +10,12 @@
 #include "../../opstreams/c/mutate.h"
 
 // what a read rests on: an id being loaded, its value, one of its info objects (name), or its
-// lists: PL_CHILDREN with no name is which names it has, with one the list of that name
+// lists: PL_CHILDREN with no name is which names it has, with one the list of that name;
+// PL_INFO with no name is which info names it has
 typedef enum { PL_LOADED, PL_VALUE, PL_INFO, PL_CHILDREN } pl_kind;
 typedef struct {
 	pl_kind kind;
-	const char *name; // NULL unless PL_INFO, or PL_CHILDREN of one list
+	const char *name; // NULL unless PL_INFO of one object, or PL_CHILDREN of one list
 } pl_part;
 
 // told, in order, each part a read rests on
@@ -121,6 +122,9 @@ int pl_children(const pl_places *p, const pl_spot *at, const char *const *addres
 // every name they have, once, first seen first
 int pl_names(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
 	const pl_depend *depend, pl_namelist *out);
+// the same of one part, "info" or "children" (else PL_WRONG_FIELD): the names in order
+int pl_names_of(const pl_places *p, const pl_spot *at, const char *const *address,
+	size_t naddress, const char *part, const pl_depend *depend, pl_namelist *out);
 // look, with the versions of the value, or of the info object of name
 int pl_content(const pl_places *p, const pl_spot *at, const char *const *address,
 	size_t naddress, const pl_depend *depend, pl_items *out);

@@ -112,7 +112,10 @@ export function createWiring(device: Device, options: Options): Wiring {
 				const bytes = encode(blop)
 				// taken in now, so that the next change commits against it
 				device.take(doc, bytes, layer)
-				settle(doc, layer, blop, blopName(bytes))
+				// an ephemeral node is its process's own: what it shows is its process's, not the
+				// histories' (a process's status is a version in front of its value, the record
+				// the first version alone)
+				if (!record.ephemeral) settle(doc, layer, blop, blopName(bytes))
 				later(async () => {
 					if (layer === "stored") await device.add(await seal(bytes, signer))
 					else await device.publish(doc, bytes)

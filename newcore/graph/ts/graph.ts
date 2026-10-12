@@ -22,6 +22,7 @@ import {
 	type Item,
 	type Part,
 	type Place,
+	PlacesError,
 	type Span,
 	type Step,
 	type Where,
@@ -79,6 +80,8 @@ export type Api = {
 	lookup(path: readonly string[]): Item<unknown, Change>[]
 	lookups(path: readonly string[]): Item<unknown, Change>[]
 	children(address: Where, name?: string): Item<unknown, Change>[] | string[]
+	// the names of a node's info or children, in order (children(address) is names(address, "children"))
+	names(address: Where, part: "info" | "children"): string[]
 	content(address: Where): (Item<unknown, Change> & { versions?: V[] })[]
 	info(address: Where, name: string): (Item<unknown, Change> & { versions?: V[] })[]
 	write(address: Where, patches: Iterable<Patch>, index?: number, slotindex?: Span): Change
@@ -223,6 +226,7 @@ type Spots<O> = {
 	loaded?: Spot<O>
 	value?: Spot<O>
 	names?: Spot<O>
+	infonames?: Spot<O>
 	children?: Map<string, Spot<O>>
 	info?: Map<string, Spot<O>>
 }
@@ -316,7 +320,11 @@ export function createGraph<O>(options: Options<O>) {
 		if (n === undefined) spots.set(id, n = {})
 		if (part === "loaded") return n.loaded ??= newSpot(id, part)
 		if (part === "value") return n.value ??= newSpot(id, part)
-		if (part.length === 1) return n.names ??= newSpot(id, part)
+		if (part.length === 1) {
+			return part[0] === "info"
+				? n.infonames ??= newSpot(id, part)
+				: n.names ??= newSpot(id, part)
+		}
 		const m = part[0] === "children" ? (n.children ??= new Map()) : (n.info ??= new Map())
 		let s = m.get(part[1])
 		if (s === undefined) m.set(part[1], s = newSpot(id, part))
@@ -335,6 +343,7 @@ export function createGraph<O>(options: Options<O>) {
 		if (n.loaded) yield n.loaded
 		if (n.value) yield n.value
 		if (n.names) yield n.names
+		if (n.infonames) yield n.infonames
 		if (n.children) yield* n.children.values()
 		if (n.info) yield* n.info.values()
 	}
@@ -347,7 +356,7 @@ export function createGraph<O>(options: Options<O>) {
 		let nf = notifies.get(s.id)
 		if (!nf) notifies.set(s.id, nf = createNotify(() => view(n)))
 		const path = s.part === "value" ? ["value"] : [...s.part]
-		const names = path.length === 1 && path[0] === "children"
+		const names = path.length === 1 && path[0] !== "value"
 		s.watch = nf.read(path, { deep: !names })
 		s.watch.on(() => fire(s))
 	}
@@ -480,6 +489,29 @@ export function createGraph<O>(options: Options<O>) {
 		// nothing made: nothing to tell
 		if (end === start && heard.length === 0) return out
 		const header = made[end - 1]
+		// changed (WIRING.tex, Out): an operation of the api reports its own records (log);
+		// any other change reports them here, so every change makes them, the scheduler's too
+		const reports: Changed[] | undefined = options.changed && log === undefined ? [] : undefined
+		if (reports && snaps === undefined) {
+			for (let i = 0; i < heard.length;) {
+				const first = heard[i]
+				const patches: Patch[] = []
+				let j = i
+				while (
+					j < heard.length && heard[j].id === first.id && heard[j].header === first.header &&
+					whichKey(heard[j].which) === whichKey(first.which)
+				) patches.push(heard[j++].patch)
+				reports.push({
+					node: first.id,
+					object: first.which,
+					patches,
+					header: first.header,
+					at: typeof o.slot === "number" ? o.slot : 0,
+					ephemeral: ephemeral.has(first.id),
+				})
+				i = j
+			}
+		}
 		if (o.wrote) { for (let i = start; i < end; i++) o.wrote.push(made[i].time!) }
 		made.length = start
 		// by: set for each object told, before it is told
@@ -491,12 +523,28 @@ export function createGraph<O>(options: Options<O>) {
 					if (!sn.n) continue
 					const h = touchOf(touches!, sn.n.id, sn.which) ?? header
 					telling.by = { ...h, node: sn.n.id, which: sn.which }
-					if (versionsOf(sn.n, sn.which) !== sn.old) whole(sn.n, sn.which, sn.old)
+					if (versionsOf(sn.n, sn.which) !== sn.old) {
+						whole(sn.n, sn.which, sn.old)
+						// told whole, so sent whole: the first version put, or the object removed
+						const now = versionsOf(sn.n, sn.which)
+						const content = now[0]?.content
+						reports?.push({
+							node: sn.n.id,
+							object: sn.which,
+							patches: content === undefined
+								? [{ path: [] }]
+								: [{ path: [], value: content }],
+							header: h,
+							at: 0,
+							ephemeral: ephemeral.has(sn.n.id),
+						})
+					}
 				}
 			}
 		} finally {
 			telling = wasTelling
 		}
+		for (const r of reports ?? []) options.changed!(r)
 		return out
 	}
 
@@ -617,8 +665,15 @@ export function createGraph<O>(options: Options<O>) {
 		loaded(id, cause)
 	}
 
-	// a node made, as the acting one: loaded, not yet placed
-	function make(id: string | undefined, value: unknown, who: Acting, has = true): string {
+	// a node made, as the acting one: loaded, not yet placed. owner: it is ephemeral, owned by
+	// that owner (true: by none). With a value, a record (WIRING.tex, Out)
+	function make(
+		id: string | undefined,
+		value: unknown,
+		who: Acting,
+		has = true,
+		owner?: O | true,
+	): string {
 		const time = clock.time + 1
 		let pid = id ?? fresh(time)
 		if (id === undefined) { for (let k = 1; table.get(pid); k++) pid = `${fresh(time)}-${k}` }
@@ -630,6 +685,17 @@ export function createGraph<O>(options: Options<O>) {
 			{ header },
 		)
 		intro(node, who, header.time)
+		if (owner !== undefined) own(pid, owner === true ? undefined : owner)
+		if (options.changed && has && value !== undefined) {
+			options.changed({
+				node: pid,
+				object: "value",
+				patches: [{ path: [], value }],
+				header,
+				at: 0,
+				ephemeral: ephemeral.has(pid),
+			})
+		}
 		return pid
 	}
 
@@ -660,7 +726,7 @@ export function createGraph<O>(options: Options<O>) {
 		const n = table.get(id)
 		if (!n) return undefined
 		depend?.(id, "value")
-		return n.value.length ? { value: n.value[0].content } : {}
+		return n.value.length && n.value[0].content !== undefined ? { value: n.value[0].content } : {}
 	}
 	const ask = (actor: unknown, asks: Iterable<Ask>, depend?: Depend): Answer =>
 		check(may, actor, asks, policyRead(depend)).answer
@@ -801,6 +867,17 @@ export function createGraph<O>(options: Options<O>) {
 				return out
 			})
 		}
+		// names: of each node the actor may reach and list (the list ask, for info too)
+		const listed = (address: Where, part: "info" | "children", d?: Depend) => {
+			if (part !== "info" && part !== "children") throw new PlacesError("wrong-field")
+			const seen = new Set<string>()
+			for (const it of guard(places.look(pl, address, d), b.agent, d)) {
+				if (!it.node || !("yes" in ask(b.agent, [listAsk(it.id)], d))) continue
+				d?.(it.id, [part])
+				for (const k of (part === "info" ? it.node.info : it.node.children).keys()) seen.add(k)
+			}
+			return [...seen]
+		}
 		const slot = (s?: Span) => (s === undefined ? 0 : typeof s === "number" ? s : null)
 		const mayPlace = (child: string) => {
 			if (ephemeral.has(child) && b.owner === undefined) {
@@ -847,15 +924,10 @@ export function createGraph<O>(options: Options<O>) {
 							d,
 						)
 					}
-					// names: of each node the actor may reach and list
-					const seen = new Set<string>()
-					for (const it of guard(places.look(pl, address, d), b.agent, d)) {
-						if (!it.node || !("yes" in ask(b.agent, [listAsk(it.id)], d))) continue
-						d?.(it.id, ["children"])
-						for (const k of it.node.children.keys()) seen.add(k)
-					}
-					return [...seen]
+					return listed(address, "children", d)
 				}, { address, name }) as Item<unknown, Change>[] | string[],
+			names: (address, part) =>
+				r("names", (d) => listed(address, part, d), { address, name: part }) as string[],
 			content: (address) =>
 				r("content", (d) => guard(places.content(pl, address, d), b.agent, d, "value"), {
 					address,
@@ -932,7 +1004,7 @@ export function createGraph<O>(options: Options<O>) {
 					() => [[id, ["children", name], 0], [id, ["children", to], 0]],
 				),
 			move: (id, name, index, toid, toname, toindex) => {
-				const child = table.get(id)?.children.get(name)?.[0]?.content[index]
+				const child = table.get(id)?.children.get(name)?.[0]?.content?.[index]
 				if (typeof child === "string") mayPlace(child)
 				// within one list, order alone asks nothing
 				const across = id !== toid || name !== toname
@@ -956,20 +1028,9 @@ export function createGraph<O>(options: Options<O>) {
 				if (o.ephemeral && b.owner === undefined) {
 					throw new GraphError("not-a-process", "only a process makes an ephemeral node")
 				}
-				const id = around(() => make(o.id, value, who(), value !== undefined))
-				if (o.ephemeral) own(id, b.owner)
-				if (options.changed && value !== undefined) {
-					const { node: _n, ...header } = table.get(id)!.value[0].change
-					options.changed({
-						node: id,
-						object: "value",
-						patches: [{ path: [], value }],
-						header,
-						at: 0,
-						ephemeral: ephemeral.has(id),
-					})
-				}
-				return id
+				return around(() =>
+					make(o.id, value, who(), value !== undefined, o.ephemeral ? b.owner : undefined)
+				)
 			},
 		}
 	}

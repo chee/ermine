@@ -85,9 +85,10 @@ static void print_value(const nt_value *v) {
 
 static void print_version(const apply_version *v) {
 	const ch_header *h = &v->change.header;
-	fputs("{\"content\":", stdout);
-	print_value(v->content);
-	fputs(",\"change\":{", stdout);
+	fputs("{", stdout);
+	// no content: a removal among other heads
+	if (v->content) fputs("\"content\":", stdout), print_value(v->content), fputs(",", stdout);
+	fputs("\"change\":{", stdout);
 	// the time only when the header has one
 	if (h->has_time) printf("\"time\":%lld,", (long long)h->time);
 	fputs("\"actor\":", stdout);

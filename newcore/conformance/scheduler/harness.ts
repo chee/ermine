@@ -1,9 +1,12 @@
 // The reference scheduler on the line protocol: one JSON request per line in, one answer per line
 // out, in order. Another implementation joins by speaking this (SCHEDULER_HARNESS).
 //
-//   {"op":"new","rules"?:[rule...]}       a new scheduler, root "root", clock at 0. rules: a node
+//   {"op":"new","rules"?:[rule...],"site"?:site}
+//                                         a new scheduler, root "root", clock at 0. rules: a node
 //                                         "rules" is made (intro), placed in the root, then given
-//                                         them, and protect reads them (protect.ts rules)   → {}
+//                                         them, and protect reads them (protect.ts rules). site:
+//                                         options.site gives it (none: the reference reads the
+//                                         call stack, C gives none)                         → {}
 //   {"op":op,...}                         a host operation (normal.ts), as the host     → {"ok":a}
 //   {"op":"start","address":a,"program":p,"name"?,"id"?}                           → {"ok":pid}
 //   {"op":"call","address":a,"args"?,"actor"?,"person"?,"trusted"?}            → {"ok":answer}
@@ -14,6 +17,8 @@
 //   {"op":"log"}                          what programs logged since the last asked
 //   {"op":"node","id":id}                 {"value":[version],"info":{n:[version]},
 //                                          "children":{n:[version]},"ephemeral":b}; null: not loaded
+//   {"op":"header","id":id}               its value's first version's change: {"time":t,
+//                                          "cause"?:c,"site"?:site}; null: none
 //   {"op":"clock"}                        the last time given
 //
 // a program: as steps.ts; a path (a list): found by the host's code, which reads the path from
@@ -70,6 +75,7 @@ function make(q: Record<string, unknown>): S {
 		hooks: [(m) => moments.push(moment(m))],
 		code: finder,
 		...(q.rules ? { may: rules("rules") } : {}),
+		...(q.site ? { site: () => q.site as never } : {}),
 	})
 	if (q.rules) {
 		s.intro(
@@ -124,6 +130,14 @@ function answer(q: Record<string, any>): unknown {
 		case "log": {
 			const out = logged
 			logged = []
+			return out
+		}
+		case "header": {
+			const c = s.get(q.id)?.value[0]?.change
+			if (!c) return null
+			const out: Record<string, unknown> = { time: c.time }
+			if (c.cause !== undefined) out.cause = c.cause
+			if (c.site !== undefined) out.site = c.site
 			return out
 		}
 		case "node": {

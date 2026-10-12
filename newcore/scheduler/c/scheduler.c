@@ -292,6 +292,8 @@ struct sc_sched {
 	void *fresh_ctx;
 	void (*changed)(void *, const gr_record *);
 	void *changed_ctx;
+	const pr_value *(*site)(void *ctx);
+	void *site_ctx;
 
 	omap procs;
 	omap due; // int64 *
@@ -1046,8 +1048,7 @@ static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, cons
 	if (status) write_status(s, p, status, run->n, run->causes, 0);
 	gr_acting who = {actor_of(s, agent_at(s, p, run->n, p->status)), p->id, NULL, NULL};
 	const char *id;
-	if (gr_make(s->g, NULL, v, 1, &who, &id)) return;
-	gr_own(s->g, id, p);
+	if (gr_make_own(s->g, NULL, v, 1, &who, 1, p, &id)) return;
 	p->run = id;
 	om_set(&s->runs, id, p);
 	gr_changing_opts co = {0};
@@ -1149,6 +1150,11 @@ static void on_changed(void *ctx, const gr_record *r) {
 	x.header = &h;
 	s->changed(s->changed_ctx, &x);
 }
+static const pr_value *on_site(void *ctx) {
+	sc_sched *s = ctx;
+	return s->site(s->site_ctx);
+}
+
 static const char *on_id(void *ctx, int64_t time) {
 	sc_sched *s = ctx;
 	return s->fresh ? s->fresh(s->fresh_ctx, time) : NULL;
@@ -1216,7 +1222,7 @@ static const gr_error *reading(void *arg, gr_read *r) {
 	const pl_depend *d = a->tracked ? gr_depend(ctx->p->track) : NULL;
 	const gr_error *e = gr_read_make(r, d);
 	if (e) return e;
-	int children = !strcmp(r->op, "children");
+	int children = !strcmp(r->op, "children") || !strcmp(r->op, "names");
 	sc_items first = r->is_names ? (sc_items){0} : r->items;
 	vec due = {0};
 	if (!children) reached(s, &first, &due);
@@ -1296,6 +1302,15 @@ static const gr_error *around(void *ctx, const gr_error *(*fn)(void *), void *ar
 const sc_error *sc_look(sc_api *a, const char *const *address, size_t n, sc_items *out) {
 	return from_gr(a->s, gr_look(a->g, address, n, out));
 }
+const sc_error *sc_node(sc_api *a, const char *id, const nd_node **out) {
+	return from_gr(a->s, gr_node(a->g, id, out));
+}
+sc_api *sc_as(sc_api *a, const pr_value *cause) {
+	sc_api *out = tmem(a->s, sizeof *out);
+	*out = *a;
+	out->g = gr_as(a->g, cause);
+	return out;
+}
 const sc_error *sc_lookup(sc_api *a, const char *const *path, size_t n, sc_items *out) {
 	return from_gr(a->s, gr_lookup(a->g, path, n, out));
 }
@@ -1304,6 +1319,10 @@ const sc_error *sc_lookups(sc_api *a, const char *const *path, size_t n, sc_item
 }
 const sc_error *sc_names(sc_api *a, const char *const *address, size_t n, pl_namelist *out) {
 	return from_gr(a->s, gr_names(a->g, address, n, out));
+}
+const sc_error *sc_names_of(sc_api *a, const char *const *address, size_t n, const char *part,
+	pl_namelist *out) {
+	return from_gr(a->s, gr_names_of(a->g, address, n, part, out));
 }
 const sc_error *sc_children(sc_api *a, const char *const *address, size_t n, const char *name,
 	sc_items *out) {
@@ -1481,9 +1500,8 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	// its node's value: the graph holds it, ours goes at the next sweep
 	nt_value *null = nt_null();
 	gr_later(s->g, null);
-	e = from_gr(s, gr_make(s->g, op->id, null, 1, &who, &pid));
+	e = from_gr(s, gr_make_own(s->g, op->id, null, 1, &who, 1, NULL, &pid));
 	if (e) return e;
-	gr_own(s->g, pid, NULL);
 	sc_proc *p = amem(s, sizeof *p);
 	vpush(&s->all, p);
 	p->id = pid;
@@ -2554,6 +2572,7 @@ sc_sched *sc_new(const sc_options *o) {
 	s->fresh_ctx = o->id_ctx;
 	s->changed = o->changed;
 	s->changed_ctx = o->changed_ctx;
+	s->site = o->site, s->site_ctx = o->site_ctx;
 	gr_options go = {0};
 	go.root = o->root;
 	go.actor = actor_of(s, s->host_actor);
@@ -2564,6 +2583,7 @@ sc_sched *sc_new(const sc_options *o) {
 	go.owned = on_owned;
 	go.released = on_released;
 	if (o->changed) go.changed = on_changed;
+	if (o->site) go.site = on_site;
 	go.ctx = s;
 	s->g = gr_new(&go);
 	gr_bind b = {0};

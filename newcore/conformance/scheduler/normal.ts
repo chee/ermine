@@ -8,12 +8,15 @@
 //   an error         its code: the library's, protect's refusal "refused", a step's throw, else "thrown"
 //
 // an interface's operations, by name, with their fields:
-//   look {address}  lookup {path}  lookups {path}  children {address, name?}
+//   look {address}  lookup {path}  lookups {path}  children {address, name?}  names {address, part}
 //   content {address}  info {address, name}
 //   write {address, patches, index?, slotindex?}  set {address, name, patches, index?, slotindex?}
 //   insert {id, name, child, index?, slotindex?}  remove {id, name, index, slotindex?}
 //   pop {id, name, slotindex}  rename {id, name, to}  move {id, name, index, toid, toname, toindex?}
 //   create {value?, id?, ephemeral?}             answers the new node's id
+//   whole {id}         node(id): {"value":[version],"info":{n:[version]},"children":{n:[version]}};
+//                      null: not loaded, or refused
+//   as {cause, do}     do (one of these, with its fields) by as({cause})
 import type { Api } from "../../scheduler/ts/scheduler.ts"
 
 export const LIVE = "<live>"
@@ -86,6 +89,8 @@ export function operate(api: Api, op: string, f: Record<string, any>): unknown {
 			const out = api.children(f.address, f.name ?? undefined)
 			return f.name === undefined || f.name === null ? out : (out as Item[]).map(item)
 		}
+		case "names":
+			return api.names(f.address, f.part)
 		case "content":
 			return api.content(f.address).map((it) => item({ versions: undefined, ...it }))
 		case "info":
@@ -110,6 +115,19 @@ export function operate(api: Api, op: string, f: Record<string, any>): unknown {
 			return times(api.rename(f.id, f.name, f.to))
 		case "move":
 			return times(api.move(f.id, f.name, f.index, f.toid, f.toname, f.toindex ?? undefined))
+		case "whole": {
+			const n = api.node(f.id)
+			if (n === undefined) return null
+			const of = (m: Map<string, unknown[]>) =>
+				Object.fromEntries([...m].map(([k, vs]) => [k, vs.map((v) => version(v as V))]))
+			return {
+				value: n.value.map((v) => version(v as V)),
+				info: of(n.info),
+				children: of(n.children as Map<string, unknown[]>),
+			}
+		}
+		case "as":
+			return operate(api.as({ cause: f.cause }), f.do.op, f.do)
 		case "create": {
 			const o: { id?: string; ephemeral?: boolean } = {}
 			if (f.id !== undefined) o.id = f.id

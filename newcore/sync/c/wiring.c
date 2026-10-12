@@ -333,7 +333,9 @@ void wiring_changed(wiring *w, const gr_record *r) {
 		free(bytes);
 		return;
 	}
-	settle(w, doc, layer, blop, name);
+	// an ephemeral node is its process's own: what it shows is its process's, not the histories' (a
+	// process's status is a version in front of its value, the record the first version alone)
+	if (!r->ephemeral) settle(w, doc, layer, blop, name);
 	jsonFree(blop);
 	later(w, doc, layer, bytes, length);
 }

@@ -5,7 +5,7 @@ import { Stand } from "../../encoding/ts/cbor.ts"
 import type { Header } from "../../nodes/ts/change.ts"
 import type { Site } from "../../nodes/ts/stacktrace.ts"
 import { side } from "./apply.ts"
-import type { Histories, Head } from "./history.ts"
+import type { Head, Histories } from "./history.ts"
 
 // a version (a number), a span ([from, to), to not included), or versions popped (PLACES.tex)
 export type At = number | readonly [number, number] | { pop: number | readonly [number, number] }
@@ -116,10 +116,9 @@ export function commit(
 	random: (n: number) => Uint8Array,
 	kind?: (live: unknown) => unknown,
 ): Blop {
-	// the versions' heads: those that have a side
-	const heads: Head[] = histories.heads(change.object).filter((h) =>
-		side(histories, h.name) !== undefined
-	)
+	// the versions' heads: every head; a removal as the only head, none
+	let heads: Head[] = histories.heads(change.object)
+	if (heads.length === 1 && side(histories, heads[0].name) === undefined) heads = []
 	const range = (from: number, to: number) => {
 		if (!(0 <= from && from < to && to <= heads.length)) throw new CommitError("range")
 		return heads.slice(from, to)

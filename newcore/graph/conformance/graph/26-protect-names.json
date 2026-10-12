@@ -1,0 +1,88 @@
+{
+	"title": "names: asks list of each node, as children's names do; refused: no names",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"actor": "eve",
+					"op": "list",
+					"node": "a",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"info": {
+				"title": "t"
+			},
+			"children": {
+				"x": [
+					"b"
+				]
+			},
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "intro",
+			"id": "b",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "bind",
+			"as": "eve",
+			"agent": "eve",
+			"expect": {}
+		},
+		{
+			"op": "names",
+			"as": "eve",
+			"address": [
+				"a"
+			],
+			"part": "info",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "names",
+			"as": "eve",
+			"address": [
+				"a"
+			],
+			"part": "children",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"a"
+			],
+			"part": "info",
+			"expect": {
+				"ok": [
+					"title"
+				]
+			}
+		}
+	]
+}

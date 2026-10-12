@@ -1,0 +1,204 @@
+{
+	"title": "a stand-in in an incoming blop's patches (or its actor) is held as data in the side: it comes back as it was, and patches go on past it",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": {
+						"/": {
+							"live": "device"
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QAAAAEAAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"canvas": {
+									"/": {
+										"live": "canvas"
+									}
+								},
+								"shape": {
+									"/": {
+										"live": {
+											"url": "x",
+											"w": 2
+										}
+									}
+								},
+								"n": 1
+							}
+						}
+					]
+				},
+				"name": "9c5ed8135885b62cffffc399839727d9fca631ad51c9e42646464523aa70a0c2"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "9c5ed8135885b62cffffc399839727d9fca631ad51c9e42646464523aa70a0c2"
+			},
+			"expect": {
+				"side": {
+					"canvas": {
+						"/": {
+							"live": "canvas"
+						}
+					},
+					"shape": {
+						"/": {
+							"live": {
+								"url": "x",
+								"w": 2
+							}
+						}
+					},
+					"n": 1
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QQAAAEEAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "nF7YE1iFtiz//8OZg5cn2fymMa1RyeQmRkZFI6pwoMI"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [
+								"n"
+							],
+							"value": {
+								"/": {
+									"live": null
+								}
+							}
+						}
+					]
+				},
+				"name": "61bb18b547b2e68c2afd07f859ccedc7503080f7c2f0e83a0a9f8bf9c7b63b7f"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "61bb18b547b2e68c2afd07f859ccedc7503080f7c2f0e83a0a9f8bf9c7b63b7f"
+			},
+			"expect": {
+				"side": {
+					"canvas": {
+						"/": {
+							"live": "canvas"
+						}
+					},
+					"shape": {
+						"/": {
+							"live": {
+								"url": "x",
+								"w": 2
+							}
+						}
+					},
+					"n": {
+						"/": {
+							"live": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"9c5ed8135885b62cffffc399839727d9fca631ad51c9e42646464523aa70a0c2": 1063,
+					"61bb18b547b2e68c2afd07f859ccedc7503080f7c2f0e83a0a9f8bf9c7b63b7f": 1064
+				}
+			},
+			"expect": [
+				{
+					"content": {
+						"canvas": {
+							"/": {
+								"live": "canvas"
+							}
+						},
+						"shape": {
+							"/": {
+								"live": {
+									"url": "x",
+									"w": 2
+								}
+							}
+						},
+						"n": {
+							"/": {
+								"live": null
+							}
+						}
+					},
+					"change": {
+						"actor": "a",
+						"time": 1064,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "61bb18b547b2e68c2afd07f859ccedc7503080f7c2f0e83a0a9f8bf9c7b63b7f"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		}
+	]
+}

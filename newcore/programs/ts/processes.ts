@@ -139,8 +139,7 @@ export function createProcesses(o: {
 			throw new GraphError("wrong-field", `start: ${k} is no name`)
 		}
 		o.mayStart(who.actor, where, op.name, op.id)
-		const pid = g.make(op.id, null, who)
-		g.own(pid)
+		const pid = g.make(op.id, null, who, true, true)
 		const agent = normal(who.actor)
 		const { person: _p, trusted: _t, code: _c, ...rest } = agent
 		const p: Proc = {

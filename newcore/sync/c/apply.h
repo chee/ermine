@@ -35,7 +35,7 @@ typedef struct {
 	char signer[65];
 } apply_why;
 typedef struct {
-	const nt_value *content;
+	const nt_value *content; // NULL: a removal among other heads, no content
 	ch_change change;
 	bc_because because;
 	apply_place place;
@@ -45,8 +45,8 @@ typedef struct {
 // the caller's time of a head, by its name as hex
 typedef int64_t (*apply_time)(void *context, const char *name);
 
-// an object's versions (object: "value" or ["info", name]...): its heads in the agreed order, each
-// with a side. Count; *out the array, free it; none: NULL, 0
+// an object's versions (object: "value" or ["info", name]...): its heads in the agreed order, one
+// per head (a removal as the only head: none). Count; *out the array, free it; none: NULL, 0
 size_t apply_versions(histories *c, const Json *object, apply_time time, void *context,
 	apply_version **out);
 

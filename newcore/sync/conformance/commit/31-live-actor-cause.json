@@ -1,0 +1,165 @@
+{
+	"title": "a live value in the actor or the cause is written as a stand-in too",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": {
+							"$live": "device"
+						},
+						"cause": {
+							"why": {
+								"$live": null
+							}
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [],
+				"random": "c02f4f6f8fafcfef"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": {
+						"/": {
+							"live": "device"
+						}
+					},
+					"cause": {
+						"why": {
+							"/": {
+								"live": null
+							}
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wC9Pb4+vz+8"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": {
+						"/": {
+							"live": "device"
+						}
+					},
+					"cause": {
+						"why": {
+							"/": {
+								"live": null
+							}
+						}
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wC9Pb4+vz+8"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				},
+				"name": "b50f70fd7d1f060e5cd693c7ac72402c49d8ab2a53bfcee7e2c3674b8a40ff11"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"b50f70fd7d1f060e5cd693c7ac72402c49d8ab2a53bfcee7e2c3674b8a40ff11": 1097
+				}
+			},
+			"expect": [
+				{
+					"content": 1,
+					"change": {
+						"actor": {
+							"/": {
+								"live": "device"
+							}
+						},
+						"cause": {
+							"why": {
+								"/": {
+									"live": null
+								}
+							}
+						},
+						"time": 1097,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "b50f70fd7d1f060e5cd693c7ac72402c49d8ab2a53bfcee7e2c3674b8a40ff11"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				}
+			]
+		}
+	]
+}

@@ -243,7 +243,7 @@ void versions(nd_object o, int lists) {
 		if (lists) {
 			const nd_list *l = v->content;
 			putchar('[');
-			for (size_t j = 0; j < l->length; j++) {
+			for (size_t j = 0; l && j < l->length; j++) {
 				if (j) putchar(',');
 				if (l->items[j].id) text(l->items[j].id);
 				else fputs("{\"symbol\":", stdout), text(l->items[j].symbol), putchar('}');

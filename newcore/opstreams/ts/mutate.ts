@@ -303,7 +303,8 @@ export default function mutate<V>(
 	const vs = versions(node, which)
 	const before = vs.get()
 	const list = which !== "value" && which[0] === "children"
-	const start = before.length ? before[0].content : list ? [] : ABSENT
+	// a first version with no content (a removal among racing heads) starts as none there
+	const start = before.length && before[0].content !== undefined ? before[0].content : list ? [] : ABSENT
 	const { patched, ...header } = options
 	const { work, apply } = createWork(start, list)
 	const seen: [Patch, Facts][] = []

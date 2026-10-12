@@ -438,6 +438,29 @@ static const sc_error *make_call(sc_fn *self, sc_given *g, nt_value **out, int *
 	return sc_create(g->api, m->value, m->id, 1, &m->made);
 }
 
+// the setup of a process whose value is the one given
+typedef struct {
+	sc_fn fn;
+	const Json *value;
+} valuefn;
+static const sc_error *value_call(sc_fn *self, sc_given *g, nt_value **out, int *pending) {
+	(void)g, (void)pending;
+	*out = nt_of(((valuefn *)self)->value);
+	return NULL;
+}
+
+// the bytes the next create or start is given for its id
+static void push_made(device *d, const Json *made) {
+	size_t k;
+	uint8_t *bytes = unhex(jsonText(made), &k);
+	if (d->made_count == d->made_room) {
+		d->made_room = d->made_room ? d->made_room * 2 : 8;
+		d->made = realloc(d->made, d->made_room * 32);
+	}
+	memcpy(d->made[d->made_count++], bytes, 32);
+	free(bytes);
+}
+
 // a compute that reads an address, tracked, and notes the changes that marked it
 typedef struct {
 	sc_fn fn;
@@ -491,16 +514,7 @@ static Json *host(device *d, const Json *r) {
 		e = sc_move(api, id, name, from, jsonText(jsonGet(r, "toid")), jsonText(jsonGet(r, "toname")), has_to ? &to : NULL, times, &count);
 	} else if (!strcmp(op, "create")) {
 		const Json *made = jsonGet(r, "made"), *value = jsonGet(r, "value"), *eph = jsonGet(r, "ephemeral");
-		if (made) {
-			size_t k;
-			uint8_t *bytes = unhex(jsonText(made), &k);
-			if (d->made_count == d->made_room) {
-				d->made_room = d->made_room ? d->made_room * 2 : 8;
-				d->made = realloc(d->made, d->made_room * 32);
-			}
-			memcpy(d->made[d->made_count++], bytes, 32);
-			free(bytes);
-		}
+		if (made) push_made(d, made);
 		const nt_value *v = value ? nt_of(value) : NULL;
 		const char *out = NULL, *given = jsonText(jsonGet(r, "id"));
 		if (!(eph && eph->boolean)) e = sc_create(api, v, given, 0, &out);
@@ -522,11 +536,32 @@ static Json *host(device *d, const Json *r) {
 		Json *j = jsonObject();
 		jsonAdd(j, "id", jsonString(out ? out : ""));
 		return j;
+	} else if (!strcmp(op, "start")) {
+		// a process at the root, named proc-k, whose setup gives value: its node is ephemeral
+		const Json *made = jsonGet(r, "made");
+		if (made && made->type == JSON_ARRAY) {
+			for (int i = 0; i < made->array.count; i++) push_made(d, made->array.items[i]);
+		} else if (made) push_made(d, made);
+		valuefn *m = calloc(1, sizeof *m);
+		m->fn.call = value_call;
+		m->value = jsonGet(r, "value");
+		char pname[32];
+		snprintf(pname, sizeof pname, "proc-%zu", ++d->procs);
+		sc_startop so = {0};
+		so.code.setup = &m->fn;
+		so.address = calloc(1, sizeof *so.address);
+		so.name = sc_dup(d->s, pname);
+		const char *out = NULL;
+		e = sc_start(d->s, &so, &out);
+		if (e) return answer_error(error_code(e));
+		Json *j = jsonObject();
+		jsonAdd(j, "id", jsonString(out ? out : ""));
+		return j;
 	} else return answer_error("unknown op");
 	return e ? answer_error(error_code(e)) : jsonObject();
 }
 
-static const char *HOST[] = {"write", "set", "insert", "remove", "pop", "rename", "move", "create", NULL};
+static const char *HOST[] = {"write", "set", "insert", "remove", "pop", "rename", "move", "create", "start", NULL};
 
 // each version of an object, the fields of each version only: the others left out
 static Json *only_of(Json *x, const Json *fields) {
@@ -558,12 +593,14 @@ static Json *read_op(device *d, const Json *r) {
 	for (size_t i = 0; i < o.length; i++) {
 		const nd_version *v = &o.versions[i];
 		Json *j = jsonObject(), *content;
-		if (children) {
+		// no content (a removal among other heads): left out
+		if (!v->content) content = NULL;
+		else if (children) {
 			const nd_list *l = v->content;
 			content = jsonArray();
 			for (size_t k = 0; l && k < l->length; k++) jsonPush(content, l->items[k].id ? jsonString(l->items[k].id) : jsonNull());
 		} else content = json_of_nt(v->content);
-		jsonAdd(j, "content", content);
+		if (content) jsonAdd(j, "content", content);
 		jsonAdd(j, "change", header_json(v->change, true));
 		if (v->because) {
 			const gr_synced *b = v->because;
@@ -612,7 +649,7 @@ static Json *versions_op(device *d, const Json *r) {
 		if (jsonGet(c, "time")) jsonIsWhole(jsonGet(c, "time"), &time);
 		changes[i] = (gr_change){time, pr_ptr(a, jsonGet(c, "actor")), jsonText(jsonGet(c, "reader")), pr_ptr(a, jsonGet(c, "cause")),
 			pr_ptr(a, jsonGet(c, "site")), jsonText(jsonGet(c, "node")), GR_NOWHERE, NULL};
-		in[i].content = nt_of(jsonGet(v, "content"));
+		in[i].content = jsonGet(v, "content") ? nt_of(jsonGet(v, "content")) : NULL;
 		in[i].change = &changes[i];
 		if (b) {
 			int64_t lamport = 0;

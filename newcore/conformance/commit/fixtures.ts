@@ -125,13 +125,15 @@ function local(object: Which, before: V[], c: Commit, made: B, after: V[]) {
 	} else {
 		const [from, to] = "version" in at ? [at.version, at.version + 1] : at.span
 		const content = patch(object, before[from]?.[1] ?? none, c.patches ?? [])
-		const made1: V[] = content === none ? [] : [[made, content]]
+		const made1: V[] = [[made, content]]
 		vs = [...before.slice(0, from), ...made1, ...before.slice(to)]
 		if (made1.length) {
 			const j = vs.findIndex(([h], k) => k < from && first(made, h))
 			if (j >= 0) vs = [...vs.slice(0, j), made1[0], ...vs.slice(j, from), ...vs.slice(from + 1)]
 		}
 	}
+	// a removal as the only head: no versions
+	if (vs.length === 1 && vs[0][1] === none) vs = []
 	assertEquals(
 		vs.map(([h, x]) => [h.name, x]),
 		after.map(([h, x]) => [h.name, x]),
@@ -223,22 +225,50 @@ const contents = (hs: B[], f: (h: B) => unknown): V[] => hs.map((h) => [h, f(h)]
 	)
 }
 
-// ---- a head with no side is no version: indices skip it
+// ---- a head with no side is a version with no content: indices count it
 {
 	const A = mk({ patches: put({ v: 0 }) })
 	const E = mk({ parents: [A], patches: removal })
 	const C = mk({ parents: [A], patches: set(["v"], 1) })
 	const D = mk({ parents: [A], patches: set(["v"], 2) })
 	const all = [A, E, C, D]
-	const [H0, H1] = desc(C, D)
-	const before = contents([H0, H1], (h) => ({ v: h === C ? 1 : 2 }))
-	const c: Commit = { at: { version: 1 }, patches: set(["x"], 0) }
-	const [s, X] = commit(c, { parents: [H1], lamport: 3 })
-	const after: V[] = [[X, { ...before[1][1] as object, x: 0 }], before[0]]
+	const order = desc(E, C, D)
+	const before = contents(order, (h) => h === E ? none : { v: h === C ? 1 : 2 })
+	// the last version, whichever head it is: its parents are that head
+	const H = order[2]
+	const c: Commit = { at: { version: 2 }, patches: put({ x: 0 }) }
+	const [s, X] = commit(c, { parents: [H], lamport: 3 })
+	const after: V[] = [[X, { x: 0 }], before[0], before[1]]
 	local("value", before, c, X, after)
 	scenario(
-		"version-skips-emptied",
-		"version i: the i-th head that has a side; an emptied head counts for nothing",
+		"version-counts-removal",
+		"version i: the i-th head; a head with no side counts, as a version with no content",
+		[
+			create(),
+			...all.map((b) => add(b)),
+			versions(all, "value", before),
+			s,
+			add(X),
+			versions([...all, X], "value", after),
+		],
+	)
+}
+
+// ---- a commit at the version with no content
+{
+	const A = mk({ patches: put({ v: 0 }) })
+	const E = mk({ parents: [A], patches: removal })
+	const C = mk({ parents: [A], patches: set(["v"], 1) })
+	const all = [A, E, C]
+	const order = desc(E, C)
+	const before = contents(order, (h) => h === E ? none : { v: 1 })
+	const c: Commit = { at: { version: order.indexOf(E) }, patches: put({ again: 1 }) }
+	const [s, X] = commit(c, { parents: [E], lamport: 3 })
+	const after: V[] = [[X, { again: 1 }], before[order.indexOf(E) === 0 ? 1 : 0]]
+	local("value", before, c, X, after)
+	scenario(
+		"version-at-removal",
+		"at the version with no content: parents its head; a put makes content, the new version first",
 		[
 			create(),
 			...all.map((b) => add(b)),
@@ -479,7 +509,7 @@ function three() {
 	])
 }
 
-// ---- a change that empties: never reorders
+// ---- a change that empties: a version with no content, ordered like any
 {
 	const A = mk({ patches: put({ v: 0 }) })
 	const B1 = mk({ parents: [A], patches: set(["v"], 1) })
@@ -488,11 +518,11 @@ function three() {
 	const before = contents([H0, H1], (h) => ({ v: h === B1 ? 1 : 2 }))
 	const c: Commit = { at: { version: 1 }, patches: removal }
 	const [s, X] = commit(c, { parents: [H1], lamport: 3 })
-	const after: V[] = [before[0]]
+	const after: V[] = [[X, none], before[0]]
 	local("value", before, c, X, after)
 	scenario(
 		"version-empties",
-		"a change at version 1 that empties: parents [its head]; after, that version is gone",
+		"a change at version 1 that empties: parents [its head]; after, a version with no content, first",
 		[
 			create(),
 			add(A),
@@ -515,7 +545,7 @@ function three() {
 	local("value", [], c, X, [[X, "again"]])
 	scenario(
 		"emptied-object",
-		"an object whose only head has no side has no versions: parents [], lamport 1",
+		"an object whose only head has no side has no versions: parents [], lamport 1; the removal stays a head, beside it",
 		[
 			create(),
 			add(A),
@@ -523,7 +553,12 @@ function three() {
 			versions([A, E], "value", []),
 			s,
 			add(X),
-			versions([A, E, X], "value", [[X, "again"]]),
+			versions(
+				[A, E, X],
+				"value",
+				// E: lamport 2, X: 1
+				[E, X].map((h): V => [h, h === E ? none : "again"]),
+			),
 		],
 	)
 }

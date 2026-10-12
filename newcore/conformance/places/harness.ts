@@ -12,6 +12,7 @@
 // { op: "look", place | here, address }              → { items }
 // { op: "lookup" | "lookups", place | here, path }    → { items }
 // { op: "children", place | here, address, name? }   → { names } | { items }
+// { op: "names", place, address, part }              → { names }; part "info" | "children", in order
 // { op: "content", place | here, address }           → { items }, each with versions
 // { op: "info", place | here, address, name }        → { items }, each with versions
 //    item: { id, route, loaded, up?, versions? }; said: [[id, part]], in the order read
@@ -147,6 +148,8 @@ function answer(r: Request): Json {
 			const out = at("children", r.address, r.name, depend)
 			return with_said(r.name === undefined ? { names: out } : { items: out.map(item) })
 		}
+		case "names":
+			return with_said({ names: places.names(r.place, r.address, r.part, depend) })
 		case "content":
 			return with_said({ items: at("content", r.address, depend).map(item) })
 		case "info":

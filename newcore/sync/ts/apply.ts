@@ -11,7 +11,8 @@ const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "
 
 // one of an object's versions: its head's side, change and because
 export type Version = {
-	content: unknown
+	// absent: a removal among other heads
+	content?: unknown
 	change: Change
 	because: Because<{ lamport: number; name: string }, { signer: string }>
 }
@@ -64,22 +65,25 @@ export function versions(
 	time: (name: string) => number,
 ): Version[] {
 	const out: Version[] = []
-	for (const head of histories.heads(object)) {
+	const heads = histories.heads(object)
+	// a removal as the only head: the object is not there
+	if (heads.length === 1 && side(histories, heads[0].name) === undefined) return out
+	for (const head of heads) {
 		const content = side(histories, head.name)
-		if (content === undefined) continue
 		const { blop } = head
 		const name = hex(head.name)
 		const header: Parameters<typeof createChange>[1] = { time: time(name), actor: blop.actor }
 		if (blop.reader !== undefined) header.reader = blop.reader
 		if (blop.site !== undefined) header.site = blop.site
 		if (blop.cause !== undefined) header.cause = blop.cause
-		out.push({
-			content,
+		const version: Version = {
 			change: createChange(blop.node, header),
 			because: createBecause("sync", { lamport: blop.lamport, name }, {
 				signer: hex(blop.signer),
 			}),
-		})
+		}
+		if (content !== undefined) version.content = content
+		out.push(version)
 	}
 	return out
 }

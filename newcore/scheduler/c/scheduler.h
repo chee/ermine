@@ -156,6 +156,10 @@ typedef struct {
 	// who may do what (protect), asked before each operation not the scheduler's own; NULL:
 	// anyone. copied
 	const pr_may *may;
+	// the host's site for its changes, as protect's values ({file, line, column?, function?}); NULL,
+	// or returns NULL: none. C reads no call stack: a host gives it (scheduler.ts reads one)
+	const pr_value *(*site)(void *ctx);
+	void *site_ctx;
 	// told, after an operation lands, each object it changed (WIRING.tex, Out): sync's side. NULL: none.
 	// The header's actor is sc_actor's
 	void (*changed)(void *ctx, const gr_record *r);
@@ -228,6 +232,9 @@ const sc_error *sc_lookup(sc_api *a, const char *const *path, size_t n, sc_items
 const sc_error *sc_lookups(sc_api *a, const char *const *path, size_t n, sc_items *out);
 // every name, or with a name that list's items
 const sc_error *sc_names(sc_api *a, const char *const *address, size_t n, pl_namelist *out);
+// "info" or "children" names (graph.h, gr_names_of)
+const sc_error *sc_names_of(sc_api *a, const char *const *address, size_t n, const char *part,
+	pl_namelist *out);
 const sc_error *sc_children(sc_api *a, const char *const *address, size_t n, const char *name,
 	sc_items *out);
 const sc_error *sc_content(sc_api *a, const char *const *address, size_t n, sc_items *out);
@@ -250,6 +257,11 @@ const sc_error *sc_rename(sc_api *a, const char *id, const char *name, const cha
 	int64_t times[2]);
 const sc_error *sc_move(sc_api *a, const char *id, const char *name, long index, const char *toid,
 	const char *toname, const long *toindex, int64_t times[2], size_t *ntimes);
+// the whole node of an id (*out NULL: not loaded, or refused); every object of it read
+const sc_error *sc_node(sc_api *a, const char *id, const nd_node **out);
+// the same interface, its changes carrying cause (borrowed); in scratch (memory, above): good for
+// the call, or the host's until it sweeps
+sc_api *sc_as(sc_api *a, const pr_value *cause);
 // a new node holding value (NULL: no value); a process may make it ephemeral
 const sc_error *sc_create(sc_api *a, const nt_value *value, const char *id, int ephemeral,
 	const char **out);

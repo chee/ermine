@@ -153,7 +153,7 @@ store_deno = --allow-write --allow-ffi
 # the program's suite runs the harness on real folders, and calls the system
 program_test = PROGRAM_HARNESS conformance/program/
 program_deno = --allow-write --allow-ffi
-skips = COMMIT_SKIP=29-live-stand-in.json,30-live-actor-cause.json
+skips = COMMIT_SKIP=30-live-stand-in.json,31-live-actor-cause.json
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check
 define run
@@ -182,7 +182,21 @@ notify/c/notify-bench: notify/c/notify.c notify/c/bench.c
 opstreams/c/squish-bench: opstreams/c/squish.c opstreams/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
+# the files tool: a command line over the C store, and a shared document laid out in a folder and synced (files/c/host.c):
+# the files program and watcher, the scheduler, the wiring and transport, and Subduction over a WebSocket (OpenSSL for wss).
+# No suite, not part of all; files/c/test/sync.sh tries it. files/c/files-check: the same with the sanitizers
+OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
+files_src = $(sort files/c/files.c files/c/host.c files/c/program.c files/c/watch.c $(filter-out files/c/store_harness.c,$(store_src)) \
+	$(filter %.c,$(filter-out sync/c/wiring_harness.c,$(wiring_src))) c/subduction/websocket.c c/subduction/transport_openssl.c)
+files_flags = $(transport_flags) -I$(OPENSSL)/include
+files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
+files/c/files: $(files_src) $(subduction_lib) $(wildcard */c/*.h)
+	$(CC) $(CFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
+files/c/files-check: $(files_src) $(subduction_lib) $(wildcard */c/*.h)
+	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
+
 clean:
+	rm -rf files/c/files files/c/files-check files/c/files-check.dSYM
 	rm -rf $(HARNESSES) $(CHECKS) $(BENCHES) $(addsuffix .dSYM,$(HARNESSES) $(CHECKS))
 
 .PHONY: all bench check test test-c test-check clean $(addprefix test-c-,$(LIBS)) $(addprefix test-check-,$(LIBS))

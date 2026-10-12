@@ -738,9 +738,11 @@ static int answer(void) {
 			code = pl_info(&places, &spot, address, n, str_of(name), d, &items);
 		else if (!strcmp(o, "children") && name)
 			code = pl_children(&places, &spot, address, n, str_of(name), d, &items);
-		else if (!strcmp(o, "children")) {
+		else if (!strcmp(o, "children") || !strcmp(o, "names")) {
 			pl_namelist ns;
-			code = pl_names(&places, &spot, address, n, d, &ns);
+			code = !strcmp(o, "names")
+				? pl_names_of(&places, &spot, address, n, str_of(get(r, "part")), d, &ns)
+				: pl_names(&places, &spot, address, n, d, &ns);
 			if (code) return fail(code);
 			fputs("{\"names\":", stdout);
 			out_names(ns.names, ns.n);

@@ -555,6 +555,15 @@ static const char *const *names_of(const nt_value *l, size_t *n) {
 	return out;
 }
 
+// an address, or an id given as a string (places.h, pl_id)
+static const char *const *where_of(const nt_value *a, size_t *n) {
+	if (a == NULL || a->type != NT_STR) return names_of(a, n);
+	const char **out = gr_alloc(g, 2 * sizeof *out);
+	out[0] = pl_id, out[1] = a->str;
+	*n = 2;
+	return out;
+}
+
 static const nt_value *field(const nt_value *f, const char *k) {
 	const nt_value *v = nt_get(f, k);
 	return v && v->type == NT_NULL ? NULL : v;
@@ -711,7 +720,7 @@ static const gr_error *operate(gr_api *api, const char *op, const nt_value *f, b
 	gr_items items;
 	size_t n = 0, np;
 	const nt_value *address = nt_get(f, "address");
-	const char *const *adr = address ? names_of(address, &n) : NULL;
+	const char *const *adr = address ? where_of(address, &n) : NULL;
 	nt_patch *ps;
 	long idx = 0;
 	const long *index = NULL;
@@ -726,12 +735,47 @@ static const gr_error *operate(gr_api *api, const char *op, const nt_value *f, b
 	const char *name = s_of(nt_get(f, "name"));
 	if (!strcmp(op, "look") || !strcmp(op, "lookup") || !strcmp(op, "lookups")) {
 		const nt_value *path = !strcmp(op, "look") ? address : nt_get(f, "path");
-		adr = names_of(path, &n);
+		adr = !strcmp(op, "look") ? where_of(path, &n) : names_of(path, &n);
 		e = !strcmp(op, "look") ? gr_look(api, adr, n, &items)
 			: !strcmp(op, "lookup") ? gr_lookup(api, adr, n, &items)
 			: gr_lookups(api, adr, n, &items);
 		if (e) return e;
 		put_items(out, &items, 0);
+		return NULL;
+	}
+	if (!strcmp(op, "whole")) {
+		const nd_node *nd;
+		e = gr_node(api, id ? id : "", &nd);
+		if (e) return e;
+		if (!nd) {
+			puts_(out, "null");
+			return NULL;
+		}
+		puts_(out, "{\"value\":");
+		put_object(out, &nd->value, 0);
+		puts_(out, ",\"info\":");
+		put_entries(out, nd->info, nd->info_length, 0);
+		puts_(out, ",\"children\":");
+		put_entries(out, nd->children, nd->children_length, 1);
+		puts_(out, "}");
+		return NULL;
+	}
+	if (!strcmp(op, "as")) {
+		const nt_value *d = nt_get(f, "do");
+		const char *inner = d ? s_of(nt_get(d, "op")) : NULL;
+		x = nt_get(f, "cause");
+		return operate(gr_as(api, x ? prp(x) : NULL), inner ? inner : "", d, out);
+	}
+	if (!strcmp(op, "names")) {
+		pl_namelist nl;
+		e = gr_names_of(api, adr, n, s_of(field(f, "part")) ? s_of(field(f, "part")) : "", &nl);
+		if (e) return e;
+		puts_(out, "[");
+		for (size_t i = 0; i < nl.n; i++) {
+			if (i) puts_(out, ",");
+			put_string(out, nl.names[i], strlen(nl.names[i]));
+		}
+		puts_(out, "]");
 		return NULL;
 	}
 	if (!strcmp(op, "children")) {
@@ -848,7 +892,7 @@ static const gr_error *inner_op(const nt_value *q, buf *out) {
 	if (!op) return thrown("unknown-op");
 	size_t n = 0, np;
 	const nt_value *address = nt_get(q, "address"), *x;
-	const char *const *adr = address ? names_of(address, &n) : NULL;
+	const char *const *adr = address ? where_of(address, &n) : NULL;
 	long idx = 0, ti = 0;
 	const long *index = NULL, *tip = NULL;
 	pl_span slot, ispan;

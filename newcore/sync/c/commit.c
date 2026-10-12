@@ -101,12 +101,10 @@ static int by_name(const void *x, const void *y) {
 Json *commit_make(histories *c, const Json *change, commit_at at, const char *const *roots,
 	size_t count, commit_random random, void *context, commit_code *code) {
 	const Json *object = jsonGet(change, "object"), *header = jsonGet(change, "header");
-	// the versions' heads: those that have a side
+	// the versions' heads: every head; a removal as the only head, none
 	history_head *all;
-	size_t n = history_heads(c, object, &all), have = 0;
-	for (size_t i = 0; i < n; i++) {
-		if (apply_side(c, all[i].name) != NULL) all[have++] = all[i];
-	}
+	size_t have = history_heads(c, object, &all);
+	if (have == 1 && apply_side(c, all[0].name) == NULL) have = 0;
 	// the heads used: [from, to) of the versions, or none for the object with no versions
 	size_t from = 0, to = 0;
 	if (!(at.kind == COMMIT_VERSION && have == 0 && at.from == 0)) {

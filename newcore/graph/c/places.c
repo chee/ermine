@@ -356,24 +356,29 @@ int pl_children(const pl_places *p, const pl_spot *at, const char *const *addres
 	return PL_OK;
 }
 
-int pl_names(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const pl_depend *depend, pl_namelist *out) {
+int pl_names_of(const pl_places *p, const pl_spot *at, const char *const *address,
+	size_t naddress, const char *part, const pl_depend *depend, pl_namelist *out) {
 	const pl_depend *d = dep(p, depend);
 	out->names = NULL, out->n = 0;
+	int info = part && !strcmp(part, "info");
+	if (!info && !(part && !strcmp(part, "children"))) return PL_WRONG_FIELD;
 	vec looked = {0};
 	int code = look_into(p, at, address, naddress, d, &looked);
 	if (code) return code;
 	size_t total = 0;
 	for (size_t i = 0; i < looked.n; i++)
-		if (looked.v[i].node) total += looked.v[i].node->children_length;
+		if (looked.v[i].node)
+			total += info ? looked.v[i].node->info_length : looked.v[i].node->children_length;
 	const char **names = mem(p, total * sizeof *names);
 	size_t n = 0;
 	for (size_t i = 0; i < looked.n; i++) {
 		const nd_node *node = looked.v[i].node;
 		if (node == NULL) continue;
-		say(d, looked.v[i].id, PL_CHILDREN, NULL);
-		for (size_t k = 0; k < node->children_length; k++) {
-			const char *name = node->children[k].name;
+		say(d, looked.v[i].id, info ? PL_INFO : PL_CHILDREN, NULL);
+		const nd_entry *es = info ? node->info : node->children;
+		size_t len = info ? node->info_length : node->children_length;
+		for (size_t k = 0; k < len; k++) {
+			const char *name = es[k].name;
 			size_t j = 0;
 			while (j < n && strcmp(names[j], name) != 0) j++;
 			if (j == n) names[n++] = name;
@@ -381,6 +386,11 @@ int pl_names(const pl_places *p, const pl_spot *at, const char *const *address, 
 	}
 	out->names = names, out->n = n;
 	return PL_OK;
+}
+
+int pl_names(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const pl_depend *depend, pl_namelist *out) {
+	return pl_names_of(p, at, address, naddress, "children", depend, out);
 }
 
 // an object of each item look gives, every version
@@ -506,7 +516,7 @@ static int edit(const pl_places *p, nd_node *n, const char *name, pl_span slots,
 	int ok = nv == 0 ? (from == 0 && to <= 1) : (from < to && (size_t)to <= nv);
 	if (!ok || from < 0) return PL_RANGE;
 	static const nd_list empty = {NULL, 0};
-	const nd_list *have = nv ? vs[from].content : &empty;
+	const nd_list *have = nv && vs[from].content ? vs[from].content : &empty;
 	size_t len = have->length, head, tail_from;
 	if (pt->take) {
 		if (pt->a < 0 || pt->a >= pt->b || (size_t)pt->b > len) return PL_RANGE;
@@ -550,7 +560,8 @@ static int place(const pl_places *p, nd_node *n, const char *name, const nd_item
 		size_t nv = e >= 0 ? n->children[e].object.length : 0;
 		size_t len = 0;
 		if (nv && s.from >= 0 && (size_t)s.from < nv)
-			len = ((const nd_list *)n->children[e].object.versions[s.from].content)->length;
+			len = n->children[e].object.versions[s.from].content
+				? ((const nd_list *)n->children[e].object.versions[s.from].content)->length : 0;
 		pt.a = pt.b = (long)len;
 	}
 	return edit(p, n, name, s, &pt, change);

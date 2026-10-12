@@ -280,7 +280,7 @@ struct gr_spot {
 // as made
 typedef struct {
 	const char *id;
-	gr_spot *loaded, *value, *names;
+	gr_spot *loaded, *value, *names, *infonames;
 	omap children, info; // gr_spot *
 	vec all; // gr_spot *
 } gr_spots;
@@ -748,8 +748,8 @@ static void watch(gr_graph *g, gr_spot *sp) {
 	if (sp->part == PL_VALUE) path[0] = (nt_key){NT_STR_KEY, 0, "value", 0, 0};
 	else if (sp->part == PL_INFO) {
 		path[0] = (nt_key){NT_STR_KEY, 0, "info", 0, 0};
-		path[1] = (nt_key){NT_STR_KEY, 0, sp->name, 0, 0};
-		len = 2;
+		if (sp->name) path[1] = (nt_key){NT_STR_KEY, 0, sp->name, 0, 0}, len = 2;
+		else names = 1;
 	} else {
 		path[0] = (nt_key){NT_STR_KEY, 0, "children", 0, 0};
 		if (sp->name) path[1] = (nt_key){NT_STR_KEY, 0, sp->name, 0, 0}, len = 2;
@@ -772,7 +772,7 @@ static gr_spot *spot(gr_graph *g, const char *id, pl_part part) {
 	omap *by = NULL;
 	if (part.kind == PL_LOADED) at = &n->loaded;
 	else if (part.kind == PL_VALUE) at = &n->value;
-	else if (!part.name) at = &n->names;
+	else if (!part.name) at = part.kind == PL_INFO ? &n->infonames : &n->names;
 	else by = part.kind == PL_CHILDREN ? &n->children : &n->info;
 	gr_spot *sp = at ? *at : om_get(by, part.name);
 	if (sp) return sp;
@@ -968,6 +968,12 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 	telling_t t = {header, o->tag, o->own};
 	telling_t *was = g->telling;
 	g->telling = &t;
+	// changed (WIRING.tex, Out): an operation of the api reports its own records; any other change
+	// reports them here, told whole as the first version put, or the object removed (children: the
+	// api's alone)
+	gr_record *recs = NULL;
+	nt_patch *puts = NULL;
+	size_t nrec = 0;
 	if (!o->has_snap) {
 		for (size_t i = 0; i < c.targets.n; i++) {
 			target *tg = c.targets.v[i];
@@ -978,6 +984,8 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 			else tell_whole(g, n, tg->w, tg->name, tg->old_len, h);
 		}
 	} else {
+		recs = o->reported || !g->o.changed ? NULL : tmem(g, (o->nsnap + 1) * sizeof *recs);
+		puts = recs ? tmem(g, (o->nsnap + 1) * sizeof *puts) : NULL;
 		for (size_t i = 0; i < o->nsnap; i++) {
 			snapped *s = &snaps[i];
 			if (!s->n) continue;
@@ -996,9 +1004,20 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 					h = ours[tg->hdr];
 			}
 			tell_whole(g, s->n, s->w, s->name, s->old.length, h);
+			if (recs && s->w != GR_CHILDREN) {
+				puts[nrec] = (nt_patch){0};
+				if (now.length && now.versions[0].content) {
+					puts[nrec].has_value = 1;
+					puts[nrec].value = now.versions[0].content;
+				}
+				recs[nrec] = (gr_record){s->n->id, s->w, s->name, &puts[nrec], 1, h, GR_AT_VERSION, 0, 1,
+					om_has(&g->ephemeral, s->n->id)};
+				nrec++;
+			}
 		}
 	}
 	g->telling = was;
+	for (size_t i = 0; i < nrec; i++) g->o.changed(g->o.ctx, &recs[i]);
 	if (o->wrote) {
 		for (size_t i = 0; i < count; i++) {
 			gr_times *w = o->wrote;
@@ -1093,6 +1112,10 @@ void gr_release(gr_graph *g, const char *id, const gr_change *cause) {
 // a node made, as the acting one: loaded, not yet placed
 const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int has_value,
 	const gr_acting *who, const char **out) {
+	return gr_make_own(g, id, value, has_value, who, 0, NULL, out);
+}
+const gr_error *gr_make_own(gr_graph *g, const char *id, const nt_value *value, int has_value,
+	const gr_acting *who, int own, void *owner, const char **out) {
 	int64_t time = *g->clock + 1;
 	const char *pid = id;
 	if (!pid) {
@@ -1139,6 +1162,15 @@ const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int 
 	mine(g, m, K_NODE, 1);
 	((ledger *)om_get(&g->ledgers, pid))->made = 1;
 	*out = pid;
+	if (own) gr_own(g, pid, owner);
+	// changed: a node made with a value is one record, the value put at []
+	if (g->o.changed && has_value && value) {
+		nt_patch p = {0};
+		p.has_value = 1;
+		p.value = value;
+		gr_record r = {pid, GR_VALUE, NULL, &p, 1, change, GR_AT_VERSION, 0, 1, om_has(&g->ephemeral, pid)};
+		g->o.changed(g->o.ctx, &r);
+	}
 	return NULL;
 }
 
@@ -1246,7 +1278,8 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 		gr_change *c = change_own(g, &proto, 0);
 		const void *content = list[i].content;
 		if (where == GR_CHILDREN) {
-			content = list[i].content && list[i].content->type == NT_LIST
+			// no content (a removal among other heads): none, as in the value
+			content = !list[i].content ? NULL : list[i].content->type == NT_LIST
 				? (const void *)mu_list_to(list[i].content, &al) : &no_ids;
 		}
 		gr_synced *b = NULL;
@@ -1529,8 +1562,9 @@ static const gr_error *live_check(gr_api *a, const char *op) {
 	return NULL;
 }
 
-enum { R_LOOK, R_LOOKUP, R_LOOKUPS, R_CHILDREN, R_CONTENT, R_INFO };
-static const char *const ROPS[] = {"look", "lookup", "lookups", "children", "content", "info"};
+enum { R_LOOK, R_LOOKUP, R_LOOKUPS, R_CHILDREN, R_CONTENT, R_INFO, R_NODE, R_NAMES };
+static const char *const ROPS[] = {"look", "lookup", "lookups", "children", "content", "info",
+	"node", "names"};
 
 static pl_spot place_of(const gr_api *a) {
 	return (pl_spot){a->b.place, a->b.nplace, 0, NULL, 0};
@@ -1560,12 +1594,30 @@ const gr_error *gr_read_make(gr_read *r, const pl_depend *d) {
 		code = pl_info(&g->places, &at, address, n, name, d, &pit);
 		object = (obj){"info", name};
 		break;
+	case R_NODE: {
+		// a look by id, read as a list as every read is; the node given: every object of it read
+		code = pl_look(&g->places, &at, address, n, d, &pit);
+		if (code) return pl_error(g, code);
+		guard(g, a->b.agent, &pit, d, NO_OBJ, &r->items);
+		const nd_node *node = r->items.n ? r->items.items[0].it.node : NULL;
+		if (node == NULL) return NULL;
+		depend(d, node->id, PL_VALUE, NULL);
+		depend(d, node->id, PL_CHILDREN, NULL);
+		for (size_t k = 0; k < node->children_length; k++)
+			depend(d, node->id, PL_CHILDREN, node->children[k].name);
+		for (size_t k = 0; k < node->info_length; k++)
+			depend(d, node->id, PL_INFO, node->info[k].name);
+		return NULL;
+	}
 	default:
-		if (name) {
+		if (name && r->kind == R_CHILDREN) {
 			code = pl_children(&g->places, &at, address, n, name, d, &pit);
 			break;
 		}
-		// names: of each node the actor may reach and list
+		// names: of each node the actor may reach and list (the list ask, for info too)
+		if (r->kind == R_NAMES && (!name || (strcmp(name, "info") && strcmp(name, "children"))))
+			return pl_error(g, PL_WRONG_FIELD);
+		int info = r->kind == R_NAMES && !strcmp(name, "info");
 		code = pl_look(&g->places, &at, address, n, d, &pit);
 		if (code) return pl_error(g, code);
 		gr_items gi;
@@ -1576,9 +1628,10 @@ const gr_error *gr_read_make(gr_read *r, const pl_depend *d) {
 			if (!it->node) continue;
 			pr_ask la = pr_list_ask(tpra(g), it->id);
 			if (ask(g, a->b.agent, &la, 1, d).kind != PR_YES) continue;
-			depend(d, it->id, PL_CHILDREN, NULL);
-			for (size_t k = 0; k < it->node->children_length; k++)
-				sadd(g, &seen, it->node->children[k].name);
+			depend(d, it->id, info ? PL_INFO : PL_CHILDREN, NULL);
+			size_t len = info ? it->node->info_length : it->node->children_length;
+			const nd_entry *es = info ? it->node->info : it->node->children;
+			for (size_t k = 0; k < len; k++) sadd(g, &seen, es[k].name);
 		}
 		r->is_names = 1;
 		r->names.n = seen.n;
@@ -1622,6 +1675,10 @@ const gr_error *gr_lookups(gr_api *a, const char *const *path, size_t n, gr_item
 const gr_error *gr_names(gr_api *a, const char *const *address, size_t n, pl_namelist *out) {
 	return do_read(a, R_CHILDREN, address, n, NULL, NULL, out);
 }
+const gr_error *gr_names_of(gr_api *a, const char *const *address, size_t n, const char *part,
+	pl_namelist *out) {
+	return do_read(a, R_NAMES, address, n, part, NULL, out);
+}
 const gr_error *gr_children(gr_api *a, const char *const *address, size_t n, const char *name,
 	gr_items *out) {
 	return do_read(a, R_CHILDREN, address, n, name, out, NULL);
@@ -1632,6 +1689,13 @@ const gr_error *gr_content(gr_api *a, const char *const *address, size_t n, gr_i
 const gr_error *gr_info(gr_api *a, const char *const *address, size_t n, const char *name,
 	gr_items *out) {
 	return do_read(a, R_INFO, address, n, name, out, NULL);
+}
+const gr_error *gr_node(gr_api *a, const char *id, const nd_node **out) {
+	gr_items items;
+	*out = NULL;
+	const gr_error *e = do_read(a, R_NODE, (const char *const[]){pl_id, id}, 2, NULL, &items, NULL);
+	if (!e && items.n) *out = items.items[0].it.node;
+	return e;
 }
 
 // writes
@@ -1809,12 +1873,23 @@ static wop wop_new(gr_graph *g, int op) {
 }
 
 // in a changing, at place [], asked nothing
+// changed (WIRING.tex, Out): the gr_do_* report their records themselves, as the api's operations do
+static void report(wop *o);
+static void plan_free(wop *o);
+static void plan_insert(wop *o, const pl_span *index, const pl_span *slotindex);
+static void plan_remove(wop *o);
+static void plan_pop(wop *o);
+static void plan_rename(wop *o);
+static void plan_move(wop *o);
+
 const gr_error *gr_do_write(gr_graph *g, const char *const *address, size_t n,
 	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
 	int64_t *time) {
 	wop o = wop_new(g, W_WRITE);
 	o.address = address, o.n = n, o.patches = patches, o.np = np, o.index = index, o.slot = slotindex, o.span_slot = span;
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
 }
@@ -1825,6 +1900,8 @@ const gr_error *gr_do_set(gr_graph *g, const char *const *address, size_t n, con
 	o.address = address, o.n = n, o.name = tdup(g, name), o.patches = patches, o.np = np;
 	o.index = index, o.slot = slotindex, o.span_slot = span;
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
 }
@@ -1833,7 +1910,10 @@ const gr_error *gr_do_insert(gr_graph *g, const char *id, const char *name, cons
 	wop o = wop_new(g, W_INSERT);
 	o.id = tdup(g, id), o.name = tdup(g, name), o.child = tdup(g, child);
 	o.ispan = index, o.slot = slotindex;
+	if (g->o.changed) plan_insert(&o, index, slotindex);
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
 }
@@ -1841,7 +1921,10 @@ const gr_error *gr_do_remove(gr_graph *g, const char *id, const char *name, pl_s
 	const pl_span *slotindex, int64_t *time) {
 	wop o = wop_new(g, W_REMOVE);
 	o.id = tdup(g, id), o.name = tdup(g, name), o.span = index, o.slot = slotindex;
+	if (g->o.changed) plan_remove(&o);
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
 }
@@ -1849,7 +1932,10 @@ const gr_error *gr_do_pop(gr_graph *g, const char *id, const char *name, pl_span
 	int64_t *time) {
 	wop o = wop_new(g, W_POP);
 	o.id = tdup(g, id), o.name = tdup(g, name), o.span = slotindex;
+	if (g->o.changed) plan_pop(&o);
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
 }
@@ -1857,7 +1943,10 @@ const gr_error *gr_do_rename(gr_graph *g, const char *id, const char *name, cons
 	int64_t times[2]) {
 	wop o = wop_new(g, W_RENAME);
 	o.id = tdup(g, id), o.name = tdup(g, name), o.to = tdup(g, to);
+	if (g->o.changed) plan_rename(&o);
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1];
 	return e;
 }
@@ -1866,7 +1955,10 @@ const gr_error *gr_do_move(gr_graph *g, const char *id, const char *name, long i
 	wop o = wop_new(g, W_MOVE);
 	o.id = tdup(g, id), o.name = tdup(g, name), o.mindex = index;
 	o.toid = tdup(g, toid), o.toname = tdup(g, toname), o.toindex = toindex;
+	if (g->o.changed) plan_move(&o);
 	const gr_error *e = wop_exec(&o);
+	if (!e) report(&o);
+	plan_free(&o);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1], *ntimes = o.ntimes;
 	return e;
 }
@@ -1901,6 +1993,43 @@ static nt_value *one_id(const char *id) {
 static long list_size(gr_graph *g, const char *id, const char *name) {
 	const nd_list *l = ids_at(g, id, name, NULL);
 	return l ? (long)l->length : 0;
+}
+// the records of each children operation, planned before it, while the lists are as they were
+static void plan_insert(wop *o, const pl_span *index, const pl_span *slotindex) {
+	const nd_list *have = ids_at(o->g, o->id, o->name, slotindex);
+	long len = have ? (long)have->length : 0;
+	plan(o, o->id, o->name, 1, 1, index ? index->from : len, index ? index->to : len, one_id(o->child));
+}
+static void plan_remove(wop *o) {
+	plan(o, o->id, o->name, 1, 1, o->span.from, o->span.to, NULL);
+}
+static void plan_pop(wop *o) {
+	plan(o, o->id, o->name, 0, 0, 0, 0, NULL);
+}
+static void plan_rename(wop *o) {
+	// the old name: its first version removed; the new: its ids put in
+	plan(o, o->id, o->name, 1, 0, 0, 0, NULL);
+	plan(o, o->id, o->to, 1, 1, 0, 0, ids_value(ids_at(o->g, o->id, o->name, NULL)));
+}
+static void plan_move(wop *o) {
+	gr_graph *g = o->g;
+	long index = o->mindex;
+	const long *toindex = o->toindex;
+	const nd_list *ids = ids_at(g, o->id, o->name, NULL);
+	int across = strcmp(o->id, o->toid) || strcmp(o->name, o->toname);
+	const char *entry = ids && index >= 0 && (size_t)index < ids->length ? ids->items[index].id : NULL;
+	if (!across) {
+		// one list: the entry moved to where toindex says, counted after it left
+		long at = toindex ? *toindex : list_size(g, o->id, o->name) - 1;
+		plan(o, o->id, o->name, 1, 1, at, at, NULL);
+		o->key[0] = (nt_key){NT_NUM_KEY, index, NULL, 0, 0};
+		o->pat[0].has_move = 1;
+		o->pat[0].move = (nt_place){o->key, 1, 0, 0, 0};
+	} else {
+		long at = toindex ? *toindex : list_size(g, o->toid, o->toname);
+		plan(o, o->id, o->name, 1, 1, index, index + 1, NULL);
+		plan(o, o->toid, o->toname, 1, 1, at, at, one_id(entry));
+	}
 }
 
 static void slot_at(const pl_span *slot, int span, gr_record *r) {
@@ -1991,6 +2120,7 @@ static const gr_error *w_go(gr_api *a, wop *o, asks_t *asks, const gr_snap *snap
 	gr_changing_opts co = {0};
 	co.tag = a->b.tag;
 	co.wrote = a->b.wrote;
+	co.reported = 1;
 	if (snap) co.has_snap = 1, co.snap = snap, co.nsnap = nsnap;
 	if (!a->b.around) {
 		e = gr_changing(g, &who, &co, wop_exec, o);
@@ -2071,11 +2201,7 @@ const gr_error *gr_insert(gr_api *a, const char *id, const char *name, const cha
 	nd_item it = {o.child, NULL};
 	nd_list after = {&it, 1};
 	asks_t as = placing_asks(g, id, name, ids_pr(g, &gone), ids_pr(g, &after), 1);
-	if (g->o.changed) {
-		const nd_list *have = ids_at(g, id, name, slotindex);
-		long len = have ? (long)have->length : 0;
-		plan(&o, o.id, o.name, 1, 1, index ? index->from : len, index ? index->to : len, one_id(child));
-	}
+	if (g->o.changed) plan_insert(&o, index, slotindex);
 	e = w_do(a, &o, &as, NULL, 0);
 	if (!e && time) *time = o.times[0];
 	return e;
@@ -2087,7 +2213,7 @@ const gr_error *gr_remove(gr_api *a, const char *id, const char *name, pl_span i
 	o.id = tdup(g, id), o.name = tdup(g, name), o.span = index, o.slot = slotindex;
 	nd_list gone = slice_of(ids_at(g, id, name, slotindex), index.from, index.to);
 	asks_t as = placing_asks(g, id, name, ids_pr(g, &gone), pr_list(), 0);
-	if (g->o.changed) plan(&o, o.id, o.name, 1, 1, index.from, index.to, NULL);
+	if (g->o.changed) plan_remove(&o);
 	const gr_error *e = w_do(a, &o, &as, NULL, 0);
 	if (!e && time) *time = o.times[0];
 	return e;
@@ -2101,7 +2227,7 @@ const gr_error *gr_pop(gr_api *a, const char *id, const char *name, pl_span slot
 	pr_value ov = obj_pr(g, (obj){"children", o.name}), av = at_pr(g, &slotindex);
 	asks_add(g, &as, pr_edit(tpra(g), "pop", o.id, &ov, &av));
 	gr_snap snap[1] = {{o.id, GR_CHILDREN, o.name}};
-	if (g->o.changed) plan(&o, o.id, o.name, 0, 0, 0, 0, NULL);
+	if (g->o.changed) plan_pop(&o);
 	const gr_error *e = w_do(a, &o, &as, snap, 1);
 	if (!e && time) *time = o.times[0];
 	return e;
@@ -2116,11 +2242,7 @@ const gr_error *gr_rename(gr_api *a, const char *id, const char *name, const cha
 	asks_t b = placing_asks(g, id, o.to, pr_list(), ids_pr(g, ids), 1);
 	for (size_t i = 0; i < b.n; i++) asks_add(g, &as, b.v[i]);
 	gr_snap snap[2] = {{o.id, GR_CHILDREN, o.name}, {o.id, GR_CHILDREN, o.to}};
-	if (g->o.changed) {
-		// the old name: its first version removed; the new: its ids put in
-		plan(&o, o.id, o.name, 1, 0, 0, 0, NULL);
-		plan(&o, o.id, o.to, 1, 1, 0, 0, ids_value(ids));
-	}
+	if (g->o.changed) plan_rename(&o);
 	const gr_error *e = w_do(a, &o, &as, snap, 2);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1];
 	return e;
@@ -2146,21 +2268,7 @@ const gr_error *gr_move(gr_api *a, const char *id, const char *name, long index,
 		for (size_t i = 0; i < x.n; i++) asks_add(g, &as, x.v[i]);
 		for (size_t i = 0; i < y.n; i++) asks_add(g, &as, y.v[i]);
 	}
-	if (g->o.changed) {
-		const char *entry = ids && index >= 0 && (size_t)index < ids->length ? ids->items[index].id : NULL;
-		if (!across) {
-			// one list: the entry moved to where toindex says, counted after it left
-			long at = toindex ? *toindex : list_size(g, id, name) - 1;
-			plan(&o, o.id, o.name, 1, 1, at, at, NULL);
-			o.key[0] = (nt_key){NT_NUM_KEY, index, NULL, 0, 0};
-			o.pat[0].has_move = 1;
-			o.pat[0].move = (nt_place){o.key, 1, 0, 0, 0};
-		} else {
-			long at = toindex ? *toindex : list_size(g, toid, toname);
-			plan(&o, o.id, o.name, 1, 1, index, index + 1, NULL);
-			plan(&o, o.toid, o.toname, 1, 1, at, at, one_id(entry));
-		}
-	}
+	if (g->o.changed) plan_move(&o);
 	e = w_do(a, &o, &as, NULL, 0);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1], *ntimes = o.ntimes;
 	return e;
@@ -2173,11 +2281,13 @@ typedef struct {
 	const nt_value *value;
 	int has_value;
 	const gr_acting *who;
+	int own;
+	void *owner;
 	const char **out;
 } making_t;
 static const gr_error *making_run(void *arg) {
 	making_t *m = arg;
-	return gr_make(m->g, m->id, m->value, m->has_value, m->who, m->out);
+	return gr_make_own(m->g, m->id, m->value, m->has_value, m->who, m->own, m->owner, m->out);
 }
 
 const gr_error *gr_create(gr_api *a, const nt_value *value, int has_value, const char *id,
@@ -2189,21 +2299,9 @@ const gr_error *gr_create(gr_api *a, const nt_value *value, int has_value, const
 	if (ephemeral && !a->b.owner)
 		return gerr(g, "not-a-process", "only a process makes an ephemeral node");
 	gr_acting who = who_of(a);
-	making_t m = {g, id, value, has_value, &who, out};
+	making_t m = {g, id, value, has_value, &who, ephemeral, a->b.owner, out};
 	e = a->b.around ? a->b.around(a->b.ctx, making_run, &m) : making_run(&m);
-	if (e) return e;
-	if (ephemeral) gr_own(g, *out, a->b.owner);
-	// changed: a node made with a value is one record, the value put at []
-	nd_node *made = g->o.changed && has_value ? om_get(&g->table, *out) : NULL;
-	if (made && made->value.length) {
-		nt_patch p = {0};
-		p.has_value = 1;
-		p.value = value;
-		gr_record r = {*out, GR_VALUE, NULL, &p, 1, made->value.versions[0].change, GR_AT_VERSION, 0, 1,
-			om_has(&g->ephemeral, *out)};
-		g->o.changed(g->o.ctx, &r);
-	}
-	return NULL;
+	return e;
 }
 
 gr_api *gr_bound(gr_graph *g, const gr_bind *b) {
@@ -2219,6 +2317,13 @@ gr_api *gr_bound(gr_graph *g, const gr_bind *b) {
 }
 
 // the graph
+
+gr_api *gr_as(gr_api *a, const pr_value *cause) {
+	gr_api *out = tmem(a->g, sizeof *out);
+	*out = *a;
+	out->b.cause = cause;
+	return out;
+}
 
 gr_graph *gr_new(const gr_options *o) {
 	gr_graph *g = calloc(1, sizeof *g);

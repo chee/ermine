@@ -20,10 +20,11 @@ export type Address = readonly string[]
 export type Where = Address | string
 
 // what a read rests on: an id being loaded, or one of its lists
-// ["children"]: which names it has
+// ["children"], ["info"]: which names it has
 export type Part =
 	| "loaded"
 	| "value"
+	| readonly ["info"]
 	| readonly ["info", string]
 	| readonly ["children"]
 	| readonly ["children", string]
@@ -83,7 +84,7 @@ function list<V, H>(n: Node<V, H>, name: string): List | undefined {
 }
 
 // the list's length, none: 0
-const size = <V, H>(n: Node<V, H>, name: string) => n.children.get(name)?.[0]?.content.length ?? 0
+const size = <V, H>(n: Node<V, H>, name: string) => n.children.get(name)?.[0]?.content?.length ?? 0
 
 // the entry of name to slot, the rest in order; in place, so holders of the node see it
 // the names' order is no object (GRAPH.tex, Children): moved outside any change
@@ -368,6 +369,19 @@ export function createPlaces<V, H>(
 			}
 		}
 		return name === undefined ? [...seen] : out
+	}
+
+	// every name of one part, of each loaded node the address selects, once, first seen first,
+	// in each node's order
+	function names(place: Spot, address: Where, part: "info" | "children", depend = fallback) {
+		if (part !== "info" && part !== "children") throw new PlacesError("wrong-field")
+		const seen = new Set<string>()
+		for (const it of look(place, address, depend)) {
+			if (it.node === undefined) continue
+			depend?.(it.id, [part])
+			for (const k of (part === "info" ? it.node.info : it.node.children).keys()) seen.add(k)
+		}
+		return [...seen]
 	}
 
 	// placing: by the node whose list it is (its id, or the node), and the list's name
@@ -658,6 +672,8 @@ export function createPlaces<V, H>(
 			name?: string,
 			depend?: Depend,
 		) => children({ names: place }, address, name, depend),
+		names: (place: Place, address: Where, part: "info" | "children", depend?: Depend) =>
+			names({ names: place }, address, part, depend),
 		content: (place: Place, address: Where, depend?: Depend) =>
 			content({ names: place }, address, depend),
 		info: (place: Place, address: Where, name: string, depend?: Depend) =>

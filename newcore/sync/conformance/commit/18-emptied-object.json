@@ -1,0 +1,220 @@
+{
+	"title": "an object whose only head has no side has no versions: parents [], lamport 1; the removal stays a head, beside it",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "QwAAAEMAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "a"
+						}
+					]
+				},
+				"name": "7dc35767aeefb26f13885874ec54612fab8017cdffeee5b9f0ad8cc867bcc073"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RAAAAEQAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "fcNXZ67vsm8TiFh07FRhL6uAF83/7uW58K2MyGe8wHM"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": []
+						}
+					]
+				},
+				"name": "21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"7dc35767aeefb26f13885874ec54612fab8017cdffeee5b9f0ad8cc867bcc073": 1066,
+					"21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d": 1067
+				}
+			},
+			"expect": []
+		},
+		{
+			"request": {
+				"op": "commit",
+				"change": {
+					"node": "n",
+					"object": "value",
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					],
+					"header": {
+						"time": 77,
+						"actor": "me"
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					}
+				},
+				"at": {
+					"version": 0
+				},
+				"roots": [],
+				"random": "c0d7f71737577797"
+			},
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wNf3FzdXd5c"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					]
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wNf3FzdXd5c"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "again"
+						}
+					]
+				},
+				"name": "892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"7dc35767aeefb26f13885874ec54612fab8017cdffeee5b9f0ad8cc867bcc073": 1066,
+					"21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d": 1067,
+					"892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574": 1068
+				}
+			},
+			"expect": [
+				{
+					"change": {
+						"actor": "a",
+						"time": 1067,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				},
+				{
+					"content": "again",
+					"change": {
+						"actor": "me",
+						"time": 1068,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574"
+						},
+						"why": {
+							"signer": "0707070707070707070707070707070707070707070707070707070707070707"
+						}
+					}
+				}
+			]
+		}
+	]
+}

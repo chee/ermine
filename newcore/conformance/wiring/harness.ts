@@ -40,6 +40,12 @@
 //                                          process makes an ephemeral node): one started at the
 //                                          root with the id "proc-k" (k from 1, per device), whose
 //                                          setup creates it, owned, and gives 0
+//   {op: "start", device, value, made?: hex | [hex]}
+//                                       -> {id}  a process started at the root, named "proc-k" (k
+//                                          as create's), with the id the
+//                                          lock's make gives (made, as create's), its setup giving
+//                                          value: its node is ephemeral, and the scheduler's own
+//                                          writes to it (its value, its status) make records too
 //   {op: "ops", device, ops: [host operations without device]}
 //                                       -> [answers]  run one after another with nothing between
 //                                          (no await, no turn of the event loop): two operations
@@ -246,6 +252,14 @@ function host(d: Held, r: Request): unknown {
 				})
 				return { id: made }
 			}
+			case "start": {
+				// made: one id's bytes, or several (the process's, then its run node's)
+				for (const m of [r.made ?? []].flat()) d.made.push(unhex(m as string))
+				const value = fromJson(r.value)
+				return {
+					id: s.start({ address: [], name: `proc-${++d.procs}`, program: () => value }).id,
+				}
+			}
 			default:
 				return { error: `unknown op ${r.op}` }
 		}
@@ -254,7 +268,17 @@ function host(d: Held, r: Request): unknown {
 	}
 }
 
-const HOST = new Set(["write", "set", "insert", "remove", "pop", "rename", "move", "create"])
+const HOST = new Set([
+	"write",
+	"set",
+	"insert",
+	"remove",
+	"pop",
+	"rename",
+	"move",
+	"create",
+	"start",
+])
 
 async function answer(r: Request): Promise<unknown> {
 	if (HOST.has(r.op)) return host(of(r.device), r)
@@ -338,10 +362,10 @@ async function answer(r: Request): Promise<unknown> {
 				? n.value
 				: (o[0] === "info" ? n.info : n.children).get(o[1]) ?? []
 			return vs.map((v: Any) => {
-				const out: Record<string, unknown> = {
-					content: toJson(v.content),
-					change: pick(v.change ?? {}, CHANGE),
-				}
+				const out: Record<string, unknown> = {}
+				// no content: a removal among other heads
+				if (v.content !== undefined) out.content = toJson(v.content)
+				out.change = pick(v.change ?? {}, CHANGE)
 				if (v.because !== undefined) out.because = toJson(v.because)
 				return only(out, r.only)
 			})

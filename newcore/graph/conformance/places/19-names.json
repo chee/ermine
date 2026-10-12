@@ -1,0 +1,216 @@
+{
+	"title": "names: a part's names, once, first seen first, node by node; the part is said to depend; nothing there: none",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										"m",
+										"d",
+										"gone"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "m",
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "t",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"author",
+							[
+								{
+									"content": "u",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"kids",
+							[
+								{
+									"content": [
+										"d"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "d",
+					"info": [
+						[
+							"author",
+							[
+								{
+									"content": "u2",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						],
+						[
+							"zed",
+							[
+								{
+									"content": "z",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"part": "info",
+			"expect": {
+				"names": [
+					"title",
+					"author",
+					"zed"
+				]
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"part": "children",
+			"expect": {
+				"names": [
+					"kids"
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"expect": {
+				"names": [
+					"kids"
+				]
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"nowhere"
+			],
+			"part": "info",
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"part": "info",
+			"depend": true,
+			"expect": {
+				"names": [
+					"title",
+					"author",
+					"zed"
+				],
+				"said": [
+					[
+						"r",
+						"loaded"
+					],
+					[
+						"r",
+						[
+							"children",
+							"t"
+						]
+					],
+					[
+						"m",
+						"loaded"
+					],
+					[
+						"d",
+						"loaded"
+					],
+					[
+						"gone",
+						"loaded"
+					],
+					[
+						"m",
+						[
+							"info"
+						]
+					],
+					[
+						"d",
+						[
+							"info"
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"t"
+			],
+			"part": "value",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		}
+	]
+}

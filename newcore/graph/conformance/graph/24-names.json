@@ -1,0 +1,120 @@
+{
+	"title": "names: a node's info or children names in order; nothing there: none; any other part: wrong-field",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"info": {
+				"title": "t",
+				"author": "u",
+				"zed": "z"
+			},
+			"children": {
+				"x": [
+					"b"
+				],
+				"y": [
+					"b"
+				]
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "b",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"a"
+			],
+			"part": "info",
+			"expect": {
+				"ok": [
+					"title",
+					"author",
+					"zed"
+				]
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"a"
+			],
+			"part": "children",
+			"expect": {
+				"ok": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "children",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": [
+					"x",
+					"y"
+				]
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"b"
+			],
+			"part": "info",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"nowhere"
+			],
+			"part": "info",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"nowhere"
+			],
+			"part": "children",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"a"
+			],
+			"part": "value",
+			"expect": {
+				"error": "wrong-field"
+			}
+		}
+	]
+}

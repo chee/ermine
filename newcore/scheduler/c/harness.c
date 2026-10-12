@@ -230,6 +230,13 @@ static const sc_error *finder(void *ctx, const sc_process *pr, sc_api *view, sc_
 	return NULL;
 }
 
+// the host's site, from new's "site"
+static const pr_value *site;
+static const pr_value *on_site(void *ctx) {
+	(void)ctx;
+	return site;
+}
+
 static void make(nt_value *q) {
 	if (sched) sc_free(sched);
 	pr_free(&may_arena);
@@ -248,7 +255,10 @@ static void make(nt_value *q) {
 		may = pr_rules(&may_arena, "rules");
 		o.may = &may;
 	}
+	nt_value *sv = nt_get(q, "site");
+	if (sv) o.site = on_site;
 	sched = sc_new(&o);
+	site = sv ? st_pr(sched, sv) : NULL;
 	env = (st_env){sched, on_log_env, NULL};
 	if (!rules) return;
 	// a node "rules" is made (intro), placed in the root, then given them
@@ -274,28 +284,6 @@ static const char *const *names_of(const nt_value *l, size_t *n) {
 	const char **out = sc_alloc(sched, (*n + 1) * sizeof *out);
 	for (size_t i = 0; i < *n; i++) out[i] = l->items[i]->type == NT_STR ? l->items[i]->str : "";
 	return out;
-}
-
-static nt_value *version_json(const nd_version *v, int list) {
-	if (!list) return st_version(sched, v);
-	const nd_list *l = v->content;
-	nt_value *m = nt_map(), *c = nt_list();
-	for (size_t i = 0; i < l->length; i++)
-		nt_push(c, l->items[i].id ? nt_str(l->items[i].id) : nt_null());
-	nt_set(m, "content", c);
-	const sc_change *ch = v->change;
-	nt_set(m, "time", ch ? nt_num((double)ch->time) : nt_null());
-	return m;
-}
-static nt_value *object_json(const nd_object *o, int list) {
-	nt_value *l = nt_list();
-	for (size_t i = 0; i < o->length; i++) nt_push(l, version_json(&o->versions[i], list));
-	return l;
-}
-static nt_value *entries_json(const nd_entry *es, size_t n, int list) {
-	nt_value *m = nt_map();
-	for (size_t i = 0; i < n; i++) nt_set(m, es[i].name, object_json(&es[i].object, list));
-	return m;
 }
 
 typedef struct {
@@ -405,11 +393,23 @@ static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
 			*out = nt_null();
 			return NULL;
 		}
-		nt_value *m = nt_map();
-		nt_set(m, "value", object_json(&n->value, 0));
-		nt_set(m, "info", entries_json(n->info, n->info_length, 0));
-		nt_set(m, "children", entries_json(n->children, n->children_length, 1));
+		nt_value *m = st_node(sched, n);
 		nt_set(m, "ephemeral", nt_bool(sc_ephemeral(sched, n->id)));
+		*out = m;
+		return NULL;
+	}
+	if (!strcmp(op, "header")) {
+		nt_value *id = nt_get(q, "id");
+		nd_node *n = sc_get(sched, id && id->type == NT_STR ? id->str : "");
+		if (!n || !n->value.length || !n->value.versions[0].change) {
+			*out = nt_null();
+			return NULL;
+		}
+		const sc_change *c = n->value.versions[0].change;
+		nt_value *m = nt_map();
+		nt_set(m, "time", nt_num((double)c->time));
+		if (c->cause) nt_set(m, "cause", st_pr_json(c->cause));
+		if (c->site) nt_set(m, "site", st_pr_json(c->site));
 		*out = m;
 		return NULL;
 	}

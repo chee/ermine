@@ -1,0 +1,388 @@
+{
+	"title": "by id: node(id) the whole node, read as every object of it; an id where an address goes; as({cause})",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"actor": "eve",
+					"op": "read",
+					"node": "secret",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "intro",
+			"id": "far",
+			"value": "f",
+			"info": {
+				"title": "F"
+			},
+			"children": {
+				"x": [
+					"secret"
+				]
+			},
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "secret",
+			"value": "s",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "whole",
+			"id": "far",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "f",
+							"time": 0
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "F",
+								"time": 0
+							}
+						]
+					},
+					"children": {
+						"x": [
+							{
+								"content": [
+									"secret"
+								],
+								"time": 0
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "whole",
+			"id": "gone",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "bind",
+			"as": "eve",
+			"agent": "eve",
+			"expect": {}
+		},
+		{
+			"op": "whole",
+			"as": "eve",
+			"id": "secret",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "whole",
+			"as": "eve",
+			"id": "far",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "f",
+							"time": 0
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "F",
+								"time": 0
+							}
+						]
+					},
+					"children": {
+						"x": [
+							{
+								"content": [
+									"secret"
+								],
+								"time": 0
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "content",
+			"as": "eve",
+			"address": "secret",
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"refused": {
+							"code": "rule",
+							"rule": 0
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": "far",
+			"expect": {
+				"ok": [
+					{
+						"id": "far",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"address": "far",
+			"name": "x",
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "p",
+			"track": "p",
+			"expect": {}
+		},
+		{
+			"op": "whole",
+			"as": "p",
+			"id": "far",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": "f",
+							"time": 0
+						}
+					],
+					"info": {
+						"title": [
+							{
+								"content": "F",
+								"time": 0
+							}
+						]
+					},
+					"children": {
+						"x": [
+							{
+								"content": [
+									"secret"
+								],
+								"time": 0
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "set",
+			"address": "far",
+			"name": "title",
+			"patches": [
+				{
+					"path": [],
+					"value": "G"
+				}
+			],
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 4,
+							"node": "far",
+							"which": [
+								"info",
+								"title"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "as",
+			"cause": {
+				"why": "because"
+			},
+			"do": {
+				"op": "write",
+				"address": "far",
+				"patches": [
+					{
+						"path": [],
+						"value": "g"
+					}
+				]
+			},
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"cause": {
+								"why": "because"
+							},
+							"time": 5,
+							"node": "far",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": "far",
+			"patches": [
+				{
+					"path": [],
+					"value": "h"
+				}
+			],
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 6,
+							"node": "far",
+							"which": "value"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "q",
+			"track": "q",
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "q",
+			"address": "secret",
+			"expect": {
+				"ok": [
+					{
+						"id": "secret",
+						"versions": [
+							{
+								"content": "s",
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "insert",
+			"id": "far",
+			"name": "y",
+			"child": "secret",
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "p",
+						"by": {
+							"actor": "host",
+							"time": 7,
+							"node": "far",
+							"which": [
+								"children",
+								"y"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"address": "secret",
+			"patches": [
+				{
+					"path": [],
+					"value": "t"
+				}
+			],
+			"expect": {
+				"ok": 8
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"ok": [
+					{
+						"marked": "q",
+						"by": {
+							"actor": "host",
+							"time": 8,
+							"node": "secret",
+							"which": "value"
+						}
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,5 +1,5 @@
 {
-	"title": "three heads of one lamport, one emptied: it gives no version, the others in agreed order",
+	"title": "three heads of one lamport, one emptied: a version with no content, in agreed order",
 	"steps": [
 		{
 			"request": {
@@ -197,6 +197,23 @@
 						"place": {
 							"lamport": 2,
 							"name": "5c578d72ef1192ed6e33ee1ace0b8640ac57e34394098a6e3f5b77d6cfa2afa0"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				},
+				{
+					"change": {
+						"actor": "a",
+						"time": 1036,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 2,
+							"name": "171129cbd40a28a7841f4516988b2bf2cf7b26eb46a262ffe22694c0772790a3"
 						},
 						"why": {
 							"signer": "0101010101010101010101010101010101010101010101010101010101010101"

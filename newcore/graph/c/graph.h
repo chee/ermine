@@ -184,6 +184,10 @@ void gr_release(gr_graph *g, const char *id, const gr_change *cause);
 // a node made as who: loaded, not yet placed. id NULL: a fresh one; has_value 0: none
 const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int has_value,
 	const gr_acting *who, const char **out);
+// the same, ephemeral if own, owned by owner if not NULL: the record a node made with a value makes
+// (WIRING.tex, Out) is then ephemeral
+const gr_error *gr_make_own(gr_graph *g, const char *id, const nt_value *value, int has_value,
+	const gr_acting *who, int own, void *owner, const char **out);
 // an ephemeral node, owned by owner if given
 void gr_own(gr_graph *g, const char *id, void *owner);
 
@@ -224,6 +228,9 @@ typedef struct {
 	const void *tag;
 	void *own; // not marked by this change
 	gr_times *wrote; // the times of the changes made, pushed
+	// the operation reports its own records (the api's); else the changes made here are reported
+	// (WIRING.tex, Out), so that every change makes them
+	int reported;
 	int has_snap;
 	const gr_snap *snap;
 	size_t nsnap;
@@ -313,6 +320,10 @@ const gr_error *gr_look(gr_api *a, const char *const *address, size_t n, gr_item
 const gr_error *gr_lookup(gr_api *a, const char *const *path, size_t n, gr_items *out);
 const gr_error *gr_lookups(gr_api *a, const char *const *path, size_t n, gr_items *out);
 const gr_error *gr_names(gr_api *a, const char *const *address, size_t n, pl_namelist *out);
+// the names of a node's "info" or "children" (else wrong-field), in order; children's is gr_names.
+// each node must be listable (protect's list ask), as for gr_names
+const gr_error *gr_names_of(gr_api *a, const char *const *address, size_t n, const char *part,
+	pl_namelist *out);
 const gr_error *gr_children(gr_api *a, const char *const *address, size_t n, const char *name,
 	gr_items *out);
 const gr_error *gr_content(gr_api *a, const char *const *address, size_t n, gr_items *out);
@@ -334,6 +345,12 @@ const gr_error *gr_rename(gr_api *a, const char *id, const char *name, const cha
 	int64_t times[2]);
 const gr_error *gr_move(gr_api *a, const char *id, const char *name, long index, const char *toid,
 	const char *toname, const long *toindex, int64_t times[2], size_t *ntimes);
+// the whole node of an id (*out NULL: not loaded, or refused), read as a look by id is: every
+// object of it said read. reading is handed it as op "node", address {pl_id, id}
+const gr_error *gr_node(gr_api *a, const char *id, const nd_node **out);
+// the same interface, its changes carrying cause (borrowed, as a bind's); in scratch (memory,
+// above), as long as a is and scratch lasts
+gr_api *gr_as(gr_api *a, const pr_value *cause);
 // a new node holding value (has_value 0: none); an owner may make it ephemeral
 const gr_error *gr_create(gr_api *a, const nt_value *value, int has_value, const char *id,
 	int ephemeral, const char **out);

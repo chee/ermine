@@ -238,9 +238,10 @@ size_t apply_versions(histories *c, const Json *object, apply_time time, void *c
 	history_head *heads;
 	size_t n = history_heads(c, object, &heads), made = 0;
 	apply_version *vs = grab(n * sizeof *vs);
+	// a removal as the only head: the object is not there
+	if (n == 1 && apply_side(c, heads[0].name) == NULL) n = 0;
 	for (size_t i = 0; i < n; i++) {
 		const nt_value *content = apply_side(c, heads[i].name);
-		if (content == NULL) continue;
 		const Json *blop = heads[i].blop, *signer = jsonGet(blop, "signer"), *site = jsonGet(blop, "site");
 		apply_version *v = &vs[made++];
 		v->content = content;

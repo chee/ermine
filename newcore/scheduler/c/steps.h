@@ -37,6 +37,12 @@ const char *st_code(const sc_error *e);
 nt_value *st_json(const nt_value *v);
 nt_value *st_version(sc_sched *s, const nd_version *v);
 nt_value *st_item(sc_sched *s, const sc_item *it, int content);
+// a node: {"value":[version],"info":{n:[version]},"children":{n:[version]}}
+nt_value *st_node(sc_sched *s, const nd_node *n);
+
+// protect's values as JSON, and back (in the scheduler's protect arena)
+nt_value *st_pr_json(const pr_value *v);
+const pr_value *st_pr(sc_sched *s, const nt_value *v);
 
 // an operation of an interface (normal.ts operate): fields a map; the answer in *out. an unknown
 // op: an error with code "unknown-op"
