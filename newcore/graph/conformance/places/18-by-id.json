@@ -1,0 +1,390 @@
+{
+	"title": "an id where an address goes: its node, no walk, route empty, said loaded",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "r",
+			"nodes": [
+				{
+					"id": "r",
+					"children": [
+						[
+							"t",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": 1,
+							"change": {
+								"time": 0
+							}
+						}
+					],
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "A",
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"x",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 0
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": 2,
+							"change": {
+								"time": 0
+							}
+						}
+					]
+				},
+				{
+					"id": "far",
+					"value": [
+						{
+							"content": "unplaced",
+							"change": {
+								"time": 0
+							}
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": "a",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "a",
+						"route": [],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"a",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"t"
+			],
+			"address": "far",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "far",
+						"route": [],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"far",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": "gone",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "gone",
+						"route": [],
+						"loaded": false
+					}
+				],
+				"said": [
+					[
+						"gone",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": "far",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "far",
+						"route": [],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "unplaced",
+								"change": {
+									"time": 0
+								}
+							}
+						]
+					}
+				],
+				"said": [
+					[
+						"far",
+						"loaded"
+					],
+					[
+						"far",
+						"value"
+					]
+				]
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": "a",
+			"name": "title",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "a",
+						"route": [],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "A",
+								"change": {
+									"time": 0
+								}
+							}
+						]
+					}
+				],
+				"said": [
+					[
+						"a",
+						"loaded"
+					],
+					[
+						"a",
+						[
+							"info",
+							"title"
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": "a",
+			"name": "x",
+			"depend": true,
+			"expect": {
+				"items": [
+					{
+						"id": "b",
+						"route": [
+							{
+								"node": "a",
+								"name": "x",
+								"id": "b",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				],
+				"said": [
+					[
+						"a",
+						"loaded"
+					],
+					[
+						"a",
+						[
+							"children",
+							"x"
+						]
+					],
+					[
+						"b",
+						"loaded"
+					]
+				]
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": "a",
+			"expect": {
+				"names": [
+					"x"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": "/",
+			"expect": {
+				"items": [
+					{
+						"id": "/",
+						"route": [],
+						"loaded": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": "far",
+			"patches": [
+				{
+					"path": [],
+					"value": "moved"
+				}
+			],
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 1,
+					"node": "far"
+				}
+			}
+		},
+		{
+			"op": "content",
+			"place": [],
+			"address": "far",
+			"expect": {
+				"items": [
+					{
+						"id": "far",
+						"route": [],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "moved",
+								"change": {
+									"actor": "me",
+									"time": 1,
+									"node": "far"
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"place": [],
+			"address": "b",
+			"name": "note",
+			"patches": [
+				{
+					"path": [],
+					"value": "hi"
+				}
+			],
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 2,
+					"node": "b"
+				}
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": "b",
+			"name": "note",
+			"expect": {
+				"items": [
+					{
+						"id": "b",
+						"route": [],
+						"loaded": true,
+						"versions": [
+							{
+								"content": "hi",
+								"change": {
+									"actor": "me",
+									"time": 2,
+									"node": "b"
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"place": [],
+			"address": "gone",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "nothing-there"
+			}
+		}
+	]
+}

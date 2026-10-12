@@ -44,7 +44,7 @@ fragment_src = sync/c/fragment.c sync/c/fragment_harness.c encoding/c/json.c
 because_src = nodes/c/because.c nodes/c/because_harness.c
 squish_src = opstreams/c/squish.c opstreams/c/squish_harness.c
 notify_src = notify/c/notify.c notify/c/harness.c
-places_src = graph/c/places.c graph/c/places_harness.c nodes/c/node.c
+places_src = graph/c/places.c graph/c/places_harness.c nodes/c/node.c opstreams/c/mutate.c notify/c/notify.c
 protect_src = protect/c/protect.c protect/c/harness.c
 mutate_src = opstreams/c/mutate.c opstreams/c/mutate_harness.c notify/c/notify.c nodes/c/node.c
 graph_src = graph/c/graph.c graph/c/graph_harness.c \
@@ -153,8 +153,7 @@ store_deno = --allow-write --allow-ffi
 # the program's suite runs the harness on real folders, and calls the system
 program_test = PROGRAM_HARNESS conformance/program/
 program_deno = --allow-write --allow-ffi
-# graph/c's places has no write by path
-skips = PLACES_SKIP=13-write.json COMMIT_SKIP=29-live-stand-in.json,30-live-actor-cause.json
+skips = COMMIT_SKIP=29-live-stand-in.json,30-live-actor-cause.json
 
 # per library: test-c-<lib> against its harness, test-check-<lib> against its harness-check
 define run

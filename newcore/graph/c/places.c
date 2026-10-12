@@ -1,4 +1,4 @@
-// Finding items by path, and placing ids in lists (places.ts), in C. See places.h.
+// Finding items by path, writing by path, and placing ids in lists (places.ts), in C. See places.h.
 #include "places.h"
 
 #include <string.h>
@@ -18,13 +18,21 @@ const char *pl_code_name(int code) {
 	case PL_ALREADY_THERE: return "already-there";
 	case PL_RANGE: return "range";
 	case PL_NO_BY: return "no-by";
+	case PL_MUTATE: return "mutate";
 	}
 	return "";
 }
 
-// never a name: ".", "..", or anything with a "/"
+const char pl_id[] = "id";
+
+// never a name: ".", "..", or anything with a "/"; nor the id marker
 static int never(const char *s) {
-	return !strcmp(s, ".") || !strcmp(s, "..") || strchr(s, '/') != NULL;
+	return s == pl_id || !strcmp(s, ".") || !strcmp(s, "..") || strchr(s, '/') != NULL;
+}
+
+// the id of an address that is one (pl_id), else NULL
+static const char *by_id(const char *const *address, size_t naddress) {
+	return naddress == 2 && address[0] == pl_id ? address[1] : NULL;
 }
 
 static long find(const nd_node *n, const char *name) {
@@ -181,6 +189,14 @@ static const pl_depend *dep(const pl_places *p, const pl_depend *d) {
 
 static int look_into(const pl_places *p, const pl_spot *at, const char *const *address,
 	size_t naddress, const pl_depend *d, vec *o) {
+	const char *id = by_id(address, naddress);
+	if (id) {
+		say(d, id, PL_LOADED, NULL);
+		pl_item *it = push(p, o);
+		it->id = id;
+		it->node = p->get(p->ctx, id);
+		return PL_OK;
+	}
 	resolved r;
 	int code = resolve(p, at, address, naddress, &r);
 	if (code) return code;
@@ -640,4 +656,104 @@ int pl_move(const pl_places *p, const char *id, const char *name, long index, co
 	if (code) return code;
 	*nchanges = 2;
 	return PL_OK;
+}
+
+// writing by path
+
+static void quiet(void *ctx, const char *id, pl_part part) { (void)ctx, (void)id, (void)part; }
+
+int pl_at(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const long *index, nd_node **out) {
+	static const pl_depend none = {quiet, NULL};
+	pl_items items;
+	int code = pl_look(p, at, address, naddress, &none, &items);
+	if (code) return code;
+	const pl_item *it = NULL;
+	if (index == NULL) {
+		for (size_t i = 0; i < items.n && !it; i++)
+			if (items.items[i].node) it = &items.items[i];
+	} else {
+		if (*index < 0 || (size_t)*index >= items.n) return PL_RANGE;
+		it = &items.items[*index];
+	}
+	if (it == NULL || it->node == NULL) return PL_NOTHING_THERE;
+	*out = (nd_node *)it->node;
+	return PL_OK;
+}
+
+int pl_edit(const pl_places *p, nd_node *n, const char *info, pl_span slots,
+	const nt_patch *patches, size_t np, const mu_patched *patched, const void **change,
+	pl_mutated *mutated) {
+	long e = -1;
+	nd_object cur = info ? (nd_object){0} : n->value;
+	for (size_t i = 0; info && e < 0 && i < n->info_length; i++)
+		if (!strcmp(n->info[i].name, info)) e = (long)i, cur = n->info[i].object;
+	long from = slots.from, to = slots.to;
+	int ok = cur.length == 0 ? (from == 0 && to <= 1) : (from < to && (size_t)to <= cur.length);
+	if (!ok || from < 0) return PL_RANGE;
+	if (p->by == NULL) return PL_NO_BY;
+	// mutate on a node holding only the version from
+	size_t nbase = cur.length ? 1 : 0;
+	nd_version base = nbase ? cur.versions[from] : (nd_version){0};
+	nd_entry entry = {info, {&base, nbase}};
+	nd_node scratch = {.id = n->id};
+	if (info == NULL) scratch.value = (nd_object){nbase ? &base : NULL, nbase};
+	else if (nbase) scratch.info = &entry, scratch.info_length = 1;
+	const void *c = p->by(p->ctx, n->id);
+	mu_alloc al = {p->alloc, p->ctx};
+	size_t failed = 0;
+	int code = mu_mutate(&scratch, (mu_which){info ? MU_INFO : MU_VALUE, info}, patches, np, c,
+		&al, patched, &failed);
+	if (code) {
+		if (mutated) *mutated = (pl_mutated){code, failed};
+		return PL_MUTATE;
+	}
+	nd_object made = info ? (nd_object){0} : scratch.value;
+	for (size_t i = 0; info && i < scratch.info_length; i++)
+		if (!strcmp(scratch.info[i].name, info)) made = scratch.info[i].object;
+	size_t tail = cur.length > (size_t)to ? cur.length - (size_t)to : 0;
+	size_t total = (size_t)from + made.length + tail;
+	nd_version *vs = mem(p, total * sizeof *vs);
+	if (from) memcpy(vs, cur.versions, (size_t)from * sizeof *vs);
+	if (made.length) memcpy(vs + from, made.versions, made.length * sizeof *vs);
+	if (tail) memcpy(vs + from + made.length, cur.versions + to, tail * sizeof *vs);
+	if (info == NULL) n->value = (nd_object){vs, total};
+	else {
+		// the entry set, added at the end, or gone
+		nd_entry *es = mem(p, (n->info_length + 1) * sizeof *es);
+		size_t m = 0;
+		for (size_t j = 0; j < n->info_length; j++) {
+			if ((long)j != e) es[m++] = n->info[j];
+			else if (total) es[m++] = (nd_entry){n->info[j].name, {vs, total}};
+		}
+		if (e < 0 && total) {
+			char *name = mem(p, strlen(info) + 1);
+			es[m++] = (nd_entry){strcpy(name, info), {vs, total}};
+		}
+		n->info = es, n->info_length = m;
+	}
+	*change = c;
+	return PL_OK;
+}
+
+static int written(const pl_places *p, const pl_spot *at, const char *const *address,
+	size_t naddress, const char *info, const nt_patch *patches, size_t np, const long *index,
+	const pl_span *slotindex, const void **change, pl_mutated *mutated) {
+	nd_node *n;
+	int code = pl_at(p, at, address, naddress, index, &n);
+	if (code) return code;
+	return pl_edit(p, n, info, slotindex ? *slotindex : first, patches, np, NULL, change, mutated);
+}
+
+int pl_write(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex,
+	const void **change, pl_mutated *mutated) {
+	return written(p, at, address, naddress, NULL, patches, np, index, slotindex, change, mutated);
+}
+
+int pl_set(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const char *name, const nt_patch *patches, size_t np, const long *index,
+	const pl_span *slotindex, const void **change, pl_mutated *mutated) {
+	if (never(name)) return PL_WRONG_FIELD;
+	return written(p, at, address, naddress, name, patches, np, index, slotindex, change, mutated);
 }

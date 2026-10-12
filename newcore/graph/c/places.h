@@ -1,6 +1,5 @@
-// Finding items by path, and placing ids in lists (newcore/graph/ts/places.ts, PLACES.tex), in C. Same
+// Finding items by path, writing by path, and placing ids in lists (newcore/graph/ts/places.ts, PLACES.tex), in C. Same
 // rules as places.ts. Nothing kept between calls, nothing tracked: each read is said to depend.
-// Writing by path is not here: it needs a mutate.
 #ifndef PLACES_H
 #define PLACES_H
 
@@ -8,6 +7,7 @@
 #include <stdint.h>
 
 #include "../../nodes/c/node.h"
+#include "../../opstreams/c/mutate.h"
 
 // what a read rests on: an id being loaded, its value, one of its info objects (name), or its
 // lists: PL_CHILDREN with no name is which names it has, with one the list of that name
@@ -80,9 +80,10 @@ enum {
 	PL_NOTHING_THERE,
 	PL_ALREADY_THERE,
 	PL_RANGE,
-	PL_NO_BY // placing, with no by
+	PL_NO_BY, // placing, with no by
+	PL_MUTATE // writing: patches that do not apply; mutate's code says which
 };
-// "wrong-field", "above-root", "nothing-there", "already-there", "range"; "no-by"
+// "wrong-field", "above-root", "nothing-there", "already-there", "range"; "no-by", "mutate"
 const char *pl_code_name(int code);
 
 // the world a read is in. get: the node of an id, or NULL if it is not loaded; placing changes
@@ -100,8 +101,13 @@ typedef struct {
 	const pl_depend *fallback;
 } pl_places;
 
+// an id where an address goes (places.ts, Where): the address {pl_id, id}, naddress 2. Its node,
+// no walk: one item, route empty, said to depend on the id loaded. Not for pl_cd (wrong-field)
+extern const char pl_id[];
+#define PL_ID(id) ((const char *const[]){pl_id, (id)}), 2
+
 // reads. a code, PL_OK with the result set. address: an optional "/", any number of "..",
-// then names. depend NULL: the fallback
+// then names; or an id (pl_id). depend NULL: the fallback
 int pl_look(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
 	const pl_depend *depend, pl_items *out);
 // the nearest path of names whose last list holds a loaded node, and every such path's list
@@ -144,5 +150,31 @@ int pl_rename(const pl_places *p, const char *id, const char *name, const char *
 // end; counted after it left). one list: one change, else two; nchanges says
 int pl_move(const pl_places *p, const char *id, const char *name, long index, const char *toid,
 	const char *toname, const long *toindex, const void *changes[2], size_t *nchanges);
+
+// writing by path, by mutate: one change. patches that do not apply: PL_MUTATE, with mutate's
+// code and the patch's place in mutated (may be NULL). nothing changes on a failure
+typedef struct {
+	int code;
+	size_t patch;
+} pl_mutated;
+// the item a write is at: the index-th item look gives (NULL: its first loaded); past the items
+// or below 0: range; pending: nothing-there. the walk says nothing to depend: a write reads nothing
+int pl_at(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const long *index, nd_node **out);
+// patches to the version slots.from of n's value (info NULL) or of its info object of name; the
+// versions slots.from to slots.to replaced by what they make, at from. no versions: {0, 1} makes
+// the first; past the versions: range. patched: as mu_mutate's, may be NULL. the old versions and
+// info arrays are left as they were, for their holders; a new info name is copied
+int pl_edit(const pl_places *p, nd_node *n, const char *info, pl_span slots,
+	const nt_patch *patches, size_t np, const mu_patched *patched, const void **change,
+	pl_mutated *mutated);
+// the value, or one info by name, of the item an address reaches: pl_at, then pl_edit. index NULL:
+// the first loaded; slotindex NULL: 0
+int pl_write(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex,
+	const void **change, pl_mutated *mutated);
+int pl_set(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
+	const char *name, const nt_patch *patches, size_t np, const long *index,
+	const pl_span *slotindex, const void **change, pl_mutated *mutated);
 
 #endif

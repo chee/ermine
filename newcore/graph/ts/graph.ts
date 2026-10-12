@@ -708,6 +708,8 @@ export function createGraph<O>(options: Options<O>) {
 		return [...passing(it.route), edit("write", it.id, object, slotindex ?? 0)]
 	}
 
+	// how a write is told to notify: from a slot, by its patches; or the objects snapped, whole
+	type Telling = { slot?: number | null; snap?: [string, Which][] }
 	// how a write is told to notify: by its patches; none, the object whole, as its version is new
 	// all the same, so what read it is marked
 	function empty(
@@ -717,7 +719,7 @@ export function createGraph<O>(options: Options<O>) {
 		index: number | undefined,
 		object: Which,
 		slotindex: Span | undefined,
-	): { slot?: number | null; snap?: [string, Which][] } {
+	): Telling {
 		const at = slotindex === undefined ? 0 : typeof slotindex === "number" ? slotindex : null
 		if (ps.length) return { slot: at }
 		const items = places.look(pl, address)
@@ -774,7 +776,8 @@ export function createGraph<O>(options: Options<O>) {
 		const w = <T>(
 			op: string,
 			f: () => T,
-			o: { slot?: number | null; snap?: [string, Which][] } = {},
+			// how it is told to notify; a function: worked out once the write may go ahead
+			how: Telling | (() => Telling) = {},
 			asks?: () => Ask[],
 			// where each change it makes was made, for changed: node, object and version
 			targets?: (out: T) => Target[],
@@ -782,6 +785,7 @@ export function createGraph<O>(options: Options<O>) {
 			live(op)
 			if (!b.writes) throw new GraphError("read-only", `${op}: a compute only reads`)
 			if (asks) allowed(ask(b.agent, asks()), op)
+			const o = typeof how === "function" ? how() : how
 			if (!options.changed || !targets) {
 				return around(() => changing(who(), { ...o, tag: b.tag, wrote: b.wrote }, f))
 			}
@@ -866,7 +870,7 @@ export function createGraph<O>(options: Options<O>) {
 				return w(
 					"write",
 					() => places.write(pl, address, ps, index, slotindex),
-					empty(ps, pl, address, index, "value", slotindex),
+					() => empty(ps, pl, address, index, "value", slotindex),
 					() => writing(pl, address, index, "value", slotindex),
 					(c) => [[c.node, "value", slotindex ?? 0]],
 				)
@@ -876,7 +880,7 @@ export function createGraph<O>(options: Options<O>) {
 				return w(
 					"set",
 					() => places.set(pl, address, name, ps, index, slotindex),
-					empty(ps, pl, address, index, ["info", name], slotindex),
+					() => empty(ps, pl, address, index, ["info", name], slotindex),
 					() => writing(pl, address, index, ["info", name], slotindex),
 					(c) => [[c.node, ["info", name], slotindex ?? 0]],
 				)

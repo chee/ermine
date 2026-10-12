@@ -1671,48 +1671,28 @@ typedef struct {
 	nt_value *held[2];
 } wop;
 
-// patches to the version from of one object of n; the versions from to to replaced by what they
-// make, at from: one change. no versions: slots 0 makes the first
+// patches to the version from of one object of n, by places (pl_edit): one change; what mutate
+// tells heard, and the versions made held
 static const gr_error *edit_object(gr_graph *g, nd_node *n, gr_where w, const char *name,
 	const pl_span *slots, const nt_patch *patches, size_t np, const gr_change **change,
 	target *tg, int span_slot) {
-	const nd_entry *entry = NULL;
-	nd_object cur = {0};
-	if (w == GR_VALUE) cur = n->value;
-	else {
-		for (size_t i = 0; i < n->info_length; i++)
-			if (!strcmp(n->info[i].name, name)) entry = &n->info[i];
-		if (entry) cur = entry->object;
-	}
+	const char *info = w == GR_VALUE ? NULL : name;
+	size_t len = object_len(n, w, name);
 	long from = slots ? slots->from : 0, to = slots ? slots->to : 1;
-	size_t len = cur.length;
-	int ok = len == 0 ? (from == 0 && to <= 1) : (from < to && (size_t)to <= len);
-	if (!ok || from < 0) return pl_error(g, PL_RANGE);
-	nd_version base[1];
-	size_t nbase = len ? 1 : 0;
-	if (nbase) base[0] = cur.versions[from];
-	nd_node scratch = {0};
-	scratch.id = n->id;
-	nd_entry se[1];
-	if (w == GR_VALUE) scratch.value = (nd_object){nbase ? base : NULL, nbase};
-	else if (nbase) {
-		se[0] = (nd_entry){name, {base, 1}};
-		scratch.info = se;
-		scratch.info_length = 1;
-	}
-	const gr_change *ch = gr_by(g, n->id);
-	mu_alloc al = {places_alloc, g};
-	size_t failed = 0;
 	heard_t heard = {g, w, name, from, NULL, NULL, 0, 0};
 	mu_patched hook = {hear, &heard};
-	int code = mu_mutate(&scratch, (mu_which){w == GR_VALUE ? MU_VALUE : MU_INFO, name}, patches, np,
-		ch, &al, tg && g->cur->hearing ? &hook : NULL, &failed);
-	if (code) return mu_error(g, code);
-	nd_object made = {0};
-	if (w == GR_VALUE) made = scratch.value;
-	else
-		for (size_t i = 0; i < scratch.info_length; i++)
-			if (!strcmp(scratch.info[i].name, name)) made = scratch.info[i].object;
+	pl_mutated mutated;
+	const void *ch;
+	int code = pl_edit(&g->places, n, info, (pl_span){from, to}, patches, np,
+		tg && g->cur->hearing ? &hook : NULL, &ch, &mutated);
+	if (code == PL_MUTATE) return mu_error(g, mutated.code);
+	if (code) return pl_error(g, code);
+	// the versions made: from, up to what was after to
+	size_t tail = len > (size_t)to ? len - (size_t)to : 0;
+	nd_object now = w == GR_VALUE ? n->value : (nd_object){0};
+	for (size_t i = 0; w != GR_VALUE && i < n->info_length; i++)
+		if (!strcmp(n->info[i].name, name)) now = n->info[i].object;
+	nd_object made = {now.versions + from, now.length - (size_t)from - tail};
 	// mutate's new versions hold their contents (mutate.h): the graph holds its own (own), and
 	// lets go of mutate's at the next sweep
 	for (size_t i = 0; i < made.length; i++) later(g, made.versions[i].content, 1);
@@ -1728,48 +1708,14 @@ static const gr_error *edit_object(gr_graph *g, nd_node *n, gr_where w, const ch
 			tg->npatches = heard.n;
 		}
 	}
-	size_t after = len > (size_t)to ? len - (size_t)to : 0;
-	size_t total = (size_t)from + made.length + after;
-	nd_version *vs = tmem(g, (total ? total : 1) * sizeof *vs);
-	if (from) memcpy(vs, cur.versions, (size_t)from * sizeof *vs);
-	if (made.length) memcpy(vs + from, made.versions, made.length * sizeof *vs);
-	if (after) memcpy(vs + from + made.length, cur.versions + to, after * sizeof *vs);
-	if (w == GR_VALUE) n->value = (nd_object){vs, total};
-	else {
-		// the entry set, or added, or gone
-		size_t at = entry ? (size_t)(entry - n->info) : n->info_length;
-		size_t cnt = n->info_length + (entry == NULL) - (total == 0);
-		nd_entry *es = tmem(g, (cnt ? cnt : 1) * sizeof *es);
-		size_t m = 0;
-		for (size_t j = 0; j < n->info_length; j++) {
-			if (j != at) es[m++] = n->info[j];
-			else if (total) es[m++] = (nd_entry){n->info[j].name, {vs, total}};
-		}
-		if (!entry && total) es[m++] = (nd_entry){tdup(g, name), {vs, total}};
-		n->info = es;
-		n->info_length = m;
-	}
 	*change = ch;
 	return NULL;
 }
 
 // the item the index-th look gives, default its first loaded
 static const gr_error *at_item(wop *o, nd_node **out) {
-	gr_graph *g = o->g;
-	pl_items items;
-	int code = pl_look(&g->places, &o->at, o->address, o->n, NULL, &items);
-	if (code) return pl_error(g, code);
-	const pl_item *it = NULL;
-	if (!o->index) {
-		for (size_t i = 0; i < items.n && !it; i++)
-			if (items.items[i].node) it = &items.items[i];
-	} else {
-		if (*o->index < 0 || (size_t)*o->index >= items.n) return pl_error(g, PL_RANGE);
-		it = &items.items[*o->index];
-	}
-	if (!it || !it->node) return pl_error(g, PL_NOTHING_THERE);
-	*out = (nd_node *)it->node;
-	return NULL;
+	int code = pl_at(&o->g->places, &o->at, o->address, o->n, o->index, out);
+	return code ? pl_error(o->g, code) : NULL;
 }
 
 static target *chg_target(gr_graph *g, const char *id, gr_where w, const char *name, size_t hdr) {

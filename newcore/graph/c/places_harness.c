@@ -1,8 +1,9 @@
 // The C places library on the line protocol: one JSON request per line in, one answer per line
 // out, in order. Same as ../conformance/harness.ts. State lasts for the process: the table of
-// nodes (id -> node), the heres cd made by name, and the time counting changes. Writing by path
-// is not here: it needs a mutate.
+// nodes (id -> node), the heres cd made by name, and the time counting changes. A value's and an
+// info's contents are notify/c's values, as mutate takes them; a list's, nodes/c's.
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -233,6 +234,76 @@ static const char **strs(const node *a, int kept, size_t *n) {
 	return out;
 }
 
+// an address, or an id given as a string (places.h, pl_id)
+static const char **where(const node *a, int kept, size_t *n) {
+	if (a == NULL || a->type != 's') return strs(a, kept, n);
+	const char **out = alloc(2 * sizeof *out);
+	out[0] = pl_id, out[1] = kept ? pstr(a->text) : a->text;
+	*n = 2;
+	return out;
+}
+
+// a value's or an info's content, or a patch's value, as notify/c's
+static nt_value *value_of(const node *j) {
+	if (j == NULL) return nt_null();
+	if (j->type == 's') return nt_str(j->text);
+	if (j->type == 'v') {
+		if (!strcmp(j->text, "null")) return nt_null();
+		if (!strcmp(j->text, "true") || !strcmp(j->text, "false")) return nt_bool(j->text[0] == 't');
+		return nt_num(strtod(j->text, NULL));
+	}
+	nt_value *v = j->type == 'a' ? nt_list() : nt_map();
+	for (size_t i = 0; i < j->n; i++) {
+		if (j->type == 'a') nt_push(v, value_of(j->kids[i]));
+		else nt_set(v, j->keys[i], value_of(j->kids[i]));
+	}
+	return v;
+}
+
+// a patch's place: a path of keys, and a range; anything else a key mutate refuses
+static const nt_key bad_key = {.type = NT_NUM_KEY, .n = -1};
+static int whole(const node *x, long *out) {
+	if (!x || x->type != 'v') return 0;
+	char *end;
+	double d = strtod(x->text, &end);
+	if (end == x->text || d != floor(d) || fabs(d) > 1e15) return 0;
+	*out = (long)d;
+	return 1;
+}
+static void place_of(const node *m, nt_place *p) {
+	memset(p, 0, sizeof *p);
+	const node *path = get(m, "path"), *r = get(m, "range");
+	if (path == NULL || path->type != 'a') goto bad;
+	nt_key *ks = palloc((path->n + 1) * sizeof *ks);
+	for (size_t i = 0; i < path->n; i++) {
+		const node *x = path->kids[i];
+		if (x->type == 's') ks[i] = (nt_key){.type = NT_STR_KEY, .s = pstr(x->text)};
+		else if (whole(x, &ks[i].n)) ks[i].type = NT_NUM_KEY;
+		else goto bad;
+	}
+	p->path = ks, p->length = path->n;
+	if (r) {
+		if (r->type != 'a' || r->n != 2 || !whole(r->kids[0], &p->from) || !whole(r->kids[1], &p->to))
+			goto bad;
+		p->has_range = 1;
+	}
+	return;
+bad:
+	memset(p, 0, sizeof *p);
+	p->path = &bad_key, p->length = 1;
+}
+static nt_patch *patches_of(const node *a, size_t *n) {
+	*n = a && a->type == 'a' ? a->n : 0;
+	nt_patch *ps = palloc(*n * sizeof *ps);
+	for (size_t i = 0; i < *n; i++) {
+		const node *m = a->kids[i], *v = get(m, "value"), *mv = get(m, "move");
+		place_of(m, &ps[i].place);
+		if (v) ps[i].has_value = 1, ps[i].value = value_of(v);
+		if (mv) ps[i].has_move = 1, place_of(mv, &ps[i].move);
+	}
+	return ps;
+}
+
 // a list's content: ids, and { "$symbol": name }
 static nd_list *list_of(const node *a) {
 	nd_list *l = palloc(sizeof *l);
@@ -253,7 +324,7 @@ static nd_object versions_of(const node *a, int islist) {
 	nd_version *vs = palloc(o.length * sizeof *vs);
 	for (size_t i = 0; i < o.length; i++) {
 		const node *v = a->kids[i], *c = get(v, "content"), *ch = get(v, "change"), *b = get(v, "because");
-		vs[i].content = islist ? (const void *)list_of(c) : (const void *)clone(c);
+		vs[i].content = islist ? (const void *)list_of(c) : (const void *)value_of(c);
 		vs[i].change = ch ? clone(ch) : NULL;
 		vs[i].because = b ? clone(b) : NULL;
 	}
@@ -307,6 +378,32 @@ static void out_node(const node *v) {
 	putchar(v->type == 'a' ? ']' : '}');
 }
 
+static void out_number(double d) {
+	if (d == 0) { putchar('0'); return; }
+	if (d == floor(d) && fabs(d) < 1e21) { printf("%.0f", d); return; }
+	char buf[40];
+	for (int p = 1; p <= 17; p++) {
+		snprintf(buf, sizeof buf, "%.*g", p, d);
+		if (strtod(buf, NULL) == d) break;
+	}
+	fputs(buf, stdout);
+}
+static void out_value(const nt_value *v) {
+	if (v == NULL || v->type == NT_NULL) { fputs("null", stdout); return; }
+	if (v->type == NT_BOOL) { fputs(v->bool_ ? "true" : "false", stdout); return; }
+	if (v->type == NT_NUM) { out_number(v->num); return; }
+	if (v->type == NT_STR) { out_str(v->str, v->bytes); return; }
+	// JSON only: nothing else is read in
+	if (v->type != NT_LIST && v->type != NT_MAP) { fputs("null", stdout); return; }
+	putchar(v->type == NT_MAP ? '{' : '[');
+	for (size_t i = 0; i < v->count; i++) {
+		if (i) putchar(',');
+		if (v->type == NT_MAP) out_s(v->keys[i]), putchar(':');
+		out_value(v->items[i]);
+	}
+	putchar(v->type == NT_MAP ? '}' : ']');
+}
+
 static void out_list(const nd_list *l) {
 	putchar('[');
 	for (size_t i = 0; i < l->length; i++) {
@@ -323,7 +420,7 @@ static void out_versions(const nd_version *vs, size_t n, int islist) {
 		if (i) putchar(',');
 		fputs("{\"content\":", stdout);
 		if (islist) out_list(vs[i].content);
-		else out_node(vs[i].content);
+		else out_value(vs[i].content);
 		fputs(",\"change\":", stdout);
 		out_node(vs[i].change);
 		if (vs[i].because) fputs(",\"because\":", stdout), out_node(vs[i].because);
@@ -506,7 +603,6 @@ static int answer(void) {
 		else puts("{\"node\":null}");
 		return 0;
 	}
-	if (!strcmp(o, "write")) return error("write needs a C mutate");
 
 	// placing
 	if (!strcmp(o, "insert") || !strcmp(o, "remove") || !strcmp(o, "pop") || !strcmp(o, "rename") || !strcmp(o, "move")) {
@@ -574,6 +670,35 @@ static int answer(void) {
 	}
 	pl_items items = {0};
 	size_t n;
+	if (!strcmp(o, "write") || !strcmp(o, "set")) {
+		persist = 1;
+		const char **address = where(get(r, "address"), 1, &n);
+		size_t np;
+		const nt_patch *ps = patches_of(get(r, "patches"), &np);
+		const node *ix = get(r, "index"), *sx = get(r, "slotindex");
+		long index = num(ix);
+		pl_span slotindex;
+		if (sx) slotindex = span_of(sx, 1);
+		const void *c = NULL;
+		pl_mutated mutated;
+		if (o[0] == 'w')
+			code = pl_write(&places, &spot, address, n, ps, np, ix ? &index : NULL,
+				sx ? &slotindex : NULL, &c, &mutated);
+		else
+			code = pl_set(&places, &spot, address, n, pstr(str_of(get(r, "name"))), ps, np,
+				ix ? &index : NULL, sx ? &slotindex : NULL, &c, &mutated);
+		if (code == PL_MUTATE) {
+			fputs("{\"fail\":", stdout);
+			out_s(mu_code_name(mutated.code));
+			puts("}");
+			return 0;
+		}
+		if (code) return fail(code);
+		fputs("{\"change\":", stdout);
+		out_change(c);
+		puts("}");
+		return 0;
+	}
 	if (iscd) {
 		persist = 1;
 		const char **address = strs(get(r, "address"), 1, &n);
@@ -605,7 +730,7 @@ static int answer(void) {
 		const char **path = strs(get(r, "path"), 0, &n);
 		code = (o[6] ? pl_lookups : pl_lookup)(&places, &spot, path, n, d, &items);
 	} else {
-		const char **address = strs(get(r, "address"), 0, &n);
+		const char **address = where(get(r, "address"), 0, &n);
 		const node *name = get(r, "name");
 		if (!strcmp(o, "look")) code = pl_look(&places, &spot, address, n, d, &items);
 		else if (!strcmp(o, "content")) code = pl_content(&places, &spot, address, n, d, &items);

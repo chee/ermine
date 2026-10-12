@@ -161,6 +161,9 @@ const DIAG: [unknown, string][] = [
 	[{ a: [1, { b: [] }] }, '{\n  "a": [\n    1.0,\n    {\n      "b": []\n    }\n  ]\n}'],
 	[{ t: new Float32Array([1]) }, "{\n  \"t\": 85(h'0000803f')\n}"],
 	[[new Uint8Array([1, 2])], "[\n  64(h'0102')\n]"],
+	// a stand-in as its tag on its kind, so its file reads back as it
+	[new Stand("clock"), '305419896("clock")'],
+	[{ c: new Stand({ w: 1 }) }, '{\n  "c": 305419896({\n    "w": 1.0\n  })\n}'],
 ]
 add(
 	"render-cbor",

@@ -1,0 +1,29 @@
+{
+	"title": "a read-only write or set is read-only before its address is looked at, with patches or none",
+	"steps": [
+		{ "op": "bind", "as": "c", "writes": false, "expect": {} },
+		{
+			"op": "write",
+			"as": "c",
+			"address": [".."],
+			"patches": [],
+			"expect": { "error": "read-only" }
+		},
+		{
+			"op": "write",
+			"as": "c",
+			"address": [".."],
+			"patches": [{ "path": [], "value": 1 }],
+			"expect": { "error": "read-only" }
+		},
+		{
+			"op": "set",
+			"as": "c",
+			"address": [".."],
+			"name": "t",
+			"patches": [],
+			"expect": { "error": "read-only" }
+		},
+		{ "op": "write", "address": [".."], "patches": [], "expect": { "error": "above-root" } }
+	]
+}
