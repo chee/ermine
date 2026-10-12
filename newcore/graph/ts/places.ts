@@ -76,8 +76,8 @@ export type Options = {
 	by?: () => Header
 }
 
-// never a name: ".", "..", or anything with a "/"
-const never = (name: string) => name === "." || name === ".." || name.includes("/")
+// never a name: ".", "..", or "/"; a name may hold a "/"
+const never = (name: string) => name === "." || name === ".." || name === "/"
 
 function list<V, H>(n: Node<V, H>, name: string): List | undefined {
 	return n.children.get(name)?.[0]?.content

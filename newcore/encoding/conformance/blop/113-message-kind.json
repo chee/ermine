@@ -1,0 +1,26 @@
+{
+	"title": "message not a string",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": [],
+		"message": 5
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "message"
+	}
+}

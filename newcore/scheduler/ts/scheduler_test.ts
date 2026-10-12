@@ -636,7 +636,7 @@ Deno.test("audit: a killed process's run node is released", () => {
 Deno.test("audit: a start refused for a bad name makes no process", () => {
 	const { s, moments } = host()
 	assertThrows(
-		() => s.start({ address: [], program: () => 1, name: "a/b" }),
+		() => s.start({ address: [], program: () => 1, name: "/" }),
 		SchedulerError,
 		"wrong-field",
 	)

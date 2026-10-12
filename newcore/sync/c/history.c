@@ -10,7 +10,9 @@ enum { NONE, TAKEN, WAITING, REFUSED, STUCK };
 typedef struct {
 	uint8_t name[32];
 	int state;
-	const Json *blop;
+	Json *blop; // held: kept while waiting or a head; with a loader, others are let go (see trim)
+	const Json *object; // the blop's, interned
+	bool lent;          // in lent: loaded or no longer needed, let go at the next trim
 	double lamport;
 	size_t *parents;
 	size_t count; // parents
@@ -29,10 +31,18 @@ struct histories {
 	history_check check;
 	void *context;
 	void (*release)(void *slot);
+	Json *(*load)(void *context, const uint8_t name[32]);
+	void *loading;
 	entry *entries;
 	size_t length, capacity;
 	// open addressing over entries, by the name's first bytes: index + 1, 0 empty
 	size_t *table, slots;
+	Json **objects; // each object seen once, held
+	size_t object_count, object_room;
+	size_t *lent; // entries whose blop goes at the next trim, unless needed again
+	size_t lent_count, lent_room;
+	Json **spare; // blops replaced, let go at the next trim
+	size_t spare_count, spare_room;
 };
 
 const char *history_refusal_name(history_refusal refusal) {
@@ -64,14 +74,25 @@ void history_release(histories *c, void (*release)(void *slot)) {
 	c->release = release;
 }
 
+void history_loader(histories *c, Json *(*load)(void *context, const uint8_t name[32]), void *context) {
+	c->load = load;
+	c->loading = context;
+}
+
 void history_free(histories *c) {
 	if (c == NULL) return;
 	for (size_t i = 0; i < c->length; i++) {
 		if (c->release && c->entries[i].slot) c->release(c->entries[i].slot);
+		jsonFree(c->entries[i].blop);
 		free(c->entries[i].parents);
 		free(c->entries[i].on);
 		free(c->entries[i].waiters);
 	}
+	for (size_t i = 0; i < c->object_count; i++) jsonFree(c->objects[i]);
+	for (size_t i = 0; i < c->spare_count; i++) jsonFree(c->spare[i]);
+	free(c->objects);
+	free(c->lent);
+	free(c->spare);
 	free(c->entries);
 	free(c->table);
 	free(c->node);
@@ -125,6 +146,46 @@ static size_t find(histories *c, const uint8_t name[32], bool make) {
 
 static const Json *field(const Json *blop, const char *key) {
 	return jsonGet(blop, key);
+}
+
+static void *room(void *items, size_t count, size_t *room, size_t size) {
+	if (count < *room) return items;
+	*room = *room ? *room * 2 : 8;
+	return regrow(items, *room * size);
+}
+
+// the object held here equal to it, NULL if none (or it is absent); made when asked to
+static const Json *interned(histories *c, const Json *object, bool make) {
+	if (object == NULL) return NULL;
+	for (size_t i = 0; i < c->object_count; i++)
+		if (jsonEqual(c->objects[i], object)) return c->objects[i];
+	if (!make) return NULL;
+	c->objects = room(c->objects, c->object_count, &c->object_room, sizeof *c->objects);
+	return c->objects[c->object_count++] = jsonRef((Json *)object);
+}
+
+static bool needed(const entry *e) {
+	return e->state == WAITING || (e->state == TAKEN && e->head);
+}
+
+// with a loader, a blop no longer needed goes at the next trim (what was given out stays good till then)
+static void drop(histories *c, size_t i) {
+	entry *e = &c->entries[i];
+	if (!c->load || !e->blop || e->lent || needed(e)) return;
+	c->lent = room(c->lent, c->lent_count, &c->lent_room, sizeof *c->lent);
+	c->lent[c->lent_count++] = i;
+	e->lent = true;
+}
+
+void history_trim(histories *c) {
+	for (size_t j = 0; j < c->lent_count; j++) {
+		entry *e = &c->entries[c->lent[j]];
+		e->lent = false;
+		if (!needed(e)) jsonFree(e->blop), e->blop = NULL;
+	}
+	c->lent_count = 0;
+	for (size_t j = 0; j < c->spare_count; j++) jsonFree(c->spare[j]);
+	c->spare_count = 0;
 }
 
 // the agreed order: higher lamport first; equal, the greater name
@@ -193,7 +254,14 @@ static history_row enter(histories *c, size_t i, const Json *blop) {
 	free(e->parents);
 	e->parents = ps;
 	e->count = n;
-	e->blop = blop;
+	if (e->blop != blop) {
+		if (e->blop) {
+			c->spare = room(c->spare, c->spare_count, &c->spare_room, sizeof *c->spare);
+			c->spare[c->spare_count++] = e->blop;
+		}
+		e->blop = jsonRef((Json *)blop);
+	}
+	e->object = interned(c, field(blop, "object"), true);
 	const Json *lamport = field(blop, "lamport");
 	e->lamport = lamport && lamport->type == JSON_NUMBER ? lamport->number : 0;
 
@@ -228,16 +296,15 @@ static history_row enter(histories *c, size_t i, const Json *blop) {
 		return row;
 	}
 	free(list);
-	const Json *object = field(blop, "object");
 	double top = 0;
 	for (size_t j = 0; j < n; j++) {
 		entry *p = &c->entries[ps[j]];
-		if (!jsonEqual(field(p->blop, "object"), object)) return refuse(c, i, HISTORY_HISTORY);
+		if (p->object != c->entries[i].object) return refuse(c, i, HISTORY_HISTORY);
 		if (p->lamport > top) top = p->lamport;
 	}
 	if (c->entries[i].lamport != top + 1) return refuse(c, i, HISTORY_LAMPORT);
 	if (!c->check(c->context, c, blop)) return refuse(c, i, HISTORY_PATCHES);
-	for (size_t j = 0; j < n; j++) c->entries[ps[j]].head = false;
+	for (size_t j = 0; j < n; j++) c->entries[ps[j]].head = false, drop(c, ps[j]);
 	c->entries[i].state = TAKEN;
 	c->entries[i].head = true;
 	return (history_row){.kind = HISTORY_TAKEN};
@@ -284,6 +351,7 @@ static void push(histories *c, stack *s, size_t i) {
 static history_row run(histories *c, size_t i, const Json *blop) {
 	forget(c, i);
 	history_row result = enter(c, i, blop);
+	drop(c, i);
 	if (result.kind == HISTORY_WAITING) return result;
 	stack s = {0};
 	push(c, &s, i);
@@ -301,6 +369,7 @@ static history_row run(histories *c, size_t i, const Json *blop) {
 		forget(c, w.index);
 		history_row again = enter(c, w.index, e->blop);
 		history_row_free(&again);
+		drop(c, w.index);
 		if (c->entries[w.index].state != WAITING) push(c, &s, w.index);
 	}
 	free(s.frames);
@@ -315,7 +384,13 @@ history_row history_add(histories *c, const Json *blop, const uint8_t name[32]) 
 
 const Json *history_get(histories *c, const uint8_t name[32]) {
 	size_t i = find(c, name, false);
-	return i != SIZE_MAX && c->entries[i].state == TAKEN ? c->entries[i].blop : NULL;
+	if (i == SIZE_MAX || c->entries[i].state != TAKEN) return NULL;
+	entry *e = &c->entries[i];
+	if (!e->blop && c->load) {
+		e->blop = c->load(c->loading, name);
+		drop(c, i);
+	}
+	return e->blop;
 }
 
 void **history_slot(histories *c, const uint8_t name[32]) {
@@ -330,11 +405,13 @@ static int by_head(const void *x, const void *y) {
 }
 
 size_t history_heads(histories *c, const Json *object, history_head **out) {
+	// the object as held here: none such, no heads (an absent one is NULL, as its entries' are)
+	const Json *o = interned(c, object, false);
 	history_head *hs = grab(c->length * sizeof *hs);
 	size_t n = 0;
-	for (size_t i = 0; i < c->length; i++) {
+	for (size_t i = 0; (o || !object) && i < c->length; i++) {
 		entry *e = &c->entries[i];
-		if (e->state != TAKEN || !e->head || !jsonEqual(field(e->blop, "object"), object)) continue;
+		if (e->state != TAKEN || !e->head || e->object != o) continue;
 		memcpy(hs[n].name, e->name, 32);
 		hs[n++].blop = e->blop;
 	}

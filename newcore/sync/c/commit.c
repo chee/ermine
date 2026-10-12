@@ -154,11 +154,14 @@ Json *commit_make(histories *c, const Json *change, commit_at at, const char *co
 	jsonAdd(blop, "node", jsonRef(jsonGet(change, "node")));
 	jsonAdd(blop, "object", jsonRef((Json *)object));
 	const Json *actor = jsonGet(header, "actor"), *reader = jsonGet(header, "reader"),
-		*site = jsonGet(header, "site"), *cause = jsonGet(header, "cause");
+		*site = jsonGet(header, "site"), *cause = jsonGet(header, "cause"),
+		*wallclock = jsonGet(header, "wallclock"), *message = jsonGet(header, "message");
 	jsonAdd(blop, "actor", actor ? jsonRef((Json *)actor) : jsonNull());
 	if (reader) jsonAdd(blop, "reader", jsonRef((Json *)reader));
 	if (site) jsonAdd(blop, "site", share(site, roots, count));
 	if (cause) jsonAdd(blop, "cause", jsonRef((Json *)cause));
+	if (wallclock) jsonAdd(blop, "wallclock", jsonRef((Json *)wallclock));
+	if (message) jsonAdd(blop, "message", jsonRef((Json *)message));
 	jsonAdd(blop, "signer", jsonRef(jsonGet(change, "signer")));
 	uint8_t nonce[8];
 	random(context, 8, nonce);

@@ -22,6 +22,8 @@ export type Versions = (
 		reader?: string
 		site?: Blop["site"]
 		cause?: unknown
+		wallclock?: number
+		message?: string
 		signer: string
 		name: string
 	},
@@ -73,6 +75,8 @@ export function createWiring(device: Device, options: Options): Wiring {
 		if (blop.reader !== undefined) from.reader = blop.reader
 		if (blop.site !== undefined) from.site = blop.site
 		if (blop.cause !== undefined) from.cause = blop.cause
+		if (blop.wallclock !== undefined) from.wallclock = blop.wallclock
+		if (blop.message !== undefined) from.message = blop.message
 		versions(doc, blop.object, list, from)
 	}
 

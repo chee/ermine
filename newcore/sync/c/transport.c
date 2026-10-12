@@ -35,11 +35,12 @@ static void *more(void *items, size_t count, size_t *room, size_t size) {
 }
 
 // a seal taken in, or being taken in; the document owns it. parents: the stored ids of its blop's
-// parents' seals, once they are all here
+// parents' seals, once they are all here. blop: decoded while held back, let go once taken in or
+// refused (the histories hold what they need, decoded again from sealed: see decoded)
 typedef struct {
 	uint8_t name[32], stored[32];
 	Json *blop;
-	uint8_t *sealed;
+	uint8_t *sealed; // heard: the blop's own bytes
 	size_t length;
 	uint8_t (*parents)[32];
 	size_t parent_count;
@@ -129,11 +130,13 @@ typedef struct doc {
 	fragment *fragments;
 	size_t fragment_count, fragment_room;
 	bool dirty; // seals taken in since fragments were built
-	// blops transport_take put straight into the histories; the document keeps them
+	// blops transport_take put straight into the histories: their bytes, till their seal is here (e)
 	struct {
-		Json *blop;
+		uint8_t *bytes;
+		size_t length;
 		uint8_t name[32];
 		bool stored;
+		const entry *e;
 	} *direct;
 	size_t direct_count, direct_room;
 	struct transport *t;
@@ -180,6 +183,7 @@ struct transport {
 		doc *d;
 		bool ephemeral;
 		entry *e;
+		Json *blop; // held till told
 	} *arrivals;
 	size_t arrival_count, arrival_room, arrival_next;
 	bool announcing;
@@ -199,10 +203,13 @@ struct transport {
 
 // -- layers
 
-static void layer_start(layer *L, const char *node, bool ephemeral) {
+static Json *again(void *context, const uint8_t name[32]);
+
+static void layer_start(doc *d, layer *L, bool ephemeral) {
 	memset(L, 0, sizeof *L);
-	L->histories = history_create(node, apply_check, NULL);
+	L->histories = history_create(d->id, apply_check, NULL);
 	history_release(L->histories, apply_release);
+	history_loader(L->histories, again, d);
 	L->stored.by_stored = true;
 	L->ephemeral = ephemeral;
 }
@@ -251,6 +258,26 @@ static void unrefuse(layer *L, const uint8_t id[32]) {
 	}
 }
 
+// an entry's blop, held (jsonFree it): its own while held back, else decoded again from its bytes,
+// checked when it came
+static Json *decoded(const entry *e) {
+	if (e->blop) return jsonRef(e->blop);
+	Json *blop = NULL;
+	if (e->heard) {
+		blop_error error = blop_decode(e->sealed, e->length, &blop);
+		free(error.field);
+		return blop;
+	}
+	Json *x = cborDecode(e->sealed, e->length, NULL, NULL);
+	const Json *change = jsonGet(x, "change");
+	if (change && change->type == JSON_BYTES) {
+		blop_error error = blop_decode(change->bytes.data, change->bytes.length, &blop);
+		free(error.field);
+	}
+	jsonFree(x);
+	return blop;
+}
+
 // a seal taken in to the layer: its tables, and its histories
 // true if the histories took it in, not passed over
 static bool admit(layer *L, entry *e) {
@@ -258,7 +285,9 @@ static bool admit(layer *L, entry *e) {
 	table_put(&L->stored, e);
 	L->taken = more(L->taken, L->taken_count, &L->taken_room, sizeof *L->taken);
 	L->taken[L->taken_count++] = e;
-	history_row r = history_add(L->histories, e->blop, e->name);
+	Json *blop = decoded(e);
+	history_row r = history_add(L->histories, blop, e->name);
+	jsonFree(blop);
 	bool taken = r.kind == HISTORY_TAKEN;
 	history_row_free(&r);
 	return taken;
@@ -278,7 +307,7 @@ static void doc_free(doc *d) {
 	if (d->has_ephemeral) layer_free(&d->ephemeral);
 	for (size_t i = 0; i < d->all_count; i++) entry_free(d->all[i]);
 	free(d->all);
-	for (size_t i = 0; i < d->direct_count; i++) jsonFree(d->direct[i].blop);
+	for (size_t i = 0; i < d->direct_count; i++) free(d->direct[i].bytes);
 	free(d->direct);
 	for (size_t i = 0; i < d->fragment_count; i++) fragment_free(&d->fragments[i]);
 	free(d->fragments);
@@ -294,10 +323,30 @@ static doc *doc_of(transport *t, const uint8_t tree[32]) {
 	d->t = t;
 	memcpy(d->id, "ermine://", 9);
 	for (int i = 0; i < 32; i++) snprintf(d->id + 9 + 2 * i, 3, "%02x", tree[i]);
-	layer_start(&d->stored, d->id, false);
+	layer_start(d, &d->stored, false);
 	d->next = t->docs;
 	t->docs = d;
 	return d;
+}
+
+// a direct one's blop, held (jsonFree it)
+static Json *direct_blop(const doc *d, size_t i) {
+	if (d->direct[i].e) return decoded(d->direct[i].e);
+	Json *blop = NULL;
+	blop_error error = blop_decode(d->direct[i].bytes, d->direct[i].length, &blop);
+	free(error.field);
+	return blop;
+}
+
+// the histories' loader: a blop of the document's taken in, by its name, decoded again
+static Json *again(void *context, const uint8_t name[32]) {
+	doc *d = context;
+	entry *e = table_get(&d->stored.names, name);
+	if (!e && d->has_ephemeral) e = table_get(&d->ephemeral.names, name);
+	if (e) return decoded(e);
+	for (size_t i = d->direct_count; i-- > 0;)
+		if (memcmp(d->direct[i].name, name, 32) == 0) return direct_blop(d, i);
+	return NULL;
 }
 
 static doc *doc_named(transport *t, const char *id) {
@@ -311,13 +360,15 @@ static doc *doc_named(transport *t, const char *id) {
 static layer *ephemeral(doc *d) {
 	layer *L = &d->ephemeral;
 	if (d->has_ephemeral) return L;
-	layer_start(L, d->id, true);
+	layer_start(d, L, true);
 	d->has_ephemeral = true;
 	for (size_t i = 0; i < d->stored.taken_count; i++) admit(L, d->stored.taken[i]);
 	// and what was put straight into the stored histories
 	for (size_t i = 0; i < d->direct_count; i++) {
 		if (!d->direct[i].stored) continue;
-		history_row r = history_add(L->histories, d->direct[i].blop, d->direct[i].name);
+		Json *blop = direct_blop(d, i);
+		history_row r = history_add(L->histories, blop, d->direct[i].name);
+		jsonFree(blop);
 		history_row_free(&r);
 	}
 	return L;
@@ -335,6 +386,7 @@ static void arrive(doc *d, layer *L, entry *e) {
 	t->arrivals = more(t->arrivals, t->arrival_count, &t->arrival_room, sizeof *t->arrivals);
 	t->arrivals[t->arrival_count].d = d;
 	t->arrivals[t->arrival_count].ephemeral = L->ephemeral;
+	t->arrivals[t->arrival_count].blop = jsonRef((Json *)history_get(L->histories, e->name));
 	t->arrivals[t->arrival_count++].e = e;
 }
 
@@ -345,9 +397,10 @@ static void announce(transport *t) {
 	while (t->arrival_next < t->arrival_count) {
 		size_t i = t->arrival_next++;
 		transport_arrival a = {t->arrivals[i].d->id, t->arrivals[i].ephemeral ? TRANSPORT_EPHEMERAL : TRANSPORT_STORED,
-			t->arrivals[i].e->blop, {0}, t->arrivals[i].e->heard};
+			t->arrivals[i].blop, {0}, t->arrivals[i].e->heard};
 		memcpy(a.name, t->arrivals[i].e->name, 32);
 		for (size_t k = 0; k < t->listener_count; k++) t->listeners[k].fn(t->listeners[k].context, &a);
+		jsonFree(t->arrivals[i].blop);
 	}
 	t->arrival_count = t->arrival_next = 0;
 	t->announcing = false;
@@ -457,6 +510,7 @@ static void settle(doc *d, layer *L) {
 			int result = attempt(d, L, p);
 			if (result == TAKEN || result == REFUSED) {
 				free(p->given);
+				jsonFree(p->e->blop), p->e->blop = NULL;
 				memmove(p, p + 1, (L->waiting_count - i - 1) * sizeof *p);
 				L->waiting_count--;
 				progress = true;
@@ -480,12 +534,11 @@ static entry *entry_new(doc *d, const seal_unsealed *u, const uint8_t *bytes, si
 	memcpy(e->name, u->name, 32);
 	memcpy(e->stored, u->stored, 32);
 	e->blop = u->blop;
-	// a blop this device put straight into the histories (transport_take), sealed and added since: the one
-	// kept decoded, held twice (jsonRef), not two copies. Looked for among the last few taken
+	// a blop this device put straight into the histories (transport_take), sealed and added since: its
+	// bytes give way to the seal's. Looked for among the last few taken
 	for (size_t i = d->direct_count, looked = 0; i-- > 0 && looked < 64; looked++)
 		if (memcmp(d->direct[i].name, u->name, 32) == 0) {
-			jsonFree(u->blop);
-			e->blop = jsonRef(d->direct[i].blop);
+			if (!d->direct[i].e) free(d->direct[i].bytes), d->direct[i].bytes = NULL, d->direct[i].e = e;
 			break;
 		}
 	e->sealed = grab(length);
@@ -517,11 +570,13 @@ static void take(doc *d, layer *L, bool commit, const uint8_t head[32], const ui
 	}
 	entry *e = entry_new(d, &u, bytes, length);
 	if (commit && memcmp(u.stored, head, 32) != 0) {
+		jsonFree(e->blop), e->blop = NULL;
 		refuse(L, id, false, TRANSPORT_STORED_ID, e->name);
 		settle(d, L);
 		return;
 	}
 	if (strcmp(jsonText(jsonGet(e->blop, "node")), d->id) != 0) {
+		jsonFree(e->blop), e->blop = NULL;
 		refuse(L, id, false, TRANSPORT_DOCUMENT, e->name);
 		settle(d, L);
 		return;
@@ -536,7 +591,11 @@ static void hold(doc *d, layer *L, bool commit, const uint8_t id[32], const uint
 	if (i == L->waiting_count) {
 		L->waiting = more(L->waiting, L->waiting_count, &L->waiting_room, sizeof *L->waiting);
 		L->waiting_count++;
-	} else free(L->waiting[i].given);
+	} else {
+		free(L->waiting[i].given);
+		entry *old = L->waiting[i].e;
+		if (old != e) jsonFree(old->blop), old->blop = NULL;
+	}
 	pending *p = &L->waiting[i];
 	memcpy(p->id, id, 32);
 	p->commit = commit;
@@ -583,6 +642,9 @@ static bool hear(doc *d, const uint8_t from[32], const uint8_t *bytes, size_t le
 	memcpy(e->name, name, 32);
 	memcpy(e->stored, name, 32); // no stored id: its name stands in for the layer's table
 	e->blop = blop;
+	e->sealed = grab(length);
+	memcpy(e->sealed, bytes, length);
+	e->length = length;
 	e->heard = true;
 	e->lamport = (int64_t)jsonGet(blop, "lamport")->number;
 	d->all = more(d->all, d->all_count, &d->all_room, sizeof *d->all);
@@ -800,7 +862,7 @@ static void take_fragment(doc *d, const uint8_t head[32], const uint8_t (*bounda
 	layer *L = &d->stored;
 	// its head taken in by the histories already: passed over, but here
 	entry *have = table_get(&L->stored, head);
-	bool passed = have != NULL && history_get(L->histories, have->name) != NULL;
+	bool passed = have != NULL && history_slot(L->histories, have->name) != NULL;
 	if (passed && known(d, head)) return;
 	// the lock's open: unlocked gives back what it is given
 	Json *list = cborDecode(blob, length, NULL, NULL);
@@ -1064,6 +1126,7 @@ void transport_free(transport *t) {
 	free(t->out);
 	free(t->found);
 	free(t->fetches);
+	for (size_t i = t->arrival_next; i < t->arrival_count; i++) jsonFree(t->arrivals[i].blop);
 	free(t->arrivals);
 	free(t->listeners);
 	expire(t, true);
@@ -1107,6 +1170,12 @@ int64_t transport_run(transport *t) {
 		busy = work(t) || busy;
 		announce(t);
 	} while (busy);
+	// nothing given out is held now: the blops the histories no longer need go
+	if (!t->announcing)
+		for (doc *d = t->docs; d; d = d->next) {
+			history_trim(d->stored.histories);
+			if (d->has_ephemeral) history_trim(d->ephemeral.histories);
+		}
 	return wait;
 }
 
@@ -1168,7 +1237,10 @@ transport_code transport_take(transport *t, const char *id, const uint8_t *bytes
 	uint8_t name[32];
 	blop_name(bytes, length, name);
 	d->direct = more(d->direct, d->direct_count, &d->direct_room, sizeof *d->direct);
-	d->direct[d->direct_count].blop = blop;
+	d->direct[d->direct_count].bytes = grab(length);
+	memcpy(d->direct[d->direct_count].bytes, bytes, length);
+	d->direct[d->direct_count].length = length;
+	d->direct[d->direct_count].e = NULL;
 	memcpy(d->direct[d->direct_count].name, name, 32);
 	d->direct[d->direct_count++].stored = which == TRANSPORT_STORED;
 	history_row r = history_add(which == TRANSPORT_STORED ? d->stored.histories : ephemeral(d)->histories, blop, name);
@@ -1177,6 +1249,8 @@ transport_code transport_take(transport *t, const char *id, const uint8_t *bytes
 		r = history_add(d->ephemeral.histories, blop, name);
 		history_row_free(&r);
 	}
+	// the histories hold what they need
+	jsonFree(blop);
 	return TRANSPORT_OK;
 }
 

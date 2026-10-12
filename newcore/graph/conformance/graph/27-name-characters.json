@@ -1,0 +1,373 @@
+{
+	"title": "names: one holding \"/\" or U+0000 placed, walked, set and renamed; never cut short; \"/\" alone wrong-field",
+	"steps": [
+		{
+			"op": "new",
+			"expect": {}
+		},
+		{
+			"op": "intro",
+			"id": "x",
+			"value": "x",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "y",
+			"value": "y",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "intro",
+			"id": "z",
+			"value": "z",
+			"expect": {
+				"ok": 3
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a/b",
+			"child": "x",
+			"expect": {
+				"ok": 4
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "\u0000",
+			"child": "y",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a\u0000b",
+			"child": "z",
+			"expect": {
+				"ok": 6
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": [
+					"a/b",
+					"\u0000",
+					"a\u0000b"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"a/b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "x",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"/",
+				"a/b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "x",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"\u0000"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "y",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"a\u0000b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "z",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"a\u0000b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "z",
+						"versions": [
+							{
+								"content": "z",
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "bind",
+			"as": "in",
+			"place": [
+				"a/b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "content",
+			"as": "in",
+			"address": [],
+			"expect": {
+				"ok": [
+					{
+						"id": "x",
+						"versions": [
+							{
+								"content": "x",
+								"time": 0
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"as": "in",
+			"address": [
+				".."
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "root",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a\u0000b"
+			],
+			"name": "k/\u0000",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "names",
+			"address": [
+				"a\u0000b"
+			],
+			"part": "info",
+			"expect": {
+				"ok": [
+					"k/\u0000"
+				]
+			}
+		},
+		{
+			"op": "info",
+			"address": [
+				"a\u0000b"
+			],
+			"name": "k/\u0000",
+			"expect": {
+				"ok": [
+					{
+						"id": "z",
+						"versions": [
+							{
+								"content": 1,
+								"time": 7
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"address": [
+				"a\u0000b"
+			],
+			"name": "k/",
+			"expect": {
+				"ok": [
+					{
+						"id": "z",
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "a/b",
+			"to": "\u0000/",
+			"expect": {
+				"ok": [
+					8,
+					9
+				]
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": [
+					"\u0000/",
+					"\u0000",
+					"a\u0000b"
+				]
+			}
+		},
+		{
+			"op": "whole",
+			"id": "root",
+			"expect": {
+				"ok": {
+					"value": [],
+					"info": {},
+					"children": {
+						"\u0000/": [
+							{
+								"content": [
+									"x"
+								],
+								"time": 9
+							}
+						],
+						"\u0000": [
+							{
+								"content": [
+									"y"
+								],
+								"time": 5
+							}
+						],
+						"a\u0000b": [
+							{
+								"content": [
+									"z"
+								],
+								"time": 6
+							}
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "/",
+			"child": "x",
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "set",
+			"address": [],
+			"name": "/",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "\u0000",
+			"to": "/",
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "bind",
+			"as": "bad",
+			"place": [
+				"/"
+			],
+			"expect": {}
+		},
+		{
+			"op": "look",
+			"as": "bad",
+			"address": [],
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 9
+			}
+		}
+	]
+}

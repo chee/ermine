@@ -31,7 +31,9 @@ static void ws(void) {
 	while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
 }
 
+// U+0000 held as C0 80, as json.h holds it
 static int put8(char *o, unsigned long c) {
+	if (c == 0) { o[0] = (char)0xC0; o[1] = (char)0x80; return 2; }
 	if (c < 0x80) { o[0] = (char)c; return 1; }
 	if (c < 0x800) { o[0] = (char)(0xC0 | c >> 6); o[1] = (char)(0x80 | (c & 63)); return 2; }
 	if (c < 0x10000) {

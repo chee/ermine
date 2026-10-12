@@ -1439,7 +1439,7 @@ static sc_partcall *partcall(sc_sched *s, sc_proc *p, const char *name, int repl
 
 static int is_code(const sc_code *c) { return c->setup || c->compute; }
 
-static int never_name(const char *s) { return !strcmp(s, ".") || !strcmp(s, "..") || strchr(s, '/'); }
+static int never_name(const char *s) { return !strcmp(s, ".") || !strcmp(s, "..") || !strcmp(s, "/"); }
 
 
 static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, const char **idout) {

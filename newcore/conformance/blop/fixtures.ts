@@ -481,6 +481,46 @@ add("decode-not-sorted", {
 	expect: { code: "not-a-blop", field: "parents" },
 })
 
+// ---- wallclock and message
+ok(
+	"wallclock-message",
+	"wallclock and message both there",
+	min({ wallclock: 1760000000, message: "tidy up" }),
+)
+ok("wallclock", "wallclock alone, whole seconds", min({ wallclock: 1760000000 }))
+ok("wallclock-zero", "wallclock 0 is whole", min({ wallclock: 0 }))
+ok("message", "message alone", min({ message: "tidy up" }))
+ok("message-empty", "message the empty string", min({ message: "" }))
+bad("wallclock-fraction", "wallclock 1.5: not whole", min({ wallclock: 1.5 }), "wallclock")
+bad("wallclock-negative", "wallclock -1: not whole", min({ wallclock: -1 }), "wallclock")
+bad("wallclock-string", "wallclock a string", min({ wallclock: "1760000000" }), "wallclock")
+bad(
+	"wallclock-null",
+	"wallclock null: null is a value, not a whole",
+	min({ wallclock: null }),
+	"wallclock",
+)
+bad("message-kind", "message not a string", min({ message: 5 }), "message")
+bad(
+	"message-null",
+	"message null: null is a value, not a string",
+	min({ message: null }),
+	"message",
+)
+bad("message-bytes", "message bytes, not a string", min({ message: bytes(3, 0) }), "message")
+bad(
+	"order-wallclock-before-message",
+	"table order: wallclock's kind beats message's",
+	min({ wallclock: -1, message: 5 }),
+	"wallclock",
+)
+bad(
+	"order-message-before-lamport",
+	"message's kind beats lamport 0",
+	min({ message: 1, lamport: 0 }),
+	"message",
+)
+
 // ---- write
 for await (const f of Deno.readDir(out)) {
 	if (f.name.endsWith(".json")) await Deno.remove(new URL(f.name, out))

@@ -35,7 +35,15 @@ const INFO: Which = ["info", "title"]
 const DEV1 = new Uint8Array(32).fill(7)
 const DEV2 = new Uint8Array(32).fill(8)
 type At = { version: number } | { span: [number, number] } | { pop: number | [number, number] }
-type Header = { time: number; actor: unknown; reader?: string; site?: unknown; cause?: unknown }
+type Header = {
+	time: number
+	actor: unknown
+	reader?: string
+	site?: unknown
+	cause?: unknown
+	wallclock?: number
+	message?: string
+}
 
 let seed = 0
 type Commit = {
@@ -77,6 +85,8 @@ function commit(c: Commit, want: Want): [Step, B] {
 		reader: header.reader,
 		site: want.site,
 		cause: "cause" in want ? want.cause : header.cause,
+		wallclock: header.wallclock,
+		message: header.message,
 		signer,
 		nonce,
 	})
@@ -831,5 +841,33 @@ scenario(
 		sited("file://", [], "file://"),
 	],
 )
+
+// ---- wallclock and message
+{
+	const header: Header = { time: 5, actor: "me", wallclock: 1760000000, message: "tidy up" }
+	const [s, X] = commit({ at: { version: 0 }, patches: put(1), header }, {
+		parents: [],
+		lamport: 1,
+	})
+	scenario("header-wallclock-message", "wallclock and message copied into the blop as given", [
+		create(),
+		s,
+		add(X),
+		versions([X], "value", [[X, 1]]),
+	])
+	for (
+		const [name, title, more] of [
+			["header-wallclock", "wallclock alone copied", { wallclock: 1760000000 }],
+			["header-message", "message alone copied", { message: "" }],
+		] as [string, string, Partial<Header>][]
+	) {
+		const [s] = commit({
+			at: { version: 0 },
+			patches: put(1),
+			header: { time: 5, actor: "me", ...more },
+		}, { parents: [], lamport: 1 })
+		scenario(name, title, [create(), s])
+	}
+}
 
 await write(new URL("../../sync/conformance/commit/", import.meta.url))

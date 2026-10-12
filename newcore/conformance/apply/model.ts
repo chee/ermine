@@ -30,6 +30,8 @@ export type Make = {
 	reader?: string
 	site?: Record<string, unknown>
 	cause?: unknown
+	wallclock?: number
+	message?: string
 	signer?: Uint8Array
 	nonce?: Uint8Array
 	lamport?: number
@@ -50,6 +52,8 @@ export function mk(m: Make = {}): B {
 	if (m.reader !== undefined) blop.reader = m.reader
 	if (m.site !== undefined) blop.site = m.site
 	if (m.cause !== undefined) blop.cause = m.cause
+	if (m.wallclock !== undefined) blop.wallclock = m.wallclock
+	if (m.message !== undefined) blop.message = m.message
 	blop.signer = m.signer ?? KEY
 	blop.nonce = m.nonce ?? Uint8Array.from({ length: 8 }, (_, i) => (count >> (8 * i)) & 0xff)
 	blop.parents = parents.map((p) => p.bytes)
@@ -125,7 +129,9 @@ export function heads(all: B[], object: Which): B[] {
 // ---- versions, in JSON form
 export function version(b: B, content: Side): unknown {
 	const header: Record<string, unknown> = { actor: b.blop.actor }
-	for (const k of ["reader", "site", "cause"]) if (k in b.blop) header[k] = b.blop[k]
+	for (const k of ["reader", "site", "cause", "wallclock", "message"]) {
+		if (k in b.blop) header[k] = b.blop[k]
+	}
 	header.time = b.time
 	return toJson({
 		...(content === NONE ? {} : { content }),

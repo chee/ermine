@@ -17,7 +17,7 @@ typedef struct {
 #define CH_HERE (&(ch_site){__FILE__, __LINE__, 0, __func__, 0})
 
 // what a change says, given by the caller: has_time and has_site, and NULL for the rest = not given
-// actor and cause: the caller's, never read here
+// actor, cause, wallclock (whole seconds since 1970) and message: the caller's, never read here
 typedef struct {
 	int has_time;
 	int64_t time;
@@ -26,6 +26,9 @@ typedef struct {
 	int has_site;
 	ch_site site;
 	const void *cause;
+	int has_wallclock;
+	int64_t wallclock;
+	const char *message;
 } ch_header;
 
 // a version's change: its header and node, never its edits

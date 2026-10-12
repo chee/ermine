@@ -255,7 +255,9 @@ size_t apply_versions(histories *c, const Json *object, apply_time time, void *c
 			.actor = jsonGet(blop, "actor"),
 			.reader = jsonText(jsonGet(blop, "reader")),
 			.cause = jsonGet(blop, "cause"),
+			.message = jsonText(jsonGet(blop, "message")),
 		};
+		if (jsonGet(blop, "wallclock")) header.has_wallclock = 1, header.wallclock = (int64_t)jsonGet(blop, "wallclock")->number;
 		if (site) header.has_site = 1, site_of(site, &header.site);
 		v->change = ch_make(jsonText(jsonGet(blop, "node")), header, NULL);
 		v->because = bc_make("sync", &v->place, &v->why, NULL);

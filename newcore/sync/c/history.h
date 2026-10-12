@@ -3,8 +3,10 @@
 // signatures; patches only checked, through the check given (apply.h's).
 //
 // A blop is a json.h value (encoding/c/blop.h), its byte fields JSON_BYTES. Memory: a blop given
-// to history_add is kept, never changed or freed here: it must live as long as the histories do.
-// Rows and lists given back are the caller's: history_rows_free.
+// to history_add is held here (jsonRef), never changed. With no loader every one is held as long as
+// the histories; with one, only the waiting and the heads: another asked for (history_get) is loaded
+// again, and one no longer needed is let go at the next history_trim, so what was given out stays
+// good until then. Rows and lists given back are the caller's: history_rows_free.
 #ifndef HISTORY_H
 #define HISTORY_H
 
@@ -55,6 +57,10 @@ histories *history_create(const char *node, history_check check, void *context);
 // what history_free calls with each slot (history_slot) the caller set, to let it go; none by default
 void history_release(histories *c, void (*release)(void *slot));
 void history_free(histories *c);
+// load: a blop taken in, by its name, decoded again (the histories hold what it gives back)
+void history_loader(histories *c, Json *(*load)(void *context, const uint8_t name[32]), void *context);
+// lets go of the blops no longer needed; called when nothing given out is held
+void history_trim(histories *c);
 // the steps of HISTORY.tex, Adding; names: free with history_row_free
 history_row history_add(histories *c, const Json *blop, const uint8_t name[32]);
 // the history's heads in the agreed order; none: NULL, 0. object: "value" or ["info", name]...

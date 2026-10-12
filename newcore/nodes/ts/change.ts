@@ -8,6 +8,9 @@ export type Header = {
 	reader?: string
 	site?: Site
 	cause?: unknown
+	// the author's clock, whole seconds since 1970, and a string from the author: the caller's, never read here
+	wallclock?: number
+	message?: string
 }
 
 // a version's change: its header and node, never its edits

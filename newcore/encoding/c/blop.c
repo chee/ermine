@@ -9,13 +9,14 @@
 
 // the table's order: the first field that says no is the one named
 static const char *const fields[] = {
-	"node", "object", "actor", "reader", "site", "cause", "signer", "nonce", "parents", "base",
+	"node", "object", "actor", "reader", "site", "cause", "wallclock", "message", "signer", "nonce", "parents", "base",
 	"combine", "lamport", "patches",
 };
 enum { FIELDS = sizeof fields / sizeof *fields };
 
 static int optional(const char *key) {
 	return strcmp(key, "reader") == 0 || strcmp(key, "site") == 0 || strcmp(key, "cause") == 0 ||
+		strcmp(key, "wallclock") == 0 || strcmp(key, "message") == 0 ||
 		strcmp(key, "base") == 0 || strcmp(key, "combine") == 0;
 }
 
@@ -139,12 +140,14 @@ static int rule(int field, const Json *v, const Json *b) {
 	case 3: return is_string(v);
 	case 4: return site(v);
 	case 5: return 1;
-	case 6: return sized(v, 32);
-	case 7: return sized(v, 8);
-	case 8: return parents_rule(v);
-	case 9: return base_rule(v, b);
-	case 10: return v->type == JSON_BOOLEAN && v->boolean && has(b, "base");
-	case 11: return whole(v) && v->number >= 1;
+	case 6: return whole(v);
+	case 7: return is_string(v);
+	case 8: return sized(v, 32);
+	case 9: return sized(v, 8);
+	case 10: return parents_rule(v);
+	case 11: return base_rule(v, b);
+	case 12: return v->type == JSON_BOOLEAN && v->boolean && has(b, "base");
+	case 13: return whole(v) && v->number >= 1;
 	default: return patches_rule(v);
 	}
 }

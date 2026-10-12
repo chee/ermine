@@ -69,7 +69,13 @@ export type Changed = {
 }
 
 // who a change is by, as places asks for it
-export type Acting = { actor: unknown; reader?: string; cause?: unknown; site?: Header["site"] }
+export type Acting = {
+	actor: unknown
+	reader?: string
+	cause?: unknown
+	site?: Header["site"]
+	message?: string
+}
 
 // what the host and code act through: reads, and writes unless read only. where: an address,
 // or an id (places.ts, Where)
@@ -106,8 +112,8 @@ export type Api = {
 	): Change[]
 	// a new node holding value (none: no value); an owner may make it ephemeral
 	create(value?: unknown, options?: { id?: string; ephemeral?: boolean }): string
-	// the same interface, its changes carrying cause
-	as(o: { cause?: unknown }): Api
+	// the same interface, its changes carrying cause and message
+	as(o: { cause?: unknown; message?: string }): Api
 }
 
 // a read, given what to track it with (none: untracked)
@@ -120,6 +126,7 @@ export type Bind<O> = {
 	agent: unknown
 	reader?: string
 	cause?: unknown
+	message?: string
 	// the caller's site captured on each change: the host's
 	site?: boolean
 	depend?: Depend
@@ -179,6 +186,8 @@ export type Options<O> = {
 	tracker?: Tracker<Tracked<O>, any>
 	// the host's site for its changes; default read off the call stack
 	site?: () => Site | undefined
+	// the author's clock stamped on each change made, whole seconds since 1970; none: no stamp
+	wallclock?: () => number | undefined
 	// told, after an operation lands, each object it changed; not by `versions`, and not for an
 	// operation refused or that throws
 	changed?: (record: Changed) => void
@@ -268,6 +277,8 @@ export function createGraph<O>(options: Options<O>) {
 	function by(): Header {
 		if (acting === undefined) throw new Error("a change made outside an operation")
 		const h: Header = { ...acting, time: ++clock.time }
+		const w = options.wallclock?.()
+		if (w !== undefined) h.wallclock = w
 		made.push(h)
 		type Told = (patch: Patch, facts: Facts, id: string, which: Which) => void
 		let told: Told | undefined = hear
@@ -678,6 +689,8 @@ export function createGraph<O>(options: Options<O>) {
 		let pid = id ?? fresh(time)
 		if (id === undefined) { for (let k = 1; table.get(pid); k++) pid = `${fresh(time)}-${k}` }
 		const header: Header = { ...who, time: ++clock.time }
+		const w = options.wallclock?.()
+		if (w !== undefined) header.wallclock = w
 		const change = createChange(pid, header)
 		const node = createNode<unknown, Change>(
 			pid,
@@ -833,6 +846,7 @@ export function createGraph<O>(options: Options<O>) {
 			const a: Acting = { actor: b.agent }
 			if (b.reader !== undefined) a.reader = b.reader
 			if (b.cause !== undefined) a.cause = b.cause
+			if (b.message !== undefined) a.message = b.message
 			if (b.site) {
 				const site = options.site ? options.site() : capture(ours)
 				if (site) a.site = site
@@ -901,7 +915,7 @@ export function createGraph<O>(options: Options<O>) {
 					for (const k of n.info.keys()) d?.(id, ["info", k])
 					return out
 				}, { address: id }) as Item<unknown, Change>[])[0]?.node,
-			as: (o) => bound({ ...b, cause: o.cause }),
+			as: (o) => bound({ ...b, cause: o.cause, message: o.message }),
 			look: (address) =>
 				r("look", (d) => guard(places.look(pl, address, d), b.agent, d), { address }) as Item<
 					unknown,

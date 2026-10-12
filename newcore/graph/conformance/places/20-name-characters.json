@@ -1,0 +1,741 @@
+{
+	"title": "names: any string but \".\", \"..\" and \"/\", one holding \"/\" or U+0000 included; each its own name, never cut short",
+	"steps": [
+		{
+			"op": "graph",
+			"root": "root",
+			"nodes": [
+				{
+					"id": "root"
+				},
+				{
+					"id": "x"
+				},
+				{
+					"id": "y"
+				},
+				{
+					"id": "z"
+				},
+				{
+					"id": "w"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a/b",
+			"child": "x",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 1,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "\u0000",
+			"child": "y",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 2,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a\u0000b",
+			"child": "z",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 3,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "",
+			"child": "w",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 4,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "é",
+			"child": "x",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 5,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "é",
+			"child": "y",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 6,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "🦊/../.",
+			"child": "z",
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 7,
+					"node": "root"
+				}
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [],
+			"expect": {
+				"names": [
+					"a/b",
+					"\u0000",
+					"a\u0000b",
+					"",
+					"é",
+					"é",
+					"🦊/../."
+				]
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [],
+			"part": "children",
+			"expect": {
+				"names": [
+					"a/b",
+					"\u0000",
+					"a\u0000b",
+					"",
+					"é",
+					"é",
+					"🦊/../."
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"/",
+				"a/b"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"\u0000"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "y",
+						"route": [
+							{
+								"node": "root",
+								"name": "\u0000",
+								"id": "y",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a\u0000b"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "z",
+						"route": [
+							{
+								"node": "root",
+								"name": "a\u0000b",
+								"id": "z",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				""
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "w",
+						"route": [
+							{
+								"node": "root",
+								"name": "",
+								"id": "w",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"é"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "é",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"é"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "y",
+						"route": [
+							{
+								"node": "root",
+								"name": "é",
+								"id": "y",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"🦊/../."
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "z",
+						"route": [
+							{
+								"node": "root",
+								"name": "🦊/../.",
+								"id": "z",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"a/b"
+			],
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [
+				"a/b"
+			],
+			"address": [
+				".."
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "root",
+						"route": [],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"a\u0000b"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "z",
+						"route": [
+							{
+								"node": "root",
+								"name": "a\u0000b",
+								"id": "z",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"up": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "cd",
+			"address": [
+				"a/b"
+			],
+			"as": "h",
+			"expect": {
+				"names": [
+					"a/b"
+				],
+				"trail": [
+					"root",
+					"x"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"here": "h",
+			"address": [],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "set",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"name": "k/\u0000",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"change": {
+					"actor": "me",
+					"time": 8,
+					"node": "x"
+				}
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"part": "info",
+			"expect": {
+				"names": [
+					"k/\u0000"
+				]
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"name": "k/\u0000",
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": [
+							{
+								"content": 1,
+								"change": {
+									"actor": "me",
+									"time": 8,
+									"node": "x"
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "info",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"name": "k/",
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "a/b",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true,
+						"versions": []
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "a/b",
+			"to": "c/\u0000d",
+			"expect": {
+				"changes": [
+					{
+						"actor": "me",
+						"time": 9,
+						"node": "root"
+					},
+					{
+						"actor": "me",
+						"time": 10,
+						"node": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"c/\u0000d"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "x",
+						"route": [
+							{
+								"node": "root",
+								"name": "c/\u0000d",
+								"id": "x",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"a/b"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "\u0000",
+			"index": 0,
+			"toid": "root",
+			"toname": "/x/",
+			"expect": {
+				"changes": [
+					{
+						"actor": "me",
+						"time": 11,
+						"node": "root"
+					},
+					{
+						"actor": "me",
+						"time": 12,
+						"node": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"/x/"
+			],
+			"expect": {
+				"items": [
+					{
+						"id": "y",
+						"route": [
+							{
+								"node": "root",
+								"name": "/x/",
+								"id": "y",
+								"at": 0
+							}
+						],
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"\u0000"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "/",
+			"child": "x",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "rename",
+			"id": "root",
+			"name": "",
+			"to": "/",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "move",
+			"id": "root",
+			"name": "",
+			"index": 0,
+			"toid": "root",
+			"toname": "/",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "set",
+			"place": [],
+			"address": [],
+			"name": "/",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "children",
+			"place": [],
+			"address": [],
+			"name": "/",
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "look",
+			"place": [],
+			"address": [
+				"/",
+				"/"
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "lookup",
+			"place": [],
+			"path": [
+				"é",
+				"/"
+			],
+			"expect": {
+				"fail": "wrong-field"
+			}
+		},
+		{
+			"op": "names",
+			"place": [],
+			"address": [],
+			"part": "children",
+			"expect": {
+				"names": [
+					"c/\u0000d",
+					"a\u0000b",
+					"",
+					"é",
+					"é",
+					"🦊/../.",
+					"/x/"
+				]
+			}
+		}
+	]
+}

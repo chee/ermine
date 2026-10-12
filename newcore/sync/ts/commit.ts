@@ -155,6 +155,8 @@ export function commit(
 	if (change.header.reader !== undefined) blop.reader = change.header.reader
 	if (change.header.site !== undefined) blop.site = share(change.header.site, roots)
 	if (change.header.cause !== undefined) blop.cause = standIns(change.header.cause, kind)
+	if (change.header.wallclock !== undefined) blop.wallclock = change.header.wallclock
+	if (change.header.message !== undefined) blop.message = change.header.message
 	if (base !== undefined) blop.base = base.name
 	if (combine) blop.combine = true
 	return blop

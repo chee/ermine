@@ -124,7 +124,7 @@
 		{
 			"op": "insert",
 			"id": "root",
-			"name": "a/b",
+			"name": "/",
 			"child": "e",
 			"expect": {
 				"fail": "wrong-field"

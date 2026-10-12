@@ -135,7 +135,7 @@ export function createProcesses(o: {
 		if (ctx?.cause !== undefined) who.cause = ctx.cause
 		// its name: checked before anything is made
 		const k = op.name
-		if (k !== undefined && (k === "." || k === ".." || k.includes("/"))) {
+		if (k !== undefined && (k === "." || k === ".." || k === "/")) {
 			throw new GraphError("wrong-field", `start: ${k} is no name`)
 		}
 		o.mayStart(who.actor, where, op.name, op.id)

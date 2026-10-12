@@ -319,6 +319,7 @@ async function answer(r: Request): Promise<unknown> {
 				root: createNode(r.root as string, {}),
 				actor: r.actor,
 				site: () => undefined,
+				wallclock: () => undefined,
 				id: () =>
 					idOf("unlocked", held.made.shift() ?? crypto.getRandomValues(new Uint8Array(32))),
 				changed: (record: unknown) => {

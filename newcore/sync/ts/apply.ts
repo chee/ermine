@@ -76,6 +76,8 @@ export function versions(
 		if (blop.reader !== undefined) header.reader = blop.reader
 		if (blop.site !== undefined) header.site = blop.site
 		if (blop.cause !== undefined) header.cause = blop.cause
+		if (blop.wallclock !== undefined) header.wallclock = blop.wallclock
+		if (blop.message !== undefined) header.message = blop.message
 		const version: Version = {
 			change: createChange(blop.node, header),
 			because: createBecause("sync", { lamport: blop.lamport, name }, {

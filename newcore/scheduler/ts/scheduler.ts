@@ -83,6 +83,8 @@ export type Options = {
 	may?: May
 	// the host's site for its changes; default read off the call stack
 	site?: () => Site | undefined
+	// the author's clock stamped on every change, whole seconds since 1970; default the system's
+	wallclock?: () => number | undefined
 	// told each object an operation changed (WIRING.tex): sync's side
 	changed?: (record: Changed) => void
 }
@@ -109,6 +111,7 @@ export function createScheduler(options: Options) {
 	const g = createGraph<Proc>({
 		root: options.root,
 		site: options.site,
+		wallclock: options.wallclock ?? (() => Math.floor(Date.now() / 1000)),
 		actor: hostActor,
 		clock,
 		id: options.id,

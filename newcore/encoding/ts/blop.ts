@@ -18,6 +18,8 @@ export type Blop = {
 	reader?: string
 	site?: Site
 	cause?: unknown
+	wallclock?: number
+	message?: string
 	signer: Uint8Array
 	nonce: Uint8Array
 	parents: Uint8Array[]
@@ -43,6 +45,8 @@ const FIELDS = [
 	"reader",
 	"site",
 	"cause",
+	"wallclock",
+	"message",
 	"signer",
 	"nonce",
 	"parents",
@@ -52,7 +56,15 @@ const FIELDS = [
 	"patches",
 ] as const
 const KNOWN: ReadonlySet<string> = new Set(FIELDS)
-const OPTIONAL: ReadonlySet<string> = new Set(["reader", "site", "cause", "base", "combine"])
+const OPTIONAL: ReadonlySet<string> = new Set([
+	"reader",
+	"site",
+	"cause",
+	"wallclock",
+	"message",
+	"base",
+	"combine",
+])
 
 type Fields = { [k: string]: unknown }
 
@@ -112,6 +124,8 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, b: Fields) => boolean 
 	reader: (v) => typeof v === "string",
 	site,
 	cause: () => true,
+	wallclock: whole,
+	message: (v) => typeof v === "string",
 	signer: (v) => sized(v, 32),
 	nonce: (v) => sized(v, 8),
 	parents: (v) => {

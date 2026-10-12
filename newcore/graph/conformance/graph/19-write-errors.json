@@ -31,7 +31,7 @@
 			"address": [
 				".."
 			],
-			"name": "a/b",
+			"name": "/",
 			"patches": [
 				{
 					"path": [],
@@ -65,7 +65,7 @@
 			"address": [
 				"a"
 			],
-			"name": "a/b",
+			"name": "/",
 			"patches": [
 				{
 					"path": [],
@@ -81,7 +81,7 @@
 			"address": [
 				"missing"
 			],
-			"name": "a/b",
+			"name": "/",
 			"patches": [
 				{
 					"path": [],
@@ -118,7 +118,7 @@
 					"address": [
 						".."
 					],
-					"name": "a/b",
+					"name": "/",
 					"patches": [
 						{
 							"path": [],

@@ -1,0 +1,26 @@
+{
+	"title": "wallclock null: null is a value, not a whole",
+	"blop": {
+		"node": "n",
+		"object": "value",
+		"actor": "a",
+		"signer": {
+			"/": {
+				"bytes": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA"
+			}
+		},
+		"nonce": {
+			"/": {
+				"bytes": "CQoLDA0ODxA"
+			}
+		},
+		"parents": [],
+		"lamport": 1,
+		"patches": [],
+		"wallclock": null
+	},
+	"expect": {
+		"code": "not-a-blop",
+		"field": "wallclock"
+	}
+}

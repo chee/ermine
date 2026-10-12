@@ -179,13 +179,13 @@
 				"a/b"
 			],
 			"expect": {
-				"fail": "wrong-field"
+				"items": []
 			}
 		},
 		{
 			"op": "look",
 			"place": [
-				"a/b"
+				"/"
 			],
 			"address": [],
 			"expect": {
@@ -242,7 +242,7 @@
 			"op": "lookup",
 			"place": [],
 			"path": [
-				"a/b"
+				"/"
 			],
 			"expect": {
 				"fail": "wrong-field"
@@ -272,7 +272,7 @@
 			"op": "info",
 			"place": [],
 			"address": [],
-			"name": "x/y",
+			"name": "/",
 			"expect": {
 				"fail": "wrong-field"
 			}

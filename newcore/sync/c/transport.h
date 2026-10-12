@@ -123,11 +123,11 @@ histories *transport_histories(transport *t, const char *doc, transport_layer la
 transport_code transport_add(transport *t, const char *doc, const uint8_t *sealed, size_t length);
 // a blop this device made, its bytes, not yet sealed, into that layer's histories at once (WIRING.tex): add
 // and publish then pass over the name already taken in. A stored blop goes into the ephemeral histories too.
-// Not announced. The document keeps the blop decoded, as long as the device
+// Not announced. The document keeps its bytes till its seal is taken in
 transport_code transport_take(transport *t, const char *doc, const uint8_t *blop, size_t length, transport_layer layer);
 
 // a blop that came to be taken in to a history, from the network or storage (heard: an ephemeral message),
-// or that waited there on one that did. Valid for the call; blop is the history's, which the device keeps
+// or that waited there on one that did. Valid for the call, blop too (held by the device till then)
 typedef struct {
 	const char *doc;
 	transport_layer layer;

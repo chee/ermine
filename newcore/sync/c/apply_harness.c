@@ -103,6 +103,8 @@ static void print_version(const apply_version *v) {
 		putchar('}');
 	}
 	if (h->cause) fputs(",\"cause\":", stdout), print_json(h->cause);
+	if (h->has_wallclock) printf(",\"wallclock\":%lld", (long long)h->wallclock);
+	if (h->message) fputs(",\"message\":", stdout), print_text(h->message);
 	fputs(",\"node\":", stdout);
 	print_text(v->change.node);
 	fputs("},\"because\":{\"layer\":", stdout);

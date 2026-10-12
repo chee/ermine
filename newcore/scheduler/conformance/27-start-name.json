@@ -4,7 +4,7 @@
 		{
 			"op": "start",
 			"address": [],
-			"name": "a/b",
+			"name": "/",
 			"program": {
 				"setup": [
 					{
@@ -77,7 +77,7 @@
 					{
 						"do": "start",
 						"address": [],
-						"name": "x/y",
+						"name": "/",
 						"program": {
 							"setup": []
 						}

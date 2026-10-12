@@ -25,9 +25,9 @@ const char *pl_code_name(int code) {
 
 const char pl_id[] = "id";
 
-// never a name: ".", "..", or anything with a "/"; nor the id marker
+// never a name: ".", "..", or "/"; nor the id marker. A name may hold a "/"
 static int never(const char *s) {
-	return s == pl_id || !strcmp(s, ".") || !strcmp(s, "..") || strchr(s, '/') != NULL;
+	return s == pl_id || !strcmp(s, ".") || !strcmp(s, "..") || !strcmp(s, "/");
 }
 
 // the id of an address that is one (pl_id), else NULL

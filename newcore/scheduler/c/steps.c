@@ -31,7 +31,10 @@ static void put_string(st_buf *b, const char *s, size_t n) {
 		case '\r': st_put(b, "\\r", 2); break;
 		case '\t': st_put(b, "\\t", 2); break;
 		default:
-			if (c < 0x20) {
+			if (c == 0xC0 && i + 1 < n && (unsigned char)s[i + 1] == 0x80) {
+				st_put(b, "\\u0000", 6);
+				i++;
+			} else if (c < 0x20) {
 				snprintf(t, sizeof t, "\\u%04x", c);
 				st_put(b, t, 6);
 			} else st_put(b, s + i, 1);

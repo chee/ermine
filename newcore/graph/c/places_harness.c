@@ -43,7 +43,9 @@ static void ws(void) {
 	while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
 }
 
+// U+0000 held as C0 80, as json.h holds it
 static int put8(char *o, unsigned long c) {
+	if (c == 0) { o[0] = (char)0xC0; o[1] = (char)0x80; return 2; }
 	if (c < 0x80) { o[0] = (char)c; return 1; }
 	if (c < 0x800) { o[0] = (char)(0xC0 | c >> 6); o[1] = (char)(0x80 | (c & 63)); return 2; }
 	if (c < 0x10000) {
@@ -358,6 +360,7 @@ static void out_str(const char *s, size_t n) {
 	for (size_t i = 0; i < n; i++) {
 		unsigned char c = (unsigned char)s[i];
 		if (c == '"' || c == '\\') printf("\\%c", c);
+		else if (c == 0xC0 && i + 1 < n && (unsigned char)s[i + 1] == 0x80) fputs("\\u0000", stdout), i++;
 		else if (c < 0x20) printf("\\u%04x", c);
 		else putchar(c);
 	}

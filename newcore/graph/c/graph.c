@@ -1700,7 +1700,7 @@ const gr_error *gr_node(gr_api *a, const char *id, const nd_node **out) {
 
 // writes
 
-static int never_name(const char *s) { return !strcmp(s, ".") || !strcmp(s, "..") || strchr(s, '/'); }
+static int never_name(const char *s) { return !strcmp(s, ".") || !strcmp(s, "..") || !strcmp(s, "/"); }
 
 enum { W_WRITE, W_SET, W_INSERT, W_REMOVE, W_POP, W_RENAME, W_MOVE };
 static const char *const WOPS[] = {"write", "set", "insert", "remove", "pop", "rename", "move"};

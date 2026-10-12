@@ -437,4 +437,20 @@ const LIST: Which = ["children", "kids"]
 	])
 }
 
+// ---- wallclock and message come back out of the blop
+{
+	const A = mk({ patches: put("x"), wallclock: 1760000000, message: "tidy up" })
+	const B = mk({ patches: put("y"), wallclock: 0 })
+	scenario(
+		"header-wallclock-message",
+		"a version's change carries the head's wallclock and message",
+		[
+			create(),
+			add(A),
+			add(B),
+			versions([A, B], "value", desc(A, B).map((h) => [h, h === A ? "x" : "y"])),
+		],
+	)
+}
+
 await write(new URL("../../sync/conformance/apply/", import.meta.url))

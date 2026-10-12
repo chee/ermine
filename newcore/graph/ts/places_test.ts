@@ -71,9 +71,8 @@ Deno.test("look: not an address", () => {
 	assertEquals(code(() => places.look(notes, ["a", ".."])), "wrong-field")
 	assertEquals(code(() => places.look(notes, ["a", "/"])), "wrong-field")
 	assertEquals(code(() => places.look(notes, ["."])), "wrong-field")
-	assertEquals(code(() => places.look(notes, ["a/b"])), "wrong-field")
-	assertEquals(code(() => places.look(["a/b"], [])), "wrong-field")
-	assertEquals(code(() => places.lookup(notes, ["a/b"])), "wrong-field")
+	assertEquals(code(() => places.look(["/"], [])), "wrong-field")
+	assertEquals(code(() => places.lookup(notes, ["/"])), "wrong-field")
 	assertEquals(code(() => places.look([], [".."])), "above-root")
 })
 
@@ -165,7 +164,17 @@ Deno.test("insert: an id in a list, one change each; it need not be loaded", () 
 	assertEquals(c, { actor: "me", time: 1, node: "root" })
 	assertEquals(list("root", "kids"), ["b", "c", "a"])
 	assertEquals(placed(() => p.insert("nope", "kids", "d")), "nothing-there")
-	assertEquals(placed(() => p.insert("root", "a/b", "d")), "wrong-field")
+	assertEquals(placed(() => p.insert("root", "/", "d")), "wrong-field")
+})
+
+Deno.test("names: a name may hold a /, but is never /", () => {
+	const { t, p, list } = placing()
+	t.intro(createNode("d"))
+	p.insert("root", "a/b", "d")
+	assertEquals(list("root", "a/b"), ["d"])
+	assertEquals(ids(p.look([], ["a/b"])), ["d"])
+	assertEquals(ids(p.look(["a/b"], [])), ["d"])
+	assertEquals(placed(() => p.insert("root", "/", "d")), "wrong-field")
 })
 
 Deno.test("insert: the same id in two places", () => {

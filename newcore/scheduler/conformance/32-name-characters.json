@@ -1,0 +1,191 @@
+{
+	"title": "a process named with \"/\" or U+0000 inside, by the host or a program: placed under that name, never cut short",
+	"steps": [
+		{
+			"op": "new",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"name": "a/b",
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"name": "a\u0000b",
+			"expect": {
+				"ok": "@6"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"program": {
+				"setup": [
+					{
+						"do": "start",
+						"address": [],
+						"name": "\u0000",
+						"program": {
+							"setup": [
+								{
+									"do": "return",
+									"value": 2
+								}
+							]
+						}
+					},
+					{
+						"do": "return",
+						"value": 3
+					}
+				]
+			},
+			"name": "/x/",
+			"expect": {
+				"ok": "@11"
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": [
+					"a/b",
+					"a\u0000b",
+					"/x/",
+					"\u0000"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"a/b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": 1,
+								"time": 3
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"a\u0000b"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"versions": [
+							{
+								"content": 1,
+								"time": 8
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"a"
+			],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"\u0000"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@13",
+						"versions": [
+							{
+								"content": 2,
+								"time": 18
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"/x/"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@11",
+						"versions": [
+							{
+								"content": 3,
+								"time": 15
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"address": [
+				"a/b"
+			],
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"name": "/",
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 20
+			}
+		}
+	]
+}
