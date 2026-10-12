@@ -1,5 +1,5 @@
 {
-	"title": "an object whose only head has no side has no versions: parents [], lamport 1; the removal stays a head, beside it",
+	"title": "an object whose only head has no side has no versions: parents [that removal], lamport one more; the removal stops being a head, one version",
 	"steps": [
 		{
 			"request": {
@@ -127,8 +127,14 @@
 							"bytes": "wNf3FzdXd5c"
 						}
 					},
-					"parents": [],
-					"lamport": 1,
+					"parents": [
+						{
+							"/": {
+								"bytes": "IcbCDXah5HHefaG/I0uRTklkJHVYv6lm1hTLXvplmi0"
+							}
+						}
+					],
+					"lamport": 3,
 					"patches": [
 						{
 							"path": [],
@@ -155,8 +161,14 @@
 							"bytes": "wNf3FzdXd5c"
 						}
 					},
-					"parents": [],
-					"lamport": 1,
+					"parents": [
+						{
+							"/": {
+								"bytes": "IcbCDXah5HHefaG/I0uRTklkJHVYv6lm1hTLXvplmi0"
+							}
+						}
+					],
+					"lamport": 3,
 					"patches": [
 						{
 							"path": [],
@@ -164,7 +176,7 @@
 						}
 					]
 				},
-				"name": "892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574"
+				"name": "78ff3aa90d6c83f28851534672178b23ced821c214e993cbc86c553c1d44a559"
 			},
 			"expect": "taken"
 		},
@@ -175,27 +187,10 @@
 				"times": {
 					"7dc35767aeefb26f13885874ec54612fab8017cdffeee5b9f0ad8cc867bcc073": 1066,
 					"21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d": 1067,
-					"892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574": 1068
+					"78ff3aa90d6c83f28851534672178b23ced821c214e993cbc86c553c1d44a559": 1068
 				}
 			},
 			"expect": [
-				{
-					"change": {
-						"actor": "a",
-						"time": 1067,
-						"node": "n"
-					},
-					"because": {
-						"layer": "sync",
-						"place": {
-							"lamport": 2,
-							"name": "21c6c20d76a1e471de7da1bf234b914e4964247558bfa966d614cb5efa659a2d"
-						},
-						"why": {
-							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
-						}
-					}
-				},
 				{
 					"content": "again",
 					"change": {
@@ -206,8 +201,8 @@
 					"because": {
 						"layer": "sync",
 						"place": {
-							"lamport": 1,
-							"name": "892b23ef5b49ea8c6b849be14c198733874533eef24836481a5819f9590f7574"
+							"lamport": 3,
+							"name": "78ff3aa90d6c83f28851534672178b23ced821c214e993cbc86c553c1d44a559"
 						},
 						"why": {
 							"signer": "0707070707070707070707070707070707070707070707070707070707070707"

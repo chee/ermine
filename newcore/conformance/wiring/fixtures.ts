@@ -226,6 +226,32 @@ scenario("remove", "a remove crosses: the ids taken out, each change its own blo
 	]
 })
 scenario(
+	"refill",
+	"a list emptied, then filled: the insert follows the removal, never races it; one version",
+	() => {
+		const p1 = [{ path: [], range: [0, 0], value: ["x"] }]
+		const cut = [{ path: [], range: [0, 1] }]
+		const p2 = [{ path: [], range: [0, 0], value: ["y"] }]
+		const i1 = blop(A, DOC, notes, p1)
+		const r = blop(A, DOC, notes, cut, [i1])
+		const i2 = blop(A, DOC, notes, p2, [r])
+		return [
+			...two(),
+			insert(A, "notes", "x"),
+			host(A, "remove", { id: DOC, name: "notes", index: 0 }),
+			insert(A, "notes", "y"),
+			pump(),
+			records(A, [
+				record(A, DOC, notes, p1, 0),
+				record(A, DOC, notes, cut, 0),
+				record(A, DOC, notes, p2, 0),
+			]),
+			records(B, []),
+			...both(DOC, notes, [version(i2, ["y"])]),
+		]
+	},
+)
+scenario(
 	"pop",
 	"a pop crosses: record {pop: 1}, patches []; the blop chooses the first kept, one version left",
 	() => {

@@ -536,16 +536,16 @@ function three() {
 	)
 }
 
-// ---- an emptied object: no versions, so no parents
+// ---- an emptied object: no versions; its removal the parent, followed, not raced
 {
 	const A = mk({ patches: put("a") })
 	const E = mk({ parents: [A], patches: removal })
 	const c: Commit = { at: { version: 0 }, patches: put("again") }
-	const [s, X] = commit(c, { parents: [], lamport: 1 })
+	const [s, X] = commit(c, { parents: [E], lamport: 3 })
 	local("value", [], c, X, [[X, "again"]])
 	scenario(
 		"emptied-object",
-		"an object whose only head has no side has no versions: parents [], lamport 1; the removal stays a head, beside it",
+		"an object whose only head has no side has no versions: parents [that removal], lamport one more; the removal stops being a head, one version",
 		[
 			create(),
 			add(A),
@@ -553,12 +553,7 @@ function three() {
 			versions([A, E], "value", []),
 			s,
 			add(X),
-			versions(
-				[A, E, X],
-				"value",
-				// E: lamport 2, X: 1
-				[E, X].map((h): V => [h, h === E ? none : "again"]),
-			),
+			versions([A, E, X], "value", [[X, "again"]]),
 		],
 	)
 }

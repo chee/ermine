@@ -103,10 +103,11 @@ Json *commit_make(histories *c, const Json *change, commit_at at, const char *co
 	const Json *object = jsonGet(change, "object"), *header = jsonGet(change, "header");
 	// the versions' heads: every head; a removal as the only head, none
 	history_head *all;
-	size_t have = history_heads(c, object, &all);
+	size_t n = history_heads(c, object, &all), have = n;
 	if (have == 1 && apply_side(c, all[0].name) == NULL) have = 0;
-	// the heads used: [from, to) of the versions, or none for the object with no versions
-	size_t from = 0, to = 0;
+	// the heads used: [from, to) of the versions; for the object with no versions, its removal
+	// (if any)
+	size_t from = 0, to = n;
 	if (!(at.kind == COMMIT_VERSION && have == 0 && at.from == 0)) {
 		if (at.from < 0 || at.from >= at.to || (size_t)at.to > have) {
 			free(all);
@@ -117,7 +118,7 @@ Json *commit_make(histories *c, const Json *change, commit_at at, const char *co
 	}
 
 	// parents: the heads used, and for a pop the first kept
-	uint8_t (*parents)[32] = grab((have + 1) * 32);
+	uint8_t (*parents)[32] = grab((n + 1) * 32);
 	size_t np = 0;
 	const history_head *base = NULL;
 	bool combine = false, removal = false, empty = false;

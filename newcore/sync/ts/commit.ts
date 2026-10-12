@@ -117,8 +117,8 @@ export function commit(
 	kind?: (live: unknown) => unknown,
 ): Blop {
 	// the versions' heads: every head; a removal as the only head, none
-	let heads: Head[] = histories.heads(change.object)
-	if (heads.length === 1 && side(histories, heads[0].name) === undefined) heads = []
+	const all: Head[] = histories.heads(change.object)
+	const heads = all.length === 1 && side(histories, all[0].name) === undefined ? [] : all
 	const range = (from: number, to: number) => {
 		if (!(0 <= from && from < to && to <= heads.length)) throw new CommitError("range")
 		return heads.slice(from, to)
@@ -128,8 +128,8 @@ export function commit(
 	let combine = false
 	let patches = change.patches
 	if (typeof at === "number") {
-		// the object with no versions: only 0, and no parents
-		if (!(heads.length === 0 && at === 0)) used = range(at, at + 1)
+		// the object with no versions: only 0, its removal (if any) the parent
+		used = heads.length === 0 && at === 0 ? all : range(at, at + 1)
 	} else if (Array.isArray(at)) {
 		used = range(at[0], at[1])
 		if (used.length > 1) base = used[0], combine = true
