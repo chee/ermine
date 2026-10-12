@@ -9,7 +9,7 @@
 //   uint8 64, uint16 69, uint32 70, uint64 71, int8 72, int16 77, int32 78,
 //   int64 79, float32 85, float64 86; a NaN element is written as the quiet
 //   NaN with no payload (7fc00000, 7ff8000000000000)
-// - a stand-in, what a live value is sent as: tag 11111111 (head da00a98ac7)
+// - a stand-in, what a live value is sent as: tag 0x12345678 (head da12345678)
 //   over its kind, any value; a live value itself has no encoding
 //
 // Bytes are an ArrayBuffer; a typed array is its own class, a Uint8Array
@@ -41,12 +41,12 @@ export type Typed =
 	| Float32Array
 	| Float64Array
 
-/** What a live value is sent as (ENCODING.tex): tag 11111111 over its `kind`, any value. */
+/** What a live value is sent as (ENCODING.tex): tag 0x12345678 over its `kind`, any value. */
 export class Stand {
 	constructor(readonly kind: Value) {}
 }
 
-const STAND = 11111111
+const STAND = 0x12345678
 
 /** What cannot be encoded, or bytes that are not an encoding. */
 export class CborError extends Error {

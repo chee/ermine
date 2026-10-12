@@ -1,0 +1,171 @@
+{
+	"title": "protect: a call made in a part is asked when made; refused, the part fails and nothing is called",
+	"steps": [
+		{
+			"op": "new",
+			"rules": [
+				{
+					"op": "read",
+					"node": "@6",
+					"process": "@11",
+					"allow": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "h",
+			"program": {
+				"setup": [
+					{
+						"do": "create",
+						"ephemeral": true,
+						"value": {
+							"$steps": [
+								{
+									"do": "log",
+									"value": "called"
+								},
+								{
+									"do": "return",
+									"value": 1
+								}
+							]
+						},
+						"var": "f"
+					},
+					{
+						"do": "insert",
+						"id": {
+							"$given": "self"
+						},
+						"name": "f",
+						"child": {
+							"$var": "f"
+						}
+					},
+					{
+						"do": "return",
+						"value": 0
+					}
+				]
+			},
+			"expect": {
+				"ok": "@4"
+			}
+		},
+		{
+			"op": "children",
+			"address": [
+				"h"
+			],
+			"name": "f",
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "c",
+			"program": {
+				"setup": [
+					{
+						"do": "call",
+						"address": [
+							"h",
+							"f"
+						]
+					},
+					{
+						"do": "log",
+						"value": "not here"
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@11"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"c"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@11",
+						"versions": [
+							{
+								"content": {
+									"error": "refused"
+								},
+								"time": 13,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 11
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@4",
+						"by": 5
+					},
+					{
+						"starts": "@4",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@4",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@11",
+						"by": 12
+					},
+					{
+						"starts": "@11",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@11",
+						"run": 1,
+						"ended": "failed",
+						"error": "refused"
+					}
+				]
+			}
+		}
+	]
+}

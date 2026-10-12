@@ -696,10 +696,11 @@ const sc_error *st_operate(sc_sched *s, sc_api *api, const char *op, const nt_va
 	const long *index = NULL;
 	pl_span slot, ispan;
 	const pl_span *slotp = NULL;
+	int span = 0;
 	int64_t t[2];
 	const nt_value *x;
 	if ((x = field(f, "index")) && x->type == NT_NUM) idx = (long)x->num, index = &idx;
-	if ((x = field(f, "slotindex"))) slot = span_of(x), slotp = &slot;
+	if ((x = field(f, "slotindex"))) slot = span_of(x), slotp = &slot, span = x->type == NT_LIST;
 	const char *id = (x = nt_get(f, "id")) && x->type == NT_STR ? x->str : NULL;
 	const char *name = (x = nt_get(f, "name")) && x->type == NT_STR ? x->str : NULL;
 	if (!strcmp(op, "look") || !strcmp(op, "lookup") || !strcmp(op, "lookups")) {
@@ -742,8 +743,8 @@ const sc_error *st_operate(sc_sched *s, sc_api *api, const char *op, const nt_va
 	if (!strcmp(op, "write") || !strcmp(op, "set")) {
 		e = patches_of(s, nt_get(f, "patches"), &ps, &np);
 		if (e) return e;
-		if (!strcmp(op, "write")) e = sc_write(api, names, n, ps, np, index, slotp, &t[0]);
-		else e = sc_set(api, names, n, name ? name : "", ps, np, index, slotp, &t[0]);
+		if (!strcmp(op, "write")) e = sc_write(api, names, n, ps, np, index, slotp, span, &t[0]);
+		else e = sc_set(api, names, n, name ? name : "", ps, np, index, slotp, span, &t[0]);
 		if (e) return e;
 		*out = times_json(t, 1, 0);
 		return NULL;

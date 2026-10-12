@@ -87,7 +87,10 @@ static void print_version(const apply_version *v) {
 	const ch_header *h = &v->change.header;
 	fputs("{\"content\":", stdout);
 	print_value(v->content);
-	printf(",\"change\":{\"time\":%lld,\"actor\":", (long long)h->time);
+	fputs(",\"change\":{", stdout);
+	// the time only when the header has one
+	if (h->has_time) printf("\"time\":%lld,", (long long)h->time);
+	fputs("\"actor\":", stdout);
 	print_json(h->actor);
 	if (h->reader) fputs(",\"reader\":", stdout), print_text(h->reader);
 	if (h->has_site) {

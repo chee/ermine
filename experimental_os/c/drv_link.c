@@ -25,9 +25,9 @@
 #include "drv.h"
 #include "peer.h"
 
-#include "../../layers/link/c/link.h"
-#include "../../layers/subduction/c/blob.h"
-#include "../../layers/subduction/c/sha2.h"
+#include "../layers/link/c/link.h"
+#include "../layers/subduction/c/blob.h"
+#include "../layers/subduction/c/sha2.h"
 
 #include <stdio.h>
 #include <stdlib.h>

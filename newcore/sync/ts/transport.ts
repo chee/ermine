@@ -1,12 +1,13 @@
-// Sealed blops over Subduction (TRANSPORT.tex): stored ones as loose commits and fragments, ephemeral
-// ones as its ephemeral messages; and what a device checks of what arrives before its chains see it.
+// Blops over Subduction (TRANSPORT.tex): stored ones, sealed, as loose commits and fragments, ephemeral
+// ones, never sealed, as its ephemeral messages; and what a device checks of what arrives before its
+// chains see it.
 // Reference for the conformance in conformance/transport. Only the lock "unlocked" is built
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "../../encoding/ts/cbor.ts"
-import type { Blop } from "../../encoding/ts/blop.ts"
+import { type Blop, BlopError, decode, name as blopName } from "../../encoding/ts/blop.ts"
 import { check } from "./apply.ts"
-import { type Chains, createChains } from "./chain.ts"
+import { type Added, type Chains, createChains } from "./chain.ts"
 import { build, depth, type Fragment } from "./fragment.ts"
 import { bytes as idbytes } from "./id.ts"
 import { SealError, type Signer, stored, unseal, type Unsealed } from "./seal.ts"
@@ -41,18 +42,40 @@ export type Taking = {
 	)[]
 }
 
-export type Heard = { from: Uint8Array; payload: Uint8Array }
-export type Topic = { readable: ReadableStream<Heard>; writable: WritableStream<Uint8Array> }
+// a blop that came to be taken in to a chain, from the network or storage (heard: an ephemeral
+// message), or that waited there on one that did
+export type Arrival = {
+	doc: string
+	layer: Layer
+	blop: Blop
+	name: Uint8Array
+	heard: boolean
+}
 
+// Starting: createDevice returns at once, and begins taking in everything the storage holds (every
+// fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
+// as ever). Everything that touches the network (connect, connectDiscover, follow) waits for that;
+// add, put and the other work queue behind it. ready() resolves when it is done; it throws what
+// the storage threw.
 export type Device = {
+	ready(): Promise<void>
 	connect(transport: sd.Transport, initiator: boolean): Promise<void>
+	// a server by its WebSocket url, by discovery (the service name its url's host, unless given)
+	connectDiscover(url: string, service?: string): Promise<void>
 	disconnect(key: Uint8Array): Promise<void>
 	follow(doc: string): Promise<void>
 	chains(doc: string, layer?: Layer): Chains
 	// a stored blop of this device's: taken in, added as a loose commit, fragments built
 	add(sealed: Uint8Array): Promise<void>
-	// an ephemeral one: taken in, published
-	publish(sealed: Uint8Array): Promise<void>
+	// a blop this device made, its bytes, not yet sealed, into that layer's chains at once and
+	// synchronously (WIRING.tex): add and publish then pass over the name already taken in. A stored
+	// blop goes into the ephemeral layer's chains too. Answers as the chains do. Not announced
+	take(doc: string, blop: Uint8Array, layer: Layer): Added
+	// told each blop taken in from elsewhere to a chain, after it is taken in
+	arrived(listener: (arrival: Arrival) => void): void
+	// an ephemeral one, the blop's bytes, not sealed, as given: taken in (refused as a receiver would
+	// refuse it, but still sent), published
+	publish(doc: string, blop: Uint8Array): Promise<void>
 	// addCommit as given: nothing checked or taken in first
 	put(doc: string, head: Uint8Array, parents: Uint8Array[], blob: Uint8Array): Promise<void>
 	// addFragment as given: nothing checked or taken in first
@@ -68,15 +91,17 @@ export type Device = {
 	stored(doc: string): Promise<Uint8Array[]>
 	// the lock's changed(): what waited on it is tried again
 	changed(): Promise<void>
-	// a topic (32 bytes, the caller's: a document's id or anything agreed): subscribes, every peer
-	// connected now or later. readable: each message heard on it, but a blop of a followed
-	// document; writable: each payload, as given, published on it. Both done (cancelled, closed
-	// or aborted): unsubscribed
-	topic(id: Uint8Array): Topic
+	// an ephemeral payload's parts not joined yet are dropped now, as the setting would in time
+	expire(): void
 	// resolves when no taking in or building is left; throws what one of them threw
 	idle(): Promise<void>
 	close(): Promise<void>
 }
+
+// Subduction drops an ephemeral payload over this; a closed blop over it is sent as parts of at most
+// PART bytes (TRANSPORT.tex, Ephemeral blops)
+export const LIMIT = 65536
+export const PART = 60000
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
@@ -117,26 +142,29 @@ type Document = {
 	bad: Set<string>
 	// waiting on the lock: tried again by changed
 	locked: Map<string, { commit: boolean; again(): Promise<void> }>
-	// refused ephemeral blops, by the stored id of their seal
+	// refused ephemeral blops, by their blop's name (BLAKE3 of what the lock opened)
 	heard: Map<string, Code>
 	// how many taken-in seals have a depth, so a build with none is skipped
 	deep: number
 }
 
 export function createDevice(
-	options: { signer: Signer; lock?: Lock; service?: string },
+	// join: how long, in ms, the parts of an ephemeral payload may wait for the rest
+	options: {
+		signer: Signer
+		lock?: Lock
+		service?: string
+		join?: number
+		// where Subduction keeps what it saves (taken in on save as ever); default: in memory
+		storage?: sd.SedimentreeStorage
+	},
 ): Device {
 	const lock = options.lock ?? unlocked
 	const service = options.service ?? "ermine"
+	const join = options.join ?? 30000
 	const documents = new Map<string, Document>()
 	const followed = new Set<string>()
 	const peers = new Map<string, sd.PeerId>()
-	// the open streams of each topic, by its hex
-	const streams = new Map<string, Set<ReadableStreamDefaultController<Heard>>>()
-	const tell = (topic: Uint8Array, from: Uint8Array, payload: Uint8Array) => {
-		for (const c of [...streams.get(hex(topic)) ?? []]) c.enqueue({ from, payload })
-	}
-
 	// taking in and building, one at a time, in the order asked
 	let tail: Promise<unknown> = Promise.resolve()
 	let busy = 0
@@ -184,6 +212,31 @@ export function createDevice(
 
 	// ---- taking in
 
+	const listeners: ((arrival: Arrival) => void)[] = []
+	// blops added that wait in a chain, by name, to find out which a later one lets in
+	const waits = new WeakMap<Chains, Map<string, Blop>>()
+
+	// added to the layer's chains; the blops it let in (itself, those that waited on it)
+	function admit(d: Document, layer: Layer, blop: Blop, name: Uint8Array, heard = false) {
+		const chains = d.chains[layer]
+		const added = chains.add(blop, name)
+		if (listeners.length === 0) return []
+		let held = waits.get(chains)
+		if (!held) waits.set(chains, held = new Map())
+		const out: Arrival[] = []
+		if (added === "taken") out.push({ doc: d.id, layer, blop, name, heard })
+		else if (typeof added === "object" && "waiting" in added) held.set(hex(name), blop)
+		for (const [n, b] of [...held]) {
+			if (!chains.get(unhex(n))) continue
+			held.delete(n)
+			if (n !== hex(name)) out.push({ doc: d.id, layer, blop: b, name: unhex(n), heard })
+		}
+		return out
+	}
+	const announce = (arrivals: Arrival[]) => {
+		for (const a of arrivals) for (const l of listeners) l(a)
+	}
+
 	// handed to the chains: its seal is taken in here
 	function hand(d: Document, u: Unsealed, sealed: Uint8Array, ids: string[]) {
 		const n = hex(u.name), s = hex(u.stored)
@@ -192,9 +245,10 @@ export function createDevice(
 		d.refused.delete(s)
 		d.seen.set(s, { name: n, blop: u.blop, sealed, parents: u.blop.parents.map(hex), ids })
 		if (depth(u.stored) > 0) d.deep++
-		d.chains.stored.add(u.blop, u.name)
+		const arrivals = admit(d, "stored", u.blop, u.name)
 		// the ephemeral layer's chains hold every stored blop too
-		d.chains.ephemeral.add(u.blop, u.name)
+		arrivals.push(...admit(d, "ephemeral", u.blop, u.name))
+		announce(arrivals)
 	}
 
 	function refuse(d: Document, key: string, code: Code, name?: string) {
@@ -348,30 +402,104 @@ export function createDevice(
 		settle(d)
 	}
 
-	// an ephemeral blop heard: as above but the steps on the commit; never stored. False: what the
-	// lock opened is not a blop of this document (refused as shape, signature or document)
-	async function hear(d: Document, blob: Uint8Array): Promise<boolean> {
+	// an ephemeral blop heard from a device with that key, or published here (never sealed): the lock's
+	// open, decode (shape), its signer the sender's (signature), its document; then handed to the
+	// ephemeral chains; never stored, no commit steps
+	async function hear(d: Document, blob: Uint8Array, from: Uint8Array) {
 		const opened = await lock.open(d.bytes, blob)
 		if (!(opened instanceof Uint8Array)) {
-			if (!("wait" in opened)) d.heard.set(hex(stored(blob)), "lock")
-			return true
+			if (!("wait" in opened)) d.heard.set(hex(blopName(blob)), "lock")
+			return
 		}
-		const s = hex(stored(opened))
-		let u: Unsealed
+		const n = blopName(opened), key = hex(n)
+		let blop: Blop
 		try {
-			u = unseal(opened)
+			blop = decode(opened)
 		} catch (e) {
-			if (!(e instanceof SealError)) throw e
-			d.heard.set(s, e.code)
-			return false
+			if (!(e instanceof BlopError)) throw e
+			d.heard.set(key, "shape")
+			return
 		}
-		if (u.blop.node !== d.id) {
-			d.heard.set(s, "document")
-			return false
+		if (hex(blop.signer) !== hex(from)) {
+			d.heard.set(key, "signature")
+			return
 		}
-		d.heard.delete(s)
-		d.chains.ephemeral.add(u.blop, u.name)
-		return true
+		if (blop.node !== d.id) {
+			d.heard.set(key, "document")
+			return
+		}
+		d.heard.delete(key)
+		announce(admit(d, "ephemeral", blop, n, true))
+	}
+
+	// ---- parts of an ephemeral payload over Subduction's limit (TRANSPORT.tex)
+
+	// by document, sender and whole: the parts here, from when the first came
+	const joining = new Map<
+		string,
+		{
+			d: Document
+			from: Uint8Array
+			whole: Uint8Array
+			parts: number
+			got: Map<number, Uint8Array>
+			at: number
+		}
+	>()
+	const expire = (all = false) => {
+		const now = Date.now()
+		for (const [k, j] of [...joining]) if (all || now - j.at >= join) joining.delete(k)
+	}
+
+	// a payload that is a part: a map of exactly whole, part, parts and bytes. undefined: not one
+	// (a blop, or no map); null: one, but its values are not (dropped)
+	function partOf(payload: Uint8Array) {
+		let x: cbor.Value
+		try {
+			x = cbor.decode(payload)
+		} catch (e) {
+			if (e instanceof cbor.CborError) return
+			throw e
+		}
+		if (x === null || typeof x !== "object" || Array.isArray(x) || x instanceof ArrayBuffer) {
+			return
+		}
+		const m = x as { [key: string]: cbor.Value }
+		const keys = Object.keys(m).sort()
+		if (keys.join() !== "bytes,part,parts,whole") return
+		const { whole, part, parts, bytes } = m
+		if (
+			!(whole instanceof ArrayBuffer) || whole.byteLength !== 32 ||
+			!(bytes instanceof ArrayBuffer) ||
+			bytes.byteLength > PART || typeof part !== "number" || typeof parts !== "number" ||
+			!Number.isInteger(part) || !Number.isInteger(parts) || part < 0 || part >= parts
+		) return null
+		return { whole: new Uint8Array(whole), part, parts, bytes: new Uint8Array(bytes) }
+	}
+
+	// one part from a sender: kept with its whole's; when all are here, joined, the hash checked,
+	// and what they make heard as a payload (a bad hash: dropped)
+	async function gather(d: Document, p: NonNullable<ReturnType<typeof partOf>>, from: Uint8Array) {
+		expire()
+		const k = d.id + " " + hex(from) + " " + hex(p.whole)
+		let j = joining.get(k)
+		if (!j) {
+			joining.set(
+				k,
+				j = { d, from, whole: p.whole, parts: p.parts, got: new Map(), at: Date.now() },
+			)
+		}
+		if (j.parts !== p.parts) return
+		if (!j.got.has(p.part)) j.got.set(p.part, p.bytes)
+		if (j.got.size < j.parts) return
+		joining.delete(k)
+		const all = new Uint8Array(
+			[...Array(j.parts).keys()].reduce((n, i) => n + j!.got.get(i)!.length, 0),
+		)
+		let at = 0
+		for (let i = 0; i < j.parts; i++) all.set(j.got.get(i)!, at), at += j.got.get(i)!.length
+		if (hex(blake3(all)) !== hex(p.whole)) return
+		await hear(d, all, from)
 	}
 
 	// ---- building (FRAGMENT.tex)
@@ -423,8 +551,8 @@ export function createDevice(
 
 	// ---- Subduction
 
-	const memory = new sd.MemoryStorage()
-	const storage = new Proxy(memory, {
+	const memory = options.storage ?? new sd.MemoryStorage()
+	const storage = new Proxy(memory as sd.MemoryStorage, {
 		get(target, key) {
 			const f = (target as unknown as Record<string | symbol, unknown>)[key]
 			if (typeof f !== "function") return f
@@ -490,21 +618,66 @@ export function createDevice(
 		storage,
 		onEphemeral: (topic: sd.Topic, from: sd.PeerId, payload: Uint8Array) => {
 			const t = topic.toBytes(), d = documents.get(hex(t))
-			if (d && followed.has(hex(t))) {
-				later(async () => {
-					if (!await hear(d, payload)) tell(t, from.toBytes(), payload)
-				})
-			} else later(async () => tell(t, from.toBytes(), payload))
+			if (!d || !followed.has(hex(t))) return
+			const part = partOf(payload)
+			if (part === undefined) later(() => hear(d, payload, from.toBytes()))
+			else if (part) later(() => gather(d, part, from.toBytes()))
 		},
 	})
 
+	// starting: what the storage holds, taken in before any connection (TRANSPORT.tex, A device).
+	// Read from the storage itself, not through the wrapper, so nothing is saved again. Ephemeral
+	// blops are never stored, so none come back
+	const loaded = run(async () => {
+		for (const tree of await memory.loadAllSedimentreeIds()) {
+			const d = document(tree.toBytes())
+			for (const f of await memory.loadAllFragments(tree)) {
+				const signed = f.signed
+				await fragment(
+					d,
+					signed.payload.head.toBytes(),
+					signed.payload.boundary.map((b: sd.CommitId) => b.toBytes()),
+					f.blob,
+				)
+			}
+			for (const c of await memory.loadAllCommits(tree)) {
+				const signed = c.signed
+				await commit(
+					d,
+					signed.payload.commitId.toBytes(),
+					signed.payload.parents.map((p: sd.CommitId) => p.toBytes()),
+					c.blob,
+				)
+			}
+			await building(d)
+		}
+	})
+	loaded.catch(() => {})
+
+	// the document fetched from every peer, subscribed; then once more subscribed: what was added
+	// while the first was out (or before it was asked) is in neither its answer nor a push
+	async function fetched(d: Document) {
+		await sub.syncWithAllPeers(d.tree, true)
+		await sub.syncWithAllPeers(d.tree, true)
+	}
+
 	const device: Device = {
+		ready: () => loaded,
 		async connect(transport, initiator) {
+			await loaded
 			const peer = initiator
 				? await sub.connectTransport(transport, service)
 				: await sub.acceptTransport(transport, service)
 			peers.set(hex(peer.toBytes()), peer)
-			for (const doc of followed) await sub.syncWithAllPeers(documents.get(doc)!.tree, true)
+			for (const doc of followed) await fetched(documents.get(doc)!)
+		},
+		async connectDiscover(url, service) {
+			await loaded
+			const peer = service === undefined
+				? await sub.connectDiscover(new URL(url))
+				: await sub.connectDiscover(new URL(url), service)
+			peers.set(hex(peer.toBytes()), peer)
+			for (const doc of followed) await fetched(documents.get(doc)!)
 		},
 		async disconnect(key) {
 			const peer = peers.get(hex(key)) ?? new sd.PeerId(key)
@@ -512,12 +685,21 @@ export function createDevice(
 			await sub.disconnectFromPeer(peer)
 		},
 		async follow(doc) {
+			await loaded
 			const d = named(doc)
 			followed.add(hex(d.bytes))
 			await sub.subscribeEphemeral([d.topic])
-			await sub.syncWithAllPeers(d.tree, true)
+			await fetched(d)
 		},
 		chains: (doc, layer = "stored") => named(doc).chains[layer],
+		take(doc, bytes, layer) {
+			const d = named(doc)
+			const blop = decode(bytes), n = blopName(bytes)
+			const added = d.chains[layer].add(blop, n)
+			if (layer === "stored") d.chains.ephemeral.add(blop, n)
+			return added
+		},
+		arrived: (listener) => void listeners.push(listener),
 		async add(sealed) {
 			const u = unseal(sealed)
 			const d = named(u.blop.node)
@@ -534,40 +716,22 @@ export function createDevice(
 			await sub.addCommit(d.tree, commitId(u.stored), parents.map(commitId), blob)
 			await run(() => building(d))
 		},
-		async publish(sealed) {
-			const u = unseal(sealed)
-			const d = named(u.blop.node)
-			const blob = await lock.close(d.bytes, u.name, u.blop.parents, sealed)
-			await run(() => hear(d, blob))
-			await sub.publishEphemeral(d.topic, blob)
-		},
-		topic(id) {
-			const key = hex(id), t = sd.Topic.fromBytes(id)
-			let open = 2, controller!: ReadableStreamDefaultController<Heard>
-			const set = streams.get(key) ?? new Set()
-			streams.set(key, set)
-			if (set.size === 0 && !followed.has(key)) sub.subscribeEphemeral([t]).catch(() => {})
-			const done = () => {
-				if (--open > 0) return
-				set.delete(controller)
-				if (set.size === 0) {
-					streams.delete(key)
-					if (!followed.has(key)) sub.unsubscribeEphemeral([t]).catch(() => {})
-				}
+		async publish(doc, bytes) {
+			const d = named(doc)
+			let parents: Uint8Array[] = []
+			try {
+				parents = decode(bytes).parents
+			} catch (e) {
+				if (!(e instanceof BlopError)) throw e
 			}
-			const readable = new ReadableStream<Heard>({
-				start(c) {
-					controller = c
-					set.add(c)
-				},
-				cancel: done,
-			})
-			const writable = new WritableStream<Uint8Array>({
-				write: (payload) => sub.publishEphemeral(t, payload),
-				close: done,
-				abort: done,
-			})
-			return { readable, writable }
+			const blob = await lock.close(d.bytes, blopName(bytes), parents, bytes)
+			await run(() => hear(d, blob, options.signer.key))
+			if (blob.length <= LIMIT) return await sub.publishEphemeral(d.topic, blob)
+			const whole = buffer(blake3(blob)), parts = Math.ceil(blob.length / PART)
+			for (let i = 0; i < parts; i++) {
+				const bytes = buffer(blob.subarray(i * PART, (i + 1) * PART))
+				await sub.publishEphemeral(d.topic, cbor.encode({ whole, part: i, parts, bytes }))
+			}
 		},
 		async put(doc, head, parents, blob) {
 			const d = named(doc)
@@ -625,6 +789,7 @@ export function createDevice(
 				await run(() => building(d))
 			}
 		},
+		expire: () => expire(true),
 		async idle() {
 			while (busy > 0) await tail
 			if (trouble.length) throw trouble.shift()

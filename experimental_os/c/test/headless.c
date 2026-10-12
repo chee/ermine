@@ -30,7 +30,7 @@
 
 #include "../os.h"
 
-#include "../../../core/graph/c/json.h"
+#include "../../core/graph/c/json.h"
 #include "../drv.h"
 
 #include <fcntl.h>
@@ -637,6 +637,14 @@ static void command(void *data, const char *json) {
 		return;
 	}
 	if (!strcmp(op, "display")) {
+		// /etc/keys' chords for the Mac's tap: said, nothing else (no tap here)
+		Json *keys = jsonGet(c, "keys");
+		if (jsonIsObject(keys) && !jsonGet(c, "takeover") && !jsonGet(c, "windows")) {
+			Json *chords = jsonGet(keys, "chords"), *system = jsonGet(keys, "system");
+			fprintf(stderr, "[display] keys %d chords%s\n", jsonIsArray(chords) ? chords->array.count : 0,
+			        system && system->type == JSON_BOOLEAN && system->boolean ? ", system" : "");
+			return;
+		}
 		Json *take = jsonGet(c, "takeover");
 		if (take && take->type == JSON_BOOLEAN) {
 			takeover = take->boolean;

@@ -1,10 +1,13 @@
 // probe.c: can two ErmSd in one process be linked by an in-memory pipe (TRANSPORT.tex)?
-//   cc -std=c11 -Ic/subduction -o /tmp/probe conformance/transport/probe.c \
+//   cc -std=c11 -Ic/subduction -o probe conformance/transport/probe.c \
 //      c/subduction/store_memory.c c/subduction/platform_posix.c c/subduction/lib/libsubduction_c.a -lc -lm -liconv
 // subduction.h has only the initiator's handshake (erm_sd_connect); erm_sd_received drops bytes
 // for a connection the node did not open. So each side opens one and the pipe crosses them.
 // Then a commit added on a, both syncing the tree: does b hold it? Then the same offline: b's
 // connection closed (erm_sd_closed both sides), a commit on a; a new pair of connections.
+// Found 2026-10-11: both handshakes finish (two initiators, crossed); the commit crosses, seen
+// by b's store's put; offline it does not; relinked and synced, it does; an ephemeral message
+// is heard (ERM_SD_HEARD). Built against lib/ (smoke's link line).
 #include "subduction.h"
 
 #include <stdio.h>

@@ -1,0 +1,14 @@
+{
+	"name": "@ermine/scheduler",
+	"version": "0.0.0",
+	"exports": {
+		".": "./ts/scheduler.ts",
+		"./alien": "./ts/alien.ts",
+		"./causes": "./ts/causes.ts",
+		"./helpers": "./ts/helpers.ts",
+		"./order": "./ts/order.ts",
+		"./push": "./ts/push.ts",
+		"./rank": "./ts/rank.ts",
+		"./types": "./ts/types.ts"
+	}
+}

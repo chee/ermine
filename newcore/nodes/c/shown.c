@@ -186,9 +186,10 @@ nd_object object(const char *p, int lists) {
 	nd_version *vs = take(n * sizeof *vs);
 	for (size_t i = 0; i < n; i++) {
 		const char *content = field(xs[i], "content"), *because = field(xs[i], "because");
+		const char *change = field(xs[i], "change");
 		vs[i] = (nd_version){
 			lists ? (const void *)list(content) : raw(content),
-			raw(field(xs[i], "change")),
+			change ? raw(change) : NULL,
 			because ? raw(because) : NULL,
 		};
 	}

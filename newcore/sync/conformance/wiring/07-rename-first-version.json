@@ -1,0 +1,294 @@
+{
+	"title": "a rename moves the first version only: the second stays under the old name, on both",
+	"steps": [
+		{
+			"request": {
+				"op": "reset"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "a",
+				"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+				"root": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"actor": "a"
+			},
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "b",
+				"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+				"root": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"actor": "b"
+			},
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"request": {
+				"op": "insert",
+				"device": "a",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"name": "old",
+				"child": "x"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "insert",
+				"device": "b",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"name": "old",
+				"child": "y"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "link",
+				"a": "a",
+				"b": "b"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "pump"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "records",
+				"device": "a"
+			},
+			"expect": [
+				{
+					"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+					"object": [
+						"children",
+						"old"
+					],
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								0,
+								0
+							],
+							"value": [
+								"x"
+							]
+						}
+					],
+					"header": {
+						"actor": "a"
+					},
+					"at": 0,
+					"ephemeral": false
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "rename",
+				"device": "a",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"name": "old",
+				"to": "new"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "pump"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "records",
+				"device": "a"
+			},
+			"expect": [
+				{
+					"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+					"object": [
+						"children",
+						"old"
+					],
+					"patches": [
+						{
+							"path": []
+						}
+					],
+					"header": {
+						"actor": "a"
+					},
+					"at": 0,
+					"ephemeral": false
+				},
+				{
+					"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+					"object": [
+						"children",
+						"new"
+					],
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								0,
+								0
+							],
+							"value": [
+								"x"
+							]
+						}
+					],
+					"header": {
+						"actor": "a"
+					},
+					"at": 0,
+					"ephemeral": false
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "read",
+				"device": "a",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": [
+					"children",
+					"old"
+				]
+			},
+			"expect": [
+				{
+					"content": [
+						"y"
+					],
+					"change": {
+						"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+						"actor": "b"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "2b5d09a3f7fb83717167b284e47218576c0d71a3d6d9bf5b155b16287e57bfa6"
+						},
+						"why": {
+							"signer": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "read",
+				"device": "b",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": [
+					"children",
+					"old"
+				]
+			},
+			"expect": [
+				{
+					"content": [
+						"y"
+					],
+					"change": {
+						"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+						"actor": "b"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "2b5d09a3f7fb83717167b284e47218576c0d71a3d6d9bf5b155b16287e57bfa6"
+						},
+						"why": {
+							"signer": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "read",
+				"device": "a",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": [
+					"children",
+					"new"
+				]
+			},
+			"expect": [
+				{
+					"content": [
+						"x"
+					],
+					"change": {
+						"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+						"actor": "a"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "921947ac42c309af39e76de0d2999d7b58d178118db5aab91e73c14b6f4bef08"
+						},
+						"why": {
+							"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+						}
+					}
+				}
+			]
+		},
+		{
+			"request": {
+				"op": "read",
+				"device": "b",
+				"id": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": [
+					"children",
+					"new"
+				]
+			},
+			"expect": [
+				{
+					"content": [
+						"x"
+					],
+					"change": {
+						"node": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+						"actor": "a"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 1,
+							"name": "921947ac42c309af39e76de0d2999d7b58d178118db5aab91e73c14b6f4bef08"
+						},
+						"why": {
+							"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+						}
+					}
+				}
+			]
+		}
+	]
+}

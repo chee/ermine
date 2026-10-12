@@ -123,7 +123,7 @@ static void parse_site(ch_site *s) {
 static void parse_header(ch_header *h) {
 	char *k;
 	while ((k = key())) {
-		if (!strcmp(k, "time")) h->time = strtoll(p, NULL, 10), skip();
+		if (!strcmp(k, "time")) h->has_time = 1, h->time = strtoll(p, NULL, 10), skip();
 		else if (!strcmp(k, "actor")) h->actor = keep(raw());
 		else if (!strcmp(k, "cause")) h->cause = keep(raw());
 		else if (!strcmp(k, "reader")) h->reader = keep(str());
@@ -161,11 +161,13 @@ static void answer(char *line) {
 	}
 	if (!op || strcmp(op, "make")) {
 		fputs("{\"error\":\"unknown op ", stdout);
-		out(op ? op : "");
+		fputs(op ? op : "", stdout);
 		puts("\"}");
 	} else {
 		ch_change c = ch_make(node ? node : "", h, outside ? CH_HERE : NULL);
-		printf("{\"change\":{\"time\":%" PRId64 ",\"node\":", c.header.time);
+		fputs("{\"change\":{", stdout);
+		if (c.header.has_time) printf("\"time\":%" PRId64 ",", c.header.time);
+		fputs("\"node\":", stdout);
 		out(c.node);
 		if (c.header.actor) printf(",\"actor\":%s", (const char *)c.header.actor);
 		if (c.header.reader) { fputs(",\"reader\":", stdout); out(c.header.reader); }

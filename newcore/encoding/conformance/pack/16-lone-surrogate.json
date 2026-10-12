@@ -1,0 +1,21 @@
+{
+	"title": "a lone surrogate in a name: cannot-carry, the id of the node holding it",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r",
+			"value": [],
+			"info": [],
+			"children": [["home", [{ "content": ["s"], "change": 1 }]]],
+			"header": {}
+		},
+		{
+			"id": "s",
+			"value": [],
+			"info": [["\ud800", [{ "content": 1, "change": 1 }]]],
+			"children": [],
+			"header": {}
+		}
+	],
+	"expect": { "code": "cannot-carry", "id": "s" }
+}

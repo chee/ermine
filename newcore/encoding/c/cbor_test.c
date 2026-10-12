@@ -287,9 +287,9 @@ static void rejected(void) {
 	expectRejected("d855440100c0ff", "a float32 NaN other than the one");
 	expectRejected("d85648010000000000f87f", "a float64 NaN other than the one");
 	expectRejected("d840", "a tag with nothing after it");
-	expectRejected("db0000000000a98ac7f6", "the stand-in's tag in an eight-byte head");
-	expectRejected("da00a98ac7", "a stand-in with no kind");
-	expectRejected("da00a98ac7f6f6", "bytes after a stand-in");
+	expectRejected("db0000000012345678f6", "the stand-in's tag in an eight-byte head");
+	expectRejected("da12345678", "a stand-in with no kind");
+	expectRejected("da12345678f6f6", "bytes after a stand-in");
 	expectRejected("da00a98ac6f6", "the tag one below the stand-in's");
 }
 

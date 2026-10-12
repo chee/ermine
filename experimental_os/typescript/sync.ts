@@ -43,17 +43,17 @@
 // again): applied again onto the nodes the SD card holds, with new times,
 // leaving the values as they were.
 
-import type { Graph } from "../../core/graph/typescript/graph.ts";
-import type { Hash } from "../../core/graph/typescript/hash.ts";
-import type { Id, Interface, Json, Listing, PlaceOp, ValueItem } from "../../core/graph/typescript/types.ts";
-import { decode, type Value } from "../../core/graph/typescript/cbor.ts";
-import type { Scheduler } from "../../core/scheduler/typescript/schedule.ts";
-import { equal, isLive } from "../../core/graph/typescript/patch.ts";
-import { bind, docOf, idOf, isSealed, publicKey, read as body, unhex, unwrap } from "../../layers/subduction/typescript/blob.ts";
-import { unlocked } from "../../layers/subduction/typescript/lock.ts";
-import { type Sync, sync as wrap } from "../../layers/subduction/typescript/sync.ts";
-import type { Connection } from "../../layers/subduction/typescript/connect.ts";
-import type { Storage } from "../../layers/subduction/typescript/storage.ts";
+import type { Graph } from "../core/graph/typescript/graph.ts";
+import type { Hash } from "../core/graph/typescript/hash.ts";
+import type { Id, Interface, Json, Listing, PlaceOp, ValueItem } from "../core/graph/typescript/types.ts";
+import { decode, type Value } from "../core/graph/typescript/cbor.ts";
+import type { Scheduler } from "../core/scheduler/typescript/schedule.ts";
+import { equal, isLive } from "../core/graph/typescript/patch.ts";
+import { bind, docOf, idOf, isSealed, publicKey, read as body, unhex, unwrap } from "../layers/subduction/typescript/blob.ts";
+import { unlocked } from "../layers/subduction/typescript/lock.ts";
+import { type Sync, sync as wrap } from "../layers/subduction/typescript/sync.ts";
+import type { Connection } from "../layers/subduction/typescript/connect.ts";
+import type { Storage } from "../layers/subduction/typescript/storage.ts";
 // deno-lint-ignore no-import-prefix
 import type * as wasm from "npm:@automerge/subduction@0.23.0";
 import type { Agent, Procs } from "./procs.ts";
@@ -357,9 +357,9 @@ export async function sync(o: Options): Promise<Synced> {
   };
 
   async function open() {
-    const { Storage } = await import("../../layers/subduction/typescript/storage.ts");
-    const { files } = await import("../../layers/subduction/typescript/deno/files.ts");
-    const { connect, legacy, local } = await import("../../layers/subduction/typescript/connect.ts");
+    const { Storage } = await import("../layers/subduction/typescript/storage.ts");
+    const { files } = await import("../layers/subduction/typescript/deno/files.ts");
+    const { connect, legacy, local } = await import("../layers/subduction/typescript/connect.ts");
     // deno-lint-ignore no-import-prefix
     const { Topic } = await import("npm:@automerge/subduction@0.23.0");
     topicOf = (h) => Topic.fromBytes(unhex(h));

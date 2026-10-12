@@ -8,9 +8,16 @@
 // node's value, its latest run a node named run inside it; four moments go to the hooks.
 // what scheduler() answers is the host's interface.
 import type { Change } from "../../nodes/ts/change.ts"
-import { type Acting, type By, createGraph, GraphError, type Read } from "../../graph/ts/graph.ts"
+import {
+	type Acting,
+	type By,
+	type Changed,
+	createGraph,
+	GraphError,
+	type Read,
+} from "../../graph/ts/graph.ts"
 import type { Node, Version } from "../../nodes/ts/node.ts"
-import type { Address, Depend, Item, Place, Step } from "../../graph/ts/places.ts"
+import type { Address, Depend, Item, Place, Step, Where } from "../../graph/ts/places.ts"
 import { type Ask, edit, type May, pass as passing } from "../../protect/ts/protect.ts"
 import { createCode } from "../../programs/ts/code.ts"
 import { createHandlers } from "../../programs/ts/handlers.ts"
@@ -60,8 +67,8 @@ type N = Node<unknown, Change>
 type V = Version<unknown, Change>
 
 export type Options = {
-	// the root's id; the host introduces its node (intro), or one is made holding nothing
-	root: string
+	// the root: the host's node, restored or new (createNode(id, {}))
+	root: N
 	// who the host's own changes are by
 	actor?: unknown
 	// the last time given; each change takes the next
@@ -76,6 +83,8 @@ export type Options = {
 	may?: May
 	// the host's site for its changes; default read off the call stack
 	site?: () => Site | undefined
+	// told each object an operation changed (WIRING.tex): sync's side
+	changed?: (record: Changed) => void
 }
 
 export type ErrorCode =
@@ -104,6 +113,7 @@ export function createScheduler(options: Options) {
 		clock,
 		id: options.id,
 		may: options.may,
+		changed: options.changed,
 		marked: (q, change, causes) => {
 			if (q.state === "running") mark(q, change, causes as Cause | undefined)
 		},
@@ -211,7 +221,7 @@ export function createScheduler(options: Options) {
 		f: Read,
 		depend: Depend | undefined,
 		ctx?: Ctx,
-		args: { address?: Address; name?: string } = {},
+		args: { address?: Where; name?: string } = {},
 	): unknown {
 		let out = f(depend)
 		const items = (Array.isArray(out) ? out : []).filter((x) => typeof x === "object") as Item<
@@ -543,8 +553,8 @@ export function createScheduler(options: Options) {
 				status.loop = loop
 			}
 			if (run.shown) status.new = run.shown.value
-			if (!sameStatus(status, p.status)) records.status(p, status, run.n, run.causes)
-			const made = records.run(p, run, ended, json, order.after(p))
+			const changed = sameStatus(status, p.status) ? undefined : status
+			const made = records.run(p, run, ended, json, order.after(p), changed)
 			if (made !== undefined) runs.set(made, p)
 		}
 		const ends: Moment = { ends: p.id, run: run.n, ended }
@@ -607,6 +617,15 @@ export function createScheduler(options: Options) {
 	})
 	return {
 		...host,
+		// INTERNAL AND DANGEROUS (WIRING.tex, In), for whoever made the scheduler to give to sync
+		// alone, never to hosts or programs: versions(node, object, list) throws away the object's
+		// versions and puts list in their place, local ones included; it is not a patch, so nothing
+		// checks that list follows from what was there; protect is not asked; it makes no record, so
+		// what it writes is never sent: with anything but what the chains say, the device silently
+		// differs from every other until a blop for that object is taken in
+		internal: {
+			versions: (...a: Parameters<typeof g.versions>) => request(() => g.versions(...a)),
+		},
 		get: g.get,
 		intro: (node: N) => request(() => g.intro(node)),
 		outro: (id: string) => request(() => outro(id)),

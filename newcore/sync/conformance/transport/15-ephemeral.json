@@ -68,8 +68,7 @@
 				"layer": "ephemeral"
 			},
 			"expect": {
-				"name": "a3b8fb469d91d22e5b95aafa333e67da1edae785995f46432691feb6a17890b7",
-				"stored": "1bccbaf205b90a0781344a783da57a6a9f8d60b7a9f6fb5b0d8baa34464c3a9c"
+				"name": "a3b8fb469d91d22e5b95aafa333e67da1edae785995f46432691feb6a17890b7"
 			}
 		},
 		{
@@ -89,8 +88,7 @@
 				"layer": "ephemeral"
 			},
 			"expect": {
-				"name": "06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43",
-				"stored": "1b9209592de749c46fcc1bd9529ffd581527517772fb8fe00197d07b756639c4"
+				"name": "06185dbb67f6c55c0630c077bcf082787c88a84222a4721f488f7221270daa43"
 			}
 		},
 		{

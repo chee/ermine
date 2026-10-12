@@ -83,10 +83,13 @@ static char *literal(parser *s) {
 		case 'u': {
 			unsigned u, lo;
 			if (!hex4(s, &u)) goto bad;
+			// a high and a low are one character; on their own, each is held as WTF-8
 			if (u >= 0xD800 && u < 0xDC00 && s->p[0] == '\\' && s->p[1] == 'u') {
+				const char *at = s->p;
 				s->p += 2;
 				if (!hex4(s, &lo)) goto bad;
-				u = 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00);
+				if (lo >= 0xDC00 && lo < 0xE000) u = 0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00);
+				else s->p = at;
 			}
 			n += utf8(out + n, u);
 			break;
@@ -174,7 +177,11 @@ static void string(const char *s) {
 		else if (c == '\b') fputs("\\b", stdout);
 		else if (c == '\f') fputs("\\f", stdout);
 		else if (c < 0x20) printf("\\u%04x", c);
-		else putchar(c);
+		// a lone surrogate, held as WTF-8 (ED A0..BF xx), is written as the escape
+		else if (c == 0xED && ((unsigned char)s[1] & 0xE0) == 0xA0 && s[2]) {
+			printf("\\u%04x", 0xD000 | (((unsigned char)s[1] & 63) << 6) | ((unsigned char)s[2] & 63));
+			s += 2;
+		} else putchar(c);
 	}
 	putchar('"');
 }
@@ -565,11 +572,13 @@ static void answer(nt_value *q) {
 		nt_set(change, "node", nt_str(node.id));
 		const nt_value *tell = nt_get(q, "patched");
 		int telling = tell && tell->type == NT_BOOL && tell->bool_;
+		const nt_value *units = nt_get(q, "utf16");
+		int utf16 = units && units->type == NT_BOOL && units->bool_;
 		told t = {grab((n + 1) * sizeof *t.facts), 0};
 		mu_patched hearing = {hear, &t};
 		mu_alloc alloc = {plain, NULL};
 		size_t at = 0;
-		int code = mu_mutate(&node, which, patches, n, change, &alloc, telling ? &hearing : NULL, &at);
+		int code = mu_mutate_units(&node, which, patches, n, change, &alloc, telling ? &hearing : NULL, &at, utf16);
 		if (code != MU_OK) {
 			nt_free(change);
 			printf("{\"fail\":\"%s\",\"patch\":%zu}\n", mu_code_name(code), at);

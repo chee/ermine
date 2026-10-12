@@ -65,7 +65,7 @@ function make(q: Record<string, unknown>): S {
 	logged = []
 	clock = { time: 0 }
 	const s = createScheduler({
-		root: "root",
+		root: createNode("root", {}),
 		clock,
 		hooks: [(m) => moments.push(moment(m))],
 		code: finder,

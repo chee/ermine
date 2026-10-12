@@ -1,0 +1,139 @@
+{
+	"title": "a kill releases the process's latest run, a node it owns",
+	"steps": [
+		{
+			"op": "create",
+			"value": 1,
+			"id": "a",
+			"expect": {
+				"ok": "a"
+			}
+		},
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"compute": [
+					{
+						"do": "content",
+						"address": [
+							"a"
+						]
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@3"
+			}
+		},
+		{
+			"op": "children",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					"run"
+				]
+			}
+		},
+		{
+			"op": "look",
+			"address": [
+				"p",
+				"run"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@6",
+						"loaded": true
+					}
+				]
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 7
+			}
+		},
+		{
+			"op": "outro",
+			"id": "@3",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 9
+			}
+		},
+		{
+			"op": "node",
+			"id": "@6",
+			"expect": {
+				"ok": null
+			}
+		},
+		{
+			"op": "write",
+			"address": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"ok": 10
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@3",
+						"by": 4
+					},
+					{
+						"starts": "@3",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"reads": "@3",
+						"run": 1,
+						"op": "content",
+						"tracked": true
+					},
+					{
+						"ends": "@3",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

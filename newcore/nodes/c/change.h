@@ -15,9 +15,10 @@ typedef struct {
 // the site of the code writing it
 #define CH_HERE (&(ch_site){__FILE__, __LINE__, 0, __func__})
 
-// what a change says, given by the caller; NULL = not given
+// what a change says, given by the caller: has_time and has_site, and NULL for the rest = not given
 // actor and cause: the caller's, never read here
 typedef struct {
+	int has_time;
 	int64_t time;
 	const void *actor;
 	const char *reader;

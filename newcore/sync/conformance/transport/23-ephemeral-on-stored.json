@@ -94,8 +94,7 @@
 				"layer": "ephemeral"
 			},
 			"expect": {
-				"name": "ddad1ce0cb0450d3d109cd038d164e41267916918283c35979b9091fe65e9e93",
-				"stored": "ff267d583126f99ac2d3f84ee40a0208f5a831986fb8042a75b24853b716a6ba"
+				"name": "ddad1ce0cb0450d3d109cd038d164e41267916918283c35979b9091fe65e9e93"
 			}
 		},
 		{

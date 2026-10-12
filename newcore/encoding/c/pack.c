@@ -127,9 +127,18 @@ static void head(pk_bytes *b, int major, uint64_t n) {
 	pk_put(b, h, 1 + size);
 }
 
-// U+0000 is held as C0 80, as json.h holds it, and written as the byte 00
-static void str(pk_bytes *b, const char *s) {
+typedef struct {
+	pk_bytes *b;
+	const pk_codec *codec;
+	int cannot;
+} writer;
+
+// U+0000 is held as C0 80, as json.h holds it, and written as the byte 00; text that is not UTF-8
+// (a lone surrogate) has no encoding
+static void str(writer *w, const char *s) {
+	pk_bytes *b = w->b;
 	size_t n = strlen(s), held = 0;
+	if (!cborText(s, n)) w->cannot = 1;
 	for (const char *q = s; (q = strstr(q, "\xC0\x80")) != NULL; q += 2) held++;
 	head(b, 3, n - held);
 	if (held == 0) {
@@ -178,12 +187,6 @@ static void number(pk_bytes *b, int64_t v) {
 	pk_put(b, x, 9);
 }
 
-typedef struct {
-	pk_bytes *b;
-	const pk_codec *codec;
-	int cannot;
-} writer;
-
 static void put_value(writer *w, const void *v) {
 	if (!w->cannot && w->codec->encode(w->codec->context, v, w->b) != 0) w->cannot = 1;
 }
@@ -192,17 +195,16 @@ static void put_versions(writer *w, nd_object o, int lists) {
 	head(w->b, 4, o.length);
 	for (size_t i = 0; i < o.length; i++) {
 		const nd_version *v = &o.versions[i];
-		head(w->b, 5, v->because ? 3 : 2);
-		str(w->b, "change");
-		put_value(w, v->change);
-		if (v->because) str(w->b, "because"), put_value(w, v->because);
-		str(w->b, "content");
+		head(w->b, 5, 1 + !!v->change + !!v->because);
+		if (v->change) str(w, "change"), put_value(w, v->change);
+		if (v->because) str(w, "because"), put_value(w, v->because);
+		str(w, "content");
 		if (lists) {
 			const nd_list *l = v->content;
 			size_t n = l ? l->length : 0;
 			head(w->b, 4, n);
 			for (size_t k = 0; k < n; k++) {
-				if (l->items[k].id) str(w->b, l->items[k].id);
+				if (l->items[k].id) str(w, l->items[k].id);
 				else w->cannot = 1;
 			}
 		} else put_value(w, v->content);
@@ -213,7 +215,7 @@ static void put_entries(writer *w, const nd_entry *es, size_t n, int lists) {
 	head(w->b, 4, n);
 	for (size_t i = 0; i < n; i++) {
 		head(w->b, 4, 2);
-		str(w->b, es[i].name);
+		str(w, es[i].name);
 		put_versions(w, es[i].object, lists);
 	}
 }
@@ -223,27 +225,27 @@ static void put_header(writer *w, const nd_header *h) {
 	head(w->b, 5, !!h->has_time + !!h->actor + !!h->reader + !!h->has_site + !!h->cause);
 	if (h->has_site) {
 		const nd_site *s = &h->site;
-		str(w->b, "site");
+		str(w, "site");
 		head(w->b, 5, 2 + !!s->column + !!s->function);
-		str(w->b, "file"), str(w->b, s->file);
-		str(w->b, "line"), number(w->b, s->line);
-		if (s->column) str(w->b, "column"), number(w->b, s->column);
-		if (s->function) str(w->b, "function"), str(w->b, s->function);
+		str(w, "file"), str(w, s->file);
+		str(w, "line"), number(w->b, s->line);
+		if (s->column) str(w, "column"), number(w->b, s->column);
+		if (s->function) str(w, "function"), str(w, s->function);
 	}
-	if (h->has_time) str(w->b, "time"), number(w->b, h->time);
-	if (h->actor) str(w->b, "actor"), put_value(w, h->actor);
-	if (h->cause) str(w->b, "cause"), put_value(w, h->cause);
-	if (h->reader) str(w->b, "reader"), str(w->b, h->reader);
+	if (h->has_time) str(w, "time"), number(w->b, h->time);
+	if (h->actor) str(w, "actor"), put_value(w, h->actor);
+	if (h->cause) str(w, "cause"), put_value(w, h->cause);
+	if (h->reader) str(w, "reader"), str(w, h->reader);
 }
 
 // a node as written: id, info, value, header, children
 static void put_node(writer *w, const nd_node *n) {
 	head(w->b, 5, 5);
-	str(w->b, "id"), str(w->b, n->id);
-	str(w->b, "info"), put_entries(w, n->info, n->info_length, 0);
-	str(w->b, "value"), put_versions(w, n->value, 0);
-	str(w->b, "header"), put_header(w, &n->header);
-	str(w->b, "children"), put_entries(w, n->children, n->children_length, 1);
+	str(w, "id"), str(w, n->id);
+	str(w, "info"), put_entries(w, n->info, n->info_length, 0);
+	str(w, "value"), put_versions(w, n->value, 0);
+	str(w, "header"), put_header(w, &n->header);
+	str(w, "children"), put_entries(w, n->children, n->children_length, 1);
 }
 
 pk_code pk_pack(const char *root, pk_get get, void *context, const pk_codec *codec,
@@ -254,17 +256,20 @@ pk_code pk_pack(const char *root, pk_get get, void *context, const pk_codec *cod
 	size_t start = out->length;
 	writer w = {out, codec, 0};
 	head(out, 5, 3);
-	str(out, "root"), str(out, root);
-	str(out, "nodes"), head(out, 4, g.length);
+	str(&w, "root"), str(&w, root);
+	// the root's id is also its node's: that node names it
+	int bad = w.cannot;
+	w.cannot = 0;
+	str(&w, "nodes"), head(out, 4, g.length);
 	for (size_t i = 0; i < g.length && !w.cannot; i++) {
 		const nd_node *n = g.nodes[i];
 		put_node(&w, n);
 		if (w.cannot && id) *id = n->id;
 	}
-	str(out, "missing"), head(out, 4, g.missing_length);
-	for (size_t i = 0; i < g.missing_length; i++) str(out, g.missing[i]);
+	str(&w, "missing"), head(out, 4, g.missing_length);
+	for (size_t i = 0; i < g.missing_length; i++) str(&w, g.missing[i]);
 	pk_free(&g);
-	code = w.cannot ? PK_CANNOT_CARRY : out->failed ? PK_NO_MEMORY : PK_OK;
+	code = w.cannot || bad ? PK_CANNOT_CARRY : out->failed ? PK_NO_MEMORY : PK_OK;
 	if (code != PK_OK && !out->failed) out->length = start;
 	return code;
 }
@@ -288,7 +293,7 @@ typedef struct {
 
 typedef struct {
 	const uint8_t *p, *end;
-	int bad, oom, depth;
+	int bad, oom;
 	arena *own;
 	const pk_codec *codec;
 } reader;
@@ -328,27 +333,29 @@ static int fits(reader *r, uint64_t n) {
 	return !r->bad;
 }
 
+// one item of any kind, without reading it: no recursion, so a value may nest as deep as the
+// input is long (cbor.c's decoder is the same)
 static void skip(reader *r) {
-	uint64_t n;
-	int ai, major = next(r, &n, &ai);
-	if (failed(r)) return;
-	if (++r->depth > 512) r->bad = 1;
-	switch (major) {
-	case 2:
-	case 3:
-		if (fits(r, n)) r->p += n;
-		break;
-	case 4:
-		if (fits(r, n))
-			for (uint64_t i = 0; i < n && !failed(r); i++) skip(r);
-		break;
-	case 5:
-		if (fits(r, n))
-			for (uint64_t i = 0; i < 2 * n && !failed(r); i++) skip(r);
-		break;
-	case 6: skip(r); break;
+	uint64_t pending = 1; // items still to pass
+	while (pending && !failed(r)) {
+		uint64_t n;
+		int ai, major = next(r, &n, &ai);
+		if (failed(r)) return;
+		pending--;
+		switch (major) {
+		case 2:
+		case 3:
+			if (fits(r, n)) r->p += n;
+			break;
+		case 4:
+			if (fits(r, n)) pending += n;
+			break;
+		case 5:
+			if (fits(r, n)) pending += 2 * n;
+			break;
+		case 6: pending++; break;
+		}
 	}
-	r->depth--;
 }
 
 static uint64_t expect(reader *r, int major) {
@@ -554,7 +561,7 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_codec *codec, pk
 		pk_free(out);
 		return PK_NOT_A_GRAPH;
 	}
-	reader r = {bytes, bytes + length, 0, 0, 0, own, codec};
+	reader r = {bytes, bytes + length, 0, 0, own, codec};
 	int nodes = 0, missing = 0;
 	size_t capacity = 0, missing_capacity = 0;
 	size_t m = (size_t)expect(&r, 5);
@@ -607,7 +614,7 @@ pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_codec *codec, pk
 	arena *own = calloc(1, sizeof *own);
 	if (own == NULL) return PK_NO_MEMORY;
 	out->own = own;
-	reader r = {bytes, bytes + length, 0, 0, 0, own, codec};
+	reader r = {bytes, bytes + length, 0, 0, own, codec};
 	nd_node *n = node(&r);
 	if (n != NULL && r.p != r.end) r.bad = 1;
 	if (n != NULL && !failed(&r) && (out->nodes = malloc(sizeof *out->nodes)) != NULL) {

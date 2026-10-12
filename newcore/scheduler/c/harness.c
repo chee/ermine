@@ -266,7 +266,7 @@ static void make(nt_value *q) {
 	patch.has_value = 1;
 	patch.value = rules;
 	const char *const address[] = {"rules"};
-	sc_write(host, address, 1, &patch, 1, NULL, NULL, NULL);
+	sc_write(host, address, 1, &patch, 1, NULL, NULL, 0, NULL);
 }
 
 static const char *const *names_of(const nt_value *l, size_t *n) {

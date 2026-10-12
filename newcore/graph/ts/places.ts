@@ -16,6 +16,9 @@ type Spot = { names: Place; trail?: readonly string[] }
 // an optional first "/", any number of "..", then names
 export type Address = readonly string[]
 
+// what a read or write is at: an address, or an id, the node itself, no walk
+export type Where = Address | string
+
 // what a read rests on: an id being loaded, or one of its lists
 // ["children"]: which names it has
 export type Part =
@@ -208,12 +211,17 @@ export function createPlaces<V, H>(
 		return out
 	}
 
-	// an item per id in the last name's list, in order; no names: the root
+	// an item per id in the last name's list, in order; no names: the root; an id: its node
 	function look(
 		place: Spot,
-		address: Address,
+		address: Where,
 		depend = fallback,
 	): Item<V, H>[] {
+		if (typeof address === "string") {
+			depend?.(address, "loaded")
+			const n = get(address)
+			return [n === undefined ? { id: address, route: [] } : { id: address, route: [], node: n }]
+		}
 		const { names, own, base } = resolve(place, address)
 		if (names.length === 0) {
 			depend?.(root, "loaded")
@@ -339,7 +347,7 @@ export function createPlaces<V, H>(
 	// without: every name they have, once, first seen first
 	function children(
 		place: Spot,
-		address: Address,
+		address: Where,
 		name?: string,
 		depend = fallback,
 	) {
@@ -546,7 +554,7 @@ export function createPlaces<V, H>(
 	// said to depend: the walk, as look, then the object of each loaded item
 	function read(
 		place: Spot,
-		address: Address,
+		address: Where,
 		part: "value" | readonly ["info", string],
 		depend?: Depend,
 	): Read<V, H>[] {
@@ -558,11 +566,11 @@ export function createPlaces<V, H>(
 		}
 		return out
 	}
-	const content = (place: Spot, address: Address, depend = fallback) =>
+	const content = (place: Spot, address: Where, depend = fallback) =>
 		read(place, address, "value", depend)
 	function info(
 		place: Spot,
-		address: Address,
+		address: Where,
 		name: string,
 		depend = fallback,
 	) {
@@ -573,7 +581,7 @@ export function createPlaces<V, H>(
 	// writing by path, by mutate.ts: one change. the item: the index-th look gives, default its
 	// first loaded; slotindex as insert's. the walk to it is said to no depend: a write reads nothing
 	const quiet: Depend = () => {}
-	function at(place: Spot, address: Address, index?: number): C {
+	function at(place: Spot, address: Where, index?: number): C {
 		const items = look(place, address, quiet)
 		const it = index === undefined ? items.find((it) => it.node) : items[index]
 		if (index !== undefined && (index < 0 || it === undefined)) {
@@ -585,7 +593,7 @@ export function createPlaces<V, H>(
 	// the value
 	function write(
 		place: Spot,
-		address: Address,
+		address: Where,
 		patches: Iterable<Patch>,
 		index?: number,
 		slotindex: Span = 0,
@@ -596,7 +604,7 @@ export function createPlaces<V, H>(
 	// one info, by name
 	function set(
 		place: Spot,
-		address: Address,
+		address: Where,
 		name: string,
 		patches: Iterable<Patch>,
 		index?: number,
@@ -613,22 +621,21 @@ export function createPlaces<V, H>(
 			names: spot.names,
 			trail: spot.trail!,
 			cd: (address: Address, depend = fallback) => here(enter(address, spot, depend)),
-			look: (address: Address, depend?: Depend) => look(spot, address, depend),
+			look: (address: Where, depend?: Depend) => look(spot, address, depend),
 			lookup: (path: readonly string[], depend?: Depend) => lookup(spot, path, depend),
 			lookups: (path: readonly string[], depend?: Depend) => lookups(spot, path, depend),
-			children: (address: Address, name?: string, depend?: Depend) =>
+			children: (address: Where, name?: string, depend?: Depend) =>
 				children(spot, address, name, depend),
-			content: (address: Address, depend?: Depend) => content(spot, address, depend),
-			info: (address: Address, name: string, depend?: Depend) =>
-				info(spot, address, name, depend),
+			content: (address: Where, depend?: Depend) => content(spot, address, depend),
+			info: (address: Where, name: string, depend?: Depend) => info(spot, address, name, depend),
 			write: (
-				address: Address,
+				address: Where,
 				patches: Iterable<Patch>,
 				index?: number,
 				slotindex?: Span,
 			) => write(spot, address, patches, index, slotindex),
 			set: (
-				address: Address,
+				address: Where,
 				name: string,
 				patches: Iterable<Patch>,
 				index?: number,
@@ -639,7 +646,7 @@ export function createPlaces<V, H>(
 
 	return {
 		cd: (address: Address, depend = fallback) => here(enter(address, { names: [] }, depend)),
-		look: (place: Place, address: Address, depend?: Depend) =>
+		look: (place: Place, address: Where, depend?: Depend) =>
 			look({ names: place }, address, depend),
 		lookup: (place: Place, path: readonly string[], depend?: Depend) =>
 			lookup({ names: place }, path, depend),
@@ -647,24 +654,24 @@ export function createPlaces<V, H>(
 			lookups({ names: place }, path, depend),
 		children: (
 			place: Place,
-			address: Address,
+			address: Where,
 			name?: string,
 			depend?: Depend,
 		) => children({ names: place }, address, name, depend),
-		content: (place: Place, address: Address, depend?: Depend) =>
+		content: (place: Place, address: Where, depend?: Depend) =>
 			content({ names: place }, address, depend),
-		info: (place: Place, address: Address, name: string, depend?: Depend) =>
+		info: (place: Place, address: Where, name: string, depend?: Depend) =>
 			info({ names: place }, address, name, depend),
 		write: (
 			place: Place,
-			address: Address,
+			address: Where,
 			patches: Iterable<Patch>,
 			index?: number,
 			slotindex?: Span,
 		) => write({ names: place }, address, patches, index, slotindex),
 		set: (
 			place: Place,
-			address: Address,
+			address: Where,
 			name: string,
 			patches: Iterable<Patch>,
 			index?: number,

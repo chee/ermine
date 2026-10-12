@@ -7,8 +7,8 @@
 
 #include "os.h"
 
-#include "../../core/graph/c/ermine.h"
-#include "../../core/scheduler/c/schedule.h"
+#include "../core/graph/c/ermine.h"
+#include "../core/scheduler/c/schedule.h"
 
 typedef struct Host Host;
 

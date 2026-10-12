@@ -1,0 +1,653 @@
+{
+	"title": "lone surrogates: halves typed apart stay apart (code points), join (UTF-16 units)",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "\ude00"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "\ude00"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "b"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": "c"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "\ude00"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "😀bc"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "\ud83d"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "ab"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "a"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": "b"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"u"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"t"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					},
+					{
+						"path": [
+							"u"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "a"
+					},
+					{
+						"path": [
+							"u"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "b"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"\ud83d"
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"x"
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": [
+						"y"
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							"\ud83d"
+						]
+					},
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": [
+							"x"
+						]
+					},
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": [
+							"y"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"k": [
+								"\ud83d"
+							]
+						}
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"x"
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							{
+								"k": [
+									"\ud83d"
+								]
+							}
+						]
+					},
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": [
+							"x"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"o"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"o"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"o"
+						],
+						"value": 1
+					},
+					{
+						"path": [
+							"o"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "x"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"u"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "ab"
+					}
+				]
+			}
+		}
+	]
+}

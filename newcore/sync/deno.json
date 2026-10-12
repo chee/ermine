@@ -1,0 +1,15 @@
+{
+	"name": "@ermine/sync",
+	"version": "0.0.0",
+	"exports": {
+		"./apply": "./ts/apply.ts",
+		"./chain": "./ts/chain.ts",
+		"./commit": "./ts/commit.ts",
+		"./fragment": "./ts/fragment.ts",
+		"./fresh": "./ts/fresh.ts",
+		"./id": "./ts/id.ts",
+		"./seal": "./ts/seal.ts",
+		"./transport": "./ts/transport.ts",
+		"./wiring": "./ts/wiring.ts"
+	}
+}

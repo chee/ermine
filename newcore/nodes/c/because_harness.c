@@ -135,7 +135,7 @@ static void answer(char *line) {
 	}
 	if (!op || strcmp(op, "create")) {
 		fputs("{\"error\":\"unknown op ", stdout);
-		out(op ? op : "");
+		fputs(op ? op : "", stdout);
 		puts("\"}");
 	} else {
 		bc_because b = bc_make(layer ? layer : "", place, why, outside ? BC_HERE : NULL);

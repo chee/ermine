@@ -763,4 +763,43 @@ for (const [name, title, cases] of SITES) {
 	)
 }
 
+// ---- pop: the kept head is a parent, so its lamport counts
+{
+	const A = mk({ patches: put("a") })
+	const B1 = mk({ parents: [A], patches: put("b") })
+	const C = mk({ parents: [A], patches: put("c") })
+	const D = mk({ parents: [C], patches: put("d") })
+	const all = [A, B1, C, D]
+	// D (lamport 3) is version 0, B1 (lamport 2) version 1
+	const before: V[] = [[D, "d"], [B1, "b"]]
+	const c: Commit = { at: { pop: 1 } }
+	const [s, X] = commit(c, { parents: [B1, D], base: D, lamport: 4, patches: [] })
+	const after: V[] = [[X, "d"]]
+	local("value", before, c, X, after)
+	scenario(
+		"pop-kept-lamport",
+		"pop version 1 (lamport 2) with version 0 (lamport 3) kept: lamport one more than the kept's",
+		[
+			create(),
+			...all.map((b) => add(b)),
+			versions(all, "value", before),
+			s,
+			add(X),
+			versions([...all, X], "value", after),
+		],
+	)
+}
+
+// ---- a local path with no parts is kept as it is
+scenario(
+	"site-no-parts",
+	'a local path with no parts, "/" or "file://": kept, under a root or none',
+	[
+		create(),
+		sited("/", ["/w"], "/"),
+		sited("/", ["/"], "/"),
+		sited("file://", [], "file://"),
+	],
+)
+
 await write(new URL("../../sync/conformance/commit/", import.meta.url))

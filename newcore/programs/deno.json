@@ -1,0 +1,11 @@
+{
+	"name": "@ermine/programs",
+	"version": "0.0.0",
+	"exports": {
+		"./code": "./ts/code.ts",
+		"./handlers": "./ts/handlers.ts",
+		"./process-api": "./ts/process-api.ts",
+		"./processes": "./ts/processes.ts",
+		"./records": "./ts/records.ts"
+	}
+}

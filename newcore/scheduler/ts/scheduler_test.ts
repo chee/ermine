@@ -5,7 +5,11 @@ import { type Api, createScheduler, type Moment, PENDING, SchedulerError } from 
 
 function host(o: { id?: (t: number) => string } = {}) {
 	const moments: Moment[] = []
-	const s = createScheduler({ root: "root", hooks: [(m) => moments.push(m)], ...o })
+	const s = createScheduler({
+		root: createNode("root", {}),
+		hooks: [(m) => moments.push(m)],
+		...o,
+	})
 	return { s, moments }
 }
 
@@ -440,7 +444,7 @@ Deno.test("an async compute is pending until it settles", async () => {
 // protect
 
 function guarded(rules: unknown[]) {
-	const s = createScheduler({ root: "root", may: protectRules("rules") })
+	const s = createScheduler({ root: createNode("root", {}), may: protectRules("rules") })
 	const change = { time: 0, actor: "host" } as never
 	s.intro(createNode("rules", { value: [{ content: [], change }] }))
 	s.insert("root", "rules", "rules")
@@ -576,7 +580,10 @@ Deno.test("audit: a throw while an async run settles is the run's failure, not a
 		const { createScheduler } = await import(${
 		JSON.stringify(import.meta.resolve("./scheduler.ts"))
 	})
-		const s = createScheduler({ root: "root" })
+		const { default: createNode } = await import(${
+		JSON.stringify(import.meta.resolve("../../nodes/ts/node.ts"))
+	})
+		const s = createScheduler({ root: createNode("root", {}) })
 		s.insert("root", "a", s.create(1, { id: "a" }))
 		const p = s.start({
 			address: [],
@@ -655,4 +662,59 @@ Deno.test("audit: a program's call to nothing throws, as the host's does", () =>
 		},
 	})
 	assertEquals(caught, host_)
+})
+
+Deno.test("by id: node gives the whole node; reads and writes take an id where they take an address", () => {
+	const { s } = host()
+	const a = put(s, "a", 1)
+	const b = s.create("deep")
+	s.insert(a, "inner", b)
+	assertEquals(s.node(b)?.value[0].content, "deep")
+	assertEquals(s.node("nothing"), undefined)
+	assertEquals(s.content(b).map((it) => it.versions?.[0].content), ["deep"])
+	assertEquals((s.children(a, "inner") as { id: string }[]).map((it) => it.id), [b])
+	assertEquals(s.children(a), ["inner"])
+	s.write(b, [{ path: [], value: "deeper" }])
+	assertEquals(value(s, ["a", "inner"]), "deeper")
+	// a compute reading by id reruns on what it read
+	const p = s.start({
+		address: [],
+		program: { compute: ({ api }: Given) => api.node(b)!.value[0].content },
+	})
+	s.write(b, [{ path: [], value: "deepest" }])
+	assertEquals(value(s, [p.id]), "deepest")
+})
+
+Deno.test("as: a handler's changes carry the cause it gives, one cause per change", () => {
+	const { s } = host()
+	put(s, "x", 0)
+	put(s, "y", 0)
+	const p = s.start({
+		address: [],
+		program: ({ api, self }: Given) => {
+			const h = api.create(({ api }: Given) => {
+				api.as({ cause: { file: "x.txt" } }).write(["x"], [{ path: [], value: 1 }])
+				api.as({ cause: { file: "y.txt" } }).write(["y"], [{ path: [], value: 1 }])
+				api.write(["x"], [{ path: [], value: 2 }])
+			}, { ephemeral: true })
+			api.insert(self, "edit", h)
+			return null
+		},
+	})
+	s.call({ address: [p.id, "edit"] })
+	const cause = (id: string, at: number) => s.get(id)!.value[at].change.cause
+	assertEquals(cause("y", 0), { file: "y.txt" })
+	assertEquals(cause("x", 0), undefined)
+	assertEquals(s.get("x")!.value[0].content, 2)
+})
+
+Deno.test("the root: the host's node, restored with what it held", () => {
+	const change = { time: 1, actor: "host" } as never
+	const root = createNode("top", {
+		value: [{ content: "kept", change }],
+		children: new Map([["a", [{ content: ["x"], change }]]]),
+	})
+	const s = createScheduler({ root: root as never })
+	assertEquals(value(s, []), "kept")
+	assertEquals(s.look(["a"]).map((it) => it.id), ["x"])
 })

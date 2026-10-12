@@ -257,18 +257,19 @@ sleep 0.8
 run "ls /home/desktop" "^Notes " "dragged from My Computer onto the desk: into /home/desktop"
 xy=$(where desk Notes)
 [ -n "$xy" ] && [ "${xy% *}" -lt 150 ] && ok "where it was let go ($xy)" || bad "not where it was let go ($xy)"
+echo "wm resize 400 300" >&3
+sleep 0.3
 echo "wm move 120 90" >&3
 sleep 0.5
 run "wm kill" "" "My Computer closed"
 sleep 0.5
-run "ls /apps/computer/layout" '"window":{"h":' "the window's place kept in the folder's layout"
 run "wm run computer" "" "My Computer again, at /home"
 sleep 1.5
 from=$(size "$out")
 echo "ls /dev/display/layers" >&3
 sleep 0.4
 cl=$(tail -c +"$((from + 1))" "$out" | perl -pe 's/\e\[[0-9;]*m//g' | perl -ne 'print "$1\n" if /^(computer-\S+)/' | tail -1)
-run "cat /dev/display/windows/$cl" '"x":120,"y":90,' "it opens where the folder's was closed"
+run "cat /dev/display/windows/$cl" '"h":300,"w":400,"x":120,"y":90,' "it opens where the folder's was closed"
 off
 
 boot "$tmp/sd"

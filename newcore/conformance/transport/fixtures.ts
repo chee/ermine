@@ -8,6 +8,8 @@
 // Not here: the refusal lock, which the lock unlocked never gives (its open gives back what it
 // is given).
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
+import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
+import { sha512 } from "npm:@noble/hashes@1.8.0/sha2"
 import { encode, name } from "../../encoding/ts/blop.ts"
 import * as cbor from "../../encoding/ts/cbor.ts"
 import { seal, stored } from "../../sync/ts/seal.ts"
@@ -29,6 +31,22 @@ const dev = (name: string, n: number): Dev => {
 	return { name, seed, secret: seed, key: ed25519.getPublicKey(seed) }
 }
 const A = dev("a", 1), B = dev("b", 2), C = dev("c", 3)
+
+// another valid signature of the same message: Ed25519 with a random r (seeded by tag) in place of
+// the deterministic one, so a different R and S, the same signer; SEAL.tex's strict rule takes it
+const little = (b: Uint8Array) => b.reduceRight((n, x) => (n << 8n) | BigInt(x), 0n)
+const L = ed25519.Point.Fn.ORDER
+const signAlt = (d: Dev, tag: number) => (m: Uint8Array) => {
+	const { scalar, pointBytes } = ed25519.utils.getExtendedPublicKey(d.secret)
+	const r = little(sha512(new Uint8Array([...d.secret, 0xaa, tag]))) % L
+	const R = ed25519.Point.BASE.multiply(r).toBytes()
+	const k = little(sha512(new Uint8Array([...R, ...pointBytes, ...m]))) % L
+	const S = (r + k * scalar) % L
+	const sig = new Uint8Array(64)
+	sig.set(R)
+	for (let i = 0, x = S; i < 32; i++, x >>= 8n) sig[32 + i] = Number(x & 0xffn)
+	return Promise.resolve(sig)
+}
 
 // a blop as COMMIT.tex makes it at version 0 (one parent at most): its bytes, name, seal, stored id
 type Blop = {
@@ -94,19 +112,28 @@ async function mk(
 	}
 }
 
+// the same blop sealed again, with another valid signature: its name the same, its stored id not
+async function resealed(b: Blop, tag: number): Promise<Blop> {
+	const sealed = await seal(b.bytes, { key: b.by.key, sign: signAlt(b.by, tag) })
+	return { ...b, sealed, stored: hex(stored(sealed)) }
+}
+
 // the agreed order: higher lamport first; equal, the greater name
 const agreed = (...bs: Blop[]) =>
-	[...bs].sort((x, y) => x.lamport !== y.lamport ? y.lamport - x.lamport : x.name < y.name ? 1 : -1)
+	[...bs].sort((x, y) =>
+		x.lamport !== y.lamport ? y.lamport - x.lamport : x.name < y.name ? 1 : -1
+	)
 
 // ---- steps
 type Step = { request: Record<string, unknown>; expect: unknown }
 const ok = (request: Record<string, unknown>): Step => ({ request, expect: {} })
 const reset = () => ok({ op: "reset" })
-const device = (d: Dev): Step => ({
-	request: { op: "device", name: d.name, seed: hex(d.seed) },
+const device = (d: Dev, store?: string): Step => ({
+	request: { op: "device", name: d.name, seed: hex(d.seed), ...(store ? { store } : {}) },
 	expect: { key: hex(d.key) },
 })
 const follow = (d: Dev, doc = DOC) => ok({ op: "follow", device: d.name, doc })
+const drop = (d: Dev) => ok({ op: "drop", device: d.name })
 const link = (a: Dev, b: Dev) => ok({ op: "link", a: a.name, b: b.name })
 const unlink = (a: Dev, b: Dev) => ok({ op: "unlink", a: a.name, b: b.name })
 const pump = () => ok({ op: "pump" })
@@ -121,7 +148,8 @@ const commit = (b: Blop, layer?: "ephemeral"): Step => ({
 		nonce: hex(b.nonce),
 		...(layer ? { layer } : {}),
 	},
-	expect: { name: b.name, stored: b.stored },
+	// an ephemeral blop is not sealed: no stored id
+	expect: layer ? { name: b.name } : { name: b.name, stored: b.stored },
 })
 const put = (d: Dev, head: string, parents: string[], blob: Uint8Array, doc = DOC) =>
 	ok({ op: "put", device: d.name, doc, head, parents, blob: hex(blob) })
@@ -134,16 +162,26 @@ type State = {
 	chainWaiting?: unknown[]
 	chainRefused?: unknown[]
 	waiting?: { commit: string; waiting: string[] }[]
-	refused?: ({ commit: string; refused: string } | { fragment: string; refused: string })[]
+	refused?: (
+		| { commit: string; refused: string }
+		| { commit: string; stuck: string[] }
+		| { fragment: string; refused: string }
+	)[]
 }
+const first = (r: Record<string, unknown>) => (r.commit ?? r.fragment) as string
 const state = (d: Dev, s: State, layer?: "ephemeral"): Step => ({
 	request: { op: "state", device: d.name, doc: DOC, ...(layer ? { layer } : {}) },
 	expect: {
 		heads: (s.heads ?? []).map((b) => b.name),
 		chain: { waiting: s.chainWaiting ?? [], refused: s.chainRefused ?? [] },
-		taking: { waiting: s.waiting ?? [], refused: s.refused ?? [] },
+		taking: {
+			waiting: s.waiting ?? [],
+			refused: [...s.refused ?? []].sort((x, y) => first(x) < first(y) ? -1 : 1),
+		},
 	},
 })
+const publish = (d: Dev, doc: string, payload: Uint8Array) =>
+	ok({ op: "publish", device: d.name, doc, payload: hex(payload) })
 const storedIds = (d: Dev, bs: Blop[]): Step => ({
 	request: { op: "stored", device: d.name, doc: DOC },
 	expect: bs.map((b) => b.stored).sort(),
@@ -156,6 +194,16 @@ const fragments = (d: Dev, fs: { head: Blop; members: Blop[]; boundary: Blop[] }
 		boundary: f.boundary.map((m) => m.stored).sort(),
 	})).sort((x, y) => x.head < y.head ? -1 : 1),
 })
+const putFragment = (d: Dev, h: Blop, boundary: Blop[], members: Blop[]): Step =>
+	ok({
+		op: "putfragment",
+		device: d.name,
+		doc: DOC,
+		head: h.stored,
+		boundary: boundary.map((b) => b.stored),
+		checkpoints: [],
+		blob: hex(cbor.encode(members.map((m) => m.sealed.slice().buffer))),
+	})
 // two devices, both following the document, linked
 const two = () => [reset(), device(A), device(B), follow(A), follow(B), link(A, B)]
 
@@ -403,6 +451,350 @@ const scenario = (name: string, title: string, steps: Step[]) => all.push({ name
 		storedIds(A, []),
 		storedIds(B, []),
 	])
+}
+
+// ---- taking in, after the papers' counterexamples (lean/transport)
+{
+	const x = await mk(A), q = await mk(A, [x])
+	scenario(
+		"waiting-synced",
+		"a child waits on both devices; its parent made on one crosses to the other: taken in on both",
+		[
+			reset(),
+			device(A),
+			device(B),
+			follow(A),
+			follow(B),
+			putBlop(A, q),
+			link(A, B),
+			pump(),
+			state(A, { waiting: [{ commit: q.stored, waiting: [x.name] }] }),
+			state(B, { waiting: [{ commit: q.stored, waiting: [x.name] }] }),
+			putBlop(B, x),
+			pump(),
+			state(A, { heads: [q] }),
+			state(B, { heads: [q] }),
+			storedIds(A, [x, q]),
+		],
+	)
+}
+for (const order of [[1, 2], [2, 1]]) {
+	const x1 = await mk(A), x2 = await resealed(x1, 1), q = await mk(A, [x1])
+	const seals = [x1, x2]
+	scenario(
+		`two-seals-${order[0] === 1 ? "first" : "second"}`,
+		`one blop sealed twice, a child over the second seal: taken in, the ${
+			order[0] === 1 ? "first" : "second"
+		} seal first`,
+		[
+			reset(),
+			device(A),
+			follow(A),
+			...order.map((i) => putBlop(A, seals[i - 1])),
+			put(A, q.stored, [x2.stored], q.sealed),
+			pump(),
+			state(A, { heads: [q] }),
+			storedIds(A, [x1, x2, q]),
+		],
+	)
+}
+for (const forgedFirst of [true, false]) {
+	const x = await mk(A)
+	const forged = put(A, x.stored, [hex(fill(0x77))], x.sealed)
+	scenario(
+		`forged-${forgedFirst ? "before" : "after"}-honest`,
+		`a commit under an honest head with made-up parents, ${
+			forgedFirst ? "before" : "after"
+		} the honest one: nothing refused once both have come`,
+		[
+			reset(),
+			device(A),
+			follow(A),
+			...(forgedFirst
+				? [forged, pump(), state(A, { refused: [{ commit: x.stored, refused: "parents" }] })]
+				: []),
+			putBlop(A, x),
+			...(forgedFirst ? [] : [forged]),
+			pump(),
+			state(A, { heads: [x] }),
+		],
+	)
+}
+{
+	const c1 = await mk(A), c2 = await mk(A, [c1])
+	const d3 = await mk(A, [c2], 3, { deep: true })
+	scenario(
+		"fake-fragment",
+		"a fragment holding only the head's seal, then the honest one: not passed over, every member taken in",
+		[
+			reset(),
+			device(A),
+			follow(A),
+			putFragment(A, d3, [], [d3]),
+			pump(),
+			state(A, { waiting: [{ commit: d3.stored, waiting: [c2.name] }] }),
+			putFragment(A, d3, [], [c1, c2, d3]),
+			pump(),
+			state(A, { heads: [d3] }),
+		],
+	)
+}
+{
+	const p = await mk(A), q = await mk(A, [p]), r = await mk(A, [q])
+	const wrong = hex(fill(0x55))
+	const stuck = [
+		{ commit: wrong, refused: "stored" },
+		{ commit: q.stored, stuck: [p.name] },
+		{ commit: r.stored, stuck: [q.name] },
+	]
+	scenario(
+		"stuck",
+		"a commit whose parent is refused is stuck, listed with that parent; its own child with it",
+		[
+			...two(),
+			put(A, wrong, [], p.sealed),
+			putBlop(A, q),
+			putBlop(A, r),
+			pump(),
+			state(A, { refused: stuck }),
+			state(B, { refused: stuck }),
+		],
+	)
+}
+{
+	const x = await mk(A), e = await mk(A, [x])
+	scenario(
+		"ephemeral-on-stored",
+		"an ephemeral blop building on a stored one is taken in to the ephemeral layer on both devices",
+		[
+			...two(),
+			commit(x),
+			pump(),
+			commit(e, "ephemeral"),
+			pump(),
+			state(A, { heads: [e] }, "ephemeral"),
+			state(B, { heads: [e] }, "ephemeral"),
+			state(B, { heads: [x] }),
+			storedIds(B, [x]),
+		],
+	)
+}
+
+// ---- ephemeral blops refused: never sealed, so the checks are on the blop itself. A refused one is
+// listed by its name, the BLAKE3 hash of its bytes; publish gives the bytes as they are, and the
+// sender refuses them too as a receiver would, then sends them
+{
+	const junk = Uint8Array.from([9, 9, 9])
+	const c = await mk(C)
+	scenario(
+		"ephemeral-signature",
+		"an ephemeral blop whose signer is not the device that sent it: refused signature, not taken in",
+		[
+			...two(),
+			publish(A, DOC, c.bytes),
+			pump(),
+			state(B, { refused: [{ commit: c.name, refused: "signature" }] }, "ephemeral"),
+			state(A, { refused: [{ commit: c.name, refused: "signature" }] }, "ephemeral"),
+			storedIds(B, []),
+		],
+	)
+	scenario(
+		"ephemeral-shape",
+		"an ephemeral payload that is not a blop: refused shape, not taken in",
+		[
+			...two(),
+			publish(A, DOC, junk),
+			pump(),
+			state(B, { refused: [{ commit: hex(blake3(junk)), refused: "shape" }] }, "ephemeral"),
+			storedIds(B, []),
+		],
+	)
+}
+
+// ---- ephemeral blops over Subduction's 65 536 bytes: split into parts, each at most 60 000 bytes of
+// the payload in the map {whole, part, parts, bytes}, and rejoined. A part is published by hand, as
+// the sender's own message; a blop of 2 500 bytes in three parts of 1 000 stands for a longer one
+const parts = (b: Uint8Array, size: number, whole = blake3(b)) => {
+	const n = Math.ceil(b.length / size)
+	return Array.from({ length: n }, (_, i) =>
+		cbor.encode({
+			whole: whole.slice().buffer,
+			part: i,
+			parts: n,
+			bytes: b.slice(i * size, (i + 1) * size).buffer,
+		}))
+}
+const expire = () => ok({ op: "expire" })
+{
+	const big = await mk(A, [], "x".repeat(200000))
+	scenario(
+		"ephemeral-parts",
+		"an ephemeral blop of about 200 KB is split into parts, crosses, is joined and taken in",
+		[
+			...two(),
+			commit(big, "ephemeral"),
+			pump(),
+			state(A, { heads: [big] }, "ephemeral"),
+			state(B, { heads: [big] }, "ephemeral"),
+			storedIds(B, []),
+		],
+	)
+}
+{
+	const e = await mk(A, [], "y".repeat(2500))
+	const [p0, p1, p2] = parts(e.bytes, 1000)
+	scenario(
+		"ephemeral-parts-out-of-order",
+		"parts arriving out of order, one twice, still join and are taken in",
+		[
+			...two(),
+			publish(A, DOC, p2),
+			publish(A, DOC, p0),
+			publish(A, DOC, p0),
+			pump(),
+			state(B, {}, "ephemeral"),
+			publish(A, DOC, p1),
+			pump(),
+			state(B, { heads: [e] }, "ephemeral"),
+			storedIds(B, []),
+		],
+	)
+	scenario(
+		"ephemeral-parts-missing",
+		"a part set with one part missing is dropped after the timeout: nothing is taken in, even when the part comes late",
+		[
+			...two(),
+			publish(A, DOC, p0),
+			publish(A, DOC, p1),
+			pump(),
+			expire(),
+			publish(A, DOC, p2),
+			pump(),
+			state(B, {}, "ephemeral"),
+		],
+	)
+	const other = await mk(A, [], "z".repeat(2500))
+	scenario(
+		"ephemeral-parts-hash",
+		"parts that join to a payload other than the whole they name are dropped; the honest set after is taken in",
+		[
+			...two(),
+			...parts(e.bytes, 1000, blake3(other.bytes)).map((p) => publish(A, DOC, p)),
+			pump(),
+			state(B, {}, "ephemeral"),
+			...parts(e.bytes, 1000).map((p) => publish(A, DOC, p)),
+			pump(),
+			state(B, { heads: [e] }, "ephemeral"),
+		],
+	)
+}
+
+// ---- a device starting takes in what its storage holds (TRANSPORT.tex, A device)
+{
+	const c1 = await mk(A), c2 = await mk(A, [c1]), d3 = await mk(A, [c2], undefined, { deep: true })
+	const c4 = await mk(A, [d3])
+	const f = { head: d3, members: [c1, c2, d3], boundary: [] }
+	const A2 = { ...A, name: "a2" }
+	scenario(
+		"restart",
+		"a device dropped and made again on its storage, linked to none: its chains hold every commit and its fragment",
+		[
+			reset(),
+			device(A, "s"),
+			follow(A),
+			commit(c1),
+			commit(c2),
+			commit(d3),
+			commit(c4),
+			pump(),
+			fragments(A, [f]),
+			drop(A),
+			device(A2, "s"),
+			state(A2, { heads: [c4] }),
+			fragments(A2, [f]),
+			storedIds(A2, [c4]),
+		],
+	)
+	const head = hex(fill(0x33))
+	scenario(
+		"restart-refused",
+		"the same with one stored commit whose blob is no seal: refused shape, as when it arrived; the rest taken in",
+		[
+			reset(),
+			device(A, "s"),
+			follow(A),
+			commit(c1),
+			commit(c2),
+			put(A, head, [], new TextEncoder().encode("not a seal")),
+			pump(),
+			drop(A),
+			device(A2, "s"),
+			state(A2, { heads: [c2], refused: [{ commit: head, refused: "shape" }] }),
+		],
+	)
+}
+
+// ---- the order of follow and commit does not matter
+{
+	const c1 = await mk(A), c2 = await mk(A, [c1])
+	scenario(
+		"commit-then-follow",
+		"commits added before the document is followed cross when it is followed",
+		[
+			reset(),
+			device(A),
+			device(B),
+			follow(B),
+			link(A, B),
+			commit(c1),
+			commit(c2),
+			follow(A),
+			pump(),
+			state(B, { heads: [c2] }),
+			storedIds(B, [c1, c2]),
+		],
+	)
+}
+{
+	const c1 = await mk(A), c2 = await mk(A, [c1])
+	scenario(
+		"follow-then-commit",
+		"commits added after the document is followed, on a link made after, cross",
+		[
+			reset(),
+			device(A),
+			device(B),
+			follow(A),
+			follow(B),
+			link(A, B),
+			commit(c1),
+			commit(c2),
+			pump(),
+			state(B, { heads: [c2] }),
+			storedIds(B, [c1, c2]),
+		],
+	)
+}
+{
+	const cs = [await mk(A)]
+	for (let i = 1; i < 8; i++) cs.push(await mk(A, [cs[i - 1]]))
+	scenario(
+		"burst-on-new",
+		"a burst of writes to a freshly made document, followed in the middle of it, all cross",
+		[
+			reset(),
+			device(A),
+			device(B),
+			follow(B),
+			link(A, B),
+			...cs.slice(0, 4).map((c) => commit(c)),
+			follow(A),
+			...cs.slice(4).map((c) => commit(c)),
+			pump(),
+			state(B, { heads: [cs[7]] }),
+			storedIds(B, cs),
+		],
+	)
 }
 
 // ---- write

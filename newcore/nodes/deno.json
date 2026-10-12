@@ -1,0 +1,10 @@
+{
+	"name": "@ermine/nodes",
+	"version": "0.0.0",
+	"exports": {
+		"./because": "./ts/because.ts",
+		"./change": "./ts/change.ts",
+		"./node": "./ts/node.ts",
+		"./stacktrace": "./ts/stacktrace.ts"
+	}
+}

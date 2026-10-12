@@ -2371,6 +2371,17 @@
       "run": "takeover"
      },
      {
+      "label": "The Mac's keys",
+      "at": [
+       "/",
+       "dev",
+       "display",
+       "mode"
+      ],
+      "key": "keys",
+      "control": "show"
+     },
+     {
       "label": "Mac Windows",
       "at": [
        "/",

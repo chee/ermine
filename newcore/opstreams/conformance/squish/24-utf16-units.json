@@ -1,0 +1,406 @@
+{
+	"title": "utf16: positions count UTF-16 units, so an emoji is two",
+	"steps": [
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "😀bc"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "😀"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": "b"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a😀b"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "a\ud83db"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀x😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						4
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "😀"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀x😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83dyz\ude00x😀"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						3
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "😀"
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						3
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"utf16": true,
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "é中"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "é中😀!"
+					}
+				]
+			}
+		}
+	]
+}

@@ -2,13 +2,12 @@
 // request per line in, one answer per line out. Several devices in one process, linked by in-memory
 // pipes: what one device is asked to send (transport_next) the other is handed (transport_received).
 // Values in their JSON form; names, stored ids, keys, seeds, nonces and blobs as lowercase hex.
-//   {op: "reset"}, {op: "device", name, seed}, {op: "follow", device, doc}, {op: "link", a, b},
+//   {op: "reset"}, {op: "device", name, seed, store?}, {op: "drop", device}, {op: "follow", device, doc}, {op: "link", a, b},
 //   {op: "unlink", a, b}, {op: "commit", device, doc, object, patches, actor, nonce, at?, layer?},
 //   {op: "put", device, doc, head, parents, blob},
 //   {op: "putfragment", device, doc, head, boundary, checkpoints, blob}, {op: "pump"},
 //   {op: "state", device, doc, object?, layer?}, {op: "fragments", device, doc},
-//   {op: "stored", device, doc}, {op: "topic", device, topic}, {op: "chirp", device, topic, payload},
-//   {op: "heard", device, topic}, {op: "untopic", device, topic}
+//   {op: "stored", device, doc}, {op: "publish", device, doc, payload}, {op: "expire"}
 // A request holding values the chains keep is not freed.
 #include "transport.h"
 
@@ -63,45 +62,25 @@ static void row(const chain_row *r) {
 	putchar('}');
 }
 
-// what an open topic was handed, as the JSON of "heard"'s answer's items, in order
-typedef struct opened {
-	uint8_t id[32];
-	char *text;
-	size_t length, count;
-	struct opened *next;
-} opened;
-
 typedef struct {
 	char *name;
 	uint8_t seed[32], key[32];
 	transport *t;
-	opened *topics;
 } device;
-
-static bool topic_op(const char *op) {
-	return strcmp(op, "topic") == 0 || strcmp(op, "chirp") == 0 || strcmp(op, "heard") == 0 || strcmp(op, "untopic") == 0;
-}
-
-static void heard(void *context, const uint8_t from[32], const uint8_t *payload, size_t length) {
-	opened *l = context;
-	size_t room = 2 * (32 + 32 + length) * 2 + 64;
-	l->text = realloc(l->text, l->length + room);
-	if (l->text == NULL) abort();
-	char *at = l->text + l->length, *end = at + room;
-	at += snprintf(at, (size_t)(end - at), "%s{\"from\":\"", l->count ? "," : "");
-	for (size_t i = 0; i < 32; i++) at += snprintf(at, (size_t)(end - at), "%02x", from[i]);
-	at += snprintf(at, (size_t)(end - at), "\",\"payload\":\"");
-	for (size_t i = 0; i < length; i++) at += snprintf(at, (size_t)(end - at), "%02x", payload[i]);
-	at += snprintf(at, (size_t)(end - at), "\"}");
-	l->length = (size_t)(at - l->text);
-	l->count++;
-}
 
 typedef struct {
 	device *a, *b;
 	uint64_t ca, cb;
 	bool live;
 } wire;
+
+// stores by name, kept after a device is dropped: a device made with the name takes in what one holds
+typedef struct {
+	char *name;
+	ErmStore *store;
+} kept;
+static kept *stores;
+static size_t store_count;
 
 static device *devices;
 static size_t device_count;
@@ -111,7 +90,7 @@ static size_t moved;
 
 static device *named(const char *name) {
 	for (size_t i = 0; name && i < device_count; i++)
-		if (strcmp(devices[i].name, name) == 0) return &devices[i];
+		if (devices[i].name && strcmp(devices[i].name, name) == 0) return &devices[i];
 	return NULL;
 }
 
@@ -119,15 +98,12 @@ static void reset(void) {
 	for (size_t i = 0; i < device_count; i++) {
 		transport_free(devices[i].t);
 		free(devices[i].name);
-		while (devices[i].topics) {
-			opened *o = devices[i].topics;
-			devices[i].topics = o->next;
-			free(o->text);
-			free(o);
-		}
 	}
 	free(devices);
 	free(links);
+	for (size_t i = 0; i < store_count; i++) free(stores[i].name);
+	free(stores);
+	stores = NULL, store_count = 0;
 	devices = NULL, links = NULL, device_count = link_count = 0;
 }
 
@@ -162,7 +138,7 @@ static bool pump(void) {
 	for (int round = 0; round < 2000; round++) {
 		bool waiting = true;
 		for (size_t i = 0; i < device_count; i++)
-			if (run(&devices[i]) == 0) waiting = false;
+			if (devices[i].t && run(&devices[i]) == 0) waiting = false;
 		if (moved == last && waiting) {
 			if (++quiet >= 5) return true;
 		} else quiet = 0, last = moved;
@@ -228,6 +204,18 @@ static void commit_op(Json *request, device *d, const char *doc, transport_layer
 		return;
 	}
 	blop_name(bytes, length, name);
+	if (layer == TRANSPORT_EPHEMERAL) {
+		// not sealed, and it has no stored id
+		if (transport_publish(d->t, doc, bytes, length) != TRANSPORT_OK) {
+			error("not taken");
+			return;
+		}
+		fputs("{\"name\":\"", stdout);
+		hex(name, 32);
+		puts("\"}");
+		free(bytes);
+		return;
+	}
 	seal_signer signer = {{0}, sign, d->seed};
 	memcpy(signer.key, d->key, 32);
 	if (seal_seal(bytes, length, &signer, &sealed, &sealed_length) != SEAL_OK) {
@@ -235,9 +223,7 @@ static void commit_op(Json *request, device *d, const char *doc, transport_layer
 		return;
 	}
 	seal_stored(sealed, sealed_length, stored);
-	transport_code result = layer == TRANSPORT_EPHEMERAL ? transport_publish(d->t, doc, sealed, sealed_length)
-	                                                     : transport_add(d->t, doc, sealed, sealed_length);
-	if (result != TRANSPORT_OK) {
+	if (transport_add(d->t, doc, sealed, sealed_length) != TRANSPORT_OK) {
 		error("not taken");
 		return;
 	}
@@ -343,14 +329,35 @@ int main(void) {
 			memcpy(x->seed, seed, 32);
 			free(seed);
 			ermEd25519Public(x->seed, x->key);
-			ErmStore *store = malloc(sizeof *store);
-			if (store == NULL) abort();
-			*store = ermStoreMemory();
+			ErmStore *store = NULL;
+			const char *label = jsonText(jsonGet(request, "store"));
+			for (size_t i = 0; label && i < store_count; i++)
+				if (strcmp(stores[i].name, label) == 0) store = stores[i].store;
+			if (store == NULL) {
+				store = malloc(sizeof *store);
+				if (store == NULL) abort();
+				*store = ermStoreMemory();
+				if (label) {
+					stores = realloc(stores, (store_count + 1) * sizeof *stores);
+					if (stores == NULL) abort();
+					stores[store_count++] = (kept){copyString(label), store};
+				}
+			}
 			x->t = transport_create(x->seed, store);
-			x->topics = NULL;
 			fputs("{\"key\":\"", stdout);
 			hex(x->key, 32);
 			puts("\"}");
+		} else if (strcmp(op, "drop") == 0) {
+			// the device gone, with its links; what its store holds stays
+			if (d == NULL) error("no device");
+			else {
+				for (size_t i = 0; i < link_count; i++)
+					if (links[i].a == d || links[i].b == d) links[i].live = false;
+				transport_free(d->t);
+				free(d->name);
+				d->t = NULL, d->name = NULL;
+				puts("{}");
+			}
 		} else if (strcmp(op, "link") == 0) {
 			device *a = named(jsonText(jsonGet(request, "a"))), *b = named(jsonText(jsonGet(request, "b")));
 			if (a == NULL || b == NULL) error("no device");
@@ -358,7 +365,7 @@ int main(void) {
 				links = realloc(links, (link_count + 1) * sizeof *links);
 				if (links == NULL) abort();
 				size_t before_a = transport_connected(a->t), before_b = transport_connected(b->t);
-				links[link_count++] = (wire){a, b, transport_connect(a->t), transport_connect(b->t), true};
+				links[link_count++] = (wire){a, b, transport_connect(a->t, "ermine"), transport_connect(b->t, "ermine"), true};
 				// the handshake done
 				for (int round = 0; round < 2000 && (transport_connected(a->t) == before_a || transport_connected(b->t) == before_b); round++) {
 					run(a);
@@ -380,39 +387,18 @@ int main(void) {
 		} else if (strcmp(op, "pump") == 0) {
 			if (pump()) puts("{}");
 			else error("never quiet");
-		} else if (d == NULL && topic_op(op)) error("no device");
-		else if (topic_op(op)) {
-			size_t topic_length, payload_length = 0;
-			uint8_t *id = unhex(jsonText(jsonGet(request, "topic")), &topic_length);
-			opened **at = &d->topics;
-			while (topic_length == 32 && *at && memcmp((*at)->id, id, 32) != 0) at = &(*at)->next;
-			if (topic_length != 32) error("not a topic");
-			else if (strcmp(op, "topic") == 0) {
-				if (*at == NULL) {
-					*at = calloc(1, sizeof **at);
-					if (*at == NULL) abort();
-					memcpy((*at)->id, id, 32);
-				}
-				transport_topic(d->t, id, heard, *at);
-				puts("{}");
-			} else if (*at == NULL) error("no topic");
-			else if (strcmp(op, "chirp") == 0) {
-				uint8_t *payload = unhex(jsonText(jsonGet(request, "payload")), &payload_length);
-				transport_chirp(d->t, id, payload, payload_length);
-				free(payload);
-				puts("{}");
-			} else if (strcmp(op, "heard") == 0) printf("[%.*s]\n", (int)(*at)->length, (*at)->text ? (*at)->text : "");
-			else {
-				opened *o = *at;
-				transport_untopic(d->t, id);
-				*at = o->next;
-				free(o->text);
-				free(o);
-				puts("{}");
-			}
-			free(id);
+		} else if (strcmp(op, "expire") == 0) {
+			for (size_t i = 0; i < device_count; i++)
+				if (devices[i].t) transport_expire(devices[i].t);
+			puts("{}");
 		} else if (d == NULL || doc == NULL) error("no device");
-		else if (strcmp(op, "follow") == 0) {
+		else if (strcmp(op, "publish") == 0) {
+			size_t payload_length;
+			uint8_t *payload = unhex(jsonText(jsonGet(request, "payload")), &payload_length);
+			transport_publish(d->t, doc, payload, payload_length);
+			free(payload);
+			puts("{}");
+		} else if (strcmp(op, "follow") == 0) {
 			if (transport_follow(d->t, doc) == TRANSPORT_OK) puts("{}");
 			else error("not a document");
 		} else if (strcmp(op, "commit") == 0) {

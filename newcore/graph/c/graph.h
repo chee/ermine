@@ -43,6 +43,49 @@ typedef struct gr_change {
 	const char *name;
 } gr_change;
 
+// one object a change changed (WIRING.tex, Out), as `changed` is told it: the patches mutate applied,
+// in order (none where the operation patched nothing: pop); at: a version (from), a span of
+// versions [from, to) replaced by the one made, or versions popped (from, to; a number, or a
+// span). Valid for the call only
+typedef enum { GR_AT_VERSION, GR_AT_SPAN, GR_AT_POP } gr_at;
+typedef struct {
+	const char *node;
+	gr_where where; // GR_VALUE, GR_INFO or GR_CHILDREN
+	const char *name; // info, children
+	const nt_patch *patches;
+	size_t npatches;
+	const gr_change *header;
+	gr_at at;
+	long from, to;
+	int ephemeral;
+} gr_record;
+
+// a version sync gives gr_versions (WIRING.tex, In). content: an nt_value (under children a list of
+// ids, a null for a symbol); change: its fields, the graph copies it and sets its time; because:
+// where it is in the chains, NULL: none. Strings are copied; contents, actors, causes and sites
+// are the caller's, kept alive as long as the graph is (in gr_pr_arena's, say)
+typedef struct {
+	const char *layer;
+	int64_t lamport;
+	const char *name;
+	const char *signer; // NULL: none
+} gr_synced;
+typedef struct {
+	const nt_value *content;
+	const gr_change *change;
+	const gr_synced *because;
+} gr_incoming;
+// the blop just taken in: its header, signer and name. Its cause comes wrapped as {sync: {signer,
+// name}, cause}
+typedef struct {
+	const pr_value *actor;
+	const char *reader;
+	const pr_value *site;
+	const pr_value *cause;
+	const char *signer;
+	const char *name;
+} gr_from;
+
 // who a change is by, as places asks for it
 typedef struct {
 	const pr_value *actor;
@@ -80,6 +123,9 @@ typedef struct {
 	void (*released)(void *ctx, const char *id, void *owner);
 	// the host's site for its changes; NULL, or returns NULL: none
 	const pr_value *(*site)(void *ctx);
+	// told, after an operation lands, each object it changed; not by gr_versions, and not for an
+	// operation refused or that fails. NULL: none
+	void (*changed)(void *ctx, const gr_record *r);
 	void *ctx; // given to all of the above
 } gr_options;
 
@@ -109,6 +155,20 @@ const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int 
 	const gr_acting *who, const char **out);
 // an ephemeral node, owned by owner if given
 void gr_own(gr_graph *g, const char *id, void *owner);
+
+// INTERNAL AND DANGEROUS (WIRING.tex, In): not in the interface a host or a program gets. Only sync
+// calls it, and only with APPLY.tex's versions of that object, from the chains. It throws away the
+// object's versions and puts list in their place, local ones included: anything not in list is
+// gone. It is not a patch: no mutate, so nothing checks that list follows from what was there.
+// protect is not asked: sync is a privileged runner. It makes no record, so what it writes is never
+// sent: called with anything but what the chains say, the device silently differs from every other
+// until a blop for that object is taken in, and a change made in between is committed against the
+// wrong version.
+// from: the blop just taken in; its header marks the readers. NULL: the header of the first version
+// that has a because. Versions already there (the same place, a because's name) are kept as they
+// are; the others get the time of this one change from elsewhere. An id not in memory: nothing
+void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
+	const gr_incoming *list, size_t count, const gr_from *from);
 
 // what owner reads tracked through
 gr_reader *gr_reader_new(gr_graph *g, void *owner);
@@ -141,6 +201,11 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 	const gr_error *(*fn)(void *ctx), void *ctx);
 // a change header for a node, in a changing (ticks the clock); NULL outside one
 const gr_change *gr_by(gr_graph *g, const char *node);
+// the same, told as what touched that object of the node: a changing that tells it whole (snap)
+// tells it by this change (name NULL for the value)
+const gr_change *gr_by_at(gr_graph *g, const char *node, gr_where where, const char *name);
+// the places the graph reads and places by: its table, its root, gr_by
+const pl_places *gr_places(gr_graph *g);
 
 // places' writes, in a changing, at place [], asked nothing. times: the changes'
 const gr_error *gr_do_write(gr_graph *g, const char *const *address, size_t n,
@@ -160,6 +225,9 @@ const gr_error *gr_do_rename(gr_graph *g, const char *id, const char *name, cons
 const gr_error *gr_do_move(gr_graph *g, const char *id, const char *name, long index,
 	const char *toid, const char *toname, const long *toindex, int64_t times[2], size_t *ntimes);
 
+typedef struct gr_items gr_items;
+typedef struct gr_read gr_read;
+
 // an interface: at a place, as an actor; it stops when *alive is 0 (NULL: never)
 typedef struct {
 	const char *const *place;
@@ -174,6 +242,11 @@ typedef struct {
 	void *owner;             // may make, place and move ephemeral nodes, owning those it makes
 	const void *tag;         // what changes are made with: given to marked
 	gr_times *wrote;
+	// around each read (NULL: made, tracked by depend): it makes it with gr_read_make
+	const gr_error *(*reading)(void *ctx, gr_read *r);
+	// around each change (NULL: fn run): runs fn(arg) and answers its error
+	const gr_error *(*around)(void *ctx, const gr_error *(*fn)(void *arg), void *arg);
+	void *ctx; // given to reading and around
 } gr_bind;
 gr_api *gr_bound(gr_graph *g, const gr_bind *b);
 
@@ -182,10 +255,27 @@ typedef struct {
 	pl_item it;
 	const pr_value *refused;
 } gr_item;
-typedef struct {
+struct gr_items {
 	gr_item *items;
 	size_t n;
-} gr_items;
+};
+
+// a read an interface makes, as reading is handed it: its op (look lookup lookups children
+// content info), address and name (children's, info's; NULL: none); once made, what it gave:
+// items, or for children with no name the names
+struct gr_read {
+	const char *op;
+	const char *const *address;
+	size_t n;
+	const char *name;
+	int is_names;
+	gr_items items;
+	pl_namelist names;
+	gr_api *api;
+	int kind;
+};
+// the read made as its interface makes it, tracked by depend (NULL: untracked)
+const gr_error *gr_read_make(gr_read *r, const pl_depend *depend);
 
 const gr_error *gr_look(gr_api *a, const char *const *address, size_t n, gr_items *out);
 const gr_error *gr_lookup(gr_api *a, const char *const *path, size_t n, gr_items *out);

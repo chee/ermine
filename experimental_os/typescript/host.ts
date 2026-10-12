@@ -4,12 +4,12 @@
 // drain the ring into handler calls, settle, keep, wait. With --bare it
 // builds no stack and runs the bare monitor instead.
 
-import { graph, type Graph } from "../../core/graph/typescript/graph.ts";
-import { library } from "../../core/graph/typescript/library.ts";
-import { type Args, matches, type May, protect, type Rule } from "../../core/protect/typescript/protect.ts";
-import type { Answer, Id, Item, Json, Site, SlotItem } from "../../core/graph/typescript/types.ts";
-import { keep, type Kept, type Keeper, load } from "../../experimental_layers/keep/typescript/keeper.ts";
-import { files } from "../../experimental_layers/keep/typescript/deno/files.ts";
+import { graph, type Graph } from "../core/graph/typescript/graph.ts";
+import { library } from "../core/graph/typescript/library.ts";
+import { type Args, matches, type May, protect, type Rule } from "../core/protect/typescript/protect.ts";
+import type { Answer, Id, Item, Json, Site, SlotItem } from "../core/graph/typescript/types.ts";
+import { keep, type Kept, type Keeper, load } from "../layers/keep/typescript/keeper.ts";
+import { files } from "../layers/keep/typescript/deno/files.ts";
 import type { Metal, Rec } from "./metal.ts";
 import { Display, Fonts, Line, Pasteboard, Power, Sound, Timer, Web } from "./ports.ts";
 import { Link } from "./link.ts";

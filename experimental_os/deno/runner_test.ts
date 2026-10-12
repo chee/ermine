@@ -6,7 +6,7 @@
 //   deno test -A experimental_os/deno/runner_test.ts
 
 import { assertEquals } from "@std/assert";
-import { decode, encode, type Value } from "../../core/graph/typescript/cbor.ts";
+import { decode, encode, type Value } from "../core/graph/typescript/cbor.ts";
 
 type Map_ = { [k: string]: Value };
 

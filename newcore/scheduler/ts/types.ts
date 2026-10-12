@@ -1,7 +1,7 @@
 // the scheduler's types, shared by the scheduler (scheduler.ts) and the programs side
 // (../programs/): a process, a run, what a part runs as. one definition each.
 import type { Api, By, Reader } from "../../graph/ts/graph.ts"
-import type { Address, Place } from "../../graph/ts/places.ts"
+import type { Address, Place, Where } from "../../graph/ts/places.ts"
 import type { Agent, Status } from "../../programs/ts/records.ts"
 import type { Cause } from "./causes.ts"
 export type { Cause } from "./causes.ts"
@@ -52,7 +52,7 @@ export type Child = { proc: Proc; name: string; part: string; replaced: number }
 export type Cleanup = (given: { killed: boolean; api: Api }) => unknown
 export type ReadEntry = {
 	op: string
-	address?: Address
+	address?: Where
 	name?: string
 	tracked: boolean
 	times: number[]

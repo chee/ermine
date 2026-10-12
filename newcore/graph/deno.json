@@ -1,0 +1,9 @@
+{
+	"name": "@ermine/graph",
+	"version": "0.0.0",
+	"exports": {
+		".": "./ts/graph.ts",
+		"./places": "./ts/places.ts",
+		"./table": "./ts/table.ts"
+	}
+}

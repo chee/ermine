@@ -21,7 +21,7 @@ import {
 	type Tracker,
 } from "../../graph/ts/graph.ts"
 import type { Node } from "../../nodes/ts/node.ts"
-import type { Address, Depend, Item, Place, Step } from "../../graph/ts/places.ts"
+import type { Address, Depend, Item, Place, Step, Where } from "../../graph/ts/places.ts"
 import { type Ask, edit, pass as passing } from "../../protect/ts/protect.ts"
 import { createCode } from "../../programs/ts/code.ts"
 import { createHandlers } from "../../programs/ts/handlers.ts"
@@ -240,7 +240,7 @@ export function createScheduler(options: Options) {
 		f: Read,
 		depend: Depend | undefined,
 		ctx?: Ctx,
-		args: { address?: Address; name?: string } = {},
+		args: { address?: Where; name?: string } = {},
 	): unknown {
 		let out = f(depend)
 		const items = (Array.isArray(out) ? out : []).filter((x) => typeof x === "object") as Item<
@@ -538,12 +538,12 @@ export function createScheduler(options: Options) {
 			if (ended === "pending") status.pending = run.mark
 			if (ended === "failed") status.error = json
 			if (run.shown) status.new = run.shown.value
-			if (!sameStatus(status, p.status)) records.status(p, status, run.n)
+			const changed = sameStatus(status, p.status) ? undefined : status
 			const after = [...p.values].filter((id) =>
 				id !== p.id && procs.get(id)?.state === "running"
 			)
 				.sort(byCodePoint)
-			const made = records.run(p, run, ended, json, after)
+			const made = records.run(p, run, ended, json, after, changed)
 			if (made !== undefined) runs.set(made, p)
 		}
 		const ends: Moment = { ends: p.id, run: run.n, ended }

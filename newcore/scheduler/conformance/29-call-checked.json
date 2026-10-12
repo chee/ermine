@@ -1,0 +1,268 @@
+{
+	"title": "a call made in a part is checked when made, run after: what is wrong fails the part; moved later, it still runs",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "h",
+			"program": {
+				"setup": [
+					{
+						"do": "create",
+						"ephemeral": true,
+						"value": {
+							"$steps": [
+								{
+									"do": "log",
+									"value": {
+										"$given": "args"
+									}
+								},
+								{
+									"do": "return",
+									"value": 1
+								}
+							]
+						},
+						"var": "f"
+					},
+					{
+						"do": "insert",
+						"id": {
+							"$given": "self"
+						},
+						"name": "f",
+						"child": {
+							"$var": "f"
+						}
+					},
+					{
+						"do": "return",
+						"value": 0
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "c",
+			"program": {
+				"setup": [
+					{
+						"do": "call",
+						"address": [
+							"nothing"
+						]
+					},
+					{
+						"do": "log",
+						"value": "not here"
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@8"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"c"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@8",
+						"versions": [
+							{
+								"content": {
+									"error": "nothing-there"
+								},
+								"time": 10,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 8
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "d",
+			"program": {
+				"setup": [
+					{
+						"do": "call",
+						"address": [
+							"h"
+						]
+					},
+					{
+						"do": "log",
+						"value": "not here"
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@13"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "k",
+			"program": {
+				"setup": [
+					{
+						"do": "call",
+						"address": [
+							"h",
+							"f"
+						],
+						"args": "late",
+						"var": "x"
+					},
+					{
+						"do": "log",
+						"value": {
+							"$var": "x"
+						}
+					},
+					{
+						"do": "remove",
+						"id": "root",
+						"name": "h",
+						"index": 0
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@18"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"ok": [
+					null,
+					"late"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": [
+					{
+						"due": "@1",
+						"by": 2
+					},
+					{
+						"starts": "@1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "@8",
+						"by": 9
+					},
+					{
+						"starts": "@8",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@8",
+						"run": 1,
+						"ended": "failed",
+						"error": "nothing-there"
+					},
+					{
+						"due": "@13",
+						"by": 14
+					},
+					{
+						"starts": "@13",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@13",
+						"run": 1,
+						"ended": "failed",
+						"error": "not-a-handler"
+					},
+					{
+						"due": "@18",
+						"by": 19
+					},
+					{
+						"starts": "@18",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "@18",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "@1",
+						"handler": "f"
+					},
+					{
+						"ends": "@1",
+						"handler": "f",
+						"ended": "done"
+					}
+				]
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 23
+			}
+		}
+	]
+}

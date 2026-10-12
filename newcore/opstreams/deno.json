@@ -1,0 +1,9 @@
+{
+	"name": "@ermine/opstreams",
+	"version": "0.0.0",
+	"exports": {
+		"./mutate": "./ts/mutate.ts",
+		"./squish": "./ts/squish.ts",
+		"./walk": "./ts/walk.ts"
+	}
+}

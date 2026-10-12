@@ -1,12 +1,19 @@
 // Feasibility: two Subduction devices in one process over an in-memory pipe (TRANSPORT.tex).
 //   deno run --allow-read --allow-env conformance/transport/probe.ts
-// A commit added on a crosses to b, seen by b's storage's saveCommit; b unlinked, a commit on a
-// does not cross; relinked, it does; an ephemeral message published on a is heard on b.
+// a initiates (connectTransport), b accepts (acceptTransport), one service name. A commit added
+// on a crosses to b, seen by b's storage's saveCommit (pushed); unlinked (disconnectFromPeer), a
+// commit on a does not cross; relinked and synced, it does, but through saveBatchAll, not
+// saveCommit; an ephemeral message published on a is heard on b, topics subscribed before the
+// link. Found 2026-10-11: all of this works.
 import * as sd from "npm:@automerge/subduction@0.23.0"
 
 // a pipe end: what one side sends, the other receives, in order
 function pipe() {
-	type End = sd.Transport & { peer?: End; queue: Uint8Array[]; waiting: ((b: Uint8Array) => void)[] }
+	type End = sd.Transport & {
+		peer?: End
+		queue: Uint8Array[]
+		waiting: ((b: Uint8Array) => void)[]
+	}
 	const make = (): End => {
 		const end: End = {
 			queue: [],
@@ -40,14 +47,31 @@ function device(name: string, seed: number) {
 			const f = (t as unknown as Record<string | symbol, unknown>)[k]
 			if (typeof f !== "function") return f
 			if (k === "saveCommit") {
-				return (tree: sd.SedimentreeId, id: sd.CommitId, s: sd.SignedLooseCommit, blob: Uint8Array) => {
-					saved.push(`${name} ${id.toHexString().slice(0, 8)} ${new TextDecoder().decode(blob)}`)
+				return (
+					tree: sd.SedimentreeId,
+					id: sd.CommitId,
+					s: sd.SignedLooseCommit,
+					blob: Uint8Array,
+				) => {
+					saved.push(
+						`${name} ${id.toHexString().slice(0, 8)} ${new TextDecoder().decode(blob)}`,
+					)
 					return memory.saveCommit(tree, id, s, blob)
 				}
 			}
 			if (k === "saveBatchAll") {
-				return (tree: sd.SedimentreeId, cs: { commitId: sd.CommitId; blob: Uint8Array }[], fs: unknown[]) => {
-					for (const c of cs) saved.push(`${name} ${c.commitId.toHexString().slice(0, 8)} ${new TextDecoder().decode(c.blob)} (batch)`)
+				return (
+					tree: sd.SedimentreeId,
+					cs: { commitId: sd.CommitId; blob: Uint8Array }[],
+					fs: unknown[],
+				) => {
+					for (const c of cs) {
+						saved.push(
+							`${name} ${c.commitId.toHexString().slice(0, 8)} ${
+								new TextDecoder().decode(c.blob)
+							} (batch)`,
+						)
+					}
 					if (fs.length) saved.push(`${name} ${fs.length} fragments (batch)`)
 					return memory.saveBatchAll(tree, cs, fs)
 				}
@@ -92,15 +116,30 @@ await new Promise((r) => setTimeout(r, 50))
 console.log("after one:", saved)
 
 console.log("disc", await a.s.disconnectFromPeer(pa), await b.s.disconnectFromPeer(pb))
-console.log("peers", (await a.s.getConnectedPeerIds()).length, (await b.s.getConnectedPeerIds()).length)
+console.log(
+	"peers",
+	(await a.s.getConnectedPeerIds()).length,
+	(await b.s.getConnectedPeerIds()).length,
+)
 await a.s.addCommit(tree, id(2), [id(1)], new TextEncoder().encode("two"))
 await new Promise((r) => setTimeout(r, 50))
 console.log("offline:", saved)
-
 ;({ pa, pb } = await link())
-console.log("peers", (await a.s.getConnectedPeerIds()).length, (await b.s.getConnectedPeerIds()).length)
+console.log(
+	"peers",
+	(await a.s.getConnectedPeerIds()).length,
+	(await b.s.getConnectedPeerIds()).length,
+)
 const r = await b.s.syncWithAllPeers(tree, true, 2000)
-for (const e of r.entries()) console.log(e.success, e.stats.commitsReceived, e.stats.commitsSent, e.stats.remoteHeads.map((h) => h.toHexString().slice(0, 8)), e.transportErrors.map(String))
+for (const e of r.entries()) {
+	console.log(
+		e.success,
+		e.stats.commitsReceived,
+		e.stats.commitsSent,
+		e.stats.remoteHeads.map((h) => h.toHexString().slice(0, 8)),
+		e.transportErrors.map(String),
+	)
+}
 await new Promise((r) => setTimeout(r, 50))
 console.log("relinked:", saved)
 

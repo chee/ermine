@@ -62,6 +62,8 @@ static Json *share(const Json *site, const char *const *roots, size_t count) {
 	const char *file = jsonText(jsonGet(site, "file"));
 	parts path;
 	if (file == NULL || !local(file, &path)) return (Json *)site;
+	// no parts at all ("/", "file://"): kept as it is
+	if (path.count == 0) return free(path.items), (Json *)site;
 	size_t best = 0;
 	bool found = false;
 	for (size_t i = 0; i < count; i++) {
@@ -136,9 +138,14 @@ Json *commit_make(chains *c, const Json *change, commit_at at, const char *const
 		if (to - from > 1) base = &all[from], combine = true;
 	}
 	qsort(parents, np, 32, by_name);
+	// one more than the parents' highest: the first kept of a pop is a parent too
 	int64_t lamport = 0;
 	for (size_t i = from; i < to; i++) {
 		int64_t l = (int64_t)jsonGet(all[i].blop, "lamport")->number;
+		if (l > lamport) lamport = l;
+	}
+	if (empty) {
+		int64_t l = (int64_t)jsonGet(base->blop, "lamport")->number;
 		if (l > lamport) lamport = l;
 	}
 

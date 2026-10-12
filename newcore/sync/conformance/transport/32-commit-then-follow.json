@@ -1,0 +1,132 @@
+{
+	"title": "commits added before the document is followed cross when it is followed",
+	"steps": [
+		{
+			"request": {
+				"op": "reset"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "a",
+				"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+			},
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"request": {
+				"op": "device",
+				"name": "b",
+				"seed": "0202020202020202020202020202020202020202020202020202020202020202"
+			},
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "link",
+				"a": "a",
+				"b": "b"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 520
+					}
+				],
+				"actor": "a",
+				"nonce": "0000020900000000"
+			},
+			"expect": {
+				"name": "a77fd68b6389fbf70239ed987eb2837642f9df1d389a6365881e825de5bf5ac2",
+				"stored": "ebf0448a1183464b0e5f556336a5bb9f627c88bf49e2879de28b009f7dc83090"
+			}
+		},
+		{
+			"request": {
+				"op": "commit",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 521
+					}
+				],
+				"actor": "a",
+				"nonce": "0000020a00000000"
+			},
+			"expect": {
+				"name": "02627fef28821cb20197823d942fb716d2d90cab613820d8b037d522e3e3e5ba",
+				"stored": "a01cff953404a99942bf94e5c741de2b9e555bb54c5daf096d3f892183c98b1f"
+			}
+		},
+		{
+			"request": {
+				"op": "follow",
+				"device": "a",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "pump"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "state",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": {
+				"heads": [
+					"02627fef28821cb20197823d942fb716d2d90cab613820d8b037d522e3e3e5ba"
+				],
+				"chain": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"request": {
+				"op": "stored",
+				"device": "b",
+				"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce"
+			},
+			"expect": [
+				"a01cff953404a99942bf94e5c741de2b9e555bb54c5daf096d3f892183c98b1f",
+				"ebf0448a1183464b0e5f556336a5bb9f627c88bf49e2879de28b009f7dc83090"
+			]
+		}
+	]
+}

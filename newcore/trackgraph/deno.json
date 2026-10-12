@@ -1,0 +1,7 @@
+{
+	"name": "@ermine/trackgraph",
+	"version": "0.0.0",
+	"exports": {
+		".": "./ts/trackgraph.ts"
+	}
+}

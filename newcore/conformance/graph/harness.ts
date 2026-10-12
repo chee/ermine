@@ -125,7 +125,7 @@ function make(q: Q) {
 	host = q.actor ?? "host"
 	site = q.site
 	g = createGraph<O>({
-		root: q.root ?? "root",
+		root: createNode(q.root ?? "root", {}),
 		clock,
 		actor: host,
 		...(q.rules ? { may: rules("rules") } : {}),

@@ -1,9 +1,9 @@
 // The scheduler (newcore/scheduler/ts/scheduler.ts, SCHEDULER.tex), in C. Same order of operations as the
 // reference: every change, node made, intro, outro and release ticks the clock where scheduler.ts
-// does. It holds the table, places, a trackgraph and one notify per node, and hooks them up; the
-// host's interface is below.
+// does. It sits on the graph (graph/c/graph.h), as scheduler.ts on graph.ts: the graph reads,
+// writes, places, tracks and tells; the scheduler runs processes. The host's interface is below.
 //
-// memory: an arena per scheduler, freed by sc_free. Values (nt_value) are made with notify's
+// memory: an arena per scheduler, and the graph's, freed by sc_free. Values (nt_value) are made with notify's
 // constructors and shared between versions by mutate, so nothing owns them: they are not freed.
 // Everything is single threaded; there is no async, so a compute cannot return a promise.
 //
@@ -19,6 +19,7 @@
 #include "../../nodes/c/node.h"
 #include "../../notify/c/notify.h"
 #include "../../graph/c/places.h"
+#include "../../graph/c/graph.h"
 #include "../../protect/c/protect.h"
 
 typedef struct sc_sched sc_sched;
@@ -66,16 +67,8 @@ const sc_agent *sc_agent_of(sc_sched *s, const char *actor);
 const sc_agent *sc_agent_with(sc_sched *s, const sc_agent *a, const char *person, int has_trusted,
 	int trusted);
 
-// a change: its time, who by, and the node it is in
-typedef struct sc_change {
-	int64_t time;
-	const sc_agent *actor;
-	const char *reader;
-	const char *cause;
-	const char *node;
-	int has_which; // a mark's: where
-	const char *which;
-} sc_change;
+// a change: the graph's (its time, who by as protect sees them, the node it is in)
+typedef gr_change sc_change;
 // a change for a node of the host's own making, at a time
 const sc_change *sc_change_new(sc_sched *s, int64_t time, const char *node);
 
@@ -136,6 +129,7 @@ typedef const sc_error *(*sc_finder)(void *ctx, const sc_process *p, sc_api *vie
 typedef struct {
 	const char *root; // the root's id; the host introduces its node (sc_intro), or one is made
 	const sc_agent *actor; // who the host's own changes are by; NULL: "host"
+	const char *host; // actor NULL: the host's actor as this string; NULL: "host"
 	int64_t *clock; // the last time given; each change takes the next. NULL: its own, at 0
 	const sc_hook *hooks;
 	size_t nhooks;
@@ -147,6 +141,10 @@ typedef struct {
 	// who may do what (protect), asked before each operation not the scheduler's own; NULL:
 	// anyone. copied
 	const pr_may *may;
+	// told, after an operation lands, each object it changed (WIRING.tex, Out): sync's side. NULL: none.
+	// The header's actor is sc_actor's
+	void (*changed)(void *ctx, const gr_record *r);
+	void *changed_ctx;
 } sc_options;
 
 sc_sched *sc_new(const sc_options *o);
@@ -163,6 +161,13 @@ const sc_error *sc_intro(sc_sched *s, nd_node *node);
 const sc_error *sc_outro(sc_sched *s, const char *id);
 // the host's interface
 sc_api *sc_host(sc_sched *s);
+// an agent that is only an actor (no person, peer, trusted or code) as its actor; else the agent. What a
+// change is by, as a change's header is told to sync
+const pr_value *sc_actor(const pr_value *agent);
+// INTERNAL AND DANGEROUS (WIRING.tex, In), for whoever made the scheduler to give to sync alone,
+// never to hosts or programs: gr_versions (graph.h says what it does and why it is dangerous)
+void sc_versions(sc_sched *s, const char *id, gr_where where, const char *name,
+	const gr_incoming *list, size_t count, const gr_from *from);
 
 // the host's: start, call, replace, batch
 typedef struct {
@@ -196,15 +201,9 @@ const sc_error *sc_call(sc_sched *s, const sc_callop *op, nt_value **out);
 const sc_error *sc_replace(sc_sched *s, const char *const *address, size_t naddress);
 const sc_error *sc_batch(sc_sched *s, const sc_error *(*fn)(void *ctx), void *ctx);
 
-// what an interface gives: items as the actor may have them. refused: why a node is not given
-typedef struct {
-	pl_item it;
-	const pr_value *refused;
-} sc_item;
-typedef struct {
-	sc_item *items;
-	size_t n;
-} sc_items;
+// what an interface gives: the graph's items as the actor may have them
+typedef gr_item sc_item;
+typedef gr_items sc_items;
 
 const sc_error *sc_look(sc_api *a, const char *const *address, size_t n, sc_items *out);
 const sc_error *sc_lookup(sc_api *a, const char *const *path, size_t n, sc_items *out);
@@ -216,11 +215,12 @@ const sc_error *sc_children(sc_api *a, const char *const *address, size_t n, con
 const sc_error *sc_content(sc_api *a, const char *const *address, size_t n, sc_items *out);
 const sc_error *sc_info(sc_api *a, const char *const *address, size_t n, const char *name,
 	sc_items *out);
-// index: the item (default its first loaded); slotindex as insert's. *time: the change's
+// index: the item (default its first loaded); slotindex as insert's, span: given as a span.
+// *time: the change's
 const sc_error *sc_write(sc_api *a, const char *const *address, size_t n, const nt_patch *patches,
-	size_t np, const long *index, const pl_span *slotindex, int64_t *time);
+	size_t np, const long *index, const pl_span *slotindex, int span, int64_t *time);
 const sc_error *sc_set(sc_api *a, const char *const *address, size_t n, const char *name,
-	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex,
+	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
 	int64_t *time);
 const sc_error *sc_insert(sc_api *a, const char *id, const char *name, const char *child,
 	const pl_span *index, const pl_span *slotindex, int64_t *time);
@@ -258,6 +258,7 @@ struct sc_given {
 	int64_t *by; // a compute's: the times of the changes that marked it
 	size_t nby;
 	void *user; // the part's own (steps)
+	const sc_change **marks; // a compute's: the changes that marked it (by's times, whole)
 };
 
 #endif

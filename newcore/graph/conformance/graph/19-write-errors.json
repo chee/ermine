@@ -1,0 +1,158 @@
+{
+	"title": "a write by an interface: its address resolved before set's name, a bad name second",
+	"steps": [
+		{
+			"op": "insert",
+			"id": "root",
+			"name": "a",
+			"child": "a",
+			"expect": {
+				"ok": 1
+			}
+		},
+		{
+			"op": "intro",
+			"id": "a",
+			"value": 1,
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "bind",
+			"as": "in",
+			"place": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "set",
+			"address": [
+				".."
+			],
+			"name": "a/b",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "above-root"
+			}
+		},
+		{
+			"op": "set",
+			"as": "in",
+			"address": [
+				"..",
+				".."
+			],
+			"name": "..",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "above-root"
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"a"
+			],
+			"name": "a/b",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "set",
+			"address": [
+				"missing"
+			],
+			"name": "a/b",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "write",
+			"as": "in",
+			"address": [
+				"..",
+				".."
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "above-root"
+			}
+		},
+		{
+			"op": "changing",
+			"actor": "host",
+			"do": [
+				{
+					"op": "set",
+					"address": [
+						".."
+					],
+					"name": "a/b",
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			],
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 2
+			}
+		},
+		{
+			"op": "node",
+			"id": "a",
+			"expect": {
+				"ok": {
+					"value": [
+						{
+							"content": 1,
+							"time": 0
+						}
+					],
+					"info": {},
+					"children": {},
+					"ephemeral": false
+				}
+			}
+		}
+	]
+}

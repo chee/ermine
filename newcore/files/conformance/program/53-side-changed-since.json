@@ -1,0 +1,324 @@
+{
+	"title": "an edit to a side whose version changed since it was laid goes to the Trash, listed, the side laid again",
+	"steps": [
+		{
+			"request": {
+				"op": "open"
+			},
+			"expect": {
+				"root": "r"
+			}
+		},
+		{
+			"request": {
+				"op": "place",
+				"path": [],
+				"slot": "apps",
+				"value": {
+					"theme": "dark"
+				}
+			},
+			"expect": {
+				"id": "id1"
+			}
+		},
+		{
+			"request": {
+				"op": "place",
+				"path": [
+					"apps"
+				],
+				"slot": "clock",
+				"value": "12:00"
+			},
+			"expect": {
+				"id": "id2"
+			}
+		},
+		{
+			"request": {
+				"op": "place",
+				"path": [],
+				"slot": "docs",
+				"value": "hello"
+			},
+			"expect": {
+				"id": "id3"
+			}
+		},
+		{
+			"request": {
+				"op": "place",
+				"path": [],
+				"slot": "docs",
+				"value": {
+					"/": {
+						"bytes": "iVBORw0KGgo"
+					}
+				}
+			},
+			"expect": {
+				"id": "id4"
+			}
+		},
+		{
+			"request": {
+				"op": "mount",
+				"path": [],
+				"slot": "pinned",
+				"to": [
+					"docs"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "save"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "start"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "side",
+				"path": [
+					"apps",
+					"clock"
+				],
+				"value": "12:05"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "save"
+			},
+			"expect": {}
+		},
+		{
+			"edit": "write",
+			"path": "apps/clock.FINAL.txt",
+			"text": "mine"
+		},
+		{
+			"request": {
+				"op": "write",
+				"path": [
+					"apps",
+					"clock"
+				],
+				"value": "theirs",
+				"version": 1
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "pass",
+				"touched": [
+					"apps"
+				]
+			},
+			"expect": {
+				"called": true,
+				"settled": true
+			}
+		},
+		{
+			"request": {
+				"op": "graph"
+			},
+			"expect": {
+				"root": "r",
+				"nodes": {
+					"id": "r",
+					"value": [],
+					"slots": [
+						[
+							"apps",
+							[
+								{
+									"id": "id1",
+									"value": [
+										{
+											"content": {
+												"theme": "dark"
+											},
+											"actor": "host"
+										}
+									],
+									"slots": [
+										[
+											"clock",
+											[
+												{
+													"id": "id2",
+													"value": [
+														{
+															"content": "12:00",
+															"actor": "host"
+														},
+														{
+															"content": "theirs",
+															"actor": "host"
+														}
+													],
+													"slots": []
+												}
+											]
+										]
+									]
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"id": "id3",
+									"value": [
+										{
+											"content": "hello",
+											"actor": "host"
+										}
+									],
+									"slots": []
+								},
+								{
+									"id": "id4",
+									"value": [
+										{
+											"content": {
+												"/": {
+													"bytes": "iVBORw0KGgo"
+												}
+											},
+											"actor": "host"
+										}
+									],
+									"slots": []
+								}
+							]
+						],
+						[
+							"pinned",
+							[
+								{
+									"id": "id3",
+									"again": true
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"observe": {},
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": "apps",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "apps.text",
+						"kind": "file",
+						"hex": "7b0a2020227468656d65223a20226461726b220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "apps/clock.FINAL.txt",
+						"kind": "file",
+						"hex": "746865697273",
+						"attrs": {
+							"party.chee.ermine.id": "id2",
+							"party.chee.ermine.side": "1"
+						}
+					},
+					{
+						"path": "apps/clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "id2"
+						}
+					},
+					{
+						"path": "docs",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": [
+								"r",
+								"docs"
+							]
+						}
+					},
+					{
+						"path": "docs/1.txt",
+						"kind": "file",
+						"hex": "68656c6c6f",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					},
+					{
+						"path": "docs/2.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "id4"
+						}
+					},
+					{
+						"path": "pinned.txt",
+						"kind": "link",
+						"target": "docs/1.txt",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					}
+				],
+				"trash": [
+					{
+						"path": "clock.FINAL.txt",
+						"kind": "file",
+						"hex": "6d696e65"
+					}
+				],
+				"listed": [
+					{
+						"path": "apps/clock.FINAL.txt",
+						"why": "side-changed"
+					}
+				]
+			}
+		}
+	]
+}

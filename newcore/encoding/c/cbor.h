@@ -23,13 +23,13 @@
 //   int16 77, int32 78, int64 79, float32 85, float64 86. A float element
 //   that is NaN is written as the one quiet NaN of its width (float32
 //   0x7fc00000, float64 0x7ff8000000000000), since all NaNs are one NaN.
-// - A stand-in (what a live value is sent as) as tag 11111111 (da00a98ac7)
+// - A stand-in (what a live value is sent as) as tag 0x12345678 (da12345678)
 //   over its kind, any value; json.h holds it as JSON_STAND. C has no live
 //   values: it carries stand-ins as data.
 //
 // Decoding accepts exactly what the encoder writes and nothing else: an
 // integer, a head longer than it need be, an indefinite length, an unknown
-// tag (the stand-in's only in its head da00a98ac7) or simple value, a number in a longer float than holds it, any other
+// tag (the stand-in's only in its head da12345678) or simple value, a number in a longer float than holds it, any other
 // NaN, a map whose keys are not text strings in strictly increasing order,
 // text that is not UTF-8, a typed array whose byte string is not a whole
 // number of elements, a NaN element other than the one above, or bytes left
@@ -66,5 +66,11 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
  * found in *at (either may be NULL).
  */
 Json *cborDecode(const unsigned char *data, size_t length, const char **why, size_t *at);
+
+/**
+ * Whether the text is one cborEncode can write as a string: UTF-8, with U+0000 as json.h holds
+ * it (C0 80). A lone surrogate (WTF-8) is not.
+ */
+bool cborText(const char *text, size_t length);
 
 #endif

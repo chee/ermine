@@ -70,12 +70,15 @@ function shape(p: Patch): boolean {
 
 // one edit's content, changed patch by patch; list: a name's list, there only when not empty
 function createWork(root: unknown, list: boolean, utf16: boolean) {
-	// made here: may change in place
-	const own = new WeakSet<object>()
+	// made here: may change in place. few, scanned; past 16, a WeakSet
+	let own: object[] | WeakSet<object> | undefined
 	const copy = <T extends object>(v: T): T => {
-		if (own.has(v)) return v
+		if (own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))) return v
 		const c = (isList(v) ? v.slice() : { ...v }) as T
-		own.add(c)
+		if (own === undefined) own = [c]
+		else if (!Array.isArray(own)) own.add(c)
+		else if (own.length < 16) own.push(c)
+		else (own = new WeakSet(own)).add(c)
 		return c
 	}
 	const work = { root }

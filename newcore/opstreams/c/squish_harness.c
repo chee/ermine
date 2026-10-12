@@ -76,10 +76,13 @@ static char *str(size_t *len) {
 		case 'u': {
 			unsigned long c = hex4(s + 1);
 			s += 5;
+			// a high and a low are one character; on their own, each is held as WTF-8
 			if (c >= 0xD800 && c < 0xDC00 && s[0] == '\\' && s[1] == 'u') {
 				unsigned long d = hex4(s + 2);
-				c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00);
-				s += 6;
+				if (d >= 0xDC00 && d < 0xE000) {
+					c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00);
+					s += 6;
+				}
 			}
 			o += put8(o, c);
 			break;
@@ -151,7 +154,11 @@ static void out_str(const char *s, size_t n) {
 		unsigned char c = (unsigned char)s[i];
 		if (c == '"' || c == '\\') printf("\\%c", c);
 		else if (c < 0x20) printf("\\u%04x", c);
-		else putchar(c);
+		// a lone surrogate, held as WTF-8 (ED A0..BF xx), is written as the escape
+		else if (c == 0xED && i + 2 < n && ((unsigned char)s[i + 1] & 0xE0) == 0xA0) {
+			printf("\\u%04x", 0xD000 | (((unsigned char)s[i + 1] & 63) << 6) | ((unsigned char)s[i + 2] & 63));
+			i += 2;
+		} else putchar(c);
 	}
 	putchar('"');
 }
@@ -232,16 +239,28 @@ static sq_path path_of(const node *a) {
 	return (sq_path){k, a->n};
 }
 
+// a lone surrogate (WTF-8) in a string anywhere in v
+static int lone(const node *v) {
+	if (v->type == 's') return sq_str(v->text, v->len).lone;
+	for (size_t i = 0; i < v->n; i++)
+		if (lone(v->kids[i])) return 1;
+	return 0;
+}
+
 static sq_value value_of(const node *v) {
 	if (v->type == 's') return sq_str(v->text, v->len);
-	if (v->type == 'a') return sq_list((const void *const *)v->kids, v->n);
+	if (v->type == 'a') {
+		sq_value l = sq_list((const void *const *)v->kids, v->n);
+		return l.lone = lone(v), l;
+	}
 	const node *b = v->n == 1 ? get(v, "$bytes") : NULL;
 	if (b && b->type == 'a') {
 		uint8_t *bytes = alloc(b->n);
 		for (size_t i = 0; i < b->n; i++) bytes[i] = (uint8_t)num(b->kids[i]);
 		return sq_bytes(bytes, b->n);
 	}
-	return sq_any(v);
+	sq_value a = sq_any(v);
+	return a.lone = lone(v), a;
 }
 
 static sq_patch *patches_of(const node *a, size_t *n) {
@@ -256,6 +275,10 @@ static sq_patch *patches_of(const node *a, size_t *n) {
 		}
 		if (value) ps[i].has_value = 1, ps[i].value = value_of(value);
 		ps[i].move = get(o, "move");
+		if (ps[i].move) {
+			sq_path mp = path_of(get(ps[i].move, "path"));
+			ps[i].move_path = mp.keys, ps[i].move_depth = mp.depth;
+		}
 	}
 	return ps;
 }
@@ -293,7 +316,8 @@ static void answer(void) {
 	size_t n;
 	if (!strcmp(o, "squish")) {
 		sq_patch *ps = patches_of(get(r, "patches"), &n);
-		sq *s = sq_new();
+		const node *u = get(r, "utf16");
+		sq *s = sq_new_units(u && u->type == 'v' && !strcmp(u->text, "true"));
 		for (size_t i = 0; i < n; i++) sq_push(s, &ps[i]);
 		const sq_patch *out = sq_patches(s, &n);
 		fputs("{\"patches\":", stdout);

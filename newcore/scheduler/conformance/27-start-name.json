@@ -1,0 +1,137 @@
+{
+	"title": "a start's name is checked before anything is made: no node, no tick",
+	"steps": [
+		{
+			"op": "start",
+			"address": [],
+			"name": "a/b",
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "..",
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": ".",
+			"program": {
+				"setup": [
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"error": "wrong-field"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 0
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"ok": []
+			}
+		},
+		{
+			"op": "start",
+			"address": [],
+			"name": "p",
+			"program": {
+				"setup": [
+					{
+						"do": "start",
+						"address": [],
+						"name": "x/y",
+						"program": {
+							"setup": []
+						}
+					},
+					{
+						"do": "return",
+						"value": 1
+					}
+				]
+			},
+			"expect": {
+				"ok": "@1"
+			}
+		},
+		{
+			"op": "clock",
+			"expect": {
+				"ok": 5
+			}
+		},
+		{
+			"op": "children",
+			"address": [],
+			"expect": {
+				"ok": [
+					"p"
+				]
+			}
+		},
+		{
+			"op": "content",
+			"address": [
+				"p"
+			],
+			"expect": {
+				"ok": [
+					{
+						"id": "@1",
+						"versions": [
+							{
+								"content": {
+									"error": "wrong-field"
+								},
+								"time": 3,
+								"status": true
+							},
+							{
+								"content": null,
+								"time": 1
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

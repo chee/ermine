@@ -33,9 +33,9 @@
 // (layers/subduction/SYNC.tex), which wrapped it with arrive and top, waits
 // for that layer to come over to this core.
 
-import { type Graph } from "../../core/graph/typescript/graph.ts";
-import { equal, isLive } from "../../core/graph/typescript/patch.ts";
-import { bind as view } from "../../core/graph/typescript/view.ts";
+import { type Graph } from "../core/graph/typescript/graph.ts";
+import { equal, isLive } from "../core/graph/typescript/patch.ts";
+import { bind as view } from "../core/graph/typescript/view.ts";
 import {
   type Address,
   type Bare,
@@ -49,7 +49,7 @@ import {
   type Json,
   type Site,
   type ValueItem,
-} from "../../core/graph/typescript/types.ts";
+} from "../core/graph/typescript/types.ts";
 
 /** What a compute returns when it has nothing yet. */
 export const pending: unique symbol = Symbol.for("ermine.pending");

@@ -10,10 +10,10 @@
 #
 # Gives: $sync_sources, $sync_cflags (for the C), $sync_libs (to link).
 
-# the layers as tree.sh staged them, beside core as committed; else in place
-if [ -n "${tree:-}" ]; then layers="$tree/layers"; else layers="$(cd "$mac/../../layers" && pwd)"; fi
+# the layers as tree.sh staged them, beside its core; else in place
+if [ -n "${tree:-}" ]; then layers="$tree/experimental_os/layers"; else layers="$(cd "$mac/../layers" && pwd)"; fi
 peer="$layers/subduction/c/peer"
-crate="$(cd "$mac/../../layers/subduction/c/peer" && pwd)" # cargo builds the crate where it is
+crate="$(cd "$mac/../layers/subduction/c/peer" && pwd)" # cargo builds the crate where it is
 sync_sources="$layers/subduction/c/sync.c $layers/subduction/c/blob.c $layers/subduction/c/sha2.c $layers/link/c/link.c \
 $layers/cache/c/hash.c $peer/websocket.c $peer/transport_openssl.c $peer/store_files.c $peer/platform_posix.c"
 

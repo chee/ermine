@@ -15,7 +15,7 @@
 // SYNC_SERVER=wss://… runs it through another server instead.
 
 import { assert, assertMatch } from "@std/assert";
-import { server } from "../../layers/link/typescript/deno/server.ts";
+import { server } from "../layers/link/typescript/deno/server.ts";
 
 const MAIN = new URL("./main.ts", import.meta.url).pathname;
 // the line's colours, ESC [ ... m, and its carriage returns

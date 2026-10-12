@@ -3,9 +3,9 @@
 // it. and who those changes are by: the process's agent, a step added to its starter's.
 //
 import createBecause from "../../nodes/ts/because.ts"
-import createChange, { type Change } from "../../nodes/ts/change.ts"
+import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
 import { type Graph, GraphError } from "../../graph/ts/graph.ts"
-import mutate from "../../opstreams/ts/mutate.ts"
+import type { Which } from "../../opstreams/ts/mutate.ts"
 import type { Version } from "../../nodes/ts/node.ts"
 
 type V = Version<unknown, Change>
@@ -118,6 +118,25 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 	}
 	const runAgent = (p: P, n: number) => agentOf(p, n > 0 ? { run: n } : {})
 
+	// a run's agent with its status: the last made again while the process, run and status are
+	let kept: { p: P; n: number; status: Status; agent: Agent } | undefined
+	function agentAt(p: P, n: number, status: Status): Agent {
+		if (kept && kept.p === p && kept.n === n && sameStatus(kept.status, status)) return kept.agent
+		const agent = agentOf(p, { ...(n > 0 ? { run: n } : {}), status })
+		kept = { p, n, status, agent }
+		return agent
+	}
+
+	// a change by the operation now, at id's which: told to the graph as what touched it, so its
+	// telling whole is by this change; stored without the graph's hook
+	function changeAt(id: string, which: Which): Change {
+		const { patched, ...header } = g.by() as Header & {
+			patched?: (p: unknown, f: unknown, id: string, which: Which) => void
+		}
+		patched?.(undefined, undefined, id, which)
+		return createChange(id, header)
+	}
+
 	// the status a process's node shows, as a version in front of its value. tag: what the
 	// change is made with (graph.ts)
 	function status(
@@ -130,27 +149,24 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		if (p.state !== "running") return
 		const node = g.get(p.id)
 		if (!node) return
-		const had = Object.keys(p.status).length > 0
-		const has = Object.keys(status).length > 0
-		if (!force && !had && !has) return
-		const agent = agentOf(p, { ...(n > 0 ? { run: n } : {}), status })
+		if (!force && !shows(p.status) && !shows(status)) return
 		g.changing(
-			{ actor: agent, reader: p.id },
+			{ actor: agentAt(p, n, status), reader: p.id },
 			{ own: p, tag, snap: [[p.id, "value"]] },
-			() => {
-				const change = createChange(p.id, g.by())
-				const version: V = {
-					content: status,
-					change,
-					because: createBecause("scheduler", "status"),
-				}
-				if (!had && has) node.value = [version, ...node.value]
-				else if (had && has) node.value = [version, ...node.value.slice(1)]
-				else if (had && !has) node.value = node.value.slice(1)
-				else node.value = node.value.map((v) => ({ ...v, change }))
-			},
+			() => putStatus(p, node, status),
 		)
 		p.status = status
+	}
+	const shows = (s: Status) => Object.keys(s).length > 0
+	// the status's version, in front of the value, put, replaced or taken away
+	function putStatus(p: P, node: { value: V[] }, status: Status) {
+		const had = shows(p.status), has = shows(status)
+		const change = changeAt(p.id, "value")
+		const version: V = { content: status, change, because: createBecause("scheduler", "status") }
+		if (!had && has) node.value = [version, ...node.value]
+		else if (had && has) node.value = [version, ...node.value.slice(1)]
+		else if (had && !has) node.value = node.value.slice(1)
+		else node.value = node.value.map((v) => ({ ...v, change }))
 	}
 
 	// its value, behind its status; then the status, if not the same
@@ -158,9 +174,8 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		const node = g.get(p.id)
 		if (p.state !== "running" || !node) return
 		p.last = { value }
-		const had = Object.keys(p.status).length > 0
-		const agent = agentOf(p, { run: n, status: st })
-		const at = had ? 1 : 0
+		const agent = agentAt(p, n, st)
+		const at = shows(p.status) ? 1 : 0
 		g.changing(
 			{ actor: agent, reader: p.id },
 			{
@@ -169,9 +184,8 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 				snap: [[p.id, "value"]],
 			},
 			() => {
-				const change = createChange(p.id, g.by())
 				const vs = node.value.slice()
-				vs[at] = { content: value, change }
+				vs[at] = { content: value, change: changeAt(p.id, "value") }
 				node.value = vs
 			},
 		)
@@ -180,15 +194,19 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 
 	// the latest run: the value of a node named run inside the process, made the first time. what
 	// it holds: the run's number, program, the times of the changes that marked it, its reads and
-	// writes, rank, how it ended, the processes it is after. answers the node's id when it made one
+	// writes, rank, how it ended, the processes it is after. status: the process's new status, if it
+	// changed, written in the same operation. answers the node's id when it made one
 	function run(
 		p: P,
 		r: Ran,
 		ended: string,
 		error: unknown,
 		after: string[],
+		status?: Status,
 	): string | undefined {
-		if (p.state !== "running" || !g.get(p.id)) return
+		if (p.state !== "running") return
+		const node = g.get(p.id)
+		if (!node) return
 		const n = r.n
 		const tag = r.causes
 		const value: Record<string, unknown> = {
@@ -204,19 +222,27 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		if (ended === "stopped" && r.stopped) value.waits = r.stopped.id
 		if (r.equal !== undefined) value.equal = r.equal
 		if (error !== undefined) value.error = error
-		const agent = agentOf(p, { run: n, status: p.status })
-		const who = { actor: agent, reader: p.id }
-		const how = { own: p, tag }
 		const there = p.run === undefined ? undefined : g.get(p.run)
-		if (there) {
-			g.changing(who, how, () => mutate(there, "value", [{ path: [], value }], g.by()))
-			return
+		if (!there) {
+			if (status) records.status(p, status, n, tag)
+			const who = { actor: agentAt(p, n, p.status), reader: p.id }
+			const id = g.make(undefined, value, who)
+			g.own(id, p)
+			p.run = id
+			g.changing(who, { own: p, tag }, () => g.places.insert(p.id, "run", id))
+			return id
 		}
-		const id = g.make(undefined, value, who)
-		g.own(id, p)
-		p.run = id
-		g.changing(who, how, () => g.places.insert(p.id, "run", id))
-		return id
+		const st = status ?? p.status
+		const snap: [string, Which][] = status
+			? [[p.id, "value"], [there.id, "value"]]
+			: [[there.id, "value"]]
+		g.changing({ actor: agentAt(p, n, st), reader: p.id }, { own: p, tag, snap }, () => {
+			if (status) putStatus(p, node, status)
+			const vs = there.value.slice()
+			vs[0] = { content: value, change: changeAt(there.id, "value") }
+			there.value = vs
+		})
+		if (status) p.status = status
 	}
 
 	// the times of the changes that set what a read got
@@ -239,7 +265,8 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 		return out
 	}
 
-	return { agentOf, runAgent, status, value, run, times }
+	const records = { agentOf, runAgent, status, value, run, times }
+	return records
 }
 
 export type Records<P extends Recorded> = ReturnType<typeof createRecords<P>>

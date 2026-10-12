@@ -24,9 +24,9 @@
 #include "drv.h"
 #include "peer.h"
 
-#include "../../core/graph/c/entry.h"
-#include "../../core/graph/c/library.h"
-#include "../../core/protect/c/protect.h"
+#include "../core/graph/c/entry.h"
+#include "../core/graph/c/library.h"
+#include "../core/protect/c/protect.h"
 
 #include <stdarg.h>
 #include <stdio.h>

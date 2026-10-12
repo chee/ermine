@@ -1,0 +1,14 @@
+{
+	"title": "a version with no change: written without one, and read back without one",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r",
+			"value": [{ "content": 1 }, { "content": 2, "change": 1 }],
+			"info": [["t", [{ "content": "x", "because": "b" }]]],
+			"children": [["home", [{ "content": [] }]]],
+			"header": {}
+		}
+	],
+	"expect": { "nodes": ["r"], "missing": [] }
+}

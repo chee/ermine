@@ -32,6 +32,7 @@ typedef enum {
 	TRANSPORT_DOC,     // not an ermine:// id
 	TRANSPORT_SEAL,    // not a seal
 	TRANSPORT_PARENTS, // a parent's seal is not taken in here
+	TRANSPORT_BLOP,    // not a blop
 } transport_code;
 
 // why a commit or fragment is refused, in Taking in's order
@@ -46,8 +47,8 @@ typedef enum {
 // "lock", "shape", "signature", "stored", "document", "parents"
 const char *transport_refusal_name(transport_refusal refusal);
 
-// commit: a loose commit's head; for what has no commit (a fragment's member, an ephemeral blop), the
-// stored id of its seal
+// commit: a loose commit's head; for what has no commit, a fragment's member the
+// stored id of its seal, an ephemeral blop its name (BLAKE3 of its bytes)
 typedef struct {
 	uint8_t commit[32];
 	uint8_t (*names)[32]; // the parents' blop names whose seals are not here, in parents order
@@ -82,13 +83,20 @@ typedef struct {
 } transport_out;
 
 // a device signing as Subduction's peer with the seed's Ed25519 key (SEAL.tex: the device's key), keeping
-// what Subduction holds in store (copied; what it points to must outlive the device)
+// what Subduction holds in store (copied; what it points to must outlive the device). Before it returns,
+// everything the store holds, every fragment and loose commit, is taken in as a save is, so no connection
+// precedes it (TRANSPORT.tex, A device)
 transport *transport_create(const uint8_t seed[32], const ErmStore *store);
 void transport_free(transport *t);
 
 // a connection: the handshake, then the followed documents synced over it. Its number is the conn of
 // the calls below and of what is asked of the host
-uint64_t transport_connect(transport *t);
+// service: the name the server answers to, in the handshake (a local subduction_cli: whatever its
+// --service-name is; a public server: its host, as transport_service gives)
+uint64_t transport_connect(transport *t, const char *service);
+// the service name a server url defaults to: its host, with :port when it names one (a url's login
+// left out), into out of size bytes
+void transport_service(const char *url, char *out, size_t size);
 // how many connections have completed their handshake
 size_t transport_connected(const transport *t);
 void transport_received(transport *t, uint64_t conn, const uint8_t *bytes, size_t length);
@@ -101,26 +109,40 @@ int64_t transport_run(transport *t);
 bool transport_next(transport *t, transport_out *out);
 void transport_out_free(transport_out *out);
 
-// doc followed: synced with every peer, subscribe true, its ephemeral topic subscribed; from now on, with
+// how long, in ms, the parts of an ephemeral payload over Subduction's 65 536 bytes may wait for the rest
+// before they are dropped (default 30 000); transport_expire drops them now
+void transport_join(transport *t, uint64_t ms);
+void transport_expire(transport *t);
+
+// doc followed: synced with every peer, subscribe true, its ephemeral messages subscribed; from now on, with
 // each peer connected later too
 transport_code transport_follow(transport *t, const char *doc);
-// a topic (32 bytes, the caller's: a document's id or anything agreed): subscribed, with every peer
-// connected now or later; heard is called for each message heard on it but a blop of a followed
-// document, with the sender's key (payload valid during the call). Opened again, the callback is
-// replaced
-typedef void (*transport_heard)(void *context, const uint8_t from[32], const uint8_t *payload, size_t length);
-void transport_topic(transport *t, const uint8_t id[32], transport_heard heard, void *context);
-// signs and publishes a payload, as given, to a topic
-void transport_chirp(transport *t, const uint8_t id[32], const uint8_t *payload, size_t length);
-// the callback gone: nothing more is heard on the topic here. Subduction's C API has no unsubscribe, so
-// peers are not told, and the topic is subscribed again with each later connection no more
-void transport_untopic(transport *t, const uint8_t id[32]);
 // the document's chains of a layer, made at first; the host commits through them (commit.h)
 chains *transport_chains(transport *t, const char *doc, transport_layer layer);
 // a stored blop of this device's, sealed: taken in, added as a loose commit, then fragments built
 transport_code transport_add(transport *t, const char *doc, const uint8_t *sealed, size_t length);
-// an ephemeral one: taken in to the ephemeral layer, then published
-transport_code transport_publish(transport *t, const char *doc, const uint8_t *sealed, size_t length);
+// a blop this device made, its bytes, not yet sealed, into that layer's chains at once (WIRING.tex): add
+// and publish then pass over the name already taken in. A stored blop goes into the ephemeral chains too.
+// Not announced. The document keeps the blop decoded, as long as the device
+transport_code transport_take(transport *t, const char *doc, const uint8_t *blop, size_t length, transport_layer layer);
+
+// a blop that came to be taken in to a chain, from the network or storage (heard: an ephemeral message),
+// or that waited there on one that did. Valid for the call; blop is the chain's, which the device keeps
+typedef struct {
+	const char *doc;
+	transport_layer layer;
+	const Json *blop;
+	uint8_t name[32];
+	bool heard;
+} transport_arrival;
+// told each, after it is taken in and what took it in is done (from transport_run, transport_add and
+// transport_publish): not in the middle of taking in, so a listener may make changes. Any number of
+// listeners; each is told every arrival, in order
+void transport_arrived(transport *t, void (*listener)(void *context, const transport_arrival *arrival), void *context);
+// an ephemeral one, the blop's bytes, not sealed: taken in to the ephemeral layer (refused there as a
+// receiver would refuse it, but still published), then published: over 65 536 bytes, as parts of at most
+// 60 000 (each the map {whole, part, parts, bytes}), which a receiver joins
+transport_code transport_publish(transport *t, const char *doc, const uint8_t *blop, size_t length);
 // addCommit as given, nothing checked or taken in first
 transport_code transport_put(transport *t, const char *doc, const uint8_t head[32], const uint8_t (*parents)[32], size_t count, const uint8_t *blob, size_t length);
 

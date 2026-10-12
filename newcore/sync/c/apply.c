@@ -249,6 +249,7 @@ size_t apply_versions(chains *c, const Json *object, apply_time time, void *cont
 		if (bytes(signer)) hex_of(signer->bytes.data, v->why.signer);
 		else v->why.signer[0] = 0;
 		ch_header header = {
+			.has_time = 1,
 			.time = time(context, v->place.name),
 			.actor = jsonGet(blop, "actor"),
 			.reader = jsonText(jsonGet(blop, "reader")),

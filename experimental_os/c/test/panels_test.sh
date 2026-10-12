@@ -161,7 +161,7 @@ key ArrowUp
 key ArrowRight
 run "cat /etc/desktop/picture" '\["' "a picture chosen: its path on the desk"
 
-# a checkbox: the list, down to Mac, its rows: Take Over runs takeover; Mirror apps is /etc/mac's on
+# a checkbox: the list, down to Mac, its rows: Take Over runs takeover; the Mac's keys shown; Mirror apps is /etc/mac's on
 key Tab
 key ArrowDown
 key ArrowDown
@@ -169,6 +169,8 @@ key Tab
 said '"label":"Take Over, off' "Take Over: off, as /dev/display/mode says"
 key Space
 waitfor "$err" '^\[display\] takeover on' 0 50 && ok "Take Over runs the world menu's command" || bad "no takeover asked"
+said '"label":"The Mac.s keys, off' "The Mac's keys: off, as /dev/display/mode says"
+key ArrowDown
 key ArrowDown
 key ArrowDown
 key Space

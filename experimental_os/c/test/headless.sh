@@ -1,6 +1,6 @@
 #!/bin/sh
-# headless.sh: builds the OS with no window (headless.c), with core as
-# committed (../tree.sh), into ../../mac/build/test/headless. Run it from
+# headless.sh: builds the OS with no window (headless.c), with its own
+# core (../tree.sh), into ../../mac/build/test/headless. Run it from
 # the repository's root:
 #   experimental_os/mac/build/test/headless --fresh
 set -e
@@ -10,7 +10,7 @@ mac="$(cd "$here/../../mac" && pwd)"
 mkdir -p "$out"
 . "$here/../tree.sh"
 c="$tree/experimental_os/c"
-core="$tree/core"
+core="$tree/experimental_os/core"
 . "$c/subduction.sh"
 . "$c/wayland.sh"
 . "$c/vterm.sh"
