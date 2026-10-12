@@ -5,16 +5,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// where in code: column 0 and function NULL when not known
+// where in code: column only when has_column, function NULL when not known
 typedef struct {
 	const char *file;
 	long line;
 	long column;
 	const char *function;
+	int has_column;
 } nd_site;
 
 // the site of the code writing it
-#define ND_HERE (&(nd_site){__FILE__, __LINE__, 0, __func__})
+#define ND_HERE (&(nd_site){__FILE__, __LINE__, 0, __func__, 0})
 
 // a change header's fields, each optional here: has_time, has_site, and NULL for the rest
 // actor and cause: the caller's, never read here

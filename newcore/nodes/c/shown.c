@@ -216,6 +216,7 @@ nd_site site(const char *p) {
 		strtol(field(p, "line"), NULL, 10),
 		column ? strtol(column, NULL, 10) : 0,
 		function ? string(function) : NULL,
+		column != NULL,
 	};
 }
 
@@ -279,7 +280,7 @@ void header(const nd_header *h) {
 		printf("%s\"site\":{\"file\":", comma);
 		text(h->site.file);
 		printf(",\"line\":%ld", h->site.line);
-		if (h->site.column) printf(",\"column\":%ld", h->site.column);
+		if (h->site.has_column) printf(",\"column\":%ld", h->site.column);
 		if (h->site.function) fputs(",\"function\":", stdout), text(h->site.function);
 		putchar('}');
 		comma = ",";

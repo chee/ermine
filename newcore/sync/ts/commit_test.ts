@@ -120,21 +120,13 @@ Deno.test("commit: live values in patches, actor and cause are stand-ins over th
 	assertEquals(typeof name(encode(b)).length, "number")
 })
 
-Deno.test("apply: a stand-in in a side is data, or what the host's live(kind) makes of it", () => {
+Deno.test("apply: a stand-in in a side is data", () => {
 	const histories = createHistories("n", check)
 	const r = make({
 		patches: [{ path: [], value: { c: new Stand("c"), d: new Stand("other"), n: 1 } }],
 	})
 	const n = name(encode(r))
 	histories.add(r, n)
-	assertEquals(side(histories, n), { c: new Stand("c"), d: new Stand("other"), n: 1 })
-	const live = (kind: unknown) => kind === "c" ? new Canvas("made") : undefined
-	const made = side(histories, n, live) as { c: unknown; d: unknown }
-	assertEquals(made.c, new Canvas("made"))
-	assertEquals(made.d, new Stand("other"))
-	const [v] = versions(histories, "value", () => 0, live)
-	assertEquals((v.content as { c: unknown }).c, new Canvas("made"))
-	// the side kept is still data
 	assertEquals(side(histories, n), { c: new Stand("c"), d: new Stand("other"), n: 1 })
 	assertEquals(versions(histories, "value", () => 0)[0].content, side(histories, n))
 })

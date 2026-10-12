@@ -403,4 +403,14 @@ const LIST: Which = ["children", "kids"]
 	)
 }
 
+// ---- column 0 is a column
+{
+	const A = mk({ patches: put("x"), site: { file: "src/a.ts", line: 1, column: 0 } })
+	scenario("column-zero", "a site at column 0 keeps its column in the version's change", [
+		create(),
+		add(A),
+		versions([A], "value", [[A, "x"]]),
+	])
+}
+
 await write(new URL("../../sync/conformance/apply/", import.meta.url))

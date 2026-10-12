@@ -147,7 +147,7 @@ static void answer(char *line) {
 			fputs(",\"site\":{\"file\":", stdout);
 			out(b.site.file ? b.site.file : "");
 			printf(",\"line\":%ld", b.site.line);
-			if (b.site.column) printf(",\"column\":%ld", b.site.column);
+			if (b.site.has_column) printf(",\"column\":%ld", b.site.column);
 			if (b.site.function) { fputs(",\"function\":", stdout); out(b.site.function); }
 			putchar('}');
 		}

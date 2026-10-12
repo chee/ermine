@@ -15,8 +15,8 @@
 static unsigned char *scratch;
 static size_t room;
 
-static int encode(void *context, const void *value, pk_bytes *out) {
-	(void)context;
+static int encode(void *context, pk_field field, const void *value, pk_bytes *out) {
+	(void)context, (void)field;
 	size_t n = 0;
 	const char *why;
 	if (!value || !cborEncode(value, scratch, room, &n, &why)) return 1;
@@ -28,8 +28,9 @@ static int encode(void *context, const void *value, pk_bytes *out) {
 	return 0;
 }
 
-static int decode(void *context, const uint8_t *item, size_t length, const void **value) {
-	(void)context;
+static int decode(void *context, pk_field field, const uint8_t *item, size_t length,
+	const void **value) {
+	(void)context, (void)field;
 	*value = cborDecode(item, length, NULL, NULL);
 	return *value == NULL;
 }

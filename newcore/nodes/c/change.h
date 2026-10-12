@@ -4,16 +4,17 @@
 
 #include <stdint.h>
 
-// where in code: column 0 and function NULL when not known
+// where in code: column only when has_column, function NULL when not known
 typedef struct {
 	const char *file;
 	long line;
 	long column;
 	const char *function;
+	int has_column;
 } ch_site;
 
 // the site of the code writing it
-#define CH_HERE (&(ch_site){__FILE__, __LINE__, 0, __func__})
+#define CH_HERE (&(ch_site){__FILE__, __LINE__, 0, __func__, 0})
 
 // what a change says, given by the caller: has_time and has_site, and NULL for the rest = not given
 // actor and cause: the caller's, never read here

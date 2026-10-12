@@ -187,8 +187,8 @@ static void number(pk_bytes *b, int64_t v) {
 	pk_put(b, x, 9);
 }
 
-static void put_value(writer *w, const void *v) {
-	if (!w->cannot && w->codec->encode(w->codec->context, v, w->b) != 0) w->cannot = 1;
+static void put_value(writer *w, pk_field f, const void *v) {
+	if (!w->cannot && w->codec->encode(w->codec->context, f, v, w->b) != 0) w->cannot = 1;
 }
 
 static void put_versions(writer *w, nd_object o, int lists) {
@@ -196,8 +196,8 @@ static void put_versions(writer *w, nd_object o, int lists) {
 	for (size_t i = 0; i < o.length; i++) {
 		const nd_version *v = &o.versions[i];
 		head(w->b, 5, 1 + !!v->change + !!v->because);
-		if (v->change) str(w, "change"), put_value(w, v->change);
-		if (v->because) str(w, "because"), put_value(w, v->because);
+		if (v->change) str(w, "change"), put_value(w, PK_CHANGE, v->change);
+		if (v->because) str(w, "because"), put_value(w, PK_BECAUSE, v->because);
 		str(w, "content");
 		if (lists) {
 			const nd_list *l = v->content;
@@ -207,7 +207,7 @@ static void put_versions(writer *w, nd_object o, int lists) {
 				if (l->items[k].id) str(w, l->items[k].id);
 				else w->cannot = 1;
 			}
-		} else put_value(w, v->content);
+		} else put_value(w, PK_CONTENT, v->content);
 	}
 }
 
@@ -226,15 +226,15 @@ static void put_header(writer *w, const nd_header *h) {
 	if (h->has_site) {
 		const nd_site *s = &h->site;
 		str(w, "site");
-		head(w->b, 5, 2 + !!s->column + !!s->function);
+		head(w->b, 5, 2 + !!s->has_column + !!s->function);
 		str(w, "file"), str(w, s->file);
 		str(w, "line"), number(w->b, s->line);
-		if (s->column) str(w, "column"), number(w->b, s->column);
+		if (s->has_column) str(w, "column"), number(w->b, s->column);
 		if (s->function) str(w, "function"), str(w, s->function);
 	}
 	if (h->has_time) str(w, "time"), number(w->b, h->time);
-	if (h->actor) str(w, "actor"), put_value(w, h->actor);
-	if (h->cause) str(w, "cause"), put_value(w, h->cause);
+	if (h->actor) str(w, "actor"), put_value(w, PK_ACTOR, h->actor);
+	if (h->cause) str(w, "cause"), put_value(w, PK_CAUSE, h->cause);
 	if (h->reader) str(w, "reader"), str(w, h->reader);
 }
 
@@ -423,12 +423,12 @@ static int64_t number_in(reader *r) {
 }
 
 // one value, by the codec
-static const void *read_value(reader *r) {
+static const void *read_value(reader *r, pk_field f) {
 	const uint8_t *start = r->p;
 	skip(r);
 	if (failed(r)) return NULL;
 	const void *v = NULL;
-	if (r->codec->decode(r->codec->context, start, (size_t)(r->p - start), &v) != 0) r->bad = 1;
+	if (r->codec->decode(r->codec->context, f, start, (size_t)(r->p - start), &v) != 0) r->bad = 1;
 	return v;
 }
 
@@ -454,9 +454,9 @@ static nd_object read_versions(reader *r, int lists) {
 			const uint8_t *s;
 			size_t len;
 			if (!key(r, &s, &len)) break;
-			if (is(s, len, "content")) vs[i].content = lists ? list(r) : read_value(r), content = 1;
-			else if (is(s, len, "change")) vs[i].change = read_value(r);
-			else if (is(s, len, "because")) vs[i].because = read_value(r);
+			if (is(s, len, "content")) vs[i].content = lists ? list(r) : read_value(r, PK_CONTENT), content = 1;
+			else if (is(s, len, "change")) vs[i].change = read_value(r, PK_CHANGE);
+			else if (is(s, len, "because")) vs[i].because = read_value(r, PK_BECAUSE);
 			else skip(r);
 		}
 		if (!content) r->bad = 1; // a version is its content
@@ -487,7 +487,7 @@ static nd_site site(reader *r) {
 		if (!key(r, &name, &len)) break;
 		if (is(name, len, "file")) s.file = text(r);
 		else if (is(name, len, "line")) s.line = (long)number_in(r), line = 1;
-		else if (is(name, len, "column")) s.column = (long)number_in(r);
+		else if (is(name, len, "column")) s.column = (long)number_in(r), s.has_column = 1;
 		else if (is(name, len, "function")) s.function = text(r);
 		else skip(r);
 	}
@@ -503,10 +503,10 @@ static nd_header read_header(reader *r) {
 		size_t len;
 		if (!key(r, &s, &len)) break;
 		if (is(s, len, "time")) h.has_time = 1, h.time = number_in(r);
-		else if (is(s, len, "actor")) h.actor = read_value(r);
+		else if (is(s, len, "actor")) h.actor = read_value(r, PK_ACTOR);
 		else if (is(s, len, "reader")) h.reader = text(r);
 		else if (is(s, len, "site")) h.has_site = 1, h.site = site(r);
-		else if (is(s, len, "cause")) h.cause = read_value(r);
+		else if (is(s, len, "cause")) h.cause = read_value(r, PK_CAUSE);
 		else skip(r);
 	}
 	return h;

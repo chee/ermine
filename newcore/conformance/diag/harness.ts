@@ -4,29 +4,17 @@
 //   {op: "read", text}   -> {value} | {code, at, line, column}
 // Another implementation joins by speaking this. A read refused is code "not-diag" with the
 // offset (in UTF-16 code units), line and column from 1 (the message is not compared). A value
-// that cannot be carried (a form standing for none, or a live stand-in) is "cannot-carry".
-import { Stand } from "../../encoding/ts/cbor.ts"
+// that cannot be carried (a form standing for none) is "cannot-carry".
 import { DiagError, read, write } from "../../files/ts/diag.ts"
 import { FormError, fromJson, line, toJson } from "../pack/form.ts"
 
 type Request = { op: string; value?: unknown; text?: string }
 
-// a stand-in anywhere in the value: no diagnostic notation for it
-function stands(x: unknown): boolean {
-	if (x instanceof Stand) return true
-	if (x === null || typeof x !== "object" || ArrayBuffer.isView(x) || x instanceof ArrayBuffer) {
-		return false
-	}
-	return Object.values(x).some(stands)
-}
-
 function answer(r: Request): unknown {
 	try {
 		switch (r.op) {
-			case "write": {
-				const value = fromJson(r.value) as never
-				return stands(value) ? { code: "cannot-carry" } : { text: write(value) }
-			}
+			case "write":
+				return { text: write(fromJson(r.value) as never) }
 			case "read":
 				return { value: toJson(read(r.text!)) }
 			default:

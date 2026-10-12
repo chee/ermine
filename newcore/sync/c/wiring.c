@@ -229,7 +229,7 @@ static void settle(wiring *w, const char *doc, transport_layer layer, const Json
 			*site = pr_map();
 			pr_put(a, site, "file", pr_str(a, h->site.file, strlen(h->site.file)));
 			pr_put(a, site, "line", pr_num((double)h->site.line));
-			if (h->site.column) pr_put(a, site, "column", pr_num((double)h->site.column));
+			if (h->site.has_column) pr_put(a, site, "column", pr_num((double)h->site.column));
 			if (h->site.function) pr_put(a, site, "function", pr_str(a, h->site.function, strlen(h->site.function)));
 			ch->site = site;
 		}

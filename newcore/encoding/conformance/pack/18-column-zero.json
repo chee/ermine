@@ -1,0 +1,36 @@
+{
+	"title": "a site at column 0 comes back with its column",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r",
+			"value": [
+				{
+					"content": { "k": [1, "x", 2.5, null, true] },
+					"change": { "time": 3, "actor": "a", "node": "r" },
+					"because": { "layer": "l", "place": [0] }
+				},
+				{ "content": "日本", "change": { "time": 2, "actor": "b", "node": "r" } }
+			],
+			"info": [
+				["type", [{ "content": "public.folder", "change": 1 }]],
+				[
+					"tags",
+					[
+						{ "content": ["kitchen"], "change": 1 },
+						{ "content": [], "change": 0, "because": "x" }
+					]
+				]
+			],
+			"children": [["home", [{ "content": [], "change": 1 }]]],
+			"header": {
+				"time": 1760000000000,
+				"actor": { "name": "chee" },
+				"reader": "box",
+				"site": { "file": "file:///a.ts", "line": 12, "column": 0, "function": "f" },
+				"cause": ["why", 1]
+			}
+		}
+	],
+	"expect": { "nodes": ["r"], "missing": [] }
+}

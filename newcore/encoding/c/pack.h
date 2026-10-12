@@ -26,12 +26,16 @@ typedef struct {
 } pk_bytes;
 void pk_put(pk_bytes *b, const void *data, size_t length);
 
+// which field a value is in: each may be a different type of the caller's
+typedef enum { PK_CONTENT, PK_CHANGE, PK_BECAUSE, PK_ACTOR, PK_CAUSE } pk_field;
+
 typedef struct {
-	// writes one CBOR item for value; nonzero: it cannot be carried
-	int (*encode)(void *context, const void *value, pk_bytes *out);
-	// a value from the one CBOR item at item, length long; nonzero: not one it reads. What it
-	// gives is the caller's, kept after pk_free. Give non-NULL: NULL is not there
-	int (*decode)(void *context, const uint8_t *item, size_t length, const void **value);
+	// writes one CBOR item for value, in field; nonzero: it cannot be carried
+	int (*encode)(void *context, pk_field field, const void *value, pk_bytes *out);
+	// a value for field from the one CBOR item at item, length long; nonzero: not one it reads.
+	// What it gives is the caller's, kept after pk_free. Give non-NULL: NULL is not there
+	int (*decode)(void *context, pk_field field, const uint8_t *item, size_t length,
+		const void **value);
 	void *context;
 } pk_codec;
 

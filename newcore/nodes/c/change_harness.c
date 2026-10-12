@@ -112,7 +112,7 @@ static void parse_site(ch_site *s) {
 	while ((k = key())) {
 		if (!strcmp(k, "file")) s->file = keep(str());
 		else if (!strcmp(k, "line")) s->line = strtol(p, NULL, 10), skip();
-		else if (!strcmp(k, "column")) s->column = strtol(p, NULL, 10), skip();
+		else if (!strcmp(k, "column")) s->column = strtol(p, NULL, 10), s->has_column = 1, skip();
 		else if (!strcmp(k, "function")) s->function = keep(str());
 		else skip();
 		free(k);
@@ -175,7 +175,7 @@ static void answer(char *line) {
 			fputs(",\"site\":{\"file\":", stdout);
 			out(c.header.site.file ? c.header.site.file : "");
 			printf(",\"line\":%ld", c.header.site.line);
-			if (c.header.site.column) printf(",\"column\":%ld", c.header.site.column);
+			if (c.header.site.has_column) printf(",\"column\":%ld", c.header.site.column);
 			if (c.header.site.function) { fputs(",\"function\":", stdout); out(c.header.site.function); }
 			putchar('}');
 		}

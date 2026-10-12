@@ -1,7 +1,6 @@
 // what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "../../encoding/ts/blop.ts"
-import { Stand } from "../../encoding/ts/cbor.ts"
 import createBecause, { type Because } from "../../nodes/ts/because.ts"
 import createChange, { type Change } from "../../nodes/ts/change.ts"
 import createNode from "../../nodes/ts/node.ts"
@@ -23,7 +22,7 @@ const kept = new WeakMap<Histories, Map<string, unknown>>()
 // the side after the blop's patches; MutateError when they do not apply
 function after(histories: Histories, blop: Blop): unknown {
 	const base = blop.base ?? blop.parents[0]
-	const before = base === undefined ? undefined : data(histories, base)
+	const before = base === undefined ? undefined : side(histories, base)
 	const change = createChange(blop.node, { time: 0, actor: blop.actor })
 	const versions = before === undefined ? [] : [{ content: before, change }]
 	const o = blop.object
@@ -36,48 +35,8 @@ function after(histories: Histories, blop: Blop): unknown {
 	return left?.[0]?.content
 }
 
-// x with each stand-in in it made into what live(kind) makes of it (a stand-in is not a plain
-// object, so it is checked first); a kind it makes nothing of (undefined), or no live: the
-// stand-in, as data. Copies only what holds one
-function lived(x: unknown, live: Live): unknown {
-	if (x instanceof Stand) {
-		const made = live(x.kind)
-		return made === undefined ? x : made
-	}
-	if (x === null || typeof x !== "object" || x instanceof ArrayBuffer || ArrayBuffer.isView(x)) {
-		return x
-	}
-	if (Array.isArray(x)) {
-		const items = x.map((e) => lived(e, live))
-		return items.some((e, i) => e !== x[i]) ? items : x
-	}
-	const keys = Object.keys(x), made: Record<string, unknown> = {}
-	let changed = false
-	for (const k of keys) {
-		const v = lived((x as Record<string, unknown>)[k], live)
-		if (v !== (x as Record<string, unknown>)[k]) changed = true
-		Object.defineProperty(made, k, {
-			value: v,
-			enumerable: true,
-			writable: true,
-			configurable: true,
-		})
-	}
-	return changed ? made : x
-}
-
-/** The host's: what a stand-in's kind makes (a canvas here for a canvas there); undefined: nothing. */
-export type Live = (kind: unknown) => unknown
-
-// a blop's side, or undefined: not taken in, or emptied. live (optional, the host's): what the
-// stand-ins in it become (APPLY.tex); none given: stand-ins stay as data
-export function side(histories: Histories, name: Uint8Array, live?: Live): unknown {
-	const content = data(histories, name)
-	return live === undefined || content === undefined ? content : lived(content, live)
-}
-
-// the side as data, stand-ins as they are
-function data(histories: Histories, name: Uint8Array): unknown {
+// a blop's side, or undefined: not taken in, or emptied. a stand-in in it stays as it is (APPLY.tex)
+export function side(histories: Histories, name: Uint8Array): unknown {
 	const blop = histories.get(name)
 	if (blop === undefined) return undefined
 	if (!kept.has(histories)) kept.set(histories, new Map())
@@ -98,17 +57,15 @@ export function check(histories: Histories, blop: Blop): boolean {
 	}
 }
 
-// an object's versions: its heads in the agreed order, each with a side; time(name) the caller's;
-// live (optional, the host's) makes each stand-in in a side into what it makes of its kind, as side
+// an object's versions: its heads in the agreed order, each with a side; time(name) the caller's
 export function versions(
 	histories: Histories,
 	object: Blop["object"],
 	time: (name: string) => number,
-	live?: Live,
 ): Version[] {
 	const out: Version[] = []
 	for (const head of histories.heads(object)) {
-		const content = side(histories, head.name, live)
+		const content = side(histories, head.name)
 		if (content === undefined) continue
 		const { blop } = head
 		const name = hex(head.name)

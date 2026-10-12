@@ -4,6 +4,7 @@
 // A value is given in JSON form (../pack/form.ts). A refused text marks the place of its fault
 // with ¶ (taken out of the text): the offset, line and column are worked out from it, counting
 // UTF-16 code units, lines from 1 at each newline, columns from 1.
+import { Stand } from "../../encoding/ts/cbor.ts"
 import { toJson } from "../pack/form.ts"
 
 const out = new URL("../../files/conformance/diag/", import.meta.url)
@@ -361,6 +362,19 @@ reads(
 		Float32Array.of(NaN),
 	],
 )
+writes(
+	"stand",
+	"a stand-in as its tag, 0x12345678, on its kind, any value, indented as its kind",
+	[new Stand("clock"), new Stand(null), new Stand({ url: "a", w: 2 }), { s: new Stand([]) }],
+	'[\n  305419896("clock"),\n  305419896(null),\n  305419896({\n    "url": "a",\n    "w": 2.0\n  }),\n  {\n    "s": 305419896([])\n  }\n]',
+)
+reads(
+	"stand-read",
+	"a stand-in's tag over any value, in any integer base, spacing and comments around",
+	`[0x12345678 ( "clock" ), 305419896(85(h'0000803f')), 305419896(/ a canvas / {"w": 1})]`,
+	[new Stand("clock"), new Stand(Float32Array.of(1)), new Stand({ w: 1 })],
+)
+refuses("refuse-stand-close", "a stand-in's kind not closed by )", `305419896("clock" ¶1)`)
 reads(
 	"map-keys",
 	"keys in any order, as any text, and the key __proto__",
@@ -387,7 +401,7 @@ refuses("refuse-simple", "simple values other than false, true and null", "¶sim
 refuses("refuse-word", "an unknown word", "[1, ¶foo]")
 refuses("refuse-word-glued", "Infinity glued to letters is a different word", "¶Infinityx")
 refuses("refuse-prefix", "bytes prefixes other than h and b64", "¶x'ab'")
-refuses("refuse-tag", "a tag that is not a typed array's", "¶100(h'00')")
+refuses("refuse-tag", "a tag that is not a typed array's or a stand-in's", "¶100(h'00')")
 refuses("refuse-tag-time", "tag 1 is a time, which is no value here", "¶1(1.5)")
 refuses("refuse-tag-over", "a typed array's tag over what is not bytes", "64(¶1)")
 refuses("refuse-tag-over-text", "a typed array's tag over text", `85(¶"abcd")`)

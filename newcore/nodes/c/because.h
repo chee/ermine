@@ -2,16 +2,17 @@
 #ifndef BECAUSE_H
 #define BECAUSE_H
 
-// where in code: column 0 and function NULL when not known
+// where in code: column only when has_column, function NULL when not known
 typedef struct {
 	const char *file;
 	long line;
 	long column;
 	const char *function;
+	int has_column;
 } bc_site;
 
 // the site of the code writing it
-#define BC_HERE (&(bc_site){__FILE__, __LINE__, 0, __func__})
+#define BC_HERE (&(bc_site){__FILE__, __LINE__, 0, __func__, 0})
 
 // why a version is there: the layer that put it there, where it put it, and that layer's reason
 // place and why: the layer's, never read here; why NULL = not given

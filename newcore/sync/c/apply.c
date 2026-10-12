@@ -220,13 +220,13 @@ bool apply_check(void *context, histories *c, const Json *blop) {
 	return applies;
 }
 
-// a site as the blop holds it; column 0 and function NULL when not given
+// a site as the blop holds it; has_column 0 and function NULL when not given
 static void site_of(const Json *j, ch_site *site) {
 	int64_t n;
 	const Json *file = jsonGet(j, "file"), *line = jsonGet(j, "line"), *column = jsonGet(j, "column");
 	*site = (ch_site){.file = jsonText(file) ? jsonText(file) : "", .function = jsonText(jsonGet(j, "function"))};
 	if (line && jsonIsWhole(line, &n)) site->line = (long)n;
-	if (column && jsonIsWhole(column, &n)) site->column = (long)n;
+	if (column && jsonIsWhole(column, &n)) site->column = (long)n, site->has_column = 1;
 }
 
 static void hex_of(const uint8_t *b, char *out) {

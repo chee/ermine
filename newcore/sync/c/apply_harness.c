@@ -97,7 +97,7 @@ static void print_version(const apply_version *v) {
 		fputs(",\"site\":{\"file\":", stdout);
 		print_text(h->site.file);
 		printf(",\"line\":%ld", h->site.line);
-		if (h->site.column) printf(",\"column\":%ld", h->site.column);
+		if (h->site.has_column) printf(",\"column\":%ld", h->site.column);
 		if (h->site.function) fputs(",\"function\":", stdout), print_text(h->site.function);
 		putchar('}');
 	}

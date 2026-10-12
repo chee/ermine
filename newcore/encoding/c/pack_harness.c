@@ -13,8 +13,8 @@
 
 // --- the codec: JSON text to canonical CBOR, and back (json.c, cbor.c) ---
 
-static int encode(void *context, const void *value, pk_bytes *out) {
-	(void)context;
+static int encode(void *context, pk_field field, const void *value, pk_bytes *out) {
+	(void)context, (void)field;
 	if (value == NULL) return 1;
 	char *why = NULL;
 	Json *x = jsonParse(value, strlen(value), &why);
@@ -33,8 +33,9 @@ static int encode(void *context, const void *value, pk_bytes *out) {
 	return bad;
 }
 
-static int decode(void *context, const uint8_t *item, size_t length, const void **value) {
-	(void)context;
+static int decode(void *context, pk_field field, const uint8_t *item, size_t length,
+	const void **value) {
+	(void)context, (void)field;
 	Json *x = cborDecode(item, length, NULL, NULL);
 	if (x == NULL) return 1;
 	char *printed = jsonPrint(x);
