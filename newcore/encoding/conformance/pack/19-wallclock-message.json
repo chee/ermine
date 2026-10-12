@@ -1,0 +1,30 @@
+{
+	"title": "a header's wallclock and message, and a version's, come back as written",
+	"root": "r",
+	"nodes": [
+		{
+			"id": "r",
+			"value": [
+				{
+					"content": "hi",
+					"change": {
+						"time": 2,
+						"actor": "a",
+						"node": "r",
+						"wallclock": 1760270400,
+						"message": "fixed the typo"
+					}
+				}
+			],
+			"info": [],
+			"children": [],
+			"header": {
+				"time": 1,
+				"actor": "a",
+				"wallclock": 1760270399,
+				"message": "made it"
+			}
+		}
+	],
+	"expect": { "nodes": ["r"], "missing": [] }
+}

@@ -32,15 +32,16 @@ static int signed_by(const Json *blop, const uint8_t key[32]) {
 	return s->bytes.length == 32 && memcmp(s->bytes.data, key, 32) == 0;
 }
 
-seal_code seal_seal(const uint8_t *blop, size_t length, const seal_signer *signer, uint8_t **out, size_t *out_length) {
+seal_code seal_seal(const uint8_t *blop, size_t length, const seal_signer *signer, const seal_made *made, uint8_t **out, size_t *out_length) {
 	*out = NULL;
-	Json *b;
-	if (blop_of(blop, length, &b) != SEAL_OK) return SEAL_SHAPE;
-	int same = signed_by(b, signer->key);
+	Json *b = NULL;
+	if (made == NULL && blop_of(blop, length, &b) != SEAL_OK) return SEAL_SHAPE;
+	int same = signed_by(made ? made->blop : b, signer->key);
 	jsonFree(b);
 	if (!same) return SEAL_SIGNATURE;
 	uint8_t m[48], signature[64];
-	message(blop, length, m);
+	if (made) memcpy(m, "ermine/v0/change", 16), memcpy(m + 16, made->name, 32);
+	else message(blop, length, m);
 	if (signer->sign(signer->context, m, 48, signature) != 64) return SEAL_SHAPE;
 	if (!seal_good(signature, signer->key, m, 48)) return SEAL_SIGNATURE;
 	Json *sealed = jsonObject();

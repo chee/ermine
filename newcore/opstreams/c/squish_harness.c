@@ -1,6 +1,6 @@
 // The C squish library on the line protocol: one JSON request per line in, one answer per line
 // out, in order. Same as ../conformance/harness.ts. List elements, moves and other values are
-// kept as parsed JSON, which squish never reads; {"$bytes": [...]} is bytes.
+// kept as parsed JSON, which squish never reads; {"$bytes": [...]}, bytes, too: one whole value.
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
@@ -187,11 +187,6 @@ static void out_value(const sq_value *v) {
 		}
 		putchar(']');
 		return;
-	case SQ_BYTES:
-		fputs("{\"$bytes\":[", stdout);
-		for (size_t i = 0; i < v->n; i++) printf(i ? ",%u" : "%u", ((const uint8_t *)v->data)[i]);
-		fputs("]}", stdout);
-		return;
 	}
 }
 
@@ -252,12 +247,6 @@ static sq_value value_of(const node *v) {
 	if (v->type == 'a') {
 		sq_value l = sq_list((const void *const *)v->kids, v->n);
 		return l.lone = lone(v), l;
-	}
-	const node *b = v->n == 1 ? get(v, "$bytes") : NULL;
-	if (b && b->type == 'a') {
-		uint8_t *bytes = alloc(b->n);
-		for (size_t i = 0; i < b->n; i++) bytes[i] = (uint8_t)num(b->kids[i]);
-		return sq_bytes(bytes, b->n);
 	}
 	sq_value a = sq_any(v);
 	return a.lone = lone(v), a;

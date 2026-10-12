@@ -218,12 +218,12 @@ static void commit_op(Json *request, device *d, const char *doc, transport_layer
 	}
 	seal_signer signer = {{0}, sign, d->seed};
 	memcpy(signer.key, d->key, 32);
-	if (seal_seal(bytes, length, &signer, &sealed, &sealed_length) != SEAL_OK) {
+	if (seal_seal(bytes, length, &signer, NULL, &sealed, &sealed_length) != SEAL_OK) {
 		error("not sealed");
 		return;
 	}
 	seal_stored(sealed, sealed_length, stored);
-	if (transport_add(d->t, doc, sealed, sealed_length) != TRANSPORT_OK) {
+	if (transport_add(d->t, doc, sealed, sealed_length, NULL) != TRANSPORT_OK) {
 		error("not taken");
 		return;
 	}

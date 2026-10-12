@@ -16,7 +16,7 @@ import {
 	GraphError,
 	type Read,
 } from "../../graph/ts/graph.ts"
-import type { Node, Version } from "../../nodes/ts/node.ts"
+import type { Node, Side } from "../../nodes/ts/node.ts"
 import type { Address, Depend, Item, Place, Step, Where } from "../../graph/ts/places.ts"
 import { type Ask, edit, type May, pass as passing } from "../../protect/ts/protect.ts"
 import { createCode } from "../../programs/ts/code.ts"
@@ -64,7 +64,7 @@ import type { Finder, Hook } from "./types.ts"
 export { GraphError as SchedulerError, pidOf } from "../../graph/ts/graph.ts"
 
 type N = Node<unknown, Change>
-type V = Version<unknown, Change>
+type V = Side<unknown, Change>
 
 export type Options = {
 	// the root: the host's node, restored or new (createNode(id, {}))

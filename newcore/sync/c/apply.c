@@ -8,7 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-// the side kept for a blop taken in: held here until the histories let it go (apply_release)
+// the side kept for a blop taken in: a head's, or one made again since the last trim; held here
+// until the histories let it go (apply_release)
 typedef struct {
 	nt_value *side;
 } kept;
@@ -118,15 +119,19 @@ static bool bytes(const Json *j) {
 	return j != NULL && j->type == JSON_BYTES && j->bytes.length == 32;
 }
 
-// the side after the blop's patches into *out, one hold of it the caller's (nt_free); false: they
-// do not apply
-static bool after(histories *c, const Json *blop, nt_value **out) {
-	*out = NULL;
+// a blop's base: its base, else its first parent; NULL: none
+static const uint8_t *base_of(const Json *blop) {
 	const Json *base = jsonGet(blop, "base"), *parents = jsonGet(blop, "parents");
 	if (base == NULL && parents && parents->type == JSON_ARRAY && parents->array.count) {
 		base = parents->array.items[0];
 	}
-	const nt_value *before = bytes(base) ? apply_side(c, base->bytes.data) : NULL;
+	return bytes(base) ? base->bytes.data : NULL;
+}
+
+// the side after the blop's patches on before into *out, one hold of it the caller's (nt_free);
+// false: they do not apply
+static bool after(const Json *blop, const nt_value *before, nt_value **out) {
+	*out = NULL;
 
 	const Json *list = jsonGet(blop, "patches"), *object = jsonGet(blop, "object");
 	size_t n = list && list->type == JSON_ARRAY ? (size_t)list->array.count : 0;
@@ -195,15 +200,48 @@ static bool after(histories *c, const Json *blop, nt_value **out) {
 	return applied;
 }
 
+static kept *keep(nt_value *side) {
+	kept *k = grab(sizeof *k);
+	k->side = side;
+	return k;
+}
+
 const nt_value *apply_side(histories *c, const uint8_t name[32]) {
 	void **slot = history_slot(c, name);
 	if (slot == NULL) return NULL;
-	if (*slot == NULL) {
-		kept *k = grab(sizeof *k);
-		after(c, history_get(c, name), &k->side);
-		*slot = k;
+	if (*slot) return ((kept *)*slot)->side;
+	// not kept: back along the bases to the nearest side kept (or the root, none), then each blop's
+	// patches again, forward. The blops got stay good till the next trim; each side made goes as
+	// the next is made from it
+	uint8_t (*line)[32] = NULL;
+	size_t n = 0, room = 0;
+	const nt_value *from = NULL;
+	for (const uint8_t *at = name; at;) {
+		void **s = history_slot(c, at);
+		if (s == NULL) break;
+		if (*s) {
+			from = ((kept *)*s)->side;
+			break;
+		}
+		if (n == room) {
+			room = room ? room * 2 : 16;
+			line = realloc(line, room * sizeof *line);
+			if (line == NULL) abort();
+		}
+		memcpy(line[n++], at, 32);
+		at = base_of(history_get(c, at));
 	}
-	return ((kept *)*slot)->side;
+	nt_value *side = NULL;
+	for (size_t i = n; i-- > 0;) {
+		nt_value *next;
+		// taken in: they applied, and apply again
+		after(history_get(c, line[i]), from, &next);
+		nt_free(side);
+		from = side = next;
+	}
+	free(line);
+	*history_slot(c, name) = keep(side);
+	return side;
 }
 
 void apply_release(void *slot) {
@@ -212,12 +250,13 @@ void apply_release(void *slot) {
 	free(k);
 }
 
-bool apply_check(void *context, histories *c, const Json *blop) {
+bool apply_check(void *context, histories *c, const Json *blop, void **slot) {
 	(void)context;
+	const uint8_t *base = base_of(blop);
 	nt_value *side;
-	bool applies = after(c, blop, &side);
-	nt_free(side);
-	return applies;
+	if (!after(blop, base ? apply_side(c, base) : NULL, &side)) return false;
+	*slot = keep(side);
+	return true;
 }
 
 // a site as the blop holds it; has_column 0 and function NULL when not given

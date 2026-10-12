@@ -6,9 +6,9 @@ import createBecause from "../../nodes/ts/because.ts"
 import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
 import { type Graph, GraphError } from "../../graph/ts/graph.ts"
 import type { Which } from "../../opstreams/ts/mutate.ts"
-import type { Version } from "../../nodes/ts/node.ts"
+import type { Side } from "../../nodes/ts/node.ts"
 
-type V = Version<unknown, Change>
+type V = Side<unknown, Change>
 
 export type Status = {
 	pending?: number
@@ -56,14 +56,12 @@ export function stepped(a: unknown, add: Record<string, unknown>): Agent {
 export const isLive = (v: unknown) => typeof v === "function" || typeof v === "symbol"
 
 // two values are the same when their members are: bytes and typed arrays by their elements, a
-// typed array only as one of its own kind; a live value only as itself
+// typed array only as one of its own kind; a live value only as itself (an ArrayBuffer is one)
 export function same(a: unknown, b: unknown): boolean {
 	if (Object.is(a, b)) return true
 	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
 	if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false
-	if (a instanceof ArrayBuffer) {
-		return same(new Uint8Array(a), new Uint8Array(b as ArrayBuffer))
-	}
+	if (a instanceof ArrayBuffer) return false
 	if (ArrayBuffer.isView(a)) {
 		const x = a as unknown as ArrayLike<unknown>, y = b as unknown as ArrayLike<unknown>
 		if (x.length !== y.length) return false

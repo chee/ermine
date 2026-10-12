@@ -22,7 +22,7 @@ const here = new URL(".", import.meta.url).pathname
 const reference = ["deno", "run", "--quiet", "--allow-all", `${here}harness.ts`]
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const utf8 = new TextEncoder()
-const bytes = (...xs: number[]) => Uint8Array.from(xs).buffer
+const bytes = (...xs: number[]) => Uint8Array.from(xs)
 const PNG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)
 const TAG = "com.apple.metadata:_kMDItemUserTags"
 
@@ -188,7 +188,7 @@ async function catching(prior: Saving[], batch: Saving, files = false): Promise<
 			const view = new DataView(all.buffer)
 			let at = 0, last = 0
 			while (at + 4 <= all.length) last = at, at += 4 + view.getUint32(at)
-			const f = cbor.decode(all.subarray(last + 4, at)) as Record<string, ArrayBuffer | null>
+			const f = cbor.decode(all.subarray(last + 4, at)) as Record<string, Uint8Array | null>
 			if (!f.plan) return
 			const inos = new Map<number, string>()
 			const walk = (abs: string, path: string) => {
@@ -202,11 +202,7 @@ async function catching(prior: Saving[], batch: Saving, files = false): Promise<
 			walk(folder, "")
 			const records: Record<string, unknown> = {}
 			for (const [k, v] of Object.entries(f)) {
-				records[k] = v === null
-					? null
-					: k === "plan"
-					? planOf(new Uint8Array(v), (n) => inos.get(n)!)
-					: hex(new Uint8Array(v))
+				records[k] = v === null ? null : k === "plan" ? planOf(v, (n) => inos.get(n)!) : hex(v)
 			}
 			const values: [string, string][] = []
 			for (const e of Deno.readDirSync(`${folder}/.ermine/values`)) {
@@ -405,9 +401,9 @@ scenario(
 	m.place("r", "accents", "s3", "ünï\n")
 	m.place("r", "png", "b1", PNG)
 	m.place("r", "jpg", "b2", bytes(0xff, 0xd8, 0xff, 0xe0, 1))
-	m.place("r", "gif", "b3", utf8.encode("GIF89a!").buffer)
-	m.place("r", "pdf", "b4", utf8.encode("%PDF-1.7").buffer)
-	m.place("r", "webp", "b5", utf8.encode("RIFF\0\0\0\0WEBPVP8").buffer)
+	m.place("r", "gif", "b3", utf8.encode("GIF89a!"))
+	m.place("r", "pdf", "b4", utf8.encode("%PDF-1.7"))
+	m.place("r", "webp", "b5", utf8.encode("RIFF\0\0\0\0WEBPVP8"))
 	m.place("r", "raw", "b6", bytes(1, 2, 3))
 	m.place("r", "notutf8", "b7", bytes(0xff, 0xfe))
 	m.place("r", "nothing", "b8", bytes())
@@ -423,6 +419,7 @@ scenario(
 	const m = new Model()
 	const steps: Step[] = [open(), read()]
 	m.place("r", "i8", "t1", new Int8Array([-1, 2]))
+	// no uint8 kind (the designer, 10-12): a Uint8Array is bytes, u8.bin
 	m.place("r", "u8", "t2", new Uint8Array([7, 255]))
 	m.place("r", "i16", "t3", new Int16Array([-300]))
 	m.place("r", "u16", "t4", new Uint16Array([65535]))
@@ -436,7 +433,7 @@ scenario(
 	steps.push(write(m), observe(), open(), read())
 	scenario(
 		"forms-typed-arrays",
-		"a typed array is its elements little-endian, named .<kind>; data.raw holding float32 is data.raw.float32",
+		"a typed array is its elements little-endian, named .<kind>; data.raw holding float32 is data.raw.float32; a Uint8Array is bytes, no kind",
 		steps,
 	)
 }
@@ -1422,7 +1419,7 @@ async function catchingMirror(first: Saving, prior: Saving[], batch: Saving): Pr
 			const view = new DataView(all.buffer)
 			let at = 0, last = 0
 			while (at + 4 <= all.length) last = at, at += 4 + view.getUint32(at)
-			const f = cbor.decode(all.subarray(last + 4, at)) as Record<string, ArrayBuffer | null>
+			const f = cbor.decode(all.subarray(last + 4, at)) as Record<string, Uint8Array | null>
 			if (!f.plan) return
 			const inos = new Map<number, string>()
 			const walk = (abs: string, path: string) => {
@@ -1436,11 +1433,7 @@ async function catchingMirror(first: Saving, prior: Saving[], batch: Saving): Pr
 			walk(folder, "")
 			const records: Record<string, unknown> = {}
 			for (const [k, v] of Object.entries(f)) {
-				records[k] = v === null
-					? null
-					: k === "plan"
-					? planOf(new Uint8Array(v), (n) => inos.get(n)!)
-					: hex(new Uint8Array(v))
+				records[k] = v === null ? null : k === "plan" ? planOf(v, (n) => inos.get(n)!) : hex(v)
 			}
 			caught = { values: [], records }
 		},

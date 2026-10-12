@@ -12,8 +12,7 @@ import { seal, SealError, stored, unseal } from "../../sync/ts/seal.ts"
 
 type Request = { op: string; blop?: string; seed?: string; bytes?: string }
 
-const hex = (b: Uint8Array | ArrayBuffer) =>
-	Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("")
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 
 function signer(seed: Uint8Array) {

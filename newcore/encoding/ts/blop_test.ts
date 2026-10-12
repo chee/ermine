@@ -37,8 +37,11 @@ Deno.test("blop: round trip, byte fields as byte strings", () => {
 	const bytes = encode(b)
 	assertEquals(decode(bytes), b)
 	const raw = cbor.decode(bytes) as { [k: string]: cbor.Value }
-	assertEquals(raw.signer instanceof ArrayBuffer, true)
-	assertEquals((raw.parents as cbor.Value[])[0] instanceof ArrayBuffer, true)
+	// byte strings, as bytes are everywhere
+	const hex = Array.from(bytes, (x) => x.toString(16).padStart(2, "0")).join("")
+	assertEquals(hex.includes("667369676e65725820"), true)
+	assertEquals(raw.signer instanceof Uint8Array, true)
+	assertEquals((raw.parents as cbor.Value[])[0] instanceof Uint8Array, true)
 	assertEquals(name(bytes).length, 32)
 	assertEquals(name(bytes), name(encode(decode(bytes))))
 })
@@ -99,12 +102,25 @@ Deno.test("blop: cannot carry a live value", () => {
 Deno.test("blop: decoding says no", () => {
 	assertEquals(fail(() => decode(new Uint8Array([0xff]))), ["not-a-blop", undefined])
 	assertEquals(fail(() => decode(cbor.encode([1]))), ["not-a-blop", undefined])
-	// a Uint8Array is a typed array (tag 64), not bytes
+	// a typed array is not bytes
 	const raw = cbor.decode(encode(blop())) as { [k: string]: cbor.Value }
-	assertEquals(fail(() => decode(cbor.encode({ ...raw, nonce: fill(8, 2) }))), [
+	assertEquals(fail(() => decode(cbor.encode({ ...raw, nonce: new Uint16Array(4) }))), [
 		"not-a-blop",
 		"nonce",
 	])
+	// a view is bytes, as given
+	const nonce = new Uint8Array(12).fill(2).subarray(2, 10)
+	assertEquals(decode(cbor.encode({ ...raw, nonce })).nonce, fill(8, 2))
+	// tag 64 over the nonce's bytes: no encoding, so no field
+	const tagged = encode(blop())
+	const at = Array.from(tagged).findIndex((_, i) =>
+		[0x65, 0x6e, 0x6f, 0x6e, 0x63, 0x65, 0x48].every((x, j) => tagged[i + j] === x)
+	)
+	const t = new Uint8Array(tagged.length + 2)
+	t.set(tagged.subarray(0, at + 6))
+	t.set([0xd8, 0x40], at + 6)
+	t.set(tagged.subarray(at + 6), at + 8)
+	assertEquals(fail(() => decode(t)), ["not-a-blop", undefined])
 	// keys out of order: not the canonical encoding
 	const b = encode(blop())
 	const swapped = new Uint8Array([0xa2, 0x61, 0x62, 0xf6, 0x61, 0x61, 0xf6])

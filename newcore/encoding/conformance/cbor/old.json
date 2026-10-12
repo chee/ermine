@@ -114,10 +114,10 @@
 		"refused": true
 	},
 	{
-		"from": "values-check-order.json#5",
+		"from": "values-check-order.json#5 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AR"
+				"int8": "AR"
 			}
 		},
 		"refused": true
@@ -132,10 +132,10 @@
 		"refused": true
 	},
 	{
-		"from": "values-check-order.json#8",
+		"from": "values-check-order.json#8 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": [
+				"int8": [
 					1
 				]
 			}
@@ -314,15 +314,15 @@
 		]
 	},
 	{
-		"from": "values-list-typed-switch.json#13",
+		"from": "values-list-typed-switch.json#13 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AQI"
+				"int8": "AQI"
 			}
 		},
 		"back": {
 			"/": {
-				"uint8": "AQI"
+				"int8": "AQI"
 			}
 		}
 	},
@@ -360,15 +360,15 @@
 		]
 	},
 	{
-		"from": "values-list-typed-switch.json#20",
+		"from": "values-list-typed-switch.json#20 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AQID"
+				"int8": "AQID"
 			}
 		},
 		"back": {
 			"/": {
-				"uint8": "AQID"
+				"int8": "AQID"
 			}
 		}
 	},
@@ -739,11 +739,11 @@
 		"refused": true
 	},
 	{
-		"from": "values-malformed-slash.json#9",
+		"from": "values-malformed-slash.json#9 (uint16: no uint8 kind)",
 		"value": {
 			"/": {
 				"int8": "AQ",
-				"uint8": "AQ"
+				"uint16": "AQA"
 			}
 		},
 		"refused": true
@@ -934,46 +934,46 @@
 		"refused": true
 	},
 	{
-		"from": "values-malformed-typed.json#11",
+		"from": "values-malformed-typed.json#11 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AQI="
+				"int8": "AQI="
 			}
 		},
 		"refused": true
 	},
 	{
-		"from": "values-malformed-typed.json#12",
+		"from": "values-malformed-typed.json#12 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "-_8"
+				"int8": "-_8"
 			}
 		},
 		"refused": true
 	},
 	{
-		"from": "values-malformed-typed.json#13",
+		"from": "values-malformed-typed.json#13 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AQ I"
+				"int8": "AQ I"
 			}
 		},
 		"refused": true
 	},
 	{
-		"from": "values-malformed-typed.json#14",
+		"from": "values-malformed-typed.json#14 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AQIDB"
+				"int8": "AQIDB"
 			}
 		},
 		"refused": true
 	},
 	{
-		"from": "values-malformed-typed.json#15",
+		"from": "values-malformed-typed.json#15 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AR"
+				"int8": "AR"
 			}
 		},
 		"refused": true
@@ -1564,15 +1564,15 @@
 		}
 	},
 	{
-		"from": "values-typed-integers.json#3",
+		"from": "values-typed-integers.json#3 (int8: no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": "AP8"
+				"int8": "AP8"
 			}
 		},
 		"back": {
 			"/": {
-				"uint8": "AP8"
+				"int8": "AP8"
 			}
 		}
 	},

@@ -2,7 +2,7 @@
 // patches are GRAPH.tex's: this reads them, never applies them, and never needs the content
 // squishing keeps the end result and drops the in-between: only an edit's end is ever seen
 import type { Key, Patch, Span } from "../../notify/ts/notify.ts"
-import { count } from "./walk.ts"
+import { count, near } from "./walk.ts"
 
 type Ranged = Patch & { range: Span }
 
@@ -16,8 +16,10 @@ function len(v: unknown): number {
 	if (isList(v) || typed(v)) return v.length
 	return NaN
 }
-type Typed = Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed => ArrayBuffer.isView(v) && !(v instanceof DataView)
+// bytes, a Uint8Array, are one whole value: never joined or cut (MUTATE.tex)
+type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
+const typed = (v: unknown): v is Typed =>
+	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 
 const same = (a: readonly Key[], b: readonly Key[]) =>
 	a.length === b.length && a.every((k, i) => k === b[i])
@@ -53,8 +55,13 @@ function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown 
 		t.n = n - (y - x) + wn
 		if (x === n) return t.simple = t.simple && s.length === wn, v + s
 		if (t.simple) return t.simple = s.length === wn, v.slice(0, x) + s + v.slice(y)
-		const cs = Array.from(v)
-		const out = cs.slice(0, x).join("") + s + cs.slice(y).join("")
+		const at = near(v, x, y, false, { n, k: n, i: v.length })
+		let out
+		if (at) out = v.slice(0, at[0]) + s + v.slice(at[1])
+		else {
+			const cs = Array.from(v)
+			out = cs.slice(0, x).join("") + s + cs.slice(y).join("")
+		}
 		t.simple = out.length === t.n
 		return out
 	}

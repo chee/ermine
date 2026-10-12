@@ -27,6 +27,10 @@ typedef struct {
 	int has_site;
 	nd_site site;
 	const void *cause;
+	// the author's clock, whole seconds since 1970, and a message (CHANGE.tex): optional
+	int has_wallclock;
+	int64_t wallclock;
+	const char *message;
 } nd_header;
 
 // content: the caller's; under children, an nd_list. change and because: the caller's

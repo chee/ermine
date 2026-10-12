@@ -63,7 +63,9 @@ add(
 	c({ op: "fits", ext: "md", form: "txt" }, true),
 	c({ op: "fits", ext: "png", form: "bin" }, true),
 	c({ op: "fits", ext: "float32", form: "txt" }, false),
-	c({ op: "fits", ext: "uint8", form: "bin" }, false),
+	c({ op: "fits", ext: "int8", form: "bin" }, false),
+	// no uint8 kind (the designer, 10-12): an extension like any other
+	c({ op: "fits", ext: "uint8", form: "bin" }, true),
 	c({ op: "fits", ext: "int64", form: "int64" }, true),
 	c({ op: "fits", ext: "float64", form: "float32" }, false),
 	c({ op: "fits", ext: "raw", form: "float32" }, false),
@@ -109,7 +111,7 @@ add(
 	c({ op: "suffix", form: "bin", head: hex([...Buffer("%PDF-")]) }, "pdf"),
 	c({ op: "suffix", form: "cbor" }, "text"),
 	c({ op: "suffix", form: "float32" }, "float32"),
-	c({ op: "suffix", form: "uint8" }, "uint8"),
+	c({ op: "suffix", form: "int8" }, "int8"),
 	c({ op: "suffix", form: "int64" }, "int64"),
 )
 
@@ -767,7 +769,9 @@ add(
 	c({ op: "take", entry: "notes.txt" }, { slot: "notes.txt" }),
 	c({ op: "take", entry: "notes.text" }, { slot: "notes", form: "cbor" }),
 	c({ op: "take", entry: "notes.float32" }, { slot: "notes", form: "float32" }),
-	c({ op: "take", entry: "notes.uint8" }, { slot: "notes", form: "uint8" }),
+	c({ op: "take", entry: "notes.int8" }, { slot: "notes", form: "int8" }),
+	// no uint8 kind: the extension stays in the slot
+	c({ op: "take", entry: "notes.uint8" }, { slot: "notes.uint8" }),
 	c({ op: "take", entry: "notes.int64" }, { slot: "notes", form: "int64" }),
 	c({ op: "take", entry: "notes.Float32" }, { slot: "notes.Float32" }),
 	c({ op: "take", entry: "notes.TEXT" }, { slot: "notes.TEXT" }),

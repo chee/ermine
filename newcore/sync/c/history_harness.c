@@ -68,7 +68,7 @@ static uint8_t (*checked)[32];
 static size_t checks, room;
 
 // check, noting the blop's name
-static bool check(void *context, histories *c, const Json *blop) {
+static bool check(void *context, histories *c, const Json *blop, void **slot) {
 	uint8_t *bytes;
 	size_t length;
 	if (blop_encode(blop, &bytes, &length).code != BLOP_OK) abort();
@@ -79,7 +79,7 @@ static bool check(void *context, histories *c, const Json *blop) {
 	}
 	blop_name(bytes, length, checked[checks++]);
 	free(bytes);
-	return apply_check(context, c, blop);
+	return apply_check(context, c, blop, slot);
 }
 
 int main(void) {

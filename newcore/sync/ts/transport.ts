@@ -7,12 +7,15 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "../../encoding/ts/cbor.ts"
 import { type Blop, BlopError, decode, name as blopName } from "../../encoding/ts/blop.ts"
 import { check } from "./apply.ts"
-import { type Added, type Histories, createHistories } from "./history.ts"
+import { type Added, createHistories, type Histories } from "./history.ts"
 import { build, depth, type Fragment } from "./fragment.ts"
 import { bytes as idbytes } from "./id.ts"
 import { SealError, type Signer, stored, unseal, type Unsealed } from "./seal.ts"
 
 export type Layer = "stored" | "ephemeral"
+
+// a blop this device made: decoded, and its name
+export type Made = { blop: Blop; name: Uint8Array }
 
 // what a lock's open gives (LOCK.tex): the bytes close was given; not yet; or never
 export type Opened = Uint8Array | { wait: true } | { refused: string }
@@ -65,12 +68,16 @@ export type Device = {
 	disconnect(key: Uint8Array): Promise<void>
 	follow(doc: string): Promise<void>
 	histories(doc: string, layer?: Layer): Histories
-	// a stored blop of this device's: taken in, added as a loose commit, fragments built
-	add(sealed: Uint8Array): Promise<void>
+	// a stored blop of this device's: taken in, added as a loose commit, fragments built. made: its
+	// blop, name and stored id, from the code that took it in and sealed it: its seal is handed to
+	// the histories before addCommit, so its save is passed over; not unsealed, checked or taken
+	// in again
+	add(sealed: Uint8Array, made?: Made & { stored: Uint8Array }): Promise<void>
 	// a blop this device made, its bytes, not yet sealed, into that layer's histories at once and
 	// synchronously (WIRING.tex): add and publish then pass over the name already taken in. A stored
 	// blop goes into the ephemeral layer's histories too. Answers as the histories do. Not announced
-	take(doc: string, blop: Uint8Array, layer: Layer): Added
+	// made: its blop decoded and its name, from the code that encoded it: not decoded or named again
+	take(doc: string, blop: Uint8Array, layer: Layer, made?: Made): Added
 	// told each blop taken in from elsewhere to a history, after it is taken in
 	arrived(listener: (arrival: Arrival) => void): void
 	// an ephemeral one, the blop's bytes, not sealed, as given: taken in (refused as a receiver would
@@ -106,7 +113,6 @@ export const PART = 60000
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 const by = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
-const buffer = (u: Uint8Array) => u.slice().buffer as ArrayBuffer
 const commitId = (b: Uint8Array) => new sd.CommitId(b)
 
 // a taken-in seal: its name, blop, sealed bytes, its blop's parents' names, and the stored ids of
@@ -355,8 +361,8 @@ export function createDevice(
 			if (e instanceof cbor.CborError) return
 			throw e
 		}
-		if (!Array.isArray(x) || !x.every((m) => m instanceof ArrayBuffer)) return
-		return x.map((m) => new Uint8Array(m as ArrayBuffer))
+		if (!Array.isArray(x) || !x.every((m) => m instanceof Uint8Array)) return
+		return x as Uint8Array[]
 	}
 
 	// FRAGMENT.tex, Taking in
@@ -461,7 +467,7 @@ export function createDevice(
 			if (e instanceof cbor.CborError) return
 			throw e
 		}
-		if (x === null || typeof x !== "object" || Array.isArray(x) || x instanceof ArrayBuffer) {
+		if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) {
 			return
 		}
 		const m = x as { [key: string]: cbor.Value }
@@ -469,12 +475,12 @@ export function createDevice(
 		if (keys.join() !== "bytes,part,parts,whole") return
 		const { whole, part, parts, bytes } = m
 		if (
-			!(whole instanceof ArrayBuffer) || whole.byteLength !== 32 ||
-			!(bytes instanceof ArrayBuffer) ||
-			bytes.byteLength > PART || typeof part !== "number" || typeof parts !== "number" ||
+			!(whole instanceof Uint8Array) || whole.length !== 32 ||
+			!(bytes instanceof Uint8Array) ||
+			bytes.length > PART || typeof part !== "number" || typeof parts !== "number" ||
 			!Number.isInteger(part) || !Number.isInteger(parts) || part < 0 || part >= parts
 		) return null
-		return { whole: new Uint8Array(whole), part, parts, bytes: new Uint8Array(bytes) }
+		return { whole, part, parts, bytes }
 	}
 
 	// one part from a sender: kept with its whole's; when all are here, joined, the hash checked,
@@ -519,7 +525,7 @@ export function createDevice(
 		for (const f of fresh) {
 			const ms = f.members.map((m) => d.seen.get(hex(m))!)
 			ms.sort((a, b) => a.blop.lamport - b.blop.lamport || by(a.name, b.name))
-			const bytes = cbor.encode(ms.map((m) => buffer(m.sealed)))
+			const bytes = cbor.encode(ms.map((m) => m.sealed))
 			const names = f.boundary.map((b) => unhex(d.seen.get(hex(b))!.name))
 				.sort((a, b) => by(hex(a), hex(b)))
 			const blob = await lock.close(d.bytes, blake3(bytes), names, bytes)
@@ -692,16 +698,16 @@ export function createDevice(
 			await fetched(d)
 		},
 		histories: (doc, layer = "stored") => named(doc).histories[layer],
-		take(doc, bytes, layer) {
+		take(doc, bytes, layer, made) {
 			const d = named(doc)
-			const blop = decode(bytes), n = blopName(bytes)
+			const blop = made?.blop ?? decode(bytes), n = made?.name ?? blopName(bytes)
 			const added = d.histories[layer].add(blop, n)
 			if (layer === "stored") d.histories.ephemeral.add(blop, n)
 			return added
 		},
 		arrived: (listener) => void listeners.push(listener),
-		async add(sealed) {
-			const u = unseal(sealed)
+		async add(sealed, made) {
+			const u = made ? { ...made, signer: made.blop.signer } : unseal(sealed)
 			const d = named(u.blop.node)
 			const blob = await lock.close(d.bytes, u.name, u.blop.parents, sealed)
 			let parents: Uint8Array[] = []
@@ -711,7 +717,8 @@ export function createDevice(
 					if (s === undefined) throw new Error("a parent is not taken in")
 					return unhex(s[0])
 				})
-				await commit(d, u.stored, parents, blob)
+				if (!made) await commit(d, u.stored, parents, blob)
+				else if (!d.seen.has(hex(u.stored))) hand(d, u, sealed, parents.map(hex).sort(by))
 			})
 			await sub.addCommit(d.tree, commitId(u.stored), parents.map(commitId), blob)
 			await run(() => building(d))
@@ -727,9 +734,9 @@ export function createDevice(
 			const blob = await lock.close(d.bytes, blopName(bytes), parents, bytes)
 			await run(() => hear(d, blob, options.signer.key))
 			if (blob.length <= LIMIT) return await sub.publishEphemeral(d.topic, blob)
-			const whole = buffer(blake3(blob)), parts = Math.ceil(blob.length / PART)
+			const whole = blake3(blob), parts = Math.ceil(blob.length / PART)
 			for (let i = 0; i < parts; i++) {
-				const bytes = buffer(blob.subarray(i * PART, (i + 1) * PART))
+				const bytes = blob.subarray(i * PART, (i + 1) * PART)
 				await sub.publishEphemeral(d.topic, cbor.encode({ whole, part: i, parts, bytes }))
 			}
 		},

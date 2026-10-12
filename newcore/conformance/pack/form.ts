@@ -1,5 +1,6 @@
 // values in their JSON form (ENCODING.tex), as the C harness's json.c writes them: JSON for
-// what JSON holds; {"/": {"bytes": b64}}, {"/": {"number": "NaN" | "Infinity" | "-Infinity"}},
+// what JSON holds; {"/": {"bytes": b64}} for bytes, a Uint8Array (no uint8 kind),
+// {"/": {"number": "NaN" | "Infinity" | "-Infinity"}},
 // {"/": {kind: [elements]}} for a typed array, 64-bit elements as decimal strings, a float's NaN
 // and infinities as the words; {"/": {"live": kind}} for a stand-in; {"/": {"map": {"/": x}}} for a map whose one key is "/". Base64:
 // the standard alphabet, unpadded. -0 is written -0
@@ -7,7 +8,6 @@ import { Stand } from "../../encoding/ts/cbor.ts"
 
 const KINDS: { [kind: string]: { new (b: ArrayBuffer): ArrayBufferView } } = {
 	int8: Int8Array,
-	uint8: Uint8Array,
 	int16: Int16Array,
 	uint16: Uint16Array,
 	int32: Int32Array,
@@ -32,7 +32,7 @@ export function toJson(x: unknown): unknown {
 		return x
 	}
 	if (x === null || typeof x !== "object") return x
-	if (x instanceof ArrayBuffer) return slash({ bytes: b64(new Uint8Array(x)) })
+	if (x instanceof Uint8Array) return slash({ bytes: b64(x) })
 	if (ArrayBuffer.isView(x)) {
 		const elements = Array.from(
 			x as unknown as ArrayLike<number | bigint>,
@@ -59,7 +59,7 @@ const no = (why: string): never => {
 
 const DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 // base64, standard alphabet, unpadded, in the one spelling of its bytes: unused bits zero
-function bytesOf(x: unknown): ArrayBuffer {
+function bytesOf(x: unknown): Uint8Array {
 	if (typeof x !== "string" || x.length % 4 === 1) return no("bytes")
 	const out: number[] = []
 	let bits = 0, held = 0
@@ -72,13 +72,12 @@ function bytesOf(x: unknown): ArrayBuffer {
 		bits &= (1 << held) - 1
 	}
 	if (bits) return no("bytes")
-	return Uint8Array.from(out).buffer
+	return Uint8Array.from(out)
 }
 
 const WORDS: { [w: string]: number } = { NaN: NaN, Infinity: Infinity, "-Infinity": -Infinity }
 const RANGE: { [kind: string]: [number, number] } = {
 	int8: [-128, 127],
-	uint8: [0, 255],
 	int16: [-32768, 32767],
 	uint16: [0, 65535],
 	int32: [-(2 ** 31), 2 ** 31 - 1],

@@ -5,8 +5,10 @@
 import type { Key, Patch } from "../../../notify/ts/notify.ts"
 import { unit } from "../walk.ts"
 
-type Typed = Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed => ArrayBuffer.isView(v) && !(v instanceof DataView)
+// bytes, a Uint8Array, are one whole value: never spliced (MUTATE.tex)
+type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
+const typed = (v: unknown): v is Typed =>
+	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 
 // the container holding path's last key
 function walk(root: any, path: readonly Key[]): any {

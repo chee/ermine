@@ -3,7 +3,7 @@
 // and the caller (the scheduler) tracks. placing is patches to lists, by mutate.ts: each a change
 import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
 import mutate, { type Which } from "../../opstreams/ts/mutate.ts"
-import createNode, { type List, type Node, type Version } from "../../nodes/ts/node.ts"
+import createNode, { type List, type Node, type Side } from "../../nodes/ts/node.ts"
 import type { Patch } from "../../notify/ts/notify.ts"
 
 // where a read is: names from the root, walked from the root each read
@@ -44,7 +44,7 @@ export type Item<V, H> = {
 }
 
 // an item with one object of its node: every version; none if the item is pending
-export type Read<V, H> = Item<V, H> & { versions?: Version<V, H>[] }
+export type Read<V, H> = Item<V, H> & { versions?: Side<V, H>[] }
 
 // get: the node of an id, or none if it is not loaded
 export type Get<V, H> = (id: string) => Node<V, H> | undefined
@@ -291,9 +291,7 @@ export function createPlaces<V, H>(
 		const out: Item<V, H>[] = []
 		if (path.length === 0) return out
 		const { names } = resolve(place, [])
-		const taken = place.trail === undefined
-			? walk(names, depend).taken
-			: along(place.trail, depend)
+		const taken = place.trail === undefined ? walk(names, depend).taken : along(place.trail, depend)
 		for (let i = taken.length - 1; i >= 0; i--) {
 			const d = down(taken[i], path, depend)
 			if (d === undefined) continue
@@ -379,7 +377,7 @@ export function createPlaces<V, H>(
 		for (const it of look(place, address, depend)) {
 			if (it.node === undefined) continue
 			depend?.(it.id, [part])
-			for (const k of (part === "info" ? it.node.info : it.node.children).keys()) seen.add(k)
+			for (const k of (part === "info" ? it.node.attributes : it.node.children).keys()) seen.add(k)
 		}
 		return [...seen]
 	}
@@ -409,7 +407,7 @@ export function createPlaces<V, H>(
 				scratch: (base: C["value"]) => createNode<V, Change>(n.id, { value: base }),
 			}
 		}
-		const map = (which[0] === "info" ? n.info : n.children) as Map<
+		const map = (which[0] === "info" ? n.attributes : n.children) as Map<
 			string,
 			C["value"]
 		>
@@ -576,7 +574,7 @@ export function createPlaces<V, H>(
 		for (const it of out) {
 			if (it.node === undefined) continue
 			depend?.(it.id, part)
-			it.versions = part === "value" ? it.node.value : (it.node.info.get(part[1]) ?? [])
+			it.versions = part === "value" ? it.node.value : (it.node.attributes.get(part[1]) ?? [])
 		}
 		return out
 	}

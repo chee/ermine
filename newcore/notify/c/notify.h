@@ -11,10 +11,9 @@
 // bytes are a leaf; a typed array is a sequence of its elements (its length: how many); a stand-in
 // (what a live value is sent as) is a leaf holding its kind, any value, as its one item
 typedef enum { NT_NULL, NT_BOOL, NT_NUM, NT_STR, NT_LIST, NT_MAP, NT_BYTES, NT_TYPED, NT_STAND } nt_type;
-// a typed array's kind, in ENCODING.tex's order
+// a typed array's kind, in ENCODING.tex's order; no uint8: bytes are that
 typedef enum {
-	NT_INT8, NT_UINT8, NT_INT16, NT_UINT16, NT_INT32, NT_UINT32, NT_INT64, NT_UINT64, NT_FLOAT32,
-	NT_FLOAT64,
+	NT_INT8, NT_INT16, NT_UINT16, NT_INT32, NT_UINT32, NT_INT64, NT_UINT64, NT_FLOAT32, NT_FLOAT64,
 } nt_elements;
 typedef struct nt_value nt_value;
 struct nt_value {
@@ -44,6 +43,8 @@ nt_value *nt_null(void);
 nt_value *nt_bool(int b);
 nt_value *nt_num(double n);
 nt_value *nt_str(const char *s);
+// the string is s, n bytes then a 0, malloc'd: the value's from here, freed with it
+nt_value *nt_str_take(char *s, size_t n);
 nt_value *nt_list(void);
 nt_value *nt_map(void);
 // copies n bytes

@@ -1,7 +1,12 @@
 // a graph from a root, or one node, as bytes in the canonical encoding (ENCODING.tex), and back
 // reachable: by any version of any list, not only the first; nothing loaded here, nothing placed
 import * as cbor from "./cbor.ts"
-import createNode, { type Header, type List, type Node, type Version } from "../../nodes/ts/node.ts"
+import createNode, {
+	type ChangeHeader,
+	type List,
+	type Node,
+	type Side,
+} from "../../nodes/ts/node.ts"
 
 // get: the node of an id, or none if it is not loaded (table.ts's get)
 export type Get<V, H> = (id: string) => Node<V, H> | undefined
@@ -48,16 +53,16 @@ function defined(o: object): Fields {
 	for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v as cbor.Value
 	return out
 }
-const versions = <C, H>(vs: Version<C, H>[]) => vs.map(defined)
+const versions = <C, H>(vs: Side<C, H>[]) => vs.map(defined)
 
 // a node as written: id, value, info and children as entries in order, header
 function written<V, H>(n: Node<V, H>): Fields {
 	return {
 		id: n.id,
 		value: versions(n.value),
-		info: [...n.info].map(([name, vs]) => [name, versions(vs)]),
+		info: [...n.attributes].map(([name, vs]) => [name, versions(vs)]),
 		children: [...n.children].map(([name, vs]) => [name, versions(vs)]),
-		header: defined(n.header),
+		header: defined(n.change),
 	}
 }
 
@@ -91,17 +96,16 @@ export function encode<V, H>(node: Node<V, H>): Uint8Array {
 }
 
 const isFields = (x: unknown): x is Fields =>
-	x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x) &&
-	!(x instanceof ArrayBuffer)
+	x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x)
 const isIds = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string")
 
 // versions as written: maps; under children, each content a list of ids; other keys passed over
-function read(x: unknown, lists: boolean): Version<unknown, unknown>[] | undefined {
+function read(x: unknown, lists: boolean): Side<unknown, unknown>[] | undefined {
 	// a version is its content: there, or it is not one
 	if (!Array.isArray(x) || !x.every((v) => isFields(v) && "content" in v)) return
 	if (lists && !x.every((v) => isIds(v.content))) return
 	return x.map((v) => {
-		const out: Version<unknown, unknown> = { content: v.content, change: v.change }
+		const out: Side<unknown, unknown> = { content: v.content, change: v.change }
 		if (!("change" in v)) delete (out as { change?: unknown }).change
 		if ("because" in v) out.because = v.because
 		return out
@@ -109,10 +113,11 @@ function read(x: unknown, lists: boolean): Version<unknown, unknown>[] | undefin
 }
 
 // a header as pack writes it: time a number, reader a string, site {file, line, column?,
-// function?}; actor and cause any value; other keys passed over
-function header(x: unknown): Header | undefined {
+// function?}, wallclock a whole, message a string; actor and cause any value; other keys
+// passed over
+function header(x: unknown): ChangeHeader | undefined {
 	if (!isFields(x)) return
-	const h: Header = {}
+	const h: ChangeHeader = {}
 	if ("time" in x) {
 		if (typeof x.time !== "number") return
 		h.time = x.time
@@ -132,12 +137,21 @@ function header(x: unknown): Header | undefined {
 		if ("function" in s) h.site.function = s.function as string
 	}
 	if ("cause" in x) h.cause = x.cause
+	if ("wallclock" in x) {
+		const w = x.wallclock
+		if (typeof w !== "number" || !Number.isInteger(w) || w < 0 || Object.is(w, -0)) return
+		h.wallclock = w
+	}
+	if ("message" in x) {
+		if (typeof x.message !== "string") return
+		h.message = x.message
+	}
 	return h
 }
 
-function named(x: unknown, lists: boolean): [string, Version<unknown, unknown>[]][] | undefined {
+function named(x: unknown, lists: boolean): [string, Side<unknown, unknown>[]][] | undefined {
 	if (!Array.isArray(x)) return
-	const out: [string, Version<unknown, unknown>[]][] = []
+	const out: [string, Side<unknown, unknown>[]][] = []
 	for (const e of x) {
 		if (!Array.isArray(e) || e.length !== 2 || typeof e[0] !== "string") return
 		const vs = read(e[1], lists)
@@ -154,9 +168,9 @@ function node<V, H>(x: unknown): Node<V, H> | undefined {
 	const children = named(x.children, true), h = header(x.header)
 	if (!value || !info || !children || !h) return
 	return createNode(x.id, {
-		value: value as Version<V, H>[],
-		info: info as [string, Version<V, H>[]][],
-		children: children as [string, Version<List, H>[]][],
+		value: value as Side<V, H>[],
+		attributes: info as [string, Side<V, H>[]][],
+		children: children as [string, Side<List, H>[]][],
 	}, { header: h })
 }
 

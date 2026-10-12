@@ -25,21 +25,9 @@ const hex = (b: Uint8Array | string) =>
 	typeof b === "string" ? b : Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 
-// the byte fields are Uint8Array in the API (BLOP.tex); the JSON form's bytes are ArrayBuffers
-const FIELDS = ["signer", "nonce", "base"]
-const map = (b: unknown, f: (x: ArrayBuffer | Uint8Array) => unknown) =>
-	b instanceof ArrayBuffer || b instanceof Uint8Array ? f(b) : b
-function convert(blop: unknown, f: (x: ArrayBuffer | Uint8Array) => unknown): unknown {
-	if (typeof blop !== "object" || blop === null || Array.isArray(blop)) return blop
-	const o: Record<string, unknown> = { ...blop }
-	for (const k of FIELDS) if (k in o) o[k] = map(o[k], f)
-	if (Array.isArray(o.parents)) o.parents = o.parents.map((p) => map(p, f))
-	return o
-}
-const toArray = (b: ArrayBuffer | Uint8Array) => b instanceof ArrayBuffer ? new Uint8Array(b) : b
-const toBuffer = (b: ArrayBuffer | Uint8Array) => b instanceof Uint8Array ? b.slice().buffer : b
-const blopIn = (j: unknown) => convert(fromJson(j), toArray) as never
-const blopOut = (b: unknown) => toJson(convert(b, toBuffer))
+// the byte fields Uint8Arrays, in the API (BLOP.tex) and in the JSON form (form.ts)
+const blopIn = (j: unknown) => fromJson(j) as never
+const blopOut = (b: unknown) => toJson(b)
 
 // deno-lint-ignore no-explicit-any
 let histories: any
@@ -57,7 +45,9 @@ function answer(r: Request): unknown {
 		case "add":
 			return histories.add(blopIn(r.blop), unhex(r.name!))
 		case "heads":
-			return histories.heads(fromJson(r.object)).map((h: { name: Uint8Array; blop: unknown }) => ({
+			return histories.heads(fromJson(r.object)).map((
+				h: { name: Uint8Array; blop: unknown },
+			) => ({
 				name: hex(h.name),
 				blop: blopOut(h.blop),
 			}))

@@ -5,8 +5,8 @@
 // VALUES BEYOND JSON. A value is also bytes, a typed array or a stand-in (what
 // a live value is sent as, over its kind, any value), each held as the machine
 // holds it: bytes and typed arrays in a buffer of their own, never as strings
-// or lists of numbers. A number is any binary64,
-// NaN, the infinities and -0 included. The parser reads plain JSON;
+// or lists of numbers; no uint8 kind, bytes are that (ENCODING.tex). A number
+// is any binary64, NaN, the infinities and -0 included. The parser reads plain JSON;
 // jsonDecode turns the "/" forms (ENCODING.tex, JSON form) in a value read from a line into these
 // kinds, and the printer writes every value in its JSON form (ENCODING.tex,
 // in JSON): -0 as -0, NaN and the infinities, bytes, typed arrays and stand-ins
@@ -58,8 +58,8 @@
 
 typedef enum { JSON_NULL, JSON_BOOLEAN, JSON_NUMBER, JSON_STRING, JSON_ARRAY, JSON_OBJECT, JSON_BYTES, JSON_TYPED, JSON_STAND } JsonType;
 
-/** a typed array's kind (ENCODING.tex), in ENCODING.tex's order; each held as its C type */
-typedef enum { JSON_INT8, JSON_UINT8, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON_INT64, JSON_UINT64, JSON_FLOAT32, JSON_FLOAT64, JSON_KINDS } JsonKind;
+/** a typed array's kind (ENCODING.tex), in ENCODING.tex's order; each held as its C type. No uint8: bytes are that */
+typedef enum { JSON_INT8, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON_INT64, JSON_UINT64, JSON_FLOAT32, JSON_FLOAT64, JSON_KINDS } JsonKind;
 
 typedef struct Json Json;
 
@@ -118,6 +118,8 @@ Json *jsonInteger(int64_t value);
 Json *jsonString(const char *text);
 /** copies `length` bytes, NUL included */
 Json *jsonStringOfLength(const char *text, size_t length);
+/** takes `text`, a heap buffer of `length` bytes and a NUL after them, as the string's own */
+Json *jsonStringTaking(char *text, size_t length);
 Json *jsonArray(void);
 Json *jsonObject(void);
 /** bytes: copies `length` octets */
@@ -133,6 +135,8 @@ void jsonPush(Json *array, Json *item);
 /** appends a key to an object, without checking for one already there; takes the value; copies the key */
 void jsonAdd(Json *object, const char *key, Json *value);
 void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value);
+/** as jsonAddOfLength, taking `key`, a heap buffer of `length` bytes and a NUL after them, as the member's own */
+void jsonAddTaking(Json *object, char *key, size_t length, Json *value);
 /** sets a key of an object: replaces the value where the key is (letting go of the one there), or appends it (JS's o[k] = v); takes the value */
 void jsonSet(Json *object, const char *key, size_t length, Json *value);
 /** removes a key of an object, letting go of its value; false if it was not there (the object is unchanged) */

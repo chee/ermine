@@ -158,21 +158,7 @@ function check(b: Fields): string | undefined {
 	}
 }
 
-const buffer = (u: Uint8Array) => u.slice().buffer as ArrayBuffer
-const bytes = (a: ArrayBuffer) => new Uint8Array(a)
-
-// the byte fields as byte strings (an ArrayBuffer), the rest as given
-function written(b: Fields): Fields {
-	const out: Fields = {}
-	for (const [k, v] of Object.entries(b)) {
-		if (k === "signer" || k === "nonce" || k === "base") out[k] = buffer(v as Uint8Array)
-		else if (k === "parents") out[k] = (v as Uint8Array[]).map(buffer)
-		else out[k] = v
-	}
-	return out
-}
-
-// the blop's bytes; nonce, signer, parents, base as Uint8Arrays, written as byte strings
+// the blop's bytes; nonce, signer, parents, base Uint8Arrays, as bytes everywhere
 export function encode(blop: Blop): Uint8Array {
 	if (!isFields(blop)) throw new BlopError("not-a-blop")
 	// a field with nothing is left out
@@ -180,16 +166,15 @@ export function encode(blop: Blop): Uint8Array {
 	for (const [k, v] of Object.entries(blop)) if (v !== undefined) b[k] = v
 	const field = check(b)
 	if (field !== undefined) throw new BlopError("not-a-blop", field)
-	const w = written(b)
 	try {
-		return cbor.encode(w as cbor.Value)
+		return cbor.encode(b as cbor.Value)
 	} catch (e) {
 		if (!(e instanceof cbor.CborError)) throw e
 		// which: each again, only when one failed
 		for (const k of FIELDS) {
-			if (!(k in w)) continue
+			if (!(k in b)) continue
 			try {
-				cbor.encode(w[k] as cbor.Value)
+				cbor.encode(b[k] as cbor.Value)
 			} catch {
 				throw new BlopError("cannot-carry", k)
 			}
@@ -198,7 +183,7 @@ export function encode(blop: Blop): Uint8Array {
 	}
 }
 
-// the blop back, byte fields as Uint8Arrays
+// the blop back, byte fields Uint8Arrays
 export function decode(b: Uint8Array): Blop {
 	let x: unknown
 	try {
@@ -208,18 +193,9 @@ export function decode(b: Uint8Array): Blop {
 		throw e
 	}
 	if (!isFields(x)) throw new BlopError("not-a-blop")
-	// byte strings back as Uint8Arrays; anything else left, for check to say no to
-	const out: Fields = { ...x }
-	for (const k of ["signer", "nonce", "base"]) {
-		if (out[k] instanceof ArrayBuffer) out[k] = bytes(out[k] as ArrayBuffer)
-		else if (k in out) out[k] = null
-	}
-	if (Array.isArray(out.parents)) {
-		out.parents = out.parents.map((p) => p instanceof ArrayBuffer ? bytes(p) : null)
-	}
-	const field = check(out)
+	const field = check(x)
 	if (field !== undefined) throw new BlopError("not-a-blop", field)
-	return out as Blop
+	return x as Blop
 }
 
 // the change's name on every device: the BLAKE3 hash of the blop's bytes

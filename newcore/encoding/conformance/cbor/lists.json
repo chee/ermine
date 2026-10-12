@@ -86,10 +86,10 @@
 		}
 	},
 	{
-		"from": "values-list-typed-switch.json#13 (as lists)",
+		"from": "values-list-typed-switch.json#13 (as lists; int8, no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": [
+				"int8": [
 					1,
 					2
 				]
@@ -97,7 +97,7 @@
 		},
 		"back": {
 			"/": {
-				"uint8": [
+				"int8": [
 					1,
 					2
 				]
@@ -105,10 +105,10 @@
 		}
 	},
 	{
-		"from": "values-list-typed-switch.json#20 (as lists)",
+		"from": "values-list-typed-switch.json#20 (as lists; int8, no uint8 kind)",
 		"value": {
 			"/": {
-				"uint8": [
+				"int8": [
 					1,
 					2,
 					3
@@ -117,7 +117,7 @@
 		},
 		"back": {
 			"/": {
-				"uint8": [
+				"int8": [
 					1,
 					2,
 					3
@@ -470,7 +470,7 @@
 		}
 	},
 	{
-		"from": "values-typed-integers.json#3 (as lists)",
+		"from": "values-typed-integers.json#3 (as lists; no uint8 kind: refused)",
 		"value": {
 			"/": {
 				"uint8": [
@@ -479,14 +479,7 @@
 				]
 			}
 		},
-		"back": {
-			"/": {
-				"uint8": [
-					0,
-					255
-				]
-			}
-		}
+		"refused": true
 	},
 	{
 		"from": "values-typed-integers.json#5 (as lists)",

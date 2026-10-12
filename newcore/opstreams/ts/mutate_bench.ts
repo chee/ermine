@@ -40,12 +40,12 @@ const work: Record<string, Work> = {
 		start: () => ({ l: [] }),
 		patches: Array.from({ length: N }, (_, i) => ({ path: ["l"], range: [i, i], value: [i] })),
 	},
-	// bytes grown at the end
-	bytes: {
-		start: () => ({ b: new Uint8Array() }),
+	// a typed array grown at the end (bytes are never spliced)
+	typed: {
+		start: () => ({ b: new Int8Array() }),
 		patches: Array.from(
 			{ length: N },
-			(_, i) => ({ path: ["b"], range: [i, i], value: new Uint8Array([i & 255]) }),
+			(_, i) => ({ path: ["b"], range: [i, i], value: new Int8Array([i & 127]) }),
 		),
 	},
 	// inserts at random places in 100 strings of 1000

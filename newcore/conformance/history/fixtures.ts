@@ -47,16 +47,8 @@ function mk(m: Make = {}): B {
 	return { blop, name: hex(bytes), bytes, lamport }
 }
 
-// the JSON form: byte fields as ArrayBuffers (form.ts)
-const buf = (u: Uint8Array) => u.slice().buffer
-function form(b: B): unknown {
-	const o: Record<string, unknown> = { ...b.blop }
-	o.signer = buf(o.signer as Uint8Array)
-	o.nonce = buf(o.nonce as Uint8Array)
-	o.parents = (o.parents as Uint8Array[]).map(buf)
-	if (o.base) o.base = buf(o.base as Uint8Array)
-	return toJson(o)
-}
+// the JSON form (form.ts)
+const form = (b: B): unknown => toJson(b.blop)
 
 const byName = (bs: B[]) => [...bs].sort((a, b) => a.name < b.name ? -1 : 1)
 const names = (bs: B[]) => byName(bs).map((b) => b.name)

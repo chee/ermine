@@ -12,20 +12,21 @@
 //    → { change }, and, patched: true, { facts }: one Facts per patch, in order
 //    → { fail: code, patch: i }    a MutateError; nothing changes
 //
-// Typed arrays in JSON: { "$Uint8Array": [1, 2] } (Int8, Uint16, Int16, Uint32, Int32 too). An
-// implementation without them skips those scenarios (MUTATE_SKIP).
+// Typed arrays in JSON: { "$Int8Array": [1, 2] } (Uint16, Int16, Uint32, Int32 too). An
+// implementation without them skips those scenarios (MUTATE_SKIP). Bytes, a Uint8Array, as
+// ENCODING.tex writes them: { "/": { "bytes": b64 } }.
 // Anything not understood: { error }.
 import { type Change } from "../../nodes/ts/change.ts"
 import createNode, { type Node, type Version } from "../../nodes/ts/node.ts"
 import mutate, { MutateError, type Which } from "../../opstreams/ts/mutate.ts"
 import type { Facts, Patch } from "../../notify/ts/notify.ts"
+import { fromJson, toJson } from "../pack/form.ts"
 
 // deno-lint-ignore no-explicit-any
 type Request = Record<string, any>
 type Json = unknown
 
 const kinds = {
-	Uint8Array,
 	Int8Array,
 	Uint16Array,
 	Int16Array,
@@ -40,13 +41,18 @@ function revive(v: Json): Json {
 		if (keys.length === 1 && keys[0].startsWith("$") && kinds[keys[0].slice(1)]) {
 			return new kinds[keys[0].slice(1)]((v as Record<string, number[]>)[keys[0]])
 		}
+		const form = (v as Record<string, unknown>)["/"]
+		if (keys.length === 1 && form !== null && typeof form === "object" && "bytes" in form) {
+			return fromJson(v)
+		}
 		return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, revive(x)]))
 	}
 	return v
 }
 function dehydrate(v: Json): Json {
 	if (Array.isArray(v)) return v.map(dehydrate)
-	if (ArrayBuffer.isView(v)) return { ["$" + v.constructor.name]: [...(v as Uint8Array)] }
+	if (v instanceof Uint8Array) return toJson(v)
+	if (ArrayBuffer.isView(v)) return { ["$" + v.constructor.name]: [...(v as Int8Array)] }
 	if (v !== null && typeof v === "object") {
 		return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, dehydrate(x)]))
 	}

@@ -100,14 +100,7 @@ function blops(seed: number): { added: F[]; all: F[] } {
 		}
 		if (parents.length >= 2) blop.base = parents[Math.floor(r() * parents.length)].bytes
 		const bytes = name(encode(blop as never))
-		const buf = (u: Uint8Array) => u.slice().buffer
-		const form = toJson({
-			...blop,
-			signer: buf(blop.signer as Uint8Array),
-			nonce: buf(blop.nonce as Uint8Array),
-			parents: parents.map((p) => buf(p.bytes)),
-			...(blop.base ? { base: buf(blop.base as Uint8Array) } : {}),
-		})
+		const form = toJson(blop)
 		const f = { form, name: hex(bytes), bytes, lamport, object }
 		all.push(f)
 		// now and then one never added: what waits on it waits for good

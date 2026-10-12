@@ -165,9 +165,7 @@ static nt_value *made_str(work *w, const char *a, size_t na, const char *b, size
 	memcpy(buf + na, b, nb);
 	memcpy(buf + na + nb, c, nc);
 	buf[na + nb + nc] = 0;
-	nt_value *s = made(w, nt_str(buf));
-	free(buf);
-	return s;
+	return made(w, nt_str_take(buf, na + nb + nc));
 }
 
 // a copy to change in place: v itself when it was made here
@@ -377,8 +375,7 @@ static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_val
 		join(buf, &size, x + nv);
 		if (nv) join(buf, &size, x);
 		buf[size] = 0;
-		out = made(w, nt_str(buf));
-		free(buf);
+		out = made(w, nt_str_take(buf, size));
 		set(w, path, n, out, 0);
 		drop(w, s);
 		if (v) drop(w, v);

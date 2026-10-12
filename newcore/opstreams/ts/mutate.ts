@@ -24,8 +24,11 @@ export class MutateError extends Error {
 	}
 }
 
-type Typed = Uint8Array | Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
-const typed = (v: unknown): v is Typed => ArrayBuffer.isView(v) && !(v instanceof DataView)
+// a typed array: a sequence of its elements. bytes, a Uint8Array, are one whole value: never
+// spliced (MUTATE.tex)
+type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array
+const typed = (v: unknown): v is Typed =>
+	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 const isList = Array.isArray
 function isMap(v: unknown): v is Record<string, unknown> {
 	if (v === null || typeof v !== "object" || isList(v)) return false
@@ -285,7 +288,7 @@ function versions<V, H>(node: Node<V, H>, which: Which) {
 		}
 	}
 	const [part, name] = which
-	const m = (part === "info" ? node.info : node.children) as Map<string, unknown[]>
+	const m = (part === "info" ? node.attributes : node.children) as Map<string, unknown[]>
 	return {
 		get: () => (m.get(name) ?? []) as { content: unknown; change: H; because?: unknown }[],
 		set: (vs: unknown[]) => void (vs.length ? m.set(name, vs) : m.delete(name)),
@@ -304,7 +307,11 @@ export default function mutate<V>(
 	const before = vs.get()
 	const list = which !== "value" && which[0] === "children"
 	// a first version with no content (a removal among racing heads) starts as none there
-	const start = before.length && before[0].content !== undefined ? before[0].content : list ? [] : ABSENT
+	const start = before.length && before[0].content !== undefined
+		? before[0].content
+		: list
+		? []
+		: ABSENT
 	const { patched, ...header } = options
 	const { work, apply } = createWork(start, list)
 	const seen: [Patch, Facts][] = []

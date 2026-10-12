@@ -15,6 +15,8 @@ typedef struct {
 	transport_layer layer;
 	uint8_t *bytes;
 	size_t length;
+	Json *blop; // held till done: the blop decoded, and its name
+	uint8_t name[32];
 } job;
 
 struct wiring {
@@ -223,6 +225,9 @@ static void settle(wiring *w, const char *doc, transport_layer layer, const Json
 		ch->actor = pr_ptr(a, h->actor);
 		ch->reader = h->reader;
 		ch->cause = pr_ptr(a, h->cause);
+		ch->has_wallclock = h->has_wallclock;
+		ch->wallclock = h->wallclock;
+		ch->message = h->message;
 		ch->node = v->change.node;
 		if (h->has_site) {
 			pr_value *site = pr_alloc(a, sizeof *site);
@@ -242,6 +247,9 @@ static void settle(wiring *w, const char *doc, transport_layer layer, const Json
 	const Json *reader = jsonGet(blop, "reader");
 	gr_from from = {pr_ptr(a, jsonGet(blop, "actor")), jsonText(reader), pr_ptr(a, jsonGet(blop, "site")),
 		pr_ptr(a, jsonGet(blop, "cause")), signer, named};
+	const Json *wallclock = jsonGet(blop, "wallclock"), *message = jsonGet(blop, "message");
+	if (wallclock) from.has_wallclock = 1, from.wallclock = (int64_t)wallclock->number;
+	from.message = jsonText(message);
 	w->o.versions(w->o.context, doc, where, oname, list, n, &from);
 	free(list);
 	free(changes);
@@ -271,7 +279,7 @@ wiring *wiring_create(transport *t, const wiring_options *options) {
 
 void wiring_free(wiring *w) {
 	if (w == NULL) return;
-	for (size_t i = w->job_next; i < w->job_count; i++) free(w->jobs[i].bytes), free(w->jobs[i].doc);
+	for (size_t i = w->job_next; i < w->job_count; i++) free(w->jobs[i].bytes), free(w->jobs[i].doc), jsonFree(w->jobs[i].blop);
 	free(w->jobs);
 	for (size_t i = 0; i < w->trouble_count; i++) free(w->trouble[i]);
 	free(w->trouble);
@@ -280,9 +288,11 @@ void wiring_free(wiring *w) {
 	free(w);
 }
 
-static void later(wiring *w, const char *doc, transport_layer layer, uint8_t *bytes, size_t length) {
+static void later(wiring *w, const char *doc, transport_layer layer, uint8_t *bytes, size_t length, Json *blop, const uint8_t name[32]) {
 	w->jobs = more(w->jobs, w->job_count, &w->job_room, sizeof *w->jobs);
-	w->jobs[w->job_count++] = (job){copyString(doc), layer, bytes, length};
+	job *j = &w->jobs[w->job_count++];
+	*j = (job){.doc = copyString(doc), .layer = layer, .bytes = bytes, .length = length, .blop = jsonRef(blop)};
+	memcpy(j->name, name, 32);
 }
 
 void wiring_changed(wiring *w, const gr_record *r) {
@@ -299,6 +309,8 @@ void wiring_changed(wiring *w, const gr_record *r) {
 	if (h->reader) jsonAdd(header, "reader", jsonString(h->reader));
 	if (h->site) jsonAdd(header, "site", json_of_pr(h->site));
 	if (h->cause) jsonAdd(header, "cause", json_of_pr(h->cause));
+	if (h->has_wallclock) jsonAdd(header, "wallclock", jsonInteger(h->wallclock));
+	if (h->message) jsonAdd(header, "message", jsonString(h->message));
 	jsonAdd(change, "node", jsonString(doc));
 	jsonAdd(change, "object", object_json(r->where, r->name));
 	jsonAdd(change, "patches", patches);
@@ -326,8 +338,10 @@ void wiring_changed(wiring *w, const gr_record *r) {
 		return;
 	}
 	blop_name(bytes, length, name);
-	// taken in now, so that the next change commits against it; the transport keeps its own, decoded
-	if (transport_take(w->t, doc, bytes, length, layer) != TRANSPORT_OK) {
+	// taken in now, so that the next change commits against it; the transport takes a hold of the blop
+	transport_made made = {.blop = blop};
+	memcpy(made.name, name, 32);
+	if (transport_take(w->t, doc, bytes, length, layer, &made) != TRANSPORT_OK) {
 		trouble(w, "take", "not taken");
 		jsonFree(blop);
 		free(bytes);
@@ -336,8 +350,8 @@ void wiring_changed(wiring *w, const gr_record *r) {
 	// an ephemeral node is its process's own: what it shows is its process's, not the histories' (a
 	// process's status is a version in front of its value, the record the first version alone)
 	if (!r->ephemeral) settle(w, doc, layer, blop, name);
+	later(w, doc, layer, bytes, length, blop, name);
 	jsonFree(blop);
-	later(w, doc, layer, bytes, length);
 }
 
 bool wiring_idle(wiring *w) {
@@ -348,14 +362,20 @@ bool wiring_idle(wiring *w) {
 		if (j.layer == TRANSPORT_STORED) {
 			uint8_t *sealed;
 			size_t length;
-			if (seal_seal(j.bytes, j.length, &w->o.signer, &sealed, &length) != SEAL_OK) trouble(w, "seal", "not sealed");
+			seal_made sm = {.blop = j.blop};
+			memcpy(sm.name, j.name, 32);
+			if (seal_seal(j.bytes, j.length, &w->o.signer, &sm, &sealed, &length) != SEAL_OK) trouble(w, "seal", "not sealed");
 			else {
-				if (transport_add(w->t, j.doc, sealed, length) != TRANSPORT_OK) trouble(w, "add", "not added");
+				transport_made made = {.blop = j.blop};
+				memcpy(made.name, j.name, 32);
+				seal_stored(sealed, length, made.stored);
+				if (transport_add(w->t, j.doc, sealed, length, &made) != TRANSPORT_OK) trouble(w, "add", "not added");
 				free(sealed);
 			}
 		} else if (transport_publish(w->t, j.doc, j.bytes, j.length) != TRANSPORT_OK) trouble(w, "publish", "not published");
 		free(j.bytes);
 		free(j.doc);
+		jsonFree(j.blop);
 	}
 	w->job_count = w->job_next = 0;
 	return did;

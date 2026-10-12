@@ -31,11 +31,18 @@ typedef struct {
 	uint8_t name[32], stored[32], signer[32];
 } seal_unsealed;
 
+// a blop as the code that encoded it has it: decoded (not owned) and its name
+typedef struct {
+	const Json *blop;
+	uint8_t name[32];
+} seal_made;
+
 // good only if S < L; A and R canonical and not of small order; [S]B = R + [k]A, no cofactor
 bool seal_good(const uint8_t signature[64], const uint8_t key[32], const uint8_t *message, size_t length);
 // the sealed change's bytes, malloc'd into *out (free it). blop is its bytes. The signature sign
-// gave is checked as unseal checks it: not 64 bytes, SEAL_SHAPE; not good, SEAL_SIGNATURE
-seal_code seal_seal(const uint8_t *blop, size_t length, const seal_signer *signer, uint8_t **out, size_t *out_length);
+// gave is checked as unseal checks it: not 64 bytes, SEAL_SHAPE; not good, SEAL_SIGNATURE. made, or
+// NULL: the blop decoded and its name, taken as given: not decoded or named again
+seal_code seal_seal(const uint8_t *blop, size_t length, const seal_signer *signer, const seal_made *made, uint8_t **out, size_t *out_length);
 // synchronous, needing no key
 seal_code seal_unseal(const uint8_t *bytes, size_t length, seal_unsealed *out);
 void seal_free(seal_unsealed *u);

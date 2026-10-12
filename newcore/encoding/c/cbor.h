@@ -19,8 +19,9 @@
 //   (WTF-8, json.h) is not UTF-8 and has no encoding.
 // - Bytes as a byte string (major type 2).
 // - A typed array as an RFC 8746 tag over a byte string of its elements,
-//   little-endian: uint8 64, uint16 69, uint32 70, uint64 71, int8 72,
-//   int16 77, int32 78, int64 79, float32 85, float64 86. A float element
+//   little-endian: uint16 69, uint32 70, uint64 71, int8 72, int16 77,
+//   int32 78, int64 79, float32 85, float64 86; no uint8 kind, bytes are
+//   that: tag 64 never written, an unknown tag when read. A float element
 //   that is NaN is written as the one quiet NaN of its width (float32
 //   0x7fc00000, float64 0x7ff8000000000000), since all NaNs are one NaN.
 // - A stand-in (what a live value is sent as) as tag 0x12345678 (da12345678)
@@ -66,6 +67,12 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
  * found in *at (either may be NULL).
  */
 Json *cborDecode(const unsigned char *data, size_t length, const char **why, size_t *at);
+
+/**
+ * Whether cborDecode would take them: the same rules, the same *why and *at on
+ * a no, and no value made.
+ */
+bool cborCheck(const unsigned char *data, size_t length, const char **why, size_t *at);
 
 /**
  * Whether the text is one cborEncode can write as a string: UTF-8, with U+0000 as json.h holds

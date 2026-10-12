@@ -453,4 +453,32 @@ const LIST: Which = ["children", "kids"]
 	)
 }
 
+// ---- based on an older blop, no longer a head: its side made again from the root
+{
+	const A = mk({ patches: put("abc") })
+	const B = mk({ parents: [A], patches: [{ path: [], range: [3, 3], value: "d" }] })
+	const C = mk({ parents: [B], patches: [{ path: [], range: [4, 4], value: "e" }] })
+	const D = mk({ parents: [B], patches: [{ path: [], range: [4, 4], value: "x" }] })
+	const E = mk({ parents: [A], patches: [{ path: [], range: [3, 4] }] })
+	const F = mk({ parents: [D], patches: [{ path: [], range: [0, 1] }] })
+	scenario(
+		"older-base",
+		"concurrent on a blop no longer a head: checked against its own side, not a head's",
+		[
+			create(),
+			add(A),
+			add(B),
+			add(C),
+			add(D),
+			add(E, { refused: "patches" }),
+			add(F),
+			side(A, "abc"),
+			side(B, "abcd"),
+			side(D, "abcdx"),
+			side(F, "bcdx"),
+			versions([A, B, C, D, F], "value", [[F, "bcdx"], [C, "abcde"]]),
+		],
+	)
+}
+
 await write(new URL("../../sync/conformance/apply/", import.meta.url))

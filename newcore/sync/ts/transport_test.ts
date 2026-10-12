@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert"
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
-import { encode, name } from "../../encoding/ts/blop.ts"
+import { decode, encode, name } from "../../encoding/ts/blop.ts"
 import { id } from "./id.ts"
 import { seal, stored } from "./seal.ts"
 import { createDevice, type Lock, unlocked } from "./transport.ts"
@@ -130,6 +130,37 @@ Deno.test({
 		await a.device.changed()
 		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
 		assertEquals(a.device.histories(DOC).heads("value").length, 1)
+		await a.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"transport: a device's own add with made is handed over, its save passed over, never opened",
+	...opts,
+	async fn() {
+		let opened = 0
+		const lock: Lock = { ...unlocked, open: (d, b) => (opened++, unlocked.open(d, b)) }
+		const a = party(1, lock)
+		const bytes = encode({
+			node: DOC,
+			object: "value",
+			actor: "t",
+			signer: a.key,
+			nonce: new Uint8Array(8).fill(1),
+			parents: [],
+			lamport: 1,
+			patches: [{ path: [], value: 1 }],
+		})
+		const made = { blop: decode(bytes), name: name(bytes) }
+		a.device.take(DOC, bytes, "stored", made)
+		const sealed = await seal(bytes, a.signer, made)
+		await a.device.add(sealed, { ...made, stored: stored(sealed) })
+		await quiet(a)
+		assertEquals(opened, 0)
+		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
+		assertEquals(a.device.histories(DOC).heads("value").map((h) => hex(h.name)), [hex(made.name)])
+		assertEquals((await a.device.stored(DOC)).map(hex), [hex(stored(sealed))])
 		await a.device.close()
 	},
 })

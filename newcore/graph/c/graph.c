@@ -505,7 +505,7 @@ static const pr_value *value_copy(const pr_value *v, char **at) {
 // go of (the host's); else its one hold goes at the next sweep, and what holds it keeps it
 static gr_change *change_own(gr_graph *g, const gr_change *c, int kept) {
 	size_t room = up(sizeof *c) + value_room(c->actor) + value_room(c->cause) + value_room(c->site) +
-		text_room(c->reader) + text_room(c->node) + text_room(c->name);
+		text_room(c->reader) + text_room(c->node) + text_room(c->name) + text_room(c->message);
 	char *at = grab(room), *b = at;
 	gr_change *x = take(&at, sizeof *x);
 	*x = *c;
@@ -515,6 +515,7 @@ static gr_change *change_own(gr_graph *g, const gr_change *c, int kept) {
 	x->reader = text_copy(c->reader, &at);
 	x->node = text_copy(c->node, &at);
 	x->name = text_copy(c->name, &at);
+	x->message = text_copy(c->message, &at);
 	mine(g, b, K_CHANGE, kept);
 	return x;
 }
@@ -1153,6 +1154,9 @@ const gr_error *gr_make_own(gr_graph *g, const char *id, const nt_value *value, 
 	node->header.actor = change->actor;
 	node->header.reader = change->reader;
 	node->header.cause = change->cause;
+	node->header.has_wallclock = change->has_wallclock;
+	node->header.wallclock = change->wallclock;
+	node->header.message = change->message;
 	const gr_error *e = intro_at(g, node, who, t);
 	if (e) {
 		drop(g, change, 0);
@@ -1289,15 +1293,21 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 	gr_object_set(g, n, where, name, now, count);
 	// the change this makes, one from elsewhere: the blop's header, its cause wrapped
 	const pr_value *actor = g->host, *site = NULL, *cause = NULL;
-	const char *reader = NULL, *signer = NULL, *sname = NULL;
+	const char *reader = NULL, *signer = NULL, *sname = NULL, *message = NULL;
+	int has_wallclock = 0;
+	int64_t wallclock = 0;
 	if (from) {
 		actor = from->actor, reader = from->reader, site = from->site, cause = from->cause;
 		signer = from->signer, sname = from->name;
+		has_wallclock = from->has_wallclock, wallclock = from->wallclock, message = from->message;
 	} else {
 		for (size_t i = 0; i < count; i++) {
 			if (!list[i].because) continue;
 			const gr_change *c = list[i].change;
-			if (c) actor = c->actor, reader = c->reader, site = c->site, cause = c->cause;
+			if (c) {
+				actor = c->actor, reader = c->reader, site = c->site, cause = c->cause;
+				has_wallclock = c->has_wallclock, wallclock = c->wallclock, message = c->message;
+			}
 			signer = list[i].because->signer, sname = list[i].because->name;
 			break;
 		}
@@ -1319,6 +1329,9 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 	by.reader = reader;
 	by.site = site;
 	by.cause = cause;
+	by.has_wallclock = has_wallclock;
+	by.wallclock = wallclock;
+	by.message = message;
 	by.node = id;
 	telling_t t = {&by, NULL, NULL};
 	telling_t *was = g->telling;

@@ -46,14 +46,34 @@ Deno.test("mutate: the change carries the whole header given", () => {
 
 Deno.test("mutate: spans of strings in code points, lists, typed arrays", () => {
 	const n = createNode<unknown, Change>("a", {
-		value: at({ s: "a😀b", l: [1, 2, 3], b: new Uint8Array([1, 2, 3]) }),
+		value: at({ s: "a😀b", l: [1, 2, 3], t: new Int16Array([1, 2, 3]) }),
 	})
 	mutate(n, "value", [
 		{ path: ["s"], range: [1, 2], value: "x" },
 		{ path: ["l"], range: [0, 2], value: [9] },
-		{ path: ["b"], range: [3, 3], value: new Uint8Array([4]) },
+		{ path: ["t"], range: [3, 3], value: new Int16Array([4]) },
 	], by)
-	assertEquals(n.value[0].content, { s: "axb", l: [9, 3], b: new Uint8Array([1, 2, 3, 4]) })
+	assertEquals(n.value[0].content, { s: "axb", l: [9, 3], t: new Int16Array([1, 2, 3, 4]) })
+})
+
+Deno.test("mutate: bytes are one whole value, never spliced", () => {
+	const b = new Uint8Array([1, 2, 3])
+	const n = createNode<unknown, Change>("a", { value: at({ b }) })
+	const into = (p: Patch) => code(() => mutate(n, "value", [p], by))
+	assertEquals(into({ path: ["b"], range: [3, 3], value: new Uint8Array([4]) }), "wrong-kind")
+	assertEquals(into({ path: ["b"], range: [0, 1] }), "wrong-kind")
+	assertEquals(into({ path: ["b", 0], value: 9 }), "wrong-kind")
+	// a typed array takes no bytes into it
+	const t = createNode<unknown, Change>("a", { value: at(new Int8Array([1])) })
+	assertEquals(
+		code(() => mutate(t, "value", [{ path: [], range: [1, 1], value: new Uint8Array([2]) }], by)),
+		"wrong-kind",
+	)
+	// a put replaces them whole, a view as given
+	const view = new Uint8Array([0, 7, 8, 0]).subarray(1, 3)
+	mutate(n, "value", [{ path: ["b"], value: view }], by)
+	assertEquals((n.value[0].content as { b: Uint8Array }).b, view)
+	assertEquals(b, new Uint8Array([1, 2, 3]))
 })
 
 Deno.test("mutate: what is not touched is shared, the old content unchanged", () => {

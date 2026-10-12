@@ -4,39 +4,42 @@ import { capture, type Site } from "./stacktrace.ts"
 // change and because: the caller's, never read here
 // content is absent (undefined at runtime) in a version that is a removal among racing heads
 // (sync/APPLY.tex); readers that take every version guard it
-export type Version<C, H> = { content: C; change: H; because?: unknown }
+export type Side<C, H> = { content: C; change: H; because?: unknown }
 
 // a list: ids in order, and symbols, which name no node
 export type List = readonly (string | symbol)[]
 
 export type Node<V, H> = {
 	id: string
-	value: Version<V, H>[]
-	info: Map<string, Version<V, H>[]>
-	children: Map<string, Version<List, H>[]>
-	// about it being made, frozen; given back as is when a node comes back from storage
-	header: Header
+	value: Side<V, H>[]
+	attributes: Iterable<readonly [string, Side<V, H>][]>
+	children: Iterable<readonly [string, Side<List, H>][]>
+	// about it being made; the caller's, not copied: never change it. Given back as is when a node
+	// comes back from storage
+	change: ChangeHeader
 }
 
 // a change header's fields; which are required is checked above
-export type Header = {
+export type ChangeHeader = {
 	time?: number
 	actor?: unknown
 	reader?: string
 	// where in code it was made
-	site?: Site
+	site?: Site[]
 	cause?: unknown
+	// the author's clock, whole seconds since 1970, and a message (CHANGE.tex)
+	wallclock?: number
 }
 
 // entries in order, as new Map takes them
 export type Contents<V, H> = {
-	value?: Version<V, H>[]
-	info?: Iterable<readonly [string, Version<V, H>[]]>
-	children?: Iterable<readonly [string, Version<List, H>[]]>
+	value?: Side<V, H>[]
+	attributes?: Iterable<readonly [string, Side<V, H>[]]>
+	children?: Iterable<readonly [string, Side<List, H>[]]>
 }
 
 export type Options = {
-	header?: Header
+	header?: ChangeHeader
 	// made by code outside the graph, not a process: capture the call's site as the header's
 	// site, when it gives none
 	outside?: boolean
@@ -54,16 +57,18 @@ export default function createNode<V, H>(
 	contents: Contents<V, H> = {},
 	options: Options = {},
 ): Node<V, H> {
-	const header: Header = { ...options.header }
-	if (options.outside && header.site === undefined) {
+	const change: ChangeHeader = options.header ?? {}
+	if (options.outside) {
 		const site = capture(ours, createNode)
-		if (site) header.site = site
+		if (site) {
+			change.site = change.site ? change.site.concat(site) : [site]
+		}
 	}
 	return {
 		id,
+		change: change,
+		attributes: contents.attributes ?? [],
+		children: contents.children ?? [],
 		value: contents.value ?? [],
-		info: new Map(contents.info),
-		children: new Map(contents.children),
-		header: Object.freeze(header),
 	}
 }

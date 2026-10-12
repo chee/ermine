@@ -20,7 +20,6 @@ const out = `${here}../../sync/conformance/seal/`
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 const utf8 = (s: string) => new TextEncoder().encode(s)
-const ab = (b: Uint8Array) => b.slice().buffer as ArrayBuffer
 const cat = (...parts: Uint8Array[]) => {
 	const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
 	let at = 0
@@ -47,8 +46,8 @@ const plain = (signer: Uint8Array, more: Record<string, Value> = {}) =>
 		node: NODE,
 		object: "value",
 		actor: "a",
-		signer: ab(signer),
-		nonce: ab(Uint8Array.from({ length: 8 }, (_, i) => i + 1)),
+		signer,
+		nonce: Uint8Array.from({ length: 8 }, (_, i) => i + 1),
 		parents: [],
 		lamport: 1,
 		patches: [],
@@ -63,10 +62,10 @@ const rich = (signer: Uint8Array) =>
 		reader: "r",
 		site: { file: "file:///a.ts", line: 3, column: 7, function: "f" },
 		cause: ["merge", null],
-		signer: ab(signer),
-		nonce: ab(new Uint8Array(8).fill(0xa5)),
-		parents: [ab(P1), ab(P2)],
-		base: ab(P2),
+		signer,
+		nonce: new Uint8Array(8).fill(0xa5),
+		parents: [P1, P2],
+		base: P2,
 		combine: true,
 		lamport: 3,
 		patches: [{ path: ["t", 0], range: [0, 2], value: "hi" }, {
@@ -78,7 +77,7 @@ const rich = (signer: Uint8Array) =>
 // -- sealing (SEAL.tex)
 const message = (blop: Uint8Array) => cat(utf8("ermine/v0/change"), blake3(blop))
 const sealed = (blop: Uint8Array, signer: Uint8Array, signature: Uint8Array) =>
-	encode({ change: ab(blop), signer: ab(signer), signature: ab(signature) })
+	encode({ change: blop, signer, signature })
 const sign = (blop: Uint8Array, seed: Uint8Array) => ed25519.sign(message(blop), seed)
 const unsealed = (blop: Uint8Array, bytes: Uint8Array, signer: Uint8Array) => ({
 	blop: hex(blop),
@@ -288,11 +287,11 @@ const notCanonical: [string, Uint8Array][] = [
 		cat(
 			Uint8Array.of(0xa3),
 			e("signer"),
-			e(ab(KEY_A)),
+			e(KEY_A),
 			e("change"),
-			e(ab(GOOD)),
+			e(GOOD),
 			e("signature"),
-			e(ab(SIG)),
+			e(SIG),
 		),
 	],
 	[
@@ -300,12 +299,12 @@ const notCanonical: [string, Uint8Array][] = [
 		cat(
 			Uint8Array.of(0xa3),
 			e("change"),
-			e(ab(GOOD)),
+			e(GOOD),
 			e("signer"),
 			Uint8Array.of(0x59, 0x00, 0x20),
 			KEY_A,
 			e("signature"),
-			e(ab(SIG)),
+			e(SIG),
 		),
 	],
 	["a byte after the map", cat(GOOD_SEALED, Uint8Array.of(0))],
@@ -314,11 +313,11 @@ const notCanonical: [string, Uint8Array][] = [
 		cat(
 			Uint8Array.of(0xbf),
 			e("change"),
-			e(ab(GOOD)),
+			e(GOOD),
 			e("signer"),
-			e(ab(KEY_A)),
+			e(KEY_A),
 			e("signature"),
-			e(ab(SIG)),
+			e(SIG),
 			Uint8Array.of(0xff),
 		),
 	],
@@ -341,7 +340,7 @@ add("10-not-canonical", {
 add("11-not-a-map", {
 	title: "not a map: a list of the three byte strings, or nothing at all: shape",
 	ask: [
-		{ op: "unseal", bytes: hex(e([ab(GOOD), ab(KEY_A), ab(SIG)])) },
+		{ op: "unseal", bytes: hex(e([GOOD, KEY_A, SIG])) },
 		{ op: "unseal", bytes: "" },
 	],
 	expect: [{ code: "shape" }, { code: "shape" }],
@@ -349,13 +348,13 @@ add("11-not-a-map", {
 refuse(
 	"12-missing-key",
 	"no signature key: shape",
-	e({ change: ab(GOOD), signer: ab(KEY_A) }),
+	e({ change: GOOD, signer: KEY_A }),
 	"shape",
 )
 refuse(
 	"13-extra-key",
 	'a fourth key, "time", beside a good seal\'s three: shape',
-	e({ change: ab(GOOD), signer: ab(KEY_A), signature: ab(SIG), time: ab(new Uint8Array(8)) }),
+	e({ change: GOOD, signer: KEY_A, signature: SIG, time: new Uint8Array(8) }),
 	"shape",
 )
 refuse(
@@ -372,14 +371,14 @@ refuse(
 )
 refuse(
 	"16-signer-not-bytes",
-	"signer a typed array (uint8, tag 64) of the key's 32 bytes, not a byte string: shape",
-	e({ change: ab(GOOD), signer: KEY_A.slice(), signature: ab(SIG) }),
+	"signer a typed array (uint16, tag 69) of the key's 32 bytes, not a byte string: shape",
+	e({ change: GOOD, signer: new Uint16Array(KEY_A.slice().buffer), signature: SIG }),
 	"shape",
 )
 refuse(
 	"17-change-a-map",
 	"change the blop as a nested map, not a byte string of it: shape",
-	e({ change: decode(GOOD), signer: ab(KEY_A), signature: ab(SIG) }),
+	e({ change: decode(GOOD), signer: KEY_A, signature: SIG }),
 	"shape",
 )
 const LAMPORT0 = plain(KEY_A, { lamport: 0 })
@@ -387,7 +386,7 @@ const NO_NONCE = e({
 	node: NODE,
 	object: "value",
 	actor: "a",
-	signer: ab(KEY_A),
+	signer: KEY_A,
 	parents: [],
 	lamport: 1,
 	patches: [],
@@ -458,14 +457,25 @@ add("40-shape-before-signature", {
 			})(),
 		),
 		e({
-			change: ab(B_BLOP),
-			signer: ab(KEY_A),
-			signature: ab(sign(B_BLOP, SEED_A)),
-			time: ab(new Uint8Array(8)),
+			change: B_BLOP,
+			signer: KEY_A,
+			signature: sign(B_BLOP, SEED_A),
+			time: new Uint8Array(8),
 		}),
 	].map((b) => ({ op: "unseal", bytes: hex(b) })),
 	expect: [{ code: "shape" }, { code: "shape" }],
 })
+
+// -- no uint8 kind: bytes are bytes (the designer, 10-12)
+// the seal's own signer: its key after the change's bytes, where the blop's signer is
+const SEALED = hex(sealed(GOOD, KEY_A, SIG)), SIGNER = "667369676e65725820" + hex(KEY_A)
+const OWN = SEALED.lastIndexOf(SIGNER)
+refuse(
+	"41-signer-tag-64",
+	"signer as tag 64 over the key's 32 bytes: no encoding of a value: shape",
+	unhex(SEALED.slice(0, OWN) + "667369676e6572d840" + SEALED.slice(OWN + 14)),
+	"shape",
+)
 
 for (const f of Deno.readDirSync(out)) if (f.name.endsWith(".json")) Deno.removeSync(out + f.name)
 for (const [name, s] of scenarios) {

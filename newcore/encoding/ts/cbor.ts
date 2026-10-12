@@ -6,16 +6,17 @@
 // - bytes are major type 2, strings major type 3, lists 4, maps 5
 // - a map's keys are strings, sorted bytewise by their encodings
 // - a typed array is its tag over a byte string of its elements, little-endian:
-//   uint8 64, uint16 69, uint32 70, uint64 71, int8 72, int16 77, int32 78,
-//   int64 79, float32 85, float64 86; a NaN element is written as the quiet
-//   NaN with no payload (7fc00000, 7ff8000000000000)
+//   uint16 69, uint32 70, uint64 71, int8 72, int16 77, int32 78, int64 79,
+//   float32 85, float64 86; a NaN element is written as the quiet NaN with no
+//   payload (7fc00000, 7ff8000000000000); no uint8 kind: bytes are that, tag 64
+//   never written
 // - a stand-in, what a live value is sent as: tag 0x12345678 (head da12345678)
 //   over its kind, any value; a live value itself has no encoding
 //
-// Bytes are an ArrayBuffer; a typed array is its own class, a Uint8Array
-// being a uint8 typed array. Decoding accepts exactly what encoding gives.
-// A stand-in is the class Stand, holding its kind; a symbol, a function, a Map,
-// any other class's object is live.
+// Bytes are a Uint8Array, any view, given and given back; decoded, a fresh
+// one. A typed array is its own class. Decoding accepts exactly what encoding
+// gives. A stand-in is the class Stand, holding its kind; a symbol, a function,
+// a Map, an ArrayBuffer (for now), any other class's object is live.
 
 /** A value as this codec holds it. */
 export type Value =
@@ -23,7 +24,7 @@ export type Value =
 	| boolean
 	| number
 	| string
-	| ArrayBuffer
+	| Uint8Array
 	| Typed
 	| Stand
 	| readonly Value[]
@@ -31,7 +32,6 @@ export type Value =
 
 export type Typed =
 	| Int8Array
-	| Uint8Array
 	| Int16Array
 	| Uint16Array
 	| Int32Array
@@ -56,7 +56,6 @@ export class CborError extends Error {
 // Each kind: its class, its tag, its element size.
 type Kind = { tag: number; size: number; make: new (n: number) => Typed }
 const KINDS: Kind[] = [
-	{ tag: 64, size: 1, make: Uint8Array },
 	{ tag: 69, size: 2, make: Uint16Array },
 	{ tag: 70, size: 4, make: Uint32Array },
 	{ tag: 71, size: 8, make: BigUint64Array },
@@ -265,9 +264,9 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (x === false) return out.byte(0xf4)
 	if (x === true) return out.byte(0xf5)
 	if (typeof x !== "object") throw new CborError(`a ${typeof x} is not a value`)
-	if (x instanceof ArrayBuffer) {
-		out.head(2, x.byteLength)
-		return out.bytes(new Uint8Array(x))
+	if (x instanceof Uint8Array) {
+		out.head(2, x.length)
+		return out.bytes(x)
 	}
 	if (x instanceof Stand) {
 		out.head(6, STAND)
@@ -417,7 +416,7 @@ function read(input: In): Value {
 		case 1:
 			throw wrong("an integer; numbers are floats")
 		case 2:
-			return input.take(input.arg(info)).slice().buffer
+			return input.take(input.arg(info)).slice()
 		case 3:
 			return string(input, input.arg(info))
 		case 4: {

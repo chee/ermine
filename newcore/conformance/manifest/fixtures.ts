@@ -11,16 +11,11 @@ import { encode, Stand, type Value } from "../../encoding/ts/cbor.ts"
 import { toJson } from "../pack/form.ts"
 
 const out = new URL("../../files/conformance/manifest/", import.meta.url)
-const hex = (b: Uint8Array | ArrayBuffer) =>
-	Array.from(
-		b instanceof ArrayBuffer ? new Uint8Array(b) : b,
-		(x) => x.toString(16).padStart(2, "0"),
-	)
-		.join("")
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 const utf8 = new TextEncoder()
 const t = (s: string) => hex(utf8.encode(s))
-const buf = (...b: number[]) => Uint8Array.from(b).buffer
+const buf = (...b: number[]) => Uint8Array.from(b)
 const cat = (...xs: Uint8Array[]) => {
 	const o = new Uint8Array(xs.reduce((n, x) => n + x.length, 0))
 	let at = 0
@@ -31,13 +26,13 @@ const cat = (...xs: Uint8Array[]) => {
 /** A value's hash. */
 const H = (v: unknown) => hex(blake3(encode(v as Value)))
 /** A hash's 32 bytes, as a record holds them. */
-const B = (h: string) => unhex(h).buffer
+const B = (h: string) => unhex(h)
 const J = toJson
 const NULL = H(null)
 
 /** A frame: 4 bytes big-endian of the length, then the CBOR of a map of bytes or null. */
 function frame(entries: [string, Uint8Array | null][]): Uint8Array {
-	return framed(encode(Object.fromEntries(entries.map(([k, v]) => [k, v && v.slice().buffer]))))
+	return framed(encode(Object.fromEntries(entries)))
 }
 function framed(body: Uint8Array): Uint8Array {
 	const o = new Uint8Array(4 + body.length)
@@ -61,7 +56,6 @@ const FORM = { code: "form" }
 const site = { file: "manifest_test.ts", line: 1, column: 1 }
 const KINDS: [string, unknown][] = [
 	["int8", new Int8Array([-1, 127])],
-	["uint8", new Uint8Array([1, 2])],
 	["int16", new Int16Array([-2])],
 	["uint16", new Uint16Array([0x0102])],
 	["int32", new Int32Array([-(2 ** 31)])],
@@ -113,7 +107,7 @@ function elements(v: ArrayBufferView): string {
 		else if (size === 2) o.setUint16(at, (x as number) & 0xffff, true)
 		else o.setUint32(at, (x as number) >>> 0, true)
 	}
-	return hex(o.buffer)
+	return hex(new Uint8Array(o.buffer))
 }
 
 const TEXT = "﻿café 🐈\n"
@@ -132,7 +126,7 @@ add("render-typed", "a typed array's file is its elements little-endian, NaN the
 	...KINDS.map(([k, v]) =>
 		s({ op: "render", value: J(v), form: k }, { bytes: elements(v as ArrayBufferView) })
 	),
-	s({ op: "render", value: J(new Uint8Array()), form: "uint8" }, { bytes: "" }),
+	s({ op: "render", value: J(new Int8Array()), form: "int8" }, { bytes: "" }),
 	s({ op: "render", value: J(new Float32Array([1])), form: "float32" }, { bytes: "0000803f" }),
 	s({ op: "render", value: J(new Float64Array([NaN])), form: "float64" }, {
 		bytes: "000000000000f87f",
@@ -160,7 +154,7 @@ const DIAG: [unknown, string][] = [
 	],
 	[{ a: [1, { b: [] }] }, '{\n  "a": [\n    1.0,\n    {\n      "b": []\n    }\n  ]\n}'],
 	[{ t: new Float32Array([1]) }, "{\n  \"t\": 85(h'0000803f')\n}"],
-	[[new Uint8Array([1, 2])], "[\n  64(h'0102')\n]"],
+	[[new Int8Array([1, 2])], "[\n  72(h'0102')\n]"],
 	// a stand-in as its tag on its kind, so its file reads back as it
 	[new Stand("clock"), '305419896("clock")'],
 	[{ c: new Stand({ w: 1 }) }, '{\n  "c": 305419896({\n    "w": 1.0\n  })\n}'],
@@ -177,12 +171,14 @@ add("render-wrong", "a value is rendered only in its own form", [
 	s({ op: "render", value: "x", form: "bin" }, WRONG),
 	s({ op: "render", value: "x", form: "cbor" }, WRONG),
 	s({ op: "render", value: J(buf(1)), form: "cbor" }, WRONG),
-	s({ op: "render", value: J(new Uint8Array([1])), form: "bin" }, WRONG),
-	s({ op: "render", value: J(new Uint8Array([1])), form: "cbor" }, WRONG),
+	s({ op: "render", value: J(new Int8Array([1])), form: "bin" }, WRONG),
+	s({ op: "render", value: J(new Int8Array([1])), form: "cbor" }, WRONG),
 	s({ op: "render", value: J(new Float32Array([1])), form: "float64" }, WRONG),
-	s({ op: "render", value: J(new Int8Array([1])), form: "uint8" }, WRONG),
-	s({ op: "render", value: {}, form: "uint8" }, WRONG),
-	s({ op: "render", value: "x", form: "uint8" }, WRONG),
+	s({ op: "render", value: J(new Int8Array([1])), form: "int16" }, WRONG),
+	s({ op: "render", value: {}, form: "int16" }, WRONG),
+	s({ op: "render", value: "x", form: "int16" }, WRONG),
+	// no uint8 form: bytes are bin (the designer, 10-12)
+	s({ op: "render", value: J(new Uint8Array([1, 2])), form: "uint8" }, WRONG),
 ])
 
 add("parse", "a file reads back as the value in its form", [
@@ -245,7 +241,7 @@ add(
 				H(v),
 				typeof v === "string"
 					? "txt"
-					: v instanceof ArrayBuffer
+					: v instanceof Uint8Array
 					? "bin"
 					: ArrayBuffer.isView(v)
 					? KINDS.find(([, x]) => (x as object).constructor === v.constructor)![0]
@@ -458,7 +454,7 @@ add("kepts", "each [hash, form] a record keeps: its value's versions, then each 
 	s({ op: "kepts", record: rec([1]) }, STORE),
 	s({ op: "kepts", record: rec({ ...base, value: [{ content: "x" }] }) }, STORE),
 	s(
-		{ op: "kepts", record: rec({ ...base, value: [{ kept: [new ArrayBuffer(31), "txt"] }] }) },
+		{ op: "kepts", record: rec({ ...base, value: [{ kept: [new Uint8Array(31), "txt"] }] }) },
 		STORE,
 	),
 	s({ op: "kepts", record: rec({ ...base, value: [{ kept: [H("x"), "txt"] }] }) }, STORE),
@@ -502,7 +498,7 @@ add("restore", "a record gives its node back, each content from its hash", [
 	s({ op: "restore", record: rec({ ...base, id: 1 }), values: [] }, STORE),
 	s({
 		op: "restore",
-		record: rec({ ...base, value: [{ kept: [new ArrayBuffer(31), "txt"] }] }),
+		record: rec({ ...base, value: [{ kept: [new Uint8Array(31), "txt"] }] }),
 		values: [],
 	}, STORE),
 ])
@@ -611,9 +607,9 @@ add("shown-refused", "a layout record that is not one is a store error", [
 		{ home: ["r", "x", "0"] },
 		{ home: [1, "x", 0] },
 		{ file: 1 },
-		{ laid: new ArrayBuffer(31) },
+		{ laid: new Uint8Array(31) },
 		{ laid: H1 },
-		{ was: new ArrayBuffer(33) },
+		{ was: new Uint8Array(33) },
 		{ sides: ["x", 1] },
 		{ folder: false },
 		{ entries: { a: 1 } },
@@ -967,7 +963,7 @@ const odd: [string, unknown][] = [
 	["list", [1]],
 	["text-value", { a: "text" }],
 	["number-value", { a: 1 }],
-	["typed-value", { a: new Uint8Array([1]) }],
+	["typed-value", { a: new Int8Array([1]) }],
 ]
 add(
 	"broken-not-a-map",
@@ -1027,7 +1023,7 @@ const PUT: unknown[] = [
 const formOf = (v: unknown) =>
 	typeof v === "string"
 		? "txt"
-		: v instanceof ArrayBuffer
+		: v instanceof Uint8Array
 		? "bin"
 		: ArrayBuffer.isView(v)
 		? KINDS.find(([, x]) => (x as object).constructor === v.constructor)![0]
@@ -1037,7 +1033,7 @@ const fileOf = (v: unknown) => {
 	return f === "txt"
 		? t(v as string)
 		: f === "bin"
-		? hex(v as ArrayBuffer)
+		? hex(v as Uint8Array)
 		: f === "cbor"
 		? hex(encode(v as Value))
 		: elements(v as ArrayBufferView)

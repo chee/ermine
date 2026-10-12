@@ -53,6 +53,10 @@ typedef struct gr_change {
 	const char *node;
 	gr_where where;
 	const char *name;
+	// the author's clock, whole seconds since 1970, and a message: optional, never read (CHANGE.tex)
+	int has_wallclock;
+	int64_t wallclock;
+	const char *message;
 } gr_change;
 
 // one object a change changed (WIRING.tex, Out), as `changed` is told it: the patches mutate applied,
@@ -96,6 +100,10 @@ typedef struct {
 	const pr_value *cause;
 	const char *signer;
 	const char *name;
+	// the blop's wallclock and message, when it has them
+	int has_wallclock;
+	int64_t wallclock;
+	const char *message;
 } gr_from;
 
 // who a change is by, as places asks for it

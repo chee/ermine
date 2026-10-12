@@ -8,8 +8,7 @@ import { bytes, id, IdError, is } from "../../sync/ts/id.ts"
 
 type Request = { op: string; lock?: string; made?: string; id?: string }
 
-const hex = (b: Uint8Array | ArrayBuffer) =>
-	Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("")
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 
 function answer(r: Request): unknown {

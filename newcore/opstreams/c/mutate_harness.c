@@ -1,6 +1,6 @@
 // The C mutate on the line protocol (newcore/conformance/mutate/harness.ts): one JSON request per
 // line in, one answer per line out. Parses and prints the JSON itself (as notify/c/harness.c).
-// Typed arrays: the suite's {"$Uint8Array": [...]} (and its five other kinds), and ENCODING.tex's
+// Typed arrays: the suite's {"$Int8Array": [...]} (and its four other kinds), and ENCODING.tex's
 // JSON form ({"/": {"bytes": b64}}, {"/": {kind: [...]}}), as the reference would write them back.
 // which ["children", name] mutates a children list; start and node have none, as the reference.
 #include "mutate.h"
@@ -199,8 +199,8 @@ static void number(double d) {
 // typed array {"/":{kind:[...]}}, 64-bit elements as decimal strings, a float's NaN and
 // infinities as words; a stand-in {"/":{"live":kind}}
 
-static const char *kinds[] = {"int8", "uint8", "int16", "uint16", "int32", "uint32", "int64",
-	"uint64", "float32", "float64"};
+static const char *kinds[] = {"int8", "int16", "uint16", "int32", "uint32", "int64", "uint64",
+	"float32", "float64"};
 static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 // one element, little-endian, from a JSON number or string (as a typed array takes a number:
@@ -243,7 +243,6 @@ static double element(const nt_value *t, size_t i) {
 	uint64_t u = raw(t, i);
 	switch (t->kind) {
 	case NT_INT8: return (int8_t)u;
-	case NT_UINT8: return (uint8_t)u;
 	case NT_INT16: return (int16_t)u;
 	case NT_UINT16: return (uint16_t)u;
 	case NT_INT32: return (int32_t)u;
@@ -328,9 +327,10 @@ static void print_elements(const nt_value *v) {
 	}
 	putchar(']');
 }
-// the suite's own form (harness.ts): {"$Uint8Array": [...]}, and the five other kinds it knows
-static const char *dollars[] = {"$Int8Array", "$Uint8Array", "$Int16Array", "$Uint16Array",
-	"$Int32Array", "$Uint32Array"};
+// the suite's own form (harness.ts): {"$Int8Array": [...]}, and the four other kinds it knows, in
+// nt_elements' order; bytes, a Uint8Array there, in ENCODING.tex's form
+static const char *dollars[] = {"$Int8Array", "$Int16Array", "$Uint16Array", "$Int32Array",
+	"$Uint32Array"};
 static nt_value *revive(nt_value *m) {
 	if (m->count == 1 && m->items[0]->type == NT_LIST) {
 		for (size_t k = 0; k < sizeof dollars / sizeof *dollars; k++) {

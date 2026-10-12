@@ -29,7 +29,7 @@ const refuses = (name: string, title: string, marked: string) => {
 	add(name, { title, text, expect: { at, line, column } })
 }
 
-const bytes = (...b: number[]) => Uint8Array.from(b).buffer
+const bytes = (...b: number[]) => Uint8Array.from(b)
 const J = JSON.stringify
 
 // ---- writing
@@ -104,7 +104,7 @@ writes(
 	"typed-ints",
 	"a typed array as its tag on its bytes, little-endian",
 	[
-		Uint8Array.of(1, 2),
+		Int8Array.of(1, 2),
 		Int8Array.of(-1),
 		Uint16Array.of(258),
 		Int16Array.of(-2),
@@ -114,7 +114,7 @@ writes(
 		BigInt64Array.of(-2n),
 	],
 	"[\n" + [
-		"64(h'0102')",
+		"72(h'0102')",
 		"72(h'ff')",
 		"69(h'0201')",
 		"77(h'feff')",
@@ -133,8 +133,8 @@ writes(
 writes(
 	"typed-empty",
 	"an empty typed array",
-	[new Uint8Array(0), new Float64Array(0)],
-	"[\n  64(h''),\n  86(h'')\n]",
+	[new Int8Array(0), new Float64Array(0)],
+	"[\n  72(h''),\n  86(h'')\n]",
 )
 writes(
 	"indent",
@@ -327,10 +327,10 @@ reads(
 reads("trailing-comma-chunks", "a last comma in (_ )", `(_ "a", "b",)`, "ab")
 reads(
 	"tags",
-	"a typed array's tag over bytes: each of the ten, spacing and comments around",
-	`[64(h'0102'), 69(h'0201'), 70(h'01000000'), 71(h'0100000000000000'), 72(h'ff'), 77(h'feff'), 78(h'ffffffff'), 79(h'ffffffffffffffff'), 85(h'0000803f'), 86(h'000000000000f03f'), 64 ( h'01' ), 64/c/(/c/h'02'/c/), 64_0(h'03'), 64(b64'BA'), 64('a'), 64((_ h'01', h'02')), 64(h''), 85(h'')]`,
+	"a typed array's tag over bytes: each of the nine, spacing and comments around",
+	`[72(h'0102'), 69(h'0201'), 70(h'01000000'), 71(h'0100000000000000'), 72(h'ff'), 77(h'feff'), 78(h'ffffffff'), 79(h'ffffffffffffffff'), 85(h'0000803f'), 86(h'000000000000f03f'), 72 ( h'01' ), 72/c/(/c/h'02'/c/), 72_0(h'03'), 72(b64'BA'), 72('a'), 72((_ h'01', h'02')), 72(h''), 85(h'')]`,
 	[
-		Uint8Array.of(1, 2),
+		Int8Array.of(1, 2),
 		Uint16Array.of(258),
 		Uint32Array.of(1),
 		BigUint64Array.of(1n),
@@ -340,13 +340,13 @@ reads(
 		BigInt64Array.of(-1n),
 		Float32Array.of(1),
 		Float64Array.of(1),
-		Uint8Array.of(1),
-		Uint8Array.of(2),
-		Uint8Array.of(3),
-		Uint8Array.of(4),
-		Uint8Array.of(0x61),
-		Uint8Array.of(1, 2),
-		new Uint8Array(0),
+		Int8Array.of(1),
+		Int8Array.of(2),
+		Int8Array.of(3),
+		Int8Array.of(4),
+		Int8Array.of(0x61),
+		Int8Array.of(1, 2),
+		new Int8Array(0),
 		new Float32Array(0),
 	],
 )
@@ -403,10 +403,10 @@ refuses("refuse-word-glued", "Infinity glued to letters is a different word", "�
 refuses("refuse-prefix", "bytes prefixes other than h and b64", "¶x'ab'")
 refuses("refuse-tag", "a tag that is not a typed array's or a stand-in's", "¶100(h'00')")
 refuses("refuse-tag-time", "tag 1 is a time, which is no value here", "¶1(1.5)")
-refuses("refuse-tag-over", "a typed array's tag over what is not bytes", "64(¶1)")
+refuses("refuse-tag-over", "a typed array's tag over what is not bytes", "72(¶1)")
 refuses("refuse-tag-over-text", "a typed array's tag over text", `85(¶"abcd")`)
 refuses("refuse-tag-whole", "a typed array's bytes that are not whole elements", "[¶70(h'0102')]")
-refuses("refuse-tag-close", "a tag's value not closed by )", "64(h'00' ¶1)")
+refuses("refuse-tag-close", "a tag's value not closed by )", "72(h'00' ¶1)")
 refuses("refuse-tag-negative", "a negative number takes no tag", "-1¶(h'00')")
 refuses("refuse-tag-float", "a decimal takes no tag", "1.0¶(h'00')")
 refuses("refuse-key-number", "a key that is not text", "{¶1: 2}")
@@ -470,6 +470,11 @@ refuses(
 	`["😀", ¶x]`,
 )
 refuses("refuse-cr", "a CR is not a newline", "[\r1 ¶2]")
+refuses(
+	"refuse-tag-uint8",
+	"tag 64: no uint8 kind, bytes are that (the designer, 10-12), so not a typed array's",
+	"[¶64(h'0102')]",
+)
 
 // JSON.stringify, but -0 written -0
 const MINUS = "\u0000-0\u0000"

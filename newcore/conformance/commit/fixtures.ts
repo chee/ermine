@@ -11,7 +11,6 @@ import { toJson } from "../pack/form.ts"
 import {
 	add,
 	type B,
-	buf,
 	create,
 	desc,
 	first,
@@ -94,7 +93,7 @@ function commit(c: Commit, want: Want): [Step, B] {
 	const step: Step = {
 		request: {
 			op: "commit",
-			change: toJson({ node: "n", object, patches, header, signer: buf(signer) }) as never,
+			change: toJson({ node: "n", object, patches, header, signer }) as never,
 			at: c.at,
 			roots: c.roots ?? [],
 			random: hex(nonce),
@@ -111,7 +110,7 @@ const refuses = (c: Commit, code: string): Step => ({
 			object: c.object ?? "value",
 			patches: c.patches ?? [],
 			header: { time: 77, actor: "me" },
-			signer: buf(DEV1),
+			signer: DEV1,
 		}) as never,
 		at: c.at,
 		roots: [],

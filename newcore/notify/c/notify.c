@@ -60,6 +60,15 @@ static nt_value *strn(const char *s, size_t n) {
 	return v;
 }
 nt_value *nt_str(const char *s) { return strn(s, strlen(s)); }
+nt_value *nt_str_take(char *s, size_t n) {
+	nt_value *v = make(NT_STR);
+	v->str = s;
+	v->bytes = n;
+	v->ascii = 1;
+	for (size_t i = 0; i < n; i++)
+		if ((unsigned char)s[i] >= 0x80) v->ascii = 0;
+	return v;
+}
 nt_value *nt_list(void) { return make(NT_LIST); }
 nt_value *nt_bytes(const void *data, size_t n) {
 	nt_value *v = make(NT_BYTES);
@@ -74,7 +83,7 @@ nt_value *nt_stand(nt_value *kind) {
 	return v;
 }
 size_t nt_size(nt_elements kind) {
-	static const unsigned char sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 4, 8};
+	static const unsigned char sizes[] = {1, 2, 2, 4, 4, 8, 8, 4, 8};
 	return (unsigned)kind < sizeof sizes ? sizes[kind] : 1;
 }
 nt_value *nt_typed(nt_elements kind, const void *data, size_t count) {
@@ -1299,7 +1308,6 @@ static nt_value *element(const nt_value *t, size_t i) {
 	for (size_t j = 0; j < z; j++) u |= (uint64_t)t->data[i * z + j] << (8 * j);
 	switch (t->kind) {
 	case NT_INT8: return nt_num((int8_t)u);
-	case NT_UINT8: return nt_num((uint8_t)u);
 	case NT_INT16: return nt_num((int16_t)u);
 	case NT_UINT16: return nt_num((uint16_t)u);
 	case NT_INT32: return nt_num((int32_t)u);

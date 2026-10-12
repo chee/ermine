@@ -103,6 +103,13 @@ Json *jsonStringOfLength(const char *text, size_t length) {
 	return value;
 }
 
+Json *jsonStringTaking(char *text, size_t length) {
+	Json *value = make(JSON_STRING);
+	value->string = text;
+	value->stringLength = length;
+	return value;
+}
+
 Json *jsonArray(void) {
 	return make(JSON_ARRAY);
 }
@@ -111,8 +118,8 @@ Json *jsonObject(void) {
 	return make(JSON_OBJECT);
 }
 
-static const size_t kindSizes[JSON_KINDS] = { 1, 1, 2, 2, 4, 4, 8, 8, 4, 8 };
-static const char *const kindNames[JSON_KINDS] = { "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64" };
+static const size_t kindSizes[JSON_KINDS] = { 1, 2, 2, 4, 4, 8, 8, 4, 8 };
+static const char *const kindNames[JSON_KINDS] = { "int8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64" };
 
 size_t jsonKindSize(JsonKind kind) {
 	return kindSizes[kind];
@@ -150,12 +157,16 @@ void jsonAdd(Json *object, const char *key, Json *value) {
 	jsonAddOfLength(object, key, strlen(key), value);
 }
 
-void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value) {
+void jsonAddTaking(Json *object, char *key, size_t length, Json *value) {
 	object->object.members = growArray(object->object.members, object->object.count, &object->object.capacity, sizeof *object->object.members);
 	JsonMember *member = &object->object.members[object->object.count++];
-	member->key = copyStringOfLength(key, length);
+	member->key = key;
 	member->keyLength = length;
 	member->value = value;
+}
+
+void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value) {
+	jsonAddTaking(object, copyStringOfLength(key, length), length, value);
 }
 
 /** the index of the member under a key of `length` bytes, or -1 */
@@ -451,7 +462,6 @@ static bool elementOf(int kind, const Json *e, char *at) {
 	d = e->number;
 	switch (kind) {
 		case JSON_INT8: if (d < INT8_MIN || d > INT8_MAX) return false; *(int8_t *)at = (int8_t)d; break;
-		case JSON_UINT8: if (d < 0 || d > UINT8_MAX) return false; *(uint8_t *)at = (uint8_t)d; break;
 		case JSON_INT16: if (d < INT16_MIN || d > INT16_MAX) return false; *(int16_t *)at = (int16_t)d; break;
 		case JSON_UINT16: if (d < 0 || d > UINT16_MAX) return false; *(uint16_t *)at = (uint16_t)d; break;
 		case JSON_INT32: if (d < INT32_MIN || d > INT32_MAX) return false; *(int32_t *)at = (int32_t)d; break;
@@ -1101,7 +1111,6 @@ static void putElements(Bytes *bytes, const Json *value) {
 		if (i) putText(bytes, ",");
 		switch (value->typed.kind) {
 			case JSON_INT8: snprintf(spelled, sizeof spelled, "%d", *(const int8_t *)at); break;
-			case JSON_UINT8: snprintf(spelled, sizeof spelled, "%u", *(const uint8_t *)at); break;
 			case JSON_INT16: snprintf(spelled, sizeof spelled, "%d", *(const int16_t *)at); break;
 			case JSON_UINT16: snprintf(spelled, sizeof spelled, "%u", *(const uint16_t *)at); break;
 			case JSON_INT32: snprintf(spelled, sizeof spelled, "%ld", (long)*(const int32_t *)at); break;

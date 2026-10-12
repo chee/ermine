@@ -27,7 +27,7 @@
 // deno-lint-ignore no-import-prefix
 import * as wasm from "npm:@automerge/subduction@0.23.0"
 import { decode, encode } from "../../encoding/ts/cbor.ts"
-import { buffer, hexOf, unhex } from "./blob.ts"
+import { hexOf, unhex } from "./blob.ts"
 
 const {
 	CommitId,
@@ -56,15 +56,15 @@ const FRAGMENT = "fragment-"
 
 /** A commit's or fragment's record: its signed envelope and its blob. */
 function pack(signed: Signed, blob: Uint8Array): Uint8Array {
-	return encode({ signed: buffer(signed.encode()), blob: buffer(blob) })
+	return encode({ signed: signed.encode(), blob })
 }
 
 function unpack(bytes: Uint8Array): { signed: Uint8Array; blob: Uint8Array } {
 	const r = decode(bytes) as { signed?: unknown; blob?: unknown }
-	if (!(r?.signed instanceof ArrayBuffer) || !(r.blob instanceof ArrayBuffer)) {
+	if (!(r?.signed instanceof Uint8Array) || !(r.blob instanceof Uint8Array)) {
 		throw new Error("a stored record is not {signed, blob}")
 	}
-	return { signed: new Uint8Array(r.signed), blob: new Uint8Array(r.blob) }
+	return { signed: r.signed, blob: r.blob }
 }
 
 /** Subduction's storage over a backend: open it with Storage.open. */

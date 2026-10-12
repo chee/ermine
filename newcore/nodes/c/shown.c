@@ -285,19 +285,24 @@ void header(const nd_header *h) {
 		putchar('}');
 		comma = ",";
 	}
-	if (h->cause) printf("%s\"cause\":%s", comma, (const char *)h->cause);
+	if (h->cause) printf("%s\"cause\":%s", comma, (const char *)h->cause), comma = ",";
+	if (h->has_wallclock) printf("%s\"wallclock\":%lld", comma, (long long)h->wallclock), comma = ",";
+	if (h->message) printf("%s\"message\":", comma), text(h->message);
 	putchar('}');
 }
 
 nd_header parse_header(const char *p) {
 	nd_header h = {0};
 	const char *time = field(p, "time"), *actor = field(p, "actor"), *reader = field(p, "reader"),
-		   *at = field(p, "site"), *cause = field(p, "cause");
+		   *at = field(p, "site"), *cause = field(p, "cause"), *wallclock = field(p, "wallclock"),
+		   *message = field(p, "message");
 	if (time) h.has_time = 1, h.time = strtoll(time, NULL, 10);
 	if (actor) h.actor = raw(actor);
 	if (reader) h.reader = string(reader);
 	if (at) h.has_site = 1, h.site = site(at);
 	if (cause) h.cause = raw(cause);
+	if (wallclock) h.has_wallclock = 1, h.wallclock = strtoll(wallclock, NULL, 10);
+	if (message) h.message = string(message);
 	return h;
 }
 

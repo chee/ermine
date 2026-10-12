@@ -3,7 +3,8 @@
 // The fixed vectors are newcore/encoding/conformance/cbor/vectors.json, a list of
 // {"value": <its JSON form, ENCODING.tex>, "cbor": "<hex>"}, so every codec checks
 // against the same bytes: each value encodes to exactly its bytes, and the
-// bytes decode to a value equal to it. Then round trips, rejected inputs,
+// bytes decode to a value equal to it; {"cbor", "refused"}: bytes no value
+// encodes as; {"form", "refused"}: a JSON form that is no value. Then round trips, rejected inputs,
 // values with no encoding, a short buffer and a deep value.
 
 #include "cbor.h"
@@ -83,6 +84,7 @@ static void expectBoth(const char *name, const Json *value, const char *hex) {
 }
 
 static void expectRejected(const char *hex, const char *what);
+static void expectNoForm(Json *form, const char *what);
 
 static int argc_default;
 
@@ -113,6 +115,12 @@ static void vectors(const char *path) {
 		Json *vector = list->array.items[i];
 		Json *value = jsonGet(vector, "value");
 		const char *hex = jsonText(jsonGet(vector, "cbor"));
+		Json *form = jsonGet(vector, "form");
+		if (form && !value && !hex && jsonGet(vector, "refused")) {
+			// a JSON form that stands for no value
+			expectNoForm(form, jsonText(jsonGet(vector, "refused")));
+			continue;
+		}
 		if (!value && hex && jsonGet(vector, "refused")) {
 			// no value: the bytes are no encoding
 			expectRejected(hex, jsonText(jsonGet(vector, "refused")));
@@ -145,6 +153,16 @@ static void expectRejected(const char *hex, const char *what) {
 		jsonFree(value);
 	}
 	free(bytes);
+}
+
+/** the JSON form is no value: jsonDecode refuses it (in place, as the values are decoded) */
+static void expectNoForm(Json *form, const char *what) {
+	if (jsonDecode(&form)) {
+		char *printed = jsonPrint(form);
+		printf("FAIL %s (%s) is a value\n", printed, what);
+		free(printed);
+		failures++;
+	}
 }
 
 static void expectNoEncoding(const char *what, const Json *value) {
@@ -281,12 +299,14 @@ static void rejected(void) {
 	expectRejected("a16161", "a map that ends after a key");
 	expectRejected("c0" "6161", "tag 0");
 	expectRejected("d84161", "an unknown tag");
-	expectRejected("d8406161", "a typed array over text");
-	expectRejected("d9004040", "a tag with a long head");
+	expectRejected("d840420102", "tag 64: no uint8 kind, bytes are that");
+	expectRejected("d84040", "tag 64 over nothing");
+	expectRejected("d8456161", "a typed array over text");
+	expectRejected("d9004540", "a tag with a long head");
 	expectRejected("d8454100", "a uint16 array of an odd length");
 	expectRejected("d855440100c0ff", "a float32 NaN other than the one");
 	expectRejected("d85648010000000000f87f", "a float64 NaN other than the one");
-	expectRejected("d840", "a tag with nothing after it");
+	expectRejected("d845", "a tag with nothing after it");
 	expectRejected("db0000000012345678f6", "the stand-in's tag in an eight-byte head");
 	expectRejected("da12345678", "a stand-in with no kind");
 	expectRejected("da12345678f6f6", "bytes after a stand-in");

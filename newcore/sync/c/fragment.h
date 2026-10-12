@@ -34,6 +34,9 @@ typedef const fragment *(*fragment_known)(void *context, const uint8_t head[32])
 size_t fragment_depth(const uint8_t id[32]);
 // adds an id to a list, in place; false if it was there
 bool fragment_add(fragment_ids *ids, const uint8_t id[32]);
+// pushes an id on the end of a list, in no order, any number of times; fragment_settle then sorts it and takes out repeats
+void fragment_push(fragment_ids *ids, const uint8_t id[32]);
+void fragment_settle(fragment_ids *ids);
 // one fragment, from a head of depth 1 or more, to *out (fragment_free it)
 fragment_code fragment_walk(const uint8_t head[32], fragment_lookup lookup, fragment_known known, void *context, fragment *out);
 // the new fragments for these heads (count, ids in a row), malloc'd into *out (fragment_release it)

@@ -349,3 +349,12 @@ Deno.test("a lone high surrogate is one code point in a span's value, as in its 
 	const s = setup({ text: "\ud83da" })
 	assertEquals(s.read(["text", [1, 2]]).value, "a")
 })
+
+Deno.test("bytes are a leaf: no length, no span; a typed array has both", () => {
+	const before = { b: new Uint8Array([1, 2, 3]), t: new Int16Array([1, 2, 3]) }
+	assertEquals(facts({ path: ["b"], range: [0, 1] }, before).place.length, 0)
+	assertEquals(facts({ path: ["t"], range: [0, 1] }, before).place.length, 3)
+	const s = setup(before)
+	assertEquals(s.read(["b", [0, 2]]).value, undefined)
+	assertEquals(s.read(["t", [0, 2]]).value, new Int16Array([1, 2]))
+})

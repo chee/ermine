@@ -239,6 +239,8 @@ int main(void) {
 #endif
 		} else printf("{\"error\":\"unknown op %s\"}\n", op);
 		if (free_request) jsonFree(request);
+		// nothing given out is held: the sides not heads' go, as transport_run does
+		if (current) history_trim(current);
 	}
 	fflush(stdout);
 	history_free(current);

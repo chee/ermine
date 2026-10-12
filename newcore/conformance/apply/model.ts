@@ -69,16 +69,8 @@ export function named(blop: Blop): B {
 	return { blop, name: hex(bytes), bytes, lamport: blop.lamport as number, time: clock++ }
 }
 
-// the JSON form: byte fields as ArrayBuffers (form.ts)
-export const buf = (u: Uint8Array) => u.slice().buffer
-export function form(b: B | Blop): unknown {
-	const o: Blop = { ...("blop" in b ? b.blop : b) as Blop }
-	o.signer = buf(o.signer as Uint8Array)
-	o.nonce = buf(o.nonce as Uint8Array)
-	o.parents = (o.parents as Uint8Array[]).map(buf)
-	if (o.base) o.base = buf(o.base as Uint8Array)
-	return toJson(o)
-}
+// the JSON form (form.ts)
+export const form = (b: B | Blop): unknown => toJson("blop" in b ? b.blop : b)
 
 export const put = (value: unknown) => [{ path: [], value }]
 export const set = (path: (string | number)[], value: unknown) => [{ path, value }]

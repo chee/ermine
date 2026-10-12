@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert"
+import { assertEquals, assertStrictEquals } from "@std/assert"
 import make from "./node.ts"
 
 Deno.test("make: the whole node, entries in order", () => {
@@ -15,7 +15,13 @@ Deno.test("make: outside gives the caller's site in the header", () => {
 	const n = make("a", {}, { header: { time: 1, actor: "me" }, outside: true })
 	assertEquals([n.header.site?.file, n.header.site?.line], [import.meta.url, line])
 	assertEquals([n.header.time, n.header.actor], [1, "me"])
-	assertEquals(Object.isFrozen(n.header), true)
+})
+
+Deno.test("make: the header given is the node's, not copied; outside never changes it", () => {
+	const h = { time: 1 }
+	assertStrictEquals(make("a", {}, { header: h }).header, h)
+	make("a", {}, { header: h, outside: true })
+	assertEquals(h, { time: 1 })
 })
 
 Deno.test("make: a header's own site is kept, as from storage", () => {

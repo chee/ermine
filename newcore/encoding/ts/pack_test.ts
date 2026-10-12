@@ -38,7 +38,6 @@ Deno.test("pack: round trip", () => {
 	const want = walk("root", t.get).nodes
 	assertEquals(back.nodes, want)
 	assertEquals(back.nodes[1].value[0].content, new Uint16Array([1, 2]))
-	assertEquals(Object.isFrozen(back.nodes[0].header), true)
 	assertEquals(back.nodes[0].header, { time: 0, actor: "host" })
 	const t2 = createTable<unknown, unknown>()
 	for (const n of back.nodes) t2.intro(n)

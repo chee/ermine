@@ -119,12 +119,21 @@ void transport_expire(transport *t);
 transport_code transport_follow(transport *t, const char *doc);
 // the document's histories of a layer, made at first; the host commits through them (commit.h)
 histories *transport_histories(transport *t, const char *doc, transport_layer layer);
-// a stored blop of this device's, sealed: taken in, added as a loose commit, then fragments built
-transport_code transport_add(transport *t, const char *doc, const uint8_t *sealed, size_t length);
+// a blop this device made, as the code that encoded and sealed it has it: the blop decoded, its name, and
+// (for transport_add) the stored id of its seal. Held by the caller; the transport takes holds of its own
+typedef struct {
+	const Json *blop;
+	uint8_t name[32], stored[32];
+} transport_made;
+// a stored blop of this device's, sealed: taken in, added as a loose commit, then fragments built. made, or
+// NULL: its seal is handed to the histories before the commit is added, so its save is passed over; not
+// unsealed, checked or taken in again
+transport_code transport_add(transport *t, const char *doc, const uint8_t *sealed, size_t length, const transport_made *made);
 // a blop this device made, its bytes, not yet sealed, into that layer's histories at once (WIRING.tex): add
 // and publish then pass over the name already taken in. A stored blop goes into the ephemeral histories too.
-// Not announced. The document keeps its bytes till its seal is taken in
-transport_code transport_take(transport *t, const char *doc, const uint8_t *blop, size_t length, transport_layer layer);
+// Not announced. The document keeps its bytes till its seal is taken in. made, or NULL: the blop decoded and
+// its name (stored unused), taken as given: not decoded or named again
+transport_code transport_take(transport *t, const char *doc, const uint8_t *blop, size_t length, transport_layer layer, const transport_made *made);
 
 // a blop that came to be taken in to a history, from the network or storage (heard: an ephemeral message),
 // or that waited there on one that did. Valid for the call, blop too (held by the device till then)

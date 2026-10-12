@@ -8,7 +8,7 @@
 // have an owner too. protect is asked as the actor before each operation through bound.
 import createChange, { type Change, type Header } from "../../nodes/ts/change.ts"
 import type { Which } from "../../opstreams/ts/mutate.ts"
-import createNode, { type Node, type Version } from "../../nodes/ts/node.ts"
+import createNode, { type Node, type Side } from "../../nodes/ts/node.ts"
 import {
 	createNotify,
 	type Facts,
@@ -45,7 +45,7 @@ import { createTable } from "./table.ts"
 import { createTrackgraph, type Node as Track } from "../../trackgraph/ts/trackgraph.ts"
 
 type N = Node<unknown, Change>
-type V = Version<unknown, Change>
+type V = Side<unknown, Change>
 
 export class GraphError extends Error {
 	// refused: protect's why, or {code: "pending"} where it did not know yet
@@ -317,7 +317,7 @@ export function createGraph<O>(options: Options<O>) {
 	// a node as notify walks it, every version: info and children read through to the node's
 	// maps, never copied
 	function view(n: N): Record<string, unknown> {
-		return { value: n.value, info: through(n.info), children: through(n.children) }
+		return { value: n.value, info: through(n.attributes), children: through(n.children) }
 	}
 
 	// one object of a node before a patch at path, as facts reads it: that path alone
@@ -332,9 +332,7 @@ export function createGraph<O>(options: Options<O>) {
 		if (part === "loaded") return n.loaded ??= newSpot(id, part)
 		if (part === "value") return n.value ??= newSpot(id, part)
 		if (part.length === 1) {
-			return part[0] === "info"
-				? n.infonames ??= newSpot(id, part)
-				: n.names ??= newSpot(id, part)
+			return part[0] === "info" ? n.infonames ??= newSpot(id, part) : n.names ??= newSpot(id, part)
 		}
 		const m = part[0] === "children" ? (n.children ??= new Map()) : (n.info ??= new Map())
 		let s = m.get(part[1])
@@ -400,7 +398,7 @@ export function createGraph<O>(options: Options<O>) {
 
 	function versionsOf(n: N, which: Which): V[] {
 		if (which === "value") return n.value
-		const m = (which[0] === "info" ? n.info : n.children) as Map<string, V[]>
+		const m = (which[0] === "info" ? n.attributes : n.children) as Map<string, V[]>
 		return m.get(which[1]) ?? []
 	}
 
@@ -449,9 +447,7 @@ export function createGraph<O>(options: Options<O>) {
 			}
 			// made or gone: the object whole. its old first content is not kept, only that it was
 			const rest = now.filter((v) => v.change?.time !== first.header.time)
-			const old = was
-				? [{ content: null, change: undefined as unknown as Change }, ...rest]
-				: rest
+			const old = was ? [{ content: null, change: undefined as unknown as Change }, ...rest] : rest
 			whole(n, first.which, old)
 		}
 	}
@@ -542,9 +538,7 @@ export function createGraph<O>(options: Options<O>) {
 						reports?.push({
 							node: sn.n.id,
 							object: sn.which,
-							patches: content === undefined
-								? [{ path: [] }]
-								: [{ path: [], value: content }],
+							patches: content === undefined ? [{ path: [] }] : [{ path: [], value: content }],
 							header: h,
 							at: 0,
 							ephemeral: ephemeral.has(sn.n.id),
@@ -612,7 +606,7 @@ export function createGraph<O>(options: Options<O>) {
 		})
 		if (which === "value") n.value = now
 		else {
-			const m = (which[0] === "info" ? n.info : n.children) as Map<string, V[]>
+			const m = (which[0] === "info" ? n.attributes : n.children) as Map<string, V[]>
 			if (now.length === 0) m.delete(which[1])
 			else m.set(which[1], now)
 		}
@@ -888,7 +882,9 @@ export function createGraph<O>(options: Options<O>) {
 			for (const it of guard(places.look(pl, address, d), b.agent, d)) {
 				if (!it.node || !("yes" in ask(b.agent, [listAsk(it.id)], d))) continue
 				d?.(it.id, [part])
-				for (const k of (part === "info" ? it.node.info : it.node.children).keys()) seen.add(k)
+				for (const k of (part === "info" ? it.node.attributes : it.node.children).keys()) {
+					seen.add(k)
+				}
 			}
 			return [...seen]
 		}
@@ -912,7 +908,7 @@ export function createGraph<O>(options: Options<O>) {
 					d?.(id, "value")
 					d?.(id, ["children"])
 					for (const k of n.children.keys()) d?.(id, ["children", k])
-					for (const k of n.info.keys()) d?.(id, ["info", k])
+					for (const k of n.attributes.keys()) d?.(id, ["info", k])
 					return out
 				}, { address: id }) as Item<unknown, Change>[])[0]?.node,
 			as: (o) => bound({ ...b, cause: o.cause, message: o.message }),
@@ -1027,9 +1023,7 @@ export function createGraph<O>(options: Options<O>) {
 					() => places.move(id, name, index, toid, toname, toindex),
 					{},
 					() =>
-						across
-							? [...placing(id, name, [child], []), ...placed(toid, toname, [], [child])]
-							: [],
+						across ? [...placing(id, name, [child], []), ...placed(toid, toname, [], [child])] : [],
 					() =>
 						across
 							? [[id, ["children", name], 0], [toid, ["children", toname], 0]]

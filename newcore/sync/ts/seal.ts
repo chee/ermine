@@ -24,10 +24,10 @@ const DOMAIN = new TextEncoder().encode("ermine/v0/change")
 const Point = ed25519.Point
 const L = Point.Fn.ORDER
 
-function message(blop: Uint8Array): Uint8Array {
+function message(blop: Uint8Array, named = name(blop)): Uint8Array {
 	const m = new Uint8Array(DOMAIN.length + 32)
 	m.set(DOMAIN)
-	m.set(name(blop), DOMAIN.length)
+	m.set(named, DOMAIN.length)
 	return m
 }
 
@@ -74,29 +74,28 @@ function blopOf(b: Uint8Array): Blop {
 	}
 }
 
-const buffer = (u: Uint8Array) => u.slice().buffer as ArrayBuffer
-
-// the sealed change's bytes: {change, signer, signature}
-export async function seal(blop: Uint8Array, signer: Signer): Promise<Uint8Array> {
-	const b = blopOf(blop)
+// the sealed change's bytes: {change, signer, signature}. made: the blop decoded and its name, from
+// the code that encoded it: taken as given, not decoded or named again
+export async function seal(
+	blop: Uint8Array,
+	signer: Signer,
+	made?: { blop: Blop; name: Uint8Array },
+): Promise<Uint8Array> {
+	const b = made?.blop ?? blopOf(blop)
 	const key = signer.key
 	if (!(key instanceof Uint8Array) || key.length !== 32) throw new SealError("shape")
 	if (!same(b.signer, key)) throw new SealError("signature")
-	const m = message(blop)
+	const m = made ? message(blop, made.name) : message(blop)
 	const signature = await signer.sign(m)
 	if (!(signature instanceof Uint8Array) || signature.length !== 64) {
 		throw new SealError("shape")
 	}
 	if (!good(signature, key, m)) throw new SealError("signature")
-	return cbor.encode({
-		change: buffer(blop),
-		signer: buffer(key),
-		signature: buffer(signature),
-	})
+	return cbor.encode({ change: blop, signer: key, signature })
 }
 
-const isBytes = (x: unknown, n?: number): x is ArrayBuffer =>
-	x instanceof ArrayBuffer && (n === undefined || x.byteLength === n)
+const isBytes = (x: unknown, n?: number): x is Uint8Array =>
+	x instanceof Uint8Array && (n === undefined || x.length === n)
 
 // the blop decoded, its name, the stored id, and who signed it
 export function unseal(bytes: Uint8Array): Unsealed {
@@ -114,10 +113,10 @@ export function unseal(bytes: Uint8Array): Unsealed {
 	if (!isBytes(f.change) || !isBytes(f.signer, 32) || !isBytes(f.signature, 64)) {
 		throw new SealError("shape")
 	}
-	const change = new Uint8Array(f.change), signer = new Uint8Array(f.signer)
+	const change = f.change, signer = f.signer
 	const blop = blopOf(change)
 	if (!same(blop.signer, signer)) throw new SealError("signature")
-	if (!good(new Uint8Array(f.signature), signer, message(change))) {
+	if (!good(f.signature, signer, message(change))) {
 		throw new SealError("signature")
 	}
 	return { blop, name: name(change), stored: blake3(bytes), signer }

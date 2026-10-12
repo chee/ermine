@@ -29,16 +29,15 @@ const ask = (request: J & { op: string }): Step => ({
 // ---- values, nodes and graphs, in the protocol's JSON
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const h = (v: Value) => manifest.hash(v)
-const PNG =
-	new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6]).buffer
-const RAW = new Uint8Array([1, 2, 3]).buffer
-const PDF = new TextEncoder().encode("%PDF-1.7 hello").buffer
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6])
+const RAW = new Uint8Array([1, 2, 3])
+const PDF = new TextEncoder().encode("%PDF-1.7 hello")
 
 /** A value's kept, and its head when it is bytes. */
 function kept(value: Value): { kept: [string, string]; head?: string } {
 	const form = manifest.form(value)
 	const k: { kept: [string, string]; head?: string } = { kept: [h(value), form] }
-	if (form === "bin") k.head = hex(new Uint8Array(value as ArrayBuffer).slice(0, names.HEAD))
+	if (form === "bin") k.head = hex((value as Uint8Array).slice(0, names.HEAD))
 	return k
 }
 

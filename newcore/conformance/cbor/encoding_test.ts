@@ -5,7 +5,9 @@
 // encoded and decoded. PACK_HARNESS: the C harness (default: the reference). Both are run.
 // The old suite wrote a typed array as its bytes in base64; ENCODING.tex now writes its elements
 // as a list (the designer, 10-11), so those vectors fail by design. And the old graph held a live
-// stand-in as a whole value, in memory, never encoded; pack encodes, and a live value has none
+// stand-in as a whole value, in memory, never encoded; pack encodes, and a live value has none.
+// No uint8 kind now (the designer, 10-12): old.json's and lists.json's uint8 vectors are made
+// int8 (one of old.json's, two forms in one map, uint16), or refused
 import { assertEquals } from "@std/assert"
 import { line } from "../pack/form.ts"
 

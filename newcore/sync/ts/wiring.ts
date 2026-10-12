@@ -7,7 +7,7 @@ import type { Changed } from "../../graph/ts/graph.ts"
 import { versions as applied } from "./apply.ts"
 import { commit } from "./commit.ts"
 import { id as idOf, is } from "./id.ts"
-import { seal, type Signer } from "./seal.ts"
+import { seal, type Signer, stored } from "./seal.ts"
 import type { Device, Layer } from "./transport.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -114,15 +114,18 @@ export function createWiring(device: Device, options: Options): Wiring {
 					options.kind,
 				)
 				const bytes = encode(blop)
+				const made = { blop, name: blopName(bytes) }
 				// taken in now, so that the next change commits against it
-				device.take(doc, bytes, layer)
+				device.take(doc, bytes, layer, made)
 				// an ephemeral node is its process's own: what it shows is its process's, not the
 				// histories' (a process's status is a version in front of its value, the record
 				// the first version alone)
-				if (!record.ephemeral) settle(doc, layer, blop, blopName(bytes))
+				if (!record.ephemeral) settle(doc, layer, blop, made.name)
 				later(async () => {
-					if (layer === "stored") await device.add(await seal(bytes, signer))
-					else await device.publish(doc, bytes)
+					if (layer === "stored") {
+						const sealed = await seal(bytes, signer, made)
+						await device.add(sealed, { ...made, stored: stored(sealed) })
+					} else await device.publish(doc, bytes)
 				})
 			} catch (e) {
 				trouble.push(e)

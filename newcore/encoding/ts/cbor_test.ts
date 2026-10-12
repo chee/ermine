@@ -3,17 +3,13 @@ import { CborError, decode, encode, Stand, type Value } from "./cbor.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => new Uint8Array(s.match(/../g)?.map((x) => parseInt(x, 16)) ?? [])
-const bytes = (...xs: number[]) => new Uint8Array(xs).buffer
+const bytes = (...xs: number[]) => new Uint8Array(xs)
 
 /** Equal as ENCODING.tex has it: numbers as Object.is, kinds kept apart, maps in any order. */
 function same(a: unknown, b: unknown): boolean {
 	if (typeof a === "number") return typeof b === "number" && Object.is(a, b)
 	if (a === null || typeof a !== "object") return a === b
 	if (b === null || typeof b !== "object") return false
-	if (a instanceof ArrayBuffer) {
-		return b instanceof ArrayBuffer &&
-			same(Array.from(new Uint8Array(a)), Array.from(new Uint8Array(b)))
-	}
 	if (ArrayBuffer.isView(a)) {
 		if (!ArrayBuffer.isView(b) || a.constructor !== b.constructor) return false
 		const x = Array.from(a as unknown as ArrayLike<unknown>),
@@ -25,7 +21,7 @@ function same(a: unknown, b: unknown): boolean {
 	if (Array.isArray(a)) {
 		return Array.isArray(b) && a.length === b.length && a.every((e, i) => same(e, b[i]))
 	}
-	if (Array.isArray(b) || b instanceof ArrayBuffer || ArrayBuffer.isView(b)) return false
+	if (Array.isArray(b) || ArrayBuffer.isView(b)) return false
 	const ka = Object.keys(a), kb = Object.keys(b)
 	return ka.length === kb.length &&
 		ka.every((k) => Object.hasOwn(b, k) && same((a as never)[k], (b as never)[k]))
@@ -67,7 +63,7 @@ const VECTORS: [string, Value, string][] = [
 	["nested list", [1, [2, 3]], "82f93c0082f94000f94200"],
 	["empty map", {}, "a0"],
 	["map keys sorted by encoding", { b: 1, aa: 3, a: 2 }, "a36161f940006162f93c00626161f94200"],
-	["uint8", new Uint8Array([1, 2]), "d840420102"],
+	["a Uint8Array is bytes", new Uint8Array([1, 2]), "420102"],
 	["uint16", new Uint16Array([1, 0x0203]), "d84544" + "0100" + "0302"],
 	["uint32", new Uint32Array([1]), "d8464401000000"],
 	["uint64", new BigUint64Array([2n ** 64n - 1n]), "d84748ffffffffffffffff"],
@@ -86,7 +82,11 @@ const VECTORS: [string, Value, string][] = [
 		[new Stand(new Stand("a"))],
 		"81da12345678da123456786161",
 	],
-	["typed arrays in a map", { u: new Uint8Array([7]), b: bytes(7) }, "a2616241076175d8404107"],
+	[
+		"a typed array and bytes in a map",
+		{ u: new Int8Array([7]), b: bytes(7) },
+		"a2616241076175d8484107",
+	],
 ]
 
 for (const [name, value, want] of VECTORS) {
@@ -113,6 +113,7 @@ Deno.test("cbor: a NaN element is the one NaN", () => {
 Deno.test("cbor: a view into a larger buffer encodes only its elements", () => {
 	const whole = new Uint16Array([1, 2, 3, 4])
 	assertEquals(hex(encode(whole.subarray(1, 3))), "d84544" + "0200" + "0300")
+	assertEquals(hex(encode(bytes(1, 2, 3, 4).subarray(1, 3))), "420203")
 })
 
 Deno.test("cbor: decoding gives fresh values of their own class", () => {
@@ -120,8 +121,14 @@ Deno.test("cbor: decoding gives fresh values of their own class", () => {
 	if (!(t instanceof Uint16Array)) throw new Error("not a Uint16Array")
 	assertEquals(Array.from(t), [1, 0x0203])
 	assertEquals(t.byteOffset, 0)
-	const b = decode(unhex("4401020304"))
-	if (!(b instanceof ArrayBuffer)) throw new Error("bytes are not an ArrayBuffer")
+	const input = unhex("4401020304")
+	const b = decode(input)
+	if (!(b instanceof Uint8Array)) throw new Error("bytes are not a Uint8Array")
+	assertEquals(Array.from(b), [1, 2, 3, 4])
+	// fresh: not a view pinning the input
+	assertEquals([b.byteOffset, b.buffer.byteLength], [0, 4])
+	input[1] = 9
+	assertEquals(b[0], 1)
 	const m = decode(unhex("a1695f5f70726f746f5f5ff6")) as { [k: string]: Value }
 	assertEquals(Object.keys(m), ["__proto__"])
 	assertEquals(Object.getPrototypeOf(m), Object.prototype)
@@ -162,14 +169,16 @@ const REJECTED: [string, string][] = [
 	["a repeated key", "a26161f66161f6"],
 	["an unknown tag", "c140"],
 	["a big-endian tag", "d84142000100"],
-	["a typed array tag head longer than needed", "d9004042 0102"],
-	["a typed array over a list", "d84080"],
+	["tag 64: no uint8 kind, bytes are that", "d840420102"],
+	["tag 64 over nothing", "d84040"],
+	["a typed array tag head longer than needed", "d9004542 0100"],
+	["a typed array over a list", "d84580"],
 	["the stand-in's tag in an eight-byte head", "db0000000012345678f6"],
 	["a stand-in with no kind", "da12345678"],
 	["a stand-in's tag head longer than needed", "db00000000123456786161"],
 	["a typed array with part of an element", "d8454101"],
-	["a typed array with a long bytes head", "d840580102"],
-	["a tagged tag", "d840d84040"],
+	["a typed array with a long bytes head", "d84558020100"],
+	["a tagged tag", "d845d84540"],
 	["bytes after the value", "f6f6"],
 	["nothing", ""],
 	["a value that ends early", "82f6"],
@@ -197,6 +206,8 @@ const UNENCODABLE: [string, unknown][] = [
 	["a Map", new Map()],
 	["a clamped array", new Uint8ClampedArray(1)],
 	["a DataView", new DataView(new ArrayBuffer(1))],
+	["an ArrayBuffer, which is live,", new ArrayBuffer(1)],
+	["an ArrayBuffer in a map", { b: new ArrayBuffer(0) }],
 	["a lone surrogate", "\ud800"],
 	["a lone surrogate as a key", { "\udc00": 1 }],
 	["undefined in a map", { a: undefined }],
@@ -273,7 +284,6 @@ function generate(r: () => number, depth: number): Value {
 		case 5: {
 			const kinds = [
 				Int8Array,
-				Uint8Array,
 				Int16Array,
 				Uint16Array,
 				Int32Array,
@@ -318,11 +328,10 @@ Deno.test("cbor: round trips", () => {
 })
 
 // the shared vectors: each a value in its JSON form (ENCODING.tex) and its encoding in hex,
-// or bytes in hex that no value encodes as
+// bytes in hex that no value encodes as, or a JSON form that is no value
 
 const TYPED: { [kind: string]: new (xs: never[]) => ArrayBufferView } = {
 	int8: Int8Array,
-	uint8: Uint8Array,
 	int16: Int16Array,
 	uint16: Uint16Array,
 	int32: Int32Array,
@@ -343,9 +352,7 @@ function fromJson(x: unknown): Value {
 	if (keys.length === 1 && keys[0] === "/") {
 		const [[tag, body]] = Object.entries((x as { "/": object })["/"])
 		if (tag === "live") return new Stand(fromJson(body))
-		if (tag === "bytes") {
-			return Uint8Array.from(atob(body as string), (c) => c.charCodeAt(0)).buffer
-		}
+		if (tag === "bytes") return Uint8Array.from(atob(body as string), (c) => c.charCodeAt(0))
 		if (tag === "number") return Number(body)
 		if (tag === "map") return { "/": fromJson((body as { "/": unknown })["/"]) }
 		const T = TYPED[tag]
@@ -370,7 +377,14 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 		const want = String(v.cbor ?? v.hex ?? v.encoding ?? v.bytes).toLowerCase()
 		const name = String(v.name ?? want)
 		const has = (k: string) => Object.hasOwn(v, k)
-		if (has("value") || has("json")) {
+		if (has("form")) {
+			try {
+				fromJson(v.form)
+				disagree.push(`${JSON.stringify(v.form)}: a value, the vector says none (${v.refused})`)
+			} catch {
+				// no value, as it should be
+			}
+		} else if (has("value") || has("json")) {
 			const value = fromJson(has("value") ? v.value : v.json)
 			let got: string
 			try {

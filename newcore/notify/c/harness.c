@@ -189,8 +189,8 @@ static void number(double d) {
 // typed array {"/":{kind:[...]}}, 64-bit elements as decimal strings, a float's NaN and
 // infinities as words; a stand-in {"/":{"live":kind}}
 
-static const char *kinds[] = {"int8", "uint8", "int16", "uint16", "int32", "uint32", "int64",
-	"uint64", "float32", "float64"};
+static const char *kinds[] = {"int8", "int16", "uint16", "int32", "uint32", "int64", "uint64",
+	"float32", "float64"};
 static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 // one element, little-endian, from a JSON number or string (as a typed array takes a number:
@@ -233,7 +233,6 @@ static double element(const nt_value *t, size_t i) {
 	uint64_t u = raw(t, i);
 	switch (t->kind) {
 	case NT_INT8: return (int8_t)u;
-	case NT_UINT8: return (uint8_t)u;
 	case NT_INT16: return (int16_t)u;
 	case NT_UINT16: return (uint16_t)u;
 	case NT_INT32: return (int32_t)u;

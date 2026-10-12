@@ -220,9 +220,10 @@ static void put_entries(writer *w, const nd_entry *es, size_t n, int lists) {
 	}
 }
 
-// keys shorter first, then bytewise: site, time, actor, cause, reader
+// keys shorter first, then bytewise: site, time, actor, cause, reader, message, wallclock
 static void put_header(writer *w, const nd_header *h) {
-	head(w->b, 5, !!h->has_time + !!h->actor + !!h->reader + !!h->has_site + !!h->cause);
+	head(w->b, 5,
+		!!h->has_time + !!h->actor + !!h->reader + !!h->has_site + !!h->cause + !!h->message + !!h->has_wallclock);
 	if (h->has_site) {
 		const nd_site *s = &h->site;
 		str(w, "site");
@@ -236,6 +237,8 @@ static void put_header(writer *w, const nd_header *h) {
 	if (h->actor) str(w, "actor"), put_value(w, PK_ACTOR, h->actor);
 	if (h->cause) str(w, "cause"), put_value(w, PK_CAUSE, h->cause);
 	if (h->reader) str(w, "reader"), str(w, h->reader);
+	if (h->message) str(w, "message"), str(w, h->message);
+	if (h->has_wallclock) str(w, "wallclock"), number(w->b, h->wallclock);
 }
 
 // a node as written: id, info, value, header, children
@@ -507,6 +510,8 @@ static nd_header read_header(reader *r) {
 		else if (is(s, len, "reader")) h.reader = text(r);
 		else if (is(s, len, "site")) h.has_site = 1, h.site = site(r);
 		else if (is(s, len, "cause")) h.cause = read_value(r, PK_CAUSE);
+		else if (is(s, len, "wallclock")) h.has_wallclock = 1, h.wallclock = number_in(r);
+		else if (is(s, len, "message")) h.message = text(r);
 		else skip(r);
 	}
 	return h;
@@ -546,10 +551,7 @@ static void forget(pk_graph *g) {
 // whether the bytes are exactly one item in the canonical encoding (ENCODING.tex), values and
 // all: shortest heads, definite lengths, floats only, keys in order, UTF-8, nothing after
 static int canonical(const uint8_t *bytes, size_t length) {
-	Json *x = cborDecode(bytes, length, NULL, NULL);
-	if (x == NULL) return 0;
-	jsonFree(x);
-	return 1;
+	return cborCheck(bytes, length, NULL, NULL);
 }
 
 pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out) {

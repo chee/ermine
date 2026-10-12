@@ -45,7 +45,7 @@ static void seal_op(const char *blop, const char *seed) {
 	ermEd25519Public(s, signer.key);
 	uint8_t *out;
 	size_t length;
-	seal_code code = seal_seal(bytes, n, &signer, &out, &length);
+	seal_code code = seal_seal(bytes, n, &signer, NULL, &out, &length);
 	if (code == SEAL_OK) {
 		fputs("{\"bytes\":\"", stdout);
 		hex(out, length);

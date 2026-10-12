@@ -202,7 +202,7 @@ const putFragment = (d: Dev, h: Blop, boundary: Blop[], members: Blop[]): Step =
 		head: h.stored,
 		boundary: boundary.map((b) => b.stored),
 		checkpoints: [],
-		blob: hex(cbor.encode(members.map((m) => m.sealed.slice().buffer))),
+		blob: hex(cbor.encode(members.map((m) => m.sealed))),
 	})
 // two devices, both following the document, linked
 const two = () => [reset(), device(A), device(B), follow(A), follow(B), link(A, B)]
@@ -313,9 +313,9 @@ const scenario = (name: string, title: string, steps: Step[]) => all.push({ name
 	const b = await mk(A)
 	const m = new Uint8Array([...new TextEncoder().encode("ermine/v0/change"), ...name(b.bytes)])
 	const forged = cbor.encode({
-		change: b.bytes.slice().buffer,
-		signer: A.key.slice().buffer,
-		signature: ed25519.sign(m, B.secret).slice().buffer,
+		change: b.bytes,
+		signer: A.key,
+		signature: ed25519.sign(m, B.secret),
 	})
 	const head = hex(fill(0x22))
 	scenario(
@@ -616,13 +616,11 @@ for (const forgedFirst of [true, false]) {
 // the sender's own message; a blop of 2 500 bytes in three parts of 1 000 stands for a longer one
 const parts = (b: Uint8Array, size: number, whole = blake3(b)) => {
 	const n = Math.ceil(b.length / size)
-	return Array.from({ length: n }, (_, i) =>
-		cbor.encode({
-			whole: whole.slice().buffer,
-			part: i,
-			parts: n,
-			bytes: b.slice(i * size, (i + 1) * size).buffer,
-		}))
+	return Array.from(
+		{ length: n },
+		(_, i) =>
+			cbor.encode({ whole, part: i, parts: n, bytes: b.subarray(i * size, (i + 1) * size) }),
+	)
 }
 const expire = () => ok({ op: "expire" })
 {

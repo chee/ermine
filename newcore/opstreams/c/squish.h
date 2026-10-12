@@ -13,10 +13,10 @@ typedef struct {
 } sq_key;
 
 // what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points), a
-// list (n opaque elements), bytes; anything else is SQ_ANY and never joins. size: data's length in
-// bytes. lone: a lone surrogate is in it, or in anything it holds (a string sets it itself; for a
+// list (n opaque elements); anything else, bytes included (one whole value, never spliced:
+// MUTATE.tex), is SQ_ANY and never joins. size: data's length in bytes. lone: a lone surrogate is in it, or in anything it holds (a string sets it itself; for a
 // list or any other value, the caller does: squish never reads those)
-typedef enum { SQ_ANY, SQ_STR, SQ_LIST, SQ_BYTES } sq_kind;
+typedef enum { SQ_ANY, SQ_STR, SQ_LIST } sq_kind;
 typedef struct {
 	sq_kind kind;
 	size_t n;
@@ -27,7 +27,6 @@ typedef struct {
 
 sq_value sq_str(const char *s, size_t size);
 sq_value sq_list(const void *const *elements, size_t n);
-sq_value sq_bytes(const uint8_t *b, size_t n);
 sq_value sq_any(const void *v);
 
 // GRAPH.tex's patch. move: opaque, NULL for none; only move_path of it is read

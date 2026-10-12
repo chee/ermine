@@ -17,13 +17,17 @@ export type Version = {
 	because: Because<{ lamport: number; name: string }, { signer: string }>
 }
 
-// kept for blops taken in only: their sides never change
-const kept = new WeakMap<Histories, Map<string, unknown>>()
+// sides kept: heads' only, by their blop (APPLY.tex); a side never changes
+const kept = new WeakMap<Histories, Map<Blop, unknown>>()
+const sides = (histories: Histories) => {
+	if (!kept.has(histories)) kept.set(histories, new Map())
+	return kept.get(histories)!
+}
 
-// the side after the blop's patches; MutateError when they do not apply
-function after(histories: Histories, blop: Blop): unknown {
-	const base = blop.base ?? blop.parents[0]
-	const before = base === undefined ? undefined : side(histories, base)
+const base = (blop: Blop) => blop.base ?? blop.parents[0]
+
+// the side after the blop's patches on before; MutateError when they do not apply
+function after(blop: Blop, before: unknown): unknown {
 	const change = createChange(blop.node, { time: 0, actor: blop.actor })
 	const versions = before === undefined ? [] : [{ content: before, change }]
 	const o = blop.object
@@ -40,22 +44,43 @@ function after(histories: Histories, blop: Blop): unknown {
 export function side(histories: Histories, name: Uint8Array): unknown {
 	const blop = histories.get(name)
 	if (blop === undefined) return undefined
-	if (!kept.has(histories)) kept.set(histories, new Map())
-	const sides = kept.get(histories)!
-	const n = hex(name)
-	if (!sides.has(n)) sides.set(n, after(histories, blop))
-	return sides.get(n)
+	const k = sides(histories)
+	if (k.has(blop)) return k.get(blop)
+	// not kept: back along the bases to the nearest side kept (or the root, none), then forward
+	const line: Blop[] = []
+	let before: unknown = undefined
+	for (let b: Blop | undefined = blop; b !== undefined;) {
+		if (k.has(b)) {
+			before = k.get(b)
+			break
+		}
+		line.push(b)
+		const n = base(b)
+		b = n === undefined ? undefined : histories.get(n)
+	}
+	// taken in: they applied, and apply again
+	for (let i = line.length - 1; i >= 0; i--) before = after(line[i], before)
+	return before
 }
 
-// whether the blop's patches apply to its base's side
+// whether the blop's patches apply to its base's side. They do: it is taken in next (HISTORY.tex,
+// step 7 the last), a head, so its side is kept and its parents' let go
 export function check(histories: Histories, blop: Blop): boolean {
+	const n = base(blop)
+	let made
 	try {
-		after(histories, blop)
-		return true
+		made = after(blop, n === undefined ? undefined : side(histories, n))
 	} catch (e) {
 		if (e instanceof MutateError) return false
 		throw e
 	}
+	const k = sides(histories)
+	for (const p of blop.parents) {
+		const b = histories.get(p)
+		if (b !== undefined) k.delete(b)
+	}
+	k.set(blop, made)
+	return true
 }
 
 // an object's versions: its heads in the agreed order, each with a side; time(name) the caller's

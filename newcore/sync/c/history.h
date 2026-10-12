@@ -18,8 +18,9 @@
 
 typedef struct histories histories;
 
-// step 7's: whether the blop's patches apply to its base's side
-typedef bool (*history_check)(void *context, histories *c, const Json *blop);
+// step 7's: whether the blop's patches apply to its base's side. slot: what it made of the blop,
+// set only when true: the blop's slot (history_slot) once taken
+typedef bool (*history_check)(void *context, histories *c, const Json *blop, void **slot);
 
 typedef enum {
 	HISTORY_TAKEN,
@@ -54,12 +55,14 @@ typedef struct {
 
 // the histories of one node, empty
 histories *history_create(const char *node, history_check check, void *context);
-// what history_free calls with each slot (history_slot) the caller set, to let it go; none by default
+// what history_free calls with each slot (history_slot) the caller set, to let it go, and
+// history_trim with each slot not a head's; none by default
 void history_release(histories *c, void (*release)(void *slot));
 void history_free(histories *c);
 // load: a blop taken in, by its name, decoded again (the histories hold what it gives back)
 void history_loader(histories *c, Json *(*load)(void *context, const uint8_t name[32]), void *context);
-// lets go of the blops no longer needed; called when nothing given out is held
+// lets go of the blops no longer needed, and the slots not heads'; called when nothing given out is
+// held
 void history_trim(histories *c);
 // the steps of HISTORY.tex, Adding; names: free with history_row_free
 history_row history_add(histories *c, const Json *blop, const uint8_t name[32]);
@@ -72,7 +75,8 @@ size_t history_waiting(histories *c, history_row **out);
 size_t history_refused(histories *c, history_row **out);
 void history_row_free(history_row *row);
 void history_rows_free(history_row *rows, size_t count);
-// the caller's own pointer for a blop taken in, NULL at first; NULL when not taken in
+// the caller's own pointer for a blop taken in, NULL at first; NULL when not taken in. Not a
+// head's: let go at the next trim
 void **history_slot(histories *c, const uint8_t name[32]);
 
 #endif

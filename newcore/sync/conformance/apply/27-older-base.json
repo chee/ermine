@@ -1,0 +1,329 @@
+{
+	"title": "concurrent on a blop no longer a head: checked against its own side, not a head's",
+	"steps": [
+		{
+			"request": {
+				"op": "create",
+				"node": "n"
+			},
+			"expect": {}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RQAAAEUAAAA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": "abc"
+						}
+					]
+				},
+				"name": "d68cf5ce6a0349590bb9080beb1d6441f6ad815608be26234b8b86965145740a"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RgAAAEYAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "1oz1zmoDSVkLuQgL6x1kQfatgVYIviYjS4uGllFFdAo"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								3,
+								3
+							],
+							"value": "d"
+						}
+					]
+				},
+				"name": "4e1bc9fc7278e4fb179b7167287083690294fe60aa6fb89122026998e94e5da6"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "RwAAAEcAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ThvJ/HJ45PsXm3FnKHCDaQKU/mCqb7iRIgJpmOlOXaY"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								4,
+								4
+							],
+							"value": "e"
+						}
+					]
+				},
+				"name": "9cc5a932afc457826384770959e6cbd9e936c521547dd0a28f3dea3ca47bb180"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "SAAAAEgAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "ThvJ/HJ45PsXm3FnKHCDaQKU/mCqb7iRIgJpmOlOXaY"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								4,
+								4
+							],
+							"value": "x"
+						}
+					]
+				},
+				"name": "61bebfd26555a279aa20e428ab4b48b99adb9c853dda9d57ddde137a472eed25"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "SQAAAEkAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "1oz1zmoDSVkLuQgL6x1kQfatgVYIviYjS4uGllFFdAo"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								3,
+								4
+							]
+						}
+					]
+				},
+				"name": "5bba5678c4ce2323f4d02417f72321540752126ec8d8b78e65c0e00b8aedbefd"
+			},
+			"expect": {
+				"refused": "patches"
+			}
+		},
+		{
+			"request": {
+				"op": "add",
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "SgAAAEoAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "Yb6/0mVVonmqIOQoq0tIuZrbnIU92p1X3d4Tekcu7SU"
+							}
+						}
+					],
+					"lamport": 4,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				},
+				"name": "2a154c7e99335a0a758c3bc3fba33a9c2cb3e2f768fe96f6381e0139edfc2162"
+			},
+			"expect": "taken"
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "d68cf5ce6a0349590bb9080beb1d6441f6ad815608be26234b8b86965145740a"
+			},
+			"expect": {
+				"side": "abc"
+			}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "4e1bc9fc7278e4fb179b7167287083690294fe60aa6fb89122026998e94e5da6"
+			},
+			"expect": {
+				"side": "abcd"
+			}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "61bebfd26555a279aa20e428ab4b48b99adb9c853dda9d57ddde137a472eed25"
+			},
+			"expect": {
+				"side": "abcdx"
+			}
+		},
+		{
+			"request": {
+				"op": "side",
+				"name": "2a154c7e99335a0a758c3bc3fba33a9c2cb3e2f768fe96f6381e0139edfc2162"
+			},
+			"expect": {
+				"side": "bcdx"
+			}
+		},
+		{
+			"request": {
+				"op": "versions",
+				"object": "value",
+				"times": {
+					"d68cf5ce6a0349590bb9080beb1d6441f6ad815608be26234b8b86965145740a": 1068,
+					"4e1bc9fc7278e4fb179b7167287083690294fe60aa6fb89122026998e94e5da6": 1069,
+					"9cc5a932afc457826384770959e6cbd9e936c521547dd0a28f3dea3ca47bb180": 1070,
+					"61bebfd26555a279aa20e428ab4b48b99adb9c853dda9d57ddde137a472eed25": 1071,
+					"2a154c7e99335a0a758c3bc3fba33a9c2cb3e2f768fe96f6381e0139edfc2162": 1073
+				}
+			},
+			"expect": [
+				{
+					"content": "bcdx",
+					"change": {
+						"actor": "a",
+						"time": 1073,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 4,
+							"name": "2a154c7e99335a0a758c3bc3fba33a9c2cb3e2f768fe96f6381e0139edfc2162"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				},
+				{
+					"content": "abcde",
+					"change": {
+						"actor": "a",
+						"time": 1070,
+						"node": "n"
+					},
+					"because": {
+						"layer": "sync",
+						"place": {
+							"lamport": 3,
+							"name": "9cc5a932afc457826384770959e6cbd9e936c521547dd0a28f3dea3ca47bb180"
+						},
+						"why": {
+							"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+						}
+					}
+				}
+			]
+		}
+	]
+}

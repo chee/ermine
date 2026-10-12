@@ -27,12 +27,12 @@ export class CommitError extends Error {
 	}
 }
 
-// a live value (ENCODING.tex): a symbol, a function, a Map, any class's object other than a
-// Stand, typed arrays and ArrayBuffer
+// a live value (ENCODING.tex): a symbol, a function, a Map, an ArrayBuffer, any class's object
+// other than a Stand, bytes (a Uint8Array) and typed arrays
 function isLive(x: unknown): boolean {
 	if (typeof x === "symbol" || typeof x === "function") return true
 	if (x === null || typeof x !== "object") return false
-	if (x instanceof Stand || x instanceof ArrayBuffer || ArrayBuffer.isView(x)) return false
+	if (x instanceof Stand || ArrayBuffer.isView(x)) return false
 	if (Array.isArray(x)) return false
 	const proto = Object.getPrototypeOf(x)
 	return proto !== Object.prototype && proto !== null
@@ -47,8 +47,8 @@ export function standIns(
 ): unknown {
 	if (isLive(x)) return new Stand((kind?.(x) ?? null) as never)
 	if (
-		x === null || typeof x !== "object" || x instanceof Stand || x instanceof ArrayBuffer ||
-		ArrayBuffer.isView(x) || open.has(x)
+		x === null || typeof x !== "object" || x instanceof Stand || ArrayBuffer.isView(x) ||
+		open.has(x)
 	) return x
 	open.add(x)
 	let out: unknown = x

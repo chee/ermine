@@ -878,9 +878,11 @@ static void take_fragment(doc *d, const uint8_t head[32], const uint8_t (*bounda
 	for (int i = 0; i < list->array.count; i++) {
 		uint8_t s[32];
 		seal_stored(list->array.items[i]->bytes.data, list->array.items[i]->bytes.length, s);
-		fragment_add(&f.members, s);
+		fragment_push(&f.members, s);
 	}
-	for (size_t i = 0; i < boundary_count; i++) fragment_add(&f.boundary, boundary[i]);
+	for (size_t i = 0; i < boundary_count; i++) fragment_push(&f.boundary, boundary[i]);
+	fragment_settle(&f.members);
+	fragment_settle(&f.boundary);
 	if (!passed) {
 		bool has = false;
 		for (size_t i = 0; i < f.members.count; i++) has = has || memcmp(f.members.ids[i], head, 32) == 0;
@@ -1225,17 +1227,20 @@ void transport_arrived(transport *t, void (*listener)(void *context, const trans
 // a blop of this device's made here, put straight into the histories: the next change commits against it
 // (a stored one goes into the ephemeral histories too, once there are any). Not announced; add and publish
 // pass over it
-transport_code transport_take(transport *t, const char *id, const uint8_t *bytes, size_t length, transport_layer which) {
+transport_code transport_take(transport *t, const char *id, const uint8_t *bytes, size_t length, transport_layer which, const transport_made *made) {
 	doc *d = doc_named(t, id);
 	if (d == NULL) return TRANSPORT_DOC;
-	Json *blop;
-	blop_error error = blop_decode(bytes, length, &blop);
-	if (error.code != BLOP_OK) {
-		free(error.field);
-		return TRANSPORT_BLOP;
-	}
+	Json *blop = made ? jsonRef((Json *)made->blop) : NULL;
 	uint8_t name[32];
-	blop_name(bytes, length, name);
+	if (made) memcpy(name, made->name, 32);
+	else {
+		blop_error error = blop_decode(bytes, length, &blop);
+		if (error.code != BLOP_OK) {
+			free(error.field);
+			return TRANSPORT_BLOP;
+		}
+		blop_name(bytes, length, name);
+	}
 	d->direct = more(d->direct, d->direct_count, &d->direct_room, sizeof *d->direct);
 	d->direct[d->direct_count].bytes = grab(length);
 	memcpy(d->direct[d->direct_count].bytes, bytes, length);
@@ -1254,11 +1259,16 @@ transport_code transport_take(transport *t, const char *id, const uint8_t *bytes
 	return TRANSPORT_OK;
 }
 
-transport_code transport_add(transport *t, const char *id, const uint8_t *sealed, size_t length) {
+transport_code transport_add(transport *t, const char *id, const uint8_t *sealed, size_t length, const transport_made *made) {
 	doc *d = doc_named(t, id);
 	if (d == NULL) return TRANSPORT_DOC;
 	seal_unsealed u;
-	if (seal_unseal(sealed, length, &u) != SEAL_OK) return TRANSPORT_SEAL;
+	if (made) {
+		u = (seal_unsealed){.blop = jsonRef((Json *)made->blop)};
+		memcpy(u.name, made->name, 32);
+		memcpy(u.stored, made->stored, 32);
+		memcpy(u.signer, jsonGet(u.blop, "signer")->bytes.data, 32);
+	} else if (seal_unseal(sealed, length, &u) != SEAL_OK) return TRANSPORT_SEAL;
 	// the commit: the seal's stored id, and the stored ids of its parents' seals
 	const Json *list = jsonGet(u.blop, "parents");
 	size_t n = (size_t)list->array.count;
@@ -1274,8 +1284,15 @@ transport_code transport_add(transport *t, const char *id, const uint8_t *sealed
 	}
 	uint8_t head[32];
 	memcpy(head, u.stored, 32);
-	seal_free(&u);
-	take(d, &d->stored, true, head, (const uint8_t(*)[32])parents, n, sealed, length);
+	if (made) {
+		// the histories have it before addCommit, so the save is passed over
+		if (!table_get(&d->stored.stored, head))
+			hold(d, &d->stored, true, head, (const uint8_t(*)[32])parents, n, entry_new(d, &u, sealed, length));
+		else seal_free(&u);
+	} else {
+		seal_free(&u);
+		take(d, &d->stored, true, head, (const uint8_t(*)[32])parents, n, sealed, length);
+	}
 	// the lock's close: unlocked gives back what it is given
 	erm_sd_add_commit(t->sd, d->tree, head, n ? (const uint8_t *)parents : NULL, n, sealed, length);
 	free(parents);

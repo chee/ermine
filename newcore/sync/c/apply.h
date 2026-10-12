@@ -2,10 +2,12 @@
 // Same shape as apply.ts: a blop's side is its patches applied, as mu_mutate applies them to a
 // first version, to its base's side. Sides are notify/c's values (nt_value).
 //
-// Memory: a side is kept for as long as its blop is taken in, and shares structure with the sides
+// Memory: a side is kept while its blop is a head (APPLY.tex), and shares structure with the sides
 // before it by reference (nt_ref; mutate.h has the ownership rule), so each is let go of alone.
-// A side is held by the histories it is kept in: history_release(c, apply_release) makes history_free
-// let them all go. What apply_side and apply_versions give back is borrowed from there.
+// Another asked for is made again from the nearest side kept, and kept till the next history_trim.
+// A side is held in its blop's slot: history_release(c, apply_release) makes history_trim let go
+// of those no longer heads', and history_free of all. What apply_side and apply_versions give back
+// is borrowed from there: good till the next trim.
 // Bytes and typed arrays in a patch are carried as they are. A live value in a patch is held
 // nowhere here: the patches do not apply.
 #ifndef APPLY_H
@@ -19,10 +21,10 @@
 
 // a blop's side, or NULL: not taken in, or emptied
 const nt_value *apply_side(histories *c, const uint8_t name[32]);
-// a slot apply_side set in the histories (history_release): lets the side go
+// a slot apply_side or apply_check set in the histories (history_release): lets the side go
 void apply_release(void *slot);
-// whether the blop's patches apply to its base's side; a history_check
-bool apply_check(void *context, histories *c, const Json *blop);
+// whether the blop's patches apply to its base's side; a history_check: the side in *slot
+bool apply_check(void *context, histories *c, const Json *blop, void **slot);
 
 // one of an object's versions: its head's side, change and because. The change borrows the
 // head's blop; the because borrows place and why, which are here: so the array is not moved.

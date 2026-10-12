@@ -88,20 +88,22 @@ type Look = (path: readonly Key[]) => Seen
 
 const isList = Array.isArray
 
+// a typed array is a sequence of its elements; bytes, a Uint8Array, are a leaf
+const typed = (v: unknown) =>
+	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
+
 // strings count code points: walk.ts
 function len(v: unknown): number {
 	if (typeof v === "string") return count(v)
 	if (isList(v)) return v.length
-	if (ArrayBuffer.isView(v)) return (v as unknown as { length: number }).length
+	if (typed(v)) return (v as unknown as { length: number }).length
 	return 0
 }
 // a string's positions [a, b), walking no further than b
 function slice(v: unknown, a: number, b: number): unknown {
 	if (typeof v === "string") return cut(v, a, b)
 	if (isList(v)) return v.slice(a, b)
-	if (ArrayBuffer.isView(v)) {
-		return (v as unknown as { slice(a: number, b: number): unknown }).slice(a, b)
-	}
+	if (typed(v)) return (v as unknown as { slice(a: number, b: number): unknown }).slice(a, b)
 	return undefined
 }
 function at(v: unknown, keys: readonly Key[]): unknown {

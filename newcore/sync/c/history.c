@@ -24,6 +24,7 @@ typedef struct {
 	bool head;
 	unsigned stamp; // bumped each time it starts waiting
 	void *slot;
+	bool loose; // in loose: its slot goes at the next trim, unless a head's
 } entry;
 
 struct histories {
@@ -43,6 +44,8 @@ struct histories {
 	size_t lent_count, lent_room;
 	Json **spare; // blops replaced, let go at the next trim
 	size_t spare_count, spare_room;
+	size_t *loose; // entries whose slot goes at the next trim, unless a head's
+	size_t loose_count, loose_room;
 };
 
 const char *history_refusal_name(history_refusal refusal) {
@@ -92,6 +95,7 @@ void history_free(histories *c) {
 	for (size_t i = 0; i < c->spare_count; i++) jsonFree(c->spare[i]);
 	free(c->objects);
 	free(c->lent);
+	free(c->loose);
 	free(c->spare);
 	free(c->entries);
 	free(c->table);
@@ -177,6 +181,15 @@ static void drop(histories *c, size_t i) {
 	e->lent = true;
 }
 
+// a slot not a head's goes at the next trim (what was given out stays good till then)
+static void loosen(histories *c, size_t i) {
+	entry *e = &c->entries[i];
+	if (!c->release || e->loose || (e->state == TAKEN && e->head)) return;
+	c->loose = room(c->loose, c->loose_count, &c->loose_room, sizeof *c->loose);
+	c->loose[c->loose_count++] = i;
+	e->loose = true;
+}
+
 void history_trim(histories *c) {
 	for (size_t j = 0; j < c->lent_count; j++) {
 		entry *e = &c->entries[c->lent[j]];
@@ -184,6 +197,12 @@ void history_trim(histories *c) {
 		if (!needed(e)) jsonFree(e->blop), e->blop = NULL;
 	}
 	c->lent_count = 0;
+	for (size_t j = 0; j < c->loose_count; j++) {
+		entry *e = &c->entries[c->loose[j]];
+		e->loose = false;
+		if (e->slot && !(e->state == TAKEN && e->head)) c->release(e->slot), e->slot = NULL;
+	}
+	c->loose_count = 0;
 	for (size_t j = 0; j < c->spare_count; j++) jsonFree(c->spare[j]);
 	c->spare_count = 0;
 }
@@ -303,10 +322,12 @@ static history_row enter(histories *c, size_t i, const Json *blop) {
 		if (p->lamport > top) top = p->lamport;
 	}
 	if (c->entries[i].lamport != top + 1) return refuse(c, i, HISTORY_LAMPORT);
-	if (!c->check(c->context, c, blop)) return refuse(c, i, HISTORY_PATCHES);
-	for (size_t j = 0; j < n; j++) c->entries[ps[j]].head = false, drop(c, ps[j]);
+	void *made = NULL;
+	if (!c->check(c->context, c, blop, &made)) return refuse(c, i, HISTORY_PATCHES);
+	for (size_t j = 0; j < n; j++) c->entries[ps[j]].head = false, drop(c, ps[j]), loosen(c, ps[j]);
 	c->entries[i].state = TAKEN;
 	c->entries[i].head = true;
+	c->entries[i].slot = made;
 	return (history_row){.kind = HISTORY_TAKEN};
 }
 
@@ -395,7 +416,9 @@ const Json *history_get(histories *c, const uint8_t name[32]) {
 
 void **history_slot(histories *c, const uint8_t name[32]) {
 	size_t i = find(c, name, false);
-	return i != SIZE_MAX && c->entries[i].state == TAKEN ? &c->entries[i].slot : NULL;
+	if (i == SIZE_MAX || c->entries[i].state != TAKEN) return NULL;
+	loosen(c, i);
+	return &c->entries[i].slot;
 }
 
 static int by_head(const void *x, const void *y) {

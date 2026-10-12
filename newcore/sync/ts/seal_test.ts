@@ -50,15 +50,15 @@ Deno.test("seal: round trip", async () => {
 	assertEquals(u.signer, alice.key)
 	const raw = cbor.decode(s) as { [k: string]: cbor.Value }
 	assertEquals(Object.keys(raw).sort(), ["change", "signature", "signer"])
-	assertEquals(raw.change instanceof ArrayBuffer, true)
+	assertEquals(raw.change instanceof Uint8Array, true)
 })
 
 Deno.test("seal: signed is ermine/v0/change then the name", async () => {
 	const b = blop(alice.key)
-	const raw = cbor.decode(await seal(b, alice)) as { [k: string]: ArrayBuffer }
+	const raw = cbor.decode(await seal(b, alice)) as { [k: string]: Uint8Array }
 	const m = new Uint8Array([...new TextEncoder().encode("ermine/v0/change"), ...name(b)])
 	assertEquals(m.length, 48)
-	assertEquals(ed25519.verify(new Uint8Array(raw.signature), m, alice.key), true)
+	assertEquals(ed25519.verify(raw.signature, m, alice.key), true)
 })
 
 Deno.test("seal: the blop's signer is the seal's", async () => {
@@ -74,39 +74,48 @@ Deno.test("seal: shape", async () => {
 	assertEquals(code(() => unseal(cbor.encode({ ...raw, more: 1 }))), "shape")
 	const { signer: _, ...two } = raw
 	assertEquals(code(() => unseal(cbor.encode(two))), "shape")
+	// a typed array of the key's 32 bytes is not bytes
+	const key = raw.signer as Uint8Array
 	assertEquals(
-		code(() =>
-			unseal(cbor.encode({ ...raw, signer: new Uint8Array(raw.signer as ArrayBuffer) }))
-		),
+		code(() => unseal(cbor.encode({ ...raw, signer: new Uint16Array(key.slice().buffer) }))),
 		"shape",
 	)
+	// tag 64 over the key's bytes: no encoding of a value (no uint8 kind)
+	const sealed = cbor.encode(raw)
+	const at = sealed.findIndex((_, i) =>
+		[0x66, 0x73, 0x69, 0x67, 0x6e, 0x65, 0x72, 0x58, 0x20].every((x, j) => sealed[i + j] === x)
+	)
+	const tagged = new Uint8Array([
+		...sealed.subarray(0, at + 7),
+		0xd8,
+		0x40,
+		...sealed.subarray(at + 7),
+	])
+	assertEquals(code(() => unseal(tagged)), "shape")
 	assertEquals(
-		code(() => unseal(cbor.encode({ ...raw, signature: new ArrayBuffer(63) }))),
+		code(() => unseal(cbor.encode({ ...raw, signature: new Uint8Array(63) }))),
 		"shape",
 	)
 	// shape before signature: a bad blop with a bad signature
 	assertEquals(
 		code(() =>
-			unseal(cbor.encode({ ...raw, change: new ArrayBuffer(1), signature: new ArrayBuffer(64) }))
+			unseal(cbor.encode({ ...raw, change: new Uint8Array(1), signature: new Uint8Array(64) }))
 		),
 		"shape",
 	)
 })
 
 Deno.test("seal: a changed field, a signature not good", async () => {
-	const raw = cbor.decode(await seal(blop(alice.key), alice)) as { [k: string]: ArrayBuffer }
-	const other = blop(alice.key, { lamport: 2 }).slice().buffer
+	const raw = cbor.decode(await seal(blop(alice.key), alice)) as { [k: string]: Uint8Array }
+	const other = blop(alice.key, { lamport: 2 })
 	assertEquals(code(() => unseal(cbor.encode({ ...raw, change: other }))), "signature")
-	const sig = new Uint8Array(raw.signature)
+	const sig = raw.signature.slice()
 	sig[0] ^= 1
-	assertEquals(
-		code(() => unseal(cbor.encode({ ...raw, signature: sig.slice().buffer }))),
-		"signature",
-	)
+	assertEquals(code(() => unseal(cbor.encode({ ...raw, signature: sig }))), "signature")
 	// the blop's signer is bob, the seal's alice
 	const bobs = blop(bob.key)
 	const forged = cbor.encode({
-		change: bobs.slice().buffer,
+		change: bobs,
 		signer: raw.signer,
 		signature: raw.signature,
 	})

@@ -1,8 +1,9 @@
 // Writes the blop scenarios to newcore/encoding/conformance/blop/NN-short-name.json.
 //   deno run --allow-read --allow-write conformance/blop/fixtures.ts
 // Expected bytes: a blop is a canonical CBOR map, so cbor.encode of the right object is the
-// oracle; names are BLAKE3 of those bytes. blop.ts is never imported. Byte fields are ArrayBuffers
-// (ENCODING.tex); a refused blop is given in JSON form (../pack/form.ts) like the rest.
+// oracle; names are BLAKE3 of those bytes. blop.ts is never imported. Byte fields are
+// Uint8Arrays, bytes as everywhere (ENCODING.tex); a refused blop is given in JSON form
+// (../pack/form.ts) like the rest.
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { encode } from "../../encoding/ts/cbor.ts"
 import { toJson } from "../pack/form.ts"
@@ -11,8 +12,8 @@ const out = new URL("../../encoding/conformance/blop/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 // n bytes, each `first` then counting up
-const bytes = (n: number, first: number): ArrayBuffer =>
-	Uint8Array.from({ length: n }, (_, i) => (first + i) & 0xff).buffer
+const bytes = (n: number, first: number): Uint8Array =>
+	Uint8Array.from({ length: n }, (_, i) => (first + i) & 0xff)
 const h = (first: number) => bytes(32, first)
 
 type O = Record<string, unknown>
@@ -84,7 +85,7 @@ ok("object-children", 'object ["children", s]', min({ object: ["children", "kids
 ok("actor-null", "actor null is a value", min({ actor: null }))
 ok("actor-map", "actor a map", min({ actor: { name: "chee", n: 1 } }))
 ok("actor-bytes", "actor bytes", min({ actor: bytes(4, 0xa0) }))
-ok("actor-typed", "actor a typed array (tag 64)", min({ actor: new Uint8Array([1, 2, 3]) }))
+ok("actor-typed", "actor a typed array (int8, tag 72)", min({ actor: new Int8Array([1, 2, 3]) }))
 ok("cause-null", "cause null is a value", min({ cause: null }))
 ok("cause-bytes", "cause bytes", min({ cause: bytes(3, 0) }))
 ok("reader", "reader a string", min({ reader: "someone" }))
@@ -519,6 +520,13 @@ bad(
 	"message's kind beats lamport 0",
 	min({ message: 1, lamport: 0 }),
 	"message",
+)
+
+// ---- no uint8 kind: bytes are bytes (the designer, 10-12)
+decodes(
+	"decode-signer-tag-64",
+	"signer as tag 64 over its 32 bytes: no encoding of a value",
+	swap("667369676e65725820", "667369676e6572d8405820"),
 )
 
 // ---- write

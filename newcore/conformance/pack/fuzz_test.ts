@@ -89,7 +89,6 @@ const NUMBERS = [
 ]
 const TYPED = [
 	Int8Array,
-	Uint8Array,
 	Int16Array,
 	Uint16Array,
 	Int32Array,
@@ -128,7 +127,7 @@ function values(pick: (n: number) => number) {
 			case 3:
 				return STRINGS[pick(STRINGS.length)]
 			case 4:
-				return Uint8Array.from({ length: pick(30) }, () => pick(256)).buffer
+				return Uint8Array.from({ length: pick(30) }, () => pick(256))
 			case 5:
 				return typed()
 			case 6:

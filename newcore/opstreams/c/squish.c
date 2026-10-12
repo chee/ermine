@@ -32,13 +32,11 @@ sq_value sq_str(const char *s, size_t size) {
 sq_value sq_list(const void *const *e, size_t n) {
 	return (sq_value){SQ_LIST, n, n * sizeof(void *), (const void *)e, 0};
 }
-sq_value sq_bytes(const uint8_t *b, size_t n) { return (sq_value){SQ_BYTES, n, n, b, 0}; }
 sq_value sq_any(const void *v) { return (sq_value){SQ_ANY, 0, 0, v, 0}; }
 
 // the byte offset of position i (element for the rest): code points for strings
 static size_t offset(const sq_value *v, size_t i) {
 	if (v->kind == SQ_LIST) return i * sizeof(void *);
-	if (v->kind == SQ_BYTES) return i;
 	const unsigned char *s = v->data;
 	size_t total = v->n;
 	if (i >= total) return v->size;
@@ -128,9 +126,9 @@ static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) 
 	if (w && w->kind != v->kind) return 0;
 	size_t bx = offset(v, x), by = offset(v, y), wsize = w ? w->size : 0;
 	size_t n = v->n - (y - x) + (w ? w->n : 0);
-	// an append to the tail's own buffer: in place
-	if (s->tail_owns && x == v->n && y == v->n && s->own[s->nown - 1].p == v->data) {
-		size_t size = v->size + wsize;
+	// the tail's own buffer: in place
+	if (s->tail_owns && s->own[s->nown - 1].p == v->data) {
+		size_t size = bx + wsize + (v->size - by);
 		own *o = &s->own[s->nown - 1];
 		if (size > o->cap) {
 			size_t c = o->cap * 2 > size ? o->cap * 2 : size;
@@ -138,8 +136,10 @@ static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) 
 			if (!o->p) abort();
 			o->cap = c;
 		}
-		if (wsize) memcpy((char *)o->p + v->size, w->data, wsize);
-		v->data = o->p, v->size = size, v->n = n;
+		unsigned char *p = o->p;
+		if (by < v->size) memmove(p + bx + wsize, p + by, v->size - by);
+		if (wsize) memcpy(p + bx, w->data, wsize);
+		v->data = p, v->size = size, v->n = n;
 		return 1;
 	}
 	size_t size = bx + wsize + (v->size - by);
