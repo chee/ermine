@@ -15,11 +15,19 @@
 // its elements' bytes, each little-endian, in base64, a NaN element the one
 // NaN of its kind (0x7fc00000, 0x7ff8000000000000).
 //
-// VALUES ARE IMMUTABLE AND NEVER FREED (see NOTES.md, Memory). A Json that
-// has been handed to another function, stored, or returned is shared: no one
-// may change it or free it. To change a value, build a new one (jsonShallow
-// the containers you change, then change the copies before anyone else sees
-// them). jsonFree exists only for scratch a function made and never let go of.
+// VALUES ARE IMMUTABLE AND HELD. A Json has holders: whoever made it holds
+// it; jsonRef adds a holder, jsonFree lets one hold go, and the last frees it
+// and lets go of what it holds. A tree never jsonRef'd is freed whole by one
+// jsonFree, as scratch always was. The rule:
+//   - a function given a value borrows it: it may read it for the call, and
+//     keeps it past the call only by taking a hold of its own (jsonRef);
+//   - a container holds its items: jsonPush, jsonAdd, jsonSet and jsonStand
+//     take the caller's hold of the item; to put in an item you only borrow,
+//     jsonRef it first;
+//   - whoever holds a value lets go of it once (jsonFree) when done.
+// A value with more than one holder is shared: no one changes it. To change a
+// value, build a new one (jsonShallow the containers you change, then change
+// the copies before anyone else sees them).
 //
 // NO RECURSION: parsing, printing, freeing and equality keep their own
 // stacks on the heap, so a value may nest as deep as memory allows.
@@ -94,6 +102,8 @@ struct Json {
 			int capacity;
 		} object;
 	};
+	// holders past the first: jsonRef adds one, jsonFree lets one go
+	size_t refs;
 };
 
 // making values ----------------------------------------------------------------
@@ -123,13 +133,15 @@ void jsonPush(Json *array, Json *item);
 /** appends a key to an object, without checking for one already there; takes the value; copies the key */
 void jsonAdd(Json *object, const char *key, Json *value);
 void jsonAddOfLength(Json *object, const char *key, size_t length, Json *value);
-/** sets a key of an object: replaces the value where the key is, or appends it (JS's o[k] = v) */
+/** sets a key of an object: replaces the value where the key is (letting go of the one there), or appends it (JS's o[k] = v); takes the value */
 void jsonSet(Json *object, const char *key, size_t length, Json *value);
-/** removes a key of an object; false if it was not there (the object is unchanged) */
+/** removes a key of an object, letting go of its value; false if it was not there (the object is unchanged) */
 bool jsonRemove(Json *object, const char *key, size_t length);
-/** a shallow copy: a new array or object holding the same items/values (shared), or a copy of a scalar */
+/** a shallow copy: a new array or object holding the same items/values (shared, a hold on each), or a copy of a scalar */
 Json *jsonShallow(const Json *value);
-/** frees scratch only (see the header comment) */
+/** one more holder of value, and so of all it holds; value. NULL: NULL. Not thread-safe */
+Json *jsonRef(Json *value);
+/** lets one hold of value go: the last frees it, and lets go of what it holds (see the header comment). NULL: nothing */
 void jsonFree(Json *value);
 
 // reading values ---------------------------------------------------------------

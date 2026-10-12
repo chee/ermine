@@ -14,7 +14,7 @@
 #include "../../trackgraph/c/trackgraph.h"
 #include "../../opstreams/c/mutate.h"
 
-// memory: an arena, and growing things in it
+// memory (graph.h says the rules): arenas, growing things, and what the graph holds
 
 typedef struct block {
 	struct block *next;
@@ -51,6 +51,7 @@ static void *aalloc(arena *a, size_t n) {
 	return p;
 }
 
+// every block given back: what was in it is gone (the sanitizers see a use after)
 static void afree(arena *a) {
 	while (a->head) {
 		block *b = a->head;
@@ -61,12 +62,25 @@ static void afree(arena *a) {
 	a->left = 0;
 }
 
+static void *grab(size_t n) {
+	void *p = malloc(n ? n : 1);
+	if (!p) die("out of memory");
+	return p;
+}
+static void *regrow(void *p, size_t n) {
+	p = realloc(p, n ? n : 1);
+	if (!p) die("out of memory");
+	return p;
+}
+
+// a growing list. vpush grows it on the heap (kept: free v when done); tpush in the scratch of
+// the moment (gone with it)
 typedef struct {
 	void **v;
 	size_t n, cap;
 } vec;
 
-// ordered maps by string: insertion order, deleting and setting again moves to the end
+// ordered maps by string, on the heap: insertion order, deleting and setting again moves to the end
 typedef struct {
 	const char *key; // NULL: deleted
 	void *val;
@@ -82,12 +96,19 @@ typedef struct {
 
 // containers
 
-static void *amem(gr_graph *s, size_t n);
+static void *tmem(gr_graph *s, size_t n);
 
-static void vpush(gr_graph *s, vec *v, void *x) {
+static void vpush(vec *v, void *x) {
+	if (v->n == v->cap) {
+		v->cap = v->cap ? v->cap * 2 : 4;
+		v->v = regrow(v->v, v->cap * sizeof *v->v);
+	}
+	v->v[v->n++] = x;
+}
+static void tpush(gr_graph *s, vec *v, void *x) {
 	if (v->n == v->cap) {
 		size_t cap = v->cap ? v->cap * 2 : 4;
-		void **nv = amem(s, cap * sizeof *nv);
+		void **nv = tmem(s, cap * sizeof *nv);
 		if (v->n) memcpy(nv, v->v, v->n * sizeof *nv);
 		v->v = nv;
 		v->cap = cap;
@@ -99,9 +120,9 @@ static long sfind(const vec *v, const char *x) {
 		if (!strcmp(v->v[i], x)) return (long)i;
 	return -1;
 }
-// a vec of strings as a set
+// a vec of strings as a set, in scratch
 static void sadd(gr_graph *s, vec *v, const char *x) {
-	if (sfind(v, x) < 0) vpush(s, v, (void *)x);
+	if (sfind(v, x) < 0) tpush(s, v, (void *)x);
 }
 
 static size_t hashs(const char *k) {
@@ -110,7 +131,7 @@ static size_t hashs(const char *k) {
 	return h;
 }
 
-static void om_reindex(gr_graph *s, omap *m) {
+static void om_reindex(omap *m) {
 	size_t live = 0;
 	for (size_t i = 0; i < m->n; i++) {
 		if (!m->e[i].key) continue;
@@ -120,7 +141,9 @@ static void om_reindex(gr_graph *s, omap *m) {
 	size_t slots = 16;
 	while (slots < 4 * (m->cap ? m->cap : 4)) slots *= 2;
 	m->slots = slots;
-	m->idx = amem(s, slots * sizeof *m->idx);
+	free(m->idx);
+	m->idx = calloc(slots, sizeof *m->idx);
+	if (!m->idx) die("out of memory");
 	for (size_t i = 0; i < m->n; i++) {
 		size_t h = hashs(m->e[i].key) & (slots - 1);
 		while (m->idx[h]) h = (h + 1) & (slots - 1);
@@ -142,7 +165,7 @@ static void *om_get(const omap *m, const char *key) {
 }
 static int om_has(const omap *m, const char *key) { return om_find(m, key) >= 0; }
 // key must outlive the map
-static void om_set(gr_graph *s, omap *m, const char *key, void *val) {
+static void om_set(omap *m, const char *key, void *val) {
 	long i = om_find(m, key);
 	if (i >= 0) {
 		m->e[i].val = val;
@@ -150,14 +173,13 @@ static void om_set(gr_graph *s, omap *m, const char *key, void *val) {
 	}
 	if (m->n == m->cap) {
 		size_t cap = m->live * 2 > 4 ? m->live * 2 : 4;
-		ent *ne = amem(s, cap * sizeof *ne);
 		size_t k = 0;
 		for (size_t j = 0; j < m->n; j++)
-			if (m->e[j].key) ne[k++] = m->e[j];
-		m->e = ne;
+			if (m->e[j].key) m->e[k++] = m->e[j];
 		m->n = k;
+		m->e = regrow(m->e, cap * sizeof *m->e);
 		m->cap = cap;
-		om_reindex(s, m);
+		om_reindex(m);
 	}
 	m->e[m->n] = (ent){key, val};
 	size_t h = hashs(key) & (m->slots - 1);
@@ -178,6 +200,65 @@ static void om_del(omap *m, const char *key) {
 		}
 	}
 }
+static void om_free(omap *m) {
+	free(m->e);
+	free(m->idx);
+	*m = (omap){0};
+}
+
+// what the graph holds by pointer (graph.h, memory): each made on the heap, with its holds. A
+// pointer not here is someone else's, never held or freed here
+typedef enum { K_ARRAY, K_ENTRIES, K_LIST, K_CHANGE, K_SYNCED, K_NODE } kind;
+typedef struct {
+	const void *p; // NULL: empty; TOMBP: was here
+	size_t refs;
+	kind k;
+} held;
+typedef struct {
+	held *e;
+	size_t n, slots; // used (tombs too), slots a power of two
+} heldset;
+#define TOMBP ((const void *)1)
+
+static size_t hashp(const void *p) {
+	size_t h = (size_t)p;
+	h ^= h >> 17;
+	h *= 0x9e3779b97f4a7c15ull;
+	return h ^ (h >> 29);
+}
+static held *hs_find(const heldset *s, const void *p) {
+	if (!s->slots || !p) return NULL;
+	for (size_t i = hashp(p) & (s->slots - 1);; i = (i + 1) & (s->slots - 1)) {
+		if (!s->e[i].p) return NULL;
+		if (s->e[i].p == p) return &s->e[i];
+	}
+}
+static void hs_add(heldset *s, const void *p, kind k) {
+	if ((s->n + 1) * 2 > s->slots) {
+		heldset t = {0};
+		t.slots = s->slots ? s->slots * 2 : 64;
+		t.e = calloc(t.slots, sizeof *t.e);
+		if (!t.e) die("out of memory");
+		for (size_t i = 0; i < s->slots; i++)
+			if (s->e[i].p && s->e[i].p != TOMBP) hs_add(&t, s->e[i].p, s->e[i].k), hs_find(&t, s->e[i].p)->refs = s->e[i].refs;
+		free(s->e);
+		*s = t;
+	}
+	size_t i = hashp(p) & (s->slots - 1);
+	while (s->e[i].p && s->e[i].p != TOMBP) i = (i + 1) & (s->slots - 1);
+	if (!s->e[i].p) s->n++;
+	s->e[i] = (held){p, 0, k};
+}
+static void hs_del(heldset *s, held *h) {
+	h->p = TOMBP;
+	h->refs = 0;
+}
+
+// a hold let go at the next sweep: a value's (nt_free) or one of the graph's own
+typedef struct {
+	const void *p;
+	int value;
+} later_t;
 
 // the graph
 

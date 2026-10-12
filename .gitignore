@@ -33,3 +33,13 @@ newcore/*/*/c/bench
 *.swp
 .swp
 .DS_Store
+
+# build outputs and test runs (removed from history 2026-10-12)
+.lake/
+__pycache__/
+*.pyc
+*.tar
+**/c/scratch/
+graveyard/core/graph/c/ermine
+graveyard/core/graph/c/ermine-asan
+**/benchmarks/results/

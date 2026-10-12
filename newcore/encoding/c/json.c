@@ -170,14 +170,18 @@ static int memberIndex(const Json *object, const char *key, size_t length) {
 
 void jsonSet(Json *object, const char *key, size_t length, Json *value) {
 	int at = memberIndex(object, key, length);
-	if (at >= 0) object->object.members[at].value = value;
-	else jsonAddOfLength(object, key, length, value);
+	if (at >= 0) {
+		Json *was = object->object.members[at].value;
+		object->object.members[at].value = value;
+		jsonFree(was);
+	} else jsonAddOfLength(object, key, length, value);
 }
 
 bool jsonRemove(Json *object, const char *key, size_t length) {
 	int at = memberIndex(object, key, length);
 	if (at < 0) return false;
-	// the key is not freed: a shallow copy may share it
+	jsonFree(object->object.members[at].value);
+	free(object->object.members[at].key);
 	memmove(&object->object.members[at], &object->object.members[at + 1], (size_t)(object->object.count - at - 1) * sizeof *object->object.members);
 	object->object.count--;
 	return true;
@@ -187,12 +191,12 @@ Json *jsonShallow(const Json *value) {
 	Json *copy = make(value->type);
 	switch (value->type) {
 		case JSON_ARRAY:
-			for (int i = 0; i < value->array.count; i++) jsonPush(copy, value->array.items[i]);
+			for (int i = 0; i < value->array.count; i++) jsonPush(copy, jsonRef(value->array.items[i]));
 			break;
 		case JSON_OBJECT:
 			for (int i = 0; i < value->object.count; i++) {
 				const JsonMember *member = &value->object.members[i];
-				jsonAddOfLength(copy, member->key, member->keyLength, member->value);
+				jsonAddOfLength(copy, member->key, member->keyLength, jsonRef(member->value));
 			}
 			break;
 		case JSON_STRING:
@@ -207,12 +211,18 @@ Json *jsonShallow(const Json *value) {
 			return jsonTyped(value->typed.kind, value->typed.data, value->typed.count);
 		case JSON_STAND:
 			jsonFree(copy);
-			return jsonStand(value->stand.kind);
+			return jsonStand(jsonRef(value->stand.kind));
 		default:
 			*copy = *value;
+			copy->refs = 0;
 			break;
 	}
 	return copy;
+}
+
+Json *jsonRef(Json *value) {
+	if (value) value->refs++;
+	return value;
 }
 
 /** a stack of values, for the walks below that would otherwise recurse once per level */
@@ -232,6 +242,11 @@ void jsonFree(Json *value) {
 	if (value) push(&stack, value);
 	while (stack.count) {
 		Json *at = (Json *)stack.items[--stack.count];
+		// held elsewhere too: only this hold goes
+		if (at->refs) {
+			at->refs--;
+			continue;
+		}
 		if (at->type == JSON_STRING) {
 			free(at->string);
 		} else if (at->type == JSON_STAND) {
