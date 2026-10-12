@@ -1202,7 +1202,7 @@ static void synced_gone(gr_graph *g, const gr_synced *b) {
 	om_del(&g->synced, k);
 }
 
-// where a version sync made is in the chains: a because gr_versions made, by the pointer
+// where a version sync made is in the histories: a because gr_versions made, by the pointer
 static const char *because_place(gr_graph *g, const void *because) {
 	if (!because) return NULL;
 	char k[32];

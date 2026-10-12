@@ -98,12 +98,12 @@ static int by_name(const void *x, const void *y) {
 	return memcmp(x, y, 32);
 }
 
-Json *commit_make(chains *c, const Json *change, commit_at at, const char *const *roots,
+Json *commit_make(histories *c, const Json *change, commit_at at, const char *const *roots,
 	size_t count, commit_random random, void *context, commit_code *code) {
 	const Json *object = jsonGet(change, "object"), *header = jsonGet(change, "header");
 	// the versions' heads: those that have a side
-	chain_head *all;
-	size_t n = chain_heads(c, object, &all), have = 0;
+	history_head *all;
+	size_t n = history_heads(c, object, &all), have = 0;
 	for (size_t i = 0; i < n; i++) {
 		if (apply_side(c, all[i].name) != NULL) all[have++] = all[i];
 	}
@@ -121,7 +121,7 @@ Json *commit_make(chains *c, const Json *change, commit_at at, const char *const
 	// parents: the heads used, and for a pop the first kept
 	uint8_t (*parents)[32] = grab((have + 1) * 32);
 	size_t np = 0;
-	const chain_head *base = NULL;
+	const history_head *base = NULL;
 	bool combine = false, removal = false, empty = false;
 	if (at.kind == COMMIT_POP) {
 		for (size_t i = from; i < to; i++) memcpy(parents[np++], all[i].name, 32);

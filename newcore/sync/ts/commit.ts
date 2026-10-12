@@ -5,7 +5,7 @@ import { Stand } from "../../encoding/ts/cbor.ts"
 import type { Header } from "../../nodes/ts/change.ts"
 import type { Site } from "../../nodes/ts/stacktrace.ts"
 import { side } from "./apply.ts"
-import type { Chains, Head } from "./chain.ts"
+import type { Histories, Head } from "./history.ts"
 
 // a version (a number), a span ([from, to), to not included), or versions popped (PLACES.tex)
 export type At = number | readonly [number, number] | { pop: number | readonly [number, number] }
@@ -108,7 +108,7 @@ function share(site: Site, roots: string[]): Site {
 // kind: the host's, optional: what a live value in the patches, the actor or the cause is
 // written as a stand-in over (COMMIT.tex); null with none
 export function commit(
-	chains: Chains,
+	histories: Histories,
 	change: Commitment,
 	at: At,
 	// deno-lint-ignore no-explicit-any
@@ -117,8 +117,8 @@ export function commit(
 	kind?: (live: unknown) => unknown,
 ): Blop {
 	// the versions' heads: those that have a side
-	const heads: Head[] = chains.heads(change.object).filter((h) =>
-		side(chains, h.name) !== undefined
+	const heads: Head[] = histories.heads(change.object).filter((h) =>
+		side(histories, h.name) !== undefined
 	)
 	const range = (from: number, to: number) => {
 		if (!(0 <= from && from < to && to <= heads.length)) throw new CommitError("range")

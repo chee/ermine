@@ -8,7 +8,7 @@
 //   {op: "putfragment", device, doc, head, boundary, checkpoints, blob}, {op: "pump"},
 //   {op: "state", device, doc, object?, layer?}, {op: "fragments", device, doc},
 //   {op: "stored", device, doc}, {op: "publish", device, doc, payload}, {op: "expire"}
-// A request holding values the chains keep is not freed.
+// A request holding values the histories keep is not freed.
 #include "transport.h"
 
 #include "commit.h"
@@ -49,14 +49,14 @@ static void names(uint8_t (*list)[32], size_t count) {
 	putchar(']');
 }
 
-// a chain's row (chain_harness.c's)
-static void row(const chain_row *r) {
+// a history's row (history_harness.c's)
+static void row(const history_row *r) {
 	fputs("{\"name\":\"", stdout);
 	hex(r->name, 32);
 	fputs("\",", stdout);
-	if (r->kind == CHAIN_REFUSED) printf("\"refused\":\"%s\"", chain_refusal_name(r->refusal));
+	if (r->kind == HISTORY_REFUSED) printf("\"refused\":\"%s\"", history_refusal_name(r->refusal));
 	else {
-		fputs(r->kind == CHAIN_WAITING ? "\"waiting\":" : "\"stuck\":", stdout);
+		fputs(r->kind == HISTORY_WAITING ? "\"waiting\":" : "\"stuck\":", stdout);
 		names(r->names, r->count);
 	}
 	putchar('}');
@@ -187,7 +187,7 @@ static void commit_op(Json *request, device *d, const char *doc, transport_layer
 	const Json *at = jsonGet(request, "at");
 	long version = at ? (long)at->number : 0;
 	commit_code code;
-	chains *c = transport_chains(d->t, doc, layer);
+	histories *c = transport_histories(d->t, doc, layer);
 	if (c == NULL) {
 		error("not a document");
 		return;
@@ -244,13 +244,13 @@ static int by_id(const void *x, const void *y) {
 static void state_op(Json *request, device *d, const char *doc, transport_layer layer) {
 	Json *object = value(request, "object");
 	if (object == NULL) object = jsonString("value");
-	chains *c = transport_chains(d->t, doc, layer);
+	histories *c = transport_histories(d->t, doc, layer);
 	if (c == NULL) {
 		error("not a document");
 		return;
 	}
-	chain_head *heads;
-	size_t n = chain_heads(c, object, &heads);
+	history_head *heads;
+	size_t n = history_heads(c, object, &heads);
 	fputs("{\"heads\":[", stdout);
 	for (size_t i = 0; i < n; i++) {
 		if (i) putchar(',');
@@ -259,15 +259,15 @@ static void state_op(Json *request, device *d, const char *doc, transport_layer 
 		putchar('"');
 	}
 	free(heads);
-	chain_row *rows;
+	history_row *rows;
 	for (int k = 0; k < 2; k++) {
-		n = k == 0 ? chain_waiting(c, &rows) : chain_refused(c, &rows);
-		fputs(k == 0 ? "],\"chain\":{\"waiting\":[" : "],\"refused\":[", stdout);
+		n = k == 0 ? history_waiting(c, &rows) : history_refused(c, &rows);
+		fputs(k == 0 ? "],\"history\":{\"waiting\":[" : "],\"refused\":[", stdout);
 		for (size_t i = 0; i < n; i++) {
 			if (i) putchar(',');
 			row(&rows[i]);
 		}
-		chain_rows_free(rows, n);
+		history_rows_free(rows, n);
 	}
 	transport_taking taking = transport_taking_of(d->t, doc, layer);
 	fputs("]},\"taking\":{\"waiting\":[", stdout);
@@ -313,7 +313,7 @@ int main(void) {
 		device *d = named(jsonText(jsonGet(request, "device")));
 		const char *layer_name = jsonText(jsonGet(request, "layer"));
 		transport_layer layer = layer_name && strcmp(layer_name, "ephemeral") == 0 ? TRANSPORT_EPHEMERAL : TRANSPORT_STORED;
-		// a request holding values kept by the chains lives on
+		// a request holding values kept by the histories lives on
 		bool free_request = true;
 		if (op == NULL) error("unknown op undefined");
 		else if (strcmp(op, "reset") == 0) {

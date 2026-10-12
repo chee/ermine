@@ -9,7 +9,7 @@
 #ifndef COMMIT_H
 #define COMMIT_H
 
-#include "chain.h"
+#include "history.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -35,7 +35,7 @@ typedef void (*commit_random)(void *context, size_t n, uint8_t *out);
 
 // change: {node, object, patches, header: {actor, reader?, site?, cause?, ...}, signer}; roots: the
 // source roots, strings. The blop, or NULL with *code set
-Json *commit_make(chains *c, const Json *change, commit_at at, const char *const *roots,
+Json *commit_make(histories *c, const Json *change, commit_at at, const char *const *roots,
 	size_t count, commit_random random, void *context, commit_code *code);
 
 #endif

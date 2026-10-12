@@ -144,7 +144,7 @@
 				"name": "c56e6ead2d4d23d8a3273585bb81a642c87e357804f3ea5d31ae701668187475"
 			},
 			"expect": {
-				"refused": "chain"
+				"refused": "history"
 			}
 		},
 		{
@@ -180,7 +180,7 @@
 				"name": "f126f8aaec724ca7d73ba4035489805e70817a67bd90fe0d1e827303b99a3263"
 			},
 			"expect": {
-				"refused": "chain"
+				"refused": "history"
 			}
 		},
 		{
@@ -210,11 +210,11 @@
 			"expect": [
 				{
 					"name": "c56e6ead2d4d23d8a3273585bb81a642c87e357804f3ea5d31ae701668187475",
-					"refused": "chain"
+					"refused": "history"
 				},
 				{
 					"name": "f126f8aaec724ca7d73ba4035489805e70817a67bd90fe0d1e827303b99a3263",
-					"refused": "chain"
+					"refused": "history"
 				}
 			]
 		}

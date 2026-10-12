@@ -1,7 +1,7 @@
 // Writes the apply scenarios to newcore/sync/conformance/apply/NN-short-name.json.
 //   deno run --allow-read --allow-write conformance/apply/fixtures.ts
 // Each scenario one session (session.ts has the protocol). Sides, versions and add's answers are
-// written by hand from APPLY.tex and CHAIN.tex; model.ts checks the versions against a small
+// written by hand from APPLY.tex and HISTORY.tex; model.ts checks the versions against a small
 // model built on mutate.ts. apply.ts is never imported.
 import { Stand } from "../../encoding/ts/cbor.ts"
 import {
@@ -298,7 +298,7 @@ const LIST: Which = ["children", "kids"]
 	const V = mk({ patches: put("v") })
 	const I = mk({ object: INFO, patches: put("t") })
 	const J = mk({ object: INFO, parents: [I], patches: put("u") })
-	scenario("objects", "each object its own chain and versions; an object with none: []", [
+	scenario("objects", "each object its own history and versions; an object with none: []", [
 		create(),
 		add(V),
 		add(I),

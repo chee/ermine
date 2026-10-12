@@ -1,12 +1,12 @@
 // sync's side of the graph (newcore/sync/WIRING.tex), in C. Same shape as wiring.ts: each record a
-// change made goes out (COMMIT.tex), taken in to its chains at once, and sealed, stored and sent after;
+// change made goes out (COMMIT.tex), taken in to its histories at once, and sealed, stored and sent after;
 // each blop taken in from elsewhere comes in (APPLY.tex) as its object's versions. The graph's `changed`
 // is wiring_changed; the scheduler's versions (sc_versions) is given to it.
 //
 // Sans-IO as the transport is: there is no promise to await, so what comes after the taking in (sealing,
 // storing, sending) waits until wiring_idle runs it, in the order made: a blop's parents are stored before it.
 // Memory: what a record makes (its change and blop) is let go of once taken in; the transport keeps the
-// blop decoded, the chains what they need. What versions is handed (actors, causes, sites, the versions'
+// blop decoded, the histories what they need. What versions is handed (actors, causes, sites, the versions'
 // contents) is borrowed for the call: the graph copies or holds what it keeps.
 #ifndef WIRING_H
 #define WIRING_H

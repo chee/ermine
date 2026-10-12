@@ -1,5 +1,5 @@
 // sync's side of the graph (WIRING.tex): each record a change made goes out (COMMIT.tex), taken in
-// to its chains at once and sealed, stored and sent after; each blop taken in from elsewhere comes
+// to its histories at once and sealed, stored and sent after; each blop taken in from elsewhere comes
 // in (APPLY.tex) as its object's versions. The graph's `changed` is this one's `changed`; the
 // scheduler's internal `versions` is given to it
 import { type Blop, encode, name as blopName } from "../../encoding/ts/blop.ts"
@@ -62,9 +62,9 @@ export function createWiring(device: Device, options: Options): Wiring {
 	// heard there. Which layer an object shows is open (WIRING.tex scenarios)
 	const shown = new Set<string>()
 
-	// an object's versions made the chains', after the blop taken in
+	// an object's versions made the histories', after the blop taken in
 	function settle(doc: string, layer: Layer, blop: Blop, name: Uint8Array) {
-		const list = applied(device.chains(doc, layer), blop.object, () => 0)
+		const list = applied(device.histories(doc, layer), blop.object, () => 0)
 		const from: Parameters<Versions>[3] = {
 			actor: blop.actor,
 			signer: hex(blop.signer),
@@ -96,7 +96,7 @@ export function createWiring(device: Device, options: Options): Wiring {
 			if (record.ephemeral) shown.add(doc)
 			try {
 				const blop = commit(
-					device.chains(doc, layer),
+					device.histories(doc, layer),
 					{
 						node: doc,
 						object: record.object,

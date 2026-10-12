@@ -111,7 +111,7 @@
 				"heads": [
 					"3be488a7352f6e1a4ca436d514431928c5f03190a2b719bf085aef8f51d45db7"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

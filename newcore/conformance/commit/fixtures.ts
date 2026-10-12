@@ -535,7 +535,7 @@ function three() {
 	const [s, X] = commit(c, { parents: [], lamport: 1 })
 	const c2: Commit = { at: { version: 0 }, object: INFO, patches: put("u") }
 	const [s2, Y] = commit(c2, { parents: [X], lamport: 2 })
-	scenario("info", "an info object: its own chain; the value's head is not a parent", [
+	scenario("info", "an info object: its own history; the value's head is not a parent", [
 		create(),
 		add(V0),
 		s,

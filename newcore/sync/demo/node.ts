@@ -14,10 +14,10 @@
 //       <title>   -> note    a stored node, its value the text
 //       here:<device> -> Q   an ephemeral node per device; its info "b<slot>" are the beats
 //
-// Presence: ephemeral blops chain (each names its parent), and nothing ephemeral is kept, so a
+// Presence: ephemeral blops form a history (each names its parent), and nothing ephemeral is kept, so a
 // device that starts hearing Q mid-stream could never link a later blop to the one it missed. A
 // beat is therefore written to a fresh info name for its half second, "b<slot>", so every beat
-// is the first blop of its own chain. Readers read the last few slots.
+// is the first blop of its own history. Readers read the last few slots.
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { createScheduler } from "../../scheduler/ts/scheduler.ts"
@@ -33,15 +33,15 @@ type Any = any
 
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 
-// the blop `name`, and every blop before it, of one chain set: names (hex) to blops
+// the blop `name`, and every blop before it, of one history set: names (hex) to blops
 // deno-lint-ignore no-explicit-any
-function ancestry(chains: any, name: string): Map<string, Any> {
+function ancestry(histories: any, name: string): Map<string, Any> {
 	const out = new Map<string, Any>()
 	const todo = [name]
 	while (todo.length) {
 		const n = todo.pop()!
 		if (out.has(n)) continue
-		const b = chains.get(unhex(n))
+		const b = histories.get(unhex(n))
 		if (!b) continue
 		out.set(n, b)
 		for (const p of b.parents) todo.push(hexOf(p))
@@ -52,16 +52,16 @@ function ancestry(chains: any, name: string): Map<string, Any> {
 // offsets carried through the text patches of the blops the sender had not seen: those in the
 // head's ancestry and not in `at`'s, by lamport then name. undefined: `at` is not here (yet)
 export function carried(
-	chains: Any,
+	histories: Any,
 	head: string | undefined,
 	spot: Spot,
 ): [number, number] | undefined {
 	let { at, from, to } = spot
 	if (from === undefined || to === undefined) return undefined
 	if (at === undefined || head === undefined || at === head) return [from, to]
-	if (!chains.get(unhex(at))) return undefined
-	const known = ancestry(chains, at)
-	const unseen = [...ancestry(chains, head)].filter(([n]) => !known.has(n))
+	if (!histories.get(unhex(at))) return undefined
+	const known = ancestry(histories, at)
+	const unseen = [...ancestry(histories, head)].filter(([n]) => !known.has(n))
 		.sort(([an, a], [bn, b]) => a.lamport - b.lamport || (an < bn ? -1 : an > bn ? 1 : 0))
 	for (const [, blop] of unseen) {
 		if (blop.object !== "value") continue
@@ -149,7 +149,7 @@ export async function start(o: Options) {
 	// ---- the graph, wired to sync
 
 	// every object a blop arrived for, by document: kept for `bring` (what the graph lacks is
-	// that nothing tells which objects a document's chains hold)
+	// that nothing tells which objects a document's histories hold)
 	const seen = new Map<string, Map<string, unknown>>()
 	device.arrived((a) => {
 		let m = seen.get(a.doc)
@@ -179,7 +179,7 @@ export async function start(o: Options) {
 	// does not hold is dropped by `versions` ("a node not in memory: nothing"), and nothing makes it
 	// come back when the node is made. WIRING.tex: how a node gets into memory is the host's. So:
 	// make the node empty (the graph loads it), follow it, then give it, object by object, what its
-	// chains say, as sync does for an arrival.
+	// histories say, as sync does for an arrival.
 	const followed = new Set<string>()
 	function follow(id: string) {
 		if (followed.has(id)) return
@@ -192,9 +192,9 @@ export async function start(o: Options) {
 		follow(id)
 	}
 	function reapply(id: string, ephemeral: boolean) {
-		const chains = device.chains(id, ephemeral ? "ephemeral" : "stored")
+		const histories = device.histories(id, ephemeral ? "ephemeral" : "stored")
 		for (const object of seen.get(id)?.values() ?? []) {
-			s.internal.versions(id, object, applied(chains, object as Any, () => 0))
+			s.internal.versions(id, object, applied(histories, object as Any, () => 0))
 		}
 	}
 
@@ -274,14 +274,14 @@ export async function start(o: Options) {
 					let spot: Spot | undefined
 					const nid = beat?.note !== undefined ? noteIds.get(beat.note) : undefined
 					if (beat && nid && beat.from !== undefined) {
-						const chains = device.chains(nid, "stored")
-						const head = chains.heads("value")[0]
+						const histories = device.histories(nid, "stored")
+						const head = histories.heads("value")[0]
 						const h = head ? hexOf(head.name) : undefined
 						const pk = name + "\0" + beat.note
 						const raw: Spot = { at: beat.at, from: beat.from, to: beat.to }
-						let got = carried(chains, h, raw)
+						let got = carried(histories, h, raw)
 						if (got) placeable.set(pk, raw)
-						else if (placeable.has(pk)) got = carried(chains, h, placeable.get(pk)!)
+						else if (placeable.has(pk)) got = carried(histories, h, placeable.get(pk)!)
 						if (got) spot = { from: got[0], to: got[1] }
 					}
 					peers.push({
@@ -365,7 +365,7 @@ export async function start(o: Options) {
 		at(note?: string, from?: number, to?: number) {
 			// "at": the blop whose version the offsets are measured in: the head shown
 			const id = note === undefined ? undefined : view_(note)?.id
-			const head = id ? device.chains(id, "stored").heads("value")[0] : undefined
+			const head = id ? device.histories(id, "stored").heads("value")[0] : undefined
 			here_ = { note, from, to, at: head ? hexOf(head.name) : undefined }
 			dirty = true
 		},
@@ -383,7 +383,7 @@ export async function start(o: Options) {
 	}
 
 	// each half second: tick, and a beat if the cursor moved (or two seconds passed). A beat is
-	// written once per slot, to the slot's own name, so it begins a chain of its own
+	// written once per slot, to the slot's own name, so it begins a history of its own
 	const timer = setInterval(() => {
 		const now = Date.now(), k = Math.floor(now / SLOT)
 		s.write(["tick"], [{ path: [], value: now }])

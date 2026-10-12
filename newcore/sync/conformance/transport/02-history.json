@@ -1,5 +1,5 @@
 {
-	"title": "a chain of three commits crosses: one head, three loose commits",
+	"title": "a history of three commits crosses: one head, three loose commits",
 	"steps": [
 		{
 			"request": {
@@ -127,7 +127,7 @@
 				"heads": [
 					"8f993e0e700fbe62f944a4ab374b12e8192cbc35da551d2a38527072ac49bf0f"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

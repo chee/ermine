@@ -103,9 +103,9 @@ typedef struct {
 	bool stuck; // a parent refused here
 } pending;
 
-// one layer of a document: its chains, the seals taken in to them, and what is held back
+// one layer of a document: its histories, the seals taken in to them, and what is held back
 typedef struct {
-	chains *chains;
+	histories *histories;
 	table names, stored;
 	entry **taken; // in the order taken in
 	size_t taken_count, taken_room;
@@ -129,7 +129,7 @@ typedef struct doc {
 	fragment *fragments;
 	size_t fragment_count, fragment_room;
 	bool dirty; // seals taken in since fragments were built
-	// blops transport_take put straight into the chains; the document keeps them
+	// blops transport_take put straight into the histories; the document keeps them
 	struct {
 		Json *blop;
 		uint8_t name[32];
@@ -175,7 +175,7 @@ struct transport {
 	joining *joins;
 	uint64_t join; // ms the parts of a payload may wait for the rest
 	uint8_t key[32]; // this device's: who its ephemeral blops must be signed by
-	// blops taken in to a chain, told to the listeners once what took them in is done
+	// blops taken in to a history, told to the listeners once what took them in is done
 	struct {
 		doc *d;
 		bool ephemeral;
@@ -201,14 +201,14 @@ struct transport {
 
 static void layer_start(layer *L, const char *node, bool ephemeral) {
 	memset(L, 0, sizeof *L);
-	L->chains = chain_create(node, apply_check, NULL);
-	chain_release(L->chains, apply_release);
+	L->histories = history_create(node, apply_check, NULL);
+	history_release(L->histories, apply_release);
 	L->stored.by_stored = true;
 	L->ephemeral = ephemeral;
 }
 
 static void layer_free(layer *L) {
-	chain_free(L->chains);
+	history_free(L->histories);
 	free(L->names.slots);
 	free(L->stored.slots);
 	free(L->taken);
@@ -251,16 +251,16 @@ static void unrefuse(layer *L, const uint8_t id[32]) {
 	}
 }
 
-// a seal taken in to the layer: its tables, and its chains
-// true if the chains took it in, not passed over
+// a seal taken in to the layer: its tables, and its histories
+// true if the histories took it in, not passed over
 static bool admit(layer *L, entry *e) {
 	table_put(&L->names, e);
 	table_put(&L->stored, e);
 	L->taken = more(L->taken, L->taken_count, &L->taken_room, sizeof *L->taken);
 	L->taken[L->taken_count++] = e;
-	chain_row r = chain_add(L->chains, e->blop, e->name);
-	bool taken = r.kind == CHAIN_TAKEN;
-	chain_row_free(&r);
+	history_row r = history_add(L->histories, e->blop, e->name);
+	bool taken = r.kind == HISTORY_TAKEN;
+	history_row_free(&r);
 	return taken;
 }
 
@@ -314,11 +314,11 @@ static layer *ephemeral(doc *d) {
 	layer_start(L, d->id, true);
 	d->has_ephemeral = true;
 	for (size_t i = 0; i < d->stored.taken_count; i++) admit(L, d->stored.taken[i]);
-	// and what was put straight into the stored chains
+	// and what was put straight into the stored histories
 	for (size_t i = 0; i < d->direct_count; i++) {
 		if (!d->direct[i].stored) continue;
-		chain_row r = chain_add(L->chains, d->direct[i].blop, d->direct[i].name);
-		chain_row_free(&r);
+		history_row r = history_add(L->histories, d->direct[i].blop, d->direct[i].name);
+		history_row_free(&r);
 	}
 	return L;
 }
@@ -327,7 +327,7 @@ static layer *ephemeral(doc *d) {
 
 enum { TAKEN, REFUSED, WAITING, STUCK };
 
-// a blop the chains took in from elsewhere, queued to be told (listeners are not called in the
+// a blop the histories took in from elsewhere, queued to be told (listeners are not called in the
 // middle of taking in: they may make changes of their own)
 static void arrive(doc *d, layer *L, entry *e) {
 	transport *t = d->t;
@@ -373,7 +373,7 @@ static bool among(entry **list, size_t n, const uint8_t stored[32]) {
 
 // step 5: the seal's parents here? waiting while one is not, stuck when one is refused or stuck here; the
 // commit's parents each a stored id of one of its blop's parents, and each parent one of them; else step 6,
-// the chains
+// the histories
 static int attempt(doc *d, layer *L, pending *p) {
 	entry *e = p->e;
 	const Json *list = jsonGet(e->blop, "parents");
@@ -480,7 +480,7 @@ static entry *entry_new(doc *d, const seal_unsealed *u, const uint8_t *bytes, si
 	memcpy(e->name, u->name, 32);
 	memcpy(e->stored, u->stored, 32);
 	e->blop = u->blop;
-	// a blop this device put straight into the chains (transport_take), sealed and added since: the one
+	// a blop this device put straight into the histories (transport_take), sealed and added since: the one
 	// kept decoded, held twice (jsonRef), not two copies. Looked for among the last few taken
 	for (size_t i = d->direct_count, looked = 0; i-- > 0 && looked < 64; looked++)
 		if (memcmp(d->direct[i].name, u->name, 32) == 0) {
@@ -798,9 +798,9 @@ static void build(transport *t, doc *d) {
 
 static void take_fragment(doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t boundary_count, const uint8_t *blob, size_t length) {
 	layer *L = &d->stored;
-	// its head taken in by the chains already: passed over, but here
+	// its head taken in by the histories already: passed over, but here
 	entry *have = table_get(&L->stored, head);
-	bool passed = have != NULL && chain_get(L->chains, have->name) != NULL;
+	bool passed = have != NULL && history_get(L->histories, have->name) != NULL;
 	if (passed && known(d, head)) return;
 	// the lock's open: unlocked gives back what it is given
 	Json *list = cborDecode(blob, length, NULL, NULL);
@@ -1136,10 +1136,10 @@ transport_code transport_follow(transport *t, const char *id) {
 	return TRANSPORT_OK;
 }
 
-chains *transport_chains(transport *t, const char *id, transport_layer which) {
+histories *transport_histories(transport *t, const char *id, transport_layer which) {
 	doc *d = doc_named(t, id);
 	if (d == NULL) return NULL;
-	return (which == TRANSPORT_STORED ? &d->stored : ephemeral(d))->chains;
+	return (which == TRANSPORT_STORED ? &d->stored : ephemeral(d))->histories;
 }
 
 void transport_arrived(transport *t, void (*listener)(void *context, const transport_arrival *arrival), void *context) {
@@ -1148,8 +1148,8 @@ void transport_arrived(transport *t, void (*listener)(void *context, const trans
 	t->listeners[t->listener_count++].context = context;
 }
 
-// a blop of this device's made here, put straight into the chains: the next change commits against it
-// (a stored one goes into the ephemeral chains too, once there are any). Not announced; add and publish
+// a blop of this device's made here, put straight into the histories: the next change commits against it
+// (a stored one goes into the ephemeral histories too, once there are any). Not announced; add and publish
 // pass over it
 transport_code transport_take(transport *t, const char *id, const uint8_t *bytes, size_t length, transport_layer which) {
 	doc *d = doc_named(t, id);
@@ -1166,11 +1166,11 @@ transport_code transport_take(transport *t, const char *id, const uint8_t *bytes
 	d->direct[d->direct_count].blop = blop;
 	memcpy(d->direct[d->direct_count].name, name, 32);
 	d->direct[d->direct_count++].stored = which == TRANSPORT_STORED;
-	chain_row r = chain_add(which == TRANSPORT_STORED ? d->stored.chains : ephemeral(d)->chains, blop, name);
-	chain_row_free(&r);
+	history_row r = history_add(which == TRANSPORT_STORED ? d->stored.histories : ephemeral(d)->histories, blop, name);
+	history_row_free(&r);
 	if (which == TRANSPORT_STORED && d->has_ephemeral) {
-		r = chain_add(d->ephemeral.chains, blop, name);
-		chain_row_free(&r);
+		r = history_add(d->ephemeral.histories, blop, name);
+		history_row_free(&r);
 	}
 	return TRANSPORT_OK;
 }

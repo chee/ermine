@@ -1,8 +1,8 @@
-// the blops of one node, each object's in a chain of its own, and which are its heads (CHAIN.tex)
+// the blops of one node, each object's in a history of its own, and which are its heads (HISTORY.tex)
 // takes blops already unsealed: no bytes, no signatures; patches only checked, through the check given
 import type { Blop } from "../../encoding/ts/blop.ts"
 
-export type Refusal = "node" | "chain" | "lamport" | "patches"
+export type Refusal = "node" | "history" | "lamport" | "patches"
 
 export type Added =
 	| "taken"
@@ -13,7 +13,7 @@ export type Added =
 
 export type Head = { name: Uint8Array; blop: Blop }
 
-export type Chains = {
+export type Histories = {
 	add(blop: Blop, name: Uint8Array): Added
 	heads(object: Blop["object"]): Head[]
 	get(name: Uint8Array): Blop | undefined
@@ -27,13 +27,13 @@ const by = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
 
 type Entry = { name: string; blop: Blop; key: string }
 
-// the chains of one node, empty; check is APPLY.tex's, step 7
-export function createChains(
+// the histories of one node, empty; check is APPLY.tex's, step 7
+export function createHistories(
 	node: string,
-	check: (chains: never, blop: never) => boolean,
-): Chains {
-	// a chain is told apart by its object, compared as a value
-	const chain = (b: Blop) => JSON.stringify(b.object)
+	check: (histories: never, blop: never) => boolean,
+): Histories {
+	// a history is told apart by its object, compared as a value
+	const history = (b: Blop) => JSON.stringify(b.object)
 	const taken = new Map<string, Entry>()
 	const waits = new Map<string, { blop: Blop; on: string[] }>()
 	// a name not taken in, to the names waiting on it
@@ -81,11 +81,11 @@ export function createChains(
 			}
 			return { waiting: missing }
 		}
-		const key = chain(blop)
-		if (ps.some((p) => taken.get(p)!.key !== key)) return refuse("chain")
+		const key = history(blop)
+		if (ps.some((p) => taken.get(p)!.key !== key)) return refuse("history")
 		const top = ps.length ? Math.max(...ps.map((p) => taken.get(p)!.blop.lamport)) : 0
 		if (blop.lamport !== top + 1) return refuse("lamport")
-		if (!check(chains as never, blop as never)) return refuse("patches")
+		if (!check(histories as never, blop as never)) return refuse("patches")
 		taken.set(n, { name: n, blop, key })
 		if (!heads.has(key)) heads.set(key, new Set())
 		const hs = heads.get(key)!
@@ -110,7 +110,7 @@ export function createChains(
 		return result
 	}
 
-	const chains: Chains = {
+	const histories: Histories = {
 		add(blop, name) {
 			const n = hex(name)
 			if (taken.has(n)) return "passed"
@@ -129,11 +129,11 @@ export function createChains(
 			}))
 		},
 		refused() {
-			const out: ReturnType<Chains["refused"]> = []
+			const out: ReturnType<Histories["refused"]> = []
 			for (const [name, r] of refusals) out.push({ name, refused: r.code })
 			for (const [name, b] of stuck) out.push({ name, stuck: parents(b).filter(bad) })
 			return out.sort((a, b) => by(a.name, b.name))
 		},
 	}
-	return chains
+	return histories
 }

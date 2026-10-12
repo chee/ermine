@@ -1,11 +1,11 @@
-// Runs the chain scenarios (sync/conformance/chain/*.json, written by fixtures.ts) against a
-// chain harness. CHAIN_HARNESS: the command for another implementation (default: the reference).
+// Runs the history scenarios (sync/conformance/history/*.json, written by fixtures.ts) against a
+// history harness. HISTORY_HARNESS: the command for another implementation (default: the reference).
 // A scenario: {title, steps: [{request, expect}]}, one session begun by its create; each answer
 // compared whole (harness.ts has the protocol). Every scenario runs in one harness process.
 // Then the order fuzz: small random sets of blops for one node (two objects; some for another
-// node, some with a bad lamport, bad patches, a parent in the other chain or a parent never
+// node, some with a bad lamport, bad patches, a parent in the other history or a parent never
 // added), added in several shuffled orders, each with a few added again at the end: heads,
-// get, waiting and refused the same for every order (CHAIN.tex: the same blops, the same
+// get, waiting and refused the same for every order (HISTORY.tex: the same blops, the same
 // answers), and every blop added exactly one of taken in, waiting, refused or stuck.
 import { assertEquals } from "@std/assert"
 import { encode, name } from "../../encoding/ts/blop.ts"
@@ -13,8 +13,8 @@ import { toJson } from "../pack/form.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`
-const subject = (Deno.env.get("CHAIN_HARNESS") ?? reference).split(" ")
-const scenarios = `${here}../../sync/conformance/chain/`
+const subject = (Deno.env.get("HISTORY_HARNESS") ?? reference).split(" ")
+const scenarios = `${here}../../sync/conformance/history/`
 
 type Request = Record<string, unknown> & { op: string }
 type Step = { request: Request; expect: unknown }
@@ -71,7 +71,7 @@ function blops(seed: number): { added: F[]; all: F[] } {
 	for (let i = 0; i < n; i++) {
 		const object = r() < 0.75 ? 0 : 1
 		const mine = all.filter((b) => b.object === object)
-		// now and then a parent from the other chain
+		// now and then a parent from the other history
 		const pool = r() < 0.08 ? all : mine
 		const k = pool.length === 0 ? 0 : r() < 0.3 ? 0 : r() < 0.7 ? 1 : 2
 		const parents: F[] = []

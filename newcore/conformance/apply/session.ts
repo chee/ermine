@@ -3,11 +3,11 @@
 // and a change's signer {"/": {"bytes": b64}}; names lowercase hex (64 digits); an object as
 // BLOP.tex writes it. A session starts at create; a later create starts a new one (a scenario
 // with two devices has a session for each, in turn).
-//   {op: "create", node}            -> {}; createChains(node, check), check APPLY.tex's
-//   {op: "add", blop, name}         -> what add answers (CHAIN.tex): "taken", "passed",
+//   {op: "create", node}            -> {}; createHistories(node, check), check APPLY.tex's
+//   {op: "add", blop, name}         -> what add answers (HISTORY.tex): "taken", "passed",
 //                                      {waiting: [names]}, {stuck: [names]}, {refused: code}
-//   {op: "side", name}              -> {side} | {none: true}: side(chains, name), name its bytes
-//   {op: "versions", object, times} -> [{content, change, because}]: versions(chains, object,
+//   {op: "side", name}              -> {side} | {none: true}: side(histories, name), name its bytes
+//   {op: "versions", object, times} -> [{content, change, because}]: versions(histories, object,
 //                                      time), time(name) times[name], name as hex
 //   {op: "commit", change, at, roots, random} -> {blop} | {code}  (commit harness only)
 //        change: {node, object, patches, header, signer}; header with time; signer bytes(32)
@@ -20,7 +20,7 @@
 //        values skips those scenarios (COMMIT_SKIP)
 //        a refusal: an error with code, answered {code}
 // Another implementation joins by speaking this.
-import { createChains } from "../../sync/ts/chain.ts"
+import { createHistories } from "../../sync/ts/history.ts"
 import * as apply from "../../sync/ts/apply.ts"
 import { fromJson, line, toJson } from "../pack/form.ts"
 
@@ -48,24 +48,24 @@ export const blopIn = (j: unknown) => convert(fromJson(j), toArray) as never
 export const blopOut = (b: unknown) => toJson(convert(b, toBuffer))
 
 // deno-lint-ignore no-explicit-any
-export type Chains = any
-export const state: { chains: Chains } = { chains: undefined }
+export type Histories = any
+export const state: { histories: Histories } = { histories: undefined }
 
 export function answer(r: Request): unknown {
 	switch (r.op) {
 		case "create":
-			state.chains = createChains(r.node as string, apply.check)
+			state.histories = createHistories(r.node as string, apply.check)
 			return {}
 		case "add":
-			return state.chains.add(blopIn(r.blop), unhex(r.name as string))
+			return state.histories.add(blopIn(r.blop), unhex(r.name as string))
 		case "side": {
-			const s = apply.side(state.chains, unhex(r.name as string))
+			const s = apply.side(state.histories, unhex(r.name as string))
 			return s === undefined ? { none: true } : { side: toJson(s) }
 		}
 		case "versions": {
 			const times = r.times as Record<string, number>
 			return toJson(
-				apply.versions(state.chains, fromJson(r.object) as never, (n: string) => times[n]),
+				apply.versions(state.histories, fromJson(r.object) as never, (n: string) => times[n]),
 			)
 		}
 		default:

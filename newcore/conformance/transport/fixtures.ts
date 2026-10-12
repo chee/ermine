@@ -2,7 +2,7 @@
 //   deno run --allow-read --allow-write conformance/transport/fixtures.ts
 // A scenario: {title, steps: [{request, expect}]}, one session started by reset (harness.ts has
 // the protocol). Every expected answer is worked out by hand from TRANSPORT.tex, FRAGMENT.tex,
-// CHAIN.tex and COMMIT.tex and written here by label; the only things computed are each blop's
+// HISTORY.tex and COMMIT.tex and written here by label; the only things computed are each blop's
 // name (blop.ts), its seal and stored id (seal.ts), the documents' ids (id.ts) and, where the
 // agreed order falls to names, which of two is the greater. transport.ts is never imported.
 // Not here: the refusal lock, which the lock unlocked never gives (its open gives back what it
@@ -159,8 +159,8 @@ const putBlop = (d: Dev, b: Blop) => put(d, b.stored, b.parents.map((p) => p.sto
 
 type State = {
 	heads?: Blop[]
-	chainWaiting?: unknown[]
-	chainRefused?: unknown[]
+	historyWaiting?: unknown[]
+	historyRefused?: unknown[]
 	waiting?: { commit: string; waiting: string[] }[]
 	refused?: (
 		| { commit: string; refused: string }
@@ -173,7 +173,7 @@ const state = (d: Dev, s: State, layer?: "ephemeral"): Step => ({
 	request: { op: "state", device: d.name, doc: DOC, ...(layer ? { layer } : {}) },
 	expect: {
 		heads: (s.heads ?? []).map((b) => b.name),
-		chain: { waiting: s.chainWaiting ?? [], refused: s.chainRefused ?? [] },
+		history: { waiting: s.historyWaiting ?? [], refused: s.historyRefused ?? [] },
 		taking: {
 			waiting: s.waiting ?? [],
 			refused: [...s.refused ?? []].sort((x, y) => first(x) < first(y) ? -1 : 1),
@@ -224,7 +224,7 @@ const scenario = (name: string, title: string, steps: Step[]) => all.push({ name
 }
 {
 	const c1 = await mk(A), c2 = await mk(A, [c1]), c3 = await mk(A, [c2])
-	scenario("chain", "a chain of three commits crosses: one head, three loose commits", [
+	scenario("history", "a history of three commits crosses: one head, three loose commits", [
 		...two(),
 		commit(c1),
 		commit(c2),
@@ -372,7 +372,7 @@ const scenario = (name: string, title: string, steps: Step[]) => all.push({ name
 	const x = await mk(A), q = await mk(A, [x])
 	scenario(
 		"waiting-parent",
-		"a commit whose parent's seal is not here waits, off the chains; taken in when it comes",
+		"a commit whose parent's seal is not here waits, off the histories; taken in when it comes",
 		[
 			...two(),
 			putBlop(A, q),
@@ -697,7 +697,7 @@ const expire = () => ok({ op: "expire" })
 	const A2 = { ...A, name: "a2" }
 	scenario(
 		"restart",
-		"a device dropped and made again on its storage, linked to none: its chains hold every commit and its fragment",
+		"a device dropped and made again on its storage, linked to none: its histories hold every commit and its fragment",
 		[
 			reset(),
 			device(A, "s"),

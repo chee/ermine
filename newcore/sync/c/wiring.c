@@ -197,9 +197,9 @@ static int64_t no_time(void *context, const char *name) {
 	return 0;
 }
 
-// the object's versions made the chains', after the blop taken in
+// the object's versions made the histories', after the blop taken in
 static void settle(wiring *w, const char *doc, transport_layer layer, const Json *blop, const uint8_t name[32]) {
-	chains *c = transport_chains(w->t, doc, layer);
+	histories *c = transport_histories(w->t, doc, layer);
 	if (c == NULL) return;
 	// what versions is handed is borrowed for the call: made here, let go of after
 	pr_arena scratch = {0}, *a = &scratch;
@@ -307,7 +307,7 @@ void wiring_changed(wiring *w, const gr_record *r) {
 	commit_at at = {COMMIT_VERSION, r->from, r->from + 1};
 	if (r->at == GR_AT_SPAN) at = (commit_at){COMMIT_SPAN, r->from, r->to};
 	else if (r->at == GR_AT_POP) at = (commit_at){COMMIT_POP, r->from, r->to};
-	chains *c = transport_chains(w->t, doc, layer);
+	histories *c = transport_histories(w->t, doc, layer);
 	commit_code code;
 	Json *blop = c ? commit_make(c, change, at, w->o.roots, w->o.root_count, w->o.random, w->o.random_context, &code) : NULL;
 	// the blop holds what it shares of the change

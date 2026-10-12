@@ -1,5 +1,5 @@
 {
-	"title": "a blop waiting, refused or stuck is no part of the chain: its parents stay heads",
+	"title": "a blop waiting, refused or stuck is no part of the history: its parents stay heads",
 	"steps": [
 		{
 			"request": {

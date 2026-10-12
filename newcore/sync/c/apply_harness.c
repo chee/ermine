@@ -1,13 +1,13 @@
 // The C apply on the line protocol (newcore/conformance/apply/session.ts): one JSON request per
 // line in, one answer per line out. A blop is in its JSON form (ENCODING.tex: "/" for bytes);
 // names are lowercase hex.
-//   {op: "create", node}            -> {}; the chains of the node, apply.h's check
+//   {op: "create", node}            -> {}; the histories of the node, apply.h's check
 //   {op: "add", blop, name}         -> "taken" | "passed" | {waiting: [names]} | {stuck: [names]} | {refused: code}
 //   {op: "side", name}              -> {side} | {none: true}
 //   {op: "versions", object, times} -> [{content, change, because}]; times: name to the caller's time
 // With COMMIT defined (commit_harness.c), also:
 //   {op: "commit", change, at, roots, random} -> {blop} | {code}
-// A blop added is kept for the chains, so its request is not freed.
+// A blop added is kept for the histories, so its request is not freed.
 #include "apply.h"
 #include "../../encoding/c/blop.h"
 #ifdef COMMIT
@@ -111,12 +111,12 @@ static void print_version(const apply_version *v) {
 	printf(",\"place\":{\"lamport\":%lld,\"name\":\"%s\"},\"why\":{\"signer\":\"%s\"}}}", (long long)p->lamport, p->name, w->signer);
 }
 
-static void row(const chain_row *r) {
-	if (r->kind == CHAIN_TAKEN) { fputs("\"taken\"", stdout); return; }
-	if (r->kind == CHAIN_PASSED) { fputs("\"passed\"", stdout); return; }
-	if (r->kind == CHAIN_REFUSED) printf("{\"refused\":\"%s\"}", chain_refusal_name(r->refusal));
+static void row(const history_row *r) {
+	if (r->kind == HISTORY_TAKEN) { fputs("\"taken\"", stdout); return; }
+	if (r->kind == HISTORY_PASSED) { fputs("\"passed\"", stdout); return; }
+	if (r->kind == HISTORY_REFUSED) printf("{\"refused\":\"%s\"}", history_refusal_name(r->refusal));
 	else {
-		fputs(r->kind == CHAIN_WAITING ? "{\"waiting\":" : "{\"stuck\":", stdout);
+		fputs(r->kind == HISTORY_WAITING ? "{\"waiting\":" : "{\"stuck\":", stdout);
 		names(r->names, r->count);
 		putchar('}');
 	}
@@ -156,7 +156,7 @@ static bool at_of(const Json *at, commit_at *out) {
 }
 #endif
 
-static chains *current;
+static histories *current;
 
 int main(void) {
 	char *line = NULL;
@@ -173,9 +173,9 @@ int main(void) {
 		bool free_request = true;
 		if (op == NULL) puts("{\"error\":\"unknown op undefined\"}");
 		else if (strcmp(op, "create") == 0) {
-			chain_free(current);
-			current = chain_create(jsonText(jsonGet(request, "node")), apply_check, NULL);
-			chain_release(current, apply_release);
+			history_free(current);
+			current = history_create(jsonText(jsonGet(request, "node")), apply_check, NULL);
+			history_release(current, apply_release);
 			puts("{}");
 		} else if (strcmp(op, "add") == 0 && text && unhex(text, name, 32)) {
 			Json **slot = NULL;
@@ -183,10 +183,10 @@ int main(void) {
 				if (strcmp(request->object.members[i].key, "blop") == 0) slot = &request->object.members[i].value;
 			}
 			if (slot == NULL || !jsonDecode(slot)) fputs("bad blop\n", stderr), exit(1);
-			chain_row r = chain_add(current, *slot, name);
+			history_row r = history_add(current, *slot, name);
 			row(&r);
 			putchar('\n');
-			chain_row_free(&r);
+			history_row_free(&r);
 			free_request = false;
 		} else if (strcmp(op, "side") == 0 && text && unhex(text, name, 32)) {
 			const nt_value *side = apply_side(current, name);
@@ -238,7 +238,7 @@ int main(void) {
 		if (free_request) jsonFree(request);
 	}
 	fflush(stdout);
-	chain_free(current);
+	history_free(current);
 	free(line);
 	return 0;
 }

@@ -39,13 +39,13 @@ function party() {
 
 const put = (value: unknown) => [{ path: [], value }]
 
-Deno.test("a change is taken in to its chains at once, before the next operation", () => {
+Deno.test("a change is taken in to its histories at once, before the next operation", () => {
 	const { s, device } = party()
 	s.write([], put(1))
-	assertEquals(device.chains(ROOT).heads("value").map((h) => h.blop.lamport), [1])
+	assertEquals(device.histories(ROOT).heads("value").map((h) => h.blop.lamport), [1])
 	s.write([], put(2))
-	// one chain: the second names the first
-	assertEquals(device.chains(ROOT).heads("value").map((h) => h.blop.lamport), [2])
+	// one history: the second names the first
+	assertEquals(device.histories(ROOT).heads("value").map((h) => h.blop.lamport), [2])
 	const v = s.get(ROOT)!.value
 	assertEquals(v.map((x: { content: unknown }) => x.content), [2])
 	assertEquals((v[0].because as { layer: string }).layer, "sync")
@@ -86,7 +86,7 @@ Deno.test("a node whose id is not ermine:// is not committed; versions makes no 
 	const { s, device, records } = party()
 	const plain = s.create("p", { id: "plain" })
 	assertEquals(records.map((r) => [r.node, r.ephemeral]), [["plain", false]])
-	assertEquals(device.chains(ROOT).heads("value").length, 0)
+	assertEquals(device.histories(ROOT).heads("value").length, 0)
 	s.internal.versions(plain, "value", [])
 	assertEquals(records.length, 1)
 	assertEquals(s.get(plain)!.value, [])
@@ -100,7 +100,7 @@ Deno.test("the scheduler's interface does not hold versions", () => {
 
 Deno.test("a commit that cannot be made is reported by idle, not thrown at the operation", async () => {
 	const { s, wiring } = party()
-	// the graph holds two versions the chains do not: a write at the second has no head to follow
+	// the graph holds two versions the histories do not: a write at the second has no head to follow
 	const change = { node: ROOT, time: 0, actor: "x" }
 	s.internal.versions(ROOT, "value", [{ content: 1, change }, { content: 2, change }] as never)
 	s.write([], put(3), undefined, 1)

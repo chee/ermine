@@ -141,7 +141,7 @@
 				"heads": [
 					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -161,7 +161,7 @@
 				"heads": [
 					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -196,7 +196,7 @@
 					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05",
 					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -217,7 +217,7 @@
 					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05",
 					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

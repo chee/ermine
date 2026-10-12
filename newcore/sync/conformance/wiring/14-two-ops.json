@@ -1,5 +1,5 @@
 {
-	"title": "two operations with nothing between: the first committed before the second, so one chain",
+	"title": "two operations with nothing between: the first committed before the second, so one history",
 	"steps": [
 		{
 			"request": {

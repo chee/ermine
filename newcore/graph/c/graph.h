@@ -74,7 +74,7 @@ typedef struct {
 
 // a version sync gives gr_versions (WIRING.tex, In). content: an nt_value (under children a list of
 // ids, a null for a symbol); change: its fields, the graph copies it and sets its time; because:
-// where it is in the chains, NULL: none. All borrowed: the graph holds the contents it keeps and
+// where it is in the histories, NULL: none. All borrowed: the graph holds the contents it keeps and
 // copies the rest
 typedef struct {
 	const char *layer;
@@ -188,11 +188,11 @@ const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int 
 void gr_own(gr_graph *g, const char *id, void *owner);
 
 // INTERNAL AND DANGEROUS (WIRING.tex, In): not in the interface a host or a program gets. Only sync
-// calls it, and only with APPLY.tex's versions of that object, from the chains. It throws away the
+// calls it, and only with APPLY.tex's versions of that object, from the histories. It throws away the
 // object's versions and puts list in their place, local ones included: anything not in list is
 // gone. It is not a patch: no mutate, so nothing checks that list follows from what was there.
 // protect is not asked: sync is a privileged runner. It makes no record, so what it writes is never
-// sent: called with anything but what the chains say, the device silently differs from every other
+// sent: called with anything but what the histories say, the device silently differs from every other
 // until a blop for that object is taken in, and a change made in between is committed against the
 // wrong version.
 // from: the blop just taken in; its header marks the readers. NULL: the header of the first version

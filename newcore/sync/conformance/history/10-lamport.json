@@ -1,5 +1,5 @@
 {
-	"title": "lamport not one more than its parents' highest, or 1 with none: refused lamport; waiting and chain come first",
+	"title": "lamport not one more than its parents' highest, or 1 with none: refused lamport; waiting and history come first",
 	"steps": [
 		{
 			"request": {
@@ -309,7 +309,7 @@
 				"name": "d190650aad61a565c8607194886d80a7cb459027460cea8852d96afd2d3fd427"
 			},
 			"expect": {
-				"refused": "chain"
+				"refused": "history"
 			}
 		},
 		{
@@ -403,7 +403,7 @@
 				},
 				{
 					"name": "d190650aad61a565c8607194886d80a7cb459027460cea8852d96afd2d3fd427",
-					"refused": "chain"
+					"refused": "history"
 				}
 			]
 		}

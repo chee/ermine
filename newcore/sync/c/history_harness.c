@@ -1,14 +1,14 @@
-// The C chain on the line protocol (newcore/conformance/chain/harness.ts): one JSON request per
+// The C history on the line protocol (newcore/conformance/history/harness.ts): one JSON request per
 // line in, one answer per line out. A blop is in its JSON form (ENCODING.tex: "/" for bytes);
 // names are lowercase hex.
-//   {op: "create", node}    -> {}; the chains of the node, apply.h's check
+//   {op: "create", node}    -> {}; the histories of the node, apply.h's check
 //   {op: "add", blop, name} -> "taken" | "passed" | {waiting: [names]} | {stuck: [names]} | {refused: code}
 //   {op: "heads", object}   -> [{name, blop}], in the agreed order
 //   {op: "get", name}       -> {blop} | {}
 //   {op: "waiting"}         -> [{name, waiting: [names]}]
 //   {op: "refused"}         -> [{name, refused: code} | {name, stuck: [names]}]
 //   {op: "checked"}         -> [names]: each blop given to check since the last checked (or create)
-// A blop added is kept for the chains, so its request is not freed.
+// A blop added is kept for the histories, so its request is not freed.
 #include "apply.h"
 #include "../../encoding/c/blop.h"
 
@@ -47,28 +47,28 @@ static void print_json(const Json *value) {
 	free(s);
 }
 
-static void row(const chain_row *r, bool named) {
-	if (r->kind == CHAIN_TAKEN) { fputs("\"taken\"", stdout); return; }
-	if (r->kind == CHAIN_PASSED) { fputs("\"passed\"", stdout); return; }
+static void row(const history_row *r, bool named) {
+	if (r->kind == HISTORY_TAKEN) { fputs("\"taken\"", stdout); return; }
+	if (r->kind == HISTORY_PASSED) { fputs("\"passed\"", stdout); return; }
 	if (named) {
 		fputs("{\"name\":\"", stdout);
 		hex(r->name, 32);
 		fputs("\",", stdout);
 	} else putchar('{');
-	if (r->kind == CHAIN_REFUSED) printf("\"refused\":\"%s\"", chain_refusal_name(r->refusal));
+	if (r->kind == HISTORY_REFUSED) printf("\"refused\":\"%s\"", history_refusal_name(r->refusal));
 	else {
-		fputs(r->kind == CHAIN_WAITING ? "\"waiting\":" : "\"stuck\":", stdout);
+		fputs(r->kind == HISTORY_WAITING ? "\"waiting\":" : "\"stuck\":", stdout);
 		names(r->names, r->count);
 	}
 	putchar('}');
 }
 
-static chains *current;
+static histories *current;
 static uint8_t (*checked)[32];
 static size_t checks, room;
 
 // check, noting the blop's name
-static bool check(void *context, chains *c, const Json *blop) {
+static bool check(void *context, histories *c, const Json *blop) {
 	uint8_t *bytes;
 	size_t length;
 	if (blop_encode(blop, &bytes, &length).code != BLOP_OK) abort();
@@ -96,9 +96,9 @@ int main(void) {
 		bool free_request = true;
 		if (op == NULL) puts("{\"error\":\"unknown op undefined\"}");
 		else if (strcmp(op, "create") == 0) {
-			chain_free(current);
-			current = chain_create(jsonText(jsonGet(request, "node")), check, NULL);
-			chain_release(current, apply_release);
+			history_free(current);
+			current = history_create(jsonText(jsonGet(request, "node")), check, NULL);
+			history_release(current, apply_release);
 			checks = 0;
 			puts("{}");
 		} else if (strcmp(op, "add") == 0 && text && unhex(text, name)) {
@@ -108,15 +108,15 @@ int main(void) {
 				if (strcmp(request->object.members[i].key, "blop") == 0) slot = &request->object.members[i].value;
 			}
 			if (blop == NULL || !jsonDecode(slot)) fputs("bad blop\n", stderr), exit(1);
-			chain_row r = chain_add(current, *slot, name);
+			history_row r = history_add(current, *slot, name);
 			row(&r, false);
 			putchar('\n');
-			chain_row_free(&r);
+			history_row_free(&r);
 			free_request = false;
 		} else if (strcmp(op, "heads") == 0) {
 			Json *object = jsonGet(request, "object");
-			chain_head *hs;
-			size_t n = chain_heads(current, object, &hs);
+			history_head *hs;
+			size_t n = history_heads(current, object, &hs);
 			putchar('[');
 			for (size_t i = 0; i < n; i++) {
 				if (i) putchar(',');
@@ -129,22 +129,22 @@ int main(void) {
 			puts("]");
 			free(hs);
 		} else if (strcmp(op, "get") == 0 && text && unhex(text, name)) {
-			const Json *blop = chain_get(current, name);
+			const Json *blop = history_get(current, name);
 			if (blop) {
 				fputs("{\"blop\":", stdout);
 				print_json(blop);
 				puts("}");
 			} else puts("{}");
 		} else if (strcmp(op, "waiting") == 0 || strcmp(op, "refused") == 0) {
-			chain_row *rows;
-			size_t n = op[0] == 'w' ? chain_waiting(current, &rows) : chain_refused(current, &rows);
+			history_row *rows;
+			size_t n = op[0] == 'w' ? history_waiting(current, &rows) : history_refused(current, &rows);
 			putchar('[');
 			for (size_t i = 0; i < n; i++) {
 				if (i) putchar(',');
 				row(&rows[i], true);
 			}
 			puts("]");
-			chain_rows_free(rows, n);
+			history_rows_free(rows, n);
 		} else if (strcmp(op, "checked") == 0) {
 			names(checked, checks);
 			putchar('\n');
@@ -153,7 +153,7 @@ int main(void) {
 		if (free_request) jsonFree(request);
 	}
 	fflush(stdout);
-	chain_free(current);
+	history_free(current);
 	free(line);
 	return 0;
 }

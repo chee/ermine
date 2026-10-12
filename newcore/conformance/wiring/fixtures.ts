@@ -2,7 +2,7 @@
 //   deno run --allow-read --allow-write conformance/wiring/fixtures.ts
 // A scenario: {title, steps: [{request, expect}]}, one session started by reset (harness.ts has
 // the protocol). Every expected answer is worked out by hand from WIRING.tex, COMMIT.tex,
-// APPLY.tex, CHAIN.tex and PLACES.tex and written here by label; the only things computed are each
+// APPLY.tex, HISTORY.tex and PLACES.tex and written here by label; the only things computed are each
 // blop's name (blop.ts), the devices' keys, the ids (id.ts) and, where the agreed order falls to
 // names, which of two is the greater. wiring.ts, the graph and the scheduler are never imported.
 //
@@ -441,7 +441,7 @@ scenario(
 )
 scenario(
 	"two-ops",
-	"two operations with nothing between: the first committed before the second, so one chain",
+	"two operations with nothing between: the first committed before the second, so one history",
 	() => {
 		const p1 = [{ path: [], value: 1 }], p2 = [{ path: [], value: 2 }]
 		const w1 = blop(A, DOC, "value", p1)

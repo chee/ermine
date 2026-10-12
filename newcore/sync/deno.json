@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"exports": {
 		"./apply": "./ts/apply.ts",
-		"./chain": "./ts/chain.ts",
+		"./history": "./ts/history.ts",
 		"./commit": "./ts/commit.ts",
 		"./fragment": "./ts/fragment.ts",
 		"./fresh": "./ts/fresh.ts",

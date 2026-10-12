@@ -1,10 +1,10 @@
-// The reference chain.ts on the line protocol: one JSON request per line in, one answer per line
+// The reference history.ts on the line protocol: one JSON request per line in, one answer per line
 // out, in order. A blop in its JSON form (../pack/form.ts), its byte fields {"/": {"bytes": b64}};
 // names lowercase hex (64 digits); an object as BLOP.tex writes it. A session starts at create;
 // a later create starts a new one.
-//   {op: "create", node}     -> {}; createChains(node, check), check APPLY.tex's (apply.ts)
+//   {op: "create", node}     -> {}; createHistories(node, check), check APPLY.tex's (apply.ts)
 //   {op: "add", blop, name}  -> "taken" | "passed" | {waiting: [names]} | {stuck: [names]} |
-//                               {refused: code}, as add answers it (CHAIN.tex)
+//                               {refused: code}, as add answers it (HISTORY.tex)
 //   {op: "heads", object}    -> [{name, blop}], in the agreed order; none: []
 //   {op: "get", name}        -> {blop} | {}
 //   {op: "waiting"}          -> [{name, waiting: [names]}], sorted by name
@@ -14,7 +14,7 @@
 //                               create), in the order check was called; how the agreed order of
 //                               wakings shows from outside
 // Another implementation joins by speaking this.
-import { createChains } from "../../sync/ts/chain.ts"
+import { createHistories } from "../../sync/ts/history.ts"
 import { check } from "../../sync/ts/apply.ts"
 import { encode, name } from "../../encoding/ts/blop.ts"
 import { fromJson, line, toJson } from "../pack/form.ts"
@@ -42,33 +42,33 @@ const blopIn = (j: unknown) => convert(fromJson(j), toArray) as never
 const blopOut = (b: unknown) => toJson(convert(b, toBuffer))
 
 // deno-lint-ignore no-explicit-any
-let chains: any
+let histories: any
 let checked: string[] = []
 
 function answer(r: Request): unknown {
 	switch (r.op) {
 		case "create":
 			checked = []
-			chains = createChains(r.node!, (c: never, blop: never) => {
+			histories = createHistories(r.node!, (c: never, blop: never) => {
 				checked.push(hex(name(encode(blop))))
 				return check(c, blop)
 			})
 			return {}
 		case "add":
-			return chains.add(blopIn(r.blop), unhex(r.name!))
+			return histories.add(blopIn(r.blop), unhex(r.name!))
 		case "heads":
-			return chains.heads(fromJson(r.object)).map((h: { name: Uint8Array; blop: unknown }) => ({
+			return histories.heads(fromJson(r.object)).map((h: { name: Uint8Array; blop: unknown }) => ({
 				name: hex(h.name),
 				blop: blopOut(h.blop),
 			}))
 		case "get": {
-			const b = chains.get(unhex(r.name!))
+			const b = histories.get(unhex(r.name!))
 			return b == null ? {} : { blop: blopOut(b) }
 		}
 		case "waiting":
-			return chains.waiting()
+			return histories.waiting()
 		case "refused":
-			return chains.refused()
+			return histories.refused()
 		case "checked": {
 			const c = checked
 			checked = []

@@ -1,5 +1,5 @@
 {
-	"title": "a device dropped and made again on its storage, linked to none: its chains hold every commit and its fragment",
+	"title": "a device dropped and made again on its storage, linked to none: its histories hold every commit and its fragment",
 	"steps": [
 		{
 			"request": {
@@ -158,7 +158,7 @@
 				"heads": [
 					"5e939f7d8149a866ad13155003c8172c732c90a0077044d8b4da65da4a22ef29"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

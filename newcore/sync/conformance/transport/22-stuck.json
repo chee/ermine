@@ -102,7 +102,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -137,7 +137,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

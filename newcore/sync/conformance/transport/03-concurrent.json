@@ -108,7 +108,7 @@
 					"e69c1722e0ce970084667c97aedc8829ddebfbee571709d206e81122156a426e",
 					"b7213c27bd4cd854e96b858979f5b9affc61c4de81325c7dca8938784780b337"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -129,7 +129,7 @@
 					"e69c1722e0ce970084667c97aedc8829ddebfbee571709d206e81122156a426e",
 					"b7213c27bd4cd854e96b858979f5b9affc61c4de81325c7dca8938784780b337"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

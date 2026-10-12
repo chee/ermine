@@ -1,7 +1,7 @@
 // What the apply and commit fixtures share: blops made and named, their JSON form, the steps of a
 // session (session.ts has the protocol), and a small model of APPLY.tex used only to check the
 // expectations written by hand. Patch semantics: mutate.ts; changes and becauses: nodes/ts. The
-// names: blop.ts (BLOP.tex), as the chain fixtures. apply.ts and commit.ts are never imported.
+// names: blop.ts (BLOP.tex), as the history fixtures. apply.ts and commit.ts are never imported.
 import { encode, name } from "../../encoding/ts/blop.ts"
 import mutate from "../../opstreams/ts/mutate.ts"
 import createNode, { type Node } from "../../nodes/ts/node.ts"

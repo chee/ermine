@@ -1,4 +1,4 @@
-// what an object holds after a blop, worked out from its chain (APPLY.tex)
+// what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "../../encoding/ts/blop.ts"
 import { Stand } from "../../encoding/ts/cbor.ts"
@@ -6,7 +6,7 @@ import createBecause, { type Because } from "../../nodes/ts/because.ts"
 import createChange, { type Change } from "../../nodes/ts/change.ts"
 import createNode from "../../nodes/ts/node.ts"
 import mutate, { MutateError } from "../../opstreams/ts/mutate.ts"
-import type { Chains } from "./chain.ts"
+import type { Histories } from "./history.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
@@ -18,12 +18,12 @@ export type Version = {
 }
 
 // kept for blops taken in only: their sides never change
-const kept = new WeakMap<Chains, Map<string, unknown>>()
+const kept = new WeakMap<Histories, Map<string, unknown>>()
 
 // the side after the blop's patches; MutateError when they do not apply
-function after(chains: Chains, blop: Blop): unknown {
+function after(histories: Histories, blop: Blop): unknown {
 	const base = blop.base ?? blop.parents[0]
-	const before = base === undefined ? undefined : data(chains, base)
+	const before = base === undefined ? undefined : data(histories, base)
 	const change = createChange(blop.node, { time: 0, actor: blop.actor })
 	const versions = before === undefined ? [] : [{ content: before, change }]
 	const o = blop.object
@@ -71,26 +71,26 @@ export type Live = (kind: unknown) => unknown
 
 // a blop's side, or undefined: not taken in, or emptied. live (optional, the host's): what the
 // stand-ins in it become (APPLY.tex); none given: stand-ins stay as data
-export function side(chains: Chains, name: Uint8Array, live?: Live): unknown {
-	const content = data(chains, name)
+export function side(histories: Histories, name: Uint8Array, live?: Live): unknown {
+	const content = data(histories, name)
 	return live === undefined || content === undefined ? content : lived(content, live)
 }
 
 // the side as data, stand-ins as they are
-function data(chains: Chains, name: Uint8Array): unknown {
-	const blop = chains.get(name)
+function data(histories: Histories, name: Uint8Array): unknown {
+	const blop = histories.get(name)
 	if (blop === undefined) return undefined
-	if (!kept.has(chains)) kept.set(chains, new Map())
-	const sides = kept.get(chains)!
+	if (!kept.has(histories)) kept.set(histories, new Map())
+	const sides = kept.get(histories)!
 	const n = hex(name)
-	if (!sides.has(n)) sides.set(n, after(chains, blop))
+	if (!sides.has(n)) sides.set(n, after(histories, blop))
 	return sides.get(n)
 }
 
 // whether the blop's patches apply to its base's side
-export function check(chains: Chains, blop: Blop): boolean {
+export function check(histories: Histories, blop: Blop): boolean {
 	try {
-		after(chains, blop)
+		after(histories, blop)
 		return true
 	} catch (e) {
 		if (e instanceof MutateError) return false
@@ -101,14 +101,14 @@ export function check(chains: Chains, blop: Blop): boolean {
 // an object's versions: its heads in the agreed order, each with a side; time(name) the caller's;
 // live (optional, the host's) makes each stand-in in a side into what it makes of its kind, as side
 export function versions(
-	chains: Chains,
+	histories: Histories,
 	object: Blop["object"],
 	time: (name: string) => number,
 	live?: Live,
 ): Version[] {
 	const out: Version[] = []
-	for (const head of chains.heads(object)) {
-		const content = side(chains, head.name, live)
+	for (const head of histories.heads(object)) {
+		const content = side(histories, head.name, live)
 		if (content === undefined) continue
 		const { blop } = head
 		const name = hex(head.name)

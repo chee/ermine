@@ -519,11 +519,11 @@ export function createGraph<O>(options: Options<O>) {
 	}
 
 	// INTERNAL AND DANGEROUS (WIRING.tex, In): not in Api, so never in what hosts and programs get.
-	// Only sync calls it, and only with APPLY.tex's versions of that object, from the chains. It
+	// Only sync calls it, and only with APPLY.tex's versions of that object, from the histories. It
 	// throws away the object's versions and puts list in their place, local ones included: anything
 	// not in list is gone. It is not a patch: no mutate, so nothing checks that list follows from
 	// what was there. protect is not asked: sync is a privileged runner. It makes no record, so what
-	// it writes is never sent: called with anything but what the chains say, the device silently
+	// it writes is never sent: called with anything but what the histories say, the device silently
 	// differs from every other until a blop for that object is taken in, and a change made in
 	// between is committed against the wrong version.
 	// from: the blop just taken in; its header marks the readers, its cause wrapped as

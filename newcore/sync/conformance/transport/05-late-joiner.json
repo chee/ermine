@@ -159,7 +159,7 @@
 				"heads": [
 					"18ed73516976a7fa65772f7013ef0383fef66574743c7b30919df0ee4fab10df"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

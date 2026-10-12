@@ -105,7 +105,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

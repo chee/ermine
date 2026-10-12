@@ -78,7 +78,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -103,7 +103,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -147,7 +147,7 @@
 				"heads": [
 					"281533b58cc5f0a5431d82f2444aff22f2cf2485ae68c36bcfb3fbcb312eaaa3"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -167,7 +167,7 @@
 				"heads": [
 					"281533b58cc5f0a5431d82f2444aff22f2cf2485ae68c36bcfb3fbcb312eaaa3"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

@@ -1,14 +1,14 @@
-// Writes the chain scenarios to newcore/sync/conformance/chain/NN-short-name.json.
-//   deno run --allow-read --allow-write conformance/chain/fixtures.ts
+// Writes the history scenarios to newcore/sync/conformance/history/NN-short-name.json.
+//   deno run --allow-read --allow-write conformance/history/fixtures.ts
 // A scenario: {title, steps: [{request, expect}]}, one session, the requests in order
-// (harness.ts has the protocol). Every expected answer is worked out by hand from CHAIN.tex and
+// (harness.ts has the protocol). Every expected answer is worked out by hand from HISTORY.tex and
 // written here by label; the only thing computed is each blop's name (blop.ts, BLOP.tex), and,
-// where the agreed order falls to names, which of two is the greater (desc). chain.ts is never
+// where the agreed order falls to names, which of two is the greater (desc). history.ts is never
 // imported.
 import { encode, name } from "../../encoding/ts/blop.ts"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../sync/conformance/chain/", import.meta.url)
+const out = new URL("../../sync/conformance/history/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
 type Object = "value" | ["info", string] | ["children", string]
@@ -269,7 +269,7 @@ const put = (value: unknown) => [{ path: [], value }]
 	)
 }
 
-// ---- a parent in another chain
+// ---- a parent in another history
 {
 	const R = mk()
 	const I = mk({ object: INFO })
@@ -278,17 +278,17 @@ const put = (value: unknown) => [{ path: [], value }]
 	const P = mk({ parents: [R] })
 	const E = mk({ object: ["children", "k"], parents: [P] })
 	scenario(
-		"other-chain",
-		"a parent taken in to another chain of this node: refused chain; also after waiting on it",
+		"other-history",
+		"a parent taken in to another history of this node: refused history; also after waiting on it",
 		[
 			taken(R),
 			taken(I),
-			refuses(C, "chain"),
-			refuses(D, "chain"),
+			refuses(C, "history"),
+			refuses(D, "history"),
 			waits(E, P),
 			taken(P),
 			waiting(),
-			refused([C, "chain"], [D, "chain"], [E, "chain"]),
+			refused([C, "history"], [D, "history"], [E, "history"]),
 			heads("value", P),
 			heads(INFO, I),
 			heads(["children", "k"]),
@@ -312,7 +312,7 @@ const put = (value: unknown) => [{ path: [], value }]
 	scenario(
 		"lamport",
 		"lamport not one more than its parents' highest, or 1 with none: refused lamport; " +
-			"waiting and chain come first",
+			"waiting and history come first",
 		[
 			refuses(R, "lamport"),
 			taken(R1),
@@ -322,11 +322,11 @@ const put = (value: unknown) => [{ path: [], value }]
 			refuses(M, "lamport"),
 			taken(M2),
 			waits(L, P),
-			refuses(Q, "chain"),
+			refuses(Q, "history"),
 			heads("value", M2),
 			heads(INFO),
 			waiting([L, [P]]),
-			refused([R, "lamport"], [A, "lamport"], [A2, "lamport"], [M, "lamport"], [Q, "chain"]),
+			refused([R, "lamport"], [A, "lamport"], [A2, "lamport"], [M, "lamport"], [Q, "history"]),
 		],
 	)
 }
@@ -502,11 +502,11 @@ const put = (value: unknown) => [{ path: [], value }]
 			taken(I1),
 			taken(I2),
 			heads(["info", "t"], I2),
-			refuses(K, "chain"),
-			refuses(U, "chain"),
+			refuses(K, "history"),
+			refuses(U, "history"),
 			heads(["children", "t"]),
 			heads(["info", "u"]),
-			refused([K, "chain"], [U, "chain"]),
+			refused([K, "history"], [U, "history"]),
 		],
 	)
 }
@@ -522,7 +522,7 @@ const put = (value: unknown) => [{ path: [], value }]
 	const U = mk({ parents: [A, Rf], base: A }) // stuck
 	scenario(
 		"heads-taken-only",
-		"a blop waiting, refused or stuck is no part of the chain: its parents stay heads",
+		"a blop waiting, refused or stuck is no part of the history: its parents stay heads",
 		[
 			taken(R),
 			taken(A),

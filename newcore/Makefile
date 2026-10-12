@@ -19,11 +19,11 @@ cbor_src = encoding/c/cbor_test.c encoding/c/cbor.c encoding/c/json.c
 blop_src = encoding/c/blop.c encoding/c/blop_harness.c encoding/c/json.c encoding/c/cbor.c $(blake3_src)
 id_src = sync/c/id.c sync/c/id_harness.c encoding/c/json.c encoding/c/cbor.c $(blake3_src)
 seal_src = sync/c/seal.c sync/c/seal_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) c/ed25519/ed25519.c c/ed25519/sha2.c
-chain_src = sync/c/chain.c sync/c/apply.c sync/c/chain_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
+history_src = sync/c/history.c sync/c/apply.c sync/c/history_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
 	opstreams/c/mutate.c notify/c/notify.c nodes/c/node.c nodes/c/change.c nodes/c/because.c
-apply_src = sync/c/chain.c sync/c/apply.c sync/c/apply_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
+apply_src = sync/c/history.c sync/c/apply.c sync/c/apply_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
 	opstreams/c/mutate.c notify/c/notify.c nodes/c/node.c nodes/c/change.c nodes/c/because.c
-commit_src = sync/c/chain.c sync/c/apply.c sync/c/commit.c sync/c/commit_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
+commit_src = sync/c/history.c sync/c/apply.c sync/c/commit.c sync/c/commit_harness.c encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) \
 	opstreams/c/mutate.c notify/c/notify.c nodes/c/node.c nodes/c/change.c nodes/c/because.c
 change_src = nodes/c/change.c nodes/c/change_harness.c
 # Subduction's own BLAKE3 exports the same symbols as c/blake3: the C ones are renamed, in every file of the harness
@@ -31,7 +31,7 @@ subduction_rename = $(foreach s,compress_in_place compress_in_place_portable com
 subduction_lib = c/subduction/lib/libsubduction_c.a
 transport_flags = -Ic/subduction $(subduction_rename)
 transport_libs = $(subduction_lib) $(filter-out -lm,$(shell tr -d '\033' < c/subduction/lib/link.txt | sed 's/\[[0-9;]*m//g'))
-transport_src = sync/c/transport.c sync/c/transport_harness.c sync/c/id.c sync/c/seal.c sync/c/chain.c sync/c/apply.c sync/c/commit.c sync/c/fragment.c \
+transport_src = sync/c/transport.c sync/c/transport_harness.c sync/c/id.c sync/c/seal.c sync/c/history.c sync/c/apply.c sync/c/commit.c sync/c/fragment.c \
 	encoding/c/blop.c encoding/c/json.c encoding/c/cbor.c $(blake3_src) c/ed25519/ed25519.c c/ed25519/sha2.c \
 	opstreams/c/mutate.c notify/c/notify.c nodes/c/node.c nodes/c/change.c nodes/c/because.c \
 	c/subduction/store_memory.c c/subduction/platform_posix.c $(subduction_lib)
@@ -81,7 +81,7 @@ seal = sync/c/seal-harness
 fragment = sync/c/fragment-harness
 transport = sync/c/transport-harness
 wiring = sync/c/wiring-harness
-chain = sync/c/chain-harness
+history = sync/c/history-harness
 apply = sync/c/apply-harness
 commit = sync/c/commit-harness
 change = nodes/c/change-harness
@@ -101,7 +101,7 @@ store = files/c/store-harness
 program = files/c/program-harness
 sys = files/c/sys-harness
 
-LIBS = trackgraph node pack cbor blop id seal fragment chain apply commit transport wiring change because squish notify places protect mutate graph scheduler names diag layout manifest store program sys
+LIBS = trackgraph node pack cbor blop id seal fragment history apply commit transport wiring change because squish notify places protect mutate graph scheduler names diag layout manifest store program sys
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -127,7 +127,7 @@ blop_test = BLOP_HARNESS conformance/blop/
 id_test = ID_HARNESS conformance/id/
 seal_test = SEAL_HARNESS conformance/seal/
 fragment_test = FRAGMENT_HARNESS conformance/fragment/
-chain_test = CHAIN_HARNESS conformance/chain/
+history_test = HISTORY_HARNESS conformance/history/
 apply_test = APPLY_HARNESS conformance/apply/
 commit_test = COMMIT_HARNESS conformance/commit/
 transport_test = TRANSPORT_HARNESS conformance/transport/

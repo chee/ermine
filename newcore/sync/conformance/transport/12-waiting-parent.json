@@ -1,5 +1,5 @@
 {
-	"title": "a commit whose parent's seal is not here waits, off the chains; taken in when it comes",
+	"title": "a commit whose parent's seal is not here waits, off the histories; taken in when it comes",
 	"steps": [
 		{
 			"request": {
@@ -78,7 +78,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -103,7 +103,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -147,7 +147,7 @@
 				"heads": [
 					"499c75d64f481234dcc16838fe6550d64442fe95fd4a0718b6dc7069b9fa0db2"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -167,7 +167,7 @@
 				"heads": [
 					"499c75d64f481234dcc16838fe6550d64442fe95fd4a0718b6dc7069b9fa0db2"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

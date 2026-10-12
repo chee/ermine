@@ -1,5 +1,5 @@
 {
-	"title": "a parent taken in to another chain of this node: refused chain; also after waiting on it",
+	"title": "a parent taken in to another history of this node: refused history; also after waiting on it",
 	"steps": [
 		{
 			"request": {
@@ -94,7 +94,7 @@
 				"name": "aed9a71d024e7c81792dbd58dfbe2b4c157e8452c82a05b38db0fc40ea7c2483"
 			},
 			"expect": {
-				"refused": "chain"
+				"refused": "history"
 			}
 		},
 		{
@@ -127,7 +127,7 @@
 				"name": "34cf503e673a6c3d3109bcc63394fe9fdf3030c3cf768015eb25ae0f1e846c9c"
 			},
 			"expect": {
-				"refused": "chain"
+				"refused": "history"
 			}
 		},
 		{
@@ -212,15 +212,15 @@
 			"expect": [
 				{
 					"name": "34cf503e673a6c3d3109bcc63394fe9fdf3030c3cf768015eb25ae0f1e846c9c",
-					"refused": "chain"
+					"refused": "history"
 				},
 				{
 					"name": "aed9a71d024e7c81792dbd58dfbe2b4c157e8452c82a05b38db0fc40ea7c2483",
-					"refused": "chain"
+					"refused": "history"
 				},
 				{
 					"name": "f6d5aef6b5c4f94f79c4fda802eaf3ecdcd6b106d26efe78148c3d8712b3291c",
-					"refused": "chain"
+					"refused": "history"
 				}
 			]
 		},

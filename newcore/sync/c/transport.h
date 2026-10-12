@@ -1,6 +1,6 @@
 // Sync's transport (newcore/sync/TRANSPORT.tex), in C: sealed blops over Subduction (c/subduction),
 // stored ones as its commits, ephemeral ones as its ephemeral messages; what arrives is checked
-// before the chains (chain.h) see it. Sans-IO as Subduction is: the host opens each connection
+// before the histories (history.h) see it. Sans-IO as Subduction is: the host opens each connection
 // (transport_connect), hands in each message that arrives, sends each one asked for (transport_next)
 // and passes the time by calling transport_run. One thread at a time.
 //
@@ -11,7 +11,7 @@
 #ifndef TRANSPORT_H
 #define TRANSPORT_H
 
-#include "chain.h"
+#include "history.h"
 #include "fragment.h"
 
 #include "../../c/subduction/subduction.h"
@@ -117,17 +117,17 @@ void transport_expire(transport *t);
 // doc followed: synced with every peer, subscribe true, its ephemeral messages subscribed; from now on, with
 // each peer connected later too
 transport_code transport_follow(transport *t, const char *doc);
-// the document's chains of a layer, made at first; the host commits through them (commit.h)
-chains *transport_chains(transport *t, const char *doc, transport_layer layer);
+// the document's histories of a layer, made at first; the host commits through them (commit.h)
+histories *transport_histories(transport *t, const char *doc, transport_layer layer);
 // a stored blop of this device's, sealed: taken in, added as a loose commit, then fragments built
 transport_code transport_add(transport *t, const char *doc, const uint8_t *sealed, size_t length);
-// a blop this device made, its bytes, not yet sealed, into that layer's chains at once (WIRING.tex): add
-// and publish then pass over the name already taken in. A stored blop goes into the ephemeral chains too.
+// a blop this device made, its bytes, not yet sealed, into that layer's histories at once (WIRING.tex): add
+// and publish then pass over the name already taken in. A stored blop goes into the ephemeral histories too.
 // Not announced. The document keeps the blop decoded, as long as the device
 transport_code transport_take(transport *t, const char *doc, const uint8_t *blop, size_t length, transport_layer layer);
 
-// a blop that came to be taken in to a chain, from the network or storage (heard: an ephemeral message),
-// or that waited there on one that did. Valid for the call; blop is the chain's, which the device keeps
+// a blop that came to be taken in to a history, from the network or storage (heard: an ephemeral message),
+// or that waited there on one that did. Valid for the call; blop is the history's, which the device keeps
 typedef struct {
 	const char *doc;
 	transport_layer layer;

@@ -81,7 +81,7 @@ Deno.test({
 		const r = await root(a, 1)
 		await a.device.add(r.sealed)
 		await quiet(a, b)
-		assertEquals(b.device.chains(DOC).heads("value").map((h) => hex(h.name)), [hex(r.name)])
+		assertEquals(b.device.histories(DOC).heads("value").map((h) => hex(h.name)), [hex(r.name)])
 		assertEquals((await b.device.stored(DOC)).map(hex), [hex(stored(r.sealed))])
 		// not a seal: refused shape, by its head
 		const head = new Uint8Array(32).fill(0x11)
@@ -107,7 +107,7 @@ Deno.test({
 		await a.device.put(DOC, stored(p.sealed), [], p.sealed)
 		await quiet(a)
 		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
-		assertEquals(a.device.chains(DOC).heads("value").map((h) => hex(h.name)), [hex(c.name)])
+		assertEquals(a.device.histories(DOC).heads("value").map((h) => hex(h.name)), [hex(c.name)])
 		await a.device.close()
 	},
 })
@@ -129,7 +129,7 @@ Deno.test({
 		ready = true
 		await a.device.changed()
 		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
-		assertEquals(a.device.chains(DOC).heads("value").length, 1)
+		assertEquals(a.device.histories(DOC).heads("value").length, 1)
 		await a.device.close()
 	},
 })

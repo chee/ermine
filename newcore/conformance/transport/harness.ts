@@ -40,10 +40,10 @@
 //   {op: "pump"}                     -> {}  everything runs until quiet: no message crossing, no
 //                                       taking in or fragment building left
 //   {op: "state", device, doc, object?, layer?}
-//                                    -> {heads, chain: {waiting, refused}, taking: {waiting,
+//                                    -> {heads, history: {waiting, refused}, taking: {waiting,
 //                                       refused}}
-//        heads: the object's (default "value") heads' names, in the agreed order (CHAIN.tex)
-//        chain: the layer's chains' waiting() and refused(), as CHAIN.tex gives them
+//        heads: the object's (default "value") heads' names, in the agreed order (HISTORY.tex)
+//        history: the layer's histories' waiting() and refused(), as HISTORY.tex gives them
 //        taking: Taking in's own (TRANSPORT.tex), each list sorted by its first field:
 //          waiting: [{commit, waiting: [names]}]  step 5: the parents (blop names, in parents
 //                   order) whose seals are not here
@@ -78,7 +78,7 @@
 //                                             handshake, then the followed documents synced with it
 //     disconnect(key): Promise<void>          the peer with that key
 //     follow(doc): Promise<void>
-//     chains(doc, layer): Chains              the document's chains of that layer (CHAIN.tex)
+//     histories(doc, layer): Histories              the document's histories of that layer (HISTORY.tex)
 //     add(sealed): Promise<void>              a stored blop of this device's: taken in, then
 //                                             addCommit, then fragments built (FRAGMENT.tex)
 //     publish(doc, blop: Uint8Array): Promise<void>   an ephemeral one, its bytes, not sealed, as given:
@@ -229,7 +229,7 @@ async function answer(r: Request): Promise<unknown> {
 			const layer = (r.layer ?? "stored") as string
 			const nonce = unhex(r.nonce as string)
 			const blop = commit(
-				d.device.chains(r.doc, layer),
+				d.device.histories(r.doc, layer),
 				{
 					node: r.doc as string,
 					object: fromJson(r.object) as never,
@@ -281,12 +281,12 @@ async function answer(r: Request): Promise<unknown> {
 			return {}
 		case "state": {
 			const d = of(r.device).device, layer = (r.layer ?? "stored") as string
-			const chains = d.chains(r.doc, layer)
+			const histories = d.histories(r.doc, layer)
 			return {
-				heads: chains.heads(fromJson(r.object ?? "value")).map((h: { name: Uint8Array }) =>
+				heads: histories.heads(fromJson(r.object ?? "value")).map((h: { name: Uint8Array }) =>
 					hex(h.name)
 				),
-				chain: { waiting: chains.waiting(), refused: chains.refused() },
+				history: { waiting: histories.waiting(), refused: histories.refused() },
 				taking: d.taking(r.doc, layer),
 			}
 		}

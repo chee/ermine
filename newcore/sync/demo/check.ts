@@ -139,7 +139,7 @@ try {
 				"stored",
 				(await d.device.stored(id)).length,
 				"heads",
-				d.device.chains(id).heads("value").length,
+				d.device.histories(id).heads("value").length,
 				JSON.stringify(d.device.taking(id)),
 				JSON.stringify(d.s.get(id)?.value?.length),
 			)

@@ -52,7 +52,7 @@
 			},
 			"expect": {
 				"heads": [],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},
@@ -94,7 +94,7 @@
 				"heads": [
 					"700710fca3b5d23e3a14b235af0e9098dec2593dc51129fe84263878186b756b"
 				],
-				"chain": {
+				"history": {
 					"waiting": [],
 					"refused": []
 				},

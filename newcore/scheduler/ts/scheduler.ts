@@ -621,7 +621,7 @@ export function createScheduler(options: Options) {
 		// alone, never to hosts or programs: versions(node, object, list) throws away the object's
 		// versions and puts list in their place, local ones included; it is not a patch, so nothing
 		// checks that list follows from what was there; protect is not asked; it makes no record, so
-		// what it writes is never sent: with anything but what the chains say, the device silently
+		// what it writes is never sent: with anything but what the histories say, the device silently
 		// differs from every other until a blop for that object is taken in
 		internal: {
 			versions: (...a: Parameters<typeof g.versions>) => request(() => g.versions(...a)),

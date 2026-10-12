@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// the side kept for a blop taken in: held here until the chains let it go (apply_release)
+// the side kept for a blop taken in: held here until the histories let it go (apply_release)
 typedef struct {
 	nt_value *side;
 } kept;
@@ -120,7 +120,7 @@ static bool bytes(const Json *j) {
 
 // the side after the blop's patches into *out, one hold of it the caller's (nt_free); false: they
 // do not apply
-static bool after(chains *c, const Json *blop, nt_value **out) {
+static bool after(histories *c, const Json *blop, nt_value **out) {
 	*out = NULL;
 	const Json *base = jsonGet(blop, "base"), *parents = jsonGet(blop, "parents");
 	if (base == NULL && parents && parents->type == JSON_ARRAY && parents->array.count) {
@@ -195,12 +195,12 @@ static bool after(chains *c, const Json *blop, nt_value **out) {
 	return applied;
 }
 
-const nt_value *apply_side(chains *c, const uint8_t name[32]) {
-	void **slot = chain_slot(c, name);
+const nt_value *apply_side(histories *c, const uint8_t name[32]) {
+	void **slot = history_slot(c, name);
 	if (slot == NULL) return NULL;
 	if (*slot == NULL) {
 		kept *k = grab(sizeof *k);
-		after(c, chain_get(c, name), &k->side);
+		after(c, history_get(c, name), &k->side);
 		*slot = k;
 	}
 	return ((kept *)*slot)->side;
@@ -212,7 +212,7 @@ void apply_release(void *slot) {
 	free(k);
 }
 
-bool apply_check(void *context, chains *c, const Json *blop) {
+bool apply_check(void *context, histories *c, const Json *blop) {
 	(void)context;
 	nt_value *side;
 	bool applies = after(c, blop, &side);
@@ -233,10 +233,10 @@ static void hex_of(const uint8_t *b, char *out) {
 	for (int i = 0; i < 32; i++) snprintf(out + 2 * i, 3, "%02x", b[i]);
 }
 
-size_t apply_versions(chains *c, const Json *object, apply_time time, void *context,
+size_t apply_versions(histories *c, const Json *object, apply_time time, void *context,
 	apply_version **out) {
-	chain_head *heads;
-	size_t n = chain_heads(c, object, &heads), made = 0;
+	history_head *heads;
+	size_t n = history_heads(c, object, &heads), made = 0;
 	apply_version *vs = grab(n * sizeof *vs);
 	for (size_t i = 0; i < n; i++) {
 		const nt_value *content = apply_side(c, heads[i].name);

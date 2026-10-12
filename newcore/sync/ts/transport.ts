@@ -1,13 +1,13 @@
 // Blops over Subduction (TRANSPORT.tex): stored ones, sealed, as loose commits and fragments, ephemeral
 // ones, never sealed, as its ephemeral messages; and what a device checks of what arrives before its
-// chains see it.
+// histories see it.
 // Reference for the conformance in conformance/transport. Only the lock "unlocked" is built
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "../../encoding/ts/cbor.ts"
 import { type Blop, BlopError, decode, name as blopName } from "../../encoding/ts/blop.ts"
 import { check } from "./apply.ts"
-import { type Added, type Chains, createChains } from "./chain.ts"
+import { type Added, type Histories, createHistories } from "./history.ts"
 import { build, depth, type Fragment } from "./fragment.ts"
 import { bytes as idbytes } from "./id.ts"
 import { SealError, type Signer, stored, unseal, type Unsealed } from "./seal.ts"
@@ -42,7 +42,7 @@ export type Taking = {
 	)[]
 }
 
-// a blop that came to be taken in to a chain, from the network or storage (heard: an ephemeral
+// a blop that came to be taken in to a history, from the network or storage (heard: an ephemeral
 // message), or that waited there on one that did
 export type Arrival = {
 	doc: string
@@ -64,14 +64,14 @@ export type Device = {
 	connectDiscover(url: string, service?: string): Promise<void>
 	disconnect(key: Uint8Array): Promise<void>
 	follow(doc: string): Promise<void>
-	chains(doc: string, layer?: Layer): Chains
+	histories(doc: string, layer?: Layer): Histories
 	// a stored blop of this device's: taken in, added as a loose commit, fragments built
 	add(sealed: Uint8Array): Promise<void>
-	// a blop this device made, its bytes, not yet sealed, into that layer's chains at once and
+	// a blop this device made, its bytes, not yet sealed, into that layer's histories at once and
 	// synchronously (WIRING.tex): add and publish then pass over the name already taken in. A stored
-	// blop goes into the ephemeral layer's chains too. Answers as the chains do. Not announced
+	// blop goes into the ephemeral layer's histories too. Answers as the histories do. Not announced
 	take(doc: string, blop: Uint8Array, layer: Layer): Added
-	// told each blop taken in from elsewhere to a chain, after it is taken in
+	// told each blop taken in from elsewhere to a history, after it is taken in
 	arrived(listener: (arrival: Arrival) => void): void
 	// an ephemeral one, the blop's bytes, not sealed, as given: taken in (refused as a receiver would
 	// refuse it, but still sent), published
@@ -113,7 +113,7 @@ const commitId = (b: Uint8Array) => new sd.CommitId(b)
 // the seals it was taken in over (the commit's parents; or, for a seal alone, every seal of each)
 type Seen = { name: string; blop: Blop; sealed: Uint8Array; parents: string[]; ids: string[] }
 
-// a loose commit, or a seal alone (a fragment's member), not yet handed to the chains: its parents
+// a loose commit, or a seal alone (a fragment's member), not yet handed to the histories: its parents
 // not all here, or one refused. given: the commit's parents' stored ids, sorted
 type Pending = {
 	commit: boolean
@@ -128,7 +128,7 @@ type Document = {
 	bytes: Uint8Array
 	tree: sd.SedimentreeId
 	topic: sd.Topic
-	chains: Record<Layer, Chains>
+	histories: Record<Layer, Histories>
 	// a taken-in seal's name to its stored ids: a signer may have signed twice
 	names: Map<string, string[]>
 	seen: Map<string, Seen>
@@ -187,13 +187,13 @@ export function createDevice(
 		let d = documents.get(key)
 		if (d) return d
 		const id = "ermine://" + key
-		const make = () => createChains(id, check)
+		const make = () => createHistories(id, check)
 		d = {
 			id,
 			bytes: tree,
 			tree: sd.SedimentreeId.fromBytes(tree),
 			topic: sd.Topic.fromBytes(tree),
-			chains: { stored: make(), ephemeral: make() },
+			histories: { stored: make(), ephemeral: make() },
 			names: new Map(),
 			seen: new Map(),
 			fragments: new Map(),
@@ -213,21 +213,21 @@ export function createDevice(
 	// ---- taking in
 
 	const listeners: ((arrival: Arrival) => void)[] = []
-	// blops added that wait in a chain, by name, to find out which a later one lets in
-	const waits = new WeakMap<Chains, Map<string, Blop>>()
+	// blops added that wait in a history, by name, to find out which a later one lets in
+	const waits = new WeakMap<Histories, Map<string, Blop>>()
 
-	// added to the layer's chains; the blops it let in (itself, those that waited on it)
+	// added to the layer's histories; the blops it let in (itself, those that waited on it)
 	function admit(d: Document, layer: Layer, blop: Blop, name: Uint8Array, heard = false) {
-		const chains = d.chains[layer]
-		const added = chains.add(blop, name)
+		const histories = d.histories[layer]
+		const added = histories.add(blop, name)
 		if (listeners.length === 0) return []
-		let held = waits.get(chains)
-		if (!held) waits.set(chains, held = new Map())
+		let held = waits.get(histories)
+		if (!held) waits.set(histories, held = new Map())
 		const out: Arrival[] = []
 		if (added === "taken") out.push({ doc: d.id, layer, blop, name, heard })
 		else if (typeof added === "object" && "waiting" in added) held.set(hex(name), blop)
 		for (const [n, b] of [...held]) {
-			if (!chains.get(unhex(n))) continue
+			if (!histories.get(unhex(n))) continue
 			held.delete(n)
 			if (n !== hex(name)) out.push({ doc: d.id, layer, blop: b, name: unhex(n), heard })
 		}
@@ -237,7 +237,7 @@ export function createDevice(
 		for (const a of arrivals) for (const l of listeners) l(a)
 	}
 
-	// handed to the chains: its seal is taken in here
+	// handed to the histories: its seal is taken in here
 	function hand(d: Document, u: Unsealed, sealed: Uint8Array, ids: string[]) {
 		const n = hex(u.name), s = hex(u.stored)
 		d.names.set(n, [...d.names.get(n) ?? [], s])
@@ -246,7 +246,7 @@ export function createDevice(
 		d.seen.set(s, { name: n, blop: u.blop, sealed, parents: u.blop.parents.map(hex), ids })
 		if (depth(u.stored) > 0) d.deep++
 		const arrivals = admit(d, "stored", u.blop, u.name)
-		// the ephemeral layer's chains hold every stored blop too
+		// the ephemeral layer's histories hold every stored blop too
 		arrivals.push(...admit(d, "ephemeral", u.blop, u.name))
 		announce(arrivals)
 	}
@@ -260,7 +260,7 @@ export function createDevice(
 	// step 5 and on, for each pending seal, until none moves: stuck while a parent is refused or
 	// stuck, waiting while a parent's seal is not here; else a commit's parents each one of its
 	// blop's parents' stored ids, and each of them one of the commit's (refused, parents), or
-	// handed to the chains
+	// handed to the histories
 	function settle(d: Document) {
 		for (let moved = true; moved;) {
 			moved = false
@@ -404,7 +404,7 @@ export function createDevice(
 
 	// an ephemeral blop heard from a device with that key, or published here (never sealed): the lock's
 	// open, decode (shape), its signer the sender's (signature), its document; then handed to the
-	// ephemeral chains; never stored, no commit steps
+	// ephemeral histories; never stored, no commit steps
 	async function hear(d: Document, blob: Uint8Array, from: Uint8Array) {
 		const opened = await lock.open(d.bytes, blob)
 		if (!(opened instanceof Uint8Array)) {
@@ -691,12 +691,12 @@ export function createDevice(
 			await sub.subscribeEphemeral([d.topic])
 			await fetched(d)
 		},
-		chains: (doc, layer = "stored") => named(doc).chains[layer],
+		histories: (doc, layer = "stored") => named(doc).histories[layer],
 		take(doc, bytes, layer) {
 			const d = named(doc)
 			const blop = decode(bytes), n = blopName(bytes)
-			const added = d.chains[layer].add(blop, n)
-			if (layer === "stored") d.chains.ephemeral.add(blop, n)
+			const added = d.histories[layer].add(blop, n)
+			if (layer === "stored") d.histories.ephemeral.add(blop, n)
 			return added
 		},
 		arrived: (listener) => void listeners.push(listener),

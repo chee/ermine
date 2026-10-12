@@ -85,7 +85,7 @@
 //     idle() resolves when no sealing, storing or sending is left
 //   the transport device (TRANSPORT.tex) gains a synchronous take-in of a blop this device made,
 //     not yet sealed: take(doc, blop: Uint8Array, layer): the blop's bytes into that layer's
-//     chains at once, so the next operation commits against them (WIRING.tex, Out); add(sealed)
+//     histories at once, so the next operation commits against them (WIRING.tex, Out); add(sealed)
 //     and publish then pass over the name already taken in. wiring.ts calls it; this shim does not
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"

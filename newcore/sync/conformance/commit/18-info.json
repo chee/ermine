@@ -1,5 +1,5 @@
 {
-	"title": "an info object: its own chain; the value's head is not a parent",
+	"title": "an info object: its own history; the value's head is not a parent",
 	"steps": [
 		{
 			"request": {

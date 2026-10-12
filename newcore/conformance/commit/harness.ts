@@ -37,7 +37,7 @@ function answerCommit(r: Request): unknown {
 	}
 	try {
 		return {
-			blop: blopOut(commit(state.chains, change as never, where as never, r.roots, take, kind)),
+			blop: blopOut(commit(state.histories, change as never, where as never, r.roots, take, kind)),
 		}
 	} catch (e) {
 		const code = (e as { code?: unknown }).code
