@@ -1,9 +1,9 @@
 // The C scheduler on the line protocol: one JSON request per line in, one answer per line out, in
 // order. Same as ../conformance/harness.ts (its header says the requests and answers).
 //
-// memory: the values a request builds (nt_value) are shared into node contents by mutate, so
-// nothing owns them and they are not freed; the leak checker is told so (below). The scheduler's
-// own memory is freed at the next "new" and at the end.
+// memory: the values a request builds (nt_value) are handed to the scheduler, which holds its own; the
+// request's hold is never let go, so the leak checker is told (below). Each line ends with a sweep
+// (sc_sweep). The scheduler is freed at the next "new" and at the end.
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
 #include <stdio.h>

@@ -480,10 +480,18 @@ static entry *entry_new(doc *d, const seal_unsealed *u, const uint8_t *bytes, si
 	memcpy(e->name, u->name, 32);
 	memcpy(e->stored, u->stored, 32);
 	e->blop = u->blop;
+	// a blop this device put straight into the chains (transport_take), sealed and added since: the one
+	// kept decoded, held twice (jsonRef), not two copies. Looked for among the last few taken
+	for (size_t i = d->direct_count, looked = 0; i-- > 0 && looked < 64; looked++)
+		if (memcmp(d->direct[i].name, u->name, 32) == 0) {
+			jsonFree(u->blop);
+			e->blop = jsonRef(d->direct[i].blop);
+			break;
+		}
 	e->sealed = grab(length);
 	memcpy(e->sealed, bytes, length);
 	e->length = length;
-	e->lamport = (int64_t)jsonGet(u->blop, "lamport")->number;
+	e->lamport = (int64_t)jsonGet(e->blop, "lamport")->number;
 	d->all = more(d->all, d->all_count, &d->all_room, sizeof *d->all);
 	d->all[d->all_count++] = e;
 	return e;

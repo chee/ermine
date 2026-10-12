@@ -1478,7 +1478,10 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 		if (e) return e;
 	}
 	const char *pid;
-	e = from_gr(s, gr_make(s->g, op->id, nt_null(), 1, &who, &pid));
+	// its node's value: the graph holds it, ours goes at the next sweep
+	nt_value *null = nt_null();
+	gr_later(s->g, null);
+	e = from_gr(s, gr_make(s->g, op->id, null, 1, &who, &pid));
 	if (e) return e;
 	gr_own(s->g, pid, NULL);
 	sc_proc *p = amem(s, sizeof *p);
