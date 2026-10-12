@@ -572,13 +572,11 @@ static void answer(nt_value *q) {
 		nt_set(change, "node", nt_str(node.id));
 		const nt_value *tell = nt_get(q, "patched");
 		int telling = tell && tell->type == NT_BOOL && tell->bool_;
-		const nt_value *units = nt_get(q, "utf16");
-		int utf16 = units && units->type == NT_BOOL && units->bool_;
 		told t = {grab((n + 1) * sizeof *t.facts), 0};
 		mu_patched hearing = {hear, &t};
 		mu_alloc alloc = {plain, NULL};
 		size_t at = 0;
-		int code = mu_mutate_units(&node, which, patches, n, change, &alloc, telling ? &hearing : NULL, &at, utf16);
+		int code = mu_mutate(&node, which, patches, n, change, &alloc, telling ? &hearing : NULL, &at);
 		if (code != MU_OK) {
 			nt_free(change);
 			printf("{\"fail\":\"%s\",\"patch\":%zu}\n", mu_code_name(code), at);

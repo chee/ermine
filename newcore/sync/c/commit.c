@@ -57,13 +57,14 @@ static bool same(part a, part b) {
 	return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
 }
 
-// the site shareable: a local path relative to the nearest root, else its last part; others kept
+// the site shareable: a local path relative to the nearest root, else its last part; others kept.
+// One hold of it the caller's
 static Json *share(const Json *site, const char *const *roots, size_t count) {
 	const char *file = jsonText(jsonGet(site, "file"));
 	parts path;
-	if (file == NULL || !local(file, &path)) return (Json *)site;
+	if (file == NULL || !local(file, &path)) return jsonRef((Json *)site);
 	// no parts at all ("/", "file://"): kept as it is
-	if (path.count == 0) return free(path.items), (Json *)site;
+	if (path.count == 0) return free(path.items), jsonRef((Json *)site);
 	size_t best = 0;
 	bool found = false;
 	for (size_t i = 0; i < count; i++) {
@@ -149,16 +150,17 @@ Json *commit_make(chains *c, const Json *change, commit_at at, const char *const
 		if (l > lamport) lamport = l;
 	}
 
+	// what it shares of the change, held
 	Json *blop = jsonObject();
-	jsonAdd(blop, "node", jsonGet(change, "node"));
-	jsonAdd(blop, "object", (Json *)object);
+	jsonAdd(blop, "node", jsonRef(jsonGet(change, "node")));
+	jsonAdd(blop, "object", jsonRef((Json *)object));
 	const Json *actor = jsonGet(header, "actor"), *reader = jsonGet(header, "reader"),
 		*site = jsonGet(header, "site"), *cause = jsonGet(header, "cause");
-	jsonAdd(blop, "actor", actor ? (Json *)actor : jsonNull());
-	if (reader) jsonAdd(blop, "reader", (Json *)reader);
+	jsonAdd(blop, "actor", actor ? jsonRef((Json *)actor) : jsonNull());
+	if (reader) jsonAdd(blop, "reader", jsonRef((Json *)reader));
 	if (site) jsonAdd(blop, "site", share(site, roots, count));
-	if (cause) jsonAdd(blop, "cause", (Json *)cause);
-	jsonAdd(blop, "signer", jsonGet(change, "signer"));
+	if (cause) jsonAdd(blop, "cause", jsonRef((Json *)cause));
+	jsonAdd(blop, "signer", jsonRef(jsonGet(change, "signer")));
 	uint8_t nonce[8];
 	random(context, 8, nonce);
 	jsonAdd(blop, "nonce", jsonBytes(nonce, 8));
@@ -174,7 +176,7 @@ Json *commit_make(chains *c, const Json *change, commit_at at, const char *const
 		jsonAdd(patch, "path", jsonArray());
 		jsonPush(patches, patch);
 		jsonAdd(blop, "patches", patches);
-	} else jsonAdd(blop, "patches", jsonGet(change, "patches"));
+	} else jsonAdd(blop, "patches", jsonRef(jsonGet(change, "patches")));
 	free(parents);
 	free(all);
 	*code = COMMIT_OK;

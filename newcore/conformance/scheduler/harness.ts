@@ -35,9 +35,9 @@ import { code, json, operate, version } from "./normal.ts"
 import { load, program } from "./steps.ts"
 
 // SCHEDULER=push or alien: the push-pull schedulers (push.ts, alien.ts)
-const createScheduler =
-	({ push, alien } as Record<string, typeof reference>)[Deno.env.get("SCHEDULER") ?? ""] ??
-		reference
+const createScheduler = ({ push, alien } as unknown as Record<string, typeof reference>)[
+	Deno.env.get("SCHEDULER") ?? ""
+] ?? reference
 type S = ReturnType<typeof reference>
 
 let moments: unknown[] = []

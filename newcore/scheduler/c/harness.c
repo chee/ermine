@@ -490,6 +490,8 @@ int main(void) {
 		puts(b.s);
 		fflush(stdout);
 		free(b.s);
+		// nothing the scheduler gave is held past a line: what it let go of goes
+		sc_sweep(sched);
 	}
 	free(line);
 	sc_free(sched);

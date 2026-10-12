@@ -86,12 +86,4 @@ nd_list *mu_list_to(const nt_value *list, const mu_alloc *alloc);
 int mu_mutate(nd_node *node, mu_which which, const nt_patch *patches, size_t n, const void *change,
 	const mu_alloc *alloc, const mu_patched *patched, size_t *failed);
 
-// as mu_mutate, utf16 set: string positions and lengths count UTF-16 units, as JavaScript's own,
-// not code points (mutate.ts's utf16, an experiment; not the change's). A string is UTF-8, a
-// lone surrogate WTF-8 (ED A0..BF xx): a position inside a four-byte character cuts it into its two
-// halves, and a lone high met by a lone low is one character again, in either count
-int mu_mutate_units(nd_node *node, mu_which which, const nt_patch *patches, size_t n,
-	const void *change, const mu_alloc *alloc, const mu_patched *patched, size_t *failed,
-	int utf16);
-
 #endif

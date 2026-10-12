@@ -316,8 +316,7 @@ static void answer(void) {
 	size_t n;
 	if (!strcmp(o, "squish")) {
 		sq_patch *ps = patches_of(get(r, "patches"), &n);
-		const node *u = get(r, "utf16");
-		sq *s = sq_new_units(u && u->type == 'v' && !strcmp(u->text, "true"));
+		sq *s = sq_new();
 		for (size_t i = 0; i < n; i++) sq_push(s, &ps[i]);
 		const sq_patch *out = sq_patches(s, &n);
 		fputs("{\"patches\":", stdout);

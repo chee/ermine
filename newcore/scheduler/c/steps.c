@@ -252,7 +252,10 @@ static const sc_error *call_closure(sc_fn *self, sc_given *g, nt_value **out, in
 	sc_sched *s = c->env->s;
 	sc_given merged;
 	if (c->merge) {
+		// the maker's fields, read; what calls the scheduler is the cleanup's own (the maker's is gone)
 		merged = c->maker;
+		merged.ctx = g->ctx;
+		merged.peep = g->peep;
 		merged.api = g->api;
 		merged.has_killed = g->has_killed;
 		merged.killed = g->killed;
@@ -275,7 +278,8 @@ static closure *closure_new(st_env *env, const nt_value *steps, const vars *snap
 	closure *c = sc_alloc(env->s, sizeof *c);
 	c->fn.call = call_closure;
 	c->env = env;
-	c->steps = steps;
+	// the steps are part of a value: held as long as the closure (never let go)
+	c->steps = nt_ref((nt_value *)steps);
 	if (snap) c->snapshot = vars_copy(env->s, snap);
 	return c;
 }
@@ -542,7 +546,16 @@ static const sc_error *steps_run(rctx *r, const nt_value *list, int *flow) {
 		} else if (!strcmp(what, "cleanup")) {
 			closure *c = closure_new(r->env, nt_get(st, "steps"), r->vars);
 			c->merge = 1;
+			// the maker's given outlives its call: what it points to that is scratch, kept
 			c->maker = *r->g;
+			nt_ref(c->maker.value);
+			nt_ref(c->maker.previous);
+			nt_ref(c->maker.args);
+			c->maker.marks = NULL;
+			if (r->g->by) {
+				c->maker.by = sc_alloc(s, (r->g->nby + 1) * sizeof *c->maker.by);
+				memcpy(c->maker.by, r->g->by, r->g->nby * sizeof *c->maker.by);
+			}
 			e = sc_given_cleanup(r->g, &c->fn);
 			if (e) return e;
 		} else if (!strcmp(what, "start")) {

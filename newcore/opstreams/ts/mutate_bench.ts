@@ -160,49 +160,35 @@ for (const name of ["typing", "appending", "puts", "moves"]) {
 	})
 }
 
-// strings: positions as code points (walked) against UTF-16 units (JavaScript's own)
-// ASCII: the same patches either way. emoji typing: each count its own positions
-const emoji = (step: number): Patch[] =>
-	Array.from({ length: N }, (_, i) => ({ path: ["t"], range: [i * step, i * step], value: "😀" }))
-const strings: Record<string, [Work, Work]> = {
-	typing: [work.typing, work.typing],
-	fixing: [work.fixing, work.fixing],
-	scattered: [work.scattered, work.scattered],
-	"typing emoji": [{ start: () => ({ t: "" }), patches: emoji(1) }, {
-		start: () => ({ t: "" }),
-		patches: emoji(2),
-	}],
+// strings: positions as code points, walked. emoji typing: every character is four bytes
+const emoji: Patch[] = Array.from(
+	{ length: N },
+	(_, i) => ({ path: ["t"], range: [i, i], value: "😀" }),
+)
+const strings: Record<string, Work> = {
+	typing: work.typing,
+	fixing: work.fixing,
+	scattered: work.scattered,
+	"typing emoji": { start: () => ({ t: "" }), patches: emoji },
 }
-for (const [name, [points, units]] of Object.entries(strings)) {
-	assertEquals(
-		viaMutate(points),
-		(() => {
-			const n = node(units.start())
-			mutate(n, "value", units.patches, { ...by, utf16: true })
-			return n.value[0].content
-		})(),
-		name,
-	)
-	const group = `${name}: code points or utf16`
-	const runs: [string, Work, boolean][] = [["code points", points, false], ["utf16", units, true]]
-	for (const [count, w, utf16] of runs) {
-		Deno.bench(`${name}: mutate, ${count}`, { group, baseline: !utf16 }, (b) => {
-			const n = node(w.start())
-			b.start()
-			mutate(n, "value", w.patches, { ...by, utf16 })
-			b.end()
-		})
-		Deno.bench(`${name}: mutate, patched, ${count}`, { group }, (b) => {
-			const n = node(w.start())
-			b.start()
-			mutate(n, "value", w.patches, { ...by, utf16, patched: () => {} })
-			b.end()
-		})
-		Deno.bench(`${name}: cabbages, ${count}`, { group }, (b) => {
-			let root = w.start()
-			b.start()
-			for (const p of w.patches) root = apply(root, p, utf16)
-			b.end()
-		})
-	}
+for (const [name, w] of Object.entries(strings)) {
+	const group = `${name}: strings`
+	Deno.bench(`${name}: mutate`, { group, baseline: true }, (b) => {
+		const n = node(w.start())
+		b.start()
+		mutate(n, "value", w.patches, by)
+		b.end()
+	})
+	Deno.bench(`${name}: mutate, patched`, { group }, (b) => {
+		const n = node(w.start())
+		b.start()
+		mutate(n, "value", w.patches, { ...by, patched: () => {} })
+		b.end()
+	})
+	Deno.bench(`${name}: cabbages`, { group }, (b) => {
+		let root = w.start()
+		b.start()
+		for (const p of w.patches) root = apply(root, p)
+		b.end()
+	})
 }

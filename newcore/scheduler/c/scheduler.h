@@ -3,8 +3,23 @@
 // does. It sits on the graph (graph/c/graph.h), as scheduler.ts on graph.ts: the graph reads,
 // writes, places, tracks and tells; the scheduler runs processes. The host's interface is below.
 //
-// memory: an arena per scheduler, and the graph's, freed by sc_free. Values (nt_value) are made with notify's
-// constructors and shared between versions by mutate, so nothing owns them: they are not freed.
+// memory: values are held (notify.h: nt_ref, nt_free) and let go when nothing holds them; the graph
+// holds what its nodes hold (graph.h, memory).
+//   - Given: a value given to a call (args, patches, values to write or create) is borrowed: whoever
+//     keeps it takes its own hold, so the caller lets go of its own when done. A part's value (what
+//     a compute, setup or handler gives back) is lent the same way: the scheduler holds the last
+//     value and the one an effect saw, the graph the versions made of it; the part's own hold, if
+//     it made the value, is never let go (it may give back a value it only reads), unless it sets
+//     sc_given's hands: then it is let go at the next sweep (a handler's, given to the host by
+//     sc_call, too).
+//   - A process's status, last value and marks (the changes that marked it, gr_change_hold) are
+//     held while it runs, and let go of when replaced, taken by a run, or when it ends.
+//   - A run, and everything a request made for it (agents, interfaces, causes, its reads and
+//     errors), is scratch, gone when the request ends: what a part was given is good for the call.
+//   - What the host's interface gives back (items, names, errors, the version contents read) is
+//     good until the host calls sc_sweep, which also lets go of what was let go since the last
+//     sweep. A host that never sweeps keeps all of it, as before.
+// sc_alloc and sc_dup are kept until sc_free, as are the processes.
 // Everything is single threaded; there is no async, so a compute cannot return a promise.
 //
 // values: nt_value. A live value (a function a process placed as a handler) is an nt_value of
@@ -38,7 +53,7 @@ typedef struct sc_error {
 	int scheduler;
 } sc_error;
 
-// a fresh error in the scheduler's arena. scheduler: its message is "code: message"
+// a fresh error, in scratch (memory, above). scheduler: its message is "code: message"
 const sc_error *sc_error_new(sc_sched *s, const char *code, const char *message, int scheduler);
 
 // what a function is: called with what a part is given; sets *out to its value (NULL: none) or
@@ -149,6 +164,9 @@ typedef struct {
 
 sc_sched *sc_new(const sc_options *o);
 void sc_free(sc_sched *s);
+// the host's scratch freed, and what was let go of since the last sweep let go now (gr_sweep): call
+// it where nothing the host's interface gave is still in use (a turn of the host's loop)
+void sc_sweep(sc_sched *s);
 // the scheduler's arena for protect: a may made with pr_rules and the like belongs there
 pr_arena *sc_pr_arena(sc_sched *s);
 void *sc_alloc(sc_sched *s, size_t n);
@@ -259,6 +277,9 @@ struct sc_given {
 	size_t nby;
 	void *user; // the part's own (steps)
 	const sc_change **marks; // a compute's: the changes that marked it (by's times, whole)
+	// the part's to set: the value it gives comes with its hold, let go of once the scheduler is done
+	// with it (memory, above); 0: lent, as before
+	int hands;
 };
 
 #endif

@@ -252,58 +252,33 @@ Deno.test("mutate: facts as notify makes them from the content", () => {
 				return { path: ["l", rand(l.length + 1)], value: 7 }
 		}
 	}
-	// code points, then UTF-16 units (an emoji may be split there: allowed)
-	for (const utf16 of [false, true]) {
-		for (let seed = 1; seed <= 40; seed++) {
-			x = seed
-			const count = { ...by, utf16 }
-			const n = createNode<unknown, Change>("a", {
-				value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
-			})
-			const ps: Patch[] = [], befores: unknown[] = []
-			// one change each, to have each content before; patches that fail are left out
-			for (let step = 0; step < 30; step++) {
-				const v = n.value[0].content as Record<string, unknown>
-				const p = patch(v)
-				try {
-					mutate(n, "value", [p], count)
-					ps.push(p), befores.push(v)
-				} catch (e) {
-					if (!(e instanceof MutateError)) throw e
-				}
+	for (let seed = 1; seed <= 40; seed++) {
+		x = seed
+		const n = createNode<unknown, Change>("a", {
+			value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
+		})
+		const ps: Patch[] = [], befores: unknown[] = []
+		// one change each, to have each content before; patches that fail are left out
+		for (let step = 0; step < 30; step++) {
+			const v = n.value[0].content as Record<string, unknown>
+			const p = patch(v)
+			try {
+				mutate(n, "value", [p], by)
+				ps.push(p), befores.push(v)
+			} catch (e) {
+				if (!(e instanceof MutateError)) throw e
 			}
-			const m = createNode<unknown, Change>("a", {
-				value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
-			})
-			const told: Facts[] = []
-			mutate(m, "value", ps, { ...count, patched: (_p, f) => told.push(f) })
-			assertEquals(m.value[0].content, n.value[0].content, `seed ${seed}`)
-			ps.forEach((p, i) =>
-				assertEquals(
-					told[i],
-					facts(p, befores[i], { utf16 }),
-					`utf16 ${utf16} seed ${seed} ${JSON.stringify(p)}`,
-				)
-			)
 		}
+		const m = createNode<unknown, Change>("a", {
+			value: at({ l: [1, 2, 3], s: "ab", m: { a: 1 } }),
+		})
+		const told: Facts[] = []
+		mutate(m, "value", ps, { ...by, patched: (_p, f) => told.push(f) })
+		assertEquals(m.value[0].content, n.value[0].content, `seed ${seed}`)
+		ps.forEach((p, i) =>
+			assertEquals(told[i], facts(p, befores[i]), `seed ${seed} ${JSON.stringify(p)}`)
+		)
 	}
-})
-
-Deno.test("mutate: utf16 counts UTF-16 units, and is not the change's", () => {
-	const n = createNode<unknown, Change>("a", { value: at({ s: "a😀b" }) })
-	const told: Facts[] = []
-	const c = mutate(n, "value", [{ path: ["s"], range: [3, 4] }], {
-		...by,
-		utf16: true,
-		patched: (_p, f) => told.push(f),
-	})
-	assertEquals(n.value[0].content, { s: "a😀" })
-	assertEquals(told[0].place.length, 4)
-	assertEquals("utf16" in c, false)
-	assertEquals(
-		code(() => mutate(n, "value", [{ path: ["s"], range: [0, 4] }], { ...by, utf16: true })),
-		"range",
-	)
 })
 
 // found by the audit of 10-11
@@ -326,22 +301,6 @@ Deno.test("mutate: the facts of moving the whole onto itself are notify's", () =
 	const p: Patch = { path: [], move: { path: [] } }
 	mutate(n, "value", [p], { ...by, patched: (_p, f) => told.push(f) })
 	assertEquals(told, [facts(p, { x: 1 })])
-})
-
-Deno.test("mutate and notify, both utf16: spans read in UTF-16 units", () => {
-	const n = createNode<unknown, Change>("a", { value: at({ s: "a😀bc" }) })
-	const notify = createNotify(() => n.value[0].content, { utf16: true })
-	const b = notify.read(["s", [3, 4]])
-	assertEquals(b.value, "b")
-	const heard: [string, unknown][] = []
-	b.on((kind) => heard.push([kind, b.value]))
-	mutate(n, "value", [{ path: ["s"], range: [3, 4], value: "B" }], {
-		...by,
-		utf16: true,
-		patched: (p, f) => notify.patched(p, f),
-	})
-	assertEquals(n.value[0].content, { s: "a😀Bc" })
-	assertEquals(heard, [["value", "B"]])
 })
 
 // many string patches in one change walk from what the last left (walk.ts near): the same end as

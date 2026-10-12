@@ -1145,6 +1145,8 @@ int main(void) {
 		puts(b.s);
 		fflush(stdout);
 		free(b.s);
+		// nothing the graph gave is held past a line: what it let go of goes
+		if (g) gr_sweep(g);
 	}
 	free(line);
 	gr_free(g);

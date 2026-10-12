@@ -13,7 +13,7 @@
 #include <string.h>
 
 
-// memory: an arena, and growing things in it
+// memory (scheduler.h says the rules): arenas, and growing things
 
 typedef struct block {
 	struct block *next;
@@ -50,6 +50,7 @@ static void *aalloc(arena *a, size_t n) {
 	return p;
 }
 
+// every block given back: what was in it is gone (the sanitizers see a use after)
 static void afree(arena *a) {
 	while (a->head) {
 		block *b = a->head;
@@ -60,12 +61,19 @@ static void afree(arena *a) {
 	a->left = 0;
 }
 
+static void *regrow(void *p, size_t n) {
+	p = realloc(p, n ? n : 1);
+	if (!p) die("out of memory");
+	return p;
+}
+
+// a growing list: vpush on the heap (kept: free v when done), tpush in scratch (gone with it)
 typedef struct {
 	void **v;
 	size_t n, cap;
 } vec;
 
-// ordered maps by string: insertion order, deleting and setting again moves to the end
+// ordered maps by string, on the heap: insertion order, deleting and setting again moves to the end
 typedef struct {
 	const char *key; // NULL: deleted
 	void *val;
@@ -100,6 +108,7 @@ struct sc_step {
 // an actor of the scheduler's shape (SCHEDULER.tex, What a process acts as). pr: as protect and
 // the graph see it, made once (a copy starts without)
 struct sc_agent {
+	int kept; // made by sc_agent_of, kept as long as the scheduler: its pr kept too
 	pr_value actor;
 	int has_peer, has_person, has_trusted;
 	pr_value peer, person;
@@ -187,6 +196,7 @@ struct sc_proc {
 	int state; // 0 running, 1 killing, 2 gone
 	int busy;
 	gr_reader *track; // what it reads tracked through
+	int64_t due; // when due, its time (the due map points here)
 };
 
 enum { RUNNING, KILLING, GONE };
@@ -256,7 +266,12 @@ typedef struct {
 } sc_kill;
 
 struct sc_sched {
-	arena a;
+	arena a; // kept as long as the scheduler
+	arena req, hosts; // scratch: a request's (gone at its end), the host's (gone at sc_sweep)
+	pr_arena preq, phost;
+	int inside; // a request runs: scratch is its
+	vec all; // sc_proc *, every one made
+	vec dead; // sc_kept * let go of, freed when the request ends
 	gr_graph *g;
 	// a run's agent with its status: the last made, again while the process, run and status are
 	struct {
@@ -309,20 +324,41 @@ char *sc_dup(sc_sched *s, const char *str) {
 void *sc_alloc(sc_sched *s, size_t n) { return amem(s, n); }
 pr_arena *sc_pr_arena(sc_sched *s) { return &s->pra; }
 
-static void vpush(sc_sched *s, vec *v, void *x) {
+// scratch: the request's while one runs, else the host's
+static void *tmem(sc_sched *s, size_t n) { return aalloc(s->inside ? &s->req : &s->hosts, n); }
+static pr_arena *tpra(sc_sched *s) { return s->inside ? &s->preq : &s->phost; }
+static char *tdup(sc_sched *s, const char *str) {
+	size_t n = strlen(str) + 1;
+	return memcpy(tmem(s, n), str, n);
+}
+
+static void vpush(vec *v, void *x) {
+	if (v->n == v->cap) {
+		v->cap = v->cap ? v->cap * 2 : 4;
+		v->v = regrow(v->v, v->cap * sizeof *v->v);
+	}
+	v->v[v->n++] = x;
+}
+static void tpush(sc_sched *s, vec *v, void *x) {
 	if (v->n == v->cap) {
 		size_t cap = v->cap ? v->cap * 2 : 4;
-		void **nv = amem(s, cap * sizeof *nv);
+		void **nv = tmem(s, cap * sizeof *nv);
 		if (v->n) memcpy(nv, v->v, v->n * sizeof *nv);
 		v->v = nv;
 		v->cap = cap;
 	}
 	v->v[v->n++] = x;
 }
+// a scratch copy
 static vec vcopy(sc_sched *s, const vec *v) {
 	vec c = {0};
-	for (size_t i = 0; i < v->n; i++) vpush(s, &c, v->v[i]);
+	for (size_t i = 0; i < v->n; i++) tpush(s, &c, v->v[i]);
 	return c;
+}
+// a kept list made what from holds
+static void vkeep(vec *to, const vec *from) {
+	to->n = 0;
+	for (size_t i = 0; i < from->n; i++) vpush(to, from->v[i]);
 }
 static void vdel(vec *v, size_t i) {
 	memmove(&v->v[i], &v->v[i + 1], (v->n - i - 1) * sizeof *v->v);
@@ -338,9 +374,9 @@ static long sfind(const vec *v, const char *x) {
 		if (!strcmp(v->v[i], x)) return (long)i;
 	return -1;
 }
-// a vec of strings as a set
+// a vec of strings as a set, in scratch
 static void sadd(sc_sched *s, vec *v, const char *x) {
-	if (sfind(v, x) < 0) vpush(s, v, (void *)x);
+	if (sfind(v, x) < 0) tpush(s, v, (void *)x);
 }
 
 static size_t hashs(const char *k) {
@@ -349,7 +385,7 @@ static size_t hashs(const char *k) {
 	return h;
 }
 
-static void om_reindex(sc_sched *s, omap *m) {
+static void om_reindex(omap *m) {
 	size_t live = 0;
 	for (size_t i = 0; i < m->n; i++) {
 		if (!m->e[i].key) continue;
@@ -359,7 +395,9 @@ static void om_reindex(sc_sched *s, omap *m) {
 	size_t slots = 16;
 	while (slots < 4 * (m->cap ? m->cap : 4)) slots *= 2;
 	m->slots = slots;
-	m->idx = amem(s, slots * sizeof *m->idx);
+	free(m->idx);
+	m->idx = calloc(slots, sizeof *m->idx);
+	if (!m->idx) die("out of memory");
 	for (size_t i = 0; i < m->n; i++) {
 		size_t h = hashs(m->e[i].key) & (slots - 1);
 		while (m->idx[h]) h = (h + 1) & (slots - 1);
@@ -381,7 +419,7 @@ static void *om_get(const omap *m, const char *key) {
 }
 static int om_has(const omap *m, const char *key) { return om_find(m, key) >= 0; }
 // key must outlive the map
-static void om_set(sc_sched *s, omap *m, const char *key, void *val) {
+static void om_set(omap *m, const char *key, void *val) {
 	long i = om_find(m, key);
 	if (i >= 0) {
 		m->e[i].val = val;
@@ -389,20 +427,24 @@ static void om_set(sc_sched *s, omap *m, const char *key, void *val) {
 	}
 	if (m->n == m->cap) {
 		size_t cap = m->live * 2 > 4 ? m->live * 2 : 4;
-		ent *ne = amem(s, cap * sizeof *ne);
 		size_t k = 0;
 		for (size_t j = 0; j < m->n; j++)
-			if (m->e[j].key) ne[k++] = m->e[j];
-		m->e = ne;
+			if (m->e[j].key) m->e[k++] = m->e[j];
 		m->n = k;
+		m->e = regrow(m->e, cap * sizeof *m->e);
 		m->cap = cap;
-		om_reindex(s, m);
+		om_reindex(m);
 	}
 	m->e[m->n] = (ent){key, val};
 	size_t h = hashs(key) & (m->slots - 1);
 	while (m->idx[h] && m->idx[h] != TOMB) h = (h + 1) & (m->slots - 1);
 	m->idx[h] = ++m->n;
 	m->live++;
+}
+static void om_free(omap *m) {
+	free(m->e);
+	free(m->idx);
+	*m = (omap){0};
 }
 static void om_del(omap *m, const char *key) {
 	if (!m->slots) return;
@@ -422,10 +464,12 @@ static void om_del(omap *m, const char *key) {
 
 #define LIVE_TAG ((size_t)0x11fe)
 
+// held for good: a live value is never freed (its keys are no keys)
 nt_value *sc_live(sc_fn *f) {
 	nt_value *v = nt_null();
 	v->count = LIVE_TAG;
 	v->keys = (char **)(void *)f;
+	v->refs = (size_t)1 << (sizeof(size_t) * 4);
 	return v;
 }
 sc_fn *sc_live_fn(const nt_value *v) {
@@ -472,13 +516,13 @@ static int same_value(const nt_value *a, const nt_value *b) {
 // errors
 
 const sc_error *sc_error_new(sc_sched *s, const char *code, const char *message, int scheduler) {
-	sc_error *e = amem(s, sizeof *e);
+	sc_error *e = tmem(s, sizeof *e);
 	e->name = "Error";
 	e->code = code;
 	e->scheduler = scheduler;
 	if (scheduler && message) {
 		size_t n = strlen(code) + strlen(message) + 3;
-		char *m = amem(s, n);
+		char *m = tmem(s, n);
 		snprintf(m, n, "%s: %s", code, message);
 		e->message = m;
 	} else e->message = message ? message : code;
@@ -521,47 +565,50 @@ const char sc_status_because[] = "scheduler:status";
 
 const sc_agent *sc_agent_of(sc_sched *s, const char *actor) {
 	sc_agent *a = amem(s, sizeof *a);
+	a->kept = 1;
 	a->actor = pr_lit(sc_dup(s, actor));
 	return a;
 }
 const sc_agent *sc_agent_with(sc_sched *s, const sc_agent *a, const char *person, int has_trusted,
 	int trusted) {
-	sc_agent *c = amem(s, sizeof *c);
+	sc_agent *c = tmem(s, sizeof *c);
 	*c = *a;
+	c->kept = 0;
 	c->pr = NULL;
-	if (person) c->has_person = 1, c->person = pr_lit(sc_dup(s, person));
+	if (person) c->has_person = 1, c->person = pr_lit(tdup(s, person));
 	if (has_trusted) c->has_trusted = 1, c->trusted = trusted;
 	return c;
 }
 
-// the agent as protect sees an actor
-static pr_value agent_pr(sc_sched *s, const sc_agent *a) {
+// the agent as protect sees an actor, in ar
+static pr_value agent_pr(pr_arena *ar, const sc_agent *a) {
 	pr_value m = pr_map();
-	pr_put(&s->pra, &m, "actor", a->actor);
-	if (a->has_peer) pr_put(&s->pra, &m, "peer", a->peer);
-	if (a->has_person) pr_put(&s->pra, &m, "person", a->person);
-	if (a->has_trusted) pr_put(&s->pra, &m, "trusted", pr_bool(a->trusted));
+	pr_put(ar, &m, "actor", a->actor);
+	if (a->has_peer) pr_put(ar, &m, "peer", a->peer);
+	if (a->has_person) pr_put(ar, &m, "person", a->person);
+	if (a->has_trusted) pr_put(ar, &m, "trusted", pr_bool(a->trusted));
 	pr_value code = pr_list();
 	for (size_t i = 0; i < a->ncode; i++) {
 		const sc_step *st = &a->code[i];
 		pr_value x = pr_map();
-		if (st->process) pr_put(&s->pra, &x, "process", pr_lit(st->process));
+		if (st->process) pr_put(ar, &x, "process", pr_lit(st->process));
 		if (st->prog_node) {
 			pr_value pg = pr_map();
-			pr_put(&s->pra, &pg, "node", pr_lit(st->prog_node));
-			pr_put(&s->pra, &pg, "time", pr_num((double)st->prog_time));
-			pr_put(&s->pra, &x, "program", pg);
+			pr_put(ar, &pg, "node", pr_lit(st->prog_node));
+			pr_put(ar, &pg, "time", pr_num((double)st->prog_time));
+			pr_put(ar, &x, "program", pg);
 		}
-		pr_push(&s->pra, &code, x);
+		pr_push(ar, &code, x);
 	}
-	pr_put(&s->pra, &m, "code", code);
+	pr_put(ar, &m, "code", code);
 	return m;
 }
-// the agent as the graph is given it, made once
+// the agent as the graph is given it, made once: as long as the agent is (kept, or scratch)
 static const pr_value *actor_of(sc_sched *s, const sc_agent *a) {
 	if (!a->pr) {
-		pr_value *v = pr_alloc(&s->pra, sizeof *v);
-		*v = agent_pr(s, a);
+		pr_arena *ar = a->kept ? &s->pra : tpra(s);
+		pr_value *v = pr_alloc(ar, sizeof *v);
+		*v = agent_pr(ar, a);
 		((sc_agent *)a)->pr = v;
 	}
 	return a->pr;
@@ -570,10 +617,11 @@ static const pr_value *actor_of(sc_sched *s, const sc_agent *a) {
 // the agent of a process for a step of its own
 static const sc_agent *agent_of(sc_sched *s, sc_proc *p, long run, const nt_value *status,
 	const char *handler, int cleanup) {
-	sc_agent *a = amem(s, sizeof *a);
+	sc_agent *a = tmem(s, sizeof *a);
 	*a = p->base;
+	a->kept = 0;
 	a->pr = NULL;
-	sc_step *code = amem(s, (p->nprefix + 1) * sizeof *code);
+	sc_step *code = tmem(s, (p->nprefix + 1) * sizeof *code);
 	if (p->nprefix) memcpy(code, p->prefix, p->nprefix * sizeof *code);
 	sc_step *st = &code[p->nprefix];
 	st->process = p->id;
@@ -600,10 +648,11 @@ static const sc_agent *agent_at(sc_sched *s, sc_proc *p, long n, const nt_value 
 
 // the agent with fields added to its last step; an empty code becomes that one step
 static const sc_agent *stepped_kill(sc_sched *s, const sc_agent *a, const char *kill) {
-	sc_agent *c = amem(s, sizeof *c);
+	sc_agent *c = tmem(s, sizeof *c);
 	*c = *a;
+	c->kept = 0;
 	c->pr = NULL;
-	sc_step *code = amem(s, (a->ncode ? a->ncode : 1) * sizeof *code);
+	sc_step *code = tmem(s, (a->ncode ? a->ncode : 1) * sizeof *code);
 	if (a->ncode) memcpy(code, a->code, a->ncode * sizeof *code);
 	code[a->ncode ? a->ncode - 1 : 0].kill = kill;
 	c->code = code;
@@ -619,23 +668,25 @@ const sc_change *sc_change_new(sc_sched *s, int64_t time, const char *node) {
 	return gr_change_new(s->g, time, actor_of(s, s->host_actor), node);
 }
 
-// a change the scheduler tells of itself: a mark's, a kill's
-static sc_change *change_at(sc_sched *s, const sc_agent *actor, const char *reader, int64_t time,
-	const char *node, gr_where where, const char *name) {
-	sc_change *c = amem(s, sizeof *c);
-	c->time = time;
-	c->actor = actor_of(s, actor);
-	c->reader = reader;
-	c->node = node;
-	c->where = where;
-	c->name = name;
-	return c;
+// a change the scheduler tells of itself: a mark's, a kill's. The graph's (a copy), held until the
+// next sweep: what keeps it holds it (gr_change_hold)
+static const sc_change *change_at(sc_sched *s, const sc_agent *actor, const char *reader,
+	int64_t time, const char *node, gr_where where, const char *name, const pr_value *cause) {
+	sc_change c = {0};
+	c.time = time;
+	c.actor = actor_of(s, actor);
+	c.reader = reader;
+	c.node = node;
+	c.where = where;
+	c.name = name;
+	c.cause = cause;
+	return gr_change_copy(s->g, &c);
 }
 
 // a cause as the graph keeps it
 static const pr_value *cause_pr(sc_sched *s, const char *cause) {
 	if (!cause) return NULL;
-	pr_value *v = pr_alloc(&s->pra, sizeof *v);
+	pr_value *v = pr_alloc(tpra(s), sizeof *v);
 	*v = pr_lit(cause);
 	return v;
 }
@@ -657,7 +708,7 @@ typedef struct {
 static void asks_add(sc_sched *s, asks_t *a, pr_ask x) {
 	if (a->n == a->cap) {
 		size_t cap = a->cap ? a->cap * 2 : 8;
-		pr_ask *nv = pr_alloc(&s->pra, cap * sizeof *nv);
+		pr_ask *nv = pr_alloc(tpra(s), cap * sizeof *nv);
 		if (a->n) memcpy(nv, a->v, a->n * sizeof *nv);
 		a->v = nv;
 		a->cap = cap;
@@ -668,9 +719,9 @@ static void asks_addall(sc_sched *s, asks_t *a, pr_asks x) {
 	for (size_t i = 0; i < x.n; i++) asks_add(s, a, x.items[i]);
 }
 static pr_asks route_asks(sc_sched *s, const pl_step *route, size_t n) {
-	pr_step *st = pr_alloc(&s->pra, (n ? n : 1) * sizeof *st);
+	pr_step *st = pr_alloc(tpra(s), (n ? n : 1) * sizeof *st);
 	for (size_t i = 0; i < n; i++) st[i] = (pr_step){route[i].node, route[i].name};
-	return pr_pass(&s->pra, st, n);
+	return pr_pass(tpra(s), st, n);
 }
 static const sc_error *asking(sc_sched *s, const sc_agent *agent, const asks_t *as, const char *op) {
 	return from_gr(s, gr_asking(s->g, actor_of(s, agent), as->v, as->n, op));
@@ -692,7 +743,7 @@ static const sc_error *reach(sc_sched *s, const char *const *place, size_t nplac
 // causes and loops
 
 static sc_cause *cause_new(sc_sched *s, const char *id, sc_cause **parents, size_t n) {
-	sc_cause *c = amem(s, sizeof *c);
+	sc_cause *c = tmem(s, sizeof *c);
 	c->id = id;
 	c->parents = parents;
 	c->n = n;
@@ -700,11 +751,11 @@ static sc_cause *cause_new(sc_sched *s, const char *id, sc_cause **parents, size
 }
 // the causes from c down, each once
 static void cause_walk(sc_sched *s, sc_cause *c, vec *seen) {
-	vpush(s, seen, c);
+	tpush(s, seen, c);
 	for (size_t i = 0; i < seen->n; i++) {
 		sc_cause *x = seen->v[i];
 		for (size_t k = 0; k < x->n; k++)
-			if (vfind(seen, x->parents[k]) < 0) vpush(s, seen, x->parents[k]);
+			if (vfind(seen, x->parents[k]) < 0) tpush(s, seen, x->parents[k]);
 	}
 }
 static int caused(sc_sched *s, sc_cause *c, const char *id) {
@@ -725,16 +776,11 @@ static void ids_of(sc_sched *s, sc_cause *c, vec *out) {
 
 // rank, kept: made again only where what some process is after changed
 
+// how many name id: the count itself is the map's value. id is kept (a process's own)
 static void name_add(sc_sched *s, const char *id, int d) {
-	long *n = om_get(&s->named, id);
-	long v = (n ? *n : 0) + d;
-	if (v > 0) {
-		if (!n) {
-			n = amem(s, sizeof *n);
-			om_set(s, &s->named, sc_dup(s, id), n);
-		}
-		*n = v;
-	} else om_del(&s->named, id);
+	long v = (long)(intptr_t)om_get(&s->named, id) + d;
+	if (v > 0) om_set(&s->named, id, (void *)(intptr_t)v);
+	else om_del(&s->named, id);
 }
 static sc_proc *proc_of(sc_sched *s, const char *id) { return om_get(&s->procs, id); }
 static int edge(sc_proc *p, sc_proc *q) { return q && q != p && q->state == RUNNING; }
@@ -755,7 +801,7 @@ static void sees(sc_sched *s, sc_proc *p, const vec *next) {
 		name_add(s, id, 1);
 		if (edge(p, proc_of(s, id))) s->rank_valid = 0;
 	}
-	p->values = *next;
+	vkeep(&p->values, next);
 }
 static void waits(sc_sched *s, sc_proc *p, sc_proc *q) {
 	if (p->after == q) return;
@@ -782,21 +828,21 @@ static void put_status(sc_sched *s, sc_proc *p, nd_node *node, nt_value *status)
 	nd_version *vs;
 	size_t count;
 	if (!had && has) {
-		vs = amem(s, (len + 1) * sizeof *vs);
+		vs = tmem(s, (len + 1) * sizeof *vs);
 		vs[0] = v;
 		if (len) memcpy(vs + 1, node->value.versions, len * sizeof *vs);
 		count = len + 1;
 	} else if (had && has) {
-		vs = amem(s, (len ? len : 1) * sizeof *vs);
+		vs = tmem(s, (len ? len : 1) * sizeof *vs);
 		if (len) memcpy(vs, node->value.versions, len * sizeof *vs);
 		vs[0] = v;
 		count = len ? len : 1;
 	} else if (had && !has) {
-		vs = amem(s, (len ? len : 1) * sizeof *vs);
+		vs = tmem(s, (len ? len : 1) * sizeof *vs);
 		if (len > 1) memcpy(vs, node->value.versions + 1, (len - 1) * sizeof *vs);
 		count = len ? len - 1 : 0;
 	} else {
-		vs = amem(s, (len ? len : 1) * sizeof *vs);
+		vs = tmem(s, (len ? len : 1) * sizeof *vs);
 		for (size_t i = 0; i < len; i++) {
 			vs[i] = node->value.versions[i];
 			vs[i].change = change;
@@ -825,7 +871,7 @@ static const gr_error *record_run(void *arg) {
 	const sc_change *change = gr_by_at(s->g, r->at->id, GR_VALUE, NULL);
 	size_t len = r->at->value.length;
 	size_t count = len > r->slot ? len : r->slot + 1;
-	nd_version *vs = amem(s, count * sizeof *vs);
+	nd_version *vs = tmem(s, count * sizeof *vs);
 	if (len) memcpy(vs, r->at->value.versions, len * sizeof *vs);
 	vs[r->slot] = (nd_version){r->value, change, NULL};
 	r->at->value = (nd_object){vs, count};
@@ -843,31 +889,45 @@ static void record(sc_sched *s, sc_proc *p, const sc_agent *agent, sc_cause *cau
 	gr_changing(s->g, &who, &co, record_run, r);
 }
 
-// the status a process's node shows, as a version in front of its value
-static void write_status(sc_sched *s, sc_proc *p, nt_value *status, long n, sc_cause *causes,
-	int force) {
-	if (p->state != RUNNING) return;
-	nd_node *node = gr_get(s->g, p->id);
-	if (!node) return;
-	if (!force && !p->status->count && !status->count) return;
-	gr_snap snap[1] = {{p->id, GR_VALUE, NULL}};
-	record_t r = {s, p, node, status, NULL, 0, NULL, 0};
-	record(s, p, agent_at(s, p, n, status), causes, snap, 1, &r);
+// the status kept as the process's: the one before let go (at the next sweep)
+static void status_is(sc_sched *s, sc_proc *p, nt_value *status) {
+	gr_later(s->g, p->status);
 	p->status = status;
 }
 
-// its value, behind its status; then the status, if not the same
+// the status a process's node shows, as a version in front of its value. Takes the caller's hold of
+// status: kept as the process's, or let go
+static void write_status(sc_sched *s, sc_proc *p, nt_value *status, long n, sc_cause *causes,
+	int force) {
+	nd_node *node = p->state == RUNNING ? gr_get(s->g, p->id) : NULL;
+	if (!node || (!force && !p->status->count && !status->count)) {
+		gr_later(s->g, status);
+		return;
+	}
+	gr_snap snap[1] = {{p->id, GR_VALUE, NULL}};
+	record_t r = {s, p, node, status, NULL, 0, NULL, 0};
+	record(s, p, agent_at(s, p, n, status), causes, snap, 1, &r);
+	status_is(s, p, status);
+}
+
+// its value, behind its status; then the status, if not the same. value is borrowed (the last
+// is held); status, the caller's hold, taken
 static void write_value(sc_sched *s, sc_proc *p, const nt_value *value, nt_value *status,
 	sc_run *run) {
 	nd_node *node = gr_get(s->g, p->id);
-	if (p->state != RUNNING || !node) return;
+	if (p->state != RUNNING || !node) {
+		gr_later(s->g, status);
+		return;
+	}
+	if (p->has_last) gr_later(s->g, (nt_value *)p->last);
 	p->has_last = 1;
-	p->last = value;
+	p->last = nt_ref((nt_value *)value);
 	const sc_agent *agent = agent_at(s, p, run->n, status);
 	gr_snap snap[1] = {{p->id, GR_VALUE, NULL}};
 	record_t r = {s, p, node, NULL, node, p->status->count > 0 ? 1 : 0, value, 0};
 	record(s, p, agent, run->causes, snap, 1, &r);
 	if (!same_value(status, p->status)) write_status(s, p, status, run->n, run->causes, 0);
+	else gr_later(s->g, status);
 }
 
 static void pending_at(sc_sched *s, sc_proc *p) {
@@ -880,10 +940,11 @@ static void pending_at(sc_sched *s, sc_proc *p) {
 		if (!strcmp(p->status->keys[i], "pending")) {
 			nt_set(st, "pending", nt_num((double)since));
 			put = 1;
-		} else nt_set(st, p->status->keys[i], p->status->items[i]);
+		} else nt_set(st, p->status->keys[i], nt_ref(p->status->items[i]));
 	}
 	if (!put) nt_set(st, "pending", nt_num((double)since));
 	if (!same_value(st, p->status)) write_status(s, p, st, p->runs, NULL, 0);
+	else gr_later(s->g, st);
 }
 
 // order
@@ -920,12 +981,17 @@ static const gr_error *insert_run(void *arg) {
 }
 
 // the latest run, the value of a node named run inside the process. status: the process's new
-// status, if it changed, written in the same operation
+// status, if it changed, written in the same operation (the caller's hold, taken)
 static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, const sc_error *error,
 	nt_value *status) {
 	nd_node *node = gr_get(s->g, p->id);
-	if (p->state != RUNNING || !node) return;
+	if (p->state != RUNNING || !node) {
+		gr_later(s->g, status);
+		return;
+	}
 	nt_value *v = nt_map();
+	// the graph holds what it keeps: this hold goes at the next sweep
+	gr_later(s->g, v);
 	nt_set(v, "run", nt_num((double)run->n));
 	if (p->has_program) {
 		nt_value *pg = nt_map();
@@ -974,7 +1040,7 @@ static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, cons
 		record_t r = {s, p, node, status, there, 0, v, 0};
 		record(s, p, agent_at(s, p, run->n, status ? status : p->status), run->causes,
 			status ? snap : snap + 1, status ? 2 : 1, &r);
-		if (status) p->status = status;
+		if (status) status_is(s, p, status);
 		return;
 	}
 	if (status) write_status(s, p, status, run->n, run->causes, 0);
@@ -983,7 +1049,7 @@ static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, cons
 	if (gr_make(s->g, NULL, v, 1, &who, &id)) return;
 	gr_own(s->g, id, p);
 	p->run = id;
-	om_set(s, &s->runs, id, p);
+	om_set(&s->runs, id, p);
 	gr_changing_opts co = {0};
 	co.tag = run->causes;
 	co.own = p;
@@ -994,9 +1060,8 @@ static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, cons
 
 static void becomes(sc_sched *s, sc_proc *q, int64_t time) {
 	if (om_has(&s->due, q->id)) return;
-	int64_t *t = amem(s, sizeof *t);
-	*t = time;
-	om_set(s, &s->due, q->id, t);
+	q->due = time;
+	om_set(&s->due, q->id, &q->due);
 	if (!q->has_since) q->has_since = 1, q->since = time;
 	sc_moment m = {.kind = SC_DUE, .id = q->id, .by = time};
 	pass(s, &m);
@@ -1008,20 +1073,31 @@ static sc_kept *kept_find(sc_proc *q, int64_t time) {
 	return NULL;
 }
 
+// a change that marked q kept (held) until a run takes it
+static void keep_mark(sc_sched *s, sc_proc *q, const sc_change *change, sc_cause *causes) {
+	sc_kept *k = malloc(sizeof *k);
+	if (!k) die("out of memory");
+	gr_change_hold(s->g, change);
+	k->by = change;
+	k->causes = causes;
+	vpush(&q->kept, k);
+	if (causes) vpush(&s->stamped, k);
+}
+// taken: let go of when the request ends (a run may still read it)
+static void let_mark(sc_sched *s, sc_kept *k) {
+	gr_change_drop(s->g, k->by);
+	vpush(&s->dead, k);
+}
+
 static void mark(sc_sched *s, sc_proc *q, const sc_change *change, sc_cause *causes) {
-	if (!kept_find(q, change->time)) {
-		sc_kept *k = amem(s, sizeof *k);
-		k->by = change;
-		k->causes = causes;
-		vpush(s, &q->kept, k);
-		if (causes) vpush(s, &s->stamped, k);
-	}
+	if (!kept_find(q, change->time)) keep_mark(s, q, change, causes);
 	int loop = caused(s, causes, q->id);
 	q->has_loop = 0;
 	if (loop) {
 		q->has_loop = 1;
-		q->loop = (vec){0};
-		ids_of(s, causes, &q->loop);
+		vec ids = {0};
+		ids_of(s, causes, &ids);
+		vkeep(&q->loop, &ids);
 	}
 	if (q->looping) {
 		if (loop) return;
@@ -1037,8 +1113,9 @@ static void on_marked(void *ctx, void *owner, const gr_change *by, const void *t
 	if (q->state == RUNNING) mark(ctx, q, by, (sc_cause *)tag);
 }
 static void on_owned(void *ctx, void *owner, const char *id) {
+	(void)ctx;
 	sc_proc *p = owner;
-	vpush(ctx, &p->owned, (void *)id);
+	vpush(&p->owned, (void *)id);
 }
 // a kill releases newest first: the last, popped
 static void on_released(void *ctx, const char *id, void *owner) {
@@ -1085,7 +1162,7 @@ static void reached(sc_sched *s, const sc_items *items, vec *out) {
 	for (size_t i = 0; i < items->n; i++) {
 		const sc_item *it = &items->items[i];
 		sc_proc *q = proc_of(s, it->it.id);
-		if (q && it->it.node && om_has(&s->due, q->id) && vfind(out, q) < 0) vpush(s, out, q);
+		if (q && it->it.node && om_has(&s->due, q->id) && vfind(out, q) < 0) tpush(s, out, q);
 	}
 }
 
@@ -1093,7 +1170,7 @@ static int waits_after(sc_sched *s, sc_proc *q, sc_proc *r) {
 	vec seen = {0};
 	for (sc_proc *x = q->after; x && vfind(&seen, x) < 0; x = x->after) {
 		if (x == r) return 1;
-		vpush(s, &seen, x);
+		tpush(s, &seen, x);
 	}
 	return 0;
 }
@@ -1125,7 +1202,7 @@ static void times_of(sc_sched *s, const sc_items *items, sc_read *r) {
 					}
 		}
 	}
-	r->times = amem(s, (n ? n : 1) * sizeof *ts);
+	r->times = tmem(s, (n ? n : 1) * sizeof *ts);
 	if (n) memcpy(r->times, ts, n * sizeof *ts);
 	r->ntimes = n;
 	free(ts);
@@ -1168,19 +1245,21 @@ static const gr_error *reading(void *arg, gr_read *r) {
 		pass(s, &m);
 		sc_run *run = ctx->run;
 		if (run) {
-			sc_read *rd = amem(s, sizeof *rd);
+			sc_read *rd = tmem(s, sizeof *rd);
 			rd->op = r->op;
 			rd->tracked = a->tracked;
 			if (!r->is_names) times_of(s, &r->items, rd);
-			const char **ad = amem(s, (r->n ? r->n : 1) * sizeof *ad);
-			for (size_t i = 0; i < r->n; i++) ad[i] = sc_dup(s, r->address[i]);
+			const char **ad = tmem(s, (r->n ? r->n : 1) * sizeof *ad);
+			for (size_t i = 0; i < r->n; i++) ad[i] = tdup(s, r->address[i]);
 			rd->has_address = 1, rd->address = ad, rd->naddress = r->n;
-			rd->name = r->name ? sc_dup(s, r->name) : NULL;
-			vpush(s, &run->reads, rd);
+			rd->name = r->name ? tdup(s, r->name) : NULL;
+			tpush(s, &run->reads, rd);
+			// the process's own id: kept, where an item's is the graph's scratch
+			sc_proc *q;
 			if (ctx->compute && !children)
 				for (size_t i = 0; i < first.n; i++)
-					if (first.items[i].it.node && proc_of(s, first.items[i].it.id))
-						sadd(s, &run->values, first.items[i].it.id);
+					if (first.items[i].it.node && (q = proc_of(s, first.items[i].it.id)))
+						sadd(s, &run->values, q->id);
 		}
 	}
 	return NULL;
@@ -1191,20 +1270,23 @@ static const gr_error *reading(void *arg, gr_read *r) {
 typedef const sc_error *(*req_fn)(void *);
 static const sc_error *request(sc_sched *s, req_fn fn, void *ctx);
 
-// each change an interface makes, as a request
+// each change an interface makes, as a request. The host's: its error kept past the request
 typedef struct {
 	const gr_error *(*fn)(void *);
 	void *arg;
 	const gr_error *e;
+	sc_sched *s;
+	int host;
 } around_t;
 static const sc_error *around_run(void *p) {
 	around_t *x = p;
 	x->e = x->fn(x->arg);
+	if (x->host) x->e = gr_error_keep(x->s->g, x->e);
 	return NULL;
 }
 static const gr_error *around(void *ctx, const gr_error *(*fn)(void *), void *arg) {
 	sc_api *a = ctx;
-	around_t x = {fn, arg, NULL};
+	around_t x = {fn, arg, NULL, a->s, !a->s->inside};
 	request(a->s, around_run, &x);
 	return x.e;
 }
@@ -1271,7 +1353,7 @@ const sc_error *sc_create(sc_api *a, const nt_value *value, const char *id, int 
 
 // the interface handed to code, at a place, as an actor; it stops when alive says so
 static sc_api *process_api(sc_sched *s, sc_ctx *ctx, int tracked, int writes, int *alive) {
-	sc_api *a = amem(s, sizeof *a);
+	sc_api *a = tmem(s, sizeof *a);
 	sc_proc *p = ctx->p;
 	a->s = s;
 	a->ctx = ctx;
@@ -1291,6 +1373,7 @@ static sc_api *process_api(sc_sched *s, sc_ctx *ctx, int tracked, int writes, in
 	b.reading = reading;
 	b.around = around;
 	b.ctx = a;
+	b.scratch = 1;
 	a->g = gr_bound(s->g, &b);
 	return a;
 }
@@ -1317,20 +1400,20 @@ static const sc_error *replacing(sc_sched *s, sc_proc *p, const sc_agent *actor,
 	sc_cause *causes) {
 	nt_value *st = nt_map();
 	for (size_t i = 0; i < p->status->count; i++)
-		if (strcmp(p->status->keys[i], "new")) nt_set(st, p->status->keys[i], p->status->items[i]);
+		if (strcmp(p->status->keys[i], "new")) nt_set(st, p->status->keys[i], nt_ref(p->status->items[i]));
 	write_status(s, p, st, p->runs, causes, 1);
 	p->replaced = 1;
 	p->replacements++;
-	mark(s, p, change_at(s, actor, reader, *s->clock, p->id, GR_VALUE, NULL), causes);
+	mark(s, p, change_at(s, actor, reader, *s->clock, p->id, GR_VALUE, NULL, NULL), causes);
 	return NULL;
 }
 static sc_partcall *partcall(sc_sched *s, sc_proc *p, const char *name, int replaced) {
-	sc_partcall *c = amem(s, sizeof *c);
+	sc_partcall *c = tmem(s, sizeof *c);
 	c->part = name;
 	c->replaced = replaced;
 	for (size_t i = 0; i < p->children.n; i++) {
 		sc_child *ch = p->children.v[i];
-		if (!strcmp(ch->part, name)) vpush(s, &c->before, ch);
+		if (!strcmp(ch->part, name)) tpush(s, &c->before, ch);
 	}
 	return c;
 }
@@ -1354,7 +1437,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 			if (strcmp(child->name, op->name) || vfind(&call->matched, child) >= 0 ||
 				child->proc->state != RUNNING || !gr_get(s->g, child->proc->id))
 				continue;
-			vpush(s, &call->matched, child);
+			tpush(s, &call->matched, child);
 			if (op->has_path) {
 				child->proc->has_path = 1;
 				child->proc->path = op->path;
@@ -1379,7 +1462,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	// its name: checked before anything is made
 	if (op->name && never_name(op->name)) {
 		size_t mn = strlen(op->name) + 20;
-		char *m = amem(s, mn);
+		char *m = tmem(s, mn);
 		snprintf(m, mn, "start: %s is no name", op->name);
 		return fail(s, "wrong-field", m);
 	}
@@ -1387,9 +1470,9 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 		asks_t as = {0};
 		asks_addall(s, &as, route_asks(s, where->route, where->nroute));
 		pr_value args = pr_map();
-		pr_put(&s->pra, &args, "node", pr_lit(where->id));
-		if (op->name) pr_put(&s->pra, &args, "name", pr_lit(op->name));
-		if (op->id) pr_put(&s->pra, &args, "id", pr_lit(op->id));
+		pr_put(tpra(s), &args, "node", pr_lit(where->id));
+		if (op->name) pr_put(tpra(s), &args, "name", pr_lit(op->name));
+		if (op->id) pr_put(tpra(s), &args, "id", pr_lit(op->id));
 		asks_add(s, &as, (pr_ask){"place", args});
 		e = asking(s, agent, &as, "start");
 		if (e) return e;
@@ -1399,6 +1482,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	if (e) return e;
 	gr_own(s->g, pid, NULL);
 	sc_proc *p = amem(s, sizeof *p);
+	vpush(&s->all, p);
 	p->id = pid;
 	p->name = op->name ? sc_dup(s, op->name) : pid;
 	p->place = absolute(s, place, nplace, op->address, op->naddress, &p->nplace);
@@ -1407,8 +1491,18 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	p->base.ncode = 0;
 	p->base.has_person = 0;
 	p->base.has_trusted = 0;
+	p->base.kept = 0;
 	p->base.pr = NULL;
-	p->prefix = agent->code;
+	// the steps it starts with, kept: the agent's are scratch
+	sc_step *prefix = amem(s, (agent->ncode + 1) * sizeof *prefix);
+	for (size_t i = 0; i < agent->ncode; i++) {
+		prefix[i] = agent->code[i];
+		if (prefix[i].prog_node) prefix[i].prog_node = sc_dup(s, prefix[i].prog_node);
+		if (prefix[i].handler) prefix[i].handler = sc_dup(s, prefix[i].handler);
+		if (prefix[i].kill) prefix[i].kill = sc_dup(s, prefix[i].kill);
+		prefix[i].status = NULL;
+	}
+	p->prefix = prefix;
 	p->nprefix = agent->ncode;
 	p->started = *s->clock;
 	p->status = nt_map();
@@ -1429,7 +1523,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 			p->prog_time = caller->prog_time;
 		}
 	}
-	om_set(s, &s->procs, p->id, p);
+	om_set(&s->procs, p->id, p);
 	started_rank(s, p);
 	if (caller && caller->state != GONE) {
 		p->parent = caller;
@@ -1438,7 +1532,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 		ch->name = p->name;
 		ch->part = call ? call->part : "request";
 		ch->replaced = caller->replacements;
-		vpush(s, &caller->children, ch);
+		vpush(&caller->children, ch);
 		gr_own(s->g, pid, caller);
 	}
 	gr_changing_opts co = {0};
@@ -1447,13 +1541,9 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	insert_t x = {s, where->id, p->name, pid, 0};
 	e = from_gr(s, gr_changing(s->g, &who, &co, insert_run, &x));
 	if (e) return e;
-	sc_change *change = change_at(s, agent, who.reader, x.time, where->id, GR_CHILDREN, p->name);
-	change->cause = who.cause;
-	sc_kept *mine = amem(s, sizeof *mine);
-	mine->by = change;
-	mine->causes = ctx ? ctx->causes : NULL;
-	vpush(s, &p->kept, mine);
-	if (mine->causes) vpush(s, &s->stamped, mine);
+	const sc_change *change = change_at(s, agent, who.reader, x.time, where->id, GR_CHILDREN, p->name,
+		who.cause);
+	keep_mark(s, p, change, ctx ? ctx->causes : NULL);
 	becomes(s, p, change->time);
 	*idout = pid;
 	return NULL;
@@ -1473,6 +1563,8 @@ static pout part_call(sc_sched *s, sc_proc *p, sc_fn *f, sc_given *g) {
 	p->busy++;
 	s->active++;
 	o.error = f->call(f, g, &o.value, &o.pending);
+	// a value handed with its hold: let go once every holder has taken its own (the next sweep)
+	if (g->hands) gr_later(s->g, o.value);
 	p->busy--;
 	s->active--;
 	unwind(s);
@@ -1498,7 +1590,7 @@ typedef struct qitem {
 } qitem;
 
 static void *g_new(sc_sched *s, sc_ctx *ctx, int *alive) {
-	sc_gctx *g = amem(s, sizeof *g);
+	sc_gctx *g = tmem(s, sizeof *g);
 	g->p = ctx->p;
 	g->alive = alive;
 	g->ctx = ctx;
@@ -1506,7 +1598,7 @@ static void *g_new(sc_sched *s, sc_ctx *ctx, int *alive) {
 }
 
 static sc_given *given_new(sc_sched *s, sc_ctx *ctx, int *alive) {
-	sc_given *g = amem(s, sizeof *g);
+	sc_given *g = tmem(s, sizeof *g);
 	g->s = s;
 	g->ctx = g_new(s, ctx, alive);
 	g->self = ctx->p->id;
@@ -1523,8 +1615,8 @@ static const sc_error *prepare(sc_sched *s, qitem *op) {
 		asks_t as = {0};
 		asks_addall(s, &as, route_asks(s, item->route, item->nroute));
 		pr_value args = pr_map();
-		pr_put(&s->pra, &args, "node", pr_lit(item->id));
-		pr_put(&s->pra, &args, "object", pr_lit("value"));
+		pr_put(tpra(s), &args, "node", pr_lit(item->id));
+		pr_put(tpra(s), &args, "object", pr_lit("value"));
 		asks_add(s, &as, (pr_ask){"read", args});
 		e = asking(s, op->agent, &as, "call");
 		if (e) return e;
@@ -1535,10 +1627,11 @@ static const sc_error *prepare(sc_sched *s, qitem *op) {
 	if (!gr_ephemeral(s->g, item->id) || !definer || definer->state != RUNNING || !f)
 		return fail(s, "not-a-handler", "the node is not a handler a process placed");
 	const char *handler = op->naddress ? op->address[op->naddress - 1] : "";
-	sc_agent *agent = amem(s, sizeof *agent);
+	sc_agent *agent = tmem(s, sizeof *agent);
 	*agent = *op->agent;
+	agent->kept = 0;
 	agent->pr = NULL;
-	sc_step *code2 = amem(s, (op->agent->ncode + 1) * sizeof *code2);
+	sc_step *code2 = tmem(s, (op->agent->ncode + 1) * sizeof *code2);
 	if (op->agent->ncode) memcpy(code2, op->agent->code, op->agent->ncode * sizeof *code2);
 	sc_step *st = &code2[op->agent->ncode];
 	st->process = definer->id;
@@ -1546,7 +1639,7 @@ static const sc_error *prepare(sc_sched *s, qitem *op) {
 	st->handler = handler;
 	agent->code = code2;
 	agent->ncode = op->agent->ncode + 1;
-	sc_ctx *ctx = amem(s, sizeof *ctx);
+	sc_ctx *ctx = tmem(s, sizeof *ctx);
 	ctx->p = definer;
 	ctx->agent = agent;
 	ctx->handler = handler;
@@ -1562,7 +1655,7 @@ static const sc_error *go(sc_sched *s, const qitem *op, nt_value **out) {
 	sc_ctx *ctx = op->ctx;
 	sc_moment m = {.kind = SC_STARTS, .id = ctx->p->id, .handler = ctx->handler};
 	pass(s, &m);
-	int *alive = amem(s, sizeof *alive);
+	int *alive = tmem(s, sizeof *alive);
 	*alive = 1;
 	sc_given *g = given_new(s, ctx, alive);
 	g->api = process_api(s, ctx, 0, 1, alive);
@@ -1580,11 +1673,11 @@ static const sc_error *go(sc_sched *s, const qitem *op, nt_value **out) {
 
 static qitem *qitem_new(sc_sched *s, const char *const *address, size_t n, nt_value *args,
 	const char *const *place, size_t np, const sc_agent *agent, sc_cause *causes) {
-	qitem *q = amem(s, sizeof *q);
-	const char **ad = amem(s, (n + 1) * sizeof *ad);
-	for (size_t i = 0; i < n; i++) ad[i] = sc_dup(s, address[i]);
-	const char **pl = amem(s, (np + 1) * sizeof *pl);
-	for (size_t i = 0; i < np; i++) pl[i] = sc_dup(s, place[i]);
+	qitem *q = tmem(s, sizeof *q);
+	const char **ad = tmem(s, (n + 1) * sizeof *ad);
+	for (size_t i = 0; i < n; i++) ad[i] = tdup(s, address[i]);
+	const char **pl = tmem(s, (np + 1) * sizeof *pl);
+	for (size_t i = 0; i < np; i++) pl[i] = tdup(s, place[i]);
 	q->address = ad;
 	q->naddress = n;
 	q->args = args;
@@ -1597,11 +1690,8 @@ static qitem *qitem_new(sc_sched *s, const char *const *address, size_t n, nt_va
 
 static void queue_push(sc_sched *s, qitem *q) {
 	if (s->nqueue == s->qcap) {
-		size_t cap = s->qcap ? s->qcap * 2 : 8;
-		qitem **nq = amem(s, cap * sizeof *nq);
-		if (s->nqueue) memcpy(nq, s->queue, s->nqueue * sizeof *nq);
-		s->queue = (struct qitem *)(void *)nq;
-		s->qcap = cap;
+		s->qcap = s->qcap ? s->qcap * 2 : 8;
+		s->queue = regrow(s->queue, s->qcap * sizeof(qitem *));
 	}
 	((qitem **)(void *)s->queue)[s->nqueue++] = q;
 }
@@ -1652,7 +1742,7 @@ const sc_error *sc_given_cleanup(sc_given *g, sc_fn *f) {
 	sc_gctx *gc = g->ctx;
 	if (!*gc->alive) return fail(g->s, "stopped", "onCleanup: this interface has stopped");
 	if (!f) return fail(g->s, "wrong-field", "a cleanup is a function");
-	vpush(g->s, &gc->p->cleanups, f);
+	vpush(&gc->p->cleanups, f);
 	return NULL;
 }
 
@@ -1664,14 +1754,14 @@ static const sc_error *cleanups(sc_sched *s, sc_proc *p, int killed, sc_run *run
 	for (size_t k = list.n; k-- > 0;) {
 		sc_fn *f = list.v[k];
 		const sc_agent *agent = run ? run_agent(s, p, run->n) : agent_of(s, p, 0, NULL, NULL, 1);
-		sc_ctx *ctx = amem(s, sizeof *ctx);
+		sc_ctx *ctx = tmem(s, sizeof *ctx);
 		ctx->p = p;
 		ctx->agent = agent;
 		if (run) ctx->run_n = run->n;
 		else ctx->cleanup = 1;
 		ctx->run = run;
 		ctx->causes = run ? run->causes : NULL;
-		int *alive = amem(s, sizeof *alive);
+		int *alive = tmem(s, sizeof *alive);
 		*alive = 1;
 		sc_given *g = given_new(s, ctx, alive);
 		g->api = process_api(s, ctx, 0, 1, alive);
@@ -1681,6 +1771,7 @@ static const sc_error *cleanups(sc_sched *s, sc_proc *p, int killed, sc_run *run
 		*alive = 0;
 		if (done.error && !first) first = done.error;
 	}
+	free(list.v);
 	return first;
 }
 
@@ -1703,14 +1794,13 @@ typedef struct {
 // a node released by a kill: the cause's, with kill added to its actor's last step, now
 static const sc_change *killing(sc_sched *s, const sc_kill *cause, const char *kill,
 	const char *node) {
-	sc_change *c = amem(s, sizeof *c);
-	*c = *cause->by;
-	c->actor = actor_of(s, stepped_kill(s, cause->agent, kill));
-	c->time = tick(s);
-	c->node = node;
-	c->where = GR_LOADED;
-	c->name = NULL;
-	return c;
+	sc_change c = *cause->by;
+	c.actor = actor_of(s, stepped_kill(s, cause->agent, kill));
+	c.time = tick(s);
+	c.node = node;
+	c.where = GR_LOADED;
+	c.name = NULL;
+	return gr_change_copy(s->g, &c);
 }
 
 // unwinding, newest first: not due; children; cleanups; its ephemeral nodes; untracked
@@ -1720,7 +1810,7 @@ static void end(sc_sched *s, sc_proc *p, const sc_kill *cause) {
 		defer *d = amem(s, sizeof *d);
 		d->p = p;
 		d->cause = cause;
-		vpush(s, &s->deferred, d);
+		vpush(&s->deferred, d);
 		return;
 	}
 	p->state = KILLING;
@@ -1750,7 +1840,10 @@ static void end(sc_sched *s, sc_proc *p, const sc_kill *cause) {
 	gr_untrack(p->track);
 	p->state = GONE;
 	for (size_t i = 0; i < p->values.n; i++) name_add(s, p->values.v[i], -1);
-	p->values = (vec){0};
+	p->values.n = 0;
+	// its marks, its status, its last value and the one before: let go
+	for (size_t i = 0; i < p->kept.n; i++) let_mark(s, p->kept.v[i]);
+	p->kept.n = 0;
 	if (p->after) name_add(s, p->after->id, -1);
 	p->after = NULL;
 	om_del(&s->procs, p->id);
@@ -1783,9 +1876,9 @@ static void release(sc_sched *s, const char *id, const sc_change *cause) {
 
 // no longer loaded; a process whose node it was, killed; ephemeral nodes it owned, released
 static const sc_error *outro_(sc_sched *s, const char *id, const sc_agent *who) {
-	sc_kill *cause = amem(s, sizeof *cause);
+	sc_kill *cause = tmem(s, sizeof *cause);
 	cause->agent = who;
-	cause->by = change_at(s, who, NULL, tick(s), sc_dup(s, id), GR_LOADED, NULL);
+	cause->by = change_at(s, who, NULL, tick(s), id, GR_LOADED, NULL, NULL);
 	release(s, id, cause->by);
 	sc_proc *p = proc_of(s, id);
 	if (p && p->state == RUNNING) end(s, p, cause);
@@ -1801,19 +1894,20 @@ static sc_process process_of(sc_proc *p) {
 // when a part's call ends done, the children it started before and not again are released
 static void settle_children(sc_sched *s, sc_ctx *ctx) {
 	sc_partcall *call = ctx->call;
-	sc_kill *cause = amem(s, sizeof *cause);
+	sc_kill *cause = tmem(s, sizeof *cause);
 	cause->agent = stepped_kill(s, ctx->agent, ctx->p->id);
-	cause->by = change_at(s, cause->agent, ctx->p->id, 0, "", GR_NOWHERE, NULL);
+	sc_change *by = tmem(s, sizeof *by);
+	*by = (sc_change){0, actor_of(s, cause->agent), ctx->p->id, NULL, NULL, "", GR_NOWHERE, NULL};
+	cause->by = by;
 	vec before = vcopy(s, &call->before);
 	for (size_t i = before.n; i-- > 0;) {
 		sc_child *c = before.v[i];
 		if (vfind(&call->matched, c) >= 0 || c->proc->state != RUNNING) continue;
-		sc_change *k = amem(s, sizeof *k);
-		*k = *cause->by;
-		k->time = tick(s);
-		k->node = c->proc->id;
-		k->where = GR_LOADED;
-		release(s, c->proc->id, k);
+		sc_change k = *cause->by;
+		k.time = tick(s);
+		k.node = c->proc->id;
+		k.where = GR_LOADED;
+		release(s, c->proc->id, gr_change_copy(s->g, &k));
 		end(s, c->proc, cause);
 	}
 }
@@ -1832,7 +1926,7 @@ static const char *why_new(const nt_value *v, int given) {
 
 static nt_value *shown_status(sc_run *run) {
 	nt_value *st = nt_map();
-	if (run->has_shown) nt_set(st, "new", (nt_value *)run->shown ? (nt_value *)run->shown : nt_null());
+	if (run->has_shown) nt_set(st, "new", run->shown ? nt_ref((nt_value *)run->shown) : nt_null());
 	return st;
 }
 
@@ -1844,6 +1938,7 @@ static void finish(sc_sched *s, sc_run *run, sc_ended ended, const sc_error *err
 				sc_kept *k = run->given.v[i];
 				for (size_t j = 0; j < p->kept.n; j++)
 					if (p->kept.v[j] == k || ((sc_kept *)p->kept.v[j])->by->time == k->by->time) {
+						let_mark(s, p->kept.v[j]);
 						vdel(&p->kept, j);
 						break;
 					}
@@ -1868,12 +1963,17 @@ static void finish(sc_sched *s, sc_run *run, sc_ended ended, const sc_error *err
 				for (size_t i = 0; i < run->loop.n; i++) nt_push(through, nt_str(run->loop.v[i]));
 			else nt_push(through, nt_str(p->id));
 			nt_set(loop, "through", through);
-			if (!is_live(run->value)) nt_set(loop, "value", (nt_value *)run->value);
+			if (!is_live(run->value)) nt_set(loop, "value", nt_ref((nt_value *)run->value));
 			nt_set(status, "loop", loop);
 		}
-		if (run->has_shown) nt_set(status, "new", (nt_value *)run->shown ? (nt_value *)run->shown : nt_null());
-		write_run(s, p, run, ended, error, same_value(status, p->status) ? NULL : status);
+		if (run->has_shown) nt_set(status, "new", run->shown ? nt_ref((nt_value *)run->shown) : nt_null());
+		int same = same_value(status, p->status);
+		if (same) gr_later(s->g, status);
+		write_run(s, p, run, ended, error, same ? NULL : status);
 	}
+	// what the run showed was its own: the statuses hold it
+	if (run->has_shown) gr_later(s->g, (nt_value *)run->shown);
+	run->has_shown = 0;
 	sc_moment m = {.kind = SC_ENDS, .id = p->id, .has_run = 1, .run = run->n, .ended = ended};
 	if (ended == SC_STOPPED && run->stopped) m.waits = run->stopped->id;
 	if (run->has_equal) m.has_equal = 1, m.equal = run->equal;
@@ -1885,10 +1985,9 @@ static void stop_run(sc_sched *s, sc_run *run) {
 	sc_proc *p = run->p;
 	waits(s, p, run->stopped);
 	if (p->state == RUNNING) {
-		int64_t *t = amem(s, sizeof *t);
-		*t = run->mark;
 		om_del(&s->due, p->id);
-		om_set(s, &s->due, p->id, t);
+		p->due = run->mark;
+		om_set(&s->due, p->id, &p->due);
 	}
 	finish(s, run, SC_STOPPED, NULL, 0);
 }
@@ -1920,7 +2019,7 @@ static void computed(sc_sched *s, sc_run *run, sc_ctx *cctx, nt_value *v) {
 		run->part = "effect";
 		run->value = v;
 		p->waiting = run;
-		vpush(s, &s->waiting, run);
+		vpush(&s->waiting, run);
 		return;
 	}
 	finish(s, run, SC_DONE, NULL, 0);
@@ -1929,7 +2028,7 @@ static void computed(sc_sched *s, sc_run *run, sc_ctx *cctx, nt_value *v) {
 static long rank_of(sc_sched *s, sc_proc *p);
 
 static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
-	sc_ctx *ctx = amem(s, sizeof *ctx);
+	sc_ctx *ctx = tmem(s, sizeof *ctx);
 	ctx->p = p;
 	ctx->agent = run_agent(s, p, run->n);
 	ctx->run_n = run->n;
@@ -1937,7 +2036,7 @@ static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
 	ctx->compute = 1;
 	ctx->causes = run->causes;
 	if (p->has_path) {
-		int *alive = amem(s, sizeof *alive);
+		int *alive = tmem(s, sizeof *alive);
 		*alive = 1;
 		sc_api *view = process_api(s, ctx, 1, 0, alive);
 		sc_process pr = process_of(p);
@@ -1964,7 +2063,7 @@ static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
 				p->has_code = 1;
 				p->code = found.code;
 				p->has_program = 1;
-				p->prog_node = found.node;
+				p->prog_node = sc_dup(s, found.node);
 				p->prog_time = found.time;
 			} else if (!p->has_program || strcmp(found.node, p->prog_node) ||
 				found.time != p->prog_time) {
@@ -1980,21 +2079,21 @@ static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
 		if (p->setup && !p->replaced) { finish(s, run, SC_DONE, NULL, 0); return; }
 		run->part = "setup";
 		p->waiting = run;
-		vpush(s, &s->waiting, run);
+		vpush(&s->waiting, run);
 		return;
 	}
 	// the compute
-	sc_ctx *cctx = amem(s, sizeof *cctx);
+	sc_ctx *cctx = tmem(s, sizeof *cctx);
 	*cctx = *ctx;
 	cctx->call = partcall(s, p, "compute", run->replaced);
-	int *open = amem(s, sizeof *open);
+	int *open = tmem(s, sizeof *open);
 	*open = 1;
 	sc_given *g = given_new(s, cctx, open);
 	g->api = process_api(s, cctx, 1, 0, open);
 	g->peep = process_api(s, cctx, 0, 0, open);
 	g->nby = given->n;
-	g->by = amem(s, (given->n + 1) * sizeof *g->by);
-	g->marks = amem(s, (given->n + 1) * sizeof *g->marks);
+	g->by = tmem(s, (given->n + 1) * sizeof *g->by);
+	g->marks = tmem(s, (given->n + 1) * sizeof *g->marks);
 	for (size_t i = 0; i < given->n; i++) {
 		g->by[i] = ((sc_kept *)given->v[i])->by->time;
 		g->marks[i] = ((sc_kept *)given->v[i])->by;
@@ -2028,14 +2127,14 @@ static void first(sc_sched *s, sc_proc *p, long picked) {
 	vec parents = {0};
 	for (size_t i = 0; i < given.n; i++) {
 		sc_kept *k = given.v[i];
-		if (k->causes && vfind(&parents, k->causes) < 0) vpush(s, &parents, k->causes);
+		if (k->causes && vfind(&parents, k->causes) < 0) tpush(s, &parents, k->causes);
 	}
-	sc_cause **ps = amem(s, (parents.n + 1) * sizeof *ps);
+	sc_cause **ps = tmem(s, (parents.n + 1) * sizeof *ps);
 	for (size_t i = 0; i < parents.n; i++) ps[i] = parents.v[i];
 	sc_cause *causes = cause_new(s, p->id, ps, parents.n);
-	om_set(s, &s->ran, p->id, (void *)1);
-	sc_run *run = amem(s, sizeof *run);
-	vpush(s, &s->wrote, &run->wrote);
+	om_set(&s->ran, p->id, (void *)1);
+	sc_run *run = tmem(s, sizeof *run);
+	vpush(&s->wrote, &run->wrote);
 	run->p = p;
 	run->n = n;
 	run->mark = mark_time;
@@ -2044,7 +2143,7 @@ static void first(sc_sched *s, sc_proc *p, long picked) {
 	run->causes = causes;
 	run->replaced = p->replaced;
 	run->has_loop = p->has_loop;
-	run->loop = p->loop;
+	run->loop = vcopy(s, &p->loop);
 	p->has_loop = 0;
 	sc_moment m = {.kind = SC_STARTS, .id = p->id, .has_run = 1, .run = n, .has_rank = 1, .rank = rank};
 	pass(s, &m);
@@ -2063,7 +2162,7 @@ static void second(sc_sched *s, sc_run *run) {
 	const sc_agent *agent = run_agent(s, p, run->n);
 	const sc_error *error = cleanups(s, p, 0, run);
 	if (p->state != RUNNING) { finish(s, run, error ? SC_FAILED : SC_DONE, error, 0); return; }
-	sc_ctx *ctx = amem(s, sizeof *ctx);
+	sc_ctx *ctx = tmem(s, sizeof *ctx);
 	ctx->p = p;
 	ctx->agent = agent;
 	ctx->run_n = run->n;
@@ -2072,7 +2171,7 @@ static void second(sc_sched *s, sc_run *run) {
 	ctx->call = partcall(s, p, run->part, run->replaced);
 	int is_effect = !strcmp(run->part, "effect");
 	if (is_effect) ctx->cause = run->why;
-	int *alive = amem(s, sizeof *alive);
+	int *alive = tmem(s, sizeof *alive);
 	*alive = 1;
 	sc_given *g = given_new(s, ctx, alive);
 	g->api = process_api(s, ctx, 0, 1, alive);
@@ -2081,8 +2180,9 @@ static void second(sc_sched *s, sc_run *run) {
 		if (p->has_previous) g->previous = (nt_value *)p->previous;
 		pout out = part_call(s, p, p->code.effect, g);
 		*alive = 0;
+		if (p->has_previous) gr_later(s->g, (nt_value *)p->previous);
 		p->has_previous = 1;
-		p->previous = run->value;
+		p->previous = nt_ref((nt_value *)run->value);
 		if (out.error) {
 			if (!error) error = out.error;
 		} else if (p->state == RUNNING) settle_children(s, ctx);
@@ -2109,9 +2209,9 @@ static void edges_of(sc_sched *s, sc_proc *p, vec *out) {
 	for (size_t i = 0; i < p->values.n; i++) {
 		const char *id = p->values.v[i];
 		sc_proc *q = strcmp(id, p->id) ? proc_of(s, id) : NULL;
-		if (q && q->state == RUNNING) vpush(s, out, q);
+		if (q && q->state == RUNNING) tpush(s, out, q);
 	}
-	if (p->after && p->after != p && p->after->state == RUNNING) vpush(s, out, p->after);
+	if (p->after && p->after != p && p->after->state == RUNNING) tpush(s, out, p->after);
 }
 
 typedef struct {
@@ -2122,7 +2222,7 @@ typedef struct {
 static void visit(sc_sched *s, tj *t, sc_proc *p) {
 	p->tj_seen = 1;
 	p->tj_index = p->tj_low = t->next++;
-	vpush(s, &t->stack, p);
+	tpush(s, &t->stack, p);
 	p->tj_on = 1;
 	vec out = {0};
 	edges_of(s, p, &out);
@@ -2139,7 +2239,7 @@ static void visit(sc_sched *s, tj *t, sc_proc *p) {
 	do {
 		m = t->stack.v[--t->stack.n];
 		m->tj_on = 0;
-		vpush(s, &members, m);
+		tpush(s, &members, m);
 	} while (m != p);
 	long r = 0;
 	for (size_t i = 0; i < members.n; i++) {
@@ -2216,8 +2316,75 @@ static int round_(sc_sched *s) {
 	return ok;
 }
 
+// a protect value copied into a
+static pr_value pr_keep(pr_arena *a, const pr_value *v) {
+	pr_value c = *v;
+	if (v->kind == PR_STR) return pr_str(a, v->str, v->n);
+	if (v->kind == PR_LIST) {
+		c = pr_list();
+		for (size_t i = 0; i < v->n; i++) pr_push(a, &c, pr_keep(a, &v->items[i]));
+	} else if (v->kind == PR_MAP) {
+		c = pr_map();
+		for (size_t i = 0; i < v->n; i++)
+			pr_put(a, &c, pr_str(a, v->keys[i], strlen(v->keys[i])).str, pr_keep(a, &v->items[i]));
+	}
+	return c;
+}
+static const char *text_keep(arena *a, const char *t) {
+	if (!t) return NULL;
+	size_t n = strlen(t) + 1;
+	return memcpy(aalloc(a, n), t, n);
+}
+// an error a request gives the host: copied into the host's scratch, the request's going now
+static const sc_error *error_keep(sc_sched *s, const sc_error *e) {
+	if (!e || e == &STOP_ERR) return e;
+	sc_error *c = aalloc(&s->hosts, sizeof *c);
+	*c = *e;
+	c->name = text_keep(&s->hosts, e->name);
+	c->code = text_keep(&s->hosts, e->code);
+	c->message = text_keep(&s->hosts, e->message);
+	if (e->why) {
+		pr_value *w = pr_alloc(&s->phost, sizeof *w);
+		*w = pr_keep(&s->phost, e->why);
+		c->why = w;
+	}
+	return c;
+}
+
+// what a request made that nothing keeps, gone as it ends: its runs' times, the marks let go of,
+// the agent kept for the last run, its scratch and the graph's
+static void request_end(sc_sched *s) {
+	for (size_t i = 0; i < s->wrote.n; i++) free(((gr_times *)s->wrote.v[i])->v);
+	s->wrote.n = 0;
+	for (size_t i = 0; i < s->dead.n; i++) free(s->dead.v[i]);
+	s->dead.n = 0;
+	s->kept.agent = NULL;
+	s->kept.p = NULL;
+	s->kept.status = NULL;
+	afree(&s->req);
+	pr_free(&s->preq);
+	s->inside = 0;
+	gr_leave(s->g);
+}
+
+void sc_sweep(sc_sched *s) {
+	if (s->inside) return;
+	s->kept.agent = NULL;
+	s->kept.p = NULL;
+	s->kept.status = NULL;
+	afree(&s->hosts);
+	pr_free(&s->phost);
+	gr_sweep(s->g);
+}
+
 static const sc_error *request(sc_sched *s, req_fn fn, void *ctx) {
 	if (s->depth > 0 || s->active > 0) return fn(ctx);
+	// outside a request the scratch was the host's: the agent kept for a run may be in it
+	s->kept.agent = NULL;
+	s->kept.p = NULL;
+	s->kept.status = NULL;
+	s->inside = 1;
+	gr_enter(s->g);
 	s->depth++;
 	// a request that fails still runs what its changes made due; then its error goes on
 	const sc_error *out = fn(ctx);
@@ -2226,7 +2393,7 @@ static const sc_error *request(sc_sched *s, req_fn fn, void *ctx) {
 	s->depth--;
 	vec ids = {0};
 	for (size_t i = 0; i < s->due.n; i++)
-		if (s->due.e[i].key) vpush(s, &ids, (void *)s->due.e[i].key);
+		if (s->due.e[i].key) tpush(s, &ids, (void *)s->due.e[i].key);
 	for (size_t i = 0; i < ids.n; i++) {
 		sc_proc *p = proc_of(s, ids.v[i]);
 		if (p && p->state == RUNNING) pending_at(s, p);
@@ -2239,6 +2406,8 @@ static const sc_error *request(sc_sched *s, req_fn fn, void *ctx) {
 		s->ran.n = 0;
 		memset(s->ran.idx, 0, s->ran.slots * sizeof *s->ran.idx);
 	}
+	out = error_keep(s, out);
+	request_end(s);
 	return out;
 }
 
@@ -2316,7 +2485,7 @@ static const sc_error *replace_run(void *ctx) {
 	asks_t as = {0};
 	asks_addall(s, &as, route_asks(s, item->route, item->nroute));
 	pr_value ov = pr_lit("value"), av = pr_num(0);
-	asks_add(s, &as, pr_edit(&s->pra, "write", item->id, &ov, &av));
+	asks_add(s, &as, pr_edit(tpra(s), "write", item->id, &ov, &av));
 	e = asking(s, s->host_actor, &as, "replace");
 	if (e) return e;
 	sc_proc *p = proc_of(s, item->id);
@@ -2407,8 +2576,28 @@ sc_sched *sc_new(const sc_options *o) {
 
 void sc_free(sc_sched *s) {
 	for (size_t i = 0; i < s->wrote.n; i++) free(((gr_times *)s->wrote.v[i])->v);
+	for (size_t i = 0; i < s->dead.n; i++) free(s->dead.v[i]);
+	// each process's holds let go, and what it grew
+	for (size_t i = 0; i < s->all.n; i++) {
+		sc_proc *p = s->all.v[i];
+		nt_free(p->status);
+		if (p->has_last) nt_free((nt_value *)p->last);
+		if (p->has_previous) nt_free((nt_value *)p->previous);
+		for (size_t k = 0; k < p->kept.n; k++) free(p->kept.v[k]);
+		vec *vs[] = {&p->children, &p->owned, &p->kept, &p->values, &p->cleanups, &p->loop};
+		for (size_t k = 0; k < sizeof vs / sizeof *vs; k++) free(vs[k]->v);
+	}
+	vec *vs[] = {&s->all, &s->dead, &s->waiting, &s->deferred, &s->wrote, &s->stamped};
+	for (size_t k = 0; k < sizeof vs / sizeof *vs; k++) free(vs[k]->v);
+	free(s->queue);
+	omap *maps[] = {&s->procs, &s->due, &s->runs, &s->ran, &s->named};
+	for (size_t k = 0; k < sizeof maps / sizeof *maps; k++) om_free(maps[k]);
 	gr_free(s->g);
 	pr_free(&s->pra);
+	pr_free(&s->preq);
+	pr_free(&s->phost);
 	afree(&s->a);
+	afree(&s->req);
+	afree(&s->hosts);
 	free(s);
 }

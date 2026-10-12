@@ -101,7 +101,6 @@ typedef struct {
 	jmp_buf jump;
 	int code;
 	int tell; // facts wanted
-	int utf16; // string positions count UTF-16 units, not code points
 	mu_fact seq; // the last splice's sequence, as it was
 } work;
 
@@ -187,76 +186,51 @@ static nt_value *own(work *w, nt_value *v) {
 	return c;
 }
 
-// strings: position -> byte offset, the one place the unit is known (code points, or UTF-16 units).
-// A lone surrogate is held as WTF-8 (ED A0..BF xx, three bytes): a position of its own, one unit;
-// a character of four bytes is one code point, two units. Counting units, a position may fall
-// inside a four-byte character: it is cut into its two halves, each a lone surrogate
+// strings: position -> byte offset, the one place the unit is known: code points. A lone
+// surrogate is held as WTF-8 (ED A0..BF xx, three bytes): a position of its own
 static size_t next(const unsigned char *t, size_t i, size_t end) {
 	i++;
 	while (i < end && (t[i] & 0xC0) == 0x80) i++;
 	return i;
 }
-// a walk along a string: byte i is at position k; mid: k is inside the character at i
+// a walk along a string: byte i is at position k
 typedef struct {
 	size_t i;
 	long k;
-	int mid;
 } finger;
-// to position t: 0 when past the end; half: t is inside the four-byte character at *at
-static int walk_to(const nt_value *s, int utf16, finger *f, long t, size_t *at, int *half) {
+// to position t: 0 when past the end
+static int walk_to(const nt_value *s, finger *f, long t, size_t *at) {
 	const unsigned char *u = (const unsigned char *)s->str;
-	*half = 0;
-	if (f->mid) {
-		if (t == f->k) return *at = f->i, *half = 1, 1;
-		f->k++, f->i = next(u, f->i, s->bytes), f->mid = 0;
-	}
 	while (f->k < t) {
 		if (f->i >= s->bytes) return 0;
-		long each = utf16 && u[f->i] >= 0xF0 ? 2 : 1;
-		if (f->k + each > t) return f->mid = 1, f->k = t, *at = f->i, *half = 1, 1;
-		f->k += each, f->i = next(u, f->i, s->bytes);
+		f->k++, f->i = next(u, f->i, s->bytes);
 	}
 	*at = f->i;
 	return 1;
 }
-// the bytes where positions a and b start (hx, hy: inside a four-byte character), and, when total
-// is given, how many positions there are; 0 when b is past the end
-static int span_bytes(const nt_value *s, int utf16, long a, long b, size_t *x, size_t *y, int *hx,
-	int *hy, long *total) {
-	*hx = *hy = 0;
+// the bytes where positions a and b start, and, when total is given, how many positions there
+// are; 0 when b is past the end
+static int span_bytes(const nt_value *s, long a, long b, size_t *x, size_t *y, long *total) {
 	if (s->ascii) {
 		if ((size_t)a > s->bytes || (size_t)b > s->bytes) return 0;
 		*x = (size_t)a, *y = (size_t)b;
 		if (total) *total = (long)s->bytes;
 		return 1;
 	}
-	finger f = {0, 0, 0};
-	if (!walk_to(s, utf16, &f, a, x, hx) || !walk_to(s, utf16, &f, b, y, hy)) return 0;
+	finger f = {0, 0};
+	if (!walk_to(s, &f, a, x) || !walk_to(s, &f, b, y)) return 0;
 	if (total) {
 		const unsigned char *u = (const unsigned char *)s->str;
-		if (f.mid) f.k++, f.i = next(u, f.i, s->bytes);
-		for (; f.i < s->bytes; f.i = next(u, f.i, s->bytes)) f.k += utf16 && u[f.i] >= 0xF0 ? 2 : 1;
+		for (; f.i < s->bytes; f.i = next(u, f.i, s->bytes)) f.k++;
 		*total = f.k;
 	}
 	return 1;
 }
-static long str_len(const nt_value *s, int utf16) {
+static long str_len(const nt_value *s) {
 	size_t x, y;
-	int hx, hy;
 	long n = 0;
-	span_bytes(s, utf16, 0, 0, &x, &y, &hx, &hy, &n);
+	span_bytes(s, 0, 0, &x, &y, &n);
 	return n;
-}
-// the half of the four-byte character at c as a lone surrogate (three bytes): low 0 the high, 1 the low
-static size_t half_of(char *out, const char *c, int low) {
-	const unsigned char *u = (const unsigned char *)c;
-	unsigned long cp = ((u[0] & 7ul) << 18) | ((u[1] & 63ul) << 12) | ((u[2] & 63ul) << 6) | (u[3] & 63ul);
-	cp -= 0x10000;
-	unsigned long h = low ? 0xDC00 + (cp & 0x3FF) : 0xD800 + (cp >> 10);
-	out[0] = (char)(0xE0 | h >> 12);
-	out[1] = (char)(0x80 | ((h >> 6) & 63));
-	out[2] = (char)(0x80 | (h & 63));
-	return 3;
 }
 // a lone high before a lone low at p[j] is one character: joined, the bytes it leaves cut
 static void join(char *p, size_t *size, size_t j) {
@@ -389,30 +363,19 @@ static void splice(work *w, const nt_key *path, size_t n, long a, long b, nt_val
 	if (s->type == NT_STR) {
 		if (v != NULL && v->type != NT_STR) fail(w, MU_WRONG_KIND);
 		size_t x, y;
-		int hx, hy;
 		long total = 0;
-		if (!span_bytes(s, w->utf16, a, b, &x, &y, &hx, &hy, count ? &total : NULL)) fail(w, MU_RANGE);
+		if (!span_bytes(s, a, b, &x, &y, count ? &total : NULL)) fail(w, MU_RANGE);
 		w->seq = (mu_fact){0, (size_t)total, 1};
-		// a position inside a four-byte character: its halves, each side keeping one
-		char low[3], high[3];
-		size_t nlow = 0, nhigh = 0, rest = hy ? 4 : 0;
-		if (hx) half_of(low, s->str + x, 1), nlow = 3;
-		if (hy) half_of(high, s->str + y, 0), nhigh = 3;
-		if (taken) {
-			// a and b inside the same character: nothing between
-			if (hx && hy && x == y) *taken = made_str(w, "", 0, "", 0, "", 0);
-			else *taken = made_str(w, low, nlow, s->str + x + (hx ? 4 : 0), y - x - (hx ? 4 : 0), high, nhigh);
-		}
-		size_t nv = v ? v->bytes : 0, pre = x + (hx ? 3 : 0), post = (hy ? 3 : 0) + s->bytes - y - rest;
-		char *buf = grab(NULL, pre + nv + post + 1);
+		if (taken) *taken = made_str(w, "", 0, s->str + x, y - x, "", 0);
+		size_t nv = v ? v->bytes : 0, post = s->bytes - y;
+		char *buf = grab(NULL, x + nv + post + 1);
 		memcpy(buf, s->str, x);
-		if (hx) half_of(buf + x, s->str + x, 0);
-		if (nv) memcpy(buf + pre, v->str, nv);
-		if (hy) half_of(buf + pre + nv, s->str + y, 1);
-		memcpy(buf + pre + nv + (hy ? 3 : 0), s->str + y + rest, s->bytes - y - rest);
-		size_t size = pre + nv + post;
-		join(buf, &size, pre + nv);
-		if (nv) join(buf, &size, pre);
+		if (nv) memcpy(buf + x, v->str, nv);
+		memcpy(buf + x + nv, s->str + y, post);
+		size_t size = x + nv + post;
+		// a lone high met by a lone low at either edge: one character again
+		join(buf, &size, x + nv);
+		if (nv) join(buf, &size, x);
 		buf[size] = 0;
 		out = made(w, nt_str(buf));
 		free(buf);
@@ -514,7 +477,7 @@ static void apply(work *w, const nt_patch *p, mu_facts *out) {
 		// a string moved into a string: its positions, before it is let go of
 		size_t size = from->has_range ? (size_t)(from->to - from->from)
 			: listy ? 1
-			: moved != NULL && moved->type == NT_STR ? (size_t)str_len(moved, w->utf16)
+			: moved != NULL && moved->type == NT_STR ? (size_t)str_len(moved)
 			: moved != NULL && moved->type == NT_TYPED ? nt_length(moved) : 0;
 		if (listy && !from->has_range) {
 			wv = made_list(w, 1);
@@ -826,12 +789,6 @@ static void let_go(work *w) {
 
 int mu_mutate(nd_node *node, mu_which which, const nt_patch *patches, size_t n, const void *change,
 	const mu_alloc *alloc, const mu_patched *patched, size_t *failed) {
-	return mu_mutate_units(node, which, patches, n, change, alloc, patched, failed, 0);
-}
-
-int mu_mutate_units(nd_node *node, mu_which which, const nt_patch *patches, size_t n,
-	const void *change, const mu_alloc *alloc, const mu_patched *patched, size_t *failed,
-	int utf16) {
 	// the object's versions on the node
 	int list = which.kind == MU_CHILDREN;
 	nd_entry **entries = list ? &node->children : &node->info;
@@ -847,7 +804,7 @@ int mu_mutate_units(nd_node *node, mu_which which, const nt_patch *patches, size
 	const nd_version *before = obj ? obj->versions : NULL;
 
 	work w = {.root = had && !list ? (nt_value *)before[0].content : NULL, .list = list,
-		.tell = patched != NULL, .utf16 = utf16};
+		.tell = patched != NULL};
 	mu_facts *seen = patched && n ? grab(NULL, n * sizeof *seen) : NULL;
 	volatile size_t i = 0;
 	if (setjmp(w.jump)) {

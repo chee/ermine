@@ -14,9 +14,6 @@ export type Options = Header & {
 	// told of each patch once the change is in, in order, with what notify reads of the content
 	// before it (notify's facts), and the node's id and which object
 	patched?: (patch: Patch, facts: Facts, node: string, which: Which) => void
-	// string positions and lengths count UTF-16 units, as JavaScript's own, not code points; not
-	// the change's. notify takes the same (an experiment: mutate_bench.ts)
-	utf16?: boolean
 }
 
 export type Code = "not-a-patch" | "no-key" | "range" | "wrong-kind" | "into-itself"
@@ -46,9 +43,9 @@ const fail = (code: Code): never => {
 	throw new Fail(code)
 }
 
-// a string's positions: walk.ts
-function len(v: unknown, utf16 = false): number {
-	if (typeof v === "string") return count(v, utf16)
+// a string's positions: code points (walk.ts)
+function len(v: unknown): number {
+	if (typeof v === "string") return count(v)
 	return (v as unknown[] | Typed).length
 }
 
@@ -69,7 +66,7 @@ function shape(p: Patch): boolean {
 }
 
 // one edit's content, changed patch by patch; list: a name's list, there only when not empty
-function createWork(root: unknown, list: boolean, utf16: boolean) {
+function createWork(root: unknown, list: boolean) {
 	// made here: may change in place. few, scanned; past 16, a WeakSet
 	let own: object[] | WeakSet<object> | undefined
 	const copy = <T extends object>(v: T): T => {
@@ -132,23 +129,19 @@ function createWork(root: unknown, list: boolean, utf16: boolean) {
 		let out: unknown, taken: unknown
 		if (typeof v === "string") {
 			if (w !== undefined && typeof w !== "string") fail("wrong-kind")
-			const at = !utf16 && memo !== null && memo.s === v
-				? near(v, a, b, all, memo)
-				: walk(v, a, b, all, utf16)
+			const at = memo !== null && memo.s === v ? near(v, a, b, all, memo) : walk(v, a, b, all)
 			if (!at) return fail("range")
 			const [x, y, n] = at
 			seq = { list: false, length: n, had: true }
 			taken = v.slice(x, y)
 			out = v.slice(0, x) + (w ?? "") + v.slice(y)
-			if (!utf16) {
-				const add = (w ?? "") as string, o = out as string, e = x + add.length
-				// a lone high met by a lone low at either edge: one pair now, a position fewer, and
-				// the finger may be inside it. rare: forget, the next walks
-				if (joins(o, x) || joins(o, e)) memo = null
-				else {
-					const wn = add ? count(add) : 0
-					memo = { s: o, n: n >= 0 ? n - (b - a) + wn : -1, k: a + wn, i: e }
-				}
+			const add = (w ?? "") as string, o = out as string, e = x + add.length
+			// a lone high met by a lone low at either edge: one pair now, a position fewer, and the
+			// finger may be inside it. rare: forget, the next walks
+			if (joins(o, x) || joins(o, e)) memo = null
+			else {
+				const wn = add ? count(add) : 0
+				memo = { s: o, n: n >= 0 ? n - (b - a) + wn : -1, k: a + wn, i: e }
 			}
 		} else if (isList(v)) {
 			if (b > v.length) fail("range")
@@ -253,7 +246,7 @@ function createWork(root: unknown, list: boolean, utf16: boolean) {
 			const w = isList(v) && !from.range ? [moved] : moved
 			splice(p.path, p.range[0], p.range[1], w, tell)
 			if (!tell) return
-			const size = from.range ? from.range[1] - from.range[0] : isList(v) ? 1 : len(moved, utf16)
+			const size = from.range ? from.range[1] - from.range[0] : isList(v) ? 1 : len(moved)
 			return { place: seq, from: was, size }
 		}
 		const w = "value" in p ? p.value : undefined
@@ -311,8 +304,8 @@ export default function mutate<V>(
 	const before = vs.get()
 	const list = which !== "value" && which[0] === "children"
 	const start = before.length ? before[0].content : list ? [] : ABSENT
-	const { patched, utf16, ...header } = options
-	const { work, apply } = createWork(start, list, utf16 ?? false)
+	const { patched, ...header } = options
+	const { work, apply } = createWork(start, list)
 	const seen: [Patch, Facts][] = []
 	let i = 0
 	for (const p of patches) {

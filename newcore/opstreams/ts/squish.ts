@@ -10,9 +10,9 @@ const isList = Array.isArray
 const ranged = (p: Patch): p is Ranged => p.range !== undefined
 const plain = (p: Patch) => p.move === undefined && !("value" in p)
 
-// strings count code points (utf16: UTF-16 units): walk.ts
-function len(v: unknown, utf16 = false): number {
-	if (typeof v === "string") return count(v, utf16)
+// strings count code points: walk.ts
+function len(v: unknown): number {
+	if (typeof v === "string") return count(v)
 	if (isList(v) || typed(v)) return v.length
 	return NaN
 }
@@ -45,11 +45,11 @@ type Tail = {
 const fresh = (): Tail => ({ n: -1, simple: false, own: false, back: null })
 
 // v, n long, with [x, y) replaced by w (undefined: removed); undefined when the kinds differ
-function splice(t: Tail, v: unknown, x: number, y: number, w: unknown, utf16: boolean): unknown {
+function splice(t: Tail, v: unknown, x: number, y: number, w: unknown): unknown {
 	const n = t.n
 	if (typeof v === "string") {
 		if (w !== undefined && typeof w !== "string") return undefined
-		const s = w ?? "", wn = len(s, utf16)
+		const s = w ?? "", wn = len(s)
 		t.n = n - (y - x) + wn
 		if (x === n) return t.simple = t.simple && s.length === wn, v + s
 		if (t.simple) return t.simple = s.length === wn, v.slice(0, x) + s + v.slice(y)
@@ -86,7 +86,7 @@ function splice(t: Tail, v: unknown, x: number, y: number, w: unknown, utf16: bo
 }
 
 // one patch doing what prev and then next do, or null; t: prev's value, then the result's
-function merge(t: Tail, prev: Patch, next: Patch, utf16: boolean): Patch | null {
+function merge(t: Tail, prev: Patch, next: Patch): Patch | null {
 	if (!ranged(prev) || !ranged(next) || prev.move || next.move) return null
 	if (!same(prev.path, next.path)) return null
 	const [a, b] = prev.range, [c, d] = next.range
@@ -94,16 +94,16 @@ function merge(t: Tail, prev: Patch, next: Patch, utf16: boolean): Patch | null 
 	const w = "value" in next ? next.value : undefined
 	if ("value" in prev) {
 		if (t.n < 0) {
-			t.n = len(prev.value, utf16)
+			t.n = len(prev.value)
 			t.simple = typeof prev.value === "string" && prev.value.length === t.n
 		}
 		// the span prev made is [a, a + n)
 		const n = t.n
 		let value: unknown, range: Span
 		if (a <= c && d <= a + n) {
-			value = splice(t, prev.value, c - a, d - a, w, utf16), range = [a, b]
+			value = splice(t, prev.value, c - a, d - a, w), range = [a, b]
 		} else if (c === a + n && d > c) {
-			value = w === undefined ? prev.value : splice(t, prev.value, n, n, w, utf16)
+			value = w === undefined ? prev.value : splice(t, prev.value, n, n, w)
 			range = [a, b + (d - c)]
 		} else return null
 		if (value === undefined) return null
@@ -137,14 +137,12 @@ export type Squish = {
 
 // typing at one place becomes one insert; a backspace after it, a shorter one;
 // a put makes earlier patches under it dead; moves are never merged
-// utf16: string positions count UTF-16 units, as mutate's and notify's utf16 (an experiment)
-export default function createSquish(options: { utf16?: boolean } = {}): Squish {
-	const utf16 = options.utf16 ?? false
+export default function createSquish(): Squish {
 	const buf: Patch[] = []
 	// counting code points, a lone surrogate makes positions depend on what is around it, which
 	// squish never sees (a lone high meeting a lone low is one pair, a position fewer). so a patch
 	// that puts one somewhere is never merged, and nothing at or under where it went is merged
-	// again. UTF-16 units are never fooled
+	// again
 	// PROBLEM (open, flagged by the designer 10-11): the content squish starts on is taken to be
 	// well-formed. lone halves already in it are never seen (squish stays content-free), so a
 	// removal that brings two together is merged wrong (squish_test.ts, "removal joins them")
@@ -167,10 +165,10 @@ export default function createSquish(options: { utf16?: boolean } = {}): Squish 
 				while (buf.length && dies(buf[buf.length - 1], patch)) buf.pop(), tail = fresh()
 			}
 			let m = null
-			if (!utf16 && (lone(patch.value) || (patch.move && isFouled(patch.move.path)))) {
+			if (lone(patch.value) || (patch.move && isFouled(patch.move.path))) {
 				fouled.push(patch.path)
-			} else if (buf.length && (utf16 || !isFouled(patch.path))) {
-				m = merge(tail, buf[buf.length - 1], patch, utf16)
+			} else if (buf.length && !isFouled(patch.path)) {
+				m = merge(tail, buf[buf.length - 1], patch)
 			}
 			if (m) buf[buf.length - 1] = m
 			else buf.push(patch), tail = fresh()
@@ -180,8 +178,8 @@ export default function createSquish(options: { utf16?: boolean } = {}): Squish 
 	}
 }
 
-export function squish(patches: Iterable<Patch>, options: { utf16?: boolean } = {}): Patch[] {
-	const s = createSquish(options)
+export function squish(patches: Iterable<Patch>): Patch[] {
+	const s = createSquish()
 	for (const p of patches) s.push(p)
 	return s.patches()
 }

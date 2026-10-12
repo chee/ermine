@@ -8,8 +8,20 @@
 // never reads, only compares, and hands to marked. Same order of operations as graph.ts: every
 // change, node made and intro ticks the clock where graph.ts does.
 //
-// memory: an arena per graph, freed by gr_free. Values (nt_value) are made with notify's
-// constructors and shared between versions by mutate, so nothing owns them: they are not freed.
+// memory: what a node holds is held, and let go when nothing holds it.
+//   - Held: each version a node in the table has holds its content (nt_ref; a children list, the
+//     graph's own copy of it), its change and its because. A version replaced or removed lets go
+//     of them; a node released lets go of all it holds, and a node the graph made (gr_make) goes
+//     with it. A node the host introduced keeps what it was given held: the host may read it after.
+//   - Borrowed: whatever is given to a call (values, patches, actors, causes, sites, names) is
+//     the caller's. The graph takes its own hold on a value it keeps, and copies a change's
+//     actor, cause, site and texts into the change. A change is the graph's: gr_change_hold keeps
+//     one past the next sweep, gr_change_drop lets that go.
+//   - Scratch: what a call gives back (items, names, errors, the interfaces made with scratch)
+//     is good until the next gr_sweep, or, made inside gr_enter, until its gr_leave. A hold let go
+//     (a version replaced, a node released) is let go at the next gr_sweep, so what was read
+//     stays readable until then. A host that never sweeps keeps everything, as before.
+// The graph's own (its spots, readers, the ids and names it keeps) stays until gr_free.
 // Single threaded. Notify tells each changed object whole (not patch by patch): a write of
 // several patches to one object marks its readers once.
 #ifndef GRAPH_H
@@ -62,8 +74,8 @@ typedef struct {
 
 // a version sync gives gr_versions (WIRING.tex, In). content: an nt_value (under children a list of
 // ids, a null for a symbol); change: its fields, the graph copies it and sets its time; because:
-// where it is in the chains, NULL: none. Strings are copied; contents, actors, causes and sites
-// are the caller's, kept alive as long as the graph is (in gr_pr_arena's, say)
+// where it is in the chains, NULL: none. All borrowed: the graph holds the contents it keeps and
+// copies the rest
 typedef struct {
 	const char *layer;
 	int64_t lamport;
@@ -131,16 +143,35 @@ typedef struct {
 
 gr_graph *gr_new(const gr_options *o);
 void gr_free(gr_graph *g);
+// scratch made between these (the scheduler's request) goes at the last gr_leave
+void gr_enter(gr_graph *g);
+void gr_leave(gr_graph *g);
+// the host's scratch freed, and every hold let go since the last sweep let go now: call it where
+// nothing the graph gave is still in use. Inside gr_enter: nothing
+void gr_sweep(gr_graph *g);
+// a hold of v let go at the next sweep (nt_free then)
+void gr_later(gr_graph *g, nt_value *v);
+// an error copied into the host's scratch: good until the next sweep, past gr_leave. A "stop"
+// is given back as it is
+const gr_error *gr_error_keep(gr_graph *g, const gr_error *e);
+// a copy of c of the graph's own (actor, cause, site and texts with it); its one hold goes at the
+// next sweep
+const gr_change *gr_change_copy(gr_graph *g, const gr_change *c);
+// a change of the graph's kept past the next sweep, until the drop (let go of at the sweep after);
+// any other pointer: nothing
+void gr_change_hold(gr_graph *g, const gr_change *c);
+void gr_change_drop(gr_graph *g, const gr_change *c);
+// kept until gr_free
 pr_arena *gr_pr_arena(gr_graph *g);
 void *gr_alloc(gr_graph *g, size_t n);
 char *gr_dup(gr_graph *g, const char *s);
-// protect's value from ours, in the graph's arena (null for a live value or absent)
+// protect's value from ours, in scratch (null for a live value or absent)
 pr_value *gr_pr(gr_graph *g, const nt_value *v);
 
 nd_node *gr_get(gr_graph *g, const char *id);
 int gr_ephemeral(gr_graph *g, const char *id);
 void *gr_owner(gr_graph *g, const char *id);
-// a change for a node of the host's own making, at a time
+// a change for a node of the host's own making, at a time: the host's, never let go of
 const gr_change *gr_change_new(gr_graph *g, int64_t time, const pr_value *actor, const char *node);
 // the object of a node given these versions (value: name NULL); an entry is made if needed,
 // and gone if no versions. children: versions' contents are nd_list
@@ -242,6 +273,7 @@ typedef struct {
 	void *owner;             // may make, place and move ephemeral nodes, owning those it makes
 	const void *tag;         // what changes are made with: given to marked
 	gr_times *wrote;
+	int scratch;             // the interface made in scratch (graph.h, memory); else kept until gr_free
 	// around each read (NULL: made, tracked by depend): it makes it with gr_read_make
 	const gr_error *(*reading)(void *ctx, gr_read *r);
 	// around each change (NULL: fn run): runs fn(arg) and answers its error

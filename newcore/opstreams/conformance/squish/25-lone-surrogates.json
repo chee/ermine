@@ -1,5 +1,5 @@
 {
-	"title": "lone surrogates: halves typed apart stay apart (code points), join (UTF-16 units)",
+	"title": "lone surrogates: halves typed apart stay apart",
 	"steps": [
 		{
 			"op": "squish",
@@ -86,66 +86,6 @@
 							2
 						],
 						"value": "c"
-					}
-				]
-			}
-		},
-		{
-			"op": "squish",
-			"utf16": true,
-			"patches": [
-				{
-					"path": [
-						"t"
-					],
-					"range": [
-						0,
-						0
-					],
-					"value": "\ud83d"
-				},
-				{
-					"path": [
-						"t"
-					],
-					"range": [
-						1,
-						1
-					],
-					"value": "\ude00"
-				},
-				{
-					"path": [
-						"t"
-					],
-					"range": [
-						2,
-						2
-					],
-					"value": "b"
-				},
-				{
-					"path": [
-						"t"
-					],
-					"range": [
-						3,
-						3
-					],
-					"value": "c"
-				}
-			],
-			"expect": {
-				"patches": [
-					{
-						"path": [
-							"t"
-						],
-						"range": [
-							0,
-							0
-						],
-						"value": "😀bc"
 					}
 				]
 			}

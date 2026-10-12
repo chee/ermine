@@ -171,12 +171,12 @@ const whole = ["a", "é", "😀", "中", "xy", "👍🏽"]
 const lone = [...whole, "\uD83D", "\uDE00", "\uD800", "\uDFFF"]
 
 // applies ps one change each, leaving out those that fail; what was kept, and the end
-function oneByOne(start: string, ps: Patch[], utf16: boolean) {
+function oneByOne(start: string, ps: Patch[]) {
 	const n = createNode<unknown, Change>("a", { value: [{ content: { t: start }, change: host }] })
 	const kept: Patch[] = []
 	for (const p of ps) {
 		try {
-			mutate(n, "value", [p], { actor: "me", time: 1, utf16 })
+			mutate(n, "value", [p], { actor: "me", time: 1 })
 			kept.push(p)
 		} catch (e) {
 			if (!(e instanceof MutateError)) throw e
@@ -184,10 +184,10 @@ function oneByOne(start: string, ps: Patch[], utf16: boolean) {
 	}
 	return { kept, end: (n.value[0].content as { t: string }).t }
 }
-function atOnce(start: string, ps: Patch[], utf16: boolean): string {
+function atOnce(start: string, ps: Patch[]): string {
 	const n = createNode<unknown, Change>("a", { value: [{ content: { t: start }, change: host }] })
 	try {
-		mutate(n, "value", ps, { actor: "me", time: 1, utf16 })
+		mutate(n, "value", ps, { actor: "me", time: 1 })
 	} catch (e) {
 		return `throws ${(e as Error).message}`
 	}
@@ -205,9 +205,9 @@ function xorshift(seed: number) {
 }
 // runs of typing, backspace and delete at a caret, now and then a new caret
 // start: what the content is made of (default: parts)
-function editing(seed: number, parts: string[], utf16: boolean, start_ = parts) {
+function editing(seed: number, parts: string[], start_ = parts) {
 	const rand = xorshift(seed)
-	const size = (s: string) => utf16 ? s.length : Array.from(s).length
+	const size = (s: string) => Array.from(s).length
 	const start = Array.from({ length: rand(12) }, () => start_[rand(start_.length)]).join("")
 	let n = size(start), caret = rand(n + 1)
 	const ps: Patch[] = []
@@ -229,13 +229,13 @@ function editing(seed: number, parts: string[], utf16: boolean, start_ = parts) 
 	return { start, ps }
 }
 // the seeds whose squished patches mean something else
-function broken(parts: string[], utf16: boolean, seeds: number, start_ = parts): string[] {
+function broken(parts: string[], seeds: number, start_ = parts): string[] {
 	const out: string[] = []
 	for (let seed = 1; seed <= seeds; seed++) {
-		const { start, ps } = editing(seed, parts, utf16, start_)
-		const { kept, end } = oneByOne(start, ps, utf16)
-		const squished = squish(kept, { utf16 })
-		const got = atOnce(start, squished, utf16)
+		const { start, ps } = editing(seed, parts, start_)
+		const { kept, end } = oneByOne(start, ps)
+		const squished = squish(kept)
+		const got = atOnce(start, squished)
 		if (got !== end) {
 			out.push(
 				`seed ${seed}: ${JSON.stringify(end)} one by one, ${JSON.stringify(got)} squished`,
@@ -245,30 +245,22 @@ function broken(parts: string[], utf16: boolean, seeds: number, start_ = parts):
 	return out
 }
 
-Deno.test("squish means what the patches meant: well-formed strings, code points", () => {
-	assertEquals(broken(whole, false, 300), [])
+Deno.test("squish means what the patches meant: well-formed strings", () => {
+	assertEquals(broken(whole, 300), [])
 })
 
-Deno.test("squish means what the patches meant: lone surrogates, UTF-16 units", () => {
-	assertEquals(broken(lone, true, 300), [])
-})
-
-Deno.test("squish means what the patches meant: well-formed strings, UTF-16 units", () => {
-	assertEquals(broken(whole, true, 300), [])
-})
-
-Deno.test("squish means what the patches meant: lone surrogates typed into well-formed content, code points", () => {
-	assertEquals(broken(lone, false, 300, whole), [])
+Deno.test("squish means what the patches meant: lone surrogates typed into well-formed content", () => {
+	assertEquals(broken(lone, 300, whole), [])
 })
 
 // a value with a lone surrogate: never merged, nor anything after it there
-Deno.test("squish with lone surrogates, code points: a typed high and low stay apart", () => {
+Deno.test("squish with lone surrogates: a typed high and low stay apart", () => {
 	const ps: Patch[] = [ins(0, "\uD83D"), ins(1, "\uDE00"), ins(1, "b"), ins(2, "c")]
 	// one by one: the low joins the high, so position 1 is after the pair
-	assertEquals(oneByOne("", ps, false).end, "😀bc")
+	assertEquals(oneByOne("", ps).end, "😀bc")
 	// merged, b would land between the halves: so nothing is
 	assertEquals(squish(ps), ps)
-	assertEquals(atOnce("", squish(ps), false), "😀bc")
+	assertEquals(atOnce("", squish(ps)), "😀bc")
 	// and well-formed typing before the lone value still merges
 	assertEquals(squish([ins(0, "a"), ins(1, "b"), ins(2, "\uD83D")]), [
 		ins(0, "ab"),
@@ -278,33 +270,33 @@ Deno.test("squish with lone surrogates, code points: a typed high and low stay a
 
 // PROBLEM (open): content that already holds lone surrogates, which squish never sees (squish.ts)
 
-Deno.test("squish with lone surrogates in the content, code points: a removal joins them", () => {
+Deno.test("squish with lone surrogates in the content: a removal joins them", () => {
 	// x, a lone high, y, a lone low: four positions
 	const start = "x\uD83Dy\uDE00z"
 	const ps: Patch[] = [del(2, 3), del(1, 2)]
 	// one by one: removing y joins the halves into one pair at 1; then [1, 2) removes the pair
-	assertEquals(oneByOne(start, ps, false).end, "xz")
+	assertEquals(oneByOne(start, ps).end, "xz")
 	// squished: [1, 3) removes the high and y, and leaves the low
 	assertEquals(squish(ps), [del(1, 3)])
-	assertEquals(atOnce(start, squish(ps), false), "x\uDE00z")
+	assertEquals(atOnce(start, squish(ps)), "x\uDE00z")
 })
 
-Deno.test("squish with lone surrogates in the content, code points: the fuzz finds more", () => {
+Deno.test("squish with lone surrogates in the content: the fuzz finds more", () => {
 	// content mostly lone halves, so removals bring them together
-	const found = broken(whole, false, 300, ["\uD83D", "\uDE00", "x"])
+	const found = broken(whole, 300, ["\uD83D", "\uDE00", "x"])
 	assertEquals(found.length > 0, true, "no counterexample found")
 })
 
 // PROBLEM (open, squish.ts): passes once squish keeps the meaning on content that already holds
-// lone surrogates, counting code points. skipped until then
+// lone surrogates. skipped until then
 Deno.test({
-	name: "squish means what the patches meant: content with lone surrogates, code points (open)",
+	name: "squish means what the patches meant: content with lone surrogates (open)",
 	ignore: true,
 	fn() {
 		const start = "x\uD83Dy\uDE00z"
 		const ps: Patch[] = [del(2, 3), del(1, 2)]
-		assertEquals(atOnce(start, squish(ps), false), oneByOne(start, ps, false).end)
-		assertEquals(broken(whole, false, 300, ["\uD83D", "\uDE00", "x"]), [])
-		assertEquals(broken(lone, false, 300), [])
+		assertEquals(atOnce(start, squish(ps)), oneByOne(start, ps).end)
+		assertEquals(broken(whole, 300, ["\uD83D", "\uDE00", "x"]), [])
+		assertEquals(broken(lone, 300), [])
 	},
 })

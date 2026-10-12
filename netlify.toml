@@ -1,8 +1,8 @@
 # the demos, built static: newcore/demos/build.ts bundles each page's .ts (Netlify can't run serve.ts)
 [build]
   base = "newcore"
-  command = "curl -fsSL https://deno.land/install.sh | sh && ~/.deno/bin/deno run -A demos/build.ts"
-  publish = "newcore/demos/dist"
+  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && $HOME/.deno/bin/deno run -A demos/build.ts"
+  publish = "demos/dist"
 
 [[headers]]
   for = "/*.wasm"

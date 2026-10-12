@@ -16,33 +16,31 @@ static void *grow(void *p, size_t *cap, size_t want, size_t each) {
 	return p;
 }
 
-// a string's positions: code points, and UTF-16 units (a character of four bytes is two). a lone
-// surrogate is held as WTF-8 (three bytes, ED A0..BF xx): a position of its own, one unit
+// a string's positions: code points. a lone surrogate is held as WTF-8 (three bytes, ED A0..BF
+// xx): a position of its own
 sq_value sq_str(const char *s, size_t size) {
-	size_t n = 0, units = 0;
+	size_t n = 0;
 	int lone = 0;
 	for (size_t i = 0; i < size; i++) {
 		unsigned char b = (unsigned char)s[i];
 		if ((b & 0xC0) == 0x80) continue;
-		n++, units += b >= 0xF0 ? 2 : 1;
+		n++;
 		if (b == 0xED && i + 1 < size && (unsigned char)s[i + 1] >= 0xA0) lone = 1;
 	}
-	return (sq_value){SQ_STR, n, size, s, units, lone};
+	return (sq_value){SQ_STR, n, size, s, lone};
 }
 sq_value sq_list(const void *const *e, size_t n) {
-	return (sq_value){SQ_LIST, n, n * sizeof(void *), (const void *)e, n, 0};
+	return (sq_value){SQ_LIST, n, n * sizeof(void *), (const void *)e, 0};
 }
-sq_value sq_bytes(const uint8_t *b, size_t n) { return (sq_value){SQ_BYTES, n, n, b, n, 0}; }
-sq_value sq_any(const void *v) { return (sq_value){SQ_ANY, 0, 0, v, 0, 0}; }
+sq_value sq_bytes(const uint8_t *b, size_t n) { return (sq_value){SQ_BYTES, n, n, b, 0}; }
+sq_value sq_any(const void *v) { return (sq_value){SQ_ANY, 0, 0, v, 0}; }
 
-// the byte offset of position i (element for the rest): code points for strings, or UTF-16 units.
-// units may put a position inside a four-byte character, whose offset is answered with *half set
-static size_t offset(const sq_value *v, size_t i, int utf16, int *half) {
-	*half = 0;
+// the byte offset of position i (element for the rest): code points for strings
+static size_t offset(const sq_value *v, size_t i) {
 	if (v->kind == SQ_LIST) return i * sizeof(void *);
 	if (v->kind == SQ_BYTES) return i;
 	const unsigned char *s = v->data;
-	size_t total = utf16 ? v->units : v->n;
+	size_t total = v->n;
 	if (i >= total) return v->size;
 	// the back half from the end: where typing and backspacing happen
 	if (i > total / 2) {
@@ -50,43 +48,17 @@ static size_t offset(const sq_value *v, size_t i, int utf16, int *half) {
 		while (seen > i) {
 			do at--;
 			while ((s[at] & 0xC0) == 0x80);
-			seen -= utf16 && s[at] >= 0xF0 ? 2 : 1;
+			seen--;
 		}
-		if (seen < i) *half = 1;
 		return at;
 	}
 	size_t at = 0, seen = 0;
 	while (seen < i) {
-		size_t each = utf16 && s[at] >= 0xF0 ? 2 : 1;
-		if (seen + each > i) return *half = 1, at;
-		seen += each;
+		seen++;
 		do at++;
 		while (at < v->size && (s[at] & 0xC0) == 0x80);
 	}
 	return at;
-}
-// the half of the four-byte character at c, as a lone surrogate of three bytes: low 0 the high, 1 the low
-static size_t half_of(unsigned char *out, const unsigned char *c, int low) {
-	unsigned long cp = ((c[0] & 7ul) << 18) | ((c[1] & 63ul) << 12) | ((c[2] & 63ul) << 6) | (c[3] & 63ul);
-	cp -= 0x10000;
-	unsigned long u = low ? 0xDC00 + (cp & 0x3FF) : 0xD800 + (cp >> 10);
-	out[0] = (unsigned char)(0xE0 | u >> 12);
-	out[1] = (unsigned char)(0x80 | ((u >> 6) & 63));
-	out[2] = (unsigned char)(0x80 | (u & 63));
-	return 3;
-}
-// a lone high before a lone low at p[j] is one character: joined, and the bytes it leaves cut
-static void join(unsigned char *p, size_t *size, size_t j) {
-	if (j < 3 || j + 3 > *size) return;
-	if (p[j - 3] != 0xED || (p[j - 2] & 0xF0) != 0xA0 || p[j] != 0xED || (p[j + 1] & 0xF0) != 0xB0) return;
-	unsigned long hi = ((p[j - 2] & 0x0Ful) << 6) | (p[j - 1] & 63ul), lo = ((p[j + 1] & 0x0Ful) << 6) | (p[j + 2] & 63ul);
-	unsigned long cp = 0x10000 + (hi << 10) + lo;
-	p[j - 3] = (unsigned char)(0xF0 | cp >> 18);
-	p[j - 2] = (unsigned char)(0x80 | ((cp >> 12) & 63));
-	p[j - 1] = (unsigned char)(0x80 | ((cp >> 6) & 63));
-	p[j] = (unsigned char)(0x80 | (cp & 63));
-	memmove(p + j + 1, p + j + 3, *size - j - 3);
-	*size -= 2;
 }
 
 static int same_key(const sq_key *a, const sq_key *b) {
@@ -116,8 +88,7 @@ struct sq {
 	size_t nown, capown;
 	// the tail's value is the last own buffer, and nothing else points into it
 	int tail_owns;
-	int utf16;
-	// where a lone surrogate was put (code points only): nothing at or under is merged again
+	// where a lone surrogate was put: nothing at or under is merged again
 	struct {
 		const sq_key *keys;
 		size_t depth;
@@ -125,13 +96,11 @@ struct sq {
 	size_t nfouled, capfouled;
 };
 
-sq *sq_new_units(int utf16) {
+sq *sq_new(void) {
 	sq *s = calloc(1, sizeof *s);
 	if (!s) abort();
-	s->utf16 = utf16;
 	return s;
 }
-sq *sq_new(void) { return sq_new_units(0); }
 
 static int is_fouled(const sq *s, const sq_key *path, size_t depth) {
 	for (size_t i = 0; i < s->nfouled; i++)
@@ -153,23 +122,14 @@ static void drop_tail(sq *s) {
 	s->n--;
 }
 
-// the positions v counts in this squisher: its units when it counts UTF-16 ones
-static size_t *counted(const sq *s, sq_value *v) { return s->utf16 && v->kind == SQ_STR ? &v->units : &v->n; }
-
 // v's [x, y) (positions) replaced by w's data; w NULL: removed. 0: the kinds differ
 static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) {
 	sq_value *v = &prev->value;
 	if (w && w->kind != v->kind) return 0;
-	int hx, hy;
-	size_t bx = offset(v, x, s->utf16, &hx), by = offset(v, y, s->utf16, &hy), wsize = w ? w->size : 0;
-	size_t *count = counted(s, v), more = w ? *counted(s, (sq_value *)w) : 0;
-	size_t n = *count - (y - x) + more;
-	const unsigned char *d = v->data;
-	// an append to the tail's own buffer: in place (unless a lone high would meet a lone low)
-	int meets = s->utf16 && wsize >= 3 && v->kind == SQ_STR && v->size >= 3 && d[v->size - 3] == 0xED &&
-		(d[v->size - 2] & 0xF0) == 0xA0 && ((const unsigned char *)w->data)[0] == 0xED &&
-		(((const unsigned char *)w->data)[1] & 0xF0) == 0xB0;
-	if (s->tail_owns && x == *count && y == *count && !meets && s->own[s->nown - 1].p == v->data) {
+	size_t bx = offset(v, x), by = offset(v, y), wsize = w ? w->size : 0;
+	size_t n = v->n - (y - x) + (w ? w->n : 0);
+	// an append to the tail's own buffer: in place
+	if (s->tail_owns && x == v->n && y == v->n && s->own[s->nown - 1].p == v->data) {
 		size_t size = v->size + wsize;
 		own *o = &s->own[s->nown - 1];
 		if (size > o->cap) {
@@ -179,33 +139,23 @@ static int splice(sq *s, sq_patch *prev, size_t x, size_t y, const sq_value *w) 
 			o->cap = c;
 		}
 		if (wsize) memcpy((char *)o->p + v->size, w->data, wsize);
-		v->data = o->p, v->size = size, *count = n;
+		v->data = o->p, v->size = size, v->n = n;
 		return 1;
 	}
-	// a position inside a four-byte character: it is cut into its two halves, each a lone surrogate
-	size_t skip = hy ? 4 : 0;
-	size_t size = bx + (hx ? 3 : 0) + wsize + (hy ? 3 : 0) + (v->size - by - skip);
+	size_t size = bx + wsize + (v->size - by);
 	unsigned char *p = take(s, size * 2);
 	size_t k = bx;
 	memcpy(p, v->data, bx);
-	if (hx) k += half_of(p + k, d + bx, 0);
-	size_t j1 = k;
 	if (wsize) memcpy(p + k, w->data, wsize), k += wsize;
-	size_t j2 = k;
-	if (hy) k += half_of(p + k, d + by, 1);
-	memcpy(p + k, d + by + skip, v->size - by - skip);
-	k += v->size - by - skip;
-	if (s->utf16 && v->kind == SQ_STR) {
-		join(p, &k, j2);
-		if (j1 != j2) join(p, &k, j1);
-	}
+	memcpy(p + k, (const unsigned char *)v->data + by, v->size - by);
+	k += v->size - by;
 	// the old buffer, if the tail's own, is no one else's
 	if (s->tail_owns && s->own[s->nown - 2].p == v->data) {
 		free(s->own[s->nown - 2].p);
 		s->own[s->nown - 2] = s->own[s->nown - 1];
 		s->nown--;
 	}
-	v->data = p, v->size = k, *count = n;
+	v->data = p, v->size = k, v->n = n;
 	s->tail_owns = 1;
 	return 1;
 }
@@ -219,7 +169,7 @@ static int merge(sq *s, const sq_patch *next) {
 	const sq_value *w = next->has_value ? &next->value : NULL;
 	if (prev->has_value) {
 		if (prev->value.kind == SQ_ANY) return 0;
-		long n = (long)*counted(s, &prev->value);
+		long n = (long)prev->value.n;
 		if (a <= c && d <= a + n) return splice(s, prev, (size_t)(c - a), (size_t)(d - a), w);
 		if (c == a + n && d > c) {
 			if (w && !splice(s, prev, (size_t)n, (size_t)n, w)) return 0;
@@ -260,13 +210,12 @@ void sq_push(sq *s, const sq_patch *p) {
 			drop_tail(s);
 		}
 	}
-	// counting code points, a lone surrogate makes positions depend on what is around it (a lone
-	// high meeting a lone low is one pair, a position fewer): never merged, nor what is at or under
-	// where it went. UTF-16 units are never fooled
-	if (!s->utf16 && ((p->has_value && p->value.lone) || (p->move && is_fouled(s, p->move_path, p->move_depth)))) {
+	// a lone surrogate makes positions depend on what is around it (a lone high meeting a lone low
+	// is one pair, a position fewer): never merged, nor what is at or under where it went
+	if ((p->has_value && p->value.lone) || (p->move && is_fouled(s, p->move_path, p->move_depth))) {
 		s->fouled = grow(s->fouled, &s->capfouled, s->nfouled + 1, sizeof *s->fouled);
 		s->fouled[s->nfouled].keys = p->path, s->fouled[s->nfouled++].depth = p->depth;
-	} else if (s->n && (s->utf16 || !is_fouled(s, p->path, p->depth)) && merge(s, p)) {
+	} else if (s->n && !is_fouled(s, p->path, p->depth) && merge(s, p)) {
 		return;
 	}
 	s->buf = grow(s->buf, &s->cap, s->n + 1, sizeof *s->buf);

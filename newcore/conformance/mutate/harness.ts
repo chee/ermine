@@ -6,10 +6,9 @@
 //    value: versions; info: [[name, versions]], in order
 //    version: { content, change, because? }, all JSON
 // { op: "node" }                       → { node: { id, value, info } }
-// { op: "mutate", which, patches, header?, patched?, utf16? }
+// { op: "mutate", which, patches, header?, patched? }
 //    which: "value" or ["info", name]; patches: JSON patches as notify.ts has them;
-//    header: the change's (default { time: 1, actor: "me" }); utf16: string positions count
-//    UTF-16 units, not code points (not the change's)
+//    header: the change's (default { time: 1, actor: "me" })
 //    → { change }, and, patched: true, { facts }: one Facts per patch, in order
 //    → { fail: code, patch: i }    a MutateError; nothing changes
 //
@@ -85,7 +84,6 @@ function answer(r: Request): Json {
 			const patches = (r.patches as Patch[]).map((p) => revive(p) as Patch)
 			const change = mutate(node, which, patches, {
 				...header,
-				...(r.utf16 ? { utf16: true } : {}),
 				...(r.patched ? { patched: (_p: Patch, f: Facts) => told.push(f) } : {}),
 			})
 			return r.patched ? { change, facts: told } : { change }

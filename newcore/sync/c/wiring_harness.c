@@ -8,7 +8,7 @@
 //   {op: "read", device, id, object?, only?}, {op: "records", device, node?, only?},
 //   {op: "versions", device, id, object, list}, {op: "watch", device, address}, {op: "marked", device},
 //   {op: "stored", device, doc}
-// Values the nodes keep are never freed (nt_value shared into versions; json.h), so this leaks them.
+// The values a request builds are not freed (they are handed on to the graph), so this leaks them.
 #define _POSIX_C_SOURCE 200809L
 #include "wiring.h"
 
@@ -679,7 +679,6 @@ static Json *device_op(const Json *r) {
 	wo.signer.context = d->seed;
 	wo.random = random_of;
 	wo.random_context = d;
-	wo.arena = sc_pr_arena(d->s);
 	d->w = wiring_create(d->t, &wo);
 	devices = realloc(devices, (device_count + 1) * sizeof *devices);
 	if (devices == NULL) abort();
@@ -775,6 +774,8 @@ int main(void) {
 			print_error(m);
 		}
 		fflush(stdout);
+		// nothing a scheduler gave is held past a line: what each let go of goes
+		for (size_t i = 0; i < device_count; i++) sc_sweep(devices[i]->s);
 	}
 	reset();
 	free(line);

@@ -12,19 +12,16 @@ typedef struct {
 	long n;
 } sq_key;
 
-// what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points,
-// units UTF-16 units), a list (n opaque elements), bytes; anything else is SQ_ANY and never joins.
-// size: data's length in bytes. lone: a lone surrogate is in it, or in anything it holds (a string
-// sets it itself; for a list or any other value, the caller does: squish never reads those).
-// A string squish joined counts only in its squisher's unit (n, or units when utf16): the other is
-// left as it was
+// what joins and cuts: a string (UTF-8, with a lone surrogate as WTF-8: n counts code points), a
+// list (n opaque elements), bytes; anything else is SQ_ANY and never joins. size: data's length in
+// bytes. lone: a lone surrogate is in it, or in anything it holds (a string sets it itself; for a
+// list or any other value, the caller does: squish never reads those)
 typedef enum { SQ_ANY, SQ_STR, SQ_LIST, SQ_BYTES } sq_kind;
 typedef struct {
 	sq_kind kind;
 	size_t n;
 	size_t size;
 	const void *data;
-	size_t units;
 	int lone;
 } sq_value;
 
@@ -50,8 +47,6 @@ typedef struct {
 typedef struct sq sq;
 
 sq *sq_new(void);
-// utf16: string positions count UTF-16 units, as squish.ts's utf16 (an experiment: as mutate's)
-sq *sq_new_units(int utf16);
 // path, keys, values and moves are borrowed: kept alive by the caller while the squisher is
 void sq_push(sq *s, const sq_patch *patch);
 // what has been pushed, squished; valid until the next push or sq_free

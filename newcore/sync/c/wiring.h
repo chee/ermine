@@ -5,7 +5,9 @@
 //
 // Sans-IO as the transport is: there is no promise to await, so what comes after the taking in (sealing,
 // storing, sending) waits until wiring_idle runs it, in the order made: a blop's parents are stored before it.
-// Json values are never freed (json.h): what a record makes is kept as long as the process.
+// Memory: what a record makes (its change and blop) is let go of once taken in; the transport keeps the
+// blop decoded, the chains what they need. What versions is handed (actors, causes, sites, the versions'
+// contents) is borrowed for the call: the graph copies or holds what it keeps.
 #ifndef WIRING_H
 #define WIRING_H
 
@@ -29,9 +31,6 @@ typedef struct {
 	seal_signer signer;
 	commit_random random;
 	void *random_context;
-	// what versions is handed (actors, causes, sites) is made in it: it must outlive the graph (the scheduler's
-	// sc_pr_arena)
-	pr_arena *arena;
 	// the source roots a site is made shareable against (COMMIT.tex); none: NULL, 0
 	const char *const *roots;
 	size_t root_count;

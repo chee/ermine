@@ -201,7 +201,8 @@ static int64_t no_time(void *context, const char *name) {
 static void settle(wiring *w, const char *doc, transport_layer layer, const Json *blop, const uint8_t name[32]) {
 	chains *c = transport_chains(w->t, doc, layer);
 	if (c == NULL) return;
-	pr_arena *a = w->o.arena;
+	// what versions is handed is borrowed for the call: made here, let go of after
+	pr_arena scratch = {0}, *a = &scratch;
 	const Json *object = jsonGet(blop, "object");
 	gr_where where = GR_VALUE;
 	const char *oname = NULL;
@@ -246,6 +247,7 @@ static void settle(wiring *w, const char *doc, transport_layer layer, const Json
 	free(changes);
 	free(because);
 	free(vs);
+	pr_free(&scratch);
 }
 
 static void arrived(void *context, const transport_arrival *arrival) {
@@ -308,6 +310,8 @@ void wiring_changed(wiring *w, const gr_record *r) {
 	chains *c = transport_chains(w->t, doc, layer);
 	commit_code code;
 	Json *blop = c ? commit_make(c, change, at, w->o.roots, w->o.root_count, w->o.random, w->o.random_context, &code) : NULL;
+	// the blop holds what it shares of the change
+	jsonFree(change);
 	if (blop == NULL) {
 		trouble(w, "commit", c ? commit_code_name(code) : "not a document");
 		return;
@@ -317,17 +321,20 @@ void wiring_changed(wiring *w, const gr_record *r) {
 	blop_error error = blop_encode(blop, &bytes, &length);
 	if (error.code != BLOP_OK) {
 		free(error.field);
+		jsonFree(blop);
 		trouble(w, "commit", "not a blop");
 		return;
 	}
 	blop_name(bytes, length, name);
-	// taken in now, so that the next change commits against it
+	// taken in now, so that the next change commits against it; the transport keeps its own, decoded
 	if (transport_take(w->t, doc, bytes, length, layer) != TRANSPORT_OK) {
 		trouble(w, "take", "not taken");
+		jsonFree(blop);
 		free(bytes);
 		return;
 	}
 	settle(w, doc, layer, blop, name);
+	jsonFree(blop);
 	later(w, doc, layer, bytes, length);
 }
 

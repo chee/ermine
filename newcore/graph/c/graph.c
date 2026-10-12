@@ -235,8 +235,12 @@ static held *hs_find(const heldset *s, const void *p) {
 }
 static void hs_add(heldset *s, const void *p, kind k) {
 	if ((s->n + 1) * 2 > s->slots) {
+		// made again, the gone left out: as big as what is here needs, not what came and went
+		size_t live = 1;
+		for (size_t i = 0; i < s->slots; i++) live += s->e[i].p && s->e[i].p != TOMBP;
 		heldset t = {0};
-		t.slots = s->slots ? s->slots * 2 : 64;
+		t.slots = 64;
+		while (t.slots < live * 4) t.slots *= 2;
 		t.e = calloc(t.slots, sizeof *t.e);
 		if (!t.e) die("out of memory");
 		for (size_t i = 0; i < s->slots; i++)
@@ -249,7 +253,7 @@ static void hs_add(heldset *s, const void *p, kind k) {
 	if (!s->e[i].p) s->n++;
 	s->e[i] = (held){p, 0, k};
 }
-static void hs_del(heldset *s, held *h) {
+static void hs_del(held *h) {
 	h->p = TOMBP;
 	h->refs = 0;
 }
@@ -280,6 +284,19 @@ typedef struct {
 	omap children, info; // gr_spot *
 	vec all; // gr_spot *
 } gr_spots;
+
+// what a node in the table holds: its arrays, lists, changes, becauses and contents, one hold
+// each. made: the graph made the node (gr_make), and frees it when it goes
+typedef struct {
+	later_t *v;
+	size_t n, cap;
+	int made;
+} ledger;
+// a node the graph made, and the change its header borrows from
+typedef struct {
+	nd_node node;
+	const gr_change *made;
+} made_node;
 
 struct gr_reader {
 	gr_graph *g;
@@ -323,8 +340,15 @@ typedef struct chg {
 } chg;
 
 struct gr_graph {
-	arena a;
-	pr_arena pra;
+	arena a; // kept as long as the graph
+	arena req, hosts; // scratch: a request's (until gr_leave), the host's (until gr_sweep)
+	pr_arena pra, preq, phost; // the same for protect's values
+	int depth; // gr_enter's
+	heldset mine;
+	omap ledgers; // ledger *, by node id
+	omap strings; // the graph's own copies of ids and names, by themselves
+	later_t *later;
+	size_t nlater, laterroom;
 	int64_t own_clock;
 	int64_t *clock;
 	gr_options o;
@@ -362,10 +386,258 @@ char *gr_dup(gr_graph *s, const char *str) {
 void *gr_alloc(gr_graph *s, size_t n) { return amem(s, n); }
 pr_arena *gr_pr_arena(gr_graph *s) { return &s->pra; }
 
+// scratch: a request's while one runs (gr_enter), else the host's
+static void *tmem(gr_graph *s, size_t n) { return aalloc(s->depth ? &s->req : &s->hosts, n); }
+static pr_arena *tpra(gr_graph *s) { return s->depth ? &s->preq : &s->phost; }
+static char *tdup(gr_graph *s, const char *str) {
+	size_t n = strlen(str) + 1;
+	return memcpy(tmem(s, n), str, n);
+}
+// the graph's own copy of a string, one per text
+static const char *intern(gr_graph *g, const char *str) {
+	const char *had = om_get(&g->strings, str);
+	if (had) return had;
+	char *c = gr_dup(g, str);
+	om_set(&g->strings, c, c);
+	return c;
+}
+
+// holds: of what the graph made (mine), and of values (nt_ref)
+
+static void forget(gr_graph *g, const void *p, kind k, int cascade);
+
+static void hold(gr_graph *g, const void *p, int value) {
+	if (value) {
+		nt_ref((nt_value *)p);
+		return;
+	}
+	held *h = hs_find(&g->mine, p);
+	if (h) h->refs++;
+}
+// a hold let go now: the last frees it
+static void drop(gr_graph *g, const void *p, int value) {
+	if (value) {
+		nt_free((nt_value *)p);
+		return;
+	}
+	held *h = hs_find(&g->mine, p);
+	if (!h || --h->refs) return;
+	kind k = h->k;
+	hs_del(h);
+	forget(g, p, k, 1);
+}
+// a hold let go at the next sweep: what was read until then stays
+static void later(gr_graph *g, const void *p, int value) {
+	if (!p) return;
+	if (g->nlater == g->laterroom) {
+		g->laterroom = g->laterroom ? g->laterroom * 2 : 64;
+		g->later = regrow(g->later, g->laterroom * sizeof *g->later);
+	}
+	g->later[g->nlater++] = (later_t){p, value};
+}
+// made: the graph's, with one hold, let go at the next sweep unless kept
+static void mine(gr_graph *g, const void *p, kind k, int kept) {
+	hs_add(&g->mine, p, k);
+	hs_find(&g->mine, p)->refs = 1;
+	if (!kept) later(g, p, 0);
+}
+
+static void synced_gone(gr_graph *g, const gr_synced *b);
+// what of the graph's goes: freed, and (cascade) what it held let go
+static void forget(gr_graph *g, const void *p, kind k, int cascade) {
+	if (k == K_SYNCED) synced_gone(g, p);
+	if (k == K_NODE && cascade) drop(g, ((const made_node *)p)->made, 0);
+	free((void *)p);
+}
+
+// sizes and copies, in one block: each piece 16-aligned
+static size_t up(size_t n) { return (n + 15) & ~(size_t)15; }
+static void *take(char **at, size_t n) {
+	void *p = *at;
+	*at += up(n);
+	return p;
+}
+static size_t text_room(const char *t) { return t ? up(strlen(t) + 1) : 0; }
+static const char *text_copy(const char *t, char **at) {
+	if (!t) return NULL;
+	size_t n = strlen(t) + 1;
+	return memcpy(take(at, n), t, n);
+}
+static size_t pr_room(const pr_value *v) {
+	size_t n = 0;
+	if (v->kind == PR_STR) n += up(v->n + 1);
+	if (v->kind == PR_LIST || v->kind == PR_MAP) {
+		n += up(v->n * sizeof *v->items);
+		if (v->kind == PR_MAP) n += up(v->n * sizeof *v->keys);
+		for (size_t i = 0; i < v->n; i++) {
+			n += pr_room(&v->items[i]);
+			if (v->kind == PR_MAP) n += text_room(v->keys[i]);
+		}
+	}
+	return n;
+}
+static void pr_copy(const pr_value *v, pr_value *out, char **at) {
+	*out = *v;
+	if (v->kind == PR_STR) {
+		char *c = take(at, v->n + 1);
+		memcpy(c, v->str, v->n);
+		c[v->n] = 0;
+		out->str = c;
+	}
+	if (v->kind != PR_LIST && v->kind != PR_MAP) return;
+	out->cap = v->n;
+	out->items = take(at, v->n * sizeof *v->items);
+	if (v->kind == PR_MAP) out->keys = take(at, v->n * sizeof *v->keys);
+	for (size_t i = 0; i < v->n; i++) {
+		pr_copy(&v->items[i], &out->items[i], at);
+		if (v->kind == PR_MAP) out->keys[i] = text_copy(v->keys[i], at);
+	}
+}
+static size_t value_room(const pr_value *v) { return v ? up(sizeof *v) + pr_room(v) : 0; }
+static const pr_value *value_copy(const pr_value *v, char **at) {
+	if (!v) return NULL;
+	pr_value *c = take(at, sizeof *c);
+	pr_copy(v, c, at);
+	return c;
+}
+
+// a change of the graph's own: c copied whole, actor, cause, site and texts with it. kept: never let
+// go of (the host's); else its one hold goes at the next sweep, and what holds it keeps it
+static gr_change *change_own(gr_graph *g, const gr_change *c, int kept) {
+	size_t room = up(sizeof *c) + value_room(c->actor) + value_room(c->cause) + value_room(c->site) +
+		text_room(c->reader) + text_room(c->node) + text_room(c->name);
+	char *at = grab(room), *b = at;
+	gr_change *x = take(&at, sizeof *x);
+	*x = *c;
+	x->actor = value_copy(c->actor, &at);
+	x->cause = value_copy(c->cause, &at);
+	x->site = value_copy(c->site, &at);
+	x->reader = text_copy(c->reader, &at);
+	x->node = text_copy(c->node, &at);
+	x->name = text_copy(c->name, &at);
+	mine(g, b, K_CHANGE, kept);
+	return x;
+}
+
+// a list of the graph's own: its items and their texts in the same block
+static const nd_list *list_own(gr_graph *g, const nd_list *l) {
+	size_t room = up(sizeof *l) + up(l->length * sizeof *l->items);
+	for (size_t i = 0; i < l->length; i++) room += text_room(l->items[i].id) + text_room(l->items[i].symbol);
+	char *at = grab(room), *b = at;
+	nd_list *x = take(&at, sizeof *x);
+	nd_item *its = take(&at, l->length * sizeof *its);
+	for (size_t i = 0; i < l->length; i++) {
+		its[i].id = text_copy(l->items[i].id, &at);
+		its[i].symbol = text_copy(l->items[i].symbol, &at);
+	}
+	x->items = its;
+	x->length = l->length;
+	hs_add(&g->mine, b, K_LIST);
+	return x;
+}
+
+static void ledger_add(ledger *l, const void *p, int value) {
+	if (!p) return;
+	if (l->n == l->cap) {
+		l->cap = l->cap ? l->cap * 2 : 8;
+		l->v = regrow(l->v, l->cap * sizeof *l->v);
+	}
+	l->v[l->n++] = (later_t){p, value};
+}
+
+// versions as the graph keeps them: the array its own (a copy if not), each list its own, and
+// what each holds put in the ledger
+static const nd_version *versions_own(gr_graph *g, const nd_version *vs, size_t len, int children,
+	ledger *l) {
+	if (!len) return NULL;
+	nd_version *arr = (nd_version *)vs;
+	if (!hs_find(&g->mine, vs)) {
+		arr = grab(len * sizeof *arr);
+		memcpy(arr, vs, len * sizeof *arr);
+		hs_add(&g->mine, arr, K_ARRAY);
+	}
+	ledger_add(l, arr, 0);
+	for (size_t i = 0; i < len; i++) {
+		nd_version *v = &arr[i];
+		if (children && v->content) {
+			if (!hs_find(&g->mine, v->content)) v->content = list_own(g, v->content);
+			ledger_add(l, v->content, 0);
+		} else ledger_add(l, v->content, 1);
+		if (hs_find(&g->mine, v->change)) ledger_add(l, v->change, 0);
+		if (hs_find(&g->mine, v->because)) ledger_add(l, v->because, 0);
+	}
+	return arr;
+}
+static nd_entry *entries_own(gr_graph *g, nd_entry *es, size_t n, int children, ledger *l) {
+	if (!n) return NULL;
+	nd_entry *arr = es;
+	if (!hs_find(&g->mine, es)) {
+		arr = grab(n * sizeof *arr);
+		memcpy(arr, es, n * sizeof *arr);
+		hs_add(&g->mine, arr, K_ENTRIES);
+	}
+	ledger_add(l, arr, 0);
+	for (size_t i = 0; i < n; i++) {
+		arr[i].name = intern(g, arr[i].name);
+		arr[i].object.versions = versions_own(g, arr[i].object.versions, arr[i].object.length, children, l);
+	}
+	return arr;
+}
+
+// a node as the graph keeps it, after anything changed it: what it holds now held, what it held
+// before let go at the next sweep
+static void own(gr_graph *g, nd_node *n) {
+	ledger now = {0};
+	n->value.versions = versions_own(g, n->value.versions, n->value.length, 0, &now);
+	n->info = entries_own(g, n->info, n->info_length, 0, &now);
+	n->children = entries_own(g, n->children, n->children_length, 1, &now);
+	for (size_t i = 0; i < now.n; i++) hold(g, now.v[i].p, now.v[i].value);
+	ledger *was = om_get(&g->ledgers, n->id);
+	if (!was) {
+		was = grab(sizeof *was);
+		*was = (ledger){0};
+		om_set(&g->ledgers, n->id, was);
+	} else {
+		for (size_t i = 0; i < was->n; i++) later(g, was->v[i].p, was->v[i].value);
+		free(was->v);
+	}
+	now.made = was->made;
+	*was = now;
+}
+
+void gr_enter(gr_graph *g) { g->depth++; }
+void gr_leave(gr_graph *g) {
+	if (--g->depth) return;
+	afree(&g->req);
+	pr_free(&g->preq);
+}
+void gr_sweep(gr_graph *g) {
+	if (g->depth) return;
+	// a let go may let go of more (a node, its change): those come now
+	for (size_t i = 0; i < g->nlater; i++) drop(g, g->later[i].p, g->later[i].value);
+	g->nlater = 0;
+	afree(&g->hosts);
+	pr_free(&g->phost);
+}
+void gr_later(gr_graph *g, nt_value *v) { later(g, v, 1); }
+const gr_error *gr_error_keep(gr_graph *g, const gr_error *e) {
+	if (!e || !e->code || !strcmp(e->code, "stop")) return e;
+	size_t room = up(sizeof *e) + text_room(e->code) + text_room(e->message) + value_room(e->why);
+	char *at = aalloc(&g->hosts, room);
+	gr_error *c = take(&at, sizeof *c);
+	c->code = text_copy(e->code, &at);
+	c->message = text_copy(e->message, &at);
+	c->why = value_copy(e->why, &at);
+	return c;
+}
+const gr_change *gr_change_copy(gr_graph *g, const gr_change *c) { return change_own(g, c, 0); }
+void gr_change_hold(gr_graph *g, const gr_change *c) { hold(g, c, 0); }
+void gr_change_drop(gr_graph *g, const gr_change *c) { later(g, c, 0); }
+
 // errors
 
 static const gr_error *gerr(gr_graph *g, const char *code, const char *message) {
-	gr_error *e = amem(g, sizeof *e);
+	gr_error *e = tmem(g, sizeof *e);
 	e->code = code;
 	e->message = message ? message : code;
 	return e;
@@ -383,21 +655,21 @@ static pr_value to_pr(gr_graph *s, const nt_value *v) {
 	switch (v->type) {
 	case NT_BOOL: return pr_bool(v->bool_);
 	case NT_NUM: return pr_num(v->num);
-	case NT_STR: return pr_str(&s->pra, v->str, v->bytes);
+	case NT_STR: return pr_str(tpra(s), v->str, v->bytes);
 	case NT_LIST: {
 		pr_value l = pr_list();
-		for (size_t i = 0; i < v->count; i++) pr_push(&s->pra, &l, to_pr(s, v->items[i]));
+		for (size_t i = 0; i < v->count; i++) pr_push(tpra(s), &l, to_pr(s, v->items[i]));
 		return l;
 	}
 	default: {
 		pr_value m = pr_map();
-		for (size_t i = 0; i < v->count; i++) pr_put(&s->pra, &m, v->keys[i], to_pr(s, v->items[i]));
+		for (size_t i = 0; i < v->count; i++) pr_put(tpra(s), &m, v->keys[i], to_pr(s, v->items[i]));
 		return m;
 	}
 	}
 }
 pr_value *gr_pr(gr_graph *g, const nt_value *v) {
-	pr_value *p = pr_alloc(&g->pra, sizeof *p);
+	pr_value *p = pr_alloc(tpra(g), sizeof *p);
 	*p = to_pr(g, v);
 	return p;
 }
@@ -407,25 +679,28 @@ pr_value *gr_pr(gr_graph *g, const nt_value *v) {
 static int64_t tick(gr_graph *g) { return ++*g->clock; }
 
 static gr_change *change_of(gr_graph *g, const gr_acting *who, int64_t time, const char *node) {
-	gr_change *c = amem(g, sizeof *c);
-	c->time = time;
-	c->actor = who->actor;
-	c->reader = who->reader;
-	c->cause = who->cause;
-	c->site = who->site;
-	c->node = node;
-	return c;
+	gr_change c = {0};
+	c.time = time;
+	c.actor = who->actor;
+	c.reader = who->reader;
+	c.cause = who->cause;
+	c.site = who->site;
+	c.node = node;
+	return change_own(g, &c, 0);
 }
 
 const gr_change *gr_change_new(gr_graph *g, int64_t time, const pr_value *actor, const char *node) {
-	gr_acting who = {actor, NULL, NULL, NULL};
-	return change_of(g, &who, time, gr_dup(g, node));
+	gr_change c = {0};
+	c.time = time;
+	c.actor = actor;
+	c.node = node;
+	return change_own(g, &c, 1);
 }
 
 const gr_change *gr_by(gr_graph *g, const char *node) {
 	if (!g->acting) return NULL;
 	gr_change *c = change_of(g, g->acting, tick(g), node);
-	vpush(g, &g->made, c);
+	vpush(&g->made, c);
 	return c;
 }
 static const void *places_by(void *ctx, const char *node) { return gr_by(ctx, node); }
@@ -437,7 +712,7 @@ static nd_node *tget(void *ctx, const char *id) {
 	return om_get(&g->table, id);
 }
 nd_node *gr_get(gr_graph *g, const char *id) { return om_get(&g->table, id); }
-static void *places_alloc(void *ctx, size_t n) { return amem(ctx, n); }
+static void *places_alloc(void *ctx, size_t n) { return tmem(ctx, n); }
 
 int gr_ephemeral(gr_graph *g, const char *id) { return om_has(&g->ephemeral, id); }
 void *gr_owner(gr_graph *g, const char *id) { return om_get(&g->owners, id); }
@@ -446,12 +721,11 @@ static const char *const KINDS[] = {"", "value", "info", "children", "loaded"};
 
 static gr_change *with_where(gr_graph *g, const gr_change *c, const char *node, gr_where w,
 	const char *name) {
-	gr_change *x = amem(g, sizeof *x);
-	*x = *c;
-	x->node = node;
-	x->where = w;
-	x->name = name;
-	return x;
+	gr_change x = *c;
+	x.node = node;
+	x.where = w;
+	x.name = name;
+	return change_own(g, &x, 0);
 }
 
 // spots and notify: what was read, and the watch on it
@@ -466,7 +740,7 @@ static void watch(gr_graph *g, gr_spot *sp) {
 	nt_notify *nf = om_get(&g->notifies, sp->id);
 	if (!nf) {
 		nf = nt_create(NULL, NULL);
-		om_set(g, &g->notifies, sp->id, nf);
+		om_set(&g->notifies, sp->id, nf);
 	}
 	nt_key path[2];
 	size_t len = 1;
@@ -491,8 +765,8 @@ static gr_spot *spot(gr_graph *g, const char *id, pl_part part) {
 	gr_spots *n = om_get(&g->spots, id);
 	if (!n) {
 		n = amem(g, sizeof *n);
-		n->id = gr_dup(g, id);
-		om_set(g, &g->spots, n->id, n);
+		n->id = intern(g, id);
+		om_set(&g->spots, n->id, n);
 	}
 	gr_spot **at = NULL;
 	omap *by = NULL;
@@ -505,14 +779,14 @@ static gr_spot *spot(gr_graph *g, const char *id, pl_part part) {
 	sp = amem(g, sizeof *sp);
 	sp->id = n->id;
 	sp->part = part.kind;
-	sp->name = part.name ? gr_dup(g, part.name) : NULL;
+	sp->name = part.name ? intern(g, part.name) : NULL;
 	sp->g = g;
 	sp->track = tg_node_new(sp);
 	if (!sp->track) die("out of memory");
-	vpush(g, &g->trackers, sp->track);
+	vpush(&g->trackers, sp->track);
 	if (at) *at = sp;
-	else om_set(g, by, sp->name, sp);
-	vpush(g, &n->all, sp);
+	else om_set(by, sp->name, sp);
+	vpush(&n->all, sp);
 	watch(g, sp);
 	return sp;
 }
@@ -524,7 +798,7 @@ static void fire(gr_graph *g, gr_spot *sp) {
 	tg_link *const *rs = tg_readers(sp->track, &n);
 	vec copy = {0};
 	for (size_t i = 0; i < n; i++)
-		if (rs[i]) vpush(g, &copy, rs[i]->from);
+		if (rs[i]) tpush(g, &copy, rs[i]->from);
 	for (size_t i = 0; i < copy.n; i++) {
 		gr_reader *r = ((tg_node *)copy.v[i])->owner;
 		if (r->owner == g->telling->own) continue;
@@ -598,7 +872,7 @@ typedef struct {
 
 static void prefix(gr_graph *g, const heard_t *h, const nt_place *in, nt_place *out) {
 	size_t pre = h->w == GR_VALUE ? 3 : 4;
-	nt_key *ks = amem(g, (in->length + pre + 1) * sizeof *ks);
+	nt_key *ks = tmem(g, (in->length + pre + 1) * sizeof *ks);
 	size_t k = 0;
 	ks[k++] = (nt_key){NT_STR_KEY, 0, KINDS[h->w], 0, 0};
 	if (h->w != GR_VALUE) ks[k++] = (nt_key){NT_STR_KEY, 0, h->name, 0, 0};
@@ -617,8 +891,8 @@ static void hear(void *ctx, const nt_patch *patch, const mu_facts *facts, const 
 	heard_t *h = ctx;
 	if (h->n == h->cap) {
 		size_t cap = h->cap ? h->cap * 2 : 4;
-		nt_patch *np = amem(h->g, cap * sizeof *np);
-		nt_facts *nf = amem(h->g, cap * sizeof *nf);
+		nt_patch *np = tmem(h->g, cap * sizeof *np);
+		nt_facts *nf = tmem(h->g, cap * sizeof *nf);
 		if (h->n) memcpy(np, h->patches, h->n * sizeof *np), memcpy(nf, h->facts, h->n * sizeof *nf);
 		h->patches = np;
 		h->facts = nf;
@@ -638,6 +912,18 @@ static void tell_patches(gr_graph *g, nd_node *n, target *t, const gr_change *hd
 	for (size_t i = 0; i < t->npatches; i++) nt_patched_facts(nf, &t->patches[i], &t->facts[i]);
 }
 
+// the nodes an operation changed, kept as the graph keeps them (own): those of the changes it made
+// and of the objects it touched
+static void owned(gr_graph *g, const chg *c) {
+	vec ids = {0};
+	for (size_t i = c->start; i < g->made.n; i++) sadd(g, &ids, ((const gr_change *)g->made.v[i])->node);
+	for (size_t i = 0; i < c->targets.n; i++) sadd(g, &ids, ((const target *)c->targets.v[i])->id);
+	for (size_t i = 0; i < ids.n; i++) {
+		nd_node *n = om_get(&g->table, ids.v[i]);
+		if (n) own(g, n);
+	}
+}
+
 // an operation making changes: by whom, then notify told, the readers marked
 const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing_opts *o,
 	const gr_error *(*fn)(void *ctx), void *ctx) {
@@ -646,14 +932,14 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 	c.mine = *who;
 	c.hearing = !o->has_snap;
 	// told whole: each object's versions before
-	snapped *snaps = o->has_snap ? amem(g, (o->nsnap + 1) * sizeof *snaps) : NULL;
+	snapped *snaps = o->has_snap ? tmem(g, (o->nsnap + 1) * sizeof *snaps) : NULL;
 	for (size_t i = 0; o->has_snap && i < o->nsnap; i++) {
 		snaps[i].n = om_get(&g->table, o->snap[i].id);
 		snaps[i].w = o->snap[i].where;
 		snaps[i].name = o->snap[i].name;
 		if (snaps[i].n) {
 			nd_object cur = object_of(snaps[i].n, snaps[i].w, snaps[i].name);
-			nd_version *copy = amem(g, (cur.length + 1) * sizeof *copy);
+			nd_version *copy = tmem(g, (cur.length + 1) * sizeof *copy);
 			if (cur.length) memcpy(copy, cur.versions, cur.length * sizeof *copy);
 			snaps[i].old = (nd_object){copy, cur.length};
 		}
@@ -667,14 +953,18 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 	g->acting = saved;
 	g->cur = saved_cur;
 	if (e) {
+		owned(g, &c);
 		g->made.n = c.start;
 		return e;
 	}
 	size_t count = g->made.n - c.start;
 	// nothing made: nothing to tell
-	if (!count) return NULL;
-	gr_change **mine = (gr_change **)&g->made.v[c.start];
-	const gr_change *header = mine[count - 1];
+	if (!count) {
+		owned(g, &c);
+		return NULL;
+	}
+	gr_change **ours = (gr_change **)&g->made.v[c.start];
+	const gr_change *header = ours[count - 1];
 	telling_t t = {header, o->tag, o->own};
 	telling_t *was = g->telling;
 	g->telling = &t;
@@ -683,7 +973,7 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 			target *tg = c.targets.v[i];
 			nd_node *n = om_get(&g->table, tg->id);
 			if (!n) continue;
-			const gr_change *h = tg->hdr < count ? mine[tg->hdr] : header;
+			const gr_change *h = tg->hdr < count ? ours[tg->hdr] : header;
 			if (tg->fine) tell_patches(g, n, tg, h);
 			else tell_whole(g, n, tg->w, tg->name, tg->old_len, h);
 		}
@@ -703,7 +993,7 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 				target *tg = c.targets.v[k];
 				if (tg->w == s->w && !strcmp(tg->id, s->n->id) &&
 					(s->w == GR_VALUE || !strcmp(tg->name, s->name)) && tg->hdr < count)
-					h = mine[tg->hdr];
+					h = ours[tg->hdr];
 			}
 			tell_whole(g, s->n, s->w, s->name, s->old.length, h);
 		}
@@ -717,9 +1007,10 @@ const gr_error *gr_changing(gr_graph *g, const gr_acting *who, const gr_changing
 				w->v = realloc(w->v, w->cap * sizeof *w->v);
 				if (!w->v) die("out of memory");
 			}
-			w->v[w->n++] = mine[i]->time;
+			w->v[w->n++] = ours[i]->time;
 		}
 	}
+	owned(g, &c);
 	g->made.n = c.start;
 	return NULL;
 }
@@ -738,16 +1029,23 @@ static void loaded(gr_graph *g, const char *id, const gr_change *change) {
 }
 
 static gr_change *loaded_change(gr_graph *g, const gr_acting *who, int64_t time, const char *node) {
-	gr_change *c = change_of(g, who, time, node);
-	c->where = GR_LOADED;
-	return c;
+	gr_change c = {0};
+	c.time = time;
+	c.actor = who->actor;
+	c.reader = who->reader;
+	c.cause = who->cause;
+	c.site = who->site;
+	c.node = node;
+	c.where = GR_LOADED;
+	return change_own(g, &c, 0);
 }
 
 // a node made now is loaded by its making's change
 static const gr_error *intro_at(gr_graph *g, nd_node *node, const gr_acting *who, int64_t time) {
 	nd_node *there = om_get(&g->table, node->id);
 	if (there && there != node) return gerr(g, "already-there", NULL);
-	om_set(g, &g->table, node->id, node);
+	om_set(&g->table, node->id, node);
+	own(g, node);
 	gr_spots *of = om_get(&g->spots, node->id);
 	if (of)
 		for (size_t i = 0; i < of->all.n; i++) watch(g, of->all.v[i]);
@@ -760,9 +1058,22 @@ const gr_error *gr_intro(gr_graph *g, nd_node *node, const gr_acting *who) {
 	return intro_at(g, node, who ? who : &host, tick(g));
 }
 
-// no longer loaded: not ephemeral, owned by none; its loaded readers marked by cause
+// no longer loaded: not ephemeral, owned by none; its loaded readers marked by cause. What it held
+// is let go at the next sweep, and a node the graph made goes then too. A node the host introduced
+// is the host's: it keeps what it was given, held (it may be read after)
 void gr_release(gr_graph *g, const char *id, const gr_change *cause) {
-	if (!om_get(&g->table, id)) return;
+	nd_node *gone = om_get(&g->table, id);
+	if (!gone) return;
+	ledger *l = om_get(&g->ledgers, gone->id);
+	if (l) {
+		om_del(&g->ledgers, gone->id);
+		if (l->made) {
+			for (size_t i = 0; i < l->n; i++) later(g, l->v[i].p, l->v[i].value);
+			later(g, gone, 0);
+		}
+		free(l->v);
+		free(l);
+	}
 	om_del(&g->table, id);
 	nt_notify *nf = om_get(&g->notifies, id);
 	if (nf) {
@@ -789,51 +1100,64 @@ const gr_error *gr_make(gr_graph *g, const char *id, const nt_value *value, int 
 		if (!base) {
 			char b[32];
 			snprintf(b, sizeof b, "@%lld", (long long)time);
-			base = gr_dup(g, b);
+			base = tdup(g, b);
 		}
 		pid = base;
 		for (int k = 1; om_get(&g->table, pid); k++) {
 			size_t bn = strlen(base) + 24;
-			char *b = amem(g, bn);
+			char *b = tmem(g, bn);
 			snprintf(b, bn, "%s-%d", base, k);
 			pid = b;
 		}
-	} else pid = gr_dup(g, pid);
+	}
+	pid = intern(g, pid);
 	int64_t t = tick(g);
 	gr_change *change = change_of(g, who, t, pid);
-	nd_node *node = amem(g, sizeof *node);
+	// the node's header borrows from its making's change, which it holds
+	made_node *m = grab(sizeof *m);
+	*m = (made_node){0};
+	m->made = change;
+	hold(g, change, 0);
+	nd_node *node = &m->node;
 	node->id = pid;
 	if (has_value) {
-		nd_version *v = amem(g, sizeof *v);
+		nd_version *v = tmem(g, sizeof *v);
 		*v = (nd_version){value, change, NULL};
 		node->value = (nd_object){v, 1};
 	}
 	node->header.has_time = 1;
 	node->header.time = t;
-	node->header.actor = who->actor;
-	node->header.reader = who->reader;
-	node->header.cause = who->cause;
+	node->header.actor = change->actor;
+	node->header.reader = change->reader;
+	node->header.cause = change->cause;
 	const gr_error *e = intro_at(g, node, who, t);
-	if (e) return e;
+	if (e) {
+		drop(g, change, 0);
+		free(m);
+		return e;
+	}
+	mine(g, m, K_NODE, 1);
+	((ledger *)om_get(&g->ledgers, pid))->made = 1;
 	*out = pid;
 	return NULL;
 }
 
 // an ephemeral node, owned by owner if given
 void gr_own(gr_graph *g, const char *id, void *owner) {
-	id = gr_dup(g, id);
-	om_set(g, &g->ephemeral, id, (void *)1);
+	id = intern(g, id);
+	om_set(&g->ephemeral, id, (void *)1);
 	if (owner == NULL) return;
-	om_set(g, &g->owners, id, owner);
+	om_set(&g->owners, id, owner);
 	if (g->o.owned) g->o.owned(g->o.ctx, owner, id);
 }
 
 void gr_object_set(gr_graph *g, nd_node *n, gr_where where, const char *name,
 	const nd_version *vs, size_t count) {
-	nd_version *copy = amem(g, (count + 1) * sizeof *copy);
+	nd_version *copy = tmem(g, (count + 1) * sizeof *copy);
 	if (count) memcpy(copy, vs, count * sizeof *copy);
 	if (where == GR_VALUE) {
 		n->value = (nd_object){copy, count};
+		if (om_get(&g->table, n->id) == n) own(g, n);
 		return;
 	}
 	nd_entry **es = where == GR_INFO ? &n->info : &n->children;
@@ -841,18 +1165,42 @@ void gr_object_set(gr_graph *g, nd_node *n, gr_where where, const char *name,
 	size_t at = *len;
 	for (size_t i = 0; i < *len; i++)
 		if (!strcmp((*es)[i].name, name)) at = i;
-	nd_entry *ne = amem(g, (*len + 1) * sizeof *ne);
+	nd_entry *ne = tmem(g, (*len + 1) * sizeof *ne);
 	size_t m = 0;
 	for (size_t i = 0; i < *len; i++) {
 		if (i != at) ne[m++] = (*es)[i];
 		else if (count) ne[m++] = (nd_entry){(*es)[i].name, {copy, count}};
 	}
-	if (at == *len && count) ne[m++] = (nd_entry){gr_dup(g, name), {copy, count}};
+	if (at == *len && count) ne[m++] = (nd_entry){tdup(g, name), {copy, count}};
 	*es = ne;
 	*len = m;
+	if (om_get(&g->table, n->id) == n) own(g, n);
 }
 
 // INTERNAL AND DANGEROUS (WIRING.tex, In; graph.h says why): sync's alone, never the interface's
+
+// a because of the graph's own, its texts and its key in the same block; found by the pointer's text
+static gr_synced *synced_own(gr_graph *g, const gr_synced *from) {
+	char k[32];
+	const char *layer = from->layer ? from->layer : "";
+	size_t room = up(sizeof(gr_synced)) + text_room(layer) + text_room(from->name) +
+		text_room(from->signer) + up(sizeof k);
+	char *at = grab(room);
+	gr_synced *b = take(&at, sizeof *b);
+	b->layer = text_copy(layer, &at);
+	b->lamport = from->lamport;
+	b->name = text_copy(from->name, &at);
+	b->signer = text_copy(from->signer, &at);
+	snprintf(k, sizeof k, "%p", (void *)b);
+	om_set(&g->synced, text_copy(k, &at), b);
+	mine(g, b, K_SYNCED, 0);
+	return b;
+}
+static void synced_gone(gr_graph *g, const gr_synced *b) {
+	char k[32];
+	snprintf(k, sizeof k, "%p", (const void *)b);
+	om_del(&g->synced, k);
+}
 
 // where a version sync made is in the chains: a because gr_versions made, by the pointer
 static const char *because_place(gr_graph *g, const void *because) {
@@ -879,7 +1227,7 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 		if (k == count) return;
 	}
 	int64_t time = tick(g);
-	nd_version *now = amem(g, (count + 1) * sizeof *now);
+	nd_version *now = tmem(g, (count + 1) * sizeof *now);
 	mu_alloc al = {places_alloc, g};
 	static const nd_list no_ids = {NULL, 0};
 	for (size_t i = 0; i < count; i++) {
@@ -890,29 +1238,19 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 			if (q && !strcmp(p, q)) now[i] = old.versions[j], kept = 1;
 		}
 		if (kept) continue;
-		gr_change *c = amem(g, sizeof *c);
-		if (list[i].change) *c = *list[i].change;
-		c->time = time;
-		c->where = GR_NOWHERE;
-		c->name = NULL;
-		if (c->node) c->node = gr_dup(g, c->node);
-		if (c->reader) c->reader = gr_dup(g, c->reader);
+		gr_change proto = {0};
+		if (list[i].change) proto = *list[i].change;
+		proto.time = time;
+		proto.where = GR_NOWHERE;
+		proto.name = NULL;
+		gr_change *c = change_own(g, &proto, 0);
 		const void *content = list[i].content;
 		if (where == GR_CHILDREN) {
 			content = list[i].content && list[i].content->type == NT_LIST
 				? (const void *)mu_list_to(list[i].content, &al) : &no_ids;
 		}
 		gr_synced *b = NULL;
-		if (list[i].because) {
-			b = amem(g, sizeof *b);
-			b->layer = gr_dup(g, list[i].because->layer ? list[i].because->layer : "");
-			b->lamport = list[i].because->lamport;
-			b->name = gr_dup(g, list[i].because->name);
-			b->signer = list[i].because->signer ? gr_dup(g, list[i].because->signer) : NULL;
-			char k[32];
-			snprintf(k, sizeof k, "%p", (void *)b);
-			om_set(g, &g->synced, gr_dup(g, k), b);
-		}
+		if (list[i].because) b = synced_own(g, list[i].because);
 		now[i] = (nd_version){content, c, b};
 	}
 	gr_object_set(g, n, where, name, now, count);
@@ -932,13 +1270,14 @@ void gr_versions(gr_graph *g, const char *id, gr_where where, const char *name,
 		}
 	}
 	if (signer) {
-		pr_value *m = pr_alloc(&g->pra, sizeof *m);
+		pr_arena *a = tpra(g);
+		pr_value *m = pr_alloc(a, sizeof *m);
 		pr_value sync = pr_map();
-		pr_put(&g->pra, &sync, "signer", pr_str(&g->pra, signer, strlen(signer)));
-		pr_put(&g->pra, &sync, "name", pr_str(&g->pra, sname, strlen(sname)));
+		pr_put(a, &sync, "signer", pr_str(a, signer, strlen(signer)));
+		pr_put(a, &sync, "name", pr_str(a, sname, strlen(sname)));
 		*m = pr_map();
-		pr_put(&g->pra, m, "sync", sync);
-		if (cause) pr_put(&g->pra, m, "cause", *cause);
+		pr_put(a, m, "sync", sync);
+		if (cause) pr_put(a, m, "cause", *cause);
 		cause = m;
 	}
 	gr_change by = {0};
@@ -969,7 +1308,7 @@ gr_reader *gr_reader_new(gr_graph *g, void *owner) {
 	r->owner = owner;
 	r->track = tg_node_new(r);
 	if (!r->track) die("out of memory");
-	vpush(g, &g->trackers, r->track);
+	vpush(&g->trackers, r->track);
 	r->dep = (pl_depend){dep_track, r};
 	return r;
 }
@@ -1012,7 +1351,7 @@ typedef struct {
 static void asks_add(gr_graph *g, asks_t *a, pr_ask x) {
 	if (a->n == a->cap) {
 		size_t cap = a->cap ? a->cap * 2 : 8;
-		pr_ask *nv = pr_alloc(&g->pra, cap * sizeof *nv);
+		pr_ask *nv = pr_alloc(tpra(g), cap * sizeof *nv);
 		if (a->n) memcpy(nv, a->v, a->n * sizeof *nv);
 		a->v = nv;
 		a->cap = cap;
@@ -1034,29 +1373,29 @@ static const obj VALUE_OBJ = {"value", NULL};
 static pr_value obj_pr(gr_graph *g, obj o) {
 	if (!o.name) return pr_lit(o.kind);
 	pr_value l = pr_list();
-	pr_push(&g->pra, &l, pr_lit(o.kind));
-	pr_push(&g->pra, &l, pr_lit(o.name));
+	pr_push(tpra(g), &l, pr_lit(o.kind));
+	pr_push(tpra(g), &l, pr_lit(o.name));
 	return l;
 }
 static pr_ask read_ask(gr_graph *g, const char *node, obj o) {
 	pr_value args = pr_map();
-	pr_put(&g->pra, &args, "node", pr_lit(node));
-	pr_put(&g->pra, &args, "object", obj_pr(g, o));
+	pr_put(tpra(g), &args, "node", pr_lit(node));
+	pr_put(tpra(g), &args, "object", obj_pr(g, o));
 	return (pr_ask){"read", args};
 }
 // every object of a node read
 static pr_asks node_reads(gr_graph *g, const nd_node *n) {
-	const char **info = pr_alloc(&g->pra, (n->info_length + 1) * sizeof *info);
-	const char **ch = pr_alloc(&g->pra, (n->children_length + 1) * sizeof *ch);
+	const char **info = pr_alloc(tpra(g), (n->info_length + 1) * sizeof *info);
+	const char **ch = pr_alloc(tpra(g), (n->children_length + 1) * sizeof *ch);
 	for (size_t k = 0; k < n->info_length; k++) info[k] = n->info[k].name;
 	for (size_t k = 0; k < n->children_length; k++) ch[k] = n->children[k].name;
-	return pr_read_asks(&g->pra, n->id, n->value.length ? 1 : 0, info, n->info_length, ch,
+	return pr_read_asks(tpra(g), n->id, n->value.length ? 1 : 0, info, n->info_length, ch,
 		n->children_length);
 }
 static pr_asks route_asks(gr_graph *g, const pl_step *route, size_t n) {
-	pr_step *st = pr_alloc(&g->pra, (n ? n : 1) * sizeof *st);
+	pr_step *st = pr_alloc(tpra(g), (n ? n : 1) * sizeof *st);
 	for (size_t i = 0; i < n; i++) st[i] = (pr_step){route[i].node, route[i].name};
-	return pr_pass(&g->pra, st, n);
+	return pr_pass(tpra(g), st, n);
 }
 
 static pr_answer ask(gr_graph *g, const pr_value *actor, const pr_ask *asks, size_t n,
@@ -1064,21 +1403,21 @@ static pr_answer ask(gr_graph *g, const pr_value *actor, const pr_ask *asks, siz
 	if (g->may.fn == pr_anyone.fn) return (pr_answer){PR_YES, {0}};
 	policy p = {g, d};
 	pr_read rd = {policy_get, &p};
-	return pr_check(&g->may, &g->pra, actor, asks, n, &rd).answer;
+	return pr_check(&g->may, tpra(g), actor, asks, n, &rd).answer;
 }
 
 static const gr_error *allowed(gr_graph *g, pr_answer a, const char *op) {
 	if (a.kind == PR_YES) return NULL;
-	pr_value *why = pr_alloc(&g->pra, sizeof *why);
+	pr_value *why = pr_alloc(tpra(g), sizeof *why);
 	if (a.kind == PR_NO) *why = a.why;
 	else {
 		*why = pr_map();
-		pr_put(&g->pra, why, "code", pr_lit("pending"));
+		pr_put(tpra(g), why, "code", pr_lit("pending"));
 	}
 	const pr_value *code = pr_get(why, "code");
 	const char *c = code && code->kind == PR_STR ? code->str : "";
 	size_t mn = strlen(op) + strlen(c) + 3;
-	char *m = amem(g, mn);
+	char *m = tmem(g, mn);
 	snprintf(m, mn, "%s: %s", op, c);
 	gr_error *e = (gr_error *)gerr(g, "refused", m);
 	e->why = why;
@@ -1095,7 +1434,7 @@ const gr_error *gr_asking(gr_graph *g, const pr_value *actor, const pr_ask *asks
 static void guard(gr_graph *g, const pr_value *actor, const pl_items *in, const pl_depend *d,
 	obj object, gr_items *out) {
 	out->n = in->n;
-	out->items = amem(g, (in->n ? in->n : 1) * sizeof *out->items);
+	out->items = tmem(g, (in->n ? in->n : 1) * sizeof *out->items);
 	for (size_t i = 0; i < in->n; i++) {
 		const pl_item *it = &in->items[i];
 		gr_item *o = &out->items[i];
@@ -1112,7 +1451,7 @@ static void guard(gr_graph *g, const pr_value *actor, const pl_items *in, const 
 		o->it.versions = NULL;
 		o->it.nversions = 0;
 		if (a.kind == PR_NO) {
-			pr_value *w = pr_alloc(&g->pra, sizeof *w);
+			pr_value *w = pr_alloc(tpra(g), sizeof *w);
 			*w = a.why;
 			o->refused = w;
 		}
@@ -1123,7 +1462,7 @@ static pr_value ids_pr(gr_graph *g, const nd_list *l) {
 	pr_value out = pr_list();
 	if (l)
 		for (size_t i = 0; i < l->length; i++)
-			if (l->items[i].id) pr_push(&g->pra, &out, pr_lit(l->items[i].id));
+			if (l->items[i].id) pr_push(tpra(g), &out, pr_lit(l->items[i].id));
 	return out;
 }
 
@@ -1158,8 +1497,8 @@ static pr_value at_pr(gr_graph *g, const pl_span *sp) {
 	if (!sp) return pr_num(0);
 	if (sp->to == sp->from + 1) return pr_num((double)sp->from);
 	pr_value l = pr_list();
-	pr_push(&g->pra, &l, pr_num((double)sp->from));
-	pr_push(&g->pra, &l, pr_num((double)sp->to));
+	pr_push(tpra(g), &l, pr_num((double)sp->from));
+	pr_push(tpra(g), &l, pr_num((double)sp->to));
 	return l;
 }
 
@@ -1167,7 +1506,7 @@ static pr_value at_pr(gr_graph *g, const pl_span *sp) {
 static asks_t placing_asks(gr_graph *g, const char *node, const char *name, pr_value before,
 	pr_value after, int reads) {
 	asks_t out = {0};
-	pr_asks placing = pr_placing(&g->pra, node, name, &before, &after);
+	pr_asks placing = pr_placing(tpra(g), node, name, &before, &after);
 	asks_addall(g, &out, placing);
 	for (size_t i = 0; reads && i < placing.n; i++) {
 		if (strcmp(placing.items[i].op, "place")) continue;
@@ -1185,7 +1524,7 @@ static const gr_error *live_check(gr_api *a, const char *op) {
 	if (a->b.alive && !*a->b.alive) {
 		char m[64];
 		snprintf(m, sizeof m, "%s: this interface has stopped", op);
-		return gerr(a->g, "stopped", gr_dup(a->g, m));
+		return gerr(a->g, "stopped", tdup(a->g, m));
 	}
 	return NULL;
 }
@@ -1235,7 +1574,7 @@ const gr_error *gr_read_make(gr_read *r, const pl_depend *d) {
 		for (size_t i = 0; i < gi.n; i++) {
 			const pl_item *it = &gi.items[i].it;
 			if (!it->node) continue;
-			pr_ask la = pr_list_ask(&g->pra, it->id);
+			pr_ask la = pr_list_ask(tpra(g), it->id);
 			if (ask(g, a->b.agent, &la, 1, d).kind != PR_YES) continue;
 			depend(d, it->id, PL_CHILDREN, NULL);
 			for (size_t k = 0; k < it->node->children_length; k++)
@@ -1374,6 +1713,9 @@ static const gr_error *edit_object(gr_graph *g, nd_node *n, gr_where w, const ch
 	else
 		for (size_t i = 0; i < scratch.info_length; i++)
 			if (!strcmp(scratch.info[i].name, name)) made = scratch.info[i].object;
+	// mutate's new versions hold their contents (mutate.h): the graph holds its own (own), and
+	// lets go of mutate's at the next sweep
+	for (size_t i = 0; i < made.length; i++) later(g, made.versions[i].content, 1);
 	// told by patch where the version made is the one patched and the object was there
 	if (tg && g->cur->hearing && heard.n && made.length && to == from + 1 && !span_slot) {
 		const nt_patch *p0 = &patches[0];
@@ -1388,7 +1730,7 @@ static const gr_error *edit_object(gr_graph *g, nd_node *n, gr_where w, const ch
 	}
 	size_t after = len > (size_t)to ? len - (size_t)to : 0;
 	size_t total = (size_t)from + made.length + after;
-	nd_version *vs = amem(g, (total ? total : 1) * sizeof *vs);
+	nd_version *vs = tmem(g, (total ? total : 1) * sizeof *vs);
 	if (from) memcpy(vs, cur.versions, (size_t)from * sizeof *vs);
 	if (made.length) memcpy(vs + from, made.versions, made.length * sizeof *vs);
 	if (after) memcpy(vs + from + made.length, cur.versions + to, after * sizeof *vs);
@@ -1397,13 +1739,13 @@ static const gr_error *edit_object(gr_graph *g, nd_node *n, gr_where w, const ch
 		// the entry set, or added, or gone
 		size_t at = entry ? (size_t)(entry - n->info) : n->info_length;
 		size_t cnt = n->info_length + (entry == NULL) - (total == 0);
-		nd_entry *es = amem(g, (cnt ? cnt : 1) * sizeof *es);
+		nd_entry *es = tmem(g, (cnt ? cnt : 1) * sizeof *es);
 		size_t m = 0;
 		for (size_t j = 0; j < n->info_length; j++) {
 			if (j != at) es[m++] = n->info[j];
 			else if (total) es[m++] = (nd_entry){n->info[j].name, {vs, total}};
 		}
-		if (!entry && total) es[m++] = (nd_entry){gr_dup(g, name), {vs, total}};
+		if (!entry && total) es[m++] = (nd_entry){tdup(g, name), {vs, total}};
 		n->info = es;
 		n->info_length = m;
 	}
@@ -1432,14 +1774,14 @@ static const gr_error *at_item(wop *o, nd_node **out) {
 
 static target *chg_target(gr_graph *g, const char *id, gr_where w, const char *name, size_t hdr) {
 	chg *c = g->cur;
-	target *t = amem(g, sizeof *t);
+	target *t = tmem(g, sizeof *t);
 	t->id = id;
 	t->w = w;
 	t->name = name;
 	t->hdr = hdr;
 	nd_node *n = om_get(&g->table, id);
 	t->old_len = n ? object_len(n, w, name) : 0;
-	vpush(g, &c->targets, t);
+	tpush(g, &c->targets, t);
 	return t;
 }
 
@@ -1512,7 +1854,7 @@ static const gr_error *wop_exec(void *p) {
 	return NULL;
 }
 
-// the strings placing keeps are the graph's own
+// the strings placing keeps are scratch: the graph keeps its own copies (own)
 static wop wop_new(gr_graph *g, int op) {
 	wop o = {0};
 	o.g = g;
@@ -1534,7 +1876,7 @@ const gr_error *gr_do_set(gr_graph *g, const char *const *address, size_t n, con
 	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
 	int64_t *time) {
 	wop o = wop_new(g, W_SET);
-	o.address = address, o.n = n, o.name = gr_dup(g, name), o.patches = patches, o.np = np;
+	o.address = address, o.n = n, o.name = tdup(g, name), o.patches = patches, o.np = np;
 	o.index = index, o.slot = slotindex, o.span_slot = span;
 	const gr_error *e = wop_exec(&o);
 	if (!e && time) *time = o.times[0];
@@ -1543,7 +1885,7 @@ const gr_error *gr_do_set(gr_graph *g, const char *const *address, size_t n, con
 const gr_error *gr_do_insert(gr_graph *g, const char *id, const char *name, const char *child,
 	const pl_span *index, const pl_span *slotindex, int64_t *time) {
 	wop o = wop_new(g, W_INSERT);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.child = gr_dup(g, child);
+	o.id = tdup(g, id), o.name = tdup(g, name), o.child = tdup(g, child);
 	o.ispan = index, o.slot = slotindex;
 	const gr_error *e = wop_exec(&o);
 	if (!e && time) *time = o.times[0];
@@ -1552,7 +1894,7 @@ const gr_error *gr_do_insert(gr_graph *g, const char *id, const char *name, cons
 const gr_error *gr_do_remove(gr_graph *g, const char *id, const char *name, pl_span index,
 	const pl_span *slotindex, int64_t *time) {
 	wop o = wop_new(g, W_REMOVE);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.span = index, o.slot = slotindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.span = index, o.slot = slotindex;
 	const gr_error *e = wop_exec(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
@@ -1560,7 +1902,7 @@ const gr_error *gr_do_remove(gr_graph *g, const char *id, const char *name, pl_s
 const gr_error *gr_do_pop(gr_graph *g, const char *id, const char *name, pl_span slotindex,
 	int64_t *time) {
 	wop o = wop_new(g, W_POP);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.span = slotindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.span = slotindex;
 	const gr_error *e = wop_exec(&o);
 	if (!e && time) *time = o.times[0];
 	return e;
@@ -1568,7 +1910,7 @@ const gr_error *gr_do_pop(gr_graph *g, const char *id, const char *name, pl_span
 const gr_error *gr_do_rename(gr_graph *g, const char *id, const char *name, const char *to,
 	int64_t times[2]) {
 	wop o = wop_new(g, W_RENAME);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.to = gr_dup(g, to);
+	o.id = tdup(g, id), o.name = tdup(g, name), o.to = tdup(g, to);
 	const gr_error *e = wop_exec(&o);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1];
 	return e;
@@ -1576,8 +1918,8 @@ const gr_error *gr_do_rename(gr_graph *g, const char *id, const char *name, cons
 const gr_error *gr_do_move(gr_graph *g, const char *id, const char *name, long index,
 	const char *toid, const char *toname, const long *toindex, int64_t times[2], size_t *ntimes) {
 	wop o = wop_new(g, W_MOVE);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.mindex = index;
-	o.toid = gr_dup(g, toid), o.toname = gr_dup(g, toname), o.toindex = toindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.mindex = index;
+	o.toid = tdup(g, toid), o.toname = tdup(g, toname), o.toindex = toindex;
 	const gr_error *e = wop_exec(&o);
 	if (!e) times[0] = o.times[0], times[1] = o.times[1], *ntimes = o.ntimes;
 	return e;
@@ -1692,7 +2034,7 @@ static const gr_error *w_go(gr_api *a, wop *o, asks_t *asks, const gr_snap *snap
 	if (!a->b.writes) {
 		char m[64];
 		snprintf(m, sizeof m, "%s: a compute only reads", WOPS[o->op]);
-		return gerr(g, "read-only", gr_dup(g, m));
+		return gerr(g, "read-only", tdup(g, m));
 	}
 	if (asks && asks->fail) return pl_error(g, asks->fail);
 	if (asks) {
@@ -1735,7 +2077,7 @@ static asks_t writing_asks(gr_api *a, const char *const *address, size_t n, cons
 	if (!it || !it->node) return out;
 	asks_addall(g, &out, route_asks(g, it->route, it->nroute));
 	pr_value ov = obj_pr(g, object), av = at_pr(g, slot);
-	asks_add(g, &out, pr_edit(&g->pra, "write", it->id, &ov, &av));
+	asks_add(g, &out, pr_edit(tpra(g), "write", it->id, &ov, &av));
 	return out;
 }
 
@@ -1761,7 +2103,7 @@ const gr_error *gr_set(gr_api *a, const char *const *address, size_t n, const ch
 	int64_t *time) {
 	wop o = wop_new(a->g, W_SET);
 	o.at = place_of(a);
-	o.address = address, o.n = n, o.name = gr_dup(a->g, name), o.patches = patches, o.np = np;
+	o.address = address, o.n = n, o.name = tdup(a->g, name), o.patches = patches, o.np = np;
 	o.index = index, o.slot = slotindex, o.span_slot = span;
 	asks_t as = writing_asks(a, address, n, index, (obj){"info", o.name}, slotindex);
 	const gr_error *e = w_do(a, &o, &as, NULL, 0);
@@ -1774,7 +2116,7 @@ const gr_error *gr_insert(gr_api *a, const char *id, const char *name, const cha
 	const gr_error *e = may_place(a, child);
 	if (e) return e;
 	wop o = wop_new(g, W_INSERT);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.child = gr_dup(g, child);
+	o.id = tdup(g, id), o.name = tdup(g, name), o.child = tdup(g, child);
 	o.ispan = index, o.slot = slotindex;
 	// a number is a gap: nothing replaced; a span: the ids there
 	nd_list gone = {NULL, 0};
@@ -1796,7 +2138,7 @@ const gr_error *gr_remove(gr_api *a, const char *id, const char *name, pl_span i
 	const pl_span *slotindex, int64_t *time) {
 	gr_graph *g = a->g;
 	wop o = wop_new(g, W_REMOVE);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.span = index, o.slot = slotindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.span = index, o.slot = slotindex;
 	nd_list gone = slice_of(ids_at(g, id, name, slotindex), index.from, index.to);
 	asks_t as = placing_asks(g, id, name, ids_pr(g, &gone), pr_list(), 0);
 	if (g->o.changed) plan(&o, o.id, o.name, 1, 1, index.from, index.to, NULL);
@@ -1808,10 +2150,10 @@ const gr_error *gr_pop(gr_api *a, const char *id, const char *name, pl_span slot
 	int64_t *time) {
 	gr_graph *g = a->g;
 	wop o = wop_new(g, W_POP);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.span = slotindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.span = slotindex;
 	asks_t as = {0};
 	pr_value ov = obj_pr(g, (obj){"children", o.name}), av = at_pr(g, &slotindex);
-	asks_add(g, &as, pr_edit(&g->pra, "pop", o.id, &ov, &av));
+	asks_add(g, &as, pr_edit(tpra(g), "pop", o.id, &ov, &av));
 	gr_snap snap[1] = {{o.id, GR_CHILDREN, o.name}};
 	if (g->o.changed) plan(&o, o.id, o.name, 0, 0, 0, 0, NULL);
 	const gr_error *e = w_do(a, &o, &as, snap, 1);
@@ -1822,7 +2164,7 @@ const gr_error *gr_rename(gr_api *a, const char *id, const char *name, const cha
 	int64_t times[2]) {
 	gr_graph *g = a->g;
 	wop o = wop_new(g, W_RENAME);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.to = gr_dup(g, to);
+	o.id = tdup(g, id), o.name = tdup(g, name), o.to = tdup(g, to);
 	const nd_list *ids = ids_at(g, id, name, NULL);
 	asks_t as = placing_asks(g, id, name, ids_pr(g, ids), pr_list(), 0);
 	asks_t b = placing_asks(g, id, o.to, pr_list(), ids_pr(g, ids), 1);
@@ -1847,8 +2189,8 @@ const gr_error *gr_move(gr_api *a, const char *id, const char *name, long index,
 	if (e) return e;
 	int across = strcmp(id, toid) || strcmp(name, toname);
 	wop o = wop_new(g, W_MOVE);
-	o.id = gr_dup(g, id), o.name = gr_dup(g, name), o.mindex = index;
-	o.toid = gr_dup(g, toid), o.toname = gr_dup(g, toname), o.toindex = toindex;
+	o.id = tdup(g, id), o.name = tdup(g, name), o.mindex = index;
+	o.toid = tdup(g, toid), o.toname = tdup(g, toname), o.toindex = toindex;
 	asks_t as = {0};
 	if (across) {
 		nd_item it = {child, NULL};
@@ -1919,11 +2261,12 @@ const gr_error *gr_create(gr_api *a, const nt_value *value, int has_value, const
 }
 
 gr_api *gr_bound(gr_graph *g, const gr_bind *b) {
-	gr_api *a = amem(g, sizeof *a);
+	void *(*mem)(gr_graph *, size_t) = b->scratch ? tmem : amem;
+	gr_api *a = mem(g, sizeof *a);
 	a->g = g;
 	a->b = *b;
-	const char **place = amem(g, (b->nplace + 1) * sizeof *place);
-	for (size_t i = 0; i < b->nplace; i++) place[i] = gr_dup(g, b->place[i]);
+	const char **place = mem(g, (b->nplace + 1) * sizeof *place);
+	for (size_t i = 0; i < b->nplace; i++) place[i] = b->scratch ? tdup(g, b->place[i]) : gr_dup(g, b->place[i]);
 	a->b.place = place;
 	if (!a->b.agent) a->b.agent = g->host;
 	return a;
@@ -1948,7 +2291,7 @@ gr_graph *gr_new(const gr_options *o) {
 	if (!om_get(&g->table, g->root)) {
 		nd_node *n = amem(g, sizeof *n);
 		n->id = g->root;
-		om_set(g, &g->table, g->root, n);
+		om_set(&g->table, g->root, n);
 	}
 	return g;
 }
@@ -1959,7 +2302,40 @@ void gr_free(gr_graph *g) {
 	for (size_t i = 0; i < g->trackers.n; i++) tg_node_free(g->trackers.v[i]);
 	for (size_t i = 0; i < g->notifies.n; i++)
 		if (g->notifies.e[i].key) nt_destroy(g->notifies.e[i].val);
+	// every hold let go: values theirs to free; what is the graph's own freed below, whatever it holds
+	for (size_t i = 0; i < g->nlater; i++)
+		if (g->later[i].value) nt_free((nt_value *)g->later[i].p);
+	for (size_t i = 0; i < g->ledgers.n; i++) {
+		if (!g->ledgers.e[i].key) continue;
+		ledger *l = g->ledgers.e[i].val;
+		for (size_t k = 0; k < l->n; k++)
+			if (l->v[k].value) nt_free((nt_value *)l->v[k].p);
+		free(l->v);
+		free(l);
+	}
+	for (size_t i = 0; i < g->mine.slots; i++) {
+		held *h = &g->mine.e[i];
+		if (h->p && h->p != TOMBP) forget(g, h->p, h->k, 0);
+	}
+	free(g->mine.e);
+	free(g->later);
+	free(g->trackers.v);
+	free(g->made.v);
+	for (size_t i = 0; i < g->spots.n; i++) {
+		gr_spots *n = g->spots.e[i].key ? g->spots.e[i].val : NULL;
+		if (!n) continue;
+		free(n->all.v);
+		om_free(&n->children);
+		om_free(&n->info);
+	}
+	omap *maps[] = {&g->table, &g->ephemeral, &g->owners, &g->spots, &g->notifies, &g->synced,
+		&g->ledgers, &g->strings};
+	for (size_t i = 0; i < sizeof maps / sizeof *maps; i++) om_free(maps[i]);
 	pr_free(&g->pra);
+	pr_free(&g->preq);
+	pr_free(&g->phost);
 	afree(&g->a);
+	afree(&g->req);
+	afree(&g->hosts);
 	free(g);
 }

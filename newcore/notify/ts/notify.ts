@@ -88,16 +88,16 @@ type Look = (path: readonly Key[]) => Seen
 
 const isList = Array.isArray
 
-// strings count code points (utf16: UTF-16 units): walk.ts
-function len(v: unknown, utf16 = false): number {
-	if (typeof v === "string") return count(v, utf16)
+// strings count code points: walk.ts
+function len(v: unknown): number {
+	if (typeof v === "string") return count(v)
 	if (isList(v)) return v.length
 	if (ArrayBuffer.isView(v)) return (v as unknown as { length: number }).length
 	return 0
 }
 // a string's positions [a, b), walking no further than b
-function slice(v: unknown, a: number, b: number, utf16 = false): unknown {
-	if (typeof v === "string") return cut(v, a, b, utf16)
+function slice(v: unknown, a: number, b: number): unknown {
+	if (typeof v === "string") return cut(v, a, b)
 	if (isList(v)) return v.slice(a, b)
 	if (ArrayBuffer.isView(v)) {
 		return (v as unknown as { slice(a: number, b: number): unknown }).slice(a, b)
@@ -150,37 +150,33 @@ function after(before: unknown, from: Place): Look {
 }
 
 // a place's fact, as look sees the content
-function fact(look: Look, p: Place, utf16: boolean): Fact {
+function fact(look: Look, p: Place): Fact {
 	if (p.range) {
 		const { v, less } = look(p.path)
-		return { list: isList(v), length: len(v, utf16) - less, had: v !== undefined }
+		return { list: isList(v), length: len(v) - less, had: v !== undefined }
 	}
 	if (!p.path.length) return { list: false, length: 0, had: look([]).v !== undefined }
 	const { v, less, lost } = look(p.path.slice(0, -1))
-	const k = p.path[p.path.length - 1], length = len(v, utf16) - less
+	const k = p.path[p.path.length - 1], length = len(v) - less
 	// a list's: the index is in it
 	if (isList(v)) return { list: true, length, had: typeof k === "number" && k < length }
 	return { list: false, length, had: has(v, k) && k !== lost }
 }
 
-// string positions and lengths count code points; utf16: UTF-16 units, as JavaScript's own
-// (an experiment, as mutate's utf16)
-export type Count = { utf16?: boolean }
-
-// the facts patched takes, from the whole content before the patch: for a caller that has it
-export function facts(patch: Patch, before: unknown, count: Count = {}): Facts {
-	const utf16 = count.utf16 ?? false
+// the facts patched takes, from the whole content before the patch: for a caller that has it.
+// string positions and lengths count code points
+export function facts(patch: Patch, before: unknown): Facts {
 	const now: Look = (path) => ({ v: at(before, path), less: 0 })
-	if (!patch.move) return { place: fact(now, patch, utf16) }
+	if (!patch.move) return { place: fact(now, patch) }
 	const from = patch.move
-	const place = fact(after(before, from), patch, utf16)
-	if (!patch.range) return { place, from: fact(now, from, utf16) }
+	const place = fact(after(before, from), patch)
+	if (!patch.range) return { place, from: fact(now, from) }
 	const size = from.range
 		? from.range[1] - from.range[0]
 		: place.list
 		? 1
-		: len(at(before, from.path), utf16)
-	return { place, from: fact(now, from, utf16), size }
+		: len(at(before, from.path))
+	return { place, from: fact(now, from), size }
 }
 
 // a point through [f, f + r) becoming n: ProseMirror's map with assoc
@@ -195,8 +191,7 @@ function inside(s: [number, number] | null, k: Key): boolean {
 	return s !== null && typeof k === "number" && k >= s[0] && k < s[1]
 }
 
-export function createNotify(get: () => unknown, count: Count = {}) {
-	const utf16 = count.utf16 ?? false
+export function createNotify(get: () => unknown) {
 	const node = (up: T | null, key: Key | null): T => ({
 		up,
 		key,
@@ -614,7 +609,7 @@ export function createNotify(get: () => unknown, count: Count = {}) {
 				only(c.r, "moved")
 			}
 		} else {
-			const value = "value" in patch ? { n: patch.range ? len(patch.value, utf16) : 0 } : null
+			const value = "value" in patch ? { n: patch.range ? len(patch.value) : 0 } : null
 			act(facts.place, patch, value, false)
 			settle()
 		}
@@ -660,7 +655,7 @@ export function createNotify(get: () => unknown, count: Count = {}) {
 		return {
 			get value() {
 				const v = at(get(), r.keys)
-				return r.span ? slice(v, r.span[0], r.span[1], utf16) : v
+				return r.span ? slice(v, r.span[0], r.span[1]) : v
 			},
 			get path() {
 				return r.span ? [...r.keys, r.span] : r.keys

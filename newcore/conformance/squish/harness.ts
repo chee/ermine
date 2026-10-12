@@ -1,14 +1,13 @@
 // The reference squish on the line protocol: one JSON request per line in, one answer per line
 // out, in order. Another implementation joins by speaking this.
 //
-// { op: "squish", patches, utf16? }  →  { patches }   the patches pushed one by one, then what is
-//    left; utf16: string positions count UTF-16 units, not code points
+// { op: "squish", patches }  →  { patches }   the patches pushed one by one, then what is left
 // { op: "encode", patches }  →  { columns }
 // { op: "decode", columns }  →  { patches }
 // bytes, which JSON has none of: {"$bytes": [0, 255, ...]} (a Uint8Array)
 import { decode, encode, squish } from "../../opstreams/ts/squish.ts"
 
-type Request = { op: string; patches?: never[]; columns?: never; utf16?: boolean }
+type Request = { op: string; patches?: never[]; columns?: never }
 
 function revive(_: string, v: unknown): unknown {
 	if (v !== null && typeof v === "object" && !Array.isArray(v) && "$bytes" in v) {
@@ -23,7 +22,7 @@ function replace(_: string, v: unknown): unknown {
 function answer(r: Request): unknown {
 	switch (r.op) {
 		case "squish":
-			return { patches: squish(r.patches!, { utf16: r.utf16 }) }
+			return { patches: squish(r.patches!) }
 		case "encode":
 			return { columns: encode(r.patches!) }
 		case "decode":

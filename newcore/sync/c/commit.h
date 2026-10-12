@@ -3,8 +3,8 @@
 // not taken in: the blop only.
 //
 // A change and a blop are json.h objects (encoding/c/blop.h), their byte fields JSON_BYTES. The
-// blop shares the change's values (node, object, actor, patches...): keep the change alive as long
-// as the blop; the blop given back is the caller's, and never freed here. C has no live values
+// blop shares the change's values (node, object, actor, patches...), holding each (jsonRef): the
+// change and the blop given back are let go of each on its own (jsonFree). C has no live values
 // (COMMIT.tex): a stand-in in the patches, actor or cause (JSON_STAND) goes through as data.
 #ifndef COMMIT_H
 #define COMMIT_H
