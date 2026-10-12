@@ -1,0 +1,9 @@
+{
+	"name": "@ermine/op",
+	"version": "0.0.0",
+	"exports": {
+		"./mutate": "./typescript/mutate.ts",
+		"./squish": "./typescript/squish.ts",
+		"./walk": "./typescript/walk.ts"
+	}
+}

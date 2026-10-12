@@ -1,9 +1,0 @@
-{
-	"name": "@ermine/encoding",
-	"version": "0.0.0",
-	"exports": {
-		"./blop": "./ts/blop.ts",
-		"./cbor": "./ts/cbor.ts",
-		"./pack": "./ts/pack.ts"
-	}
-}

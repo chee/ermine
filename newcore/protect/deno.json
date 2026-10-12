@@ -1,7 +1,0 @@
-{
-	"name": "@ermine/protect",
-	"version": "0.0.0",
-	"exports": {
-		".": "./ts/protect.ts"
-	}
-}

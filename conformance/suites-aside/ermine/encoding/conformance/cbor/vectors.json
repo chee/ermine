@@ -1,0 +1,72 @@
+[
+	{ "value": null, "cbor": "f6" },
+	{ "value": false, "cbor": "f4" },
+	{ "value": true, "cbor": "f5" },
+	{ "value": 0, "cbor": "f90000" },
+	{ "value": -0, "cbor": "f98000" },
+	{ "value": 1, "cbor": "f93c00" },
+	{ "value": -1, "cbor": "f9bc00" },
+	{ "value": 1.5, "cbor": "f93e00" },
+	{ "value": 65504, "cbor": "f97bff" },
+	{ "value": 5.960464477539063e-8, "cbor": "f90001" },
+	{ "value": 100000, "cbor": "fa47c35000" },
+	{ "value": 9007199254740992, "cbor": "fa5a000000" },
+	{ "value": 3.4028234663852886e+38, "cbor": "fa7f7fffff" },
+	{ "value": 0.1, "cbor": "fb3fb999999999999a" },
+	{ "value": -4.1, "cbor": "fbc010666666666666" },
+	{ "value": { "/": { "number": "NaN" } }, "cbor": "f97e00" },
+	{ "value": { "/": { "number": "Infinity" } }, "cbor": "f97c00" },
+	{ "value": { "/": { "number": "-Infinity" } }, "cbor": "f9fc00" },
+	{ "value": "", "cbor": "60" },
+	{ "value": "a", "cbor": "6161" },
+	{ "value": "\u0000", "cbor": "6100" },
+	{ "value": "ü", "cbor": "62c3bc" },
+	{
+		"value": "aaaaaaaaaaaaaaaaaaaaaaaa",
+		"cbor": "7818616161616161616161616161616161616161616161616161"
+	},
+	{ "value": { "/": { "bytes": "" } }, "cbor": "40" },
+	{ "value": { "/": { "bytes": "aGVsbG8" } }, "cbor": "4568656c6c6f" },
+	{ "value": { "/": { "bytes": "Af8" } }, "cbor": "4201ff" },
+	{
+		"cbor": "d8404201ff",
+		"refused": "tag 64: no uint8 kind, bytes are that (the designer, 10-12)"
+	},
+	{ "form": { "/": { "uint8": [1, 255] } }, "refused": "no uint8 kind: no value" },
+	{ "value": { "/": { "uint16": [1, 256] } }, "cbor": "d8454401000001" },
+	{ "value": { "/": { "uint32": [1] } }, "cbor": "d8464401000000" },
+	{ "value": { "/": { "uint64": ["18446744073709551615"] } }, "cbor": "d84748ffffffffffffffff" },
+	{ "value": { "/": { "int8": [-1, 2] } }, "cbor": "d84842ff02" },
+	{ "value": { "/": { "int16": [-2] } }, "cbor": "d84d42feff" },
+	{ "value": { "/": { "int32": [-1] } }, "cbor": "d84e44ffffffff" },
+	{ "value": { "/": { "int64": ["-9007199254740993"] } }, "cbor": "d84f48ffffffffffffdfff" },
+	{ "value": { "/": { "float32": [1.5, -0, "NaN"] } }, "cbor": "d8554c0000c03f000000800000c07f" },
+	{
+		"value": { "/": { "float64": [1, "-Infinity"] } },
+		"cbor": "d85650000000000000f03f000000000000f0ff"
+	},
+	{ "value": { "/": { "float64": [] } }, "cbor": "d85640" },
+	{ "value": [], "cbor": "80" },
+	{ "value": {}, "cbor": "a0" },
+	{
+		"value": { "b": 1, "aa": 2, "a": 3, "": null },
+		"cbor": "a460f66161f942006162f93c00626161f94000"
+	},
+	{ "value": { "é": 1, "z": 2 }, "cbor": "a2617af9400062c3a9f93c00" },
+	{ "value": [[], [1, [null]], { "x": [] }], "cbor": "838082f93c0081f6a1617880" },
+	{ "value": { "/": { "map": { "/": 1 } } }, "cbor": "a1612ff93c00" },
+	{ "value": { "/": { "live": "canvas" } }, "cbor": "da123456786663616e766173" },
+	{
+		"value": { "/": { "live": { "url": "x", "w": 2 } } },
+		"cbor": "da12345678a26177f940006375726c6178"
+	},
+	{ "value": { "/": { "live": null } }, "cbor": "da12345678f6" },
+	{
+		"value": [{ "/": { "live": { "/": { "live": "a" } } } }],
+		"cbor": "81da12345678da123456786161"
+	},
+	{
+		"cbor": "db00000000123456786663616e766173",
+		"refused": "the stand-in's tag in a longer head than it needs"
+	}
+]

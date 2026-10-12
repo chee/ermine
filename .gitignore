@@ -24,12 +24,19 @@ core/graph/c/scratch/
 !*_test.ts
 !*_test.c
 !*_test.h
-newcore/*/c/harness
-newcore/*/*/c/harness
-newcore/*/c/harness-check
-newcore/*/*/c/harness-check
-newcore/*/c/bench
-newcore/*/*/c/bench
+**/c/harness
+**/c/harness-check
+**/c/bench
+# C build outputs: harnesses, harness-checks, tests, benches (the root Makefile)
+**/c/*-harness
+**/c/*-harness-check
+**/c/*-test
+**/c/*-test-check
+**/c/*-bench
+# libFuzzer (core/graph/c/fuzz.sh)
+core/graph/c/fuzz
+core/graph/c/corpus/
+core/graph/c/crash-*
 *.swp
 .swp
 .DS_Store
@@ -40,6 +47,6 @@ __pycache__/
 *.pyc
 *.tar
 **/c/scratch/
-graveyard/core/graph/c/ermine
-graveyard/core/graph/c/ermine-asan
+.graveyard/core/graph/c/ermine
+.graveyard/core/graph/c/ermine-asan
 **/benchmarks/results/

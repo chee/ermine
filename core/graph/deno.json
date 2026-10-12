@@ -1,0 +1,14 @@
+{
+	"name": "@ermine/graph",
+	"version": "0.0.0",
+	"exports": {
+		".": "./typescript/graph.ts",
+		"./places": "./typescript/places.ts",
+		"./table": "./typescript/table.ts",
+		"./node": "./typescript/node.ts",
+		"./change": "./typescript/change.ts",
+		"./because": "./typescript/because.ts",
+		"./stacktrace": "./typescript/stacktrace.ts",
+		"./trackgraph": "./typescript/trackgraph.ts"
+	}
+}
