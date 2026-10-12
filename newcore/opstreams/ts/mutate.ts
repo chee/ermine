@@ -168,7 +168,7 @@ function createWork(root: unknown, list: boolean) {
 	}
 	// what is at path becomes w (undefined: removed, ABSENT at [])
 	function set(path: readonly Key[], w: unknown) {
-		if (path.length === 0) return void (work.root = w ?? ABSENT)
+		if (path.length === 0) return void (work.root = w === undefined ? ABSENT : w)
 		const at = parent(path), k = path[path.length - 1]
 		if (isList(at)) {
 			if (typeof k !== "number") fail("wrong-kind")
