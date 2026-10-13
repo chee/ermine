@@ -1,0 +1,71 @@
+{
+	"title": "the header as the node's change, as given",
+	"steps": [
+		{
+			"op": "make",
+			"value": 1,
+			"header": {
+				"time": 9007199254740991,
+				"actor": {
+					"name": "me"
+				},
+				"reader": "p",
+				"external": [
+					{
+						"file": "file:///old.ts",
+						"line": 3,
+						"column": 4,
+						"function": "f"
+					}
+				],
+				"metadata": [
+					[
+						"note",
+						"hello"
+					]
+				]
+			},
+			"expect": {
+				"node": {
+					"value": 1,
+					"change": {
+						"time": 9007199254740991,
+						"actor": {
+							"name": "me"
+						},
+						"reader": "p",
+						"external": [
+							{
+								"file": "file:///old.ts",
+								"line": 3,
+								"column": 4,
+								"function": "f"
+							}
+						],
+						"metadata": [
+							[
+								"note",
+								"hello"
+							]
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"header": {
+				"time": 0,
+				"actor": "me"
+			},
+			"expect": {
+				"node": {
+					"change": {
+						"time": 0,
+						"actor": "me"
+					}
+				}
+			}
+		}
+	]
+}

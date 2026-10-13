@@ -1,0 +1,244 @@
+{
+	"title": "moves: leave first, then land in what is left",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {},
+				"s": "xy"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k"
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"l": [
+							"c"
+						],
+						"m": {
+							"k": "b"
+						},
+						"s": "xy"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"k"
+									],
+									"move": {
+										"path": [
+											"l",
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"l",
+										0
+									],
+									"move": {
+										"path": [
+											"l",
+											1
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": [
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"move": {
+										"path": [
+											"m",
+											"k"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"l": [
+							"c"
+						],
+						"s": "xy",
+						"z": {
+							"k": "b"
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"z"
+									],
+									"move": {
+										"path": [
+											"m"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m"
+									],
+									"move": {
+										"path": [
+											"z"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z",
+						"k"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"move": {
+						"path": [
+							"nothing"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

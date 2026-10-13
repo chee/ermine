@@ -1,0 +1,20 @@
+{
+	"title": "sub with nothing there is an add; sub moves the key to the end of its id",
+	"steps": [
+		{ "op": "sub", "part": "value", "id": "a", "node": "n1", "expect": {} },
+		{ "op": "add", "part": "children", "id": "a", "node": "n2", "expect": {} },
+		{ "op": "add", "part": "info", "id": "a", "node": "n3", "expect": {} },
+		{ "op": "sub", "part": "value", "id": "a", "node": "n4", "expect": {} },
+		{
+			"op": "at",
+			"id": "a",
+			"expect": { "entries": [["children", "n2"], ["info", "n3"], ["value", "n4"]] }
+		},
+		{ "op": "sub", "part": "children", "id": "a", "node": "n2", "expect": {} },
+		{
+			"op": "at",
+			"id": "a",
+			"expect": { "entries": [["children", "n2"], ["info", "n3"], ["value", "n4"]] }
+		}
+	]
+}

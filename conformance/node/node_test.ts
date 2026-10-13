@@ -1,21 +1,18 @@
 // Runs the scenarios and the fuzzer against a node harness. NODE_HARNESS: the command for another
-// implementation (default: the reference). A site of "*" in an expectation: any site the harness
-// made, a file and a line.
+// implementation (default: the reference). NODE_SKIP: scenario files it does not speak, by
+// commas. The protocol: harness.ts. A time "now": a whole number of seconds since 1970 within the
+// test's own clock around the call.
 import { assert, assertEquals } from "@std/assert"
 
 const here = new URL(".", import.meta.url).pathname
 const command = (Deno.env.get("NODE_HARNESS") ?? `deno run --quiet ${here}harness.ts`).split(" ")
+const skip = new Set((Deno.env.get("NODE_SKIP") ?? "").split(",").filter((x) => x))
 
+type Site = { file: string; line: number; column?: number; function?: string }
+type Change = Record<string, unknown>
+type Shown = { value?: unknown; change: Change }
 type Request = Record<string, unknown> & { op: string }
-type Step = Request & { expect?: Shown }
-type Version = { content: unknown; change: unknown; because?: unknown }
-type Shown = {
-	id: string
-	value: Version[]
-	info: [string, Version[]][]
-	children: [string, Version[]][]
-	header: Record<string, unknown>
-}
+type Step = Request & { expect?: { node: Shown } }
 
 async function ask(requests: Request[]): Promise<{ node?: Shown; error?: string }[]> {
 	const child = new Deno.Command(command[0], {
@@ -30,36 +27,53 @@ async function ask(requests: Request[]): Promise<{ node?: Shown; error?: string 
 	return new TextDecoder().decode(stdout).trim().split("\n").map((l) => JSON.parse(l))
 }
 
-// "*" sites: checked for shape, then taken as the expectation's
-function match(got: Shown, want: Shown, at: string) {
-	if (want.header.site === "*") {
-		const site = got.header.site as { file?: unknown; line?: unknown } | undefined
-		assert(typeof site?.file === "string" && typeof site.line === "number", `${at}: a site`)
-		want = { ...want, header: { ...want.header, site } }
+const now = () => Math.floor(Date.now() / 1000)
+
+// a time "now" in the expectation: within [from - 1, to + 1], then taken as the expectation's
+function match(got: Shown | undefined, want: Shown, at: string, from: number, to: number) {
+	assert(got !== undefined, `${at}: no node`)
+	if (want.change.time === "now") {
+		const t = got.change.time
+		assert(
+			Number.isInteger(t) && t as number >= from - 1 && t as number <= to + 1,
+			`${at}: time ${t}`,
+		)
+		want = { ...want, change: { ...want.change, time: t } }
 	}
 	assertEquals(got, want, at)
 }
 
-for await (const f of Deno.readDir(`${here}../../core/graph/conformance/node`)) {
+for await (const f of Deno.readDir(`${here}../../core/node/conformance/node`)) {
 	if (!f.name.endsWith(".json")) continue
 	const { title, steps } = JSON.parse(
-		await Deno.readTextFile(`${here}../../core/graph/conformance/node/${f.name}`),
+		await Deno.readTextFile(`${here}../../core/node/conformance/node/${f.name}`),
 	) as {
 		title: string
 		steps: Step[]
 	}
-	Deno.test(`${f.name}: ${title}`, async () => {
+	Deno.test({ name: `${f.name}: ${title}`, ignore: skip.has(f.name) }, async () => {
+		const from = now()
 		const answers = await ask(steps.map(({ expect: _, ...r }) => r))
+		const to = now()
 		steps.forEach((s, i) => {
 			assertEquals(answers[i].error, undefined, `step ${i}`)
-			if (s.expect !== undefined) match(answers[i].node!, s.expect, `step ${i}`)
+			if (s.expect !== undefined) match(answers[i].node, s.expect.node, `step ${i}`, from, to)
 		})
 	})
 }
 
+Deno.test("an unknown op is an error, and the harness goes on", async () => {
+	const from = now()
+	const [a, b] = await ask([{ op: "nope" }, { op: "make" }])
+	assert(a.error)
+	match(b.node, { change: { time: "now" } }, "make", from, now())
+})
+
 // a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
+const STEPS = 25
 const NAMES = ["a", "b", "c", "d"]
+const STRINGS = ["", "a", "é", 'a"b\\c', "line\nbreak", "\u0001", "🦊"]
 
 function rand(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1
@@ -71,49 +85,52 @@ function rand(seed: number) {
 	}
 }
 
-// NODE.tex read plainly: entries as new Map takes them, without a Map
-function entries(given: [string, Version[]][]): [string, Version[]][] {
-	const out: [string, Version[]][] = []
-	for (const [name, vs] of given) {
-		const at = out.findIndex(([n]) => n === name)
-		if (at === -1) out.push([name, vs])
-		else out[at] = [name, vs]
-	}
-	return out
+function json(pick: (n: number) => number, depth = 0): unknown {
+	const k = pick(depth > 2 ? 4 : 6)
+	if (k === 0) return null
+	if (k === 1) return pick(2) === 0
+	if (k === 2) return pick(2) === 0 ? pick(1000) : -pick(1000) / 4
+	if (k === 3) return STRINGS[pick(STRINGS.length)]
+	if (k === 4) return Array.from({ length: pick(3) }, () => json(pick, depth + 1))
+	const o: Record<string, unknown> = {}
+	for (let i = pick(3); i > 0; i--) o[STRINGS[pick(STRINGS.length)]] = json(pick, depth + 1)
+	return o
 }
 
-Deno.test(`fuzz: ${SEEDS} seeds against the model`, async () => {
-	const requests: Request[] = []
-	const expected: Shown[] = []
+Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} requests against the model`, async () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const pick = rand(seed)
-		const version = (list: boolean): Version => {
-			const v: Version = {
-				content: list
-					? Array.from({ length: pick(4) }, () => pick(4) ? NAMES[pick(4)] : { symbol: "s" })
-					: pick(3)
-					? pick(100)
-					: { k: [pick(9), "x"] },
-				change: { time: pick(1000), actor: NAMES[pick(4)], node: "n" },
+		const steps: { request: Request; expect: Shown }[] = []
+		for (let k = 0; k < STEPS; k++) {
+			const request: Request = { op: "make" }
+			const change: Change = {}
+			const expect: Shown = { change }
+			if (pick(4)) request.value = expect.value = json(pick)
+			const header: Record<string, unknown> = {}
+			if (pick(2)) header.time = pick(1 << 30)
+			if (pick(2)) header.actor = NAMES[pick(4)]
+			if (pick(3) === 0) {
+				header.metadata = Array.from({ length: pick(4) }, () => [NAMES[pick(2)], json(pick, 2)])
 			}
-			if (pick(3) === 0) v.because = ["b", pick(5)]
-			return v
+			const sites: Site[] = []
+			for (let n = pick(3); n > 0; n--) {
+				sites.push({
+					file: `f${pick(9)}.ts`,
+					line: 1 + pick(500),
+					...(pick(2) ? { column: pick(80) } : {}),
+				})
+			}
+			if (sites.length || pick(5) === 0) header.external = sites
+			if (pick(2)) {
+				request.header = header
+				Object.assign(change, header)
+			}
+			if (change.time === undefined) change.time = "now"
+			steps.push({ request, expect })
 		}
-		const versions = (list: boolean) => Array.from({ length: pick(3) }, () => version(list))
-		const named = (list: boolean) =>
-			Array.from(
-				{ length: pick(6) },
-				() => [NAMES[pick(4)], versions(list)] as [string, Version[]],
-			)
-		const value = versions(false), info = named(false), children = named(true)
-		const header: Record<string, unknown> = {}
-		if (pick(2)) header.time = pick(1 << 30)
-		if (pick(2)) header.actor = NAMES[pick(4)]
-		if (pick(4) === 0) header.cause = { why: pick(3) }
-		const id = `n${seed}`
-		requests.push({ op: "make", id, contents: { value, info, children }, header })
-		expected.push({ id, value, info: entries(info), children: entries(children), header })
+		const from = now()
+		const answers = await ask(steps.map((s) => s.request))
+		const to = now()
+		steps.forEach((s, i) => match(answers[i].node, s.expect, `seed ${seed}, step ${i}`, from, to))
 	}
-	const answers = await ask(requests)
-	expected.forEach((e, i) => match(answers[i].node!, e, `seed ${i + 1}`))
 })

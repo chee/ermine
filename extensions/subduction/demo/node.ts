@@ -27,7 +27,7 @@ import { createDevice, type Device } from "../typescript/transport.ts"
 import { createWiring, fresh } from "../typescript/wiring.ts"
 import { hexOf } from "../live/blob.ts"
 import { type Backend, Storage } from "../live/storage.ts"
-import createNode from "@ermine/graph/node"
+import createNode from "@ermine/node"
 // deno-lint-ignore no-explicit-any
 type Any = any
 

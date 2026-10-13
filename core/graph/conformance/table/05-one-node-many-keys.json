@@ -1,0 +1,18 @@
+{
+	"title": "one node under several keys; who gives them all, ids by part",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "value", "id": "b", "node": "n", "expect": {} },
+		{ "op": "add", "part": "children", "id": "a", "node": "n", "expect": {} },
+		{
+			"op": "who",
+			"node": "n",
+			"expect": { "keys": [["value", "a"], ["value", "b"], ["children", "a"]] }
+		},
+		{ "op": "ids", "part": "value", "node": "n", "expect": { "ids": ["a", "b"] } },
+		{ "op": "ids", "part": "children", "node": "n", "expect": { "ids": ["a"] } },
+		{ "op": "ids", "part": "attributes", "node": "n", "expect": { "ids": [] } },
+		{ "op": "who", "node": "other", "expect": { "keys": [] } },
+		{ "op": "at", "id": "a", "expect": { "entries": [["value", "n"], ["children", "n"]] } }
+	]
+}

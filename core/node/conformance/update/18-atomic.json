@@ -1,0 +1,152 @@
+{
+	"title": "a failed patch changes nothing and tells nothing",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3
+				],
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"s": "abc"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"b"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"m",
+						"z",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 3
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3
+						],
+						"m": {
+							"a": {
+								"b": 1
+							}
+						},
+						"s": "abc"
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"b"
+					],
+					"value": 0
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3
+						],
+						"m": {
+							"a": {
+								"b": 1
+							}
+						},
+						"s": "abc"
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		}
+	]
+}

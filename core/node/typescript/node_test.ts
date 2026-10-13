@@ -1,31 +1,43 @@
-import { assertEquals, assertStrictEquals } from "@std/assert"
-import make from "./node.ts"
+import { assert, assertEquals, assertStrictEquals } from "@std/assert"
+import createNode from "./node.ts"
 
-Deno.test("make: the whole node, entries in order", () => {
-	const v = { content: 1, change: { time: 0 } }
-	const n = make("a", { value: [v], children: [["b", []], ["a", []]] })
-	assertEquals(n.value, [v])
-	assertEquals([...n.children.keys()], ["b", "a"])
-	assertEquals(n.info.size, 0)
-	assertEquals(n.header, {})
+const now = () => Math.floor(Date.now() / 1000)
+
+Deno.test("createNode: the value and the change; no value, none there", () => {
+	const n = createNode({ a: 1 }, { time: 0, actor: "host" })
+	assertEquals(n, { value: { a: 1 }, change: { time: 0, actor: "host" } })
+	assertEquals("value" in createNode(), false)
 })
 
-Deno.test("make: outside gives the caller's site in the header", () => {
-	const line = Number(new Error().stack!.split("\n")[1].match(/:(\d+):\d+\)?$/)![1]) + 1
-	const n = make("a", {}, { header: { time: 1, actor: "me" }, outside: true })
-	assertEquals([n.header.site?.file, n.header.site?.line], [import.meta.url, line])
-	assertEquals([n.header.time, n.header.actor], [1, "me"])
+Deno.test("createNode: the change given is the node's, not copied", () => {
+	const h = { time: 1, actor: "me" }
+	assertStrictEquals(createNode(undefined, h).change, h)
 })
 
-Deno.test("make: the header given is the node's, not copied; outside never changes it", () => {
-	const h = { time: 1 }
-	assertStrictEquals(make("a", {}, { header: h }).header, h)
-	make("a", {}, { header: h, outside: true })
-	assertEquals(h, { time: 1 })
+Deno.test("createNode: no time given, the time now, in a new change", () => {
+	const before = now()
+	const h = { actor: "me", metadata: [["why", "a test"]] as [string, unknown][] }
+	const n = createNode(1, h as never)
+	const after = now()
+	assert(n.change.time >= before && n.change.time <= after, String(n.change.time))
+	assertEquals({ ...n.change, time: 0 }, { ...h, time: 0 })
+	assertEquals("time" in h, false)
+	assert(typeof createNode().change.time === "number")
 })
 
-Deno.test("make: a header's own site is kept, as from storage", () => {
-	const site = { file: "file:///old.ts", line: 3 }
-	const n = make("a", {}, { header: { time: 0, actor: "me", site }, outside: true })
-	assertEquals(n.header.site, site)
+Deno.test("createNode: a time given is kept, 0 included", () => {
+	assertEquals(createNode(undefined, { time: 0, actor: "me" }).change.time, 0)
+})
+
+Deno.test("createNode: external and metadata kept as given", () => {
+	const external = [{ file: "file:///old.ts", line: 3 }]
+	const metadata: [string, unknown][] = [["a", 1], ["a", 2]]
+	const n = createNode(undefined, { time: 1, actor: "me", external, metadata })
+	assertStrictEquals(n.change.external, external)
+	assertStrictEquals(n.change.metadata, metadata)
+})
+
+Deno.test("createNode: the value given is the node's, not copied", () => {
+	const v = { a: [1] }
+	assertStrictEquals(createNode(v).value, v)
 })

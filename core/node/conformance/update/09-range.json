@@ -1,0 +1,170 @@
+{
+	"title": "range: past the end, backwards",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"s": "ab",
+				"l": [
+					1
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						2
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"s": "ab",
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		}
+	]
+}

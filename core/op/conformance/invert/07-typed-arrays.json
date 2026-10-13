@@ -1,0 +1,530 @@
+{
+	"title": "typed arrays: spans of their elements, the taken put back as their own kind; bytes put back whole",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1,
+							2,
+							3
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"int8": [
+								4
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							3,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							1,
+							2,
+							3
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						2
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": {
+							"/": {
+								"int16": [
+									1,
+									2
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							1,
+							2,
+							3
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								7,
+								8
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							3
+						],
+						"value": {
+							"/": {
+								"uint16": [
+									2
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-1,
+							2
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int32": [
+								5
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": {
+							"/": {
+								"uint32": [
+									4294967295
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							-0
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"float32": [
+								"NaN"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": {
+							"/": {
+								"float32": [
+									-0
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": {
+							"/": {
+								"float64": [
+									0.1
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-9007199254740993",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"3"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": {
+							"/": {
+								"int64": [
+									"-9007199254740993"
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"18446744073709551615"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"1"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": {
+						"/": {
+							"bytes": "BA"
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"value": {
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"value": {
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"/": {
+					"int16": [
+						1,
+						2
+					]
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"int16": [
+								9
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,318 @@
+{
+	"title": "facts per patch: list parents, map parents, strings",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3
+				],
+				"m": {
+					"a": 1
+				},
+				"s": "a😀"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"value": 5
+				},
+				{
+					"path": [
+						"l",
+						2
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"c"
+					],
+					"move": {
+						"path": [
+							"m",
+							"b"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"l": [
+							5
+						],
+						"m": {
+							"c": 1
+						},
+						"s": "a"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l",
+										1
+									],
+									"value": 5
+								},
+								{
+									"path": [
+										"l",
+										2
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									]
+								},
+								{
+									"path": [
+										"l",
+										0
+									],
+									"move": {
+										"path": [
+											"l",
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"m",
+											"b"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": [
+										1
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": "😀"
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										2,
+										2
+									],
+									"value": [
+										3
+									]
+								},
+								{
+									"path": [
+										"l",
+										1
+									],
+									"value": 2
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

@@ -1,7 +1,7 @@
 // The C scheduler on the line protocol: one JSON request per line in, one answer per line out, in
 // order. Same as ../conformance/harness.ts (its header says the requests and answers).
 //
-// memory: the values a request builds (nt_value) are handed to the scheduler, which holds its own; the
+// memory: the values a request builds (op_value) are handed to the scheduler, which holds its own; the
 // request's hold is never let go, so the leak checker is told (below). Each line ends with a sweep
 // (sc_sweep). The scheduler is freed at the next "new" and at the end.
 #define _POSIX_C_SOURCE 200809L
@@ -84,19 +84,19 @@ static char *str(size_t *len) {
 	return out;
 }
 
-static nt_value *value(void) {
+static op_value *value(void) {
 	ws();
 	if (*p == '"') {
 		char *s = str(NULL);
-		nt_value *v = nt_str(s);
+		op_value *v = op_str(s);
 		free(s);
 		return v;
 	}
 	if (*p == '[') {
-		nt_value *l = nt_list();
+		op_value *l = op_list();
 		p++;
 		for (ws(); *p && *p != ']'; ws()) {
-			nt_push(l, value());
+			op_push(l, value());
 			ws();
 			if (*p == ',') p++;
 			else if (*p != ']') { bad = 1; break; }
@@ -106,7 +106,7 @@ static nt_value *value(void) {
 		return l;
 	}
 	if (*p == '{') {
-		nt_value *m = nt_map();
+		op_value *m = op_map();
 		p++;
 		for (ws(); *p && *p != '}'; ws()) {
 			if (*p != '"') { bad = 1; break; }
@@ -114,7 +114,7 @@ static nt_value *value(void) {
 			ws();
 			if (*p == ':') p++;
 			else bad = 1;
-			nt_set(m, k, value());
+			op_set(m, k, value());
 			free(k);
 			ws();
 			if (*p == ',') p++;
@@ -124,14 +124,14 @@ static nt_value *value(void) {
 		else bad = 1;
 		return m;
 	}
-	if (!strncmp(p, "true", 4)) { p += 4; return nt_bool(1); }
-	if (!strncmp(p, "false", 5)) { p += 5; return nt_bool(0); }
-	if (!strncmp(p, "null", 4)) { p += 4; return nt_null(); }
+	if (!strncmp(p, "true", 4)) { p += 4; return op_bool(1); }
+	if (!strncmp(p, "false", 5)) { p += 5; return op_bool(0); }
+	if (!strncmp(p, "null", 4)) { p += 4; return op_null(); }
 	char *end;
 	double d = strtod(p, &end);
-	if (end == p) { bad = 1; p++; return nt_null(); }
+	if (end == p) { bad = 1; p++; return op_null(); }
 	p = end;
-	return nt_num(d);
+	return op_num(d);
 }
 
 // the state
@@ -160,56 +160,56 @@ static void clear(lines *l) {
 	l->n = 0;
 }
 
-static void on_log(void *ctx, nt_value *v) {
+static void on_log(void *ctx, op_value *v) {
 	(void)ctx;
-	nt_value *j = st_json(v);
+	op_value *j = st_json(v);
 	st_buf b = {0};
 	st_dump(&b, j);
 	add(&logged, b.s);
-	nt_free(j);
+	op_free(j);
 }
 
 // a moment, as SCHEDULER.tex's: a read's without its items, an error as its code
 static void on_moment(void *ctx, const sc_moment *m) {
 	(void)ctx;
-	nt_value *o = nt_map();
+	op_value *o = op_map();
 	switch (m->kind) {
 	case SC_DUE:
-		nt_set(o, "due", nt_str(m->id));
-		nt_set(o, "by", nt_num((double)m->by));
+		op_set(o, "due", op_str(m->id));
+		op_set(o, "by", op_num((double)m->by));
 		break;
 	case SC_STARTS:
-		nt_set(o, "starts", nt_str(m->id));
-		if (m->has_run) nt_set(o, "run", nt_num((double)m->run));
-		if (m->handler) nt_set(o, "handler", nt_str(m->handler));
-		if (m->has_rank) nt_set(o, "rank", nt_num((double)m->rank));
+		op_set(o, "starts", op_str(m->id));
+		if (m->has_run) op_set(o, "run", op_num((double)m->run));
+		if (m->handler) op_set(o, "handler", op_str(m->handler));
+		if (m->has_rank) op_set(o, "rank", op_num((double)m->rank));
 		break;
 	case SC_READS:
-		nt_set(o, "reads", nt_str(m->id));
-		if (m->has_run) nt_set(o, "run", nt_num((double)m->run));
-		if (m->handler) nt_set(o, "handler", nt_str(m->handler));
-		if (m->cleanup) nt_set(o, "cleanup", nt_bool(1));
-		nt_set(o, "op", nt_str(m->op));
-		nt_set(o, "tracked", nt_bool(m->tracked));
+		op_set(o, "reads", op_str(m->id));
+		if (m->has_run) op_set(o, "run", op_num((double)m->run));
+		if (m->handler) op_set(o, "handler", op_str(m->handler));
+		if (m->cleanup) op_set(o, "cleanup", op_bool(1));
+		op_set(o, "op", op_str(m->op));
+		op_set(o, "tracked", op_bool(m->tracked));
 		break;
 	case SC_ENDS: {
 		static const char *const ended[] = {"done", "pending", "failed", "stopped", "looping"};
-		nt_set(o, "ends", nt_str(m->id));
-		if (m->has_run) nt_set(o, "run", nt_num((double)m->run));
-		if (m->handler) nt_set(o, "handler", nt_str(m->handler));
-		nt_set(o, "ended", nt_str(ended[m->ended]));
-		if (m->has_equal) nt_set(o, "equal", nt_bool(m->equal));
-		if (m->error) nt_set(o, "error", nt_str(st_code(m->error)));
-		if (m->waits) nt_set(o, "waits", nt_str(m->waits));
+		op_set(o, "ends", op_str(m->id));
+		if (m->has_run) op_set(o, "run", op_num((double)m->run));
+		if (m->handler) op_set(o, "handler", op_str(m->handler));
+		op_set(o, "ended", op_str(ended[m->ended]));
+		if (m->has_equal) op_set(o, "equal", op_bool(m->equal));
+		if (m->error) op_set(o, "error", op_str(st_code(m->error)));
+		if (m->waits) op_set(o, "waits", op_str(m->waits));
 	}
 	}
 	st_buf b = {0};
 	st_dump(&b, o);
 	add(&moments, b.s);
-	nt_free(o);
+	op_free(o);
 }
 
-static void on_log_env(void *ctx, nt_value *v) { on_log(ctx, v); }
+static void on_log_env(void *ctx, op_value *v) { on_log(ctx, v); }
 static st_env env;
 
 // the host's code: the program at the path, read as the process
@@ -239,13 +239,13 @@ static const pr_value *on_site(void *ctx) {
 	return site;
 }
 
-static void make(nt_value *q) {
+static void make(op_value *q) {
 	if (sched) sc_free(sched);
 	pr_free(&may_arena);
 	clear(&moments);
 	clear(&logged);
 	clk = 0;
-	nt_value *rules = nt_get(q, "rules");
+	op_value *rules = op_get(q, "rules");
 	sc_hook hook = {on_moment, NULL};
 	sc_options o = {0};
 	o.root = "root";
@@ -257,7 +257,7 @@ static void make(nt_value *q) {
 		may = pr_rules(&may_arena, "rules");
 		o.may = &may;
 	}
-	nt_value *sv = nt_get(q, "site");
+	op_value *sv = op_get(q, "site");
 	if (sv) o.site = on_site;
 	sched = sc_new(&o);
 	site = sv ? st_pr(sched, sv) : NULL;
@@ -267,13 +267,13 @@ static void make(nt_value *q) {
 	nd_node *n = calloc(1, sizeof *n);
 	n->id = "rules";
 	nd_version *v = sc_alloc(sched, sizeof *v);
-	*v = (nd_version){nt_list(), sc_change_new(sched, 0, "rules"), NULL};
+	*v = (nd_version){op_list(), sc_change_new(sched, 0, "rules"), NULL};
 	n->value = (nd_object){v, 1};
 	sc_intro(sched, n);
 	sc_api *host = sc_host(sched);
 	sc_insert(host, "root", "rules", "rules", NULL, NULL, NULL);
-	nt_key path[1];
-	nt_patch patch = {0};
+	op_key path[1];
+	op_patch patch = {0};
 	patch.place.path = path;
 	patch.has_value = 1;
 	patch.value = rules;
@@ -281,34 +281,34 @@ static void make(nt_value *q) {
 	sc_write(host, address, 1, &patch, 1, NULL, NULL, 0, NULL);
 }
 
-static const char *const *names_of(const nt_value *l, size_t *n) {
-	*n = l && l->type == NT_LIST ? l->count : 0;
+static const char *const *names_of(const op_value *l, size_t *n) {
+	*n = l && l->type == OP_LIST ? l->count : 0;
 	const char **out = sc_alloc(sched, (*n + 1) * sizeof *out);
-	for (size_t i = 0; i < *n; i++) out[i] = l->items[i]->type == NT_STR ? l->items[i]->str : "";
+	for (size_t i = 0; i < *n; i++) out[i] = l->items[i]->type == OP_STR ? l->items[i]->str : "";
 	return out;
 }
 
 typedef struct {
-	nt_value *ops;
-	nt_value *out;
+	op_value *ops;
+	op_value *out;
 } batch;
-static const sc_error *answer(nt_value *q, nt_value **out, int *undefined);
+static const sc_error *answer(op_value *q, op_value **out, int *undefined);
 
 static const sc_error *batch_fn(void *ctx) {
 	batch *b = ctx;
 	for (size_t i = 0; i < b->ops->count; i++) {
-		nt_value *a;
+		op_value *a;
 		int undef = 0;
 		const sc_error *e = answer(b->ops->items[i], &a, &undef);
 		if (e) return e;
-		nt_push(b->out, undef ? nt_null() : a);
+		op_push(b->out, undef ? op_null() : a);
 	}
 	return NULL;
 }
 
-static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
-	nt_value *opv = nt_get(q, "op");
-	const char *op = opv && opv->type == NT_STR ? opv->str : "";
+static const sc_error *answer(op_value *q, op_value **out, int *undefined) {
+	op_value *opv = op_get(q, "op");
+	const char *op = opv && opv->type == OP_STR ? opv->str : "";
 	const sc_error *e;
 	*out = NULL;
 	if (!strcmp(op, "new")) {
@@ -319,30 +319,30 @@ static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
 	if (!strcmp(op, "start")) {
 		sc_startop so = {0};
 		size_t n;
-		so.address = names_of(nt_get(q, "address"), &n);
+		so.address = names_of(op_get(q, "address"), &n);
 		so.naddress = n;
-		e = st_program(&env, nt_get(q, "program"), &so);
+		e = st_program(&env, op_get(q, "program"), &so);
 		if (e) return e;
-		nt_value *x;
-		if ((x = nt_get(q, "name")) && x->type == NT_STR) so.name = x->str;
-		if ((x = nt_get(q, "id")) && x->type == NT_STR) so.id = x->str;
+		op_value *x;
+		if ((x = op_get(q, "name")) && x->type == OP_STR) so.name = x->str;
+		if ((x = op_get(q, "id")) && x->type == OP_STR) so.id = x->str;
 		const char *id;
 		e = sc_start(sched, &so, &id);
 		if (e) return e;
-		*out = nt_str(id);
+		*out = op_str(id);
 		return NULL;
 	}
 	if (!strcmp(op, "call")) {
 		sc_callop co = {0};
 		size_t n;
-		co.address = names_of(nt_get(q, "address"), &n);
+		co.address = names_of(op_get(q, "address"), &n);
 		co.naddress = n;
-		nt_value *x;
-		if ((x = nt_get(q, "args"))) co.args = x;
-		if ((x = nt_get(q, "actor")) && x->type == NT_STR) co.actor = sc_agent_of(sched, x->str);
-		if ((x = nt_get(q, "person")) && x->type == NT_STR) co.person = x->str;
-		if ((x = nt_get(q, "trusted"))) co.has_trusted = 1, co.trusted = x->type == NT_BOOL && x->bool_;
-		nt_value *res;
+		op_value *x;
+		if ((x = op_get(q, "args"))) co.args = x;
+		if ((x = op_get(q, "actor")) && x->type == OP_STR) co.actor = sc_agent_of(sched, x->str);
+		if ((x = op_get(q, "person")) && x->type == OP_STR) co.person = x->str;
+		if ((x = op_get(q, "trusted"))) co.has_trusted = 1, co.trusted = x->type == OP_BOOL && x->bool_;
+		op_value *res;
 		e = sc_call(sched, &co, &res);
 		if (e) return e;
 		*out = st_json(res);
@@ -350,22 +350,22 @@ static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
 	}
 	if (!strcmp(op, "replace")) {
 		size_t n;
-		const char *const *a = names_of(nt_get(q, "address"), &n);
+		const char *const *a = names_of(op_get(q, "address"), &n);
 		e = sc_replace(sched, a, n);
 		if (e) return e;
-		*out = nt_null();
+		*out = op_null();
 		return NULL;
 	}
 	if (!strcmp(op, "outro")) {
-		nt_value *id = nt_get(q, "id");
-		e = sc_outro(sched, id && id->type == NT_STR ? id->str : "");
+		op_value *id = op_get(q, "id");
+		e = sc_outro(sched, id && id->type == OP_STR ? id->str : "");
 		if (e) return e;
-		*out = nt_null();
+		*out = op_null();
 		return NULL;
 	}
 	if (!strcmp(op, "batch")) {
-		batch b = {nt_get(q, "ops"), nt_list()};
-		if (!b.ops || b.ops->type != NT_LIST) b.ops = nt_list();
+		batch b = {op_get(q, "ops"), op_list()};
+		if (!b.ops || b.ops->type != OP_LIST) b.ops = op_list();
 		e = sc_batch(sched, batch_fn, &b);
 		if (e) return e;
 		*out = b.out;
@@ -382,56 +382,56 @@ static const sc_error *answer(nt_value *q, nt_value **out, int *undefined) {
 		st_put(&b, "]", 1);
 		clear(l);
 		// the list is printed whole: carried as a string the printer does not quote
-		nt_value *raw = nt_str(b.s);
+		op_value *raw = op_str(b.s);
 		free(b.s);
 		raw->count = 0x7a77; // marks raw text, below
 		*out = raw;
 		return NULL;
 	}
 	if (!strcmp(op, "node")) {
-		nt_value *id = nt_get(q, "id");
-		nd_node *n = sc_get(sched, id && id->type == NT_STR ? id->str : "");
+		op_value *id = op_get(q, "id");
+		nd_node *n = sc_get(sched, id && id->type == OP_STR ? id->str : "");
 		if (!n) {
-			*out = nt_null();
+			*out = op_null();
 			return NULL;
 		}
-		nt_value *m = st_node(sched, n);
-		nt_set(m, "ephemeral", nt_bool(sc_ephemeral(sched, n->id)));
+		op_value *m = st_node(sched, n);
+		op_set(m, "ephemeral", op_bool(sc_ephemeral(sched, n->id)));
 		*out = m;
 		return NULL;
 	}
 	if (!strcmp(op, "header")) {
-		nt_value *id = nt_get(q, "id");
-		nd_node *n = sc_get(sched, id && id->type == NT_STR ? id->str : "");
+		op_value *id = op_get(q, "id");
+		nd_node *n = sc_get(sched, id && id->type == OP_STR ? id->str : "");
 		if (!n || !n->value.length || !n->value.versions[0].change) {
-			*out = nt_null();
+			*out = op_null();
 			return NULL;
 		}
 		const sc_change *c = n->value.versions[0].change;
-		nt_value *m = nt_map();
-		nt_set(m, "time", nt_num((double)c->time));
-		if (c->cause) nt_set(m, "cause", st_pr_json(c->cause));
-		if (c->site) nt_set(m, "site", st_pr_json(c->site));
+		op_value *m = op_map();
+		op_set(m, "time", op_num((double)c->time));
+		if (c->cause) op_set(m, "cause", st_pr_json(c->cause));
+		if (c->site) op_set(m, "site", st_pr_json(c->site));
 		*out = m;
 		return NULL;
 	}
 	if (!strcmp(op, "clock")) {
-		*out = nt_num((double)clk);
+		*out = op_num((double)clk);
 		return NULL;
 	}
-	nt_value *fields = nt_map();
+	op_value *fields = op_map();
 	for (size_t i = 0; i < q->count; i++)
-		if (strcmp(q->keys[i], "op")) nt_set(fields, q->keys[i], q->items[i]);
+		if (strcmp(q->keys[i], "op")) op_set(fields, q->keys[i], q->items[i]);
 	return st_operate(sched, sc_host(sched), op, fields, out);
 }
 
 // out: raw text marked above is printed as it is
-static void print(const nt_value *v, st_buf *b) {
-	if (v && v->type == NT_STR && v->count == 0x7a77) {
+static void print(const op_value *v, st_buf *b) {
+	if (v && v->type == OP_STR && v->count == 0x7a77) {
 		st_put(b, v->str, v->bytes);
 		return;
 	}
-	if (v && v->type == NT_LIST) {
+	if (v && v->type == OP_LIST) {
 		st_put(b, "[", 1);
 		for (size_t i = 0; i < v->count; i++) {
 			if (i) st_put(b, ",", 1);
@@ -440,14 +440,14 @@ static void print(const nt_value *v, st_buf *b) {
 		st_put(b, "]", 1);
 		return;
 	}
-	if (v && v->type == NT_MAP) {
+	if (v && v->type == OP_MAP) {
 		st_buf k = {0};
 		st_put(b, "{", 1);
 		for (size_t i = 0; i < v->count; i++) {
 			if (i) st_put(b, ",", 1);
-			nt_value *key = nt_str(v->keys[i]);
+			op_value *key = op_str(v->keys[i]);
 			st_dump(b, key);
-			nt_free(key);
+			op_free(key);
 			st_put(b, ":", 1);
 			print(v->items[i], b);
 		}
@@ -459,7 +459,7 @@ static void print(const nt_value *v, st_buf *b) {
 }
 
 int main(void) {
-	make(nt_map());
+	make(op_map());
 	char *line = NULL;
 	size_t cap = 0;
 	ssize_t got;
@@ -468,19 +468,19 @@ int main(void) {
 		ws();
 		if (!*p) continue;
 		bad = 0;
-		nt_value *q = value();
+		op_value *q = value();
 		st_buf b = {0};
-		if (bad || q->type != NT_MAP) {
+		if (bad || q->type != OP_MAP) {
 			st_put(&b, "{\"error\":\"thrown\"}", 17);
 		} else {
-			nt_value *a;
+			op_value *a;
 			int undef = 0;
 			const sc_error *e = answer(q, &a, &undef);
 			if (e) {
 				st_put(&b, "{\"error\":", 9);
-				nt_value *c = nt_str(st_code(e));
+				op_value *c = op_str(st_code(e));
 				st_dump(&b, c);
-				nt_free(c);
+				op_free(c);
 				st_put(&b, "}", 1);
 			} else if (undef) st_put(&b, "{}", 2);
 			else {

@@ -1,0 +1,123 @@
+{
+	"title": "the value as given: any JSON, whole",
+	"steps": [
+		{
+			"op": "make",
+			"value": {
+				"title": "hi",
+				"tags": [
+					"a",
+					"b",
+					3
+				],
+				"deep": {
+					"x": [
+						null,
+						true,
+						1.5
+					]
+				}
+			},
+			"expect": {
+				"node": {
+					"value": {
+						"title": "hi",
+						"tags": [
+							"a",
+							"b",
+							3
+						],
+						"deep": {
+							"x": [
+								null,
+								true,
+								1.5
+							]
+						}
+					},
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": [
+				1,
+				2
+			],
+			"expect": {
+				"node": {
+					"value": [
+						1,
+						2
+					],
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": "é 🦊\n",
+			"expect": {
+				"node": {
+					"value": "é 🦊\n",
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": 0,
+			"expect": {
+				"node": {
+					"value": 0,
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": "",
+			"expect": {
+				"node": {
+					"value": "",
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": [],
+			"expect": {
+				"node": {
+					"value": [],
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": {},
+			"expect": {
+				"node": {
+					"value": {},
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		}
+	]
+}

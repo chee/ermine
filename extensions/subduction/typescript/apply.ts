@@ -1,9 +1,9 @@
 // what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "@ermine/encoding/blop"
-import createBecause, { type Because } from "@ermine/graph/because"
-import createChange, { type Change } from "@ermine/graph/change"
-import createNode from "@ermine/graph/node"
+import createBecause, { type Because } from "@ermine/change/because"
+import createChange, { type Change } from "@ermine/change"
+import createNode from "@ermine/node"
 import mutate, { MutateError } from "@ermine/op/mutate"
 import type { Histories } from "./history.ts"
 

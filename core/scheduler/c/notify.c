@@ -32,177 +32,33 @@ static char *xdup(const char *s) {
 
 // values
 
-static nt_value *make(nt_type type) {
-	nt_value *v = xrealloc(NULL, sizeof *v);
-	*v = (nt_value){.type = type};
-	return v;
-}
-nt_value *nt_null(void) { return make(NT_NULL); }
-nt_value *nt_bool(int b) {
-	nt_value *v = make(NT_BOOL);
-	v->bool_ = b != 0;
-	return v;
-}
-nt_value *nt_num(double n) {
-	nt_value *v = make(NT_NUM);
-	v->num = n;
-	return v;
-}
-static nt_value *strn(const char *s, size_t n) {
-	nt_value *v = make(NT_STR);
-	v->str = xrealloc(NULL, n + 1);
-	memcpy(v->str, s, n);
-	v->str[n] = 0;
-	v->bytes = n;
-	v->ascii = 1;
-	for (size_t i = 0; i < n; i++)
-		if ((unsigned char)s[i] >= 0x80) v->ascii = 0;
-	return v;
-}
-nt_value *nt_str(const char *s) { return strn(s, strlen(s)); }
-nt_value *nt_str_take(char *s, size_t n) {
-	nt_value *v = make(NT_STR);
-	v->str = s;
-	v->bytes = n;
-	v->ascii = 1;
-	for (size_t i = 0; i < n; i++)
-		if ((unsigned char)s[i] >= 0x80) v->ascii = 0;
-	return v;
-}
-nt_value *nt_list(void) { return make(NT_LIST); }
-nt_value *nt_bytes(const void *data, size_t n) {
-	nt_value *v = make(NT_BYTES);
-	v->data = xrealloc(NULL, n ? n : 1);
-	if (n) memcpy(v->data, data, n);
-	v->bytes = n;
-	return v;
-}
-nt_value *nt_stand(nt_value *kind) {
-	nt_value *v = make(NT_STAND);
-	nt_push(v, kind);
-	return v;
-}
-size_t nt_size(nt_elements kind) {
-	static const unsigned char sizes[] = {1, 2, 2, 4, 4, 8, 8, 4, 8};
-	return (unsigned)kind < sizeof sizes ? sizes[kind] : 1;
-}
-nt_value *nt_typed(nt_elements kind, const void *data, size_t count) {
-	nt_value *v = nt_bytes(data, count * nt_size(kind));
-	v->type = NT_TYPED;
-	v->kind = kind;
-	return v;
-}
-size_t nt_length(const nt_value *t) { return t->bytes / nt_size(t->kind); }
-nt_value *nt_map(void) { return make(NT_MAP); }
-void nt_push(nt_value *list, nt_value *v) {
-	GROW(list->items, list->count, list->capacity);
-	list->items[list->count++] = v;
-}
 static size_t hash(const char *s) {
 	size_t h = 5381;
 	for (; *s; s++) h = h * 33 + (unsigned char)*s;
 	return h;
 }
-static void slot(nt_value *m, size_t i) {
-	size_t h = hash(m->keys[i]) & (m->slots - 1);
-	while (m->index[h]) h = (h + 1) & (m->slots - 1);
-	m->index[h] = i + 1;
-}
-// a map with many keys is found by hash
-static nt_value *lookup(const nt_value *map, const char *key, size_t *at) {
-	if (map->count <= 16) {
-		for (size_t i = 0; i < map->count; i++) {
-			if (strcmp(map->keys[i], key) == 0) {
-				if (at) *at = i;
-				return map->items[i];
-			}
-		}
-		return NULL;
-	}
-	nt_value *m = (nt_value *)map;
-	if (m->index == NULL) {
-		m->slots = 64;
-		while (m->slots < 4 * m->count) m->slots *= 2;
-		m->index = xrealloc(NULL, m->slots * sizeof *m->index);
-		memset(m->index, 0, m->slots * sizeof *m->index);
-		for (size_t i = 0; i < m->count; i++) slot(m, i);
-	}
-	for (size_t h = hash(key) & (m->slots - 1); m->index[h]; h = (h + 1) & (m->slots - 1)) {
-		size_t i = m->index[h] - 1;
-		if (strcmp(m->keys[i], key) == 0) {
-			if (at) *at = i;
-			return m->items[i];
-		}
-	}
-	return NULL;
-}
-nt_value *nt_get(const nt_value *map, const char *key) {
-	if (map == NULL || map->type != NT_MAP) return NULL;
-	return lookup(map, key, NULL);
-}
-void nt_set(nt_value *map, const char *key, nt_value *v) {
-	size_t at;
-	if (lookup(map, key, &at) != NULL) {
-		nt_free(map->items[at]);
-		map->items[at] = v;
-		return;
-	}
-	if (map->count == map->capacity) {
-		map->capacity = map->capacity ? map->capacity * 2 : 4;
-		map->items = xrealloc(map->items, map->capacity * sizeof *map->items);
-		map->keys = xrealloc(map->keys, map->capacity * sizeof *map->keys);
-	}
-	map->keys[map->count] = xdup(key);
-	map->items[map->count++] = v;
-	if (map->index != NULL) {
-		if (map->slots >= 2 * map->count) {
-			slot(map, map->count - 1);
-		} else {
-			free(map->index);
-			map->index = NULL;
-		}
-	}
-}
-nt_value *nt_ref(nt_value *v) {
-	if (v != NULL) v->refs++;
-	return v;
-}
-void nt_free(nt_value *v) {
-	if (v == NULL) return;
-	if (v->refs) {
-		v->refs--;
-		return;
-	}
-	for (size_t i = 0; i < v->count; i++) {
-		nt_free(v->items[i]);
-		if (v->type == NT_MAP) free(v->keys[i]);
-	}
-	free(v->items);
-	free(v->keys);
-	free(v->index);
-	free(v->str);
-	free(v->data);
-	free(v);
-}
-static nt_value *copy(const nt_value *v) {
+static op_value *copy(const op_value *v) {
 	if (v == NULL) return NULL;
-	if (v->type == NT_BYTES || v->type == NT_TYPED) {
-		nt_value *c = nt_bytes(v->data, v->bytes);
+	op_value *c;
+	switch (v->type) {
+	case OP_BYTES:
+	case OP_TYPED:
+		c = op_bytes(v->data, v->bytes);
 		c->type = v->type;
 		c->kind = v->kind;
 		return c;
-	}
-	nt_value *c = make(v->type);
-	c->bool_ = v->bool_;
-	c->num = v->num;
-	if (v->str) {
-		c->str = xdup(v->str);
-		c->bytes = v->bytes;
-		c->ascii = v->ascii;
+	case OP_NULL: return op_null();
+	case OP_BOOL: return op_bool(v->bool_);
+	case OP_NUM: return op_num(v->num);
+	case OP_STR: return op_str_n(v->str, v->bytes);
+	case OP_MAP: c = op_map(); break;
+	default: // a list; a stand-in is one item
+		c = op_list();
+		c->type = v->type;
 	}
 	for (size_t i = 0; i < v->count; i++) {
-		if (v->type == NT_MAP) nt_set(c, v->keys[i], copy(v->items[i]));
-		else nt_push(c, copy(v->items[i]));
+		if (v->type == OP_MAP) op_set(c, v->keys[i], copy(v->items[i]));
+		else op_push(c, copy(v->items[i]));
 	}
 	return c;
 }
@@ -224,11 +80,11 @@ static const char *cp_at(const char *s, long k) {
 	}
 	return s;
 }
-static long len(const nt_value *v) {
+static long len(const op_value *v) {
 	if (v == NULL) return 0;
-	if (v->type == NT_STR) return v->ascii ? (long)v->bytes : (long)cps(v->str);
-	if (v->type == NT_LIST) return (long)v->count;
-	if (v->type == NT_TYPED) return (long)nt_length(v);
+	if (v->type == OP_STR) return v->ascii ? (long)v->bytes : (long)cps(v->str);
+	if (v->type == OP_LIST) return (long)v->count;
+	if (v->type == OP_TYPED) return (long)op_length(v);
 	return 0;
 }
 // slice's [a, b) in 0..size, as Array.slice would have it
@@ -239,9 +95,9 @@ static void clamp(long size, long *a, long *b) {
 	if (*b > size) *b = size;
 	if (*b < *a) *b = *a;
 }
-static nt_value *slice(const nt_value *v, long a, long b) {
+static op_value *slice(const op_value *v, long a, long b) {
 	if (v == NULL) return NULL;
-	if (v->type == NT_STR) {
+	if (v->type == OP_STR) {
 		// walks no further than b
 		if (a < 0) a = 0;
 		if (b < a) b = a;
@@ -253,37 +109,37 @@ static nt_value *slice(const nt_value *v, long a, long b) {
 			p = cp_at(v->str, a);
 			q = cp_at(p, b - a);
 		}
-		return strn(p, (size_t)(q - p));
+		return op_str_n(p, (size_t)(q - p));
 	}
-	if (v->type == NT_LIST) {
+	if (v->type == OP_LIST) {
 		clamp(len(v), &a, &b);
-		nt_value *l = nt_list();
-		for (long i = a; i < b; i++) nt_push(l, copy(v->items[i]));
+		op_value *l = op_list();
+		for (long i = a; i < b; i++) op_push(l, copy(v->items[i]));
 		return l;
 	}
-	if (v->type == NT_TYPED) {
+	if (v->type == OP_TYPED) {
 		clamp(len(v), &a, &b);
-		size_t z = nt_size(v->kind);
-		return nt_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
+		size_t z = op_size(v->kind);
+		return op_typed(v->kind, v->data + (size_t)a * z, (size_t)(b - a));
 	}
 	return NULL;
 }
 
 // what is at a key; a number key and a string key meet on a map by its text
-static const nt_value *child(const nt_value *v, nt_key k) {
+static const op_value *child(const op_value *v, op_key k) {
 	if (v == NULL) return NULL;
-	if (v->type == NT_MAP) {
+	if (v->type == OP_MAP) {
 		char buf[32];
 		const char *s = k.s;
-		if (k.type == NT_NUM_KEY) {
+		if (k.type == OP_NUM_KEY) {
 			snprintf(buf, sizeof buf, "%ld", k.n);
 			s = buf;
 		}
-		return nt_get(v, s);
+		return op_get(v, s);
 	}
-	if (v->type == NT_LIST) {
+	if (v->type == OP_LIST) {
 		long i = -1;
-		if (k.type == NT_NUM_KEY) i = k.n;
+		if (k.type == OP_NUM_KEY) i = k.n;
 		else if (k.s[0] >= '0' && k.s[0] <= '9' && (k.s[0] != '0' || k.s[1] == 0)) {
 			char *end;
 			i = strtol(k.s, &end, 10);
@@ -293,38 +149,38 @@ static const nt_value *child(const nt_value *v, nt_key k) {
 	}
 	return NULL;
 }
-static const nt_value *at(const nt_value *v, const nt_key *keys, size_t m) {
+static const op_value *at(const op_value *v, const op_key *keys, size_t m) {
 	for (size_t i = 0; i < m && v != NULL; i++) v = child(v, keys[i]);
 	return v;
 }
-static int same_key(nt_key a, nt_key b) {
+static int same_key(op_key a, op_key b) {
 	if (a.type != b.type) return 0;
-	return a.type == NT_NUM_KEY ? a.n == b.n : strcmp(a.s, b.s) == 0;
+	return a.type == OP_NUM_KEY ? a.n == b.n : strcmp(a.s, b.s) == 0;
 }
-static int same_keys(const nt_key *a, size_t n, const nt_key *b, size_t m) {
+static int same_keys(const op_key *a, size_t n, const op_key *b, size_t m) {
 	if (n != m) return 0;
 	for (size_t i = 0; i < n; i++)
 		if (!same_key(a[i], b[i])) return 0;
 	return 1;
 }
 // as map keys: 3 and "3" are one there
-static int same_map_key(nt_key a, nt_key b) {
+static int same_map_key(op_key a, op_key b) {
 	char x[32], y[32];
 	const char *s = a.s, *t = b.s;
-	if (a.type == NT_NUM_KEY) snprintf(x, sizeof x, "%ld", a.n), s = x;
-	if (b.type == NT_NUM_KEY) snprintf(y, sizeof y, "%ld", b.n), t = y;
+	if (a.type == OP_NUM_KEY) snprintf(x, sizeof x, "%ld", a.n), s = x;
+	if (b.type == OP_NUM_KEY) snprintf(y, sizeof y, "%ld", b.n), t = y;
 	return strcmp(s, t) == 0;
 }
 
 // the content with what is at a place taken out, without making it: where the walk gets to,
 // and the part of the sequence or the key that is cut there
 typedef struct {
-	const nt_value *v;
+	const op_value *v;
 	long cut_from, cut_count;
-	const nt_key *dropped;
+	const op_key *dropped;
 } view;
 
-static view view_at(const nt_value *base, const nt_place *rm, const nt_key *keys, size_t m) {
+static view view_at(const op_value *base, const op_target *rm, const op_key *keys, size_t m) {
 	view w = {base, 0, 0, NULL};
 	if (rm == NULL) {
 		w.v = at(base, keys, m);
@@ -335,20 +191,20 @@ static view view_at(const nt_value *base, const nt_place *rm, const nt_key *keys
 		w.v = NULL;
 		return w;
 	}
-	const nt_value *v = base;
+	const op_value *v = base;
 	int on = 1;
 	for (size_t i = 0; i < m; i++) {
-		if (v == NULL || (v->type != NT_LIST && v->type != NT_MAP)) return (view){NULL, 0, 0, NULL};
-		nt_key k = keys[i];
+		if (v == NULL || (v->type != OP_LIST && v->type != OP_MAP)) return (view){NULL, 0, 0, NULL};
+		op_key k = keys[i];
 		if (on && !rm->has_range && i == pl - 1) {
-			if (v->type == NT_LIST) {
-				if (k.type == NT_NUM_KEY && k.n >= rm->path[i].n) k.n++;
+			if (v->type == OP_LIST) {
+				if (k.type == OP_NUM_KEY && k.n >= rm->path[i].n) k.n++;
 			} else if (same_map_key(k, rm->path[i])) {
 				return (view){NULL, 0, 0, NULL};
 			}
 			on = 0;
 		} else if (on && rm->has_range && i == pl) {
-			if (v->type == NT_LIST && k.type == NT_NUM_KEY) {
+			if (v->type == OP_LIST && k.type == OP_NUM_KEY) {
 				if (k.n >= rm->from) k.n += rm->to - rm->from;
 			}
 			on = 0;
@@ -360,10 +216,10 @@ static view view_at(const nt_value *base, const nt_place *rm, const nt_key *keys
 	w.v = v;
 	if (on && v != NULL) {
 		if (!rm->has_range && m + 1 == pl) {
-			if (v->type == NT_LIST) {
+			if (v->type == OP_LIST) {
 				w.cut_from = rm->path[m].n;
 				w.cut_count = 1;
-			} else if (v->type == NT_MAP) {
+			} else if (v->type == OP_MAP) {
 				w.dropped = &rm->path[m];
 			}
 		} else if (rm->has_range && m == pl) {
@@ -373,12 +229,12 @@ static view view_at(const nt_value *base, const nt_place *rm, const nt_key *keys
 	}
 	return w;
 }
-static int is_list(view w) { return w.v != NULL && w.v->type == NT_LIST; }
+static int is_list(view w) { return w.v != NULL && w.v->type == OP_LIST; }
 // a map has the key; a typed array the index (as Object.hasOwn)
-static int view_has(view w, nt_key k) {
-	if (w.v != NULL && w.v->type == NT_TYPED)
-		return k.type == NT_NUM_KEY && k.n >= 0 && k.n < len(w.v) - w.cut_count;
-	if (w.v == NULL || w.v->type != NT_MAP) return 0;
+static int view_has(view w, op_key k) {
+	if (w.v != NULL && w.v->type == OP_TYPED)
+		return k.type == OP_NUM_KEY && k.n >= 0 && k.n < len(w.v) - w.cut_count;
+	if (w.v == NULL || w.v->type != OP_MAP) return 0;
 	if (w.dropped != NULL && same_map_key(*w.dropped, k)) return 0;
 	return child(w.v, k) != NULL;
 }
@@ -391,7 +247,7 @@ typedef struct nt_read R;
 // numeric kids sorted by number, string kids sorted by text: a patch finds the first it reaches
 struct T {
 	T *up;
-	nt_key key;
+	op_key key;
 	T **nk;
 	size_t nnk, cnk;
 	T **sk;
@@ -409,7 +265,7 @@ typedef struct {
 
 struct nt_read {
 	nt_notify *n;
-	nt_key *keys;
+	op_key *keys;
 	size_t nkeys, ckeys;
 	int has_span;
 	long sa, sb;
@@ -427,10 +283,10 @@ struct nt_read {
 	long held;
 	// in a move, where it was: its whole path, or one key of it (d, k) when only shifted
 	long marked;
-	nt_key *was;
+	op_key *was;
 	size_t nwas;
 	size_t was_d;
-	nt_key was_k;
+	op_key was_k;
 	int was_has_span;
 	long was_a, was_b;
 };
@@ -438,7 +294,7 @@ struct nt_read {
 // a chased read carried by a move: where it is inside what moved
 typedef struct {
 	R *r;
-	nt_key *rel;
+	op_key *rel;
 	size_t nrel;
 	int single;
 } carried_t;
@@ -464,7 +320,7 @@ typedef struct {
 } shift_t;
 
 struct nt_notify {
-	const nt_value *(*get)(void *);
+	const op_value *(*get)(void *);
 	void *ctx;
 	T root;
 	R **all;
@@ -507,11 +363,11 @@ static const char *intern(nt_notify *n, const char *s) {
 	n->ntable++;
 	return n->table[h] = xdup(s);
 }
-static nt_key own(nt_notify *n, nt_key k) {
-	if (k.type == NT_STR_KEY) k.s = intern(n, k.s);
+static op_key own(nt_notify *n, op_key k) {
+	if (k.type == OP_STR_KEY) k.s = intern(n, k.s);
 	return k;
 }
-static nt_key numkey(long n) { return (nt_key){.type = NT_NUM_KEY, .n = n}; }
+static op_key numkey(long n) { return (op_key){.type = OP_NUM_KEY, .n = n}; }
 
 // kids
 
@@ -534,8 +390,8 @@ static size_t slower(T *const *xs, size_t n, const char *s) {
 	}
 	return lo;
 }
-static T *kid_of(const T *t, nt_key k) {
-	if (k.type == NT_NUM_KEY) {
+static T *kid_of(const T *t, op_key k) {
+	if (k.type == OP_NUM_KEY) {
 		size_t i = lower(t->nk, t->nnk, k.n);
 		return i < t->nnk && t->nk[i]->key.n == k.n ? t->nk[i] : NULL;
 	}
@@ -543,15 +399,15 @@ static T *kid_of(const T *t, nt_key k) {
 	return i < t->nsk && strcmp(t->sk[i]->key.s, k.s) == 0 ? t->sk[i] : NULL;
 }
 static size_t kids_count(const T *t) { return t->nnk + t->nsk; }
-static T *new_t(T *up, nt_key key) {
+static T *new_t(T *up, op_key key) {
 	T *t = xrealloc(NULL, sizeof *t);
 	*t = (T){.up = up, .key = key};
 	return t;
 }
-static void adopt(T *t, nt_key k, T *kid) {
+static void adopt(T *t, op_key k, T *kid) {
 	kid->up = t;
 	kid->key = k;
-	if (k.type == NT_NUM_KEY) {
+	if (k.type == OP_NUM_KEY) {
 		size_t i = lower(t->nk, t->nnk, k.n);
 		GROW(t->nk, t->nnk, t->cnk);
 		memmove(t->nk + i + 1, t->nk + i, (t->nnk - i) * sizeof *t->nk);
@@ -566,7 +422,7 @@ static void adopt(T *t, nt_key k, T *kid) {
 	}
 }
 static void disown(T *t, T *kid) {
-	if (kid->key.type == NT_NUM_KEY) {
+	if (kid->key.type == OP_NUM_KEY) {
 		size_t i = lower(t->nk, t->nnk, kid->key.n);
 		if (i < t->nnk && t->nk[i] == kid) {
 			memmove(t->nk + i, t->nk + i + 1, (t->nnk - i - 1) * sizeof *t->nk);
@@ -597,7 +453,7 @@ static void erase(void **a, size_t *count, void *x) {
 	}
 }
 static int empty(const T *t) { return kids_count(t) == 0 && t->nreads == 0 && t->nspans == 0; }
-static T *place(const nt_key *keys, size_t m, T *from) {
+static T *place(const op_key *keys, size_t m, T *from) {
 	T *t = from;
 	for (size_t i = 0; i < m; i++) {
 		T *kid = kid_of(t, keys[i]);
@@ -675,7 +531,7 @@ static void detach(R *r) {
 	prune(t);
 }
 // root and each listened node along the path, as far as they go; ts has room for m + 1
-static size_t line(nt_notify *n, const nt_key *path, size_t m, T **ts) {
+static size_t line(nt_notify *n, const op_key *path, size_t m, T **ts) {
 	size_t c = 0;
 	ts[c++] = &n->root;
 	for (size_t i = 0; i < m; i++) {
@@ -771,7 +627,7 @@ static void gone(nt_notify *n, R *r) {
 	r->live = 0;
 }
 // takes rel
-static void carry(nt_notify *n, R *r, nt_key *rel, size_t nrel, int single) {
+static void carry(nt_notify *n, R *r, op_key *rel, size_t nrel, int single) {
 	if (held(n, r)) {
 		free(rel);
 		return;
@@ -781,11 +637,11 @@ static void carry(nt_notify *n, R *r, nt_key *rel, size_t nrel, int single) {
 	r->held = n->step;
 }
 
-static int inside(const R *r, nt_key k) {
-	return r->has_span && k.type == NT_NUM_KEY && k.n >= r->sa && k.n < r->sb;
+static int inside(const R *r, op_key k) {
+	return r->has_span && k.type == OP_NUM_KEY && k.n >= r->sa && k.n < r->sb;
 }
 // deep reads above the path, and deep spans above holding the next key
-static void above(nt_notify *n, T **ts, size_t tsn, const nt_key *path, size_t m) {
+static void above(nt_notify *n, T **ts, size_t tsn, const op_key *path, size_t m) {
 	for (size_t i = 0; i < tsn && i < m; i++) {
 		for (size_t j = 0; j < ts[i]->nreads; j++)
 			if (ts[i]->reads[j]->deep) hit(n, ts[i]->reads[j], NT_VALUE);
@@ -798,7 +654,7 @@ static void above(nt_notify *n, T **ts, size_t tsn, const nt_key *path, size_t m
 static void hear_value(R *r, void *ctx) { hit(ctx, r, NT_VALUE); }
 
 // the content at the path is new; a key came or went when keyed
-static void put(nt_notify *n, const nt_key *path, size_t d, int keyed) {
+static void put(nt_notify *n, const op_key *path, size_t d, int keyed) {
 	T *small[8];
 	T **ts = d < 8 ? small : xrealloc(NULL, (d + 1) * sizeof *ts);
 	size_t tsn = line(n, path, d, ts);
@@ -815,12 +671,12 @@ static void put(nt_notify *n, const nt_key *path, size_t d, int keyed) {
 }
 
 // a copy of what r holds from key index from on, the span last
-static nt_key *rest(const R *r, size_t from, size_t *count) {
+static op_key *rest(const R *r, size_t from, size_t *count) {
 	size_t c = r->nkeys - from + (r->has_span ? 1 : 0);
-	nt_key *out = xrealloc(NULL, (c + 1) * sizeof *out);
+	op_key *out = xrealloc(NULL, (c + 1) * sizeof *out);
 	size_t i = 0;
 	for (size_t k = from; k < r->nkeys; k++) out[i++] = r->keys[k];
-	if (r->has_span) out[i++] = (nt_key){.type = NT_SPAN, .a = r->sa, .b = r->sb};
+	if (r->has_span) out[i++] = (op_key){.type = OP_SPAN, .a = r->sa, .b = r->sb};
 	*count = c;
 	return out;
 }
@@ -835,12 +691,12 @@ static void unkey_each(R *r, void *p) {
 	if (!r->chase) hit(c->n, r, NT_VALUE);
 	else if (c->moved) {
 		size_t m;
-		nt_key *rel = rest(r, c->d, &m);
+		op_key *rel = rest(r, c->d, &m);
 		carry(c->n, r, rel, m, 1);
 	} else gone(c->n, r);
 }
 // a map's key removed: chased reads under it are gone, or carried by a move
-static void unkey(nt_notify *n, const nt_key *path, size_t d, int moved) {
+static void unkey(nt_notify *n, const op_key *path, size_t d, int moved) {
 	T *small[8];
 	T **ts = d < 8 ? small : xrealloc(NULL, (d + 1) * sizeof *ts);
 	size_t tsn = line(n, path, d, ts);
@@ -881,7 +737,7 @@ static void kid_each(R *rd, void *p) {
 		hit(n, rd, NT_MOVED);
 	} else if (c->moved) {
 		size_t m;
-		nt_key *rel = rest(rd, c->d + 1, &m);
+		op_key *rel = rest(rd, c->d + 1, &m);
 		if (!c->single) {
 			rel = xrealloc(rel, (m + 2) * sizeof *rel);
 			memmove(rel + 1, rel, m * sizeof *rel);
@@ -897,7 +753,7 @@ static void kid_each(R *rd, void *p) {
 // v, less: what it was, less what a move took out, for knowing if it had more than k elements
 // moved: what left is carried; single: one element left
 // length: how long the sequence was (its fact's)
-static void splice(nt_notify *nf, const nt_key *path, size_t d, long length, long f,
+static void splice(nt_notify *nf, const op_key *path, size_t d, long length, long f,
 		long r, long n, int atomic, int moved, int single) {
 	T *small[8];
 	T **ts = d < 8 ? small : xrealloc(NULL, (d + 1) * sizeof *ts);
@@ -941,8 +797,8 @@ static void splice(nt_notify *nf, const nt_key *path, size_t d, long length, lon
 		}
 		// all it holds moves: it goes along, as a span over what moved
 		if (moved && a >= f && b <= f + r && b > a) {
-			nt_key *rel = xrealloc(NULL, sizeof *rel);
-			rel[0] = (nt_key){.type = NT_SPAN, .a = a - f, .b = b - f};
+			op_key *rel = xrealloc(NULL, sizeof *rel);
+			rel[0] = (op_key){.type = OP_SPAN, .a = a - f, .b = b - f};
 			carry(nf, sp, rel, 1, 0);
 			continue;
 		}
@@ -1069,9 +925,9 @@ static void whole_each(R *r, void *p) {
 	if (r->chase) gone(p, r);
 	else hit(p, r, NT_VALUE);
 }
-// one place, removed (no value) or put (a value n long); f: its fact (nt_facts).
+// one place, removed (no value) or put (a value n long); f: its fact (op_facts).
 // moved: chased reads in what leaves are carried
-static void act(nt_notify *n, const nt_fact *f, const nt_place *p, int has_value, long vn, int moved) {
+static void act(nt_notify *n, const op_fact *f, const op_target *p, int has_value, long vn, int moved) {
 	if (p->has_range) {
 		splice(n, p->path, p->length, f->length, p->from, p->to - p->from, has_value ? vn : 0,
 			!f->list, moved, 0);
@@ -1083,7 +939,7 @@ static void act(nt_notify *n, const nt_fact *f, const nt_place *p, int has_value
 		else each(&n->root, whole_each, n);
 		return;
 	}
-	nt_key k = p->path[p->length - 1];
+	op_key k = p->path[p->length - 1];
 	if (f->list) {
 		if (has_value) put(n, p->path, p->length, 0);
 		else splice(n, p->path, p->length - 1, f->length, k.n, 1, 0, 0, moved, 1);
@@ -1107,7 +963,7 @@ static void settle(nt_notify *n) {
 	n->nspans = 0;
 }
 
-void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts) {
+void nt_patched_facts(nt_notify *n, const op_patch *patch, const op_facts *facts) {
 	n->tick++;
 	n->step++;
 	n->nfired = 0;
@@ -1118,9 +974,9 @@ void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts
 	n->ncarried = 0;
 	n->still = 0;
 	n->moving = patch->has_move;
-	const nt_place *pl = &patch->place;
+	const op_target *pl = &patch->place;
 	if (patch->has_move) {
-		const nt_place *from = &patch->move;
+		const op_target *from = &patch->move;
 		// a move inside one sequence: its length stays
 		size_t fl = from->has_range ? from->length : from->length ? from->length - 1 : 0;
 		size_t pk = pl->has_range ? pl->length : pl->length ? pl->length - 1 : 0;
@@ -1137,7 +993,7 @@ void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts
 		// carried reads land inside what arrived
 		for (size_t i = 0; i < n->ncarried; i++) {
 			carried_t *c = &n->carried[i];
-			nt_key *rel = c->rel;
+			op_key *rel = c->rel;
 			size_t nrel = c->nrel;
 			R *r = c->r;
 			// a span over one thing that moved with no range: the thing is a value there
@@ -1156,17 +1012,17 @@ void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts
 						nrel++;
 					} else if (nrel == 0) {
 						rel = xrealloc(rel, 2 * sizeof *rel);
-						rel[0] = (nt_key){.type = NT_SPAN, .a = 0, .b = count};
+						rel[0] = (op_key){.type = OP_SPAN, .a = 0, .b = count};
 						nrel = 1;
 					}
 				}
 				if (nrel > 0) {
-					if (rel[0].type == NT_NUM_KEY) rel[0].n += g;
-					else if (rel[0].type == NT_SPAN) rel[0].a += g, rel[0].b += g;
+					if (rel[0].type == OP_NUM_KEY) rel[0].n += g;
+					else if (rel[0].type == OP_SPAN) rel[0].a += g, rel[0].b += g;
 				}
 				c->rel = rel;
 			}
-			int span = nrel > 0 && rel[nrel - 1].type == NT_SPAN;
+			int span = nrel > 0 && rel[nrel - 1].type == OP_SPAN;
 			size_t nk = span ? nrel - 1 : nrel;
 			mark(n, r);
 			free(r->keys);
@@ -1215,7 +1071,7 @@ void nt_patched_facts(nt_notify *n, const nt_patch *patch, const nt_facts *facts
 	n->nfired = 0;
 }
 
-nt_notify *nt_create(const nt_value *(*get)(void *), void *ctx) {
+nt_notify *nt_create(const op_value *(*get)(void *), void *ctx) {
 	nt_notify *n = xrealloc(NULL, sizeof *n);
 	*n = (nt_notify){.get = get, .ctx = ctx};
 	return n;
@@ -1249,11 +1105,11 @@ void nt_destroy(nt_notify *n) {
 	free(n);
 }
 
-nt_read *nt_open(nt_notify *n, const nt_key *path, size_t length, const nt_options *options) {
+nt_read *nt_open(nt_notify *n, const op_key *path, size_t length, const nt_options *options) {
 	R *r = xrealloc(NULL, sizeof *r);
 	*r = (R){.n = n, .live = 1};
 	size_t nk = length;
-	if (length > 0 && path[length - 1].type == NT_SPAN) {
+	if (length > 0 && path[length - 1].type == OP_SPAN) {
 		r->has_span = 1;
 		r->sa = path[length - 1].a;
 		r->sb = path[length - 1].b;
@@ -1293,7 +1149,7 @@ void nt_stop(nt_read *r) {
 	r->live = 0;
 	detach(r);
 }
-const nt_key *nt_keys(const nt_read *r, size_t *length) {
+const op_key *nt_keys(const nt_read *r, size_t *length) {
 	*length = r->nkeys;
 	return r->keys;
 }
@@ -1302,52 +1158,52 @@ int nt_span(const nt_read *r, long *a, long *b) {
 	return r->has_span;
 }
 // one typed array element as a number (a 64-bit integer: as the nearest double; notify.ts has a bigint)
-static nt_value *element(const nt_value *t, size_t i) {
-	size_t z = nt_size(t->kind);
+static op_value *element(const op_value *t, size_t i) {
+	size_t z = op_size(t->kind);
 	uint64_t u = 0;
 	for (size_t j = 0; j < z; j++) u |= (uint64_t)t->data[i * z + j] << (8 * j);
 	switch (t->kind) {
-	case NT_INT8: return nt_num((int8_t)u);
-	case NT_INT16: return nt_num((int16_t)u);
-	case NT_UINT16: return nt_num((uint16_t)u);
-	case NT_INT32: return nt_num((int32_t)u);
-	case NT_UINT32: return nt_num((uint32_t)u);
-	case NT_INT64: return nt_num((double)(int64_t)u);
-	case NT_UINT64: return nt_num((double)u);
-	case NT_FLOAT32: {
+	case OP_INT8: return op_num((int8_t)u);
+	case OP_INT16: return op_num((int16_t)u);
+	case OP_UINT16: return op_num((uint16_t)u);
+	case OP_INT32: return op_num((int32_t)u);
+	case OP_UINT32: return op_num((uint32_t)u);
+	case OP_INT64: return op_num((double)(int64_t)u);
+	case OP_UINT64: return op_num((double)u);
+	case OP_FLOAT32: {
 		uint32_t b = (uint32_t)u;
 		float f;
 		memcpy(&f, &b, 4);
-		return nt_num(f);
+		return op_num(f);
 	}
 	default: {
 		double d;
 		memcpy(&d, &u, 8);
-		return nt_num(d);
+		return op_num(d);
 	}
 	}
 }
-nt_value *nt_value_of(const nt_read *r) {
-	const nt_value *v = at(r->n->get(r->n->ctx), r->keys, r->nkeys);
+op_value *nt_value_of(const nt_read *r) {
+	const op_value *v = at(r->n->get(r->n->ctx), r->keys, r->nkeys);
 	// a typed array's one element, as notify.ts's v[k]: a number key, or a string of one
 	if (v == NULL && r->nkeys && !r->has_span) {
-		const nt_value *t = at(r->n->get(r->n->ctx), r->keys, r->nkeys - 1);
-		nt_key k = r->keys[r->nkeys - 1];
+		const op_value *t = at(r->n->get(r->n->ctx), r->keys, r->nkeys - 1);
+		op_key k = r->keys[r->nkeys - 1];
 		long i = -1;
-		if (k.type == NT_NUM_KEY) i = k.n;
+		if (k.type == OP_NUM_KEY) i = k.n;
 		else if (k.s[0] >= '0' && k.s[0] <= '9' && (k.s[0] != '0' || k.s[1] == 0)) {
 			char *end;
 			i = strtol(k.s, &end, 10);
 			if (*end) i = -1;
 		}
-		if (t != NULL && t->type == NT_TYPED && i >= 0 && (size_t)i < nt_length(t)) return element(t, (size_t)i);
+		if (t != NULL && t->type == OP_TYPED && i >= 0 && (size_t)i < op_length(t)) return element(t, (size_t)i);
 	}
 	return r->has_span ? slice(v, r->sa, r->sb) : copy(v);
 }
 
 // a place's fact, as the base with rm taken out is seen (as notify.ts's fact)
-static nt_fact fact_of(const nt_value *base, const nt_place *rm, const nt_place *p) {
-	nt_fact f = {0, 0, 0};
+static op_fact fact_of(const op_value *base, const op_target *rm, const op_target *p) {
+	op_fact f = {0, 0, 0};
 	if (p->has_range) {
 		view w = view_at(base, rm, p->path, p->length);
 		f.list = is_list(w);
@@ -1360,22 +1216,22 @@ static nt_fact fact_of(const nt_value *base, const nt_place *rm, const nt_place 
 		return f;
 	}
 	view w = view_at(base, rm, p->path, p->length - 1);
-	nt_key k = p->path[p->length - 1];
+	op_key k = p->path[p->length - 1];
 	f.list = is_list(w);
 	f.length = (size_t)(len(w.v) - w.cut_count);
 	// a list's: the index is in it
-	f.had = f.list ? k.type == NT_NUM_KEY && k.n >= 0 && (size_t)k.n < f.length : view_has(w, k);
+	f.had = f.list ? k.type == OP_NUM_KEY && k.n >= 0 && (size_t)k.n < f.length : view_has(w, k);
 	return f;
 }
 
-nt_facts nt_facts_of(const nt_patch *patch, const nt_value *before) {
-	nt_facts fs = {0};
-	const nt_place *pl = &patch->place;
+op_facts nt_facts_of(const op_patch *patch, const op_value *before) {
+	op_facts fs = {0};
+	const op_target *pl = &patch->place;
 	if (!patch->has_move) {
 		fs.place = fact_of(before, NULL, pl);
 		return fs;
 	}
-	const nt_place *from = &patch->move;
+	const op_target *from = &patch->move;
 	fs.place = fact_of(before, from, pl);
 	fs.has_from = 1;
 	fs.from = fact_of(before, NULL, from);
@@ -1388,7 +1244,7 @@ nt_facts nt_facts_of(const nt_patch *patch, const nt_value *before) {
 	return fs;
 }
 
-void nt_patched(nt_notify *n, const nt_patch *patch, const nt_value *before) {
-	nt_facts fs = nt_facts_of(patch, before);
+void nt_patched(nt_notify *n, const op_patch *patch, const op_value *before) {
+	op_facts fs = nt_facts_of(patch, before);
 	nt_patched_facts(n, patch, &fs);
 }

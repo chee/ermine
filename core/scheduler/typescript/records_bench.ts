@@ -2,8 +2,8 @@
 // what the scheduler writes after a run: the value, the status, the latest run; each against the
 // pieces it is made of (the agent, an empty change, the bare assignment)
 import { createGraph } from "@ermine/graph"
-import createChange from "@ermine/graph/change"
-import createNode from "@ermine/graph/node"
+import createChange from "@ermine/change"
+import createNode from "@ermine/node"
 import mutate from "@ermine/op/mutate"
 import { createRecords, type Ran, type Recorded } from "./records.ts"
 

@@ -3,7 +3,7 @@
 // the few things about the content before it that notify reads, never the content
 // only listened places are walked: reads sit in a trie of their paths
 // no patch walks the content: a long string or list costs what the patch touches
-import { count, slice as cut } from "@ermine/op/walk"
+import { count, slice as cut } from "@ermine/util/walk-string"
 
 export type Key = string | number
 export type Span = readonly [number, number]

@@ -9,7 +9,7 @@
 // values it kept are caught as it appends; the scenario then gives them back as edits, with a
 // folder's file id in the plan written as the path that holds it, and lays out by hand, as
 // edits, whatever part of the plan the crash is to have done.
-import createNode, { type Node } from "@ermine/graph/node"
+import createNode, { type Node } from "@ermine/node"
 import * as cbor from "@ermine/encoding/cbor"
 import * as manifest from "@ermine/files/manifest"
 import { mirror, type Saving, store } from "@ermine/files/store"

@@ -1,0 +1,302 @@
+{
+	"title": "puts and removals: maps, lists, nesting, a missing key",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"t": "hi",
+				"l": [
+					1,
+					2,
+					3
+				],
+				"m": {
+					"a": {
+						"b": 1
+					}
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"t"
+					],
+					"value": "bye"
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"c"
+					],
+					"value": [
+						true,
+						null
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"t": "bye",
+						"l": [
+							1,
+							2,
+							3
+						],
+						"m": {
+							"a": {
+								"b": 1,
+								"c": [
+									true,
+									null
+								]
+							}
+						},
+						"x": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"x"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"t"
+									],
+									"value": "bye"
+								},
+								{
+									"path": [
+										"m",
+										"a",
+										"c"
+									],
+									"value": [
+										true,
+										null
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a",
+										"c"
+									]
+								},
+								{
+									"path": [
+										"t"
+									],
+									"value": "hi"
+								},
+								{
+									"path": [
+										"x"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					]
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 9
+				},
+				{
+					"path": [
+						"gone"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"b"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"t": "bye",
+						"l": [
+							9,
+							3
+						],
+						"m": {
+							"a": {
+								"c": [
+									true,
+									null
+								]
+							}
+						},
+						"x": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l",
+										1
+									]
+								},
+								{
+									"path": [
+										"l",
+										0
+									],
+									"value": 9
+								},
+								{
+									"path": [
+										"gone"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a",
+										"b"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a",
+										"b"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"l",
+										0
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": [
+										2
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a",
+						"q",
+						"r"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"t": "bye",
+						"l": [
+							9,
+							3
+						],
+						"m": {
+							"a": {
+								"c": [
+									true,
+									null
+								]
+							}
+						},
+						"x": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [],
+							"undo": []
+						}
+					}
+				}
+			}
+		}
+	]
+}

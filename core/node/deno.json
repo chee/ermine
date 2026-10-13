@@ -1,0 +1,8 @@
+{
+	"name": "@ermine/node",
+	"version": "0.0.0",
+	"exports": {
+		".": "./typescript/node.ts",
+		"./update": "./typescript/update.ts"
+	}
+}

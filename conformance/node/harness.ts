@@ -1,50 +1,25 @@
 // The reference node.ts on the line protocol: one JSON request per line in, one answer per line
-// out, in order. Content, change, because, actor and cause are any JSON, given back as is; in a
-// list, {"symbol": name} is a symbol. Another implementation joins by speaking this.
-import make, { type Header, type List, type Node, type Version } from "@ermine/graph/node"
+// out, in order. Another implementation joins by speaking this (NODE_HARNESS).
+//
+// { op: "make", value?, header? } → { node: { value?, change } }
+//    value: any JSON (null is a value; not given: none), typed arrays and bytes as in
+//    conformance/update/form.ts. header: the change header as given (never an op)
+//    node: no value key when none; change: the header's fields as given, and the time now (whole
+//    seconds since 1970) when it gave none
+// Anything not understood: { error }.
+import createNode from "@ermine/node"
+import type { ChangeHeader } from "@ermine/node"
+import { dehydrate, revive } from "../update/form.ts"
 
-type V = Version<unknown, unknown>
-type Request = {
-	op: string
-	id?: string
-	contents?: { value?: V[]; info?: [string, V[]][]; children?: [string, V[]][] }
-	header?: Header
-	outside?: boolean
-}
-
-const symbol = (e: unknown): string | symbol =>
-	typeof e === "object" && e !== null && "symbol" in e ? Symbol.for(String(e.symbol)) : String(e)
-const unsymbol = (e: unknown) => typeof e === "symbol" ? { symbol: Symbol.keyFor(e) } : e
-const list = (vs: V[]): Version<List, unknown>[] =>
-	vs.map((v) => ({ ...v, content: (v.content as unknown[]).map(symbol) }))
-
-function show(n: Node<unknown, unknown>) {
-	return {
-		id: n.id,
-		value: n.value,
-		info: [...n.info],
-		children: [...n.children].map(([name, vs]) => [
-			name,
-			vs.map((v) => ({ ...v, content: v.content.map(unsymbol) })),
-		]),
-		header: n.header,
-	}
-}
+type Request = { op: string; value?: unknown; header?: ChangeHeader }
 
 function answer(r: Request): unknown {
-	switch (r.op) {
-		case "make": {
-			const c = r.contents ?? {}
-			const n = make(r.id!, {
-				value: c.value,
-				info: c.info,
-				children: c.children?.map(([name, vs]) => [name, list(vs)] as const),
-			}, { header: r.header, outside: r.outside })
-			return { node: show(n as Node<unknown, unknown>) }
-		}
-		default:
-			return { error: `unknown op ${r.op}` }
-	}
+	if (r.op !== "make") return { error: `unknown op ${r.op}` }
+	const n = createNode(
+		r.value === undefined ? undefined : revive(r.value),
+		r.header,
+	)
+	return { node: { ...("value" in n ? { value: dehydrate(n.value) } : {}), change: n.change } }
 }
 
 const out = Deno.stdout.writable.getWriter()

@@ -1,0 +1,646 @@
+{
+	"title": "each: told of every patch, in order, once all have landed; never when a patch fails",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"l",
+						0
+					]
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 9
+				},
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						9
+					],
+					"s": "abc",
+					"b": 2
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"l",
+						5
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 2
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						5
+					]
+				},
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [],
+			"each": true,
+			"expect": {
+				"value": {
+					"a": 1,
+					"l": [
+						1,
+						2
+					],
+					"s": "ab"
+				},
+				"facts": []
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"value": {
+					"a": 1,
+					"l": [
+						1,
+						2
+					],
+					"s": "ab",
+					"b": 2
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"each": true,
+			"expect": {
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": ""
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "e"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "r"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "m"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "i"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "n"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "e"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": ","
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						7,
+						7
+					],
+					"value": " "
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						8,
+						8
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						9,
+						9
+					],
+					"value": "l"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						10
+					],
+					"value": "l"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						11
+					],
+					"value": " "
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						12,
+						12
+					],
+					"value": "o"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						13,
+						13
+					],
+					"value": "f"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						14,
+						14
+					],
+					"value": " "
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						15,
+						15
+					],
+					"value": "i"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						16,
+						16
+					],
+					"value": "t"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"s": "ermine, all of it"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 1,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 5,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 6,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 7,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 8,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 9,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 10,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 11,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 12,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 13,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 14,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 15,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 16,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"l": [
+					1,
+					2
+				],
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": "xyz"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "!"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"value": "q"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "?"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"a": 1,
+					"l": [
+						1,
+						2
+					],
+					"s": "q?"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 1,
+							"had": true
+						}
+					}
+				]
+			}
+		}
+	]
+}

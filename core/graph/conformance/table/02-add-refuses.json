@@ -1,0 +1,18 @@
+{
+	"title": "add refuses a different node under a taken key; the same node again is fine",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n1", "expect": {} },
+		{ "op": "add", "part": "value", "id": "a", "node": "n1", "expect": {} },
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n2",
+			"expect": { "error": "already-there" }
+		},
+		{ "op": "get", "part": "value", "id": "a", "expect": { "node": "n1" } },
+		{ "op": "who", "node": "n1", "expect": { "keys": [["value", "a"]] } },
+		{ "op": "who", "node": "n2", "expect": { "keys": [] } },
+		{ "op": "at", "id": "a", "expect": { "entries": [["value", "n1"]] } }
+	]
+}

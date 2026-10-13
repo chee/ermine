@@ -1,0 +1,302 @@
+{
+	"title": "patches apply refuses: its code and the patch's index, no undo",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"m": {}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": "s"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": 1,
+					"move": {
+						"path": [
+							"t"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"q",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"x": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"y",
+						"z"
+					],
+					"move": {
+						"path": [
+							"y"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQ"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"m": {
+					"x": 1
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"y"
+					],
+					"move": {
+						"path": [
+							"m",
+							"y"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

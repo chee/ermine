@@ -1,0 +1,612 @@
+{
+	"title": "no-key: a key not there, an index past the end; at its patch's index",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q",
+						"r"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q",
+						"r"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						5
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2,
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"z"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						3
+					],
+					"range": [
+						0,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"move": {
+						"path": [
+							"q"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"move": {
+						"path": [
+							"l",
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q",
+						"r"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"move": {
+						"path": [
+							"q"
+						],
+						"range": [
+							0,
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"move": {
+						"path": [
+							"l",
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 0
+				},
+				{
+					"path": [
+						"q",
+						0
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"y"
+					],
+					"value": 2
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 2
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					]
+				},
+				{
+					"path": [
+						"l",
+						0
+					]
+				},
+				{
+					"path": [
+						"l",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 2
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"value": {}
+				},
+				{
+					"path": [
+						"q",
+						"r"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2
+					],
+					"q": {
+						"r": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": []
+				},
+				{
+					"path": [
+						"m"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 1
+				}
+			}
+		}
+	]
+}

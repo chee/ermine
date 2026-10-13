@@ -1,0 +1,14 @@
+{
+	"title": "del a key; the node keeps its others; nothing there",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "value", "id": "b", "node": "n", "expect": {} },
+		{ "op": "del", "part": "value", "id": "a", "expect": {} },
+		{ "op": "get", "part": "value", "id": "a", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [["value", "b"]] } },
+		{ "op": "del", "part": "value", "id": "a", "expect": { "error": "nothing-there" } },
+		{ "op": "del", "part": "children", "id": "b", "expect": { "error": "nothing-there" } },
+		{ "op": "del", "part": "value", "id": "b", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [] } }
+	]
+}

@@ -1,0 +1,687 @@
+{
+	"title": "lone surrogates: a lone high met by a lone low at an edge is one pair, a position fewer; the undo widens over the pair and gives back the units",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"s": "x\ud83d"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "\ude00y"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							3
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ude00z"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a\ud83d"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							2
+						],
+						"value": "\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dQ\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "\udc00\ud800"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							2
+						],
+						"value": "\ud83dQ\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "🐀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "\ude00"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "𐈀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "\ud83d"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dQ\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83dQ\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "a\ud83dxy\ude00b"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						4
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": "\ud83dxy\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ude00Q\ud83d"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "Q"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "ab\ud83d"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "\ude00"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "a"
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							4
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							2,
+							3
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dQ\ude00ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							4
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83dQ\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dx",
+				"t": "y\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "x\ude00",
+				"t": "\ud83dy"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": "\ude00"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "a\ude00b",
+				"t": "\ud83d"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": "\ude00"
+					},
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83db",
+				"e": "\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"e"
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83d"
+					},
+					{
+						"path": [
+							"e"
+						],
+						"value": "\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dQ\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"k"
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83dQ\ude00"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "\ud83dab",
+				"t": "\ude00"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"s"
+							],
+							"range": [
+								3,
+								4
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": "\ud83d",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "\ude00"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							1
+						],
+						"value": "\ud83d"
+					}
+				]
+			}
+		}
+	]
+}

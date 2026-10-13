@@ -6,7 +6,7 @@ import createNode, {
 	type List,
 	type Node,
 	type Side,
-} from "@ermine/graph/node"
+} from "@ermine/node"
 
 // get: the node of an id, or none if it is not loaded (table.ts's get)
 export type Get<V, H> = (id: string) => Node<V, H> | undefined

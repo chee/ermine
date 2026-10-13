@@ -1,0 +1,163 @@
+{
+	"title": "metadata: entries kept as given, in order, repeats kept, any value",
+	"steps": [
+		{
+			"op": "make",
+			"header": {
+				"time": 1,
+				"metadata": [
+					[
+						"a",
+						1
+					],
+					[
+						"b",
+						"two"
+					],
+					[
+						"a",
+						1
+					],
+					[
+						"a",
+						3
+					]
+				]
+			},
+			"expect": {
+				"node": {
+					"change": {
+						"time": 1,
+						"metadata": [
+							[
+								"a",
+								1
+							],
+							[
+								"b",
+								"two"
+							],
+							[
+								"a",
+								1
+							],
+							[
+								"a",
+								3
+							]
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"header": {
+				"metadata": [
+					[
+						"z",
+						null
+					],
+					[
+						"y",
+						[
+							1,
+							{
+								"k": true
+							}
+						]
+					],
+					[
+						"x",
+						{
+							"n": [
+								0.5,
+								"é 🦊"
+							]
+						}
+					],
+					[
+						"",
+						""
+					]
+				]
+			},
+			"expect": {
+				"node": {
+					"change": {
+						"metadata": [
+							[
+								"z",
+								null
+							],
+							[
+								"y",
+								[
+									1,
+									{
+										"k": true
+									}
+								]
+							],
+							[
+								"x",
+								{
+									"n": [
+										0.5,
+										"é 🦊"
+									]
+								}
+							],
+							[
+								"",
+								""
+							]
+						],
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"header": {
+				"metadata": []
+			},
+			"expect": {
+				"node": {
+					"change": {
+						"metadata": [],
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"header": {
+				"time": 2,
+				"actor": "me",
+				"metadata": [
+					[
+						"why",
+						"because"
+					]
+				]
+			},
+			"expect": {
+				"node": {
+					"change": {
+						"time": 2,
+						"actor": "me",
+						"metadata": [
+							[
+								"why",
+								"because"
+							]
+						]
+					}
+				}
+			}
+		}
+	]
+}

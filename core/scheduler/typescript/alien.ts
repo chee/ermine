@@ -1,6 +1,6 @@
 // alien: the push-pull scheduler (push.ts) on alien-signals' reactive system in place of shift's
 // core and the trackgraph. one link graph holds both what a process read of the graph (a spot: a
-// part of a node, as graph.ts tracks it) and the processes whose nodes it read:
+// part of a node, as main.ts tracks it) and the processes whose nodes it read:
 //   - a change reaches a process (the graph's marked): it is dirty, and alien's propagate makes the
 //     processes that read its node pending, and theirs
 //   - a read of a process's node pulls it: a pending one asks alien's checkDirty, which runs the
@@ -10,7 +10,7 @@
 // no ranks, no stopped runs, no loops (a flush that goes on too long throws, so tests end).
 // deno-lint-ignore no-import-prefix
 import { createReactiveSystem, type Link, type ReactiveNode } from "npm:alien-signals@3.1.2/system"
-import type { Change } from "@ermine/graph/change"
+import type { Change } from "@ermine/change"
 import {
 	type Acting,
 	type By,
@@ -20,8 +20,8 @@ import {
 	type Tracked,
 	type Tracker,
 } from "@ermine/graph"
-import type { Node } from "@ermine/graph/node"
-import type { Address, Depend, Item, Place, Step, Where } from "@ermine/graph/places"
+import type { Node } from "@ermine/node"
+import type { Address, Depend, Item, Place, Step, Where } from "@ermine/places"
 import { type Ask, edit, pass as passing } from "@ermine/protect"
 import { createCode } from "@ermine/programs/code"
 import { createHandlers } from "@ermine/programs/handlers"

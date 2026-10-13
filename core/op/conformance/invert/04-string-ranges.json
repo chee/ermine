@@ -1,0 +1,458 @@
+{
+	"title": "strings: spans in code points; what was put in removed, what was taken put back",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							5,
+							6
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "oh, "
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						4
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							1
+						],
+						"value": "ell"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						4
+					],
+					"value": "ipp"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							4
+						],
+						"value": "ell"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						5
+					],
+					"value": ""
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "hello"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "hello"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					]
+				}
+			],
+			"expect": {
+				"undo": []
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "a😀b中c"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": "😀"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "a😀b中c"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "👍🏽"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							5
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "a😀b中c"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						5
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": "a😀b中c"
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": "whole",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							5,
+							6
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": ""
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "t"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "p"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "e"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							4
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							2,
+							3
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "d"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						4
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "😀"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						]
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							2,
+							2
+						],
+						"value": "cd"
+					},
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							4
+						]
+					}
+				]
+			}
+		}
+	]
+}

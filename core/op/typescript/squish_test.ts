@@ -81,8 +81,8 @@ Deno.test("squish: pushed patches are not changed; iterable", () => {
 	assertEquals(s.patches().length, 1)
 })
 
-// apply, for strings under "t" only
-function apply(t: string, ps: Patch[]): string {
+// the patches on a string, as code points: apply's ranges, nothing checked
+function edit(t: string, ps: Patch[]): string {
 	const cs = Array.from(t)
 	for (const p of ps) {
 		const [a, b] = p.range!
@@ -106,13 +106,13 @@ Deno.test("squish: same end result as the patches, over random typing", () => {
 				? del(a, a + 1 + rnd(Math.min(2, n - a)))
 				: ins(at, "ab😀"[rnd(3)] + (rnd(2) ? "z" : ""))
 			if (p.range![1] > n) continue
-			doc = apply(doc, [p])
+			doc = edit(doc, [p])
 			ps.push(p)
 			if (rnd(2) && rnd(2)) ps.push(ins(Array.from(doc).length, "!"))
-			doc = apply(start, ps)
+			doc = edit(start, ps)
 		}
 		const out = squish(ps)
-		assertEquals(apply(start, out), doc, `seed ${seed}`)
+		assertEquals(edit(start, out), doc, `seed ${seed}`)
 		if (out.length > ps.length) throw new Error("grew")
 	}
 })
@@ -167,36 +167,31 @@ Deno.test("squish: a long list typed into a list is one insert", () => {
 // one. strings with lone surrogates break this for code points (squish never sees the content,
 // and a lone high meeting a lone low makes one pair, a position fewer); never for UTF-16 units,
 // where a pair is two units however it was made
-import mutate, { MutateError } from "./mutate.ts"
-import createNode from "@ermine/graph/node"
-import createChange, { type Change } from "@ermine/graph/change"
+import apply, { ApplyError } from "./apply.ts"
 
-const host = createChange("a", { time: 0, actor: "host" })
 const whole = ["a", "é", "😀", "中", "xy", "👍🏽"]
 const lone = [...whole, "\uD83D", "\uDE00", "\uD800", "\uDFFF"]
 
-// applies ps one change each, leaving out those that fail; what was kept, and the end
+// applies ps one call each, leaving out those that fail; what was kept, and the end
 function oneByOne(start: string, ps: Patch[]) {
-	const n = createNode<unknown, Change>("a", { value: [{ content: { t: start }, change: host }] })
+	let v: unknown = { t: start }
 	const kept: Patch[] = []
 	for (const p of ps) {
 		try {
-			mutate(n, "value", [p], { actor: "me", time: 1 })
+			v = apply(v, [p])
 			kept.push(p)
 		} catch (e) {
-			if (!(e instanceof MutateError)) throw e
+			if (!(e instanceof ApplyError)) throw e
 		}
 	}
-	return { kept, end: (n.value[0].content as { t: string }).t }
+	return { kept, end: (v as { t: string }).t }
 }
 function atOnce(start: string, ps: Patch[]): string {
-	const n = createNode<unknown, Change>("a", { value: [{ content: { t: start }, change: host }] })
 	try {
-		mutate(n, "value", ps, { actor: "me", time: 1 })
+		return (apply({ t: start }, ps) as { t: string }).t
 	} catch (e) {
 		return `throws ${(e as Error).message}`
 	}
-	return (n.value[0].content as { t: string }).t
 }
 // a fuzz's numbers: xorshift, as the conformance fuzz (an LCG's low bits repeat: % k patterned)
 function xorshift(seed: number) {

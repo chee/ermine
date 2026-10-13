@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import createNode, { type Node } from "@ermine/graph/node"
+import createNode, { type Node } from "@ermine/node"
 import { encode as encodeValue } from "./cbor.ts"
 import { decode, encode, pack, PackError, unpack, walk } from "./pack.ts"
 import { createTable } from "@ermine/graph/table"

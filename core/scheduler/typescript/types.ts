@@ -1,7 +1,7 @@
 // the scheduler's types, shared by the scheduler (scheduler.ts) and the programs side
 // (../programs/): a process, a run, what a part runs as. one definition each.
 import type { Api, By, Reader } from "@ermine/graph"
-import type { Address, Place, Where } from "@ermine/graph/places"
+import type { Address, Place, Where } from "@ermine/places"
 import type { Agent, Status } from "./records.ts"
 import type { Cause } from "./causes.ts"
 export type { Cause } from "./causes.ts"

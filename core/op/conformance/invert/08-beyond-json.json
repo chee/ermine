@@ -1,0 +1,316 @@
+{
+	"title": "values beyond JSON put back as they were: a stand-in, NaN and the infinities, -0, a map whose one key is \"/\"",
+	"steps": [
+		{
+			"op": "invert",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"z": -0
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"value": {
+							"/": {
+								"live": "clock"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"z": -0
+			},
+			"patches": [
+				{
+					"path": [
+						"n"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"n"
+						],
+						"value": {
+							"/": {
+								"number": "NaN"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"z": -0
+			},
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"value": 0
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"z"
+						],
+						"value": -0
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"s": {
+					"/": {
+						"live": {
+							"kind": 1
+						}
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"value": {
+							"s": {
+								"/": {
+									"live": {
+										"kind": 1
+									}
+								}
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"m"
+						],
+						"value": {
+							"/": {
+								"map": {
+									"/": 1
+								}
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"m": {
+					"/": 1,
+					"x": 2
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"m",
+							"x"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": []
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"/": {
+								"map": {
+									"/": {
+										"/": {
+											"map": {
+												"/": 1
+											}
+										}
+									}
+								}
+							}
+						}
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					-0,
+					{
+						"/": {
+							"number": "NaN"
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							-0,
+							{
+								"/": {
+									"number": "NaN"
+								}
+							}
+						]
+					}
+				]
+			}
+		}
+	]
+}

@@ -2,8 +2,8 @@
 // updated to GRAPH.tex's patches: { path, range?, value? | move? }; strings in code points;
 // typed arrays; moves; the whole at []. kept from cabbages: changes the target in place,
 // nothing copied, nothing undone when a patch fails
-import type { Key, Patch } from "@ermine/scheduler/notify"
-import { unit } from "../walk.ts"
+import type { Key, Patch } from "../apply.ts"
+import { unit } from "@ermine/util/walk-string"
 
 // bytes, a Uint8Array, are one whole value: never spliced (MUTATE.tex)
 type Typed = Int8Array | Uint16Array | Int16Array | Uint32Array | Int32Array

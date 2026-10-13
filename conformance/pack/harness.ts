@@ -7,7 +7,7 @@
 //   {op: "unpack", bytes}
 //   {op: "encode", node}: one node alone; {op: "decode", bytes}
 // answers: {graph: {root, nodes, missing}}, {node}, {bytes}, or {code, id?} for a PackError
-import createNode, { type Header, type List, type Node, type Version } from "@ermine/graph/node"
+import createNode, { type Header, type List, type Node, type Version } from "@ermine/node"
 import {
 	decode,
 	encode,

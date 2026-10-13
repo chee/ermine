@@ -1,4 +1,4 @@
-// the reference scheduler, over the graph (graph.ts): the graph hooks
+// the reference scheduler, over the graph (main.ts): the graph hooks
 // up newcore's libraries and tells the scheduler when a change reached what a process read; the
 // scheduler runs processes, in rounds, ranked (rank.ts).
 //
@@ -7,7 +7,7 @@
 // compute whose value is acted on. no history: each process's value and status are versions of its
 // node's value, its latest run a node named run inside it; four moments go to the hooks.
 // what scheduler() answers is the host's interface.
-import type { Change } from "@ermine/graph/change"
+import type { Change } from "@ermine/change"
 import {
 	type Acting,
 	type By,
@@ -16,8 +16,8 @@ import {
 	GraphError,
 	type Read,
 } from "@ermine/graph"
-import type { Node, Side } from "@ermine/graph/node"
-import type { Address, Depend, Item, Place, Step, Where } from "@ermine/graph/places"
+import type { Node, Side } from "@ermine/node"
+import type { Address, Depend, Item, Place, Step, Where } from "@ermine/places"
 import { type Ask, edit, type May, pass as passing } from "@ermine/protect"
 import { createCode } from "@ermine/programs/code"
 import { createHandlers } from "@ermine/programs/handlers"
@@ -39,15 +39,8 @@ import {
 	type Run,
 	type StartOp,
 } from "./types.ts"
-import {
-	createRecords,
-	errorOf,
-	isLive,
-	normal,
-	sameStatus,
-	type Status,
-} from "./records.ts"
-import type { Site } from "@ermine/graph/stacktrace"
+import { createRecords, errorOf, isLive, normal, sameStatus, type Status } from "./records.ts"
+import type { FileLocation } from "@ermine/util/stacktrace"
 
 export type { Api, By } from "@ermine/graph"
 export {
@@ -82,7 +75,7 @@ export type Options = {
 	// default anyone
 	may?: May
 	// the host's site for its changes; default read off the call stack
-	site?: () => Site | undefined
+	site?: () => FileLocation | undefined
 	// the author's clock stamped on every change, whole seconds since 1970; default the system's
 	wallclock?: () => number | undefined
 	// told each object an operation changed (WIRING.tex): sync's side

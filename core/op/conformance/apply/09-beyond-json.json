@@ -1,0 +1,1050 @@
+{
+	"title": "values beyond JSON: a stand-in is a leaf, NaN and the infinities are numbers, a map whose one key is \"/\" a map",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"s",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"s",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						"kind"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"value": {
+						"/": {
+							"live": [
+								"a",
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					],
+					"t": {
+						"/": {
+							"live": [
+								"a",
+								1
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					},
+					"l": [
+						{
+							"/": {
+								"live": "clock"
+							}
+						},
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					],
+					"x": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"value": {
+						"/": {
+							"number": "NaN"
+						}
+					}
+				},
+				{
+					"path": [
+						"n"
+					],
+					"value": 0
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": 0,
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					],
+					"k": {
+						"/": {
+							"number": "NaN"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"/"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": {
+							"map": {
+								"/": 2
+							}
+						}
+					},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {
+						"/": 1,
+						"x": 3
+					},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"/": {
+						"live": "clock"
+					}
+				},
+				"n": {
+					"/": {
+						"number": "NaN"
+					}
+				},
+				"i": {
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				"j": {
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				"m": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"l": [
+					{
+						"/": {
+							"live": {
+								"kind": 1
+							}
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"/"
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"/": {
+							"live": "clock"
+						}
+					},
+					"n": {
+						"/": {
+							"number": "NaN"
+						}
+					},
+					"i": {
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					"j": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"m": {},
+					"l": [
+						{
+							"/": {
+								"live": {
+									"kind": 1
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"/": 1,
+					"x": 2
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": []
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"/": {
+								"map": {
+									"/": {
+										"/": {
+											"map": {
+												"/": 1
+											}
+										}
+									}
+								}
+							}
+						}
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						{
+							"/": {
+								"map": {
+									"/": {
+										"/": {
+											"map": {
+												"/": 1
+											}
+										}
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"live": "k"
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"live": "k"
+				}
+			},
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"map": {
+						"/": [
+							1,
+							2
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"/"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"/": {
+						"map": {
+							"/": [
+								2
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

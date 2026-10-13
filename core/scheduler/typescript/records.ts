@@ -2,11 +2,11 @@
 // a version in front of its value; its value; its latest run, the value of a node named run inside
 // it. and who those changes are by: the process's agent, a step added to its starter's.
 //
-import createBecause from "@ermine/graph/because"
-import createChange, { type Change, type Header } from "@ermine/graph/change"
+import createBecause from "@ermine/change/because"
+import createChange, { type Change, type ChangeHeader } from "@ermine/change"
 import { type Graph, GraphError } from "@ermine/graph"
 import type { Which } from "@ermine/op/mutate"
-import type { Side } from "@ermine/graph/node"
+import type { Side } from "@ermine/node"
 
 type V = Side<unknown, Change>
 
@@ -128,7 +128,7 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 	// a change by the operation now, at id's which: told to the graph as what touched it, so its
 	// telling whole is by this change; stored without the graph's hook
 	function changeAt(id: string, which: Which): Change {
-		const { patched, ...header } = g.by() as Header & {
+		const { patched, ...header } = g.by() as ChangeHeader & {
 			patched?: (p: unknown, f: unknown, id: string, which: Which) => void
 		}
 		patched?.(undefined, undefined, id, which)
@@ -136,7 +136,7 @@ export function createRecords<P extends Recorded>(g: Graph<P>) {
 	}
 
 	// the status a process's node shows, as a version in front of its value. tag: what the
-	// change is made with (graph.ts)
+	// change is made with (main.ts)
 	function status(
 		p: P,
 		status: Status,

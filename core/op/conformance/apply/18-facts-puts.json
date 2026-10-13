@@ -1,0 +1,1413 @@
+{
+	"title": "facts of puts and removals: the place's parent and whether its key was there; a span's sequence",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 2
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 2
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1,
+						"b": 2
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 0
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						0,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": 0
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": 0,
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"value": 0
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					],
+					"k": 0
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [],
+					"value": 0
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": 0,
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"each": true,
+			"expect": {
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "!"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b!",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int32": [
+								0
+							]
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								0,
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"e"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [
+						1
+					],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"n",
+						0
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"n",
+						1
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"x",
+						"😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"n",
+						1
+					],
+					"value": "z"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						1,
+						2,
+						3
+					],
+					"s": "a😀b",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"z"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": 1
+				},
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"t": {
+					"/": {
+						"int32": [
+							1,
+							2
+						]
+					}
+				},
+				"e": [],
+				"n": [
+					"",
+					"😀😀"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 9
+				},
+				{
+					"path": [
+						"l",
+						0
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						8
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"m",
+						"z"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						"z"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"z"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"a": 1
+					},
+					"l": [
+						8,
+						2,
+						3
+					],
+					"s": "xab",
+					"t": {
+						"/": {
+							"int32": [
+								1,
+								2
+							]
+						}
+					},
+					"e": [],
+					"n": [
+						"",
+						"😀😀"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2
+			],
+			"patches": [
+				{
+					"path": [
+						0
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": [
+					2
+				],
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						0
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": [
+					0,
+					1,
+					2
+				],
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				[
+					1,
+					2
+				]
+			],
+			"patches": [
+				{
+					"path": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": [
+					[
+						1
+					]
+				],
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		}
+	]
+}

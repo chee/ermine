@@ -7,10 +7,10 @@
 //   - computes are lazy: run when read. effects and setups are eager: queued, pulled when the
 //     request ends (the flush)
 // no ranks, no stopped runs, no loops (a flush that goes on too long throws, so tests end).
-import type { Change } from "@ermine/graph/change"
+import type { Change } from "@ermine/change"
 import { type Acting, type By, createGraph, GraphError, type Read } from "@ermine/graph"
-import type { Node } from "@ermine/graph/node"
-import type { Address, Depend, Item, Place, Step, Where } from "@ermine/graph/places"
+import type { Node } from "@ermine/node"
+import type { Address, Depend, Item, Place, Step, Where } from "@ermine/places"
 import { type Ask, edit, pass as passing } from "@ermine/protect"
 import { createCode } from "@ermine/programs/code"
 import { createHandlers } from "@ermine/programs/handlers"

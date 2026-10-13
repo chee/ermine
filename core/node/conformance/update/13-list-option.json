@@ -1,0 +1,438 @@
+{
+	"title": "the list option: nothing there starts as [], a list left empty is nothing, anything but a list is wrong-kind",
+	"steps": [
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"a",
+						"b"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": [
+						"a",
+						"b"
+					],
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"a",
+										"b"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										2
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"c"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [
+						0
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": [
+						"c",
+						"b"
+					],
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										0
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"a"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						2
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"range": [
+										0,
+										2
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"c",
+										"b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"z"
+					]
+				},
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 0,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"z"
+									]
+								},
+								{
+									"path": [],
+									"range": [
+										0,
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"z"
+									]
+								},
+								{
+									"path": [],
+									"range": [
+										0,
+										1
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"q"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"z"
+									]
+								},
+								{
+									"path": [],
+									"range": [
+										0,
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										"z"
+									]
+								},
+								{
+									"path": [],
+									"range": [
+										0,
+										1
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"k": 1
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"q"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"list": true,
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"k": 1
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		}
+	]
+}

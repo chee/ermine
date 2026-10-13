@@ -1,4 +1,4 @@
-// The reference graph (graph.ts) on the line protocol: one JSON request per line in, one answer per
+// The reference graph (main.ts) on the line protocol: one JSON request per line in, one answer per
 // line out, in order. Another implementation joins by speaking this (GRAPH_HARNESS).
 //
 // owners are names; interfaces are names, "host" made by new. what the graph tells (marked,
@@ -45,8 +45,8 @@
 //
 // a by: the change's header as JSON (time, actor, reader?, site?, cause?) and node, which?.
 // an error: {"error":code}; a refusal also "why": protect's. the harness goes on.
-import createChange, { type Change } from "@ermine/graph/change"
-import createNode from "@ermine/graph/node"
+import createChange, { type Change } from "@ermine/change"
+import createNode from "@ermine/node"
 import { type Patch } from "@ermine/scheduler/notify"
 import { rules } from "@ermine/protect"
 import { type Bind, createGraph, type Graph, type Reader } from "@ermine/graph"

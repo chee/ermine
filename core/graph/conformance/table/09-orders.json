@@ -1,0 +1,26 @@
+{
+	"title": "orders are the order added; who groups by part in the order the part was first taken",
+	"steps": [
+		{ "op": "add", "part": "p", "id": "z", "node": "n", "expect": {} },
+		{ "op": "add", "part": "q", "id": "y", "node": "n", "expect": {} },
+		{ "op": "add", "part": "p", "id": "x", "node": "n", "expect": {} },
+		{ "op": "add", "part": "q", "id": "w", "node": "n", "expect": {} },
+		{
+			"op": "who",
+			"node": "n",
+			"expect": { "keys": [["p", "z"], ["p", "x"], ["q", "y"], ["q", "w"]] }
+		},
+		{ "op": "ids", "part": "q", "node": "n", "expect": { "ids": ["y", "w"] } },
+		{ "op": "del", "part": "p", "id": "z", "expect": {} },
+		{ "op": "del", "part": "p", "id": "x", "expect": {} },
+		{ "op": "add", "part": "p", "id": "v", "node": "n", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [["q", "y"], ["q", "w"], ["p", "v"]] } },
+		{ "op": "del", "part": "q", "id": "y", "expect": {} },
+		{ "op": "add", "part": "q", "id": "u", "node": "n", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [["q", "w"], ["q", "u"], ["p", "v"]] } },
+		{ "op": "add", "part": "r", "id": "t", "node": "k", "expect": {} },
+		{ "op": "add", "part": "p", "id": "t", "node": "k", "expect": {} },
+		{ "op": "add", "part": "o", "id": "t", "node": "k", "expect": {} },
+		{ "op": "at", "id": "t", "expect": { "entries": [["r", "k"], ["p", "k"], ["o", "k"]] } }
+	]
+}

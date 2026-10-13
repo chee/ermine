@@ -1,0 +1,721 @@
+{
+	"title": "edges fixed: the list option's string, a target's own fields, onto itself, a reversed range, and range before a value's kind",
+	"steps": [
+		{
+			"op": "apply",
+			"value": "",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"value": [
+						"a"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": [
+					"a"
+				],
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "",
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"value": "b"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [],
+			"list": true,
+			"patches": [
+				{
+					"path": [],
+					"value": [
+						"a"
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": [
+					"a"
+				],
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": false
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"move": {
+						"path": [
+							"a"
+						],
+						"value": 5
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"move": {
+						"path": [
+							"a"
+						],
+						"move": {
+							"path": [
+								"a"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1,
+				"c": 2
+			},
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"value": 3
+				},
+				{
+					"path": [
+						"b"
+					],
+					"move": {
+						"path": [
+							"a"
+						],
+						"move": 5
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"move": {
+						"path": [
+							"l",
+							2
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"x": 1,
+					"y": 2
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"move": {
+						"path": [
+							"m",
+							"x"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"m": {
+						"x": 1,
+						"y": 2
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"x": 1
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"y"
+					],
+					"move": {
+						"path": [
+							"m",
+							"y"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s",
+						0
+					],
+					"move": {
+						"path": [
+							"s",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"n": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {}
+			},
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"range": [
+						1,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"z": null
+			},
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"range": [
+						3,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"y": {
+					"/": {
+						"bytes": "AQ"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"range": [
+						1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						1
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"n": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "ab",
+				"n": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"move": {
+						"path": [
+							"n"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

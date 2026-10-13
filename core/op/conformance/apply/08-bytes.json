@@ -1,0 +1,546 @@
+{
+	"title": "bytes: one whole value, never spliced, no keys",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"bytes": "BA"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b",
+						0
+					],
+					"value": 9
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"bytes": "AQID"
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": {
+						"/": {
+							"bytes": "BwgJ"
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": "BwgJ"
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": {
+						"/": {
+							"bytes": ""
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"b": {
+						"/": {
+							"bytes": ""
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					]
+				}
+			],
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"bytes": "Ag"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int8": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": []
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						},
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						},
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				},
+				"l": [
+					0
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"b"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						0,
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						}
+					]
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 1,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				},
+				"s": "x"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"b"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"move": {
+						"path": [
+							"b"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"move": {
+						"path": [
+							"b"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"c": {
+						"/": {
+							"bytes": "AQID"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"bytes": "AQID"
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"/": {
+							"bytes": "AA"
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"/": {
+						"bytes": "AA"
+					}
+				}
+			}
+		}
+	]
+}

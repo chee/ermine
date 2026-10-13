@@ -6,7 +6,7 @@
 // a part's start of a child named as one it started in the same part before gives that child
 // again. killing: newest first, children, cleanups, its ephemeral nodes, then untracked; a process
 // busy in a part is killed when the part ends.
-import type { Change } from "@ermine/graph/change"
+import type { Change } from "@ermine/change"
 import {
 	type Acting,
 	type Api,
@@ -16,9 +16,9 @@ import {
 	ours,
 	type Reader,
 } from "@ermine/graph"
-import type { Address, Place, Step } from "@ermine/graph/places"
+import type { Address, Place, Step } from "@ermine/places"
 import { normal, type Records, type Status, stepped } from "./records.ts"
-import { capture, type Site } from "@ermine/graph/stacktrace"
+import { capture, type FileLocation } from "@ermine/util/stacktrace"
 import type {
 	Cause,
 	Child,
@@ -45,7 +45,7 @@ export function createProcesses(o: {
 	g: Graph<Proc>
 	clock: { time: number }
 	actor: unknown
-	site?: () => Site | undefined
+	site?: () => FileLocation | undefined
 	finder?: Finder
 	procs: Map<string, Proc>
 	records: Records<Proc>

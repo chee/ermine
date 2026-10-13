@@ -1,0 +1,1046 @@
+{
+	"title": "not-a-patch: a shape no patch has, at its index, before anything else",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": "l"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": {}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						-1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						-1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1.5
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						true
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						null
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						[
+							0
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						{}
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						-1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						-1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": []
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0.5,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						true,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						"0",
+						"1"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": "0,1"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": {}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1,
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": null,
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": 5
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": "l"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": []
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": "l"
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": [
+							-1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							-1,
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				null
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				5
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				"x"
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				[]
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				[
+					[
+						"l"
+					]
+				]
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"l",
+						-1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						-1
+					]
+				},
+				{
+					"path": [
+						"q",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"q",
+						0
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						-1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						-1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2,
+					"extra": 1
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

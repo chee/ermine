@@ -3,7 +3,7 @@
 // parents looked up
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "./cbor.ts"
-import type { Site } from "@ermine/graph/stacktrace"
+import type { FileLocation } from "@ermine/util/stacktrace"
 
 export type Which = "value" | readonly ["info", string] | readonly ["children", string]
 export type Key = string | number
@@ -16,7 +16,7 @@ export type Blop = {
 	object: Which
 	actor: unknown
 	reader?: string
-	site?: Site
+	site?: FileLocation
 	cause?: unknown
 	wallclock?: number
 	message?: string

@@ -5,7 +5,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { id } from "./id.ts"
 import { createDevice } from "./transport.ts"
 import { createWiring, fresh } from "./wiring.ts"
-import createNode from "@ermine/graph/node"
+import createNode from "@ermine/node"
 
 const ROOT = id("unlocked", Uint8Array.from({ length: 32 }, (_, i) => 0x20 + i))
 

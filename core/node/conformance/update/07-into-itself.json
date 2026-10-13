@@ -1,0 +1,186 @@
+{
+	"title": "a move into what it takes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					2,
+					3
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a",
+						"x"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"m": {
+							"b": {
+								"b": 1
+							}
+						},
+						"l": [
+							1,
+							2,
+							3
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"move": {
+										"path": [
+											"m",
+											"a"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"move": {
+										"path": [
+											"m",
+											"b"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

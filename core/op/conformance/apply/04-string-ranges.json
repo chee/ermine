@@ -1,0 +1,967 @@
+{
+	"title": "strings: a range counts code points; a value there is a string",
+	"steps": [
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": ">"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": ">hello",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 5,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"value": "hello!"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "--"
+				}
+			],
+			"expect": {
+				"value": "he--llo"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						4
+					],
+					"value": "ipp"
+				}
+			],
+			"expect": {
+				"value": "hippo"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": "hlo"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						5
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 5,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": ""
+				}
+			],
+			"expect": {
+				"value": "hello"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					],
+					"value": ""
+				}
+			],
+			"expect": {
+				"value": "ello"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						6
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						6,
+						6
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						6
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "hello",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "x",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					]
+				}
+			],
+			"expect": {
+				"value": ""
+			}
+		},
+		{
+			"op": "apply",
+			"value": "",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "naïve 中文"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"s": "nave 中文"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 8,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "naïve 中文"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						8
+					],
+					"value": "日本語"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "naïve 日本語"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "naïve 中文"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						8,
+						8
+					],
+					"value": "!"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "naïve 中文!"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "naïve 中文"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						8,
+						9
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "é",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "e",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "axb😀c",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 5,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						4
+					]
+				}
+			],
+			"expect": {
+				"value": "a😀bc"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						4
+					]
+				}
+			],
+			"expect": {
+				"value": "ac"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "😀😀"
+				}
+			],
+			"expect": {
+				"value": "a😀😀😀b😀c"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "👍🏽"
+				}
+			],
+			"expect": {
+				"value": "a😀b😀c👍🏽"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						6
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						7
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "👍🏽",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "👍",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "🏳️‍🌈",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "️‍🌈",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a\u0000b",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "\u0000\u0000"
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "a\u0000\u0000b",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": "😀😀",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						2
+					],
+					"value": "ab"
+				}
+			],
+			"expect": {
+				"value": "ab"
+			}
+		},
+		{
+			"op": "apply",
+			"value": "😀😀",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "a😀b😀c",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [],
+					"range": [
+						6,
+						6
+					],
+					"value": "y"
+				},
+				{
+					"path": [],
+					"range": [
+						3,
+						4
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": "xa😀😀cy",
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 5,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 6,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 7,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": {
+					"t": [
+						"",
+						"ab"
+					]
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"s",
+						"t",
+						1
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s",
+						"t",
+						0
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "é"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": {
+						"t": [
+							"é",
+							"a😀b"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {},
+			"patches": [
+				{
+					"path": [
+						"zz"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a"
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						"x"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					],
+					"value": {
+						"a": "x"
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int8": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

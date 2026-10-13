@@ -1,0 +1,17 @@
+{
+	"title": "sub replaces; the old node loses that key only",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "old", "expect": {} },
+		{ "op": "add", "part": "value", "id": "b", "node": "old", "expect": {} },
+		{ "op": "sub", "part": "value", "id": "a", "node": "new", "expect": {} },
+		{ "op": "get", "part": "value", "id": "a", "expect": { "node": "new" } },
+		{ "op": "who", "node": "old", "expect": { "keys": [["value", "b"]] } },
+		{ "op": "sub", "part": "value", "id": "c", "node": "new", "expect": {} },
+		{ "op": "who", "node": "new", "expect": { "keys": [["value", "a"], ["value", "c"]] } },
+		{ "op": "sub", "part": "value", "id": "c", "node": "new", "expect": {} },
+		{ "op": "ids", "part": "value", "node": "new", "expect": { "ids": ["a", "c"] } },
+		{ "op": "sub", "part": "value", "id": "a", "node": "old", "expect": {} },
+		{ "op": "ids", "part": "value", "node": "old", "expect": { "ids": ["b", "a"] } },
+		{ "op": "ids", "part": "value", "node": "new", "expect": { "ids": ["c"] } }
+	]
+}

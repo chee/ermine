@@ -29,14 +29,14 @@
 //
 // a PlacesError, MutateError or TableError: { fail: code }. Anything else wrong: { error }
 import { MutateError } from "@ermine/op/mutate"
-import createNode, { type List, type Node } from "@ermine/graph/node"
+import createNode, { type List, type Node } from "@ermine/node"
 import {
 	createPlaces,
 	type Item,
 	type Part,
 	PlacesError,
 	type Read,
-} from "@ermine/graph/places"
+} from "@ermine/places"
 import { createTable, TableError } from "@ermine/graph/table"
 
 type N = Node<unknown, unknown>

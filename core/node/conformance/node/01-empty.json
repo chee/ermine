@@ -1,0 +1,26 @@
+{
+	"title": "no value: no value key; no header: a change with only the time now",
+	"steps": [
+		{
+			"op": "make",
+			"expect": {
+				"node": {
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"header": {},
+			"expect": {
+				"node": {
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		}
+	]
+}

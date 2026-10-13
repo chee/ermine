@@ -13,7 +13,7 @@
 // a compute returns while what it needs is not here. each map works until its part returns: alive
 // says so, and after, its functions throw stopped.
 import type { Api, By, Graph, Read, ReadArgs } from "@ermine/graph"
-import type { Address, Depend } from "@ermine/graph/places"
+import type { Address, Depend } from "@ermine/places"
 import {
 	type Cleanup,
 	type Ctx,

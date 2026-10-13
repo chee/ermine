@@ -1,5 +1,4 @@
-// where in code a call came from: WIRE.tex's site
-export type Site = { file: string; line: number; column?: number; function?: string }
+export type FileLocation = { file: string; line: number; column?: number; function?: string }
 
 // one line of a stack, as V8 writes it ("    at fn (file:1:2)", "    at file:1:2")
 // or as JavaScriptCore and SpiderMonkey do ("fn@file:1:2", "@file:1:2")
@@ -8,15 +7,15 @@ const AT = /^(.*?)@(.+?):(\d+):(\d+)\s*$/
 
 // the frames of a stack, top first; lines that are not frames are left out.
 // one way of writing per stack: a V8 stack's message line is never read as a frame
-export function frames(stack: string): Site[] {
+export function frames(stack: string): FileLocation[] {
 	const lines = stack.split("\n")
 	const way = lines.some((l) => V8.test(l)) ? V8 : AT
-	const out: Site[] = []
+	const out: FileLocation[] = []
 	for (const raw of lines) {
 		const m = way.exec(raw)
 		if (!m) continue
 		const [, name, file, line, column] = m
-		const site: Site = { file, line: Number(line), column: Number(column) }
+		const site: FileLocation = { file, line: Number(line), column: Number(column) }
 		if (name) site.function = name
 		out.push(site)
 	}
@@ -24,7 +23,7 @@ export function frames(stack: string): Site[] {
 }
 
 // the first frame whose file is not one of ours
-export function outside(stack: string, ours: ReadonlySet<string>): Site | undefined {
+export function outside(stack: string, ours: ReadonlySet<string>): FileLocation | undefined {
 	return frames(stack).find((f) => !ours.has(f.file))
 }
 
@@ -35,7 +34,7 @@ type V8Error = {
 
 // the site of the call into entry: the first frame now on the stack outside ours.
 // entry, where the engine allows, cuts the frames above it
-export function capture(ours: ReadonlySet<string>, entry?: unknown): Site | undefined {
+export function capture(ours: ReadonlySet<string>, entry?: unknown): FileLocation | undefined {
 	const E = Error as unknown as V8Error
 	const limit = E.stackTraceLimit
 	if (typeof limit === "number" && limit < 10) E.stackTraceLimit = 10

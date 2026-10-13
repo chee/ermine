@@ -1,0 +1,4603 @@
+{
+	"title": "typed arrays: sequences of their elements, spliced only with their own kind",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"int8": [
+								-1,
+								5
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"int8": [
+								-1
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int8": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int8": [
+								-1,
+								5,
+								127
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int8": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int8": [
+								-128,
+								0
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int8": [
+								-128,
+								0
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"int8": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							-128,
+							0,
+							127
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"int16": [
+								-1,
+								5
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"int16": [
+								-1
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int16": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": [
+								-1,
+								5,
+								32767
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int16": [
+								-32768,
+								0
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": [
+								-32768,
+								0
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"int16": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							-32768,
+							0,
+							32767
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								7,
+								8
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								7
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint16": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint16": [
+								7,
+								8,
+								65535
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint16": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								0,
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint16": [
+								0,
+								1
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							0,
+							1,
+							65535
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"int32": [
+								-1,
+								5
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"int32": [
+								-1
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int32": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int32": [
+								-1,
+								5,
+								2147483647
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int32": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int32": [
+								-2147483648,
+								0
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int32": [
+								-2147483648,
+								0
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"int32": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							-2147483648,
+							0,
+							2147483647
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"uint32": [
+								7,
+								8
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"uint32": [
+								7
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint32": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint32": [
+								7,
+								8,
+								4294967295
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint32": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint32": [
+								0,
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint32": [
+								0,
+								1
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"uint32": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint32": [
+							0,
+							1,
+							4294967295
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"7",
+								"8"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"7"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int64": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int64": [
+								"7",
+								"8",
+								"1"
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int64": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"-1",
+								"0"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int64": [
+								"-1",
+								"0"
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"1"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"-1",
+							"0",
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"7",
+								"8"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"7"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint64": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint64": [
+								"7",
+								"8",
+								"2"
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint64": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"0",
+								"1"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint64": [
+								"0",
+								"1"
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"1"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint64": [
+							"0",
+							"1",
+							"2"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"float32": [
+								0.25,
+								8
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"float32": [
+								0.25
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"float32": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float32": [
+								0.25,
+								8,
+								"-Infinity"
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float32": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"float32": [
+								1.5,
+								"NaN"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float32": [
+								1.5,
+								"NaN"
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"float32": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": {
+						"/": {
+							"float64": [
+								1e-7,
+								8
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"float64": [
+								1e-7
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"float64": []
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float64": [
+								1e-7,
+								8,
+								-2.5
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 4,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float64": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": []
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"float64": [
+								0.1,
+								"Infinity"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float64": [
+								0.1,
+								"Infinity"
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": {
+						"/": {
+							"float64": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t",
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							0.1,
+							"Infinity",
+							-2.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int16": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int32": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint32": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int64": [
+							"1"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"1"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"float64": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"float64": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"int32": [
+								1
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"value": {
+						"/": {
+							"float64": [
+								0.5
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float64": [
+								0.5
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": [
+						1
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"int16": [
+						1,
+						2
+					]
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"/": {
+						"int16": [
+							2
+						]
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					{
+						"/": {
+							"int8": [
+								1
+							]
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					{
+						"/": {
+							"int8": [
+								1
+							]
+						}
+					}
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"int8": [
+								2
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						{
+							"/": {
+								"int8": [
+									1,
+									2
+								]
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"uint16": [
+							1,
+							2,
+							3
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								9
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"uint16": [
+								8
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"uint16": [
+								8,
+								9,
+								2,
+								3
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": {
+					"/": {
+						"int64": [
+							"-9223372036854775808",
+							"9223372036854775807"
+						]
+					}
+				},
+				"b": {
+					"/": {
+						"uint64": [
+							"18446744073709551615",
+							"0"
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"-1"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": {
+						"/": {
+							"uint64": [
+								"9223372036854775808"
+							]
+						}
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"a": {
+						"/": {
+							"int64": [
+								"-9223372036854775808",
+								"-1",
+								"9223372036854775807"
+							]
+						}
+					},
+					"b": {
+						"/": {
+							"uint64": [
+								"9223372036854775808",
+								"18446744073709551615"
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						}
+					},
+					{
+						"place": {
+							"list": false,
+							"length": 1,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"f": {
+					"/": {
+						"float32": [
+							0.10000000149011612,
+							-0.5
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"f"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"f"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"float32": [
+								"Infinity",
+								"NaN"
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"f": {
+						"/": {
+							"float32": [
+								-0.5,
+								"Infinity",
+								"NaN"
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

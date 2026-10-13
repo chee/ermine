@@ -1,0 +1,196 @@
+{
+	"title": "nothing there: a put at [] made the value, its undo removes it; no patches, no undo",
+	"steps": [
+		{
+			"op": "invert",
+			"patches": [],
+			"expect": {
+				"undo": []
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [],
+					"value": null
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				},
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"value": 1
+					},
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": [
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"a",
+						0
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							1
+						]
+					},
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": []
+				},
+				{
+					"path": [],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					},
+					{
+						"path": [],
+						"value": {
+							"a": 1
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"a": 1
+			},
+			"patches": [],
+			"expect": {
+				"undo": []
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "invert",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

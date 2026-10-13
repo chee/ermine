@@ -3,20 +3,15 @@
 // mutate: what is touched copied, the old content kept, all or nothing
 // cabbages: in place; "cabbages, cloned": a structuredClone first, so the old content is kept
 import { assertEquals } from "@std/assert"
-import { apply } from "./mutate/cabbages.ts"
-import createChange, { type Change } from "@ermine/graph/change"
-import createNode from "@ermine/graph/node"
-import mutate from "./mutate.ts"
+import { apply as cabbage } from "./mutate/cabbages.ts"
+import apply, { type Patch } from "./apply.ts"
 import { squish } from "./squish.ts"
-import type { Patch } from "@ermine/scheduler/notify"
 
 const N = 10_000
 const rnd = (() => {
 	let x = 1
 	return (n: number) => (x = (x * 1103515245 + 12345) & 0x7fffffff) % n
 })()
-const by = { actor: "me", time: 1 }
-const host = createChange("a", { time: 0, actor: "host" })
 
 type Work = { start: () => unknown; patches: Patch[] }
 
@@ -83,42 +78,36 @@ const work: Record<string, Work> = {
 	},
 }
 
-const node = (content: unknown) =>
-	createNode<unknown, Change>("a", { value: [{ content, change: host }] })
-const viaMutate = (w: Work) => {
-	const n = node(w.start())
-	mutate(n, "value", w.patches, by)
-	return n.value[0].content
-}
+const viaApply = (w: Work) => apply(w.start(), w.patches)
 const viaCabbages = (w: Work) => {
 	let root = w.start()
-	for (const p of w.patches) root = apply(root, p)
+	for (const p of w.patches) root = cabbage(root, p)
 	return root
 }
 
 // the same end, before anything is timed
 for (const [name, w] of Object.entries(work)) {
-	assertEquals(viaMutate(w), viaCabbages(w), name)
+	assertEquals(viaApply(w), viaCabbages(w), name)
 }
 
 for (const [name, w] of Object.entries(work)) {
-	Deno.bench(`${name}: mutate`, { group: name, baseline: true }, (b) => {
-		const n = node(w.start())
+	Deno.bench(`${name}: apply`, { group: name, baseline: true }, (b) => {
+		const v = w.start()
 		b.start()
-		mutate(n, "value", w.patches, by)
+		apply(v, w.patches)
 		b.end()
 	})
 	Deno.bench(`${name}: cabbages`, { group: name }, (b) => {
 		let root = w.start()
 		b.start()
-		for (const p of w.patches) root = apply(root, p)
+		for (const p of w.patches) root = cabbage(root, p)
 		b.end()
 	})
 	Deno.bench(`${name}: cabbages, cloned`, { group: name }, (b) => {
 		const old = w.start()
 		b.start()
 		let root = structuredClone(old)
-		for (const p of w.patches) root = apply(root, p)
+		for (const p of w.patches) root = cabbage(root, p)
 		b.end()
 	})
 }
@@ -135,16 +124,16 @@ const each: Record<string, Work> = {
 	"puts, a change each": { start: work.puts.start, patches: work.puts.patches.slice(0, M) },
 }
 for (const [name, w] of Object.entries(each)) {
-	Deno.bench(`${name}: mutate`, { group: name, baseline: true }, (b) => {
-		const n = node(w.start())
+	Deno.bench(`${name}: apply`, { group: name, baseline: true }, (b) => {
+		let v = w.start()
 		b.start()
-		for (const p of w.patches) mutate(n, "value", [p], by)
+		for (const p of w.patches) v = apply(v, [p])
 		b.end()
 	})
 	Deno.bench(`${name}: cabbages`, { group: name }, (b) => {
 		let root = w.start()
 		b.start()
-		for (const p of w.patches) root = apply(root, p)
+		for (const p of w.patches) root = cabbage(root, p)
 		b.end()
 	})
 }
@@ -152,10 +141,10 @@ for (const [name, w] of Object.entries(each)) {
 // patched given: the facts notify reads gathered per patch
 for (const name of ["typing", "appending", "puts", "moves"]) {
 	const w = work[name]
-	Deno.bench(`${name}: mutate, patched`, { group: `${name}, patched` }, (b) => {
-		const n = node(w.start())
+	Deno.bench(`${name}: apply, each`, { group: `${name}, each` }, (b) => {
+		const v = w.start()
 		b.start()
-		mutate(n, "value", w.patches, { ...by, patched: () => {} })
+		apply(v, w.patches, { each: () => {} })
 		b.end()
 	})
 }
@@ -173,22 +162,22 @@ const strings: Record<string, Work> = {
 }
 for (const [name, w] of Object.entries(strings)) {
 	const group = `${name}: strings`
-	Deno.bench(`${name}: mutate`, { group, baseline: true }, (b) => {
-		const n = node(w.start())
+	Deno.bench(`${name}: apply`, { group, baseline: true }, (b) => {
+		const v = w.start()
 		b.start()
-		mutate(n, "value", w.patches, by)
+		apply(v, w.patches)
 		b.end()
 	})
-	Deno.bench(`${name}: mutate, patched`, { group }, (b) => {
-		const n = node(w.start())
+	Deno.bench(`${name}: apply, each`, { group }, (b) => {
+		const v = w.start()
 		b.start()
-		mutate(n, "value", w.patches, { ...by, patched: () => {} })
+		apply(v, w.patches, { each: () => {} })
 		b.end()
 	})
 	Deno.bench(`${name}: cabbages`, { group }, (b) => {
 		let root = w.start()
 		b.start()
-		for (const p of w.patches) root = apply(root, p)
+		for (const p of w.patches) root = cabbage(root, p)
 		b.end()
 	})
 }

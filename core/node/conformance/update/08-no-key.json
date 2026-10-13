@@ -1,0 +1,189 @@
+{
+	"title": "no-key: missing keys, indexes, and no value",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"m": {},
+				"l": [
+					1
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"q"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						"x",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "start",
+			"expect": {},
+			"header": {
+				"time": 0
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"change": {
+						"time": 0
+					}
+				}
+			}
+		}
+	]
+}

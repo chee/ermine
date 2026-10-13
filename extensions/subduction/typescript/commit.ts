@@ -2,8 +2,8 @@
 // header leaves the device (COMMIT.tex). Not sealed, not taken in: the blop only
 import type { Blop, Patch } from "@ermine/encoding/blop"
 import { Stand } from "@ermine/encoding/cbor"
-import type { Header } from "@ermine/graph/change"
-import type { Site } from "@ermine/graph/stacktrace"
+import type { ChangeHeader } from "@ermine/change"
+import type { FileLocation } from "@ermine/util/stacktrace"
 import { side } from "./apply.ts"
 import type { Head, Histories } from "./history.ts"
 
@@ -15,7 +15,7 @@ export type Commitment = {
 	node: string
 	object: Blop["object"]
 	patches: Patch[]
-	header: Header
+	header: ChangeHeader
 	signer: Uint8Array
 }
 
@@ -91,7 +91,7 @@ function local(file: string): string[] | undefined {
 }
 
 // the site shareable: a local path relative to the nearest root, else its last part; others kept
-function share(site: Site, roots: string[]): Site {
+function share(site: FileLocation, roots: string[]): FileLocation {
 	const path = local(site.file)
 	if (path === undefined) return site
 	let best: string[] | undefined
@@ -153,7 +153,7 @@ export function commit(
 		patches: standIns(patches, kind) as Patch[],
 	}
 	if (change.header.reader !== undefined) blop.reader = change.header.reader
-	if (change.header.site !== undefined) blop.site = share(change.header.site, roots)
+	if (change.header.external !== undefined) blop.site = share(change.header.external, roots)
 	if (change.header.cause !== undefined) blop.cause = standIns(change.header.cause, kind)
 	if (change.header.wallclock !== undefined) blop.wallclock = change.header.wallclock
 	if (change.header.message !== undefined) blop.message = change.header.message

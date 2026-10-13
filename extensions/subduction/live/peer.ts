@@ -23,7 +23,7 @@ import { createWiring, fresh } from "../typescript/wiring.ts"
 import { files } from "./files.ts"
 import { Storage } from "./storage.ts"
 import { hexOf, unhex } from "./blob.ts"
-import createNode from "@ermine/graph/node"
+import createNode from "@ermine/node"
 // deno-lint-ignore no-explicit-any
 type Any = any
 

@@ -1,0 +1,1415 @@
+{
+	"title": "moves: what is at move taken out first, then put at the place, in what is left",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"w"
+					],
+					"move": {
+						"path": [
+							"m",
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"y": {
+							"z": 2
+						},
+						"w": 1
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k"
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						},
+						"k": "b"
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						"b",
+						"c"
+					],
+					"m": {
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"z"
+					],
+					"move": {
+						"path": [
+							"m",
+							"y",
+							"z"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {}
+					},
+					"s": "str",
+					"z": 2
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"y",
+						"s"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2,
+							"s": "str"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": "str",
+						"y": {
+							"z": 2
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": "str"
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"move": {
+						"path": [
+							"m",
+							"x"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 3,
+							"had": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"move": {
+						"path": [
+							"l",
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"b",
+						"a"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"q",
+						"r"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				},
+				{
+					"path": [
+						"l"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				},
+				{
+					"path": [
+						"s"
+					],
+					"move": {
+						"path": [
+							"t"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"l": "str",
+					"s": [
+						"a",
+						"b",
+						"c"
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				},
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"n"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"s": "str",
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"k0"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"k1"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"k2"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						},
+						"k0": "a",
+						"k1": "b",
+						"k2": "c"
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"m",
+							"y"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						{
+							"z": 2
+						},
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str",
+				"n": [
+					1,
+					2
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"n"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						[
+							1,
+							2
+						],
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str",
+				"e": "😀!"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"e"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"a",
+						"b",
+						"c"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str😀!"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 3,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"t": {
+					"/": {
+						"int8": [
+							1,
+							2
+						]
+					}
+				},
+				"u": {
+					"/": {
+						"int8": [
+							7,
+							8,
+							9
+						]
+					}
+				}
+			},
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"u"
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int8": [
+								1,
+								7,
+								8,
+								9,
+								2
+							]
+						}
+					}
+				},
+				"facts": [
+					{
+						"place": {
+							"list": false,
+							"length": 2,
+							"had": true
+						},
+						"from": {
+							"list": false,
+							"length": 0,
+							"had": true
+						},
+						"size": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					],
+					"move": {
+						"path": [
+							"m",
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						"c"
+					],
+					"m": {
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						2,
+						2
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"each": true,
+			"expect": {
+				"value": {
+					"l": [
+						"b",
+						"c",
+						"a"
+					],
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2
+						}
+					},
+					"s": "str"
+				},
+				"facts": [
+					{
+						"place": {
+							"list": true,
+							"length": 2,
+							"had": true
+						},
+						"from": {
+							"list": true,
+							"length": 3,
+							"had": true
+						},
+						"size": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				[
+					2
+				]
+			],
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": [
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					2
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [],
+						"range": [
+							2,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					3,
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": [
+					3,
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					"a",
+					"b",
+					"c"
+				],
+				"m": {
+					"x": 1,
+					"y": {
+						"z": 2
+					}
+				},
+				"s": "str"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"y",
+						"w"
+					],
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"y",
+						"w",
+						0
+					],
+					"value": "A"
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"x": 1,
+						"y": {
+							"z": 2,
+							"w": [
+								"A",
+								"b",
+								"c"
+							]
+						}
+					},
+					"s": "str"
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,25 @@
+{
+	"title": "del a node from everywhere; emptied ids and nodes disappear",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "value", "id": "b", "node": "n", "expect": {} },
+		{ "op": "add", "part": "children", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "children", "id": "b", "node": "m", "expect": {} },
+		{ "op": "del", "node": "n", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [] } },
+		{ "op": "at", "id": "a", "expect": { "entries": [] } },
+		{ "op": "get", "part": "value", "id": "b", "expect": {} },
+		{ "op": "at", "id": "b", "expect": { "entries": [["children", "m"]] } },
+		{ "op": "ids", "part": "value", "node": "n", "expect": { "ids": [] } },
+		{ "op": "del", "node": "n", "expect": { "error": "nothing-there" } },
+		{ "op": "del", "node": "never", "expect": { "error": "nothing-there" } },
+		{ "op": "add", "part": "value", "id": "a", "node": "other", "expect": {} },
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": { "error": "already-there" }
+		}
+	]
+}

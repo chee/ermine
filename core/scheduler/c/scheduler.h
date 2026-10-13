@@ -1,10 +1,10 @@
 // The scheduler (newcore/scheduler/ts/scheduler.ts, SCHEDULER.tex), in C. Same order of operations as the
 // reference: every change, node made, intro, outro and release ticks the clock where scheduler.ts
-// does. It sits on the graph (graph/c/graph.h), as scheduler.ts on graph.ts: the graph reads,
+// does. It sits on the graph (graph/c/main.h), as scheduler.ts on main.ts: the graph reads,
 // writes, places, tracks and tells; the scheduler runs processes. The host's interface is below.
 //
-// memory: values are held (notify.h: nt_ref, nt_free) and let go when nothing holds them; the graph
-// holds what its nodes hold (graph.h, memory).
+// memory: values are held (notify.h: op_ref, op_free) and let go when nothing holds them; the graph
+// holds what its nodes hold (main.h, memory).
 //   - Given: a value given to a call (args, patches, values to write or create) is borrowed: whoever
 //     keeps it takes its own hold, so the caller lets go of its own when done. A part's value (what
 //     a compute, setup or handler gives back) is lent the same way: the scheduler holds the last
@@ -22,8 +22,8 @@
 // sc_alloc and sc_dup are kept until sc_free, as are the processes.
 // Everything is single threaded; there is no async, so a compute cannot return a promise.
 //
-// values: nt_value. A live value (a function a process placed as a handler) is an nt_value of
-// type NT_NULL that carries an sc_fn: sc_live makes one, sc_live_fn gets it back. null,
+// values: op_value. A live value (a function a process placed as a handler) is an op_value of
+// type OP_NULL that carries an sc_fn: sc_live makes one, sc_live_fn gets it back. null,
 // booleans, numbers and strings are the same by value; lists, maps and live values by identity.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
@@ -31,10 +31,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../../graph/c/node.h"
+#include "../../node/c/node.h"
 #include "notify.h"
-#include "../../graph/c/places.h"
-#include "../../graph/c/graph.h"
+#include "../../places/c/places.h"
+#include "../../graph/c/main.h"
 #include "../../protect/c/protect.h"
 
 typedef struct sc_sched sc_sched;
@@ -59,13 +59,13 @@ const sc_error *sc_error_new(sc_sched *s, const char *code, const char *message,
 // what a function is: called with what a part is given; sets *out to its value (NULL: none) or
 // *pending. an error is returned (NULL: none)
 struct sc_fn {
-	const sc_error *(*call)(sc_fn *self, sc_given *g, nt_value **out, int *pending);
+	const sc_error *(*call)(sc_fn *self, sc_given *g, op_value **out, int *pending);
 };
-nt_value *sc_live(sc_fn *f);
-sc_fn *sc_live_fn(const nt_value *v); // NULL if not live
+op_value *sc_live(sc_fn *f);
+sc_fn *sc_live_fn(const op_value *v); // NULL if not live
 
 // whether two values are the same (Object.is)
-int sc_is(const nt_value *a, const nt_value *b);
+int sc_is(const op_value *a, const op_value *b);
 
 // code: a setup (setup set), or a compute with an optional effect
 typedef struct {
@@ -187,7 +187,7 @@ sc_api *sc_host(sc_sched *s);
 // change is by, as a change's header is told to sync
 const pr_value *sc_actor(const pr_value *agent);
 // INTERNAL AND DANGEROUS (WIRING.tex, In), for whoever made the scheduler to give to sync alone,
-// never to hosts or programs: gr_versions (graph.h says what it does and why it is dangerous)
+// never to hosts or programs: gr_versions (main.h says what it does and why it is dangerous)
 void sc_versions(sc_sched *s, const char *id, gr_where where, const char *name,
 	const gr_incoming *list, size_t count, const gr_from *from);
 
@@ -201,14 +201,14 @@ typedef struct {
 	sc_code code;
 	const char *name; // NULL: the pid
 	const char *id;
-	int (*equal)(const nt_value *a, const nt_value *b);
+	int (*equal)(const op_value *a, const op_value *b);
 	const char *const *place; // where the address is read from; default the root
 	size_t nplace;
 } sc_startop;
 typedef struct {
 	const char *const *address;
 	size_t naddress;
-	nt_value *args; // NULL: none
+	op_value *args; // NULL: none
 	const sc_agent *actor; // NULL: the host's
 	const char *person;
 	int has_trusted;
@@ -219,7 +219,7 @@ typedef struct {
 
 const sc_error *sc_start(sc_sched *s, const sc_startop *op, const char **id);
 // *out: the handler's answer (NULL: none, or the call was queued)
-const sc_error *sc_call(sc_sched *s, const sc_callop *op, nt_value **out);
+const sc_error *sc_call(sc_sched *s, const sc_callop *op, op_value **out);
 const sc_error *sc_replace(sc_sched *s, const char *const *address, size_t naddress);
 const sc_error *sc_batch(sc_sched *s, const sc_error *(*fn)(void *ctx), void *ctx);
 
@@ -232,7 +232,7 @@ const sc_error *sc_lookup(sc_api *a, const char *const *path, size_t n, sc_items
 const sc_error *sc_lookups(sc_api *a, const char *const *path, size_t n, sc_items *out);
 // every name, or with a name that list's items
 const sc_error *sc_names(sc_api *a, const char *const *address, size_t n, pl_namelist *out);
-// "info" or "children" names (graph.h, gr_names_of)
+// "info" or "children" names (main.h, gr_names_of)
 const sc_error *sc_names_of(sc_api *a, const char *const *address, size_t n, const char *part,
 	pl_namelist *out);
 const sc_error *sc_children(sc_api *a, const char *const *address, size_t n, const char *name,
@@ -242,10 +242,10 @@ const sc_error *sc_info(sc_api *a, const char *const *address, size_t n, const c
 	sc_items *out);
 // index: the item (default its first loaded); slotindex as insert's, span: given as a span.
 // *time: the change's
-const sc_error *sc_write(sc_api *a, const char *const *address, size_t n, const nt_patch *patches,
+const sc_error *sc_write(sc_api *a, const char *const *address, size_t n, const op_patch *patches,
 	size_t np, const long *index, const pl_span *slotindex, int span, int64_t *time);
 const sc_error *sc_set(sc_api *a, const char *const *address, size_t n, const char *name,
-	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
+	const op_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
 	int64_t *time);
 const sc_error *sc_insert(sc_api *a, const char *id, const char *name, const char *child,
 	const pl_span *index, const pl_span *slotindex, int64_t *time);
@@ -263,14 +263,14 @@ const sc_error *sc_node(sc_api *a, const char *id, const nd_node **out);
 // the call, or the host's until it sweeps
 sc_api *sc_as(sc_api *a, const pr_value *cause);
 // a new node holding value (NULL: no value); a process may make it ephemeral
-const sc_error *sc_create(sc_api *a, const nt_value *value, const char *id, int ephemeral,
+const sc_error *sc_create(sc_api *a, const op_value *value, const char *id, int ephemeral,
 	const char **out);
 
 // what a part does with what it is given: start, call, onCleanup. a part that has no right to
 // one is stopped or wrong-field
 const sc_error *sc_given_start(sc_given *g, const sc_startop *op, const char **id);
 const sc_error *sc_given_call(sc_given *g, const char *const *address, size_t naddress,
-	const nt_value *args, nt_value **out);
+	const op_value *args, op_value **out);
 const sc_error *sc_given_cleanup(sc_given *g, sc_fn *f);
 
 struct sc_given {
@@ -280,9 +280,9 @@ struct sc_given {
 	void *ctx; // the scheduler's
 	const char *self;
 	const char *name;
-	nt_value *value; // an effect's; NULL: not given
-	nt_value *previous;
-	nt_value *args; // a handler's
+	op_value *value; // an effect's; NULL: not given
+	op_value *previous;
+	op_value *args; // a handler's
 	int has_killed; // a cleanup's
 	int killed;
 	int64_t *by; // a compute's: the times of the changes that marked it

@@ -1,0 +1,17 @@
+{
+	"title": "empty strings and odd text are keys like any other",
+	"steps": [
+		{ "op": "add", "part": "", "id": "", "node": "n", "expect": {} },
+		{ "op": "add", "part": "", "id": "a b/c\"d\\e", "node": "n", "expect": {} },
+		{ "op": "add", "part": "é", "id": "", "node": "n", "expect": {} },
+		{ "op": "get", "part": "", "id": "", "expect": { "node": "n" } },
+		{ "op": "get", "part": "é", "id": "", "expect": { "node": "n" } },
+		{ "op": "get", "part": "e", "id": "", "expect": {} },
+		{
+			"op": "who",
+			"node": "n",
+			"expect": { "keys": [["", ""], ["", "a b/c\"d\\e"], ["é", ""]] }
+		},
+		{ "op": "at", "id": "", "expect": { "entries": [["", "n"], ["é", "n"]] } }
+	]
+}

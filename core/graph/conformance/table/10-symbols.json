@@ -1,0 +1,54 @@
+{
+	"title": "symbols as parts and ids: one per name, distinct from the string of that name",
+	"steps": [
+		{
+			"op": "add",
+			"part": { "symbol": "drag" },
+			"id": { "symbol": "here" },
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": { "symbol": "drag" },
+			"id": { "symbol": "here" },
+			"expect": { "node": "n" }
+		},
+		{ "op": "get", "part": "drag", "id": "here", "expect": {} },
+		{ "op": "get", "part": { "symbol": "drag" }, "id": "here", "expect": {} },
+		{ "op": "add", "part": "drag", "id": { "symbol": "here" }, "node": "m", "expect": {} },
+		{
+			"op": "at",
+			"id": { "symbol": "here" },
+			"expect": { "entries": [[{ "symbol": "drag" }, "n"], ["drag", "m"]] }
+		},
+		{
+			"op": "add",
+			"part": { "symbol": "drag" },
+			"id": { "symbol": "here" },
+			"node": "m",
+			"expect": { "error": "already-there" }
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": { "keys": [[{ "symbol": "drag" }, { "symbol": "here" }]] }
+		},
+		{
+			"op": "ids",
+			"part": { "symbol": "drag" },
+			"node": "n",
+			"expect": { "ids": [{ "symbol": "here" }] }
+		},
+		{ "op": "ids", "part": "drag", "node": "n", "expect": { "ids": [] } },
+		{ "op": "del", "part": { "symbol": "drag" }, "id": { "symbol": "here" }, "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [] } },
+		{
+			"op": "del",
+			"part": { "symbol": "drag" },
+			"id": { "symbol": "here" },
+			"expect": { "error": "nothing-there" }
+		},
+		{ "op": "at", "id": { "symbol": "here" }, "expect": { "entries": [["drag", "m"]] } }
+	]
+}

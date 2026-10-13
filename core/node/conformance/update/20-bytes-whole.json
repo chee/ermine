@@ -1,0 +1,143 @@
+{
+	"title": "bytes: one whole value, never spliced; a patch into them is wrong-kind",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"b": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": {
+						"/": {
+							"bytes": "BA"
+						}
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b",
+						0
+					],
+					"value": 9
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": {
+						"/": {
+							"bytes": "BwgJ"
+						}
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"b": {
+							"/": {
+								"bytes": "BwgJ"
+							}
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": {
+										"/": {
+											"bytes": "BwgJ"
+										}
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									],
+									"value": {
+										"/": {
+											"bytes": "AQID"
+										}
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

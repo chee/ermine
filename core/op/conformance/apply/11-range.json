@@ -1,0 +1,491 @@
+{
+	"title": "range: a span past the end, or reversed; counted in what is there when the patch lands",
+	"steps": [
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						4,
+						4
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						0
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						100000000000000000000
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						100000000000000000000,
+						100000000000000000000
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						0
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [],
+						"range": [
+							2,
+							4
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": "bca"
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2,
+				3
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					2,
+					3
+				],
+				"k": []
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						2,
+						2
+					],
+					"move": {
+						"path": [
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "x"
+				},
+				{
+					"path": [],
+					"range": [
+						0,
+						5
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						2
+					]
+				},
+				{
+					"path": [],
+					"range": [
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 1
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						2
+					]
+				},
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"value": ""
+			}
+		}
+	]
+}

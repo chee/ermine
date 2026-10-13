@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createNode from "@ermine/graph/node"
+import createNode from "@ermine/node"
 import { rules as protectRules } from "@ermine/protect"
 import { type Api, createScheduler, type Moment, PENDING, SchedulerError } from "./scheduler.ts"
 
@@ -581,7 +581,7 @@ Deno.test("audit: a throw while an async run settles is the run's failure, not a
 		JSON.stringify(import.meta.resolve("./scheduler.ts"))
 	})
 		const { default: createNode } = await import(${
-		JSON.stringify(import.meta.resolve("@ermine/graph/node"))
+		JSON.stringify(import.meta.resolve("@ermine/node"))
 	})
 		const s = createScheduler({ root: createNode("root", {}) })
 		s.insert("root", "a", s.create(1, { id: "a" }))

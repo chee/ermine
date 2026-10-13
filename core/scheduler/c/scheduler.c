@@ -1,7 +1,7 @@
 // The scheduler (newcore/scheduler/ts/scheduler.ts), in C. Ported in the same order of operations: the clock
 // ticks wherever scheduler.ts's does. Comments say what the reference's say, tersely.
 //
-// It sits on the graph (graph/c/graph.c) as scheduler.ts on graph.ts: the graph reads, writes,
+// It sits on the graph (graph/c/main.c) as scheduler.ts on main.ts: the graph reads, writes,
 // places, tracks and tells, and calls back when a change reached what a process read (marked), an
 // ephemeral node is owned (owned) or a node goes (released). What is the scheduler's: processes,
 // runs, rounds, ranks, hooks, its own protect asks, and the host's interface.
@@ -102,7 +102,7 @@ struct sc_step {
 	const char *handler;
 	int cleanup;
 	const char *kill;
-	const nt_value *status;
+	const op_value *status;
 };
 
 // an actor of the scheduler's shape (SCHEDULER.tex, What a process acts as). pr: as protect and
@@ -166,7 +166,7 @@ struct sc_proc {
 	int has_program;
 	const char *prog_node;
 	int64_t prog_time;
-	int (*equal)(const nt_value *, const nt_value *);
+	int (*equal)(const op_value *, const op_value *);
 	sc_proc *parent;
 	vec children; // sc_child *
 	vec owned; // const char *, in the order made
@@ -176,8 +176,8 @@ struct sc_proc {
 	int setup;
 	vec kept; // sc_kept *, by time
 	int has_last;
-	const nt_value *last;
-	nt_value *status; // a map of the fields it has
+	const op_value *last;
+	op_value *status; // a map of the fields it has
 	int has_since;
 	int64_t since;
 	vec values; // const char *: the processes whose nodes its last run that did not stop read
@@ -188,7 +188,7 @@ struct sc_proc {
 	long tj_index, tj_low;
 	int tj_seen, tj_on;
 	int has_previous;
-	const nt_value *previous;
+	const op_value *previous;
 	const char *run;
 	int looping;
 	int has_loop;
@@ -212,12 +212,12 @@ struct sc_run {
 	vec values; // const char *
 	long rank;
 	const char *part; // NULL, "setup", "effect"
-	const nt_value *value;
+	const op_value *value;
 	int has_equal;
 	int equal;
 	const char *why;
 	int has_shown;
-	const nt_value *shown;
+	const op_value *shown;
 	sc_proc *stopped;
 	int replaced;
 	int has_loop;
@@ -277,7 +277,7 @@ struct sc_sched {
 	struct {
 		sc_proc *p;
 		long n;
-		const nt_value *status;
+		const op_value *status;
 		const sc_agent *agent;
 	} kept;
 	pr_arena pra;
@@ -467,48 +467,48 @@ static void om_del(omap *m, const char *key) {
 #define LIVE_TAG ((size_t)0x11fe)
 
 // held for good: a live value is never freed (its keys are no keys)
-nt_value *sc_live(sc_fn *f) {
-	nt_value *v = nt_null();
+op_value *sc_live(sc_fn *f) {
+	op_value *v = op_null();
 	v->count = LIVE_TAG;
 	v->keys = (char **)(void *)f;
 	v->refs = (size_t)1 << (sizeof(size_t) * 4);
 	return v;
 }
-sc_fn *sc_live_fn(const nt_value *v) {
-	if (v == NULL || v->type != NT_NULL || v->count != LIVE_TAG) return NULL;
+sc_fn *sc_live_fn(const op_value *v) {
+	if (v == NULL || v->type != OP_NULL || v->count != LIVE_TAG) return NULL;
 	return (sc_fn *)(void *)v->keys;
 }
-int sc_is(const nt_value *a, const nt_value *b) {
+int sc_is(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
 	switch (a->type) {
-	case NT_NULL: return sc_live_fn(a) == NULL && sc_live_fn(b) == NULL;
-	case NT_BOOL: return a->bool_ == b->bool_;
-	case NT_NUM:
+	case OP_NULL: return sc_live_fn(a) == NULL && sc_live_fn(b) == NULL;
+	case OP_BOOL: return a->bool_ == b->bool_;
+	case OP_NUM:
 		if (isnan(a->num) && isnan(b->num)) return 1;
 		return a->num == b->num && signbit(a->num) == signbit(b->num);
-	case NT_STR: return a->bytes == b->bytes && !memcmp(a->str, b->str, a->bytes);
+	case OP_STR: return a->bytes == b->bytes && !memcmp(a->str, b->str, a->bytes);
 	default: return 0;
 	}
 }
 
-static int is_live(const nt_value *v) { return sc_live_fn(v) != NULL; }
+static int is_live(const op_value *v) { return sc_live_fn(v) != NULL; }
 
 // two values are the same when their members are; a live value only as itself. a status
 // (SCHEDULER.tex, Status) is a map of pending, error, new, loop; empty: the value is current
-static int same_value(const nt_value *a, const nt_value *b) {
+static int same_value(const op_value *a, const op_value *b) {
 	if (a == b) return 1;
 	if (a == NULL || b == NULL || a->type != b->type) return 0;
-	if (a->type == NT_LIST) {
+	if (a->type == OP_LIST) {
 		if (a->count != b->count) return 0;
 		for (size_t i = 0; i < a->count; i++)
 			if (!same_value(a->items[i], b->items[i])) return 0;
 		return 1;
 	}
-	if (a->type == NT_MAP) {
+	if (a->type == OP_MAP) {
 		if (a->count != b->count) return 0;
 		for (size_t i = 0; i < a->count; i++) {
-			nt_value *y = nt_get(b, a->keys[i]);
+			op_value *y = op_get(b, a->keys[i]);
 			if (!y || !same_value(a->items[i], y)) return 0;
 		}
 		return 1;
@@ -548,16 +548,16 @@ static const sc_error *from_gr(sc_sched *s, const gr_error *e) {
 }
 
 // an error as a status holds it
-static nt_value *error_value(const sc_error *e) {
-	nt_value *m = nt_map();
+static op_value *error_value(const sc_error *e) {
+	op_value *m = op_map();
 	if (e->scheduler) {
-		nt_set(m, "code", nt_str(e->code));
-		nt_set(m, "message", nt_str(e->message));
+		op_set(m, "code", op_str(e->code));
+		op_set(m, "message", op_str(e->message));
 		return m;
 	}
-	nt_set(m, "name", nt_str(e->name ? e->name : "Error"));
-	nt_set(m, "message", nt_str(e->message ? e->message : ""));
-	if (e->code) nt_set(m, "code", nt_str(e->code));
+	op_set(m, "name", op_str(e->name ? e->name : "Error"));
+	op_set(m, "message", op_str(e->message ? e->message : ""));
+	if (e->code) op_set(m, "code", op_str(e->code));
 	return m;
 }
 
@@ -617,7 +617,7 @@ static const pr_value *actor_of(sc_sched *s, const sc_agent *a) {
 }
 
 // the agent of a process for a step of its own
-static const sc_agent *agent_of(sc_sched *s, sc_proc *p, long run, const nt_value *status,
+static const sc_agent *agent_of(sc_sched *s, sc_proc *p, long run, const op_value *status,
 	const char *handler, int cleanup) {
 	sc_agent *a = tmem(s, sizeof *a);
 	*a = p->base;
@@ -639,7 +639,7 @@ static const sc_agent *agent_of(sc_sched *s, sc_proc *p, long run, const nt_valu
 static const sc_agent *run_agent(sc_sched *s, sc_proc *p, long n) {
 	return agent_of(s, p, n > 0 ? n : 0, NULL, NULL, 0);
 }
-static const sc_agent *agent_at(sc_sched *s, sc_proc *p, long n, const nt_value *status) {
+static const sc_agent *agent_at(sc_sched *s, sc_proc *p, long n, const op_value *status) {
 	n = n > 0 ? n : 0;
 	if (s->kept.agent && s->kept.p == p && s->kept.n == n && same_value(s->kept.status, status))
 		return s->kept.agent;
@@ -822,7 +822,7 @@ static void waits(sc_sched *s, sc_proc *p, sc_proc *q) {
 // told whole (snap)
 
 // the status's version, in front of the value, put, replaced or taken away
-static void put_status(sc_sched *s, sc_proc *p, nd_node *node, nt_value *status) {
+static void put_status(sc_sched *s, sc_proc *p, nd_node *node, op_value *status) {
 	int had = p->status->count > 0, has = status->count > 0;
 	const sc_change *change = gr_by_at(s->g, p->id, GR_VALUE, NULL);
 	nd_version v = {status, change, sc_status_because};
@@ -859,10 +859,10 @@ typedef struct {
 	sc_sched *s;
 	sc_proc *p;
 	nd_node *node;
-	nt_value *status; // NULL: none put
+	op_value *status; // NULL: none put
 	nd_node *at;
 	size_t slot;
-	const nt_value *value;
+	const op_value *value;
 	int64_t time;
 } record_t;
 static const gr_error *record_run(void *arg) {
@@ -892,14 +892,14 @@ static void record(sc_sched *s, sc_proc *p, const sc_agent *agent, sc_cause *cau
 }
 
 // the status kept as the process's: the one before let go (at the next sweep)
-static void status_is(sc_sched *s, sc_proc *p, nt_value *status) {
+static void status_is(sc_sched *s, sc_proc *p, op_value *status) {
 	gr_later(s->g, p->status);
 	p->status = status;
 }
 
 // the status a process's node shows, as a version in front of its value. Takes the caller's hold of
 // status: kept as the process's, or let go
-static void write_status(sc_sched *s, sc_proc *p, nt_value *status, long n, sc_cause *causes,
+static void write_status(sc_sched *s, sc_proc *p, op_value *status, long n, sc_cause *causes,
 	int force) {
 	nd_node *node = p->state == RUNNING ? gr_get(s->g, p->id) : NULL;
 	if (!node || (!force && !p->status->count && !status->count)) {
@@ -914,16 +914,16 @@ static void write_status(sc_sched *s, sc_proc *p, nt_value *status, long n, sc_c
 
 // its value, behind its status; then the status, if not the same. value is borrowed (the last
 // is held); status, the caller's hold, taken
-static void write_value(sc_sched *s, sc_proc *p, const nt_value *value, nt_value *status,
+static void write_value(sc_sched *s, sc_proc *p, const op_value *value, op_value *status,
 	sc_run *run) {
 	nd_node *node = gr_get(s->g, p->id);
 	if (p->state != RUNNING || !node) {
 		gr_later(s->g, status);
 		return;
 	}
-	if (p->has_last) gr_later(s->g, (nt_value *)p->last);
+	if (p->has_last) gr_later(s->g, (op_value *)p->last);
 	p->has_last = 1;
-	p->last = nt_ref((nt_value *)value);
+	p->last = op_ref((op_value *)value);
 	const sc_agent *agent = agent_at(s, p, run->n, status);
 	gr_snap snap[1] = {{p->id, GR_VALUE, NULL}};
 	record_t r = {s, p, node, NULL, node, p->status->count > 0 ? 1 : 0, value, 0};
@@ -936,15 +936,15 @@ static void pending_at(sc_sched *s, sc_proc *p) {
 	int64_t *d = om_get(&s->due, p->id);
 	int64_t since = p->has_since ? p->since : (d ? *d : 0);
 	// {...p.status, pending}: pending keeps its place if it was there
-	nt_value *st = nt_map();
+	op_value *st = op_map();
 	int put = 0;
 	for (size_t i = 0; i < p->status->count; i++) {
 		if (!strcmp(p->status->keys[i], "pending")) {
-			nt_set(st, "pending", nt_num((double)since));
+			op_set(st, "pending", op_num((double)since));
 			put = 1;
-		} else nt_set(st, p->status->keys[i], nt_ref(p->status->items[i]));
+		} else op_set(st, p->status->keys[i], op_ref(p->status->items[i]));
 	}
-	if (!put) nt_set(st, "pending", nt_num((double)since));
+	if (!put) op_set(st, "pending", op_num((double)since));
 	if (!same_value(st, p->status)) write_status(s, p, st, p->runs, NULL, 0);
 	else gr_later(s->g, st);
 }
@@ -985,57 +985,57 @@ static const gr_error *insert_run(void *arg) {
 // the latest run, the value of a node named run inside the process. status: the process's new
 // status, if it changed, written in the same operation (the caller's hold, taken)
 static void write_run(sc_sched *s, sc_proc *p, sc_run *run, sc_ended ended, const sc_error *error,
-	nt_value *status) {
+	op_value *status) {
 	nd_node *node = gr_get(s->g, p->id);
 	if (p->state != RUNNING || !node) {
 		gr_later(s->g, status);
 		return;
 	}
-	nt_value *v = nt_map();
+	op_value *v = op_map();
 	// the graph holds what it keeps: this hold goes at the next sweep
 	gr_later(s->g, v);
-	nt_set(v, "run", nt_num((double)run->n));
+	op_set(v, "run", op_num((double)run->n));
 	if (p->has_program) {
-		nt_value *pg = nt_map();
-		nt_set(pg, "node", nt_str(p->prog_node));
-		nt_set(pg, "time", nt_num((double)p->prog_time));
-		nt_set(v, "program", pg);
-	} else nt_set(v, "program", nt_null());
-	nt_value *by = nt_list();
+		op_value *pg = op_map();
+		op_set(pg, "node", op_str(p->prog_node));
+		op_set(pg, "time", op_num((double)p->prog_time));
+		op_set(v, "program", pg);
+	} else op_set(v, "program", op_null());
+	op_value *by = op_list();
 	for (size_t i = 0; i < run->given.n; i++)
-		nt_push(by, nt_num((double)((sc_kept *)run->given.v[i])->by->time));
-	nt_set(v, "by", by);
-	nt_value *reads = nt_list();
+		op_push(by, op_num((double)((sc_kept *)run->given.v[i])->by->time));
+	op_set(v, "by", by);
+	op_value *reads = op_list();
 	for (size_t i = 0; i < run->reads.n; i++) {
 		sc_read *r = run->reads.v[i];
-		nt_value *e = nt_map();
-		nt_set(e, "op", nt_str(r->op));
-		nt_set(e, "tracked", nt_bool(r->tracked));
-		nt_value *ts = nt_list();
-		for (size_t k = 0; k < r->ntimes; k++) nt_push(ts, nt_num((double)r->times[k]));
-		nt_set(e, "times", ts);
+		op_value *e = op_map();
+		op_set(e, "op", op_str(r->op));
+		op_set(e, "tracked", op_bool(r->tracked));
+		op_value *ts = op_list();
+		for (size_t k = 0; k < r->ntimes; k++) op_push(ts, op_num((double)r->times[k]));
+		op_set(e, "times", ts);
 		if (r->has_address) {
-			nt_value *ad = nt_list();
-			for (size_t k = 0; k < r->naddress; k++) nt_push(ad, nt_str(r->address[k]));
-			nt_set(e, "address", ad);
+			op_value *ad = op_list();
+			for (size_t k = 0; k < r->naddress; k++) op_push(ad, op_str(r->address[k]));
+			op_set(e, "address", ad);
 		}
-		if (r->name) nt_set(e, "name", nt_str(r->name));
-		nt_push(reads, e);
+		if (r->name) op_set(e, "name", op_str(r->name));
+		op_push(reads, e);
 	}
-	nt_set(v, "reads", reads);
-	nt_value *wrote = nt_list();
-	for (size_t i = 0; i < run->wrote.n; i++) nt_push(wrote, nt_num((double)run->wrote.v[i]));
-	nt_set(v, "wrote", wrote);
-	nt_set(v, "rank", nt_num((double)run->rank));
-	nt_set(v, "ended", nt_str(ended_name(ended)));
+	op_set(v, "reads", reads);
+	op_value *wrote = op_list();
+	for (size_t i = 0; i < run->wrote.n; i++) op_push(wrote, op_num((double)run->wrote.v[i]));
+	op_set(v, "wrote", wrote);
+	op_set(v, "rank", op_num((double)run->rank));
+	op_set(v, "ended", op_str(ended_name(ended)));
 	vec af = {0};
 	after_of(s, p, &af);
-	nt_value *after = nt_list();
-	for (size_t i = 0; i < af.n; i++) nt_push(after, nt_str(af.v[i]));
-	nt_set(v, "after", after);
-	if (ended == SC_STOPPED && run->stopped) nt_set(v, "waits", nt_str(run->stopped->id));
-	if (run->has_equal) nt_set(v, "equal", nt_bool(run->equal));
-	if (error) nt_set(v, "error", error_value(error));
+	op_value *after = op_list();
+	for (size_t i = 0; i < af.n; i++) op_push(after, op_str(af.v[i]));
+	op_set(v, "after", after);
+	if (ended == SC_STOPPED && run->stopped) op_set(v, "waits", op_str(run->stopped->id));
+	if (run->has_equal) op_set(v, "equal", op_bool(run->equal));
+	if (error) op_set(v, "error", error_value(error));
 	nd_node *there = p->run ? gr_get(s->g, p->run) : NULL;
 	if (there) {
 		gr_snap snap[2] = {{p->id, GR_VALUE, NULL}, {there->id, GR_VALUE, NULL}};
@@ -1335,12 +1335,12 @@ const sc_error *sc_info(sc_api *a, const char *const *address, size_t n, const c
 	sc_items *out) {
 	return from_gr(a->s, gr_info(a->g, address, n, name, out));
 }
-const sc_error *sc_write(sc_api *a, const char *const *address, size_t n, const nt_patch *patches,
+const sc_error *sc_write(sc_api *a, const char *const *address, size_t n, const op_patch *patches,
 	size_t np, const long *index, const pl_span *slotindex, int span, int64_t *time) {
 	return from_gr(a->s, gr_write(a->g, address, n, patches, np, index, slotindex, span, time));
 }
 const sc_error *sc_set(sc_api *a, const char *const *address, size_t n, const char *name,
-	const nt_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
+	const op_patch *patches, size_t np, const long *index, const pl_span *slotindex, int span,
 	int64_t *time) {
 	return from_gr(a->s,
 		gr_set(a->g, address, n, name, patches, np, index, slotindex, span, time));
@@ -1365,7 +1365,7 @@ const sc_error *sc_move(sc_api *a, const char *id, const char *name, long index,
 	const char *toname, const long *toindex, int64_t times[2], size_t *ntimes) {
 	return from_gr(a->s, gr_move(a->g, id, name, index, toid, toname, toindex, times, ntimes));
 }
-const sc_error *sc_create(sc_api *a, const nt_value *value, const char *id, int ephemeral,
+const sc_error *sc_create(sc_api *a, const op_value *value, const char *id, int ephemeral,
 	const char **out) {
 	return from_gr(a->s, gr_create(a->g, value, value != NULL, id, ephemeral, out));
 }
@@ -1417,9 +1417,9 @@ static const char *const *absolute(sc_sched *s, const char *const *place, size_t
 // replacing: an empty write at its pid, its status without new; due by it, run as replaced
 static const sc_error *replacing(sc_sched *s, sc_proc *p, const sc_agent *actor, const char *reader,
 	sc_cause *causes) {
-	nt_value *st = nt_map();
+	op_value *st = op_map();
 	for (size_t i = 0; i < p->status->count; i++)
-		if (strcmp(p->status->keys[i], "new")) nt_set(st, p->status->keys[i], nt_ref(p->status->items[i]));
+		if (strcmp(p->status->keys[i], "new")) op_set(st, p->status->keys[i], op_ref(p->status->items[i]));
 	write_status(s, p, st, p->runs, causes, 1);
 	p->replaced = 1;
 	p->replacements++;
@@ -1498,7 +1498,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	}
 	const char *pid;
 	// its node's value: the graph holds it, ours goes at the next sweep
-	nt_value *null = nt_null();
+	op_value *null = op_null();
 	gr_later(s->g, null);
 	e = from_gr(s, gr_make_own(s->g, op->id, null, 1, &who, 1, NULL, &pid));
 	if (e) return e;
@@ -1526,7 +1526,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 	p->prefix = prefix;
 	p->nprefix = agent->ncode;
 	p->started = *s->clock;
-	p->status = nt_map();
+	p->status = op_map();
 	p->equal = op->equal;
 	p->track = gr_reader_new(s->g, p);
 	if (op->has_path) {
@@ -1573,7 +1573,7 @@ static const sc_error *start_(sc_sched *s, const sc_startop *op, sc_ctx *ctx, co
 
 typedef struct {
 	const sc_error *error;
-	nt_value *value;
+	op_value *value;
 	int pending;
 } pout;
 
@@ -1601,7 +1601,7 @@ static void end(sc_sched *s, sc_proc *p, const sc_kill *cause);
 typedef struct qitem {
 	const char *const *address;
 	size_t naddress;
-	nt_value *args;
+	op_value *args;
 	const char *const *place;
 	size_t nplace;
 	const sc_agent *agent;
@@ -1643,7 +1643,7 @@ static const sc_error *prepare(sc_sched *s, qitem *op) {
 		if (e) return e;
 	}
 	sc_proc *definer = gr_owner(s->g, item->id);
-	const nt_value *fv = item->node->value.length ? item->node->value.versions[0].content : NULL;
+	const op_value *fv = item->node->value.length ? item->node->value.versions[0].content : NULL;
 	sc_fn *f = sc_live_fn(fv);
 	if (!gr_ephemeral(s->g, item->id) || !definer || definer->state != RUNNING || !f)
 		return fail(s, "not-a-handler", "the node is not a handler a process placed");
@@ -1671,7 +1671,7 @@ static const sc_error *prepare(sc_sched *s, qitem *op) {
 }
 
 // a prepared call run: as the process that placed the handler
-static const sc_error *go(sc_sched *s, const qitem *op, nt_value **out) {
+static const sc_error *go(sc_sched *s, const qitem *op, op_value **out) {
 	*out = NULL;
 	sc_ctx *ctx = op->ctx;
 	sc_moment m = {.kind = SC_STARTS, .id = ctx->p->id, .handler = ctx->handler};
@@ -1692,7 +1692,7 @@ static const sc_error *go(sc_sched *s, const qitem *op, nt_value **out) {
 	return NULL;
 }
 
-static qitem *qitem_new(sc_sched *s, const char *const *address, size_t n, nt_value *args,
+static qitem *qitem_new(sc_sched *s, const char *const *address, size_t n, op_value *args,
 	const char *const *place, size_t np, const sc_agent *agent, sc_cause *causes) {
 	qitem *q = tmem(s, sizeof *q);
 	const char **ad = tmem(s, (n + 1) * sizeof *ad);
@@ -1720,7 +1720,7 @@ static void queue_push(sc_sched *s, qitem *q) {
 typedef struct {
 	sc_sched *s;
 	const qitem *q;
-	nt_value *out;
+	op_value *out;
 } callreq;
 static const sc_error *call_run(void *p) {
 	callreq *c = p;
@@ -1739,13 +1739,13 @@ const sc_error *sc_given_start(sc_given *g, const sc_startop *op, const char **i
 }
 
 const sc_error *sc_given_call(sc_given *g, const char *const *address, size_t naddress,
-	const nt_value *args, nt_value **out) {
+	const op_value *args, op_value **out) {
 	sc_gctx *gc = g->ctx;
 	sc_sched *s = g->s;
 	sc_ctx *ctx = gc->ctx;
 	*out = NULL;
 	if (ctx->p->state == GONE) return fail(s, "stopped", "call: the process is gone");
-	qitem *q = qitem_new(s, address, naddress, (nt_value *)args, ctx->p->place, ctx->p->nplace,
+	qitem *q = qitem_new(s, address, naddress, (op_value *)args, ctx->p->place, ctx->p->nplace,
 		ctx->agent, ctx->causes);
 	if (s->in_round || s->active > 0) {
 		const sc_error *e = prepare(s, q);
@@ -1932,22 +1932,22 @@ static void settle_children(sc_sched *s, sc_ctx *ctx) {
 		end(s, c->proc, cause);
 	}
 }
-static int same(sc_proc *p, const nt_value *v) {
+static int same(sc_proc *p, const op_value *v) {
 	if (!p->has_last) return 0;
 	return p->equal ? p->equal(v, p->last) : sc_is(v, p->last);
 }
 
-static const char *why_new(const nt_value *v, int given) {
+static const char *why_new(const op_value *v, int given) {
 	if (given) return "not equal by its comparison";
-	if (v && v->type == NT_LIST) return "a new list";
-	if (v && v->type == NT_MAP) return "a new map";
+	if (v && v->type == OP_LIST) return "a new list";
+	if (v && v->type == OP_MAP) return "a new map";
 	if (is_live(v)) return "a new live value";
 	return "not equal";
 }
 
-static nt_value *shown_status(sc_run *run) {
-	nt_value *st = nt_map();
-	if (run->has_shown) nt_set(st, "new", run->shown ? nt_ref((nt_value *)run->shown) : nt_null());
+static op_value *shown_status(sc_run *run) {
+	op_value *st = op_map();
+	if (run->has_shown) op_set(st, "new", run->shown ? op_ref((op_value *)run->shown) : op_null());
 	return st;
 }
 
@@ -1973,27 +1973,27 @@ static void finish(sc_sched *s, sc_run *run, sc_ended ended, const sc_error *err
 			p->has_since = d != NULL;
 			if (d) p->since = *d;
 		}
-		nt_value *status = nt_map();
+		op_value *status = op_map();
 		if (ended == SC_PENDING || ended == SC_STOPPED)
-			nt_set(status, "pending", nt_num((double)(p->has_since ? p->since : run->mark)));
-		if (ended == SC_FAILED) nt_set(status, "error", error_value(error));
+			op_set(status, "pending", op_num((double)(p->has_since ? p->since : run->mark)));
+		if (ended == SC_FAILED) op_set(status, "error", error_value(error));
 		if (ended == SC_LOOPING) {
-			nt_value *loop = nt_map();
-			nt_value *through = nt_list();
+			op_value *loop = op_map();
+			op_value *through = op_list();
 			if (run->has_loop)
-				for (size_t i = 0; i < run->loop.n; i++) nt_push(through, nt_str(run->loop.v[i]));
-			else nt_push(through, nt_str(p->id));
-			nt_set(loop, "through", through);
-			if (!is_live(run->value)) nt_set(loop, "value", nt_ref((nt_value *)run->value));
-			nt_set(status, "loop", loop);
+				for (size_t i = 0; i < run->loop.n; i++) op_push(through, op_str(run->loop.v[i]));
+			else op_push(through, op_str(p->id));
+			op_set(loop, "through", through);
+			if (!is_live(run->value)) op_set(loop, "value", op_ref((op_value *)run->value));
+			op_set(status, "loop", loop);
 		}
-		if (run->has_shown) nt_set(status, "new", run->shown ? nt_ref((nt_value *)run->shown) : nt_null());
+		if (run->has_shown) op_set(status, "new", run->shown ? op_ref((op_value *)run->shown) : op_null());
 		int same = same_value(status, p->status);
 		if (same) gr_later(s->g, status);
 		write_run(s, p, run, ended, error, same ? NULL : status);
 	}
 	// what the run showed was its own: the statuses hold it
-	if (run->has_shown) gr_later(s->g, (nt_value *)run->shown);
+	if (run->has_shown) gr_later(s->g, (op_value *)run->shown);
 	run->has_shown = 0;
 	sc_moment m = {.kind = SC_ENDS, .id = p->id, .has_run = 1, .run = run->n, .ended = ended};
 	if (ended == SC_STOPPED && run->stopped) m.waits = run->stopped->id;
@@ -2013,13 +2013,13 @@ static void stop_run(sc_sched *s, sc_run *run) {
 	finish(s, run, SC_STOPPED, NULL, 0);
 }
 
-static const sc_error *value_of(sc_sched *s, const nt_value *v) {
+static const sc_error *value_of(sc_sched *s, const op_value *v) {
 	if (v == NULL) return fail(s, "wrong-field", "value: a part gives a value");
 	return NULL;
 }
 
 // a compute's value: compared, written, its effect part waiting if new
-static void computed(sc_sched *s, sc_run *run, sc_ctx *cctx, nt_value *v) {
+static void computed(sc_sched *s, sc_run *run, sc_ctx *cctx, op_value *v) {
 	sc_proc *p = run->p;
 	const sc_error *e = value_of(s, v);
 	if (e) { finish(s, run, SC_FAILED, e, 0); return; }
@@ -2078,7 +2078,7 @@ static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
 		} else if (found.pending) {
 			if (takes) { finish(s, run, SC_PENDING, NULL, 0); return; }
 			run->has_shown = 1;
-			run->shown = nt_null();
+			run->shown = op_null();
 		} else {
 			if (takes) {
 				p->has_code = 1;
@@ -2088,9 +2088,9 @@ static void first_body(sc_sched *s, sc_proc *p, sc_run *run, vec *given) {
 				p->prog_time = found.time;
 			} else if (!p->has_program || strcmp(found.node, p->prog_node) ||
 				found.time != p->prog_time) {
-				nt_value *pg = nt_map();
-				nt_set(pg, "node", nt_str(found.node));
-				nt_set(pg, "time", nt_num((double)found.time));
+				op_value *pg = op_map();
+				op_set(pg, "node", op_str(found.node));
+				op_set(pg, "time", op_num((double)found.time));
 				run->has_shown = 1;
 				run->shown = pg;
 			}
@@ -2197,13 +2197,13 @@ static void second(sc_sched *s, sc_run *run) {
 	sc_given *g = given_new(s, ctx, alive);
 	g->api = process_api(s, ctx, 0, 1, alive);
 	if (is_effect) {
-		g->value = (nt_value *)run->value;
-		if (p->has_previous) g->previous = (nt_value *)p->previous;
+		g->value = (op_value *)run->value;
+		if (p->has_previous) g->previous = (op_value *)p->previous;
 		pout out = part_call(s, p, p->code.effect, g);
 		*alive = 0;
-		if (p->has_previous) gr_later(s->g, (nt_value *)p->previous);
+		if (p->has_previous) gr_later(s->g, (op_value *)p->previous);
 		p->has_previous = 1;
-		p->previous = nt_ref((nt_value *)run->value);
+		p->previous = op_ref((op_value *)run->value);
 		if (out.error) {
 			if (!error) error = out.error;
 		} else if (p->state == RUNNING) settle_children(s, ctx);
@@ -2330,7 +2330,7 @@ static int round_(sc_sched *s) {
 	s->in_round = 0;
 	while (s->qhead < s->nqueue) {
 		qitem *q = ((qitem **)(void *)s->queue)[s->qhead++];
-		nt_value *out;
+		op_value *out;
 		go(s, q, &out);
 	}
 	s->qhead = s->nqueue = 0;
@@ -2475,7 +2475,7 @@ const sc_error *sc_start(sc_sched *s, const sc_startop *op, const char **id) {
 	return e;
 }
 
-const sc_error *sc_call(sc_sched *s, const sc_callop *op, nt_value **out) {
+const sc_error *sc_call(sc_sched *s, const sc_callop *op, op_value **out) {
 	const sc_agent *agent = op->actor ? op->actor : s->host_actor;
 	if (op->person || op->has_trusted) agent = sc_agent_with(s, agent, op->person, op->has_trusted, op->trusted);
 	qitem *q = qitem_new(s, op->address, op->naddress, op->args, op->place, op->nplace, agent, NULL);
@@ -2603,9 +2603,9 @@ void sc_free(sc_sched *s) {
 	// each process's holds let go, and what it grew
 	for (size_t i = 0; i < s->all.n; i++) {
 		sc_proc *p = s->all.v[i];
-		nt_free(p->status);
-		if (p->has_last) nt_free((nt_value *)p->last);
-		if (p->has_previous) nt_free((nt_value *)p->previous);
+		op_free(p->status);
+		if (p->has_last) op_free((op_value *)p->last);
+		if (p->has_previous) op_free((op_value *)p->previous);
 		for (size_t k = 0; k < p->kept.n; k++) free(p->kept.v[k]);
 		vec *vs[] = {&p->children, &p->owned, &p->kept, &p->values, &p->cleanups, &p->loop};
 		for (size_t k = 0; k < sizeof vs / sizeof *vs; k++) free(vs[k]->v);

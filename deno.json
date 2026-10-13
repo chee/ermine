@@ -1,6 +1,9 @@
 {
 	"workspace": [
 		"./core/op",
+		"./core/node",
+		"./core/places",
+		"./core/util",
 		"./core/graph",
 		"./core/scheduler",
 		"./core/protect",
@@ -9,7 +12,8 @@
 		"./extensions/subduction",
 		"./playground/files",
 		"./playground/solid",
-		"./playground/demos/console"
+		"./playground/demos/console",
+		"./playground/places-fresh"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env",

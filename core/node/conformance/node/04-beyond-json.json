@@ -1,0 +1,79 @@
+{
+	"title": "bytes and typed arrays are values, given back whole",
+	"steps": [
+		{
+			"op": "make",
+			"value": {
+				"/": {
+					"bytes": "AQID"
+				}
+			},
+			"expect": {
+				"node": {
+					"value": {
+						"/": {
+							"bytes": "AQID"
+						}
+					},
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": {
+				"$Int8Array": [
+					1,
+					-2,
+					3
+				]
+			},
+			"expect": {
+				"node": {
+					"value": {
+						"$Int8Array": [
+							1,
+							-2,
+							3
+						]
+					},
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "make",
+			"value": {
+				"a": [
+					{
+						"$Uint16Array": [
+							65535,
+							0
+						]
+					}
+				]
+			},
+			"expect": {
+				"node": {
+					"value": {
+						"a": [
+							{
+								"$Uint16Array": [
+									65535,
+									0
+								]
+							}
+						]
+					},
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		}
+	]
+}

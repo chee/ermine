@@ -1,0 +1,15 @@
+{
+	"title": "del a node from every id under a part",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "value", "id": "b", "node": "n", "expect": {} },
+		{ "op": "add", "part": "children", "id": "a", "node": "n", "expect": {} },
+		{ "op": "add", "part": "value", "id": "c", "node": "m", "expect": {} },
+		{ "op": "del", "part": "value", "node": "n", "expect": {} },
+		{ "op": "who", "node": "n", "expect": { "keys": [["children", "a"]] } },
+		{ "op": "get", "part": "value", "id": "c", "expect": { "node": "m" } },
+		{ "op": "at", "id": "a", "expect": { "entries": [["children", "n"]] } },
+		{ "op": "del", "part": "value", "node": "n", "expect": { "error": "nothing-there" } },
+		{ "op": "del", "part": "value", "node": "never", "expect": { "error": "nothing-there" } }
+	]
+}

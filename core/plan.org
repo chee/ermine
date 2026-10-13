@@ -1,0 +1,178 @@
+#+title: plan: op, change, node, table
+#+author: LLM generated working output
+#+date: 2026-10-12
+
+Words: *decided*: chee's words, quoted. *lean*: chee thinking it through. *mine*: my proposal,
+open to change. *open*: not answered.
+
+* Where it ends up
+#+begin_src tsx-ts
+// op
+apply(value, patches, { each?, list? }) → value               // as now
+invert(value, patches, { list? }) → Patch[]                  // new; signature mine
+
+// change
+type ChangeHeader = {
+	time; actor; reader?; site?: Site[]; cause?; wallclock?; message?
+	op?: { patches: Patch[]; undo: Patch[] }                    // set by update, never by a caller
+}
+
+// node: a value and its latest change; no id, no sides, no attributes, no children
+type Node<V> = { value?: V; change: ChangeHeader }
+createNode(contents, { header?, outside? }) → Node            // no id
+update(node, patches, header, { each? }) → void                // in place, no which
+
+// table: nodes by id and part; knows no part's meaning
+intro(id, part, node) · get(id, part) · outro(id, part)      // key shape open
+#+end_src
+
+* What it rests on
+- latest op on the change, *decided*: "we could just keep the latest op, it's not going to be
+  much ram"; one only: "all good, we have the sync layer for when that matters"
+- undo, *decided*: "the stored op would have a `.undo` field on it with the inverse"
+- invert, *decided*: "let's put `invert` as a function by itself in a file by itself inside op/"
+- value, *decided*: "value?: V", one value, no sides
+- parts at one id, *decided*: "the graph at an id creates an attributes object and a children object
+  and puts them all at the same id, and a node doesn't actually keep them"; "it might well be
+  that they are nodes and they are at the same id"
+- which parts, *decided*: "we can move this decision up a level"
+- no id on a node, *decided*: "what if a node _didn't_ have an id, what if that was a layer above?";
+  "that's good! also means that having a value doesn't mean you can get and edit it and mount it
+  other places"
+- update changes the node in place, *decided*: "that's fine for now. we can benchmark it later
+  and see"
+- graph's patched/changed plumbing, *decided*: "all this spaghetti is fucked and not relevant"
+- callers later, *decided*: "we don't need to do the callers right now"; C, *decided*: "update the
+  C as we go"
+
+* Steps
+Lowest library first. Each: TypeScript, C, conformance, run both.
+
+** 1. op
+- invert.ts + invert.c: the undo for patches on a value; apply then undo gives the value back.
+  Round-trip tests, a few dozen fuzz seeds, conformance in core/op/conformance/invert/.
+  Done 10-12, TypeScript and C.
+- apply: a size counts a lone-surrogate join (yes, 10-12). About 5 lines in each language.
+- speed: pick from optim/ (open). `__proto__` written as a key: done.
+
+** 2. change
+The change folder is gone, *decided* 10-13: "`createChange` is also no longer needed. it's
+really just a type exported from node now. we can drop the whole `change` folder". ChangeHeader
+lives in node.ts; external code adds its site with stacktrace's capture.
+TypeScript done 10-12; C with an agent.
+- ChangeHeader gains `op`. C: ch_header gains patches and undo, borrowed, with lengths.
+- Change (header + node id) goes, *decided*: "ok so the thing that calls it already knows its id?";
+  "okay let's update ChangeHeader and drop Change".
+  Every caller does: places, graph, records, subduction. createChange(header, { outside }).
+- because: untouched (open: "im concerned").
+- breaks: places, graph, records, subduction (callers later).
+
+** 3. node
+TypeScript done 10-12; C with an agent.
+- Node as above, *decided*: "update Node to not have an id and just be change and value".
+- update: apply, then invert on the value before, then `value` set (or removed, when nothing is
+  left) and `change` = header + op. Any patch invalid: throws ApplyError, nothing changes. `each`
+  told (patch, facts) after the value is in; the caller adds where. `versions`, `Which` go.
+- `list` option: kept while a children part is lists of ids; goes if its value is name → id, as
+  in chee's node.ts sketch (open).
+- C: nd_node → { has_value, value, change }; nd_update(node, patches, n, header, each, failed);
+  nd_version, nd_object, nd_entry, nd_list go.
+- conformance: the update suite (core/node/conformance/update/) speaks a node's value, not versions;
+  13-info and 14-versions go, or move to the table.
+- breaks: places, graph, scheduler, notify; C places.c, graph.c, scheduler.c, steps.c, pack.c,
+  subduction apply.c (callers later).
+
+** 4. table
+Done 10-13, TypeScript and C (core/graph/c/table.{h,c}), suite in core/graph/conformance/table/.
+Not wired into main yet.
+- chee's API: "add(type, id, node) / get(type, id) / get(type, node) / get(id) / del(type, node) /
+  del(node) // drop em all / del(type, id)", plus `who(node)` and `sub()`: "if we add a
+  `who(node)->id` we can refuse, we can also add a sub() that replaces"
+- one node under several ids, *decided*: "yeah i think it's allowed"
+- get(id), *decided*: "entries"; the argument name: "call it whatever you want" (part)
+- mine: del of nothing there throws nothing-there; get(part, node) and who give keys in the
+  order added; the same node added again under its key is fine
+- packing it: later ("when it comes to doing "pack" we'll figure out a hot efficient way")
+
+** 5. change header
+chee 10-13:
+- because inside change, *decided*: "`because` needs to come inside `change`"; then removed,
+  *decided*: "so it's literally just an extra piece of metadata to contribute", "remove because".
+  Done 10-13 (TS, C, suites). Sync's head becomes a metadata entry in the sync pass. Metadata stays
+  an array: "probably not worth it, the arrays are short and changes are many"
+- time on the change, *decided*: "`time` on change, from now on, is wall clock time like
+  automerge"; the scheduler's ordering tick goes with the trackgraph ("seeing as scheduler works
+  with the trackgraph, and the trackgraph uses nodes, we use it for time"); pidOf: "not going to
+  be real". The scheduler keeps its counter beside changes, not in them: mechanical, in the
+  scheduler pass (marks, order, records, a program's version)
+- actor, reader: "good"
+- site: "good (i'm renaming it to `external`)"
+- wallclock: "good, could be called `time` if we drop `time`"
+- message: "might not be needed"
+- cause: open ("i don't understand what cause is or why scheduler is using it")
+- cause → metadata, *decided*: "rename `cause` to `metadata` and make it an array of things that
+  people can concat", entries "[string, unknown][]"
+- chee's change.ts 10-13: { time, actor, reader?, external?: FileLocation[], metadata?, op? };
+  wallclock, message and cause gone from it
+
+* Not in this plan, next
+- places: the one library that knows the `children` part. Its own pass, with handles.
+- places, 10-13: a rewrite. *decided*: "places is basically just dealing with the children table,
+  except for when somebody asks for an item at a place, then they can ask for another table";
+  "ok let's do a fuckin trie that rules" (core/places/typescript/trie.ts, tested, fuzzed,
+  benched); places may make its own table for its internal cache ("duh we should do that").
+  Making entries should be cheap: a fable agent is trying versions in core/places/typescript/optim/.
+  A fresh design from a problem-only brief: playground/places-fresh/ (members as children parts,
+  hold as a re-checking function, 11 open questions in its NOTES.md)
+- place handles: "h.list() / h.read("a", "b") / h.edit(patches) / h.edit("a", "b", patches) /
+  h.info()", maybe "const [read, write] = h.find("a")"; "of the place, not what's at the place",
+  the node gettable from it as another handle; places pushed, not walked again ("yep"). Open:
+  choosing a member ("the api needs thinking"), the raw mechanics ("unclear").
+- places rewritten 10-13 (TypeScript): core/places/typescript/places.ts, 325 lines, 20 tests incl. a
+  fuzz of holds against fresh walks. The hole, *decided*: "leave a hole for that bit": setup's
+  children(by, id) says where a contributor's children of an id live. Reads of what is not there
+  are told, *decided*: "i would like for a thing to be able to read a path that is not there, and
+  to know it tried to read it, so i can then put something there". C, the old conformance suite:
+  not yet
+- places' stack, *decided* 10-13: several contributions at one path, often the same id; "the order
+  is not the same everywhere. that needs to go a layer up. at the places layer we need to be able
+  to reorder them. and they may be of many more arbitrary kinds than that (time travel). the app
+  or user needs to be able to choose the winner in some circumstances"; "the order has to be data
+  in the graph"; and yes to: the order is per (parent, name), not per path; a node like any other
+  (tracked, changes, undo, synced); contributors in a saved order are strings, absent ones skipped;
+  places ignorant of meaning, unnamed contributions after named ones, the layer above writes the
+  order. One list, *decided*: "no need to have two lists": at (parent, name), the entries there,
+  in order; an entry's position is its order
+- notify: a rewrite, *decided* 10-13: "we definitely want to rewrite notify".
+- graph, scheduler: patched/changed plumbing gone; notify's own facts() likely has no caller once
+  every change comes through apply (open).
+- sync: its own change form for merging; a blop names the part it edits.
+- because and change as one stackable source (a theory).
+
+* Open
+- saving temporary things: later, *decided* 10-13: "when we get to storage, sync, encoding etc we
+  can introduce the concept of an ephemeral node, we'll tag it in some way, and everyone can decide
+  whether or not they want to save it. like, subduction will be _creating_ the ephemeral nodes, so
+  it knows not to save them"
+- how several parts are put at an id: by the table, or by the graph above it ("by the table?")
+- the table's key: (id, part) pairs, or id → parts
+- attributes: one node holding a map, or a node per attribute
+- children: concurrent placements must not conflict as whole lists; merged per name in sync, or a
+  node per placement
+- attributes and children reactive, *decided* 10-13: "attributes + children are reactive now
+  because they're a regular ol' node attached at the same id in another table"
+- a name twice in one children part?
+
+* The yardstick
+What a design has to meet, from chee 10-12:
+1. a read of an id can give several items: "ephemeral-pending, ephemeral, (pending,
+   normal)[]...(per conflict)", many ephemeral heads; variants, rewind, protect's stand-ins the
+   same kind
+2. a node has value?, and attributes and children reachable by the same name
+3. a node doesn't know subduction; op's patches are local, not a CRDT
+4. a folder mounted in two places shows its children in both
+5. writes to the persisted layer, reads from the ephemeral one, by default, but "i don't think
+   this layer of the system should know about ephemeral or pending"
+6. a handle is of the place; places pushed, not walked again
+7. value, attributes and children are three things, changing separately
+8. concurrent placements don't conflict as whole lists

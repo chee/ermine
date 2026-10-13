@@ -25,7 +25,7 @@
 // the process's place, its first item's first version a program; none there: pending.
 // a moment: as SCHEDULER.tex's, a read's without its items, an error as its code.
 // an error: {"error": code} (normal.ts); the harness goes on.
-import createNode from "@ermine/graph/node"
+import createNode from "@ermine/node"
 import { rules } from "@ermine/protect"
 import {
 	type Api,

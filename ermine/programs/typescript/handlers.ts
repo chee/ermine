@@ -3,7 +3,7 @@
 // with a step naming the process that placed it and the handler. a call made while a round or a
 // part runs is checked now and run after; otherwise it is its own request.
 import { type Graph, GraphError } from "@ermine/graph"
-import type { Address, Place, Step } from "@ermine/graph/places"
+import type { Address, Place, Step } from "@ermine/places"
 import { type Agent, errorOf, normal } from "@ermine/scheduler/records"
 import type { CallOp, Cause, Ctx, Moment, Proc } from "@ermine/scheduler/types"
 

@@ -1,0 +1,840 @@
+{
+	"title": "into-itself: a move to a place inside what it takes; checked before the take",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a",
+						"x"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1,
+						0
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"zz",
+						"a"
+					],
+					"move": {
+						"path": [
+							"zz"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"a": {
+							"b": 1
+						}
+					},
+					"l": [
+						1,
+						[
+							2,
+							3
+						],
+						4
+					],
+					"s": "abc"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"mm"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						[
+							2,
+							3
+						],
+						4
+					],
+					"s": "abc",
+					"mm": {
+						"a": {
+							"b": 1
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a",
+							"b"
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"m": 1,
+					"l": [
+						1,
+						[
+							2,
+							3
+						],
+						4
+					],
+					"s": "abc"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"a": {
+							"b": 1
+						}
+					},
+					"l": [
+						[
+							[
+								2,
+								3
+							],
+							4
+						]
+					],
+					"s": "abc"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"m": {
+						"a": {
+							"b": 1
+						}
+					},
+					"l": [
+						[
+							2,
+							3
+						],
+						1,
+						4
+					],
+					"s": "abc"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4,
+					5,
+					6
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"value": {
+					"l": [
+						4,
+						5,
+						[
+							1,
+							[
+								2,
+								3
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						2
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						"1"
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					[
+						2,
+						3
+					],
+					4
+				],
+				"s": "abc"
+			},
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						"a",
+						"q"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 1
+				}
+			}
+		}
+	]
+}

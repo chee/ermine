@@ -1,0 +1,13 @@
+{
+	"title": "several parts at one id, got by part and id, and all at the id",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n1", "expect": {} },
+		{ "op": "add", "part": "children", "id": "a", "node": "n2", "expect": {} },
+		{ "op": "get", "part": "value", "id": "a", "expect": { "node": "n1" } },
+		{ "op": "get", "part": "children", "id": "a", "expect": { "node": "n2" } },
+		{ "op": "get", "part": "attributes", "id": "a", "expect": {} },
+		{ "op": "get", "part": "value", "id": "b", "expect": {} },
+		{ "op": "at", "id": "a", "expect": { "entries": [["value", "n1"], ["children", "n2"]] } },
+		{ "op": "at", "id": "b", "expect": { "entries": [] } }
+	]
+}

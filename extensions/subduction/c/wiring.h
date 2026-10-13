@@ -15,7 +15,7 @@
 #include "seal.h"
 #include "transport.h"
 
-#include "../../../core/graph/c/graph.h"
+#include "../../../core/graph/c/main.h"
 
 #include <stdbool.h>
 #include <stddef.h>

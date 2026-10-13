@@ -3,7 +3,7 @@
 // no canonical form (integers, keys as made), so it is a bound, not a rival
 import { Encoder } from "cbor-x"
 import * as cbor from "./cbor.ts"
-import createNode, { type Node } from "@ermine/graph/node"
+import createNode, { type Node } from "@ermine/node"
 import { decode, encode, pack, unpack } from "./pack.ts"
 import { createTable } from "@ermine/graph/table"
 
