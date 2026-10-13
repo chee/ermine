@@ -1,0 +1,16 @@
+{
+	"title": "runs nest; a re-read across a nested run makes no second link",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["a", "b"] },
+		{ "op": "reads", "of": "q", "expect": ["a"] },
+		{ "op": "readers", "of": "a", "expect": ["p", "q"] }
+	]
+}

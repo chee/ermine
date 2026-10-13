@@ -654,7 +654,7 @@ static void print_target(const op_target *t) {
 	if (t->has_range) printf(",\"range\":[%ld,%ld]", t->from, t->to);
 }
 
-static void print_patch(const op_patch *p) {
+void print_patch(const op_patch *p) {
 	putchar('{');
 	print_target(&p->place);
 	if (p->has_value) {

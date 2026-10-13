@@ -1,0 +1,37 @@
+{
+	"title": "what a compute reads may change between runs: only what its last run read makes it due",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "flag": true, "a": 1, "b": 2 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "if": [{ "read": "flag" }, { "read": "a" }, { "read": "b" }] },
+			"to": "c"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "c" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 1]] } },
+		{ "op": "write", "values": { "b": 3 }, "expect": { "tick": 5 } },
+		{ "op": "moments" },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } },
+		{ "op": "write", "values": { "flag": false }, "expect": { "tick": 6 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 3]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "a": 5 }, "expect": { "tick": 8 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } },
+		{ "op": "write", "values": { "b": 4 }, "expect": { "tick": 9 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 4]] } }
+	]
+}

@@ -6,14 +6,12 @@
 // value after, gives the value before (maps by content), and a failed one leaves the node as it was.
 //
 // The fuzzer makes patches against content it follows with the reference library; each goes to
-// the harness alone, then all that were valid in one change, with facts asked. Whatever answers
-// must equal the reference's answers, and its facts must equal notify.ts's facts(patch, before)
-// (a move onto itself aside: apply's facts for it differ).
+// the harness alone, then all that were valid in one change. Whatever answers must equal the
+// reference's answers, and the one change must end where the reference's patches one by one did.
 import { assert, assertEquals } from "@std/assert"
 import createNode from "@ermine/node"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import { facts } from "@ermine/scheduler/notify"
 import { dehydrate, revive } from "./form.ts"
 
 const here = new URL(".", import.meta.url).pathname
@@ -186,7 +184,7 @@ function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 	}
 }
 
-Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference, facts as notify's`, async () => {
+Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const pick = rand(seed)
 		const n = createNode<Record<string, unknown>>(content())
@@ -202,27 +200,19 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference, facts as 
 			}
 		}
 		const steps: Request[] = [start]
-		for (const p of patches) steps.push({ op: "update", patches: [p], each: true })
-		steps.push(start, { op: "update", patches: good, each: true }, { op: "node" })
-		const { asked, at, check } = around(steps)
+		for (const p of patches) steps.push({ op: "update", patches: [p] })
+		steps.push(start, { op: "update", patches: good }, { op: "node" })
+		const { asked, check } = around(steps)
 		const mine = await ask(asked)
 		if (command.join(" ") !== reference) {
 			assertEquals(mine, await ask(asked, reference.split(" ")), `seed ${seed}`)
 		}
 		check(mine)
-		// its facts are notify's, from the value before each patch
-		patches.forEach((p, k) => {
-			const i = at[1 + k]
-			if (mine[i].error) return
-			// a move onto itself: apply's facts are fixed by its suite (24-edges), notify's are not
-			if (p.move && !p.range && !p.move.range && p.path.join() === p.move.path.join()) return
-			assertEquals(
-				mine[i].facts,
-				[facts(p, mine[i - 1].node.value)],
-				`seed ${seed} patch ${k} ${JSON.stringify(p)} ${
-					JSON.stringify(mine[i - 1].node.value)
-				}`,
-			)
-		})
+		// the one change ends where the patches one by one did
+		assertEquals(
+			canon(mine[mine.length - 1].node.value),
+			canon(dehydrate(n.value)),
+			`seed ${seed}: the end`,
+		)
 	}
 })

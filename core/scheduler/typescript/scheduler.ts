@@ -1,661 +1,541 @@
-// the reference scheduler, over the graph (main.ts): the graph hooks
-// up newcore's libraries and tells the scheduler when a change reached what a process read; the
-// scheduler runs processes, in rounds, ranked (rank.ts).
+// the scheduler: runs code, and knows nothing else. a compute is tracked: it runs again when a
+// key it read changed. an effect is a compute whose value is acted on after the round's last run.
+// a setup runs once, untracked. the owners tree holds them: disposing an owner takes everything
+// under it.
 //
-// processes are ephemeral nodes made by start; one is killed when its node goes, by outro.
-// a program: a setup, run once; a compute, run again when what it read changes; or an effect, a
-// compute whose value is acted on. no history: each process's value and status are versions of its
-// node's value, its latest run a node named run inside it; four moments go to the hooks.
-// what scheduler() answers is the host's interface.
-import type { Change } from "@ermine/change"
-import {
-	type Acting,
-	type By,
-	type Changed,
-	createGraph,
-	GraphError,
-	type Read,
-} from "@ermine/graph"
-import type { Node, Side } from "@ermine/node"
-import type { Address, Depend, Item, Place, Step, Where } from "@ermine/places"
-import { type Ask, edit, type May, pass as passing } from "@ermine/protect"
-import { createCode } from "@ermine/programs/code"
-import { createHandlers } from "@ermine/programs/handlers"
-import { createProcesses } from "./processes.ts"
-import { createProcessApi } from "@ermine/programs/process-api"
+// a pulse runs what is due, in rounds: a round runs the due computations by rank (rank.ts,
+// order.ts), then acts on the effects' new values; acting may make more due, for another round.
+// a result equal to the last stops there. it holds no values but each computation's last result:
+// a compute's goes to its set, whose writer says changed(keys), and what read those keys is due.
+// keys are opaque, compared by identity.
 import { type Cause, createCauses } from "./causes.ts"
-import { isPromise, same, valueOf, whyNew } from "./helpers.ts"
+import { isPromise, same } from "./helpers.ts"
 import { createOrder } from "./order.ts"
-import {
-	type CallOp,
-	type Ctx,
-	type Ended,
-	type Fn,
-	type Kept,
-	type Moment,
-	PENDING,
-	type Proc,
-	type ReadEntry,
-	type Run,
-	type StartOp,
-} from "./types.ts"
-import { createRecords, errorOf, isLive, normal, sameStatus, type Status } from "./records.ts"
-import type { FileLocation } from "@ermine/util/stacktrace"
+import { createTracker, type Node } from "./tracker.ts"
 
-export type { Api, By } from "@ermine/graph"
-export {
-	type CallOp,
-	type Code,
-	type Ended,
-	type Finder,
-	type Hook,
-	type Moment,
-	PENDING,
-	type StartOp,
-} from "./types.ts"
-import type { Finder, Hook } from "./types.ts"
-export { GraphError as SchedulerError, pidOf } from "@ermine/graph"
+// a compute returns it while what it needs is not here: its run ends pending
+export const PENDING: unique symbol = Symbol.for("ermine.pending")
 
-type N = Node<unknown, Change>
-type V = Side<unknown, Change>
+export class SchedulerError extends Error {
+	constructor(readonly code: "stopped" | "disposed", message: string) {
+		super(message)
+		this.name = "SchedulerError"
+	}
+}
+
+export type Equal<T = unknown> = (a: T, b: T) => boolean
+// a run's own read: after the run returned (an await), it throws stopped
+export type Read = (key: unknown) => void
+
+// an owner: the owners and computations under it, and its cleanups, in the order made
+export type Owner = {
+	readonly n: number
+	readonly parent: Owner | undefined
+	children: Owner[]
+	cleanups: (() => unknown)[]
+	state: "alive" | "disposing" | "gone"
+}
+
+// a computation is an owner too: what is under it goes before each run of a compute, and
+// before each act of an effect
+export type Computation = Owner & {
+	readonly kind: "compute" | "effect"
+	readonly f: (read: Read) => unknown
+	readonly set?: (value: never) => void
+	readonly act?: (value: never, previous: never) => void
+	readonly equal?: Equal
+	readonly node: Node<unknown>
+	runs: number
+	// a compute's: the last result given to set; an effect's: the last acted on
+	last?: { value: unknown }
+	// the causes of the marks since its last run that ended done (causes.ts)
+	kept: Set<Cause<Computation>>
+	// the writers of the keys its last run read, and the one it waits after (order.ts)
+	values: Set<Computation>
+	after?: Computation
+	// the keys it is the writer of
+	wrote: Set<unknown>
+	loop?: Computation[]
+	looping: boolean
+	acting?: Act
+}
+
+export type Ended = "done" | "pending" | "failed" | "stopped" | "looping"
+
+export type Moment =
+	| { due: Computation; tick: number }
+	| { starts: Computation; run: number; rank: number }
+	| {
+		ends: Computation
+		run: number
+		ended: Ended
+		equal?: boolean
+		error?: unknown
+		waits?: Computation
+		through?: Computation[]
+	}
+	| { acts: Computation; run: number; error?: unknown }
 
 export type Options = {
-	// the root: the host's node, restored or new (createNode(id, {}))
-	root: N
-	// who the host's own changes are by
-	actor?: unknown
-	// the last time given; each change takes the next
-	clock?: { time: number }
-	hooks?: readonly Hook[]
-	// finds the code of a process whose program is a path (LOADERS.tex)
-	code?: Finder
-	// a fresh id for a node made at a time; "@" and the time if not given
-	id?: (time: number) => string
-	// who may do what (protect.ts), asked before each operation not the scheduler's own;
-	// default anyone
-	may?: May
-	// the host's site for its changes; default read off the call stack
-	site?: () => FileLocation | undefined
-	// the author's clock stamped on every change, whole seconds since 1970; default the system's
-	wallclock?: () => number | undefined
-	// told each object an operation changed (WIRING.tex): sync's side
-	changed?: (record: Changed) => void
+	// told each moment
+	hook?: (moment: Moment) => void
+	// told when a promise settled: its result waits for the next pulse
+	wake?: () => void
 }
 
-export type ErrorCode =
-	| "stopped"
-	| "read-only"
-	| "nothing-there"
-	| "not-a-handler"
-	| "not-a-process"
-	| "wrong-field"
-	| "refused"
-
-class Stop {
-	constructor(readonly at: Proc) {}
+type Ran = {
+	c: Computation
+	n: number
+	mark: number
+	given: Cause<Computation>[]
+	cause: Cause<Computation>
+	values: Set<Computation>
+	open: boolean
+	stopped?: Computation
+	loop?: Computation[]
 }
+type Act = { r: Ran; value: unknown }
+type Out = { value: unknown } | { error: unknown }
+type More = { equal?: boolean; error?: unknown; waits?: Computation; through?: Computation[] }
 
-export function createScheduler(options: Options) {
-	const clock = options.clock ?? { time: 0 }
-	const hooks = options.hooks ?? []
-	const hostActor = options.actor ?? "host"
-	const finder = options.code
+// thrown at a read of a key whose writer is due: the run stops, and waits after it
+class Stop {}
 
-	const g = createGraph<Proc>({
-		root: options.root,
-		site: options.site,
-		wallclock: options.wallclock ?? (() => Math.floor(Date.now() / 1000)),
-		actor: hostActor,
-		clock,
-		id: options.id,
-		may: options.may,
-		changed: options.changed,
-		marked: (q, change, causes) => {
-			if (q.state === "running") mark(q, change, causes as Cause | undefined)
-		},
-		owned: (p, id) => void p.owned.push(id),
-		released: (id, owner) => {
-			// a kill releases newest first: the last, popped
-			if (owner) {
-				const o = owner.owned
-				if (o[o.length - 1] === id) o.pop()
-				else {
-					const i = o.lastIndexOf(id)
-					if (i >= 0) o.splice(i, 1)
-				}
-			}
-			const r = runs.get(id)
-			if (r) {
-				runs.delete(id)
-				r.run = undefined
-			}
-		},
-	})
-	const { places } = g
+export function createScheduler(options: Options = {}) {
+	const pass = options.hook ?? (() => {})
+	const wake = options.wake
 
-	const procs = new Map<string, Proc>()
-	const order = createOrder<Proc>((id) => procs.get(id), () => procs.values())
-	const runs = new Map<string, Proc>()
-	const waiting: Run[] = []
-	const queue: (() => void)[] = []
+	// a node per computation, and per key read
+	const tracker = createTracker<unknown>()
+	const nodes = new Map<unknown, Node<unknown>>()
+	// each key's writer: the computation whose run or set last said it changed
+	const writers = new Map<unknown, Computation>()
+	const live = new Set<Computation>()
+	const order = createOrder<Computation>(() => live)
+	const causes = createCauses<Computation>()
+	// the effects to act, in the order their runs ended; settled promises, for the next pulse
+	const acts: Act[] = []
+	const landed: { r: Ran; out: Out }[] = []
 
-	let depth = 0
-	let inRound = false
-	const causes = createCauses()
+	let made = 0
+	let tick = 0
+	let pulsing = false
+	// the run whose reads are tracked; the run whose changes these are, and if it writes results
+	let reading: Ran | undefined
+	let causing: { r: Ran; writes: boolean } | undefined
 
-	const pass = (m: Moment) => {
-		for (const h of hooks) h(m)
+	// owners
+
+	function owner(parent?: Owner): Owner {
+		if (parent && parent.state !== "alive") throw disposed()
+		const o: Owner = { n: ++made, parent, children: [], cleanups: [], state: "alive" }
+		parent?.children.push(o)
+		return o
 	}
 
-	// no longer loaded; a process whose node it was, killed; ephemeral nodes it owned, released
-	function outro(id: string, who: Acting = { actor: hostActor }) {
-		const cause: By = { ...who, time: ++clock.time, node: id, which: "loaded" }
-		g.release(id, cause)
-		const p = procs.get(id)
-		if (p?.state === "running") processes.kill([p], cause)
+	// on an owner already gone, f runs now
+	function cleanup(o: Owner, f: () => unknown) {
+		if (o.state === "alive") o.cleanups.push(f)
+		else f()
 	}
 
-	// records: status, value and the latest run, written at the process's node
+	// what is under o, newest first, then its cleanups, newest first; o stays. the first error
+	function clean(o: Owner): { error: unknown } | undefined {
+		let failed: { error: unknown } | undefined
+		const kids = o.children
+		o.children = []
+		for (let i = kids.length - 1; i >= 0; i--) {
+			try {
+				dispose(kids[i])
+			} catch (e) {
+				failed ??= { error: e }
+			}
+		}
+		const fs = o.cleanups
+		o.cleanups = []
+		for (let i = fs.length - 1; i >= 0; i--) {
+			try {
+				fs[i]()
+			} catch (e) {
+				failed ??= { error: e }
+			}
+		}
+		return failed
+	}
 
-	const records = createRecords<Proc>(g)
-	const { runAgent } = records
+	// children first, newest first, then o's cleanups, newest first. every cleanup runs; the
+	// first error is thrown after
+	function dispose(o: Owner) {
+		if (o.state !== "alive") return
+		o.state = "disposing"
+		if ("kind" in o) drop(o as Computation)
+		const failed = clean(o)
+		o.state = "gone"
+		const p = o.parent
+		if (p) {
+			const i = p.children.lastIndexOf(o)
+			if (i >= 0) p.children.splice(i, 1)
+		}
+		if (failed) throw failed.error
+	}
 
-	function pendingAt(p: Proc) {
-		const status = { ...p.status, pending: p.since ?? order.at(p.id)! }
-		if (!sameStatus(status, p.status)) records.status(p, status)
+	// a computation going: not due, untracked, the writer of nothing, its act undone
+	function drop(c: Computation) {
+		live.delete(c)
+		order.gone(c)
+		tracker.untrack(c.node)
+		for (const k of c.wrote) if (writers.get(k) === c) writers.delete(k)
+		c.wrote.clear()
+		if (c.acting) unact(c)
+		c.kept.clear()
+	}
+
+	const disposed = () => new SchedulerError("disposed", "the owner is disposed")
+
+	// computations
+
+	function make(
+		kind: "compute" | "effect",
+		o: Owner,
+		f: (read: Read) => unknown,
+		then: (value: never, previous: never) => void,
+		equal?: Equal<never>,
+		key?: unknown,
+	): Computation {
+		if (o.state !== "alive") throw disposed()
+		const c = {
+			n: ++made,
+			parent: o,
+			children: [],
+			cleanups: [],
+			state: "alive",
+			kind,
+			f,
+			[kind === "compute" ? "set" : "act"]: then,
+			equal,
+			runs: 0,
+			kept: new Set(),
+			values: new Set(),
+			wrote: new Set(),
+			looping: false,
+		} as unknown as Computation & { node: Node<unknown> }
+		c.node = tracker.node(c)
+		o.children.push(c)
+		live.add(c)
+		// the key its results land at, given: its writer from the start, not learned
+		if (key !== undefined) write(c, key)
+		order.started(c)
+		mark(c, ++tick)
+		return c
 	}
 
 	// marks
 
-	function mark(q: Proc, change: By, by?: Cause) {
-		if (!q.kept.has(change.time!)) {
-			const k: Kept = { by: change, causes: by }
-			q.kept.set(change.time!, k)
-			causes.keep(k)
-		}
-		const loop = causes.loop(by, q.id)
-		q.loop = loop
-		if (q.looping) {
+	function mark(c: Computation, t: number, by?: Cause<Computation>) {
+		if (c.state !== "alive") return
+		if (by) causes.keep(c, by)
+		const loop = causes.loop(by, c)
+		// a run known to loop, marking itself again: not due again
+		if (loop && causing?.r.c === c && causing.r.loop) return
+		c.loop = loop
+		// a looping computation is due again only by a change from outside the loop
+		if (c.looping) {
 			if (loop) return
-			q.looping = false
+			c.looping = false
 		}
-		becomes(q, change.time!)
+		if (order.has(c)) return
+		order.set(c, t)
+		pass({ due: c, tick: t })
 	}
 
-	function becomes(q: Proc, time: number) {
-		if (order.has(q.id)) return
-		order.set(q.id, time)
-		q.since ??= time
-		pass({ due: q.id, by: time })
+	// these keys changed: what read them is due, at the next tick. said in a computation's run or
+	// a compute's set, that computation becomes their writer
+	function changed(keys: readonly unknown[]): number {
+		const t = ++tick
+		const by = causing
+		for (const key of keys) {
+			if (by?.writes && by.r.c.state === "alive") write(by.r.c, key)
+			const node = nodes.get(key)
+			if (node === undefined) continue
+			for (const l of tracker.readers(node)) mark(l.from.owner as Computation, t, by?.r.cause)
+		}
+		return t
+	}
+
+	function write(c: Computation, key: unknown) {
+		const was = writers.get(key)
+		if (was === c) return
+		was?.wrote.delete(key)
+		writers.set(key, c)
+		c.wrote.add(key)
 	}
 
 	// reads
 
-	// items of process nodes that are due: a compute's read stops, unless that process waits
-	// after it; otherwise their pending is written first
-	function reached(items: readonly { id: string; node?: unknown }[]): Proc[] {
-		const out: Proc[] = []
-		for (const it of items) {
-			const q = procs.get(it.id)
-			if (q && it.node && order.has(q.id) && !out.includes(q)) out.push(q)
+	// a key read in r: tracked. its writer due (and not waiting after r's), the run stops
+	function track(r: Ran, key: unknown) {
+		if (r.stopped) throw new Stop()
+		const c = r.c
+		if (c.state !== "alive") return
+		let node = nodes.get(key)
+		if (node === undefined) nodes.set(key, node = tracker.node(key))
+		tracker.track(c.node, node)
+		const w = writers.get(key)
+		if (w === undefined || w === c) return
+		r.values.add(w)
+		if (order.has(w) && !waitsAfter(w, c)) {
+			r.stopped = w
+			throw new Stop()
 		}
-		return out
 	}
 
-	function waitsAfter(q: Proc, r: Proc): boolean {
-		const seen = new Set<Proc>()
-		for (let x = q.after; x && !seen.has(x); x = x.after) {
-			if (x === r) return true
+	function waitsAfter(w: Computation, c: Computation): boolean {
+		const seen = new Set<Computation>()
+		for (let x = w.after; x && !seen.has(x); x = x.after) {
+			if (x === c) return true
 			seen.add(x)
 		}
 		return false
 	}
 
-	// a read: as ctx's process, tracked when given a depend; the hooks and the run see it
-	function reading(
-		op: string,
-		f: Read,
-		depend: Depend | undefined,
-		ctx?: Ctx,
-		args: { address?: Where; name?: string } = {},
-	): unknown {
-		let out = f(depend)
-		const items = (Array.isArray(out) ? out : []).filter((x) => typeof x === "object") as Item<
-			unknown,
-			Change
-		>[]
-		const due = op === "children" ? [] : reached(items)
-		if (due.length) {
-			if (ctx?.compute && ctx.run) {
-				for (const q of due) {
-					if (q !== ctx.p && !waitsAfter(q, ctx.p)) {
-						ctx.run.stopped = q
-						throw new Stop(q)
-					}
-				}
-			}
-			const before = clock.time
-			for (const q of due) pendingAt(q)
-			if (clock.time !== before) out = f(undefined)
-		}
-		if (ctx) {
-			const tracked = depend !== undefined
-			pass({ reads: ctx.p.id, ...ctx.base, op, items: Array.isArray(out) ? out : [], tracked })
-			const run = ctx.run
-			if (run) {
-				const entry: ReadEntry = {
-					op,
-					tracked,
-					times: records.times(Array.isArray(out) ? out : []),
-				}
-				if (args.address !== undefined) entry.address = args.address
-				if (args.name !== undefined) entry.name = args.name
-				run.reads.push(entry)
-				if (ctx.compute && op !== "children") {
-					for (const it of items) if (it.node && procs.has(it.id)) run.values.add(it.id)
-				}
-			}
-		}
-		return out
+	// the running computation read this key; outside a run, or in run(), nothing
+	function read(key: unknown) {
+		if (reading) track(reading, key)
 	}
-
-	// the process api: what each part of a process is given
-
-	const given = createProcessApi(g, {
-		reading,
-		request,
-		starter: (ctx, alive) => processes.starter(ctx, alive),
-		callerOf: (ctx) => handlers.callerOf(ctx),
-		cleaner: (p, alive) => processes.cleaner(p, alive),
-	})
-
-	// protect, as the programs side is given it: one check for each thing it does, never protect
-	// itself. each passes the item's route, then asks the one thing
-
-	function mayStart(
-		actor: unknown,
-		item: { id: string; route: Step[] },
-		name?: string,
-		id?: string,
-	) {
-		const place: Ask = { op: "place", args: { node: item.id, name, id } }
-		g.asking(actor, [...passing(item.route), place], "start")
-	}
-	function mayCall(actor: unknown, item: { id: string; route: Step[] }) {
-		const read: Ask = { op: "read", args: { node: item.id, object: "value" } }
-		g.asking(actor, [...passing(item.route), read], "call")
-	}
-
-	// processes: starting, parts, cleanups, killing
-
-	const processes = createProcesses({
-		g,
-		clock,
-		actor: hostActor,
-		site: options.site,
-		finder,
-		procs,
-		records,
-		mayStart,
-		cleanup: given.cleanup,
-		started: (p) => order.started(p),
-		due(p, k) {
-			p.kept.set(k.by.time!, k)
-			causes.keep(k)
-			becomes(p, k.by.time!)
-		},
-		mark,
-		ending(p) {
-			order.killing(p)
-			const w = p.waiting
-			if (w) {
-				waiting.splice(waiting.indexOf(w), 1)
-				p.waiting = undefined
-				pass({ ends: p.id, run: w.n, ended: "stopped" })
-			}
-		},
-		gone: (p) => order.gone(p),
-	})
-	const { start, replacing, part, partCall, settleChildren, cleanups } = processes
-
-	// code, when a program is a path
-
-	const code = createCode({ finder, view: given.view, part })
-
-	// handler calls
-
-	const handlers = createHandlers({
-		g,
-		pass,
-		mayCall,
-		given: given.handler,
-		part,
-		request,
-		busy: () => inRound || processes.active() > 0,
-		queue: (f) => void queue.push(f),
-	})
 
 	// runs
 
-	// a run's first half: code, if the program is a path; then a compute runs, and a setup or an
-	// effect's part waits for the second half
-	function first(p: Proc, picked: number) {
-		let rank = picked
-		const earlier = p.waiting
-		if (earlier) {
-			waiting.splice(waiting.indexOf(earlier), 1)
-			p.waiting = undefined
-			finish(earlier, "done", undefined, true)
-			rank = order.rank(p)
-		}
-		const markTime = order.at(p.id)!
-		order.delete(p.id)
-		order.waits(p, undefined)
-		const n = ++p.runs
-		const kept = [...p.kept.values()]
-		const caused = causes.run(p.id, kept)
-		const run: Run = {
-			p,
+	function first(c: Computation, rank: number) {
+		const mark = order.at(c)!
+		order.delete(c)
+		order.waits(c, undefined)
+		const n = ++c.runs
+		const given = [...c.kept]
+		const r: Ran = {
+			c,
 			n,
-			mark: markTime,
-			rank,
-			given: kept,
-			causes: caused,
-			reads: [],
-			wrote: [],
+			mark,
+			given,
+			cause: causes.run(c, given),
 			values: new Set(),
-			replaced: p.replaced,
-			loop: p.loop,
+			open: true,
+			loop: c.loop,
 		}
-		p.loop = undefined
-		pass({ starts: p.id, run: n, rank })
-		p.track.begin()
+		c.loop = undefined
+		// an effect acts on its latest run's value only
+		if (c.acting) unact(c)
+		pass({ starts: c, run: n, rank })
+		const before = c.kind === "compute" ? clean(c) : undefined
+		const own: Read = (key) => {
+			if (!r.open) throw new SchedulerError("stopped", "a read after its run returned")
+			track(r, key)
+		}
+		let out: Out
+		const was = reading
+		const wasCausing = causing
+		reading = r
+		causing = { r, writes: true }
+		tracker.begin(c.node)
 		try {
-			const ctx: Ctx = {
-				p,
-				agent: runAgent(p, n),
-				base: { run: n },
-				run,
-				compute: true,
-				causes: caused,
-			}
-			const found = code.find(ctx)
-			if (found === "stopped") return stop(run)
-			if (found === "pending") return finish(run, "pending")
-			if (found) return finish(run, "failed", found.failed)
-			const c = p.code!
-			if (typeof c === "function") {
-				if (p.setup && !p.replaced) return finish(run, "done")
-				run.part = "setup"
-				p.waiting = run
-				waiting.push(run)
-				return
-			}
-			// the compute
-			const cctx: Ctx = { ...ctx, call: partCall(p, "compute", run.replaced) }
-			let open = true
-			const out = part(p, () =>
-				(c.compute as (g: unknown) => unknown)(
-					given.compute(cctx, kept.map((k) => k.by), () => open),
-				))
-			open = false
-			if (run.stopped) return stop(run)
-			if ("error" in out) return finish(run, "failed", out.error)
-			if (out.value === PENDING) return finish(run, "pending")
-			if (isPromise(out.value)) return awaiting(run, out.value as Promise<unknown>, cctx)
-			computed(run, cctx, out.value)
+			out = { value: c.f(own) }
+		} catch (e) {
+			out = { error: e }
 		} finally {
-			p.track.end()
+			r.open = false
+			reading = was
+			causing = wasCausing
+			tracker.end(c.node)
 		}
+		if (c.state !== "alive") return
+		if (r.stopped) return stop(r)
+		if (before) return finish(r, "failed", { error: before.error })
+		if ("error" in out) return finish(r, "failed", { error: out.error })
+		if (out.value === PENDING) return finish(r, "pending")
+		if (isPromise(out.value)) return awaiting(r, out.value)
+		result(r, out.value)
 	}
 
-	// a compute's value: compared, written, its effect part waiting if new
-	function computed(run: Run, cctx: Ctx, v: unknown) {
-		const p = run.p
-		const c = p.code as { compute: Fn; effect?: Fn }
-		let value: unknown
-		try {
-			value = valueOf(v, false)
-		} catch (e) {
-			return finish(run, "failed", e)
-		}
-		settleChildren(cctx)
-		let equals: boolean
-		try {
-			equals = same(p, value)
-		} catch (e) {
-			return finish(run, "failed", e)
-		}
-		run.equal = equals
-		if (run.loop && !equals) {
-			run.value = value
-			return finish(run, "looping")
-		}
-		if (!equals) {
-			run.why = p.last === undefined ? "a first value" : whyNew(value, p.equal !== undefined)
-			records.value(p, value, shownStatus(run), run.n, run.causes)
-		}
-		if (c.effect && (!equals || run.replaced)) {
-			if (run.replaced) run.why = "replaced"
-			run.part = "effect"
-			run.value = value
-			p.waiting = run
-			waiting.push(run)
-			return
-		}
-		finish(run, "done")
+	function stop(r: Ran) {
+		order.waits(r.c, r.stopped)
+		order.set(r.c, r.mark)
+		finish(r, "stopped", { waits: r.stopped })
 	}
 
-	// an async compute: its run ends pending; the settling, unless rerun or killed since, a
-	// request finishing that run
-	function awaiting(run: Run, promise: Promise<unknown>, cctx: Ctx) {
-		const p = run.p
-		finish(run, "pending")
-		const settle = (f: () => void) => {
-			if (p.state !== "running" || p.runs !== run.n) return
+	// a result: equal to the last, it stops there. a compute's goes to set; an effect's waits
+	// for the acts, the latest one
+	function result(r: Ran, v: unknown) {
+		const c = r.c
+		let equal: boolean
+		try {
+			equal = c.last !== undefined && same(c.equal, v, c.last.value)
+		} catch (e) {
+			return finish(r, "failed", { error: e })
+		}
+		if (r.loop && !equal) return finish(r, "looping", { equal, through: r.loop })
+		if (c.kind === "effect") {
+			if (!equal) acts.push(c.acting = { r, value: v })
+			return finish(r, "done", { equal })
+		}
+		if (!equal) {
+			let failed: { error: unknown } | undefined
+			const was = reading
+			const wasCausing = causing
+			reading = undefined
+			causing = { r, writes: true }
 			try {
-				request(() => {
-					run.reads = run.reads.slice()
-					f()
-				})
+				;(c.set as (value: unknown) => void)(v)
 			} catch (e) {
-				// nobody awaits a settle: what escaped is the run's failure
-				try {
-					request(() => finish(run, "failed", e))
-				} catch { /* shows in the moments */ }
+				failed = { error: e }
+			} finally {
+				reading = was
+				causing = wasCausing
 			}
+			if (failed) return finish(r, "failed", { equal, error: failed.error })
+			c.last = { value: v }
 		}
-		promise.then(
-			(v) => settle(() => v === PENDING ? finish(run, "pending") : computed(run, cctx, v)),
-			(e) => settle(() => finish(run, "failed", e)),
-		)
+		finish(r, "done", { equal })
 	}
 
-	const shownStatus = (run: Run): Status => (run.shown ? { new: run.shown.value } : {})
+	function finish(r: Ran, ended: Ended, more: More = {}) {
+		const c = r.c
+		if (c.state === "alive") {
+			if (ended === "done") { for (const k of r.given) c.kept.delete(k) }
+			if (ended === "looping") c.looping = true
+			if (ended !== "stopped") order.sees(c, r.values)
+		}
+		const m: Moment = { ends: c, run: r.n, ended }
+		if (more.equal !== undefined) m.equal = more.equal
+		if ("error" in more) m.error = more.error
+		if (more.waits) m.waits = more.waits
+		if (more.through) m.through = more.through
+		pass(m)
+	}
 
-	// a run's second half: the cleanups before, then the setup, or the effect part
-	function second(run: Run) {
-		const p = run.p
-		waiting.splice(waiting.indexOf(run), 1)
-		p.waiting = undefined
-		if (p.state !== "running") return
-		const agent = runAgent(p, run.n)
-		let error = cleanups(p, false, run)
-		if (p.state !== "running") return finish(run, error === undefined ? "done" : "failed", error)
-		const ctx: Ctx = {
-			p,
-			agent,
-			base: { run: run.n },
-			run,
-			causes: run.causes,
-			call: partCall(p, run.part!, run.replaced),
+	// a promise: the run ends pending; its settling, unless run again or gone since, lands at the
+	// next pulse
+	function awaiting(r: Ran, p: PromiseLike<unknown>) {
+		finish(r, "pending")
+		const settle = (out: Out) => {
+			if (r.c.state !== "alive" || r.c.runs !== r.n) return
+			landed.push({ r, out })
+			wake?.()
 		}
-		if (run.part === "effect") ctx.cause = run.why
-		let alive = true
-		const c = p.code!
-		if (run.part === "effect") {
-			const effect = (c as { effect: Fn }).effect
-			const e = given.effect(ctx, () => alive, run.value, p.previous)
-			const out = part(p, () => (effect as (g: unknown) => unknown)(e))
-			alive = false
-			p.previous = { value: run.value }
-			if ("error" in out) error ??= out.error
-			else if (p.state === "running") settleChildren(ctx)
-			return finish(run, error === undefined ? "done" : "failed", error)
-		}
-		const setup = given.setup(ctx, () => alive)
-		const out = part(p, () => (c as (g: unknown) => unknown)(setup))
-		alive = false
-		p.setup = true
-		if ("error" in out) return finish(run, "failed", error ?? out.error)
-		let value: unknown
+		p.then((value) => settle({ value }), (error) => settle({ error }))
+	}
+
+	function land(r: Ran, out: Out) {
+		if (r.c.state !== "alive" || r.c.runs !== r.n) return
+		if ("error" in out) return finish(r, "failed", { error: out.error })
+		if (out.value === PENDING) return finish(r, "pending")
+		result(r, out.value)
+	}
+
+	// acts
+
+	function unact(c: Computation) {
+		acts.splice(acts.indexOf(c.acting!), 1)
+		c.acting = undefined
+	}
+
+	// what is under the effect goes, then it acts, with the value it acted on last
+	function act(a: Act) {
+		const c = a.r.c
+		c.acting = undefined
+		if (c.state !== "alive") return
+		let failed = clean(c)
+		const was = reading
+		const wasCausing = causing
+		reading = undefined
+		causing = { r: a.r, writes: false }
 		try {
-			value = valueOf(out.value, true)
+			;(c.act as (value: unknown, previous: unknown) => void)(a.value, c.last?.value)
 		} catch (e) {
-			return finish(run, "failed", error ?? e)
-		}
-		if (p.state !== "running") return finish(run, error === undefined ? "done" : "failed", error)
-		settleChildren(ctx)
-		const equals = same(p, value)
-		run.equal = equals
-		if (!equals) records.value(p, value, shownStatus(run), run.n, run.causes)
-		finish(run, error === undefined ? "done" : "failed", error)
-	}
-
-	function stop(run: Run) {
-		const p = run.p
-		order.waits(p, run.stopped!)
-		if (p.state === "running") order.set(p.id, run.mark)
-		finish(run, "stopped")
-	}
-
-	function finish(run: Run, ended: Ended, error?: unknown, keep = false) {
-		const p = run.p
-		const json = error === undefined ? undefined : errorOf(error)
-		if (p.state === "running") {
-			if (ended === "done" && !keep) {
-				for (const k of run.given) p.kept.delete(k.by.time!)
-				p.replaced = false
-			}
-			if (ended === "looping") p.looping = true
-			if (ended !== "stopped") order.sees(p, run.values)
-			if (ended !== "pending" && ended !== "stopped") p.since = order.at(p.id)
-			const status: Status = {}
-			if (ended === "pending" || ended === "stopped") status.pending = p.since ?? run.mark
-			if (ended === "failed") status.error = json
-			if (ended === "looping") {
-				const loop: { through: string[]; value?: unknown } = { through: run.loop ?? [p.id] }
-				if (!isLive(run.value)) loop.value = run.value
-				status.loop = loop
-			}
-			if (run.shown) status.new = run.shown.value
-			const changed = sameStatus(status, p.status) ? undefined : status
-			const made = records.run(p, run, ended, json, order.after(p), changed)
-			if (made !== undefined) runs.set(made, p)
-		}
-		const ends: Moment = { ends: p.id, run: run.n, ended }
-		if (ended === "stopped" && run.stopped) ends.waits = run.stopped.id
-		if (run.equal !== undefined) ends.equal = run.equal
-		if (json !== undefined) ends.error = json
-		pass(ends)
-	}
-
-	// requests and rounds
-
-	function round() {
-		inRound = true
-		try {
-			while (order.size()) {
-				const next = order.next()
-				first(next.p, next.rank)
-			}
-			while (waiting.length) second(waiting[0])
+			failed ??= { error: e }
 		} finally {
-			inRound = false
+			reading = was
+			causing = wasCausing
 		}
-		while (queue.length) queue.shift()!()
+		c.last = { value: a.value }
+		const m: Moment = { acts: c, run: a.r.n }
+		if (failed) m.error = failed.error
+		pass(m)
 	}
 
-	function request<T>(fn: () => T): T {
-		if (depth > 0 || processes.active() > 0) return fn()
-		depth++
-		let out: T | undefined
-		// a request that throws still runs what its changes made due; then its error goes on
-		let failed: { e: unknown } | undefined
+	// pulses
+
+	// rounds until nothing is due: the settled promises land, the due run by rank, the effects
+	// act. a pulse in a pulse does nothing
+	function pulse() {
+		if (pulsing) return
+		pulsing = true
 		try {
-			try {
-				out = fn()
-			} catch (e) {
-				failed = { e }
-			}
-			while (order.size() || queue.length || waiting.length) round()
-		} finally {
-			depth--
-			for (const id of order.ids()) {
-				const p = procs.get(id)
-				if (p?.state === "running") pendingAt(p)
-			}
-			causes.end(queue.length > 0)
-		}
-		if (failed) throw failed.e
-		return out as T
-	}
-
-	// the host's interface
-	const host = g.bound({
-		place: [],
-		agent: hostActor,
-		site: true,
-		writes: true,
-		alive: () => true,
-		reading: (op, f, args) => reading(op, f, undefined, undefined, args),
-		around: request,
-	})
-	return {
-		...host,
-		// INTERNAL AND DANGEROUS (WIRING.tex, In), for whoever made the scheduler to give to sync
-		// alone, never to hosts or programs: versions(node, object, list) throws away the object's
-		// versions and puts list in their place, local ones included; it is not a patch, so nothing
-		// checks that list follows from what was there; protect is not asked; it makes no record, so
-		// what it writes is never sent: with anything but what the histories say, the device silently
-		// differs from every other until a blop for that object is taken in
-		internal: {
-			versions: (...a: Parameters<typeof g.versions>) => request(() => g.versions(...a)),
-		},
-		get: g.get,
-		intro: (node: N) => request(() => g.intro(node)),
-		outro: (id: string) => request(() => outro(id)),
-		ephemeral: g.ephemeral,
-		start: (op: StartOp) => request(() => start(op)),
-		call(op: CallOp) {
-			let agent: unknown = op.actor ?? hostActor
-			if (op.person !== undefined || op.trusted !== undefined) {
-				const a = { ...normal(agent) }
-				if (op.person !== undefined) a.person = op.person
-				if (op.trusted !== undefined) a.trusted = op.trusted
-				agent = a
-			}
-			return handlers.call(op, { place: op.place ?? [], agent })
-		},
-		replace(op: { address: Address; place?: Place }) {
-			return request(() => {
-				const item = places.look(op.place ?? [], op.address).find((it) => it.node)
-				if (!item) throw new GraphError("nothing-there", "the address reaches nothing")
-				g.asking(
-					hostActor,
-					[...passing(item.route), edit("write", item.id, "value")],
-					"replace",
-				)
-				const p = procs.get(item.id)
-				if (!p || p.state !== "running") {
-					throw new GraphError("not-a-process", "the node is no process")
+			for (;;) {
+				while (landed.length) {
+					const { r, out } = landed.shift()!
+					land(r, out)
 				}
-				replacing(p, { actor: hostActor })
-			})
-		},
-		batch(fn: () => void) {
-			request(fn)
-		},
+				if (!order.size() && !acts.length) break
+				while (order.size()) {
+					const { p, rank } = order.next()
+					first(p, rank)
+				}
+				while (acts.length) act(acts.shift()!)
+			}
+		} finally {
+			pulsing = false
+			causes.end()
+			sweep()
+		}
+	}
+
+	// keys nobody reads, forgotten now and then
+	let swept = 0
+	function sweep() {
+		if (nodes.size < 2 * swept + 64) return
+		for (const [k, node] of nodes) if (node.first === null) nodes.delete(k)
+		swept = nodes.size
+	}
+
+	// once, untracked: a setup. its throw is the caller's
+	function run<T>(o: Owner, f: () => T): T {
+		if (o.state !== "alive") throw disposed()
+		const was = reading
+		reading = undefined
+		try {
+			return f()
+		} finally {
+			reading = was
+		}
+	}
+
+	return {
+		owner,
+		cleanup,
+		dispose,
+		run,
+		// tracked; a result not equal to the last goes to set. first runs at the next pulse. key:
+		// where set's results land, when the caller knows; then readers of it wait for this compute
+		// from the first pulse, rather than once it has written
+		compute: <T>(
+			o: Owner,
+			f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+			set: (value: T) => void,
+			equal?: Equal<T>,
+			key?: unknown,
+		): Computation => make("compute", o, f, set, equal as Equal<never>, key),
+		// tracked; a result not equal to the one it last acted on is acted on after the round's
+		// last run. first runs at the next pulse
+		effect: <T>(
+			o: Owner,
+			f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+			act: (value: T, previous: T | undefined) => void,
+			equal?: Equal<T>,
+		): Computation => make("effect", o, f, act, equal as Equal<never>),
+		read,
+		changed,
+		pulse,
+		// the scheduler's counter: each change and each new computation takes the next
+		tick: () => tick,
 	}
 }
 

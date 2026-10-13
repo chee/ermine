@@ -1,0 +1,32 @@
+{
+	"title": "a read after an await is refused: stopped; the run failed",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "wait": ["p", { "read": "a" }] },
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "resolve", "promise": "p", "value": null, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "pending" },
+					{ "ends": "c", "run": 1, "ended": "failed", "error": "stopped" }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } }
+	]
+}

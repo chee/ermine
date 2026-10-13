@@ -1,0 +1,1262 @@
+{
+	"title": "many patches to one string in one call: each walks from where the last left off, the same as one call each",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"s": ""
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "e"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "l"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "l"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "o"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": " "
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "w"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						7,
+						7
+					],
+					"value": "o"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						8,
+						8
+					],
+					"value": "r"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						9,
+						9
+					],
+					"value": "l"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						10
+					],
+					"value": "d"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "hello world"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						10
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						11
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						12,
+						12
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						12,
+						13
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						12
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						12
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						11
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						10
+					],
+					"value": "😀"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						19,
+						19
+					],
+					"value": "e"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "s"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						11
+					],
+					"value": "m"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						23,
+						23
+					],
+					"value": "z"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						22,
+						22
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						21,
+						22
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "s😀😀😀😀😀😀😀😀😀m😀😀😀😀😀😀😀😀😀eyz"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "ab😀c😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						6
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						5
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "ab"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "ab😀c😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀😀"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "x😀y"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "\ude00"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "!"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "?"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "x😀😀!y?"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "a\ud83db\ude00c😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "!"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						22,
+						22
+					],
+					"value": "e"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀!c😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀e😀"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": "x😀y😀z",
+				"b": "x😀y😀z"
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "!"
+				},
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "<"
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "?"
+				},
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						4,
+						5
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"a": "<xy😀",
+					"b": "x😀y!😀z?"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": "ab😀",
+				"b": "a😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						1,
+						2
+					]
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "!"
+				},
+				{
+					"path": [
+						"a"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "?"
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "0"
+				}
+			],
+			"expect": {
+				"value": {
+					"a": "a😀?",
+					"b": "0a😀!"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀yyyyy"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						41,
+						41
+					],
+					"value": "1"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						47,
+						47
+					],
+					"value": "2"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "3"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						41,
+						42
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						48,
+						48
+					],
+					"value": "4"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "3xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1yyyyy24"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "ab"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"value": "😀😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "c"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀b😀c"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀a",
+				"t": "b😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "1"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "2"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "3"
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "4"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						3,
+						4
+					]
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "a13",
+					"t": "24b"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀a"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "x"
+				},
+				{
+					"path": [
+						"u"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				},
+				{
+					"path": [
+						"u"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "y"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"move": {
+						"path": [
+							"u"
+						]
+					}
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀yaxz"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					],
+					"value": "d"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀😀d"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": ""
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						7,
+						7
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						8,
+						8
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						9,
+						9
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						10,
+						10
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						11,
+						11
+					],
+					"value": "😀"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "a😀😀a😀😀a😀😀a😀😀"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀end"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						22,
+						23
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						21,
+						22
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						20,
+						21
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						19,
+						20
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						19,
+						19
+					],
+					"value": "E"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀E"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						15,
+						15
+					],
+					"value": "a"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "b"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						16,
+						16
+					],
+					"value": "c"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "d"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						22,
+						22
+					],
+					"value": "e"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀😀😀bd😀😀😀😀😀😀😀😀😀😀😀😀ca😀😀😀e😀😀"
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"s": "\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx"
+			},
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						4
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "\ude00"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						30,
+						31
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						12,
+						12
+					],
+					"value": "\ud83d"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						13,
+						13
+					],
+					"value": "\ude00y"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						2
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						35,
+						35
+					],
+					"value": "z"
+				}
+			],
+			"expect": {
+				"value": {
+					"s": "😀\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀y😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀\ud83dx\ude00😀😀😀\ud83dx\ude00😀z\ud83dx"
+				}
+			}
+		}
+	]
+}

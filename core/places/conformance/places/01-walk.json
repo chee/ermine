@@ -1,0 +1,231 @@
+{
+	"title": "names walked through children; several at a name, in order, each through its own children",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{
+			"op": "get",
+			"address": [],
+			"expect": { "items": [{ "source": "s", "id": "R", "path": [] }], "reads": [] }
+		},
+		{
+			"op": "get",
+			"address": ["a"],
+			"expect": { "items": [], "reads": [{ "source": "s", "id": "R", "path": ["a"] }] }
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"a": [["s", "A"]],
+				"today": [["drag", "X"], ["s", "X"], ["s", "Y"]],
+				"empty": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"address": [],
+			"expect": { "items": [{ "source": "s", "id": "R", "path": [] }], "reads": [] }
+		},
+		{
+			"op": "get",
+			"address": ["a"],
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["nope"],
+			"expect": { "items": [], "reads": [{ "source": "s", "id": "R", "path": ["nope"] }] }
+		},
+		{
+			"op": "get",
+			"address": ["empty"],
+			"expect": { "items": [], "reads": [{ "source": "s", "id": "R", "path": ["empty"] }] }
+		},
+		{ "op": "children", "source": "s", "id": "A", "value": { "b": [["s", "B"]] }, "expect": {} },
+		{ "op": "children", "source": "s", "id": "B", "value": { "c": [["s", "C"]] }, "expect": {} },
+		{
+			"op": "get",
+			"address": ["a", "b", "c"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["a", "b", "nope"],
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["nope"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["a", "nope", "c"],
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["nope"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["today"],
+			"expect": {
+				"items": [
+					{ "source": "drag", "id": "X", "name": "today", "at": 0, "path": ["today"] },
+					{ "source": "s", "id": "X", "name": "today", "at": 1, "path": ["today"] },
+					{ "source": "s", "id": "Y", "name": "today", "at": 2, "path": ["today"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["today"] }]
+			}
+		},
+		{
+			"op": "children",
+			"source": "drag",
+			"id": "X",
+			"value": { "x": [["s", "S1"]], "y": [["s", "Y1"]] },
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "X",
+			"value": { "x": [["s", "S2"]], "y": [["s", "Y2"], ["s", "Y3"]] },
+			"expect": {}
+		},
+		{ "op": "children", "source": "s", "id": "Y", "value": { "x": [["s", "S3"]] }, "expect": {} },
+		{
+			"op": "get",
+			"address": ["today", "x"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "S1", "name": "x", "at": 0, "path": ["today", "x"] },
+					{ "source": "s", "id": "S2", "name": "x", "at": 0, "path": ["today", "x"] },
+					{ "source": "s", "id": "S3", "name": "x", "at": 0, "path": ["today", "x"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["today"] },
+					{ "source": "drag", "id": "X", "path": ["x"] },
+					{ "source": "s", "id": "X", "path": ["x"] },
+					{ "source": "s", "id": "Y", "path": ["x"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["today", "y"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "Y1", "name": "y", "at": 0, "path": ["today", "y"] },
+					{ "source": "s", "id": "Y2", "name": "y", "at": 0, "path": ["today", "y"] },
+					{ "source": "s", "id": "Y3", "name": "y", "at": 1, "path": ["today", "y"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["today"] },
+					{ "source": "drag", "id": "X", "path": ["y"] },
+					{ "source": "s", "id": "X", "path": ["y"] },
+					{ "source": "s", "id": "Y", "path": ["y"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["today", "z"],
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["today"] },
+					{ "source": "drag", "id": "X", "path": ["z"] },
+					{ "source": "s", "id": "X", "path": ["z"] },
+					{ "source": "s", "id": "Y", "path": ["z"] }
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "a": [["s", "A"], ["other", "A"]], "b": [["s", "A"]] },
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "other",
+			"id": "A",
+			"value": { "b": [["s", "B"]] },
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"address": ["a", "b"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] },
+					{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "other", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["a"],
+			"save": "a",
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] },
+					{ "source": "other", "id": "A", "name": "a", "at": 1, "path": ["a"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["b", "b"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["b", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["b"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["b"],
+			"from": ["s", "A"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["b"] }],
+				"reads": [{ "source": "s", "id": "A", "path": ["b"] }]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["b"],
+			"from": ["other", "A"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["b"] }],
+				"reads": [{ "source": "other", "id": "A", "path": ["b"] }]
+			}
+		}
+	]
+}

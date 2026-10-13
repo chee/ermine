@@ -14,18 +14,8 @@
 					"value": ">"
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": ">hello",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 5,
-							"had": true
-						}
-					}
-				]
+				"value": ">hello"
 			}
 		},
 		{
@@ -107,18 +97,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 5,
-							"had": true
-						}
-					}
-				]
+				"value": ""
 			}
 		},
 		{
@@ -245,18 +225,8 @@
 					"value": "x"
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "x",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
+				"value": "x"
 			}
 		},
 		{
@@ -330,20 +300,10 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"s": "nave 中文"
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 8,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -427,18 +387,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "e",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					}
-				]
+				"value": "e"
 			}
 		},
 		{
@@ -454,18 +404,8 @@
 					"value": "x"
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "axb😀c",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 5,
-							"had": true
-						}
-					}
-				]
+				"value": "axb😀c"
 			}
 		},
 		{
@@ -584,18 +524,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "👍",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					}
-				]
+				"value": "👍"
 			}
 		},
 		{
@@ -610,18 +540,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "️‍🌈",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					}
-				]
+				"value": "️‍🌈"
 			}
 		},
 		{
@@ -644,25 +564,8 @@
 					"value": "\u0000\u0000"
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "a\u0000\u0000b",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					}
-				]
+				"value": "a\u0000\u0000b"
 			}
 		},
 		{
@@ -729,32 +632,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": "xa😀😀cy",
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 5,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 6,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 7,
-							"had": true
-						}
-					}
-				]
+				"value": "xa😀😀cy"
 			}
 		},
 		{

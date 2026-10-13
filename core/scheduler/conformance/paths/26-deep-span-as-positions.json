@@ -1,0 +1,82 @@
+{
+	"title": "a deep read of a span as deep reads of its rows (from notify 20-deep-span)",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"rows",
+				1
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"rows",
+				2
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows",
+						1,
+						"v"
+					],
+					"value": 9
+				}
+			],
+			"expect": [
+				[
+					"rows",
+					1
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows",
+						3,
+						"v"
+					],
+					"value": 9
+				}
+			],
+			"expect": []
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows",
+						2
+					],
+					"value": {
+						"v": 5
+					}
+				}
+			],
+			"expect": [
+				[
+					"rows",
+					2
+				]
+			]
+		}
+	]
+}

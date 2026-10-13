@@ -9,15 +9,6 @@
 		},
 		{
 			"op": "apply",
-			"patches": [],
-			"list": true,
-			"each": true,
-			"expect": {
-				"facts": []
-			}
-		},
-		{
-			"op": "apply",
 			"patches": [
 				{
 					"path": [],
@@ -31,19 +22,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"m2"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 0,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -59,20 +40,10 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"a",
 					"b"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
 				]
 			}
 		},
@@ -90,19 +61,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"b"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 2,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -146,18 +107,7 @@
 				}
 			],
 			"list": true,
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "apply",
@@ -189,18 +139,7 @@
 				}
 			],
 			"list": true,
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "apply",
@@ -225,26 +164,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"b"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": true,
-							"length": 0,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -289,19 +211,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					1
-				],
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
 				]
 			}
 		},
@@ -377,7 +289,6 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"error": {
 					"code": "wrong-kind",
@@ -466,18 +377,7 @@
 				}
 			],
 			"list": true,
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "apply",
@@ -677,27 +577,11 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"c",
 					"a",
 					"b"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 2,
-							"had": true
-						},
-						"from": {
-							"list": true,
-							"length": 3,
-							"had": true
-						},
-						"size": 1
-					}
 				]
 			}
 		},
@@ -715,24 +599,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"a"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						},
-						"from": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -747,23 +616,7 @@
 				}
 			],
 			"list": true,
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						},
-						"from": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "apply",
@@ -782,26 +635,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					2
-				],
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -871,24 +707,9 @@
 				}
 			],
 			"list": true,
-			"each": true,
 			"expect": {
 				"value": [
 					"b"
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						},
-						"from": {
-							"list": true,
-							"length": 2,
-							"had": true
-						}
-					}
 				]
 			}
 		},

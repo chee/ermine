@@ -1,0 +1,55 @@
+{
+	"title": "any other splice marks from its start on; the number kids are found in order",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 9, "x"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 7] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "name"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [3, 3], "value": ["new"] }],
+			"expect": [["l", 5], ["l", 7], ["l", 9, "x"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [2, 4] }],
+			"expect": [["l", 2], ["l", 5], ["l", 7], ["l", 9, "x"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [7, 8], "value": ["a", "b", "c"] }],
+			"expect": [["l", 7], ["l", 9, "x"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [10, 10], "value": ["appended"] }],
+			"expect": []
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [0, 0], "value": ["front"] }],
+			"expect": [["l", 0], ["l", 2], ["l", 5], ["l", 7], ["l", 9, "x"]]
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["s"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["s", 1] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["s"], "range": [0, 1], "value": "x" }],
+			"expect": [["s"], ["s", 1]]
+		}
+	]
+}

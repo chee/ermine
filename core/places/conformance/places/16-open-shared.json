@@ -1,0 +1,473 @@
+{
+	"title": "open: places opened with a shared beginning never keep a stale step",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A"]] }, "expect": {} },
+		{ "op": "children", "source": "s", "id": "A", "value": { "b": [["s", "B"]] }, "expect": {} },
+		{ "op": "children", "source": "s", "id": "B", "value": { "c": [["s", "C"]] }, "expect": {} },
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A2",
+			"value": { "b": [["s", "B2"]] },
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "B2",
+			"value": { "c": [["s", "C2"]] },
+			"expect": {}
+		},
+		{ "op": "open", "address": ["a", "b"], "as": "short", "expect": {} },
+		{ "op": "open", "address": ["a", "b", "c"], "as": "long", "expect": {} },
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "short",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A2"]] }, "expect": {} },
+		{
+			"op": "items",
+			"open": "short",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B2", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "short",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B2", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] }
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A"]] }, "expect": {} },
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "short",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{ "op": "drop", "open": "short", "expect": {} },
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A2"]] }, "expect": {} },
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "open", "address": ["a", "b", "c"], "as": "twin", "expect": {} },
+		{
+			"op": "items",
+			"open": "twin",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "long",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "drop", "open": "long", "expect": {} },
+		{
+			"op": "items",
+			"open": "twin",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A"]] }, "expect": {} },
+		{
+			"op": "items",
+			"open": "twin",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "items", "open": "long", "skip": ["same"], "expect": { "items": [], "reads": [] } },
+		{ "op": "drop", "open": "twin", "expect": {} },
+		{ "op": "items", "open": "twin", "skip": ["same"], "expect": { "items": [], "reads": [] } },
+		{ "op": "open", "address": ["a", "b", "c"], "as": "fresh", "expect": {} },
+		{
+			"op": "items",
+			"open": "fresh",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "open", "address": ["a", "b"], "as": "t1", "expect": {} },
+		{ "op": "open", "address": ["a", "x"], "as": "t2", "expect": {} },
+		{ "op": "open", "address": ["a"], "as": "t0", "expect": {} },
+		{
+			"op": "items",
+			"open": "t0",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t1",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t2",
+			"skip": ["same"],
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["x"] }
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": ["s", "A"],
+			"name": "x",
+			"entry": ["s", "X"],
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": { "b": [["s", "B"]], "x": [["s", "X"]] },
+						"time": 2,
+						"patches": [{ "path": ["x"], "value": [["s", "X"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t2",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "X", "name": "x", "at": 0, "path": ["a", "x"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["x"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t1",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t0",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{ "op": "drop", "open": "t0", "expect": {} },
+		{
+			"op": "place",
+			"parent": ["s", "A"],
+			"name": "x",
+			"entry": ["s", "X2"],
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": { "b": [["s", "B"]], "x": [["s", "X"], ["s", "X2"]] },
+						"time": 3,
+						"patches": [{ "path": ["x"], "range": [1, 1], "value": [["s", "X2"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t2",
+			"skip": ["same"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "X", "name": "x", "at": 0, "path": ["a", "x"] },
+					{ "source": "s", "id": "X2", "name": "x", "at": 1, "path": ["a", "x"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["x"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "t1",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{ "op": "drop", "open": "t1", "expect": {} },
+		{ "op": "drop", "open": "t2", "expect": {} },
+		{
+			"op": "items",
+			"open": "fresh",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "open", "address": ["a", "b"], "as": "p", "expect": {} },
+		{ "op": "open", "address": ["a", "b", "c"], "as": "q", "expect": {} },
+		{ "op": "drop", "open": "p", "expect": {} },
+		{
+			"op": "items",
+			"open": "q",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "q",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "drop", "open": "q", "expect": {} },
+		{ "op": "open", "address": ["a", "b", "c"], "as": "after", "expect": {} },
+		{
+			"op": "items",
+			"open": "after",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "open", "address": ["a", ".", "b", "c"], "as": "dotted", "expect": {} },
+		{
+			"op": "items",
+			"open": "dotted",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["c"] }
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A2"]] }, "expect": {} },
+		{
+			"op": "items",
+			"open": "dotted",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "after",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "fresh",
+			"skip": ["same"],
+			"expect": {
+				"items": [{ "source": "s", "id": "C2", "name": "c", "at": 0, "path": ["a", "b", "c"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A2", "path": ["b"] },
+					{ "source": "s", "id": "B2", "path": ["c"] }
+				]
+			}
+		}
+	]
+}

@@ -258,12 +258,22 @@ Deno.test("places: move, within a name, to another name, to another parent", () 
 	assertEquals(code(() => p.move([R, "u"], 0, [R, "/"], h)), "not-a-name")
 })
 
-Deno.test("places: each told of every patch a write landed, with the node's source and id", () => {
-	const told: [Key, Key, unknown][] = []
-	const { p, kids } = world({ each: (source, id, patch) => told.push([source, id, patch]) })
-	kids("stored", "R", { t: [["a", "X"]] })
-	p.place([["stored", "R"], "t"], ["b", "X"], h)
-	assertEquals(told, [["stored", "R", { path: ["t"], range: [1, 1], value: [["b", "X"]] }]])
+Deno.test("places: a write gives back the nodes it changed, in order; none when nothing changed", () => {
+	const { p, kids } = world()
+	const r = kids("stored", "R", { t: [["a", "X"], ["c", "X"]] })
+	const d = kids("drag", "D", {})
+	const ids = (cs: { source: Key; id: Key }[]) => cs.map((c) => [c.source, c.id])
+	const placed = p.place([["stored", "R"], "t"], ["b", "X"], h)
+	assertEquals(ids(placed), [["stored", "R"]])
+	assertStrictEquals(placed[0].node, r)
+	assertEquals(r.change.op?.patches, [{ path: ["t"], range: [2, 2], value: [["b", "X"]] }])
+	// across parents: the one it went into first
+	const moved = p.move([["stored", "R"], "t"], 0, [["drag", "D"], "u"], h)
+	assertEquals(ids(moved), [["drag", "D"], ["stored", "R"]])
+	assertStrictEquals(moved[0].node, d)
+	assertStrictEquals(moved[1].node, r)
+	assertEquals(p.order([["stored", "R"], "t"], 0, 0, h), [])
+	assertEquals(p.rename([["stored", "R"], "t"], "t", h), [])
 })
 
 Deno.test("places: open: the same list while nothing changed; walked again from what changed", () => {

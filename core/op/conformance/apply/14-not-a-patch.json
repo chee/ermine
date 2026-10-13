@@ -913,7 +913,6 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"error": {
 					"code": "not-a-patch",

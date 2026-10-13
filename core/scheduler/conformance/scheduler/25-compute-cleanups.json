@@ -1,0 +1,23 @@
+{
+	"title": "a compute is an owner: its cleanups run before its next run, and when it goes",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": {
+				"do": [{ "cleanup": ["c", { "log": "undo" }] }, { "log": ["run", { "read": "a" }] }]
+			},
+			"to": "c"
+		},
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["run", 1]] } },
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": ["undo", ["run", 2]] } },
+		{ "op": "dispose", "owner": "c", "expect": {} },
+		{ "op": "log", "expect": { "log": ["undo"] } }
+	]
+}

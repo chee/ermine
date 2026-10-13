@@ -1,0 +1,2852 @@
+{
+	"title": "place: at the end, at an index, the front, a new name, a node with no value or a value that is no map",
+	"steps": [
+		{
+			"op": "make",
+			"root": [
+				"s",
+				"R"
+			],
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"A"
+			],
+			"expect": {
+				"error": "nothing-there",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"t": [
+					[
+						"s",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"B"
+			],
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 2,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									1,
+									1
+								],
+								"value": [
+									[
+										"s",
+										"B"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "A",
+						"name": "t",
+						"at": 0,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "B",
+						"name": "t",
+						"at": 1,
+						"path": [
+							"t"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"drag",
+				"A"
+			],
+			"index": 0,
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 3,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": [
+									[
+										"drag",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "A",
+						"name": "t",
+						"at": 0,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"name": "t",
+						"at": 1,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "B",
+						"name": "t",
+						"at": 2,
+						"path": [
+							"t"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"C"
+			],
+			"index": 2,
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 4,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									2,
+									2
+								],
+								"value": [
+									[
+										"s",
+										"C"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "A",
+						"name": "t",
+						"at": 0,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"name": "t",
+						"at": 1,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"name": "t",
+						"at": 2,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "B",
+						"name": "t",
+						"at": 3,
+						"path": [
+							"t"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"D"
+			],
+			"index": 4,
+			"time": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								]
+							]
+						},
+						"time": 5,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									4,
+									4
+								],
+								"value": [
+									[
+										"s",
+										"D"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"D"
+			],
+			"index": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									5,
+									5
+								],
+								"value": [
+									[
+										"s",
+										"D"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"D"
+			],
+			"index": -1,
+			"expect": {
+				"error": "range",
+				"at": "t",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"D"
+			],
+			"index": 99,
+			"expect": {
+				"error": "range",
+				"at": "t",
+				"changes": []
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": {
+				"node": {
+					"value": {
+						"t": [
+							[
+								"drag",
+								"A"
+							],
+							[
+								"s",
+								"A"
+							],
+							[
+								"s",
+								"C"
+							],
+							[
+								"s",
+								"B"
+							],
+							[
+								"s",
+								"D"
+							],
+							[
+								"s",
+								"D"
+							]
+						]
+					},
+					"time": 1
+				}
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "new",
+			"entry": [
+				"s",
+				"N"
+			],
+			"time": 6,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							]
+						},
+						"time": 6,
+						"patches": [
+							{
+								"path": [
+									"new"
+								],
+								"value": [
+									[
+										"s",
+										"N"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "new2",
+			"entry": [
+				"s",
+				"N"
+			],
+			"index": 0,
+			"time": 7,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							]
+						},
+						"time": 7,
+						"patches": [
+							{
+								"path": [
+									"new2"
+								],
+								"value": [
+									[
+										"s",
+										"N"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "new3",
+			"entry": [
+				"s",
+				"N"
+			],
+			"index": 1,
+			"expect": {
+				"error": "range",
+				"at": "new3",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "new3",
+			"entry": [
+				"s",
+				"N"
+			],
+			"index": -1,
+			"expect": {
+				"error": "range",
+				"at": "new3",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "",
+			"entry": [
+				"s",
+				"Empty"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"": [
+								[
+									"s",
+									"Empty"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									""
+								],
+								"value": [
+									[
+										"s",
+										"Empty"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"new"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "N",
+						"name": "new",
+						"at": 0,
+						"path": [
+							"new"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"new"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"new2"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "N",
+						"name": "new2",
+						"at": 0,
+						"path": [
+							"new2"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"new2"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				""
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "Empty",
+						"name": "",
+						"at": 0,
+						"path": [
+							""
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							""
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"drag",
+				"A"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"drag",
+									"A"
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"": [
+								[
+									"s",
+									"Empty"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									6,
+									6
+								],
+								"value": [
+									[
+										"drag",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				{
+					"symbol": "s"
+				},
+				{
+					"symbol": "i"
+				}
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"drag",
+									"A"
+								],
+								[
+									{
+										"symbol": "s"
+									},
+									{
+										"symbol": "i"
+									}
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"": [
+								[
+									"s",
+									"Empty"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									7,
+									7
+								],
+								"value": [
+									[
+										{
+											"symbol": "s"
+										},
+										{
+											"symbol": "i"
+										}
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "A",
+						"name": "t",
+						"at": 0,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"name": "t",
+						"at": 1,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"name": "t",
+						"at": 2,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "B",
+						"name": "t",
+						"at": 3,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "D",
+						"name": "t",
+						"at": 4,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "D",
+						"name": "t",
+						"at": 5,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "drag",
+						"id": "A",
+						"name": "t",
+						"at": 6,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": {
+							"symbol": "s"
+						},
+						"id": {
+							"symbol": "i"
+						},
+						"name": "t",
+						"at": 7,
+						"path": [
+							"t"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": ".",
+			"entry": [
+				"s",
+				"N"
+			],
+			"expect": {
+				"error": "not-a-name",
+				"at": ".",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "..",
+			"entry": [
+				"s",
+				"N"
+			],
+			"expect": {
+				"error": "not-a-name",
+				"at": "..",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "/",
+			"entry": [
+				"s",
+				"N"
+			],
+			"expect": {
+				"error": "not-a-name",
+				"at": "/",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "...",
+			"entry": [
+				"s",
+				"N"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"drag",
+									"A"
+								],
+								[
+									{
+										"symbol": "s"
+									},
+									{
+										"symbol": "i"
+									}
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"": [
+								[
+									"s",
+									"Empty"
+								]
+							],
+							"...": [
+								[
+									"s",
+									"N"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"..."
+								],
+								"value": [
+									[
+										"s",
+										"N"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "./",
+			"entry": [
+				"s",
+				"N"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								],
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"s",
+									"D"
+								],
+								[
+									"drag",
+									"A"
+								],
+								[
+									{
+										"symbol": "s"
+									},
+									{
+										"symbol": "i"
+									}
+								]
+							],
+							"new": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"new2": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"": [
+								[
+									"s",
+									"Empty"
+								]
+							],
+							"...": [
+								[
+									"s",
+									"N"
+								]
+							],
+							"./": [
+								[
+									"s",
+									"N"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"./"
+								],
+								"value": [
+									[
+										"s",
+										"N"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": {
+				"node": {
+					"value": {
+						"t": [
+							[
+								"drag",
+								"A"
+							],
+							[
+								"s",
+								"A"
+							],
+							[
+								"s",
+								"C"
+							],
+							[
+								"s",
+								"B"
+							],
+							[
+								"s",
+								"D"
+							],
+							[
+								"s",
+								"D"
+							],
+							[
+								"drag",
+								"A"
+							],
+							[
+								{
+									"symbol": "s"
+								},
+								{
+									"symbol": "i"
+								}
+							]
+						],
+						"new": [
+							[
+								"s",
+								"N"
+							]
+						],
+						"new2": [
+							[
+								"s",
+								"N"
+							]
+						],
+						"": [
+							[
+								"s",
+								"Empty"
+							]
+						],
+						"...": [
+							[
+								"s",
+								"N"
+							]
+						],
+						"./": [
+							[
+								"s",
+								"N"
+							]
+						]
+					},
+					"time": 1
+				}
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"nobody"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"A"
+			],
+			"expect": {
+				"error": "nothing-there",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"nobody"
+			],
+			"name": ".",
+			"entry": [
+				"s",
+				"A"
+			],
+			"expect": {
+				"error": "not-a-name",
+				"at": ".",
+				"changes": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				{
+					"root": true
+				},
+				"R"
+			],
+			"name": "t",
+			"entry": [
+				"s",
+				"A"
+			],
+			"expect": {
+				"error": "nothing-there",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"E"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 8,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "E",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 8,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"E"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"index": 0,
+			"time": 9,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "E",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 9,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "E",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"E"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"index": 1,
+			"expect": {
+				"error": "range",
+				"at": "a",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "L",
+			"value": [
+				1,
+				2
+			],
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"L"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 10,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "L",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 10,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "T",
+			"value": "text",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"T"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 11,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "T",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 11,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "Z",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"Z"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 12,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "Z",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 12,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "N5",
+			"value": 5,
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"N5"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 13,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "N5",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 13,
+						"patches": [
+							{
+								"path": [],
+								"value": {}
+							},
+							{
+								"path": [
+									"a"
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "W",
+			"value": {
+				"a": 5
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"W"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 14,
+			"expect": {
+				"error": "already-there",
+				"at": "a",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "W",
+			"value": {
+				"a": 5
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"W"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"index": 0,
+			"expect": {
+				"error": "already-there",
+				"at": "a",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "W",
+			"value": {
+				"a": 5
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"W"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"index": 1,
+			"expect": {
+				"error": "already-there",
+				"at": "a",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "V",
+			"value": {
+				"a": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"V"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"time": 15,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "V",
+						"value": {
+							"a": [
+								[
+									"s",
+									"A"
+								]
+							]
+						},
+						"time": 15,
+						"patches": [
+							{
+								"path": [
+									"a"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": [
+									[
+										"s",
+										"A"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "V",
+			"value": {
+				"a": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"V"
+			],
+			"name": "a",
+			"entry": [
+				"s",
+				"A"
+			],
+			"index": 1,
+			"expect": {
+				"error": "range",
+				"at": "a",
+				"changes": []
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"t": [
+					[
+						"drag",
+						"A"
+					],
+					[
+						"s",
+						"A"
+					],
+					[
+						"s",
+						"C"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "drag",
+			"id": "A",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t"
+			],
+			"save": "t",
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "A",
+						"name": "t",
+						"at": 0,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"name": "t",
+						"at": 1,
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"name": "t",
+						"at": 2,
+						"path": [
+							"t"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": {
+				"item": "t"
+			},
+			"name": "kid",
+			"entry": [
+				"s",
+				"K"
+			],
+			"time": 16,
+			"expect": {
+				"changes": [
+					{
+						"source": "drag",
+						"id": "A",
+						"value": {
+							"kid": [
+								[
+									"s",
+									"K"
+								]
+							]
+						},
+						"time": 16,
+						"patches": [
+							{
+								"path": [
+									"kid"
+								],
+								"value": [
+									[
+										"s",
+										"K"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": {
+				"item": "t",
+				"at": 1
+			},
+			"name": "kid",
+			"entry": [
+				"s",
+				"K2"
+			],
+			"time": 17,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"kid": [
+								[
+									"s",
+									"K2"
+								]
+							]
+						},
+						"time": 17,
+						"patches": [
+							{
+								"path": [
+									"kid"
+								],
+								"value": [
+									[
+										"s",
+										"K2"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": {
+				"item": "t",
+				"at": 2
+			},
+			"name": "kid",
+			"entry": [
+				"s",
+				"K3"
+			],
+			"expect": {
+				"error": "nothing-there",
+				"changes": []
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t",
+				"kid"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K2",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "drag",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"path": [
+							"kid"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": {
+				"item": "t"
+			},
+			"name": "kid",
+			"entry": [
+				"s",
+				"K"
+			],
+			"index": 0,
+			"time": 18,
+			"expect": {
+				"changes": [
+					{
+						"source": "drag",
+						"id": "A",
+						"value": {
+							"kid": [
+								[
+									"s",
+									"K"
+								],
+								[
+									"s",
+									"K"
+								]
+							]
+						},
+						"time": 18,
+						"patches": [
+							{
+								"path": [
+									"kid"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": [
+									[
+										"s",
+										"K"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "drag",
+			"id": "A",
+			"expect": {
+				"node": {
+					"value": {
+						"kid": [
+							[
+								"s",
+								"K"
+							],
+							[
+								"s",
+								"K"
+							]
+						]
+					},
+					"time": 18
+				}
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "A",
+			"expect": {
+				"node": {
+					"value": {
+						"kid": [
+							[
+								"s",
+								"K2"
+							]
+						]
+					},
+					"time": 17
+				}
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "kid",
+			"entry": [
+				"s",
+				"K4"
+			],
+			"time": 19,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"kid": [
+								[
+									"s",
+									"K2"
+								],
+								[
+									"s",
+									"K4"
+								]
+							]
+						},
+						"time": 19,
+						"patches": [
+							{
+								"path": [
+									"kid"
+								],
+								"range": [
+									1,
+									1
+								],
+								"value": [
+									[
+										"s",
+										"K4"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t",
+				"kid"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 1,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K2",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K4",
+						"name": "kid",
+						"at": 1,
+						"path": [
+							"t",
+							"kid"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "drag",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"path": [
+							"kid"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": {
+				"item": "t"
+			},
+			"name": "kid",
+			"entry": [
+				"s",
+				"K"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "drag",
+						"id": "A",
+						"value": {
+							"kid": [
+								[
+									"s",
+									"K"
+								],
+								[
+									"s",
+									"K"
+								],
+								[
+									"s",
+									"K"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"kid"
+								],
+								"range": [
+									2,
+									2
+								],
+								"value": [
+									[
+										"s",
+										"K"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"t",
+				"kid"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 1,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K",
+						"name": "kid",
+						"at": 2,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K2",
+						"name": "kid",
+						"at": 0,
+						"path": [
+							"t",
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "K4",
+						"name": "kid",
+						"at": 1,
+						"path": [
+							"t",
+							"kid"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"t"
+						]
+					},
+					{
+						"source": "drag",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"kid"
+						]
+					},
+					{
+						"source": "s",
+						"id": "C",
+						"path": [
+							"kid"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "same",
+			"entry": [
+				"s",
+				"X"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								]
+							],
+							"same": [
+								[
+									"s",
+									"X"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"same"
+								],
+								"value": [
+									[
+										"s",
+										"X"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "same",
+			"entry": [
+				"s",
+				"X"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {
+							"t": [
+								[
+									"drag",
+									"A"
+								],
+								[
+									"s",
+									"A"
+								],
+								[
+									"s",
+									"C"
+								]
+							],
+							"same": [
+								[
+									"s",
+									"X"
+								],
+								[
+									"s",
+									"X"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"same"
+								],
+								"range": [
+									1,
+									1
+								],
+								"value": [
+									[
+										"s",
+										"X"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "X",
+						"name": "same",
+						"at": 0,
+						"path": [
+							"same"
+						]
+					},
+					{
+						"source": "s",
+						"id": "X",
+						"name": "same",
+						"at": 1,
+						"path": [
+							"same"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"same"
+						]
+					}
+				]
+			}
+		}
+	]
+}

@@ -1499,7 +1499,6 @@
 					"value": 1
 				}
 			],
-			"each": true,
 			"expect": {
 				"error": {
 					"code": "wrong-kind",

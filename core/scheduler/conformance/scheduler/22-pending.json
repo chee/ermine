@@ -1,0 +1,38 @@
+{
+	"title": "a compute returning pending: its run ends pending, nothing given to set",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "if": [{ "eq": [{ "read": "a" }, null] }, { "pending": null }, { "read": "a" }] },
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 1 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "pending" }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,1273 @@
+{
+	"title": "open: the same list while nothing changed; walked again after changes; drop",
+	"steps": [
+		{
+			"op": "make",
+			"root": [
+				"s",
+				"R"
+			],
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"s",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"B"
+					]
+				],
+				"c": [
+					[
+						"s",
+						"C"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"address": [
+				"a",
+				"b"
+			],
+			"as": "h",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "z",
+			"entry": [
+				"s",
+				"Z"
+			],
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"b": [
+								[
+									"s",
+									"B"
+								]
+							],
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							]
+						},
+						"time": 2,
+						"patches": [
+							{
+								"path": [
+									"z"
+								],
+								"value": [
+									[
+										"s",
+										"Z"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "Q",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"Q"
+			],
+			"name": "x",
+			"entry": [
+				"s",
+				"X"
+			],
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "Q",
+						"value": {
+							"x": [
+								[
+									"s",
+									"X"
+								]
+							]
+						},
+						"time": 3,
+						"patches": [
+							{
+								"path": [
+									"x"
+								],
+								"value": [
+									[
+										"s",
+										"X"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "z",
+			"entry": [
+				"s",
+				"Z"
+			],
+			"index": 9,
+			"expect": {
+				"error": "range",
+				"at": "z",
+				"changes": []
+			}
+		},
+		{
+			"op": "order",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "z",
+			"from": 0,
+			"to": 0,
+			"expect": {
+				"changes": []
+			}
+		},
+		{
+			"op": "rename",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "z",
+			"to": "z",
+			"expect": {
+				"changes": []
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "rename",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "b",
+			"to": "bb",
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							],
+							"bb": [
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 4,
+						"patches": [
+							{
+								"path": [
+									"bb"
+								],
+								"move": {
+									"path": [
+										"b"
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "b",
+			"entry": [
+				"drag",
+				"B2"
+			],
+			"time": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							],
+							"bb": [
+								[
+									"s",
+									"B"
+								]
+							],
+							"b": [
+								[
+									"drag",
+									"B2"
+								]
+							]
+						},
+						"time": 5,
+						"patches": [
+							{
+								"path": [
+									"b"
+								],
+								"value": [
+									[
+										"drag",
+										"B2"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "B2",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "drag",
+						"id": "B2",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "rename",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "bb",
+			"to": "b2",
+			"time": 6,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							],
+							"b": [
+								[
+									"drag",
+									"B2"
+								]
+							],
+							"b2": [
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 6,
+						"patches": [
+							{
+								"path": [
+									"b2"
+								],
+								"move": {
+									"path": [
+										"bb"
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "b",
+			"to": "b3",
+			"time": 7,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							],
+							"b2": [
+								[
+									"s",
+									"B"
+								]
+							],
+							"b3": [
+								[
+									"drag",
+									"B2"
+								]
+							]
+						},
+						"time": 7,
+						"patches": [
+							{
+								"path": [
+									"b3"
+								],
+								"move": {
+									"path": [
+										"b"
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "b2",
+			"to": "b",
+			"time": 8,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"c": [
+								[
+									"s",
+									"C"
+								]
+							],
+							"z": [
+								[
+									"s",
+									"Z"
+								]
+							],
+							"b3": [
+								[
+									"drag",
+									"B2"
+								]
+							],
+							"b": [
+								[
+									"s",
+									"B"
+								]
+							]
+						},
+						"time": 8,
+						"patches": [
+							{
+								"path": [
+									"b"
+								],
+								"move": {
+									"path": [
+										"b2"
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"B"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "nothing",
+			"source": "s",
+			"id": "A",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"B"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			}
+		},
+		{
+			"op": "nothing",
+			"source": "s",
+			"id": "R",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"s",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": false
+			}
+		},
+		{
+			"op": "drop",
+			"open": "h",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [],
+				"reads": []
+			}
+		},
+		{
+			"op": "drop",
+			"open": "h",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [],
+				"reads": []
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "b",
+			"entry": [
+				"s",
+				"B9"
+			],
+			"time": 9,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"b": [
+								[
+									"s",
+									"B"
+								],
+								[
+									"s",
+									"B9"
+								]
+							]
+						},
+						"time": 9,
+						"patches": [
+							{
+								"path": [
+									"b"
+								],
+								"range": [
+									1,
+									1
+								],
+								"value": [
+									[
+										"s",
+										"B9"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [],
+				"reads": []
+			}
+		}
+	]
+}

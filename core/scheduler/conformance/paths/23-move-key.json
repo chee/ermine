@@ -1,0 +1,76 @@
+{
+	"title": "a key moved: readers under the take, under the landing and of the map are marked, a sibling not (from notify 10-move-key)",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"meta",
+				"a",
+				"x"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"meta"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"meta",
+				"b"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"meta",
+				"c",
+				"x"
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"meta",
+						"c"
+					],
+					"move": {
+						"path": [
+							"meta",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": [
+				[
+					"meta",
+					"a",
+					"x"
+				],
+				[
+					"meta"
+				],
+				[
+					"meta",
+					"c",
+					"x"
+				]
+			]
+		}
+	]
+}

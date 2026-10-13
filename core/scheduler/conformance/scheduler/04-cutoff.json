@@ -1,0 +1,48 @@
+{
+	"title": "a result equal to the last stops there: nothing given to set, nothing after it runs",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "p",
+			"owner": "o",
+			"f": { "mod": [{ "read": "x" }, 2] },
+			"to": "p"
+		},
+		{
+			"op": "compute",
+			"name": "q",
+			"owner": "o",
+			"f": { "sum": [{ "read": "p" }, 10] },
+			"to": "q"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "q" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 11]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "x": 3 }, "expect": { "tick": 7 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "p", "tick": 7 },
+					{ "starts": "p", "run": 2, "rank": 0 },
+					{ "ends": "p", "run": 2, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{ "op": "log", "expect": { "log": [] } },
+		{ "op": "write", "values": { "x": 4 }, "expect": { "tick": 8 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 10]] } },
+		{ "op": "get", "key": "q", "expect": { "value": 10 } }
+	]
+}

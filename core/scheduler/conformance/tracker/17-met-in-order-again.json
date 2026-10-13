@@ -1,0 +1,30 @@
+{
+	"title": "a spot read out of order, then met in order again: one link, the old one goes, the rest still confirmed",
+	"steps": [
+		{ "op": "begin", "from": "r" },
+		{ "op": "track", "from": "r", "to": "a" },
+		{ "op": "track", "from": "r", "to": "b" },
+		{ "op": "track", "from": "r", "to": "c" },
+		{ "op": "end", "from": "r" },
+		{ "op": "begin", "from": "s" },
+		{ "op": "track", "from": "s", "to": "b" },
+		{ "op": "end", "from": "s" },
+		{ "op": "begin", "from": "r" },
+		{ "op": "track", "from": "r", "to": "b" },
+		{ "op": "readers", "of": "b", "expect": ["r", "s", "r"] },
+		{ "op": "track", "from": "r", "to": "a" },
+		{ "op": "track", "from": "r", "to": "b" },
+		{ "op": "readers", "of": "b", "expect": ["s", "r"] },
+		{ "op": "reads", "of": "r", "expect": ["b", "a", "c"] },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "c" },
+		{ "op": "end", "from": "q" },
+		{ "op": "track", "from": "r", "to": "c" },
+		{ "op": "track", "from": "r", "to": "b" },
+		{ "op": "end", "from": "r" },
+		{ "op": "reads", "of": "r", "expect": ["b", "a", "c"] },
+		{ "op": "readers", "of": "a", "expect": ["r"] },
+		{ "op": "readers", "of": "b", "expect": ["s", "r"] },
+		{ "op": "readers", "of": "c", "expect": ["r", "q"] }
+	]
+}

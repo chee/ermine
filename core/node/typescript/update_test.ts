@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import apply, { ApplyError, type Facts, type Patch } from "@ermine/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import createNode, { type ChangeHeader, type Node } from "./node.ts"
 import update from "./update.ts"
 
@@ -70,38 +70,6 @@ Deno.test("update: invalid, nothing changes", () => {
 	assertStrictEquals(n.value, value)
 	assertStrictEquals(n.change, change)
 	assertEquals(value, { s: "ab", l: [1], m: {} })
-})
-
-Deno.test("update: each hears each patch once the value is in, with its facts", () => {
-	const n = make({ t: "ab", l: [1] })
-	const told: [Facts, unknown][] = []
-	update(
-		n,
-		[
-			{ path: ["t"], range: [2, 2], value: "c" },
-			{ path: ["l", 0], value: 2 },
-			{ path: ["t"], range: [0, 1] },
-		],
-		by,
-		{ each: (_p, f) => told.push([f, n.value]) },
-	)
-	const end = { t: "bc", l: [2] }
-	assertEquals(told, [
-		[{ place: { list: false, length: 2, had: true } }, end],
-		[{ place: { list: true, length: 1, had: true } }, end],
-		[{ place: { list: false, length: 3, had: true } }, end],
-	])
-})
-
-Deno.test("update: invalid, each never hears", () => {
-	const n = make({ t: "ab" })
-	let told = 0
-	code(() =>
-		update(n, [{ path: ["t"], range: [0, 0], value: "x" }, { path: ["q", 0] }], by, {
-			each: () => told++,
-		})
-	)
-	assertEquals(told, 0)
 })
 
 Deno.test("update: list, nothing there starts as [], and a list left empty is none", () => {

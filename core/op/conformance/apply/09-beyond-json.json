@@ -387,7 +387,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"n": {
@@ -426,22 +425,7 @@
 							}
 						}
 					]
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						},
-						"from": {
-							"list": false,
-							"length": 0,
-							"had": true
-						},
-						"size": 1
-					}
-				]
+				}
 			}
 		},
 		{

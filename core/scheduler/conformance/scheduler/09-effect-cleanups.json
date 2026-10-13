@@ -1,0 +1,40 @@
+{
+	"title": "an effect is an owner: its cleanups run before its next act, and when it goes",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "x" },
+			"act": {
+				"do": [
+					{ "log": ["act", { "given": "value" }] },
+					{ "cleanup": ["e", { "log": ["undo", { "given": "value" }] }] }
+				]
+			}
+		},
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 1]] } },
+		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["undo", 1], ["act", 2]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "e", "tick": 4 },
+					{ "starts": "e", "run": 3, "rank": 0 },
+					{ "ends": "e", "run": 3, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{ "op": "log", "expect": { "log": [] } },
+		{ "op": "dispose", "owner": "e", "expect": {} },
+		{ "op": "log", "expect": { "log": [["undo", 2]] } }
+	]
+}

@@ -1,0 +1,13 @@
+{
+	"title": "add in a run is an error and changes nothing; outside a run it works again",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "add", "from": "p", "to": "b", "fails": true },
+		{ "op": "reads", "of": "p", "expect": ["a"] },
+		{ "op": "readers", "of": "b", "expect": [] },
+		{ "op": "end", "from": "p" },
+		{ "op": "add", "from": "p", "to": "b" },
+		{ "op": "reads", "of": "p", "expect": ["a", "b"] }
+	]
+}

@@ -66,32 +66,7 @@
 					}
 				}
 			],
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "node",

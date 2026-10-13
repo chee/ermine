@@ -25,7 +25,6 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"l": [
@@ -35,16 +34,7 @@
 						3,
 						4
 					]
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 4,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -245,20 +235,10 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"l": []
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 4,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -660,22 +640,12 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"l": [
 						1
 					]
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -719,21 +689,11 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": [
 					1,
 					9,
 					2
-				],
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 2,
-							"had": true
-						}
-					}
 				]
 			}
 		},
@@ -825,7 +785,6 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"l": [
@@ -834,30 +793,7 @@
 						4,
 						5
 					]
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": true,
-							"length": 5,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": true,
-							"length": 6,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{

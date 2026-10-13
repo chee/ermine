@@ -81,7 +81,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -93,44 +92,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -515,7 +477,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -527,44 +488,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -949,7 +873,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -961,44 +884,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -1383,7 +1269,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -1395,44 +1280,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -1817,7 +1665,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -1829,44 +1676,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -2251,7 +2061,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -2263,44 +2072,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -2685,7 +2457,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -2697,44 +2468,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -3119,7 +2853,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -3131,44 +2864,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -3553,7 +3249,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"t": {
@@ -3565,44 +3260,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 4,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 3,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -4268,7 +3926,6 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"/": {
@@ -4276,16 +3933,7 @@
 							2
 						]
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -4499,7 +4147,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"a": {
@@ -4519,30 +4166,7 @@
 							]
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 2,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 1,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{

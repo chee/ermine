@@ -180,7 +180,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"b": {
@@ -188,16 +187,7 @@
 							"bytes": "BwgJ"
 						}
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -392,7 +382,6 @@
 					}
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"l": [
@@ -403,22 +392,7 @@
 							}
 						}
 					]
-				},
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						},
-						"from": {
-							"list": false,
-							"length": 0,
-							"had": true
-						},
-						"size": 1
-					}
-				]
+				}
 			}
 		},
 		{

@@ -21,18 +21,7 @@
 					]
 				}
 			],
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "node",
@@ -209,25 +198,7 @@
 					]
 				}
 			],
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": true,
-							"length": 0,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": true,
-							"length": 1,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "node",
@@ -310,7 +281,6 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
 				"error": {
 					"code": "no-key",

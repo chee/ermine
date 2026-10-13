@@ -1,0 +1,28 @@
+{
+	"title": "run: once, untracked; its value and its throw are the caller's; refused on a disposed owner",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1, "b": 10 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "sum": [{ "read": "a" }, { "run": { "read": "b" } }] },
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 11 } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "b": 20 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } },
+		{ "op": "get", "key": "c", "expect": { "value": 11 } },
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 22 } },
+		{ "op": "run", "owner": "o", "do": { "sum": [1, 2] }, "expect": { "value": 3 } },
+		{ "op": "run", "owner": "o", "do": { "throw": "boom" }, "expect": { "error": "boom" } },
+		{ "op": "dispose", "owner": "o", "expect": {} },
+		{ "op": "run", "owner": "o", "do": 1, "expect": { "error": "disposed" } }
+	]
+}

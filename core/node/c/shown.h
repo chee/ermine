@@ -41,6 +41,8 @@ nd_node *parse_node(const char *p, op_value **value);
 // writing JSON
 void text(const char *s);
 void print_value(const op_value *v);
+// a patch as {path, range?, value?, move?}
+void print_patch(const op_patch *p);
 // the header's fields, with its op if it has one
 void print_header(const ch_header *h);
 // {"value"?: ..., "change": ...}

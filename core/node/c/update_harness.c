@@ -1,7 +1,7 @@
 // The C update on the line protocol (conformance/update/harness.ts): one JSON request per line
 // in, one answer per line out. State lasts for the process: one node.
 //   {op: "start", value?, header?} -> {}
-//   {op: "update", patches, header?, list?, each?} -> {} | {facts} | {error: {code, patch}}
+//   {op: "update", patches, header?, list?} -> {} | {error: {code, patch}}
 //   {op: "node"} -> {node: {value?, change}}, change.op as {patches, undo}
 // Values and patches as shown.h reads them (typed arrays and bytes too). The node's change
 // refers to the patches and the header's pieces: they are kept (the arena, the request's values)
@@ -23,22 +23,6 @@ static void let_go(op_value ***os, size_t *n) {
 	free(*os);
 	*os = NULL;
 	*n = 0;
-}
-
-static void print_fact(const op_fact *f) {
-	printf("{\"list\":%s,\"length\":%zu,\"had\":%s}", f->list ? "true" : "false", f->length,
-		f->had ? "true" : "false");
-}
-
-typedef struct {
-	op_facts *facts;
-	size_t count;
-} told;
-
-static void hear(void *ctx, const op_patch *patch, const op_facts *f) {
-	(void)patch;
-	told *t = ctx;
-	t->facts[t->count++] = *f;
 }
 
 static int flag(const char *line, const char *name) {
@@ -69,9 +53,7 @@ static void update(const char *line) {
 	for (size_t i = 0; i < n; i++) mine[i] = read_patch(xs[i], &patches[i]);
 	const char *given = field(line, "header");
 	ch_header h = given ? parse_header(given) : (ch_header){.has_time = 1, .time = 1, .actor = "\"me\""};
-	int telling = flag(line, "each");
-	told t = {take((n ? n : 1) * sizeof *t.facts), 0};
-	nd_update_options o = {.list = flag(line, "list"), .each = telling ? hear : NULL, .ctx = &t};
+	nd_update_options o = {.list = flag(line, "list")};
 	size_t at = 0;
 	int code = nd_update(node, patches, n, h, &o, &at);
 	if (code != OP_OK) {
@@ -82,24 +64,7 @@ static void update(const char *line) {
 	let_go(&owners, &owners_length);
 	owners = mine;
 	owners_length = n;
-	if (!telling) {
-		puts("{}");
-		return;
-	}
-	fputs("{\"facts\":[", stdout);
-	for (size_t i = 0; i < t.count; i++) {
-		const op_facts *f = &t.facts[i];
-		if (i) putchar(',');
-		fputs("{\"place\":", stdout);
-		print_fact(&f->place);
-		if (f->has_from) {
-			fputs(",\"from\":", stdout);
-			print_fact(&f->from);
-		}
-		if (f->has_size) printf(",\"size\":%zu", f->size);
-		putchar('}');
-	}
-	puts("]}");
+	puts("{}");
 }
 
 int main(void) {

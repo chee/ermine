@@ -1,0 +1,25 @@
+{
+	"title": "a spot read again in a run is never linked twice, whoever read it between",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "begin", "from": "q" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "begin", "from": "r" },
+		{ "op": "track", "from": "r", "to": "a" },
+		{ "op": "track", "from": "q", "to": "b" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "track", "from": "q", "to": "a" },
+		{ "op": "track", "from": "r", "to": "a" },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "end", "from": "r" },
+		{ "op": "end", "from": "q" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": ["a", "b"] },
+		{ "op": "reads", "of": "q", "expect": ["a", "b"] },
+		{ "op": "reads", "of": "r", "expect": ["a"] },
+		{ "op": "readers", "of": "a", "expect": ["p", "q", "r"] },
+		{ "op": "readers", "of": "b", "expect": ["p", "q"] }
+	]
+}

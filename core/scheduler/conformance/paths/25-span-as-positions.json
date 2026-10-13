@@ -1,0 +1,179 @@
+{
+	"title": "a span read as the reads of its positions: only a front insert, a put or a removal at or before them marks (from notify 12-span-chase, 16-span-by-position)",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				3
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				4
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						"0",
+						"1"
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					4
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": [
+						"i"
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						6,
+						7
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						5,
+						6
+					],
+					"value": [
+						"D"
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						8,
+						9
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						4,
+						5
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					4
+				]
+			]
+		}
+	]
+}

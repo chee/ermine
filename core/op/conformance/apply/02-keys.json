@@ -446,7 +446,6 @@
 					"value": 2
 				}
 			],
-			"each": true,
 			"expect": {
 				"value": {
 					"constructor": 1,
@@ -455,44 +454,7 @@
 					"__proto__": {
 						"x": 2
 					}
-				},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
+				}
 			}
 		},
 		{
@@ -505,18 +467,8 @@
 					]
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": {},
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
-				]
+				"value": {}
 			}
 		},
 		{

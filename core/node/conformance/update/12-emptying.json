@@ -190,6 +190,176 @@
 					}
 				}
 			}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				},
+				{
+					"path": [],
+					"value": 2
+				},
+				{
+					"path": []
+				},
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": 3,
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"value": 1
+								},
+								{
+									"path": [],
+									"value": 2
+								},
+								{
+									"path": []
+								},
+								{
+									"path": [],
+									"value": 3
+								}
+							],
+							"undo": [
+								{
+									"path": []
+								},
+								{
+									"path": [],
+									"value": 2
+								},
+								{
+									"path": [],
+									"value": 1
+								},
+								{
+									"path": []
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": "x",
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "ab"
+				},
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": "bax",
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"value": "ab"
+								},
+								{
+									"path": [],
+									"range": [
+										1,
+										1
+									],
+									"move": {
+										"path": [],
+										"range": [
+											0,
+											1
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [],
+										"range": [
+											1,
+											2
+										]
+									}
+								},
+								{
+									"path": [],
+									"range": [
+										0,
+										2
+									]
+								}
+							]
+						}
+					}
+				}
+			}
 		}
 	]
 }

@@ -4,10 +4,10 @@
 //
 // { op: "start", value?, header? }  → {}   a fresh node: the value (not given: none), the header
 //    its change (not given: an empty one)
-// { op: "update", patches, header?, list?, each? }
+// { op: "update", patches, header?, list? }
 //    patches: JSON patches as op's apply has them; header: the change's (default
 //    { time: 1, actor: "me" }, never an op); list: apply's option
-//    → {}, and, each: true, { facts }: one Facts per patch, in order
+//    → {}
 //    → { error: { code, patch } }   an ApplyError; nothing changes
 // { op: "node" }                    → { node: { value?, change } }
 //    no value key when none; change: the header of the latest update, with op: { patches, undo }
@@ -18,7 +18,7 @@
 // Anything not understood: { error: "text" }.
 import createNode, { type Node } from "@ermine/node"
 import update from "@ermine/node/update"
-import { ApplyError, type Facts, type Patch } from "@ermine/op/apply"
+import { ApplyError, type Patch } from "@ermine/op/apply"
 import { dehydrate, revive } from "./form.ts"
 
 // deno-lint-ignore no-explicit-any
@@ -43,14 +43,10 @@ function answer(r: Request): Json {
 				},
 			}
 		case "update": {
-			const told: Facts[] = []
 			const header = r.header ?? { time: 1, actor: "me" }
 			const patches = (r.patches as Patch[]).map((p) => revive(p) as Patch)
-			update(node, patches, header, {
-				list: r.list === true,
-				...(r.each ? { each: (_p: Patch, f: Facts) => void told.push(f) } : {}),
-			})
-			return r.each ? { facts: told } : {}
+			update(node, patches, header, { list: r.list === true })
+			return {}
 		}
 		default:
 			return { error: `unknown op ${r.op}` }

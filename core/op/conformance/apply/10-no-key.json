@@ -458,7 +458,6 @@
 					"value": 2
 				}
 			],
-			"each": true,
 			"expect": {
 				"error": {
 					"code": "no-key",

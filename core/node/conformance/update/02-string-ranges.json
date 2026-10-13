@@ -219,18 +219,7 @@
 					"value": "é"
 				}
 			],
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		}
 	]
 }

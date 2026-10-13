@@ -1,22 +1,22 @@
-// causes: within one request, what led to each run: its process, and the causes of each change
-// that marked it. so a mark on a process can be asked: did it come out of a run of that same
-// process? then it is a loop through it. nothing is kept past the request.
-import { byCodePoint } from "./helpers.ts"
-import type { Kept } from "./types.ts"
-
-export class Cause {
-	constructor(readonly id: string, readonly parents: readonly Cause[]) {}
+// causes: within one pulse, what led to each run: its computation, and the causes of each change
+// that marked it. so a mark on a computation can be asked: did it come out of a run of that same
+// computation? then it is a loop through it. nothing is kept past the pulse.
+export class Cause<T> {
+	constructor(readonly of: T, readonly parents: readonly Cause<T>[]) {}
 }
 
-export function createCauses() {
-	// the processes that ran in this request
-	const ran = new Set<string>()
-	// the marks holding causes, forgotten at the request's end
-	const stamped: Kept[] = []
+// kept: the causes of the marks since its last run that ended done
+export type Caused<T> = { n: number; kept: Set<Cause<T>> }
+
+export function createCauses<T extends Caused<T>>() {
+	// the computations that ran in this pulse
+	const ran = new Set<T>()
+	// the computations holding causes, forgotten at the pulse's end
+	const holding = new Set<T>()
 
 	// every cause reached from c
-	function walk(c: Cause, each: (x: Cause) => boolean | void): boolean {
-		const seen = new Set<Cause>([c])
+	function walk(c: Cause<T>, each: (x: Cause<T>) => boolean | void): boolean {
+		const seen = new Set<Cause<T>>([c])
 		const stack = [c]
 		while (stack.length) {
 			const x = stack.pop()!
@@ -27,34 +27,33 @@ export function createCauses() {
 	}
 
 	return {
-		// a run of id, caused by what caused each mark it was given
-		run(id: string, kept: readonly Kept[]): Cause {
-			const parents = new Set<Cause>()
-			for (const k of kept) if (k.causes) parents.add(k.causes)
-			ran.add(id)
-			return new Cause(id, [...parents])
+		// a run of t, caused by what caused each mark it was given
+		run(t: T, given: readonly Cause<T>[]): Cause<T> {
+			ran.add(t)
+			return new Cause(t, given)
 		},
 
-		// a mark kept on a process: its causes are forgotten at the request's end
-		keep(k: Kept) {
-			if (k.causes) stamped.push(k)
+		// a mark's causes, kept on t until the pulse's end
+		keep(t: T, c: Cause<T>) {
+			t.kept.add(c)
+			holding.add(t)
 		},
 
-		// a loop through id: causes came out of a run of id in this request. answers the ids on
-		// the loop, or nothing
-		loop(causes: Cause | undefined, id: string): string[] | undefined {
-			if (!causes || !ran.has(id)) return
-			if (!walk(causes, (x) => x.id === id)) return
-			const ids = new Set<string>()
-			walk(causes, (x) => void ids.add(x.id))
-			return [...ids].sort(byCodePoint)
+		// a loop through t: c came out of a run of t in this pulse. answers the computations on
+		// the loop, in the order made, or nothing
+		loop(c: Cause<T> | undefined, t: T): T[] | undefined {
+			if (!c || !ran.has(t)) return
+			if (!walk(c, (x) => x.of === t)) return
+			const on = new Set<T>()
+			walk(c, (x) => void on.add(x.of))
+			return [...on].sort((a, b) => a.n - b.n)
 		},
 
-		// the request's end: causes forgotten; which processes ran too, unless calls wait queued
-		end(queued: boolean) {
-			for (const k of stamped) k.causes = undefined
-			stamped.length = 0
-			if (!queued) ran.clear()
+		// the pulse's end: causes and runs forgotten
+		end() {
+			for (const t of holding) t.kept.clear()
+			holding.clear()
+			ran.clear()
 		},
 	}
 }

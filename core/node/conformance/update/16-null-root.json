@@ -1,0 +1,184 @@
+{
+	"title": "null is a value: a put of null at [] is kept",
+	"steps": [
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"value": null
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": null,
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"value": null
+								}
+							],
+							"undo": [
+								{
+									"path": []
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"value": null
+				},
+				{
+					"path": [],
+					"value": null
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": null,
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"value": null
+								},
+								{
+									"path": [],
+									"value": null
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"value": null
+								},
+								{
+									"path": [],
+									"value": null
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": []
+								}
+							],
+							"undo": [
+								{
+									"path": [],
+									"value": null
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				},
+				{
+					"path": [
+						"a"
+					],
+					"value": null
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"expect": {
+				"node": {
+					"value": {
+						"a": null
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"value": {
+										"a": 1
+									}
+								},
+								{
+									"path": [
+										"a"
+									],
+									"value": null
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 1
+								},
+								{
+									"path": []
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

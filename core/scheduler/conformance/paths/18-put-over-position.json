@@ -1,0 +1,179 @@
+{
+	"title": "a put over an index marks that index; only a removal shifts the rest (from notify 06-put-keeps-chase, 08-put-above-keeps)",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				2
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				3
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				3,
+				"x"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"l",
+				4
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						4
+					],
+					"value": [
+						"q"
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					3,
+					"x"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l",
+						3
+					],
+					"value": "p"
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					3,
+					"x"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l",
+						3
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					3,
+					"x"
+				],
+				[
+					"l",
+					4
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"value": [
+						"a"
+					]
+				}
+			],
+			"expect": [
+				[
+					"l"
+				],
+				[
+					"l",
+					2
+				],
+				[
+					"l",
+					3
+				],
+				[
+					"l",
+					3,
+					"x"
+				],
+				[
+					"l",
+					4
+				]
+			]
+		}
+	]
+}

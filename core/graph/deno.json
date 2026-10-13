@@ -3,7 +3,6 @@
 	"version": "0.0.0",
 	"exports": {
 		".": "./typescript/main.ts",
-		"./table": "./typescript/table.ts",
-		"./trackgraph": "./typescript/trackgraph.ts"
+		"./table": "./typescript/table.ts"
 	}
 }

@@ -12,7 +12,7 @@ CFLAGS = -std=c11 -O2 -Wall -Wextra -Wpedantic
 CHECKFLAGS = -std=c11 -g -O1 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer
 DENO = deno test --quiet --allow-run --allow-read --allow-env
 
-trackgraph_src = core/graph/c/trackgraph.c core/graph/c/trackgraph_harness.c
+tracker_src = core/scheduler/c/tracker.c core/scheduler/c/tracker_harness.c
 table_src = core/graph/c/table.c core/graph/c/table_harness.c
 node_src = core/node/c/node.c core/node/c/shown.c core/node/c/node_harness.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
 pack_src = core/node/c/node.c core/node/c/shown.c ermine/encoding/c/pack.c ermine/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
@@ -39,18 +39,19 @@ transport_src = extensions/subduction/c/transport.c extensions/subduction/c/tran
 wiring_flags = $(transport_flags)
 wiring_libs = $(transport_libs)
 wiring_src = extensions/subduction/c/wiring.c extensions/subduction/c/wiring_harness.c $(filter-out extensions/subduction/c/transport_harness.c,$(transport_src)) \
-	core/scheduler/c/scheduler.c core/graph/c/main.c core/places/c/places.c core/graph/c/trackgraph.c core/protect/c/protect.c
+	core/scheduler/c/scheduler.c core/graph/c/main.c core/places/c/places.c core/scheduler/c/tracker.c core/protect/c/protect.c
 fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
 squish_src = core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/op/c/value.c ermine/encoding/c/json.c
 notify_src = core/scheduler/c/notify.c core/scheduler/c/notify_harness.c core/op/c/value.c
-places_src = core/places/c/places.c core/places/c/places_harness.c core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/scheduler/c/notify.c
+paths_src = core/scheduler/c/paths.c core/scheduler/c/paths_harness.c core/op/c/value.c ermine/encoding/c/json.c
+places_src = core/places/c/places.c core/places/c/places_harness.c core/places/c/trie.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/node/c/shown.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c
+trie_src = core/places/c/trie.c core/places/c/trie_harness.c
 protect_src = core/protect/c/protect.c core/protect/c/harness.c
 update_src = core/node/c/update.c core/node/c/update_harness.c core/node/c/node.c core/node/c/shown.c core/op/c/apply.c core/op/c/invert.c core/op/c/value.c
 graph_src = core/graph/c/main.c core/graph/c/main_harness.c \
-	core/places/c/places.c core/scheduler/c/notify.c core/graph/c/trackgraph.c core/protect/c/protect.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c
-scheduler_src = core/scheduler/c/scheduler.c core/scheduler/c/steps.c core/scheduler/c/harness.c core/graph/c/main.c \
-	core/places/c/places.c core/scheduler/c/notify.c core/graph/c/trackgraph.c core/protect/c/protect.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
+	core/places/c/places.c core/scheduler/c/notify.c core/scheduler/c/tracker.c core/protect/c/protect.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c
+scheduler_src = core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c ermine/encoding/c/json.c
 names_src = playground/files/c/names.c playground/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/files/c/diag.c playground/files/c/diag_harness.c ermine/encoding/c/json.c
 layout_src = playground/files/c/layout.c playground/files/c/layout_harness.c playground/files/c/names.c ermine/encoding/c/json.c
@@ -61,7 +62,7 @@ store_src = playground/files/c/store.c playground/files/c/store_harness.c playgr
 # sys.c's Trash against homes of its own, no suite
 sys_src = playground/files/c/sys.c playground/files/c/foundation.c playground/files/c/sys_harness.c
 program_src = playground/files/c/program.c playground/files/c/watch.c playground/files/c/program_harness.c $(filter-out playground/files/c/store_harness.c,$(store_src)) \
-	core/scheduler/c/scheduler.c core/graph/c/main.c core/places/c/places.c core/scheduler/c/notify.c core/graph/c/trackgraph.c core/protect/c/protect.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
+	core/scheduler/c/scheduler.c core/graph/c/main.c core/places/c/places.c core/scheduler/c/notify.c core/scheduler/c/tracker.c core/protect/c/protect.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
 program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -framework CoreFoundation,) -lpthread
 manifest_src = playground/files/c/manifest.c playground/files/c/manifest_harness.c playground/files/c/diag.c core/node/c/node.c core/node/c/shown.c \
 	ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
@@ -71,7 +72,7 @@ blake3_src = ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_d
 BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512 -DBLAKE3_USE_NEON=0
 
 # name: binary, sources, the suite, its env var, and what C skips
-trackgraph = core/graph/c/trackgraph-harness
+tracker = core/scheduler/c/tracker-harness
 table = core/graph/c/table-harness
 node = core/node/c/node-harness
 pack = ermine/encoding/c/pack-harness
@@ -88,7 +89,9 @@ commit = extensions/subduction/c/commit-harness
 squish = core/op/c/squish-harness
 op-apply = core/op/c/apply-harness
 notify = core/scheduler/c/notify-harness
+paths = core/scheduler/c/paths-harness
 places = core/places/c/places-harness
+trie = core/places/c/trie-harness
 protect = core/protect/c/protect-harness
 update = core/node/c/update-harness
 graph = core/graph/c/main-harness
@@ -101,7 +104,7 @@ store = playground/files/c/store-harness
 program = playground/files/c/program-harness
 sys = playground/files/c/sys-harness
 
-LIBS = trackgraph table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply notify places protect update graph scheduler names diag layout manifest store program sys
+LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply notify paths places trie protect update graph scheduler names diag layout manifest store program sys
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -120,7 +123,7 @@ $(foreach l,$(LIBS),$(eval $(call harness,$(l))))
 $(HARNESSES) $(CHECKS): $(wildcard */*/c/*.h)
 
 # env var, then the suites (in conformance/<lib>/; their scenarios next to the code, <topic>/conformance/)
-trackgraph_test = TRACKGRAPH_HARNESS conformance/trackgraph/
+tracker_test = TRACKER_HARNESS conformance/tracker/
 table_test = TABLE_HARNESS conformance/table/
 node_test = NODE_HARNESS conformance/node/
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
@@ -136,7 +139,9 @@ wiring_test = WIRING_HARNESS conformance/wiring/
 squish_test = SQUISH_HARNESS conformance/squish/
 op-apply_test = OP_APPLY_HARNESS conformance/op-apply/ conformance/op-invert/
 notify_test = NOTIFY_HARNESS conformance/notify/
+paths_test = PATHS_HARNESS conformance/paths/
 places_test = PLACES_HARNESS conformance/places/
+trie_test = TRIE_HARNESS conformance/trie/
 protect_test = PROTECT_HARNESS conformance/protect/
 update_test = UPDATE_HARNESS conformance/update/
 graph_test = GRAPH_HARNESS conformance/graph/
@@ -178,17 +183,20 @@ $(eval $(call run,op-invert))
 test:
 	$(DENO)
 
-test-c: $(addprefix test-c-,$(LIBS))
-test-check: $(addprefix test-check-,$(LIBS))
+TESTED = $(LIBS)
+test-c: $(addprefix test-c-,$(TESTED))
+test-check: $(addprefix test-check-,$(TESTED))
 # the harnesses under macOS's leaks (conformance/leaks.sh): the sanitizers find no leaks there
-test-leaks: $(addprefix test-leaks-,$(LIBS))
+test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = ermine/encoding/c/pack-bench core/scheduler/c/notify-bench core/op/c/squish-bench
+BENCHES = ermine/encoding/c/pack-bench core/scheduler/c/notify-bench core/scheduler/c/paths-bench core/op/c/squish-bench
 bench: $(BENCHES)
 ermine/encoding/c/pack-bench: core/node/c/node.c ermine/encoding/c/pack.c ermine/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/scheduler/c/notify-bench: core/scheduler/c/notify.c core/op/c/value.c core/scheduler/c/bench.c
+	$(CC) $(CFLAGS) -o $@ $^ -lm
+core/scheduler/c/paths-bench: core/scheduler/c/paths.c core/op/c/value.c core/scheduler/c/paths_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/op/c/squish-bench: core/op/c/squish.c core/op/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm

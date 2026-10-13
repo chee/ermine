@@ -1,0 +1,394 @@
+{
+	"title": "rename: everything under a name to another name, one change; its refusals",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "t": [["a", "X"], ["b", "Y"]], "u": [["s", "U"]], "e": [] },
+			"expect": {}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "t",
+			"to": "v",
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "u": [["s", "U"]], "e": [], "v": [["a", "X"], ["b", "Y"]] },
+						"time": 2,
+						"patches": [{ "path": ["v"], "move": { "path": ["t"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["v"],
+			"expect": {
+				"items": [
+					{ "source": "a", "id": "X", "name": "v", "at": 0, "path": ["v"] },
+					{ "source": "b", "id": "Y", "name": "v", "at": 1, "path": ["v"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["v"] }]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["t"],
+			"expect": { "items": [], "reads": [{ "source": "s", "id": "R", "path": ["t"] }] }
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": {
+				"node": {
+					"value": { "u": [["s", "U"]], "e": [], "v": [["a", "X"], ["b", "Y"]] },
+					"time": 2
+				}
+			}
+		},
+		{
+			"op": "names",
+			"from": ["s", "R"],
+			"expect": { "names": ["u", "e", "v"], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "v",
+			"to": "u",
+			"expect": { "error": "already-there", "at": "u", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "gone",
+			"to": "w",
+			"expect": { "error": "nothing-there", "at": "gone", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "gone",
+			"to": "u",
+			"expect": { "error": "nothing-there", "at": "gone", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "v",
+			"to": ".",
+			"expect": { "error": "not-a-name", "at": ".", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "v",
+			"to": "..",
+			"expect": { "error": "not-a-name", "at": "..", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "v",
+			"to": "/",
+			"expect": { "error": "not-a-name", "at": "/", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "gone",
+			"to": "/",
+			"expect": { "error": "not-a-name", "at": "/", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "gone",
+			"to": "gone",
+			"expect": { "error": "nothing-there", "at": "gone", "changes": [] }
+		},
+		{ "op": "rename", "parent": ["s", "R"], "name": "v", "to": "v", "expect": { "changes": [] } },
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "v",
+			"to": "w",
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "u": [["s", "U"]], "e": [], "w": [["a", "X"], ["b", "Y"]] },
+						"time": 3,
+						"patches": [{ "path": ["w"], "move": { "path": ["v"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "names",
+			"from": ["s", "R"],
+			"expect": { "names": ["u", "e", "w"], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "w",
+			"to": "",
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "u": [["s", "U"]], "e": [], "": [["a", "X"], ["b", "Y"]] },
+						"time": 1,
+						"patches": [{ "path": [""], "move": { "path": ["w"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "names",
+			"from": ["s", "R"],
+			"expect": { "names": ["u", "e", ""], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "",
+			"to": "w",
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "u": [["s", "U"]], "e": [], "w": [["a", "X"], ["b", "Y"]] },
+						"time": 4,
+						"patches": [{ "path": ["w"], "move": { "path": [""] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "e",
+			"to": "f",
+			"expect": { "error": "nothing-there", "at": "e", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "w",
+			"to": "e",
+			"expect": { "error": "already-there", "at": "e", "changes": [] }
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "a": [["s", "A"]], "b": 5, "c": null },
+			"expect": {}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "a",
+			"to": "b",
+			"expect": { "error": "already-there", "at": "b", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "a",
+			"to": "c",
+			"expect": { "error": "already-there", "at": "c", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "a",
+			"to": "d",
+			"time": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "b": 5, "c": null, "d": [["s", "A"]] },
+						"time": 5,
+						"patches": [{ "path": ["d"], "move": { "path": ["a"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["d"],
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "d", "at": 0, "path": ["d"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["d"] }]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "b",
+			"to": "x",
+			"expect": { "error": "nothing-there", "at": "b", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "c",
+			"to": "x",
+			"expect": { "error": "nothing-there", "at": "c", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "toString",
+			"to": "x",
+			"expect": { "error": "nothing-there", "at": "toString", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "d",
+			"to": "toString",
+			"time": 6,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "b": 5, "c": null, "toString": [["s", "A"]] },
+						"time": 6,
+						"patches": [{ "path": ["toString"], "move": { "path": ["d"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["toString"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "toString", "at": 0, "path": ["toString"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["toString"] }]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "toString",
+			"to": "__proto__",
+			"time": 7,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "b": 5, "c": null, "__proto__": [["s", "A"]] },
+						"time": 7,
+						"patches": [{ "path": ["__proto__"], "move": { "path": ["toString"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": {
+				"node": { "value": { "b": 5, "c": null, "__proto__": [["s", "A"]] }, "time": 7 }
+			}
+		},
+		{
+			"op": "get",
+			"address": ["__proto__"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "__proto__", "at": 0, "path": ["__proto__"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["__proto__"] }]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "nobody"],
+			"name": "a",
+			"to": "b",
+			"expect": { "error": "nothing-there", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "R", "expect": {} },
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "a",
+			"to": "b",
+			"expect": { "error": "nothing-there", "at": "a", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": [["s", "A"]], "expect": {} },
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "a",
+			"to": "b",
+			"expect": { "error": "nothing-there", "at": "a", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "a": [["s", "A"]] }, "expect": {} },
+		{
+			"op": "get",
+			"address": ["a"],
+			"save": "a",
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": { "item": "a" },
+			"name": "a",
+			"to": "b",
+			"expect": { "error": "nothing-there", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "A", "value": { "k": [["s", "K"]] }, "expect": {} },
+		{
+			"op": "rename",
+			"parent": { "item": "a" },
+			"name": "k",
+			"to": "j",
+			"time": 8,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": { "j": [["s", "K"]] },
+						"time": 8,
+						"patches": [{ "path": ["j"], "move": { "path": ["k"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "A",
+			"expect": { "node": { "value": { "j": [["s", "K"]] }, "time": 8 } }
+		}
+	]
+}

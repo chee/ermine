@@ -3,8 +3,7 @@
 // ermine/encoding/c/json.h; a value's "/" forms are decoded one by one (jsonDecode on the form
 // alone), so a string anywhere else may hold lone surrogates, as apply counts them.
 //
-// As the reference, every call is checked: each never told on failure, told patch k as its k-th,
-// the value given and the patches' values unchanged. And the ownership rules of apply.h and
+// As the reference, every call is checked: the value given and the patches' values unchanged. And the ownership rules of apply.h and
 // invert.h: the value given and the patches' values are let go of before the answer is made from
 // what came out.
 #define _POSIX_C_SOURCE 200809L
@@ -132,24 +131,6 @@ static Json *json_of(const op_value *v) {
 	}
 	return jsonNull();
 }
-static Json *fact_of(const op_fact *f) {
-	Json *j = jsonObject();
-	jsonAdd(j, "list", jsonBoolean(f->list));
-	jsonAdd(j, "length", jsonInteger((int64_t)f->length));
-	jsonAdd(j, "had", jsonBoolean(f->had));
-	return j;
-}
-static Json *facts_of(const op_facts *f, size_t n) {
-	Json *a = jsonArray();
-	for (size_t i = 0; i < n; i++) {
-		Json *j = jsonObject();
-		jsonAdd(j, "place", fact_of(&f[i].place));
-		if (f[i].has_from) jsonAdd(j, "from", fact_of(&f[i].from));
-		if (f[i].has_size) jsonAdd(j, "size", jsonInteger((int64_t)f[i].size));
-		jsonPush(a, j);
-	}
-	return a;
-}
 // a patch of an undo: its path, range, value, move
 static Json *keys_json(const op_target *t) {
 	Json *a = jsonArray();
@@ -240,22 +221,6 @@ static void batch_free(batch *b) {
 	free(b->values);
 }
 
-// what each was told: facts in order, and whether patch k came k-th
-typedef struct {
-	const op_patch *first;
-	size_t n, count;
-	op_facts *facts;
-	int wrong;
-} told;
-static void hear(void *ctx, const op_patch *patch, const op_facts *f) {
-	told *t = ctx;
-	if (t->count >= t->n || patch != t->first + t->count) {
-		t->wrong = 1;
-		return;
-	}
-	t->facts[t->count++] = *f;
-}
-
 // the values given, printed: the same after the call
 static char *given(const op_value *value, const batch *b) {
 	Json *a = jsonArray();
@@ -310,7 +275,7 @@ static void answer(Json *q) {
 		batch_free(&b);
 		return;
 	}
-	const Json *l = jsonGet(q, "list"), *e = jsonGet(q, "each");
+	const Json *l = jsonGet(q, "list");
 	if (inverting) {
 		op_invert_options io = {l && l->type == JSON_BOOLEAN && l->boolean};
 		op_undo undo = {0};
@@ -343,9 +308,7 @@ static void answer(Json *q) {
 		batch_free(&b);
 		return;
 	}
-	int each = e && e->type == JSON_BOOLEAN && e->boolean;
-	told t = {b.patches, b.n, 0, allocate((b.n + 1) * sizeof *t.facts), 0};
-	op_apply_options o = {l && l->type == JSON_BOOLEAN && l->boolean, each ? hear : NULL, &t};
+	op_apply_options o = {.list = l && l->type == JSON_BOOLEAN && l->boolean};
 	char *before = given(value, &b);
 	op_value *out = NULL;
 	size_t failed = 0;
@@ -363,20 +326,12 @@ static void answer(Json *q) {
 		jsonAdd(err, "code", jsonString(op_code_name(code)));
 		jsonAdd(err, "patch", jsonInteger((int64_t)failed));
 		jsonAdd(a, "error", err);
-		if (t.count) jsonAdd(a, "facts", facts_of(t.facts, t.count));
-	} else {
-		if (out) jsonAdd(a, "value", json_of(out));
-		if (each) jsonAdd(a, "facts", facts_of(t.facts, t.count));
-	}
+	} else if (out) jsonAdd(a, "value", json_of(out));
 	if (changed) {
 		jsonFree(a);
 		error("a value given changed");
-	} else if (t.wrong || (code == OP_OK && each && t.count != b.n)) {
-		jsonFree(a);
-		error("each told the patches out of order");
 	} else say(a);
 	op_free(out);
-	free(t.facts);
 	batch_free(&b);
 }
 

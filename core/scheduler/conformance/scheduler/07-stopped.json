@@ -1,0 +1,41 @@
+{
+	"title": "a read of a key whose writer is due stops the run; it runs again after that writer",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "flag": false, "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "q",
+			"owner": "o",
+			"f": { "if": [{ "read": "flag" }, { "read": "w" }, 0] },
+			"to": "q"
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"owner": "o",
+			"f": { "sum": [{ "read": "x" }, 1] },
+			"to": "w"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "flag": true, "x": 5 }, "expect": { "tick": 6 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "q", "tick": 6 },
+					{ "due": "w", "tick": 6 },
+					{ "starts": "q", "run": 2, "rank": 0 },
+					{ "ends": "q", "run": 2, "ended": "stopped", "waits": "w" },
+					{ "starts": "w", "run": 2, "rank": 0 },
+					{ "ends": "w", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "q", "run": 3, "rank": 1 },
+					{ "ends": "q", "run": 3, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "get", "key": "q", "expect": { "value": 6 } }
+	]
+}

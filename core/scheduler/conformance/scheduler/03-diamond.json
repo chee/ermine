@@ -1,0 +1,62 @@
+{
+	"title": "a diamond: each side once, the join after both, the effect once, on the whole",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "b",
+			"owner": "o",
+			"f": { "sum": [{ "read": "x" }, 1] },
+			"to": "b"
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "sum": [{ "read": "x" }, { "read": "x" }] },
+			"to": "c"
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"owner": "o",
+			"f": { "sum": [{ "read": "b" }, { "read": "c" }] },
+			"to": "d"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "d" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 4]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 9 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 7]] } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "b", "tick": 9 },
+					{ "due": "c", "tick": 9 },
+					{ "starts": "b", "run": 2, "rank": 0 },
+					{ "due": "d", "tick": 10 },
+					{ "ends": "b", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "d", "run": 2, "rank": 1 },
+					{ "due": "e", "tick": 12 },
+					{ "ends": "d", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "e", "run": 2, "rank": 2 },
+					{ "ends": "e", "run": 2, "ended": "done", "equal": false },
+					{ "acts": "e", "run": 2 }
+				]
+			}
+		},
+		{ "op": "get", "key": "d", "expect": { "value": 7 } }
+	]
+}

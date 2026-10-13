@@ -1,0 +1,53 @@
+{
+	"title": "an effect run again in a round acts once, on its latest run; a latest run that failed, not at all",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "w" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{
+			"op": "effect",
+			"name": "f",
+			"owner": "o",
+			"f": { "if": [{ "eq": [{ "read": "w" }, 2] }, { "throw": "two" }, { "read": "w" }] },
+			"act": { "log": ["f", { "given": "value" }] }
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"owner": "o",
+			"f": { "sum": [{ "read": "x" }, 1] },
+			"to": "w"
+		},
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 2]] } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "e", "tick": 1 },
+					{ "due": "f", "tick": 2 },
+					{ "due": "w", "tick": 3 },
+					{ "starts": "e", "run": 1, "rank": 0 },
+					{ "ends": "e", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "f", "run": 1, "rank": 0 },
+					{ "ends": "f", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "w", "run": 1, "rank": 0 },
+					{ "due": "e", "tick": 5 },
+					{ "due": "f", "tick": 5 },
+					{ "ends": "w", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "e", "run": 2, "rank": 0 },
+					{ "ends": "e", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "f", "run": 2, "rank": 0 },
+					{ "ends": "f", "run": 2, "ended": "failed", "error": "two" },
+					{ "acts": "e", "run": 2 }
+				]
+			}
+		}
+	]
+}

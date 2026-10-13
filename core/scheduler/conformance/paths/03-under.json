@@ -1,0 +1,29 @@
+{
+	"title": "an unranged patch marks every read under its path",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body", 2, "text"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["docs"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["doc"], "value": { "title": "t" } }],
+			"expect": [["doc", "title"], ["doc", "body", 2, "text"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["doc"] }],
+			"expect": [["doc", "title"], ["doc", "body", 2, "text"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": [] }],
+			"expect": [["doc", "title"], ["doc", "body", 2, "text"], ["docs"]]
+		}
+	]
+}

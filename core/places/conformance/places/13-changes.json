@@ -1,0 +1,357 @@
+{
+	"title": "writes: the nodes each write changed, in order, with the patches that landed there",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{ "op": "children", "source": "s", "id": "R", "value": { "t": [["s", "A"]] }, "expect": {} },
+		{
+			"op": "place",
+			"parent": ["s", "R"],
+			"name": "t",
+			"entry": ["s", "B"],
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "A"], ["s", "B"]] },
+						"time": 2,
+						"patches": [{ "path": ["t"], "range": [1, 1], "value": [["s", "B"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": ["s", "R"],
+			"name": "n",
+			"entry": ["s", "N"],
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "A"], ["s", "B"]], "n": [["s", "N"]] },
+						"time": 3,
+						"patches": [{ "path": ["n"], "value": [["s", "N"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": ["s", "R"],
+			"name": "t",
+			"entry": ["s", "C"],
+			"index": 0,
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "C"], ["s", "A"], ["s", "B"]], "n": [["s", "N"]] },
+						"time": 4,
+						"patches": [{ "path": ["t"], "range": [0, 0], "value": [["s", "C"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 1,
+			"time": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "C"], ["s", "B"]], "n": [["s", "N"]] },
+						"time": 5,
+						"patches": [{ "path": ["t"], "range": [1, 2] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "n",
+			"index": 0,
+			"time": 6,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "C"], ["s", "B"]] },
+						"time": 6,
+						"patches": [{ "path": ["n"] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "order",
+			"parent": ["s", "R"],
+			"name": "t",
+			"from": 0,
+			"to": 1,
+			"time": 7,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "B"], ["s", "C"]] },
+						"time": 7,
+						"patches": [
+							{ "path": ["t"], "range": [1, 1], "move": { "path": ["t"], "range": [0, 1] } }
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "t",
+			"to": "r",
+			"time": 8,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "r": [["s", "B"], ["s", "C"]] },
+						"time": 8,
+						"patches": [{ "path": ["r"], "move": { "path": ["t"] } }]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": ["s", "R"],
+			"name": "r",
+			"index": 0,
+			"to": { "parent": ["s", "R"], "name": "r" },
+			"toindex": 1,
+			"time": 9,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "r": [["s", "C"], ["s", "B"]] },
+						"time": 9,
+						"patches": [
+							{ "path": ["r"], "range": [1, 1], "move": { "path": ["r"], "range": [0, 1] } }
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": ["s", "R"],
+			"name": "r",
+			"index": 0,
+			"to": { "parent": ["s", "R"], "name": "q" },
+			"time": 10,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "r": [["s", "B"]], "q": [["s", "C"]] },
+						"time": 10,
+						"patches": [
+							{ "path": ["q"], "value": [] },
+							{ "path": ["q"], "range": [0, 0], "move": { "path": ["r"], "range": [0, 1] } }
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": ["s", "R"],
+			"name": "r",
+			"index": 0,
+			"to": { "parent": ["s", "R"], "name": "q" },
+			"toindex": 0,
+			"time": 11,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "q": [["s", "B"], ["s", "C"]] },
+						"time": 11,
+						"patches": [
+							{ "path": ["q"], "range": [0, 0], "move": { "path": ["r"], "range": [0, 1] } },
+							{ "path": ["r"] }
+						]
+					}
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "D", "value": {}, "expect": {} },
+		{
+			"op": "move",
+			"parent": ["s", "R"],
+			"name": "q",
+			"index": 0,
+			"to": { "parent": ["s", "D"], "name": "in" },
+			"time": 12,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "D",
+						"value": { "in": [["s", "B"]] },
+						"time": 12,
+						"patches": [{ "path": ["in"], "value": [["s", "B"]] }]
+					},
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "q": [["s", "C"]] },
+						"time": 12,
+						"patches": [{ "path": ["q"], "range": [0, 1] }]
+					}
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "E", "expect": {} },
+		{
+			"op": "place",
+			"parent": ["s", "E"],
+			"name": "a",
+			"entry": ["s", "A"],
+			"time": 13,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "E",
+						"value": { "a": [["s", "A"]] },
+						"time": 13,
+						"patches": [{ "path": [], "value": {} }, { "path": ["a"], "value": [["s", "A"]] }]
+					}
+				]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "L", "value": [1], "expect": {} },
+		{
+			"op": "place",
+			"parent": ["s", "L"],
+			"name": "a",
+			"entry": ["s", "A"],
+			"time": 14,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "L",
+						"value": { "a": [["s", "A"]] },
+						"time": 14,
+						"patches": [{ "path": [], "value": {} }, { "path": ["a"], "value": [["s", "A"]] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": { "symbol": "so" },
+			"id": { "symbol": "sy" },
+			"value": { "a": [["s", "A"]] },
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"parent": [{ "symbol": "so" }, { "symbol": "sy" }],
+			"name": "a",
+			"entry": [{ "symbol": "e" }, { "symbol": "f" }],
+			"time": 15,
+			"expect": {
+				"changes": [
+					{
+						"source": { "symbol": "so" },
+						"id": { "symbol": "sy" },
+						"value": { "a": [["s", "A"], [{ "symbol": "e" }, { "symbol": "f" }]] },
+						"time": 15,
+						"patches": [
+							{
+								"path": ["a"],
+								"range": [1, 1],
+								"value": [[{ "symbol": "e" }, { "symbol": "f" }]]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": [{ "symbol": "so" }, { "symbol": "sy" }],
+			"name": "a",
+			"index": 0,
+			"time": 16,
+			"expect": {
+				"changes": [
+					{
+						"source": { "symbol": "so" },
+						"id": { "symbol": "sy" },
+						"value": { "a": [[{ "symbol": "e" }, { "symbol": "f" }]] },
+						"time": 16,
+						"patches": [{ "path": ["a"], "range": [0, 1] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": [{ "symbol": "so" }, { "symbol": "sy" }],
+			"name": "a",
+			"index": 0,
+			"time": 17,
+			"expect": {
+				"changes": [
+					{
+						"source": { "symbol": "so" },
+						"id": { "symbol": "sy" },
+						"value": {},
+						"time": 17,
+						"patches": [{ "path": ["a"] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": ["s", "R"],
+			"name": "t",
+			"entry": ["s", "X"],
+			"index": 9,
+			"expect": { "error": "range", "at": "t", "changes": [] }
+		},
+		{
+			"op": "rename",
+			"parent": ["s", "R"],
+			"name": "nope",
+			"to": "x",
+			"expect": { "error": "nothing-there", "at": "nope", "changes": [] }
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": { "node": { "value": { "q": [["s", "C"]] }, "time": 12 } }
+		}
+	]
+}

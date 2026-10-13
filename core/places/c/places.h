@@ -1,184 +1,181 @@
-// Finding items by path, writing by path, and placing ids in lists (newcore/graph/ts/places.ts, PLACES.tex), in C. Same
-// rules as places.ts. Nothing kept between calls, nothing tracked: each read is said to depend.
+// Places (typescript/places.ts), in C: names from a root, walked through children nodes. A children
+// node's value maps each name to a list of entries, in order: [source, id], what put it there and
+// the id. The list is the order: the front is first. Places knows no source's meaning, and no part
+// but children. Same rules as places.ts, which the suite in conformance/places/ holds both to.
+//
+// KEYS. A source or an id is a tb_key (table.h): a string, or a symbol (the caller's token, equal
+// by address). A string key places gives you lives as long as the item it is in; a string key you
+// give places copies when it keeps it. Symbols in a children node's value are the setup's to read
+// and write (symbol, symbol_value): an op_value has no symbol of its own. pl_root() is the symbol
+// that is the source of a root given as an id (places.ts's ROOT); the setup hooks decide whether
+// it may stand in a value.
+//
+// THE HOLE. Where a source's nodes are kept is the caller's: `children` gives the children node
+// of an id as a source has it, NULL: not there. Places never frees or keeps a node. A write is
+// op's patches through nd_update, and nd_update's node change refers to the patches until the
+// node's next update: places keeps those (one block per node it wrote, let go of at that node's
+// next write through places, or at pl_free). A node may be freed by the caller at any time.
+//
+// ITEMS. An item is immutable, with its strings and its `up` chain; it is reference counted. A
+// result from pl_get, pl_lookup, is a pl_list: the caller's, pl_list_free when done. To keep one
+// item past its list, pl_item_ref it and pl_item_free it later. An item holds its `up`. An item is
+// good as a start for as long as the caller holds it: nothing else about the graph is kept.
+//
+// OPENED PLACES. pl_open walks an address from the root, kept: pl_items gives what is there now,
+// as a list places owns (borrowed: good until the next pl_items of that opened place that walks
+// again, or its pl_drop, or pl_close; keep items with pl_item_ref). Nothing changed: the very
+// same list (same pointer and serial), and a step walked again that gives alike items keeps its
+// old list, so what stands on it is kept too. Opened places on one beginning share its steps.
 #ifndef PLACES_H
 #define PLACES_H
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 
+#include "../../graph/c/table.h"
 #include "../../node/c/node.h"
 #include "../../node/c/update.h"
 
-// what a read rests on: an id being loaded, its value, one of its info objects (name), or its
-// lists: PL_CHILDREN with no name is which names it has, with one the list of that name;
-// PL_INFO with no name is which info names it has
-typedef enum { PL_LOADED, PL_VALUE, PL_INFO, PL_CHILDREN } pl_kind;
-typedef struct {
-	pl_kind kind;
-	const char *name; // NULL unless PL_INFO of one object, or PL_CHILDREN of one list
-} pl_part;
+// the source of a root given as an id
+extern const char pl_root_mark;
+static inline tb_key pl_root(void) { return tb_symbol(&pl_root_mark); }
 
-// told, in order, each part a read rests on
-typedef struct {
-	void (*fn)(void *ctx, const char *id, pl_part part);
-	void *ctx;
-} pl_depend;
-
-// why an item was given: the node whose list it was, the name, the id taken, its position
-typedef struct {
-	const char *node;
-	const char *name;
-	const char *id;
+// one thing at a place, and how it was reached: up: the item whose children it was found in,
+// under name, at index `at` of that name's list. A start (the root, or an entry given) has none
+// (name NULL). Read only
+typedef struct pl_item pl_item;
+struct pl_item {
+	tb_key source, id;
+	const pl_item *up; // NULL on a start
+	const char *name;  // NULL on a start
 	size_t at;
-} pl_step;
-
-// node: NULL if not loaded, pending. route: a step per name of the address; a lookup's, the
-// step to its list. has_up, up: a lookup's, how many nodes above the place's . its list was.
-// has_versions: content and info give every version of the object (none: length 0), for a
-// loaded item
-typedef struct {
-	const char *id;
-	const pl_step *route;
-	size_t nroute;
-	const nd_node *node;
-	int has_up;
-	long up;
-	int has_versions;
-	const nd_version *versions;
-	size_t nversions;
-} pl_item;
-
-typedef struct {
-	const pl_item *items;
-	size_t n;
-} pl_items;
-
-typedef struct {
-	const char *const *names;
-	size_t n;
-} pl_namelist;
-
-// a place: names from the root, and the trail cd made (the ids its walk took, the root first),
-// if has_trail. a "here" is a spot with a trail; reads at it walk from the trail
-typedef struct {
-	const char *const *names;
-	size_t nnames;
-	int has_trail;
-	const char *const *trail;
-	size_t ntrail;
-} pl_spot;
-
-// one, or from up to not including to. an index given as one number a is {a, a}; a slotindex
-// given as one number s is {s, s + 1}
-typedef struct {
-	long from, to;
-} pl_span;
-
-enum {
-	PL_OK = 0,
-	PL_WRONG_FIELD,
-	PL_ABOVE_ROOT,
-	PL_NOTHING_THERE,
-	PL_ALREADY_THERE,
-	PL_RANGE,
-	PL_NO_BY, // placing, with no by
-	PL_MUTATE // writing: patches that do not apply; mutate's code says which
+	size_t refs; // places' own
 };
-// "wrong-field", "above-root", "nothing-there", "already-there", "range"; "no-by", "mutate"
-const char *pl_code_name(int code);
 
-// the world a read is in. get: the node of an id, or NULL if it is not loaded; placing changes
-// the nodes it gives, in place. alloc: memory for results and for what placing makes, never
-// returns NULL, never freed by the library: an arena. by: the change for a node, asked for each
-// change placing makes (an opaque pointer, kept in the versions it makes); NULL: placing is
-// no_by. Names and ids given to placing are kept, not copied. fallback: the depend of a read
-// given none, or NULL
+// items, front first; serial: every list places makes has its own, 0 for the empty list places
+// gives when there is nothing (tell two apart by it, not by address: an address may be reused)
 typedef struct {
-	nd_node *(*get)(void *ctx, const char *id);
-	void *(*alloc)(void *ctx, size_t size);
-	const void *(*by)(void *ctx, const char *node);
+	size_t n;
+	pl_item *const *items;
+	uint64_t serial;
+} pl_list;
+// lets go of the list and one hold of each item; for the lists a call gave. Not for an opened
+// place's
+void pl_list_free(pl_list *list);
+
+pl_item *pl_item_ref(pl_item *item);
+// lets one hold go; the last frees the item (and lets go of its up)
+void pl_item_free(pl_item *item);
+
+// the names from the start to the item, written to names (up to cap of them, pointing into the
+// items' own names), and the length of the whole path
+size_t pl_path(const pl_item *item, const char **names, size_t cap);
+
+// where a read or a write begins: an item (item set), or an entry given (item NULL)
+typedef struct {
+	const pl_item *item;
+	tb_key source, id;
+} pl_at;
+static inline pl_at pl_at_item(const pl_item *item) { return (pl_at){.item = item}; }
+static inline pl_at pl_at_entry(tb_key source, tb_key id) { return (pl_at){NULL, source, id}; }
+
+// the setup: the hole and the tellings. A read is told as `read(source, id, name)`: it rested on
+// the children of id as source has them, at `name` in that node's value, NULL: the whole value;
+// told whether or not anything was there
+typedef struct {
+	// where names start: an id with the source pl_root(), or an entry. copied
+	tb_key root_source, root_id;
+	// the children node of id as source has it; NULL: not there (not loaded, or never made)
+	nd_node *(*children)(void *ctx, tb_key source, tb_key id);
+	// told of each read, as it is made. May be NULL
+	void (*read)(void *ctx, tb_key source, tb_key id, const char *name);
+	// a value in an entry that is not a string: 1 and *token if it is a symbol. NULL hook: none is
+	int (*symbol)(void *ctx, const op_value *v, const void **token);
+	// the value that stands for a symbol, new (the caller of the hook is its holder). NULL hook:
+	// null. Written wherever places puts an entry with a symbol in it
+	op_value *(*symbol_value)(void *ctx, const void *token);
 	void *ctx;
-	const char *root;
-	const pl_depend *fallback;
-} pl_places;
+} pl_setup;
 
-// an id where an address goes (places.ts, Where): the address {pl_id, id}, naddress 2. Its node,
-// no walk: one item, route empty, said to depend on the id loaded. Not for pl_cd (wrong-field)
-extern const char pl_id[];
-#define PL_ID(id) ((const char *const[]){pl_id, (id)}), 2
+typedef struct pl pl;
+// out of memory aborts, as everywhere in core. Close every opened place before pl_free
+pl *pl_new(const pl_setup *setup);
+// frees the places, the root item, the patches kept; not the nodes. Items the caller holds stay
+void pl_free(pl *p);
 
-// reads. a code, PL_OK with the result set. address: an optional "/", any number of "..",
-// then names; or an id (pl_id). depend NULL: the fallback
-int pl_look(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const pl_depend *depend, pl_items *out);
-// the nearest path of names whose last list holds a loaded node, and every such path's list
-int pl_lookup(const pl_places *p, const pl_spot *at, const char *const *path, size_t npath,
-	const pl_depend *depend, pl_items *out);
-int pl_lookups(const pl_places *p, const pl_spot *at, const char *const *path, size_t npath,
-	const pl_depend *depend, pl_items *out);
-// that list's ids in each loaded node the address selects, node by node
-int pl_children(const pl_places *p, const pl_spot *at, const char *const *address,
-	size_t naddress, const char *name, const pl_depend *depend, pl_items *out);
-// every name they have, once, first seen first
-int pl_names(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const pl_depend *depend, pl_namelist *out);
-// the same of one part, "info" or "children" (else PL_WRONG_FIELD): the names in order
-int pl_names_of(const pl_places *p, const pl_spot *at, const char *const *address,
-	size_t naddress, const char *part, const pl_depend *depend, pl_namelist *out);
-// look, with the versions of the value, or of the info object of name
-int pl_content(const pl_places *p, const pl_spot *at, const char *const *address,
-	size_t naddress, const pl_depend *depend, pl_items *out);
-int pl_info(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const char *name, const pl_depend *depend, pl_items *out);
-// a trail: the address walked once, from at (a spot without a trail starts from the root)
-int pl_cd(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const pl_depend *depend, pl_spot *out);
+// reading
+// the address: n steps, in order: a name, "." here, ".." back one, "/" the root. A name is any
+// other string. `from` NULL: the root.
 
-// placing. changes: one or two, in order. the first version of a list is the one placing
-// reads, as places.ts does
-// child put in id's list of name, at index (NULL: the end; a span: the ids there replaced), in
-// the version slotindex (NULL: 0; a span: those versions replaced by the one made)
-int pl_insert(const pl_places *p, const char *id, const char *name, const char *child,
-	const pl_span *index, const pl_span *slotindex, const void **change);
-// the ids at index (one number a is {a, a + 1}; from < to) out of the version slotindex (NULL: 0;
-// a span merges as insert's does). a list left empty is gone
-int pl_remove(const pl_places *p, const char *id, const char *name, pl_span index,
-	const pl_span *slotindex, const void **change);
-// the versions slotindex of id's list of name dropped whole
-int pl_pop(const pl_places *p, const char *id, const char *name, pl_span slotindex,
-	const void **change);
-// a list to a new name; its entry keeps its slot. two changes
-int pl_rename(const pl_places *p, const char *id, const char *name, const char *to,
-	const void *changes[2]);
-// the entry at index of id's list of name to toid's list of toname, at toindex (NULL: the
-// end; counted after it left). one list: one change, else two; nchanges says
-int pl_move(const pl_places *p, const char *id, const char *name, long index, const char *toid,
-	const char *toname, const long *toindex, const void *changes[2], size_t *nchanges);
+// what is at the address, front first
+pl_list *pl_get(pl *p, const char *const *address, size_t n, const pl_at *from);
+// the address from the start, then from each place the start was found in, nearest first: what
+// the nearest gives (all 0), or what each gives, nearest first
+pl_list *pl_lookup(pl *p, const char *const *address, size_t n, const pl_at *from, int all);
 
-// writing by path, by mutate: one change. patches that do not apply: PL_MUTATE, with mutate's
-// code and the patch's place in mutated (may be NULL). nothing changes on a failure
+// the names in an item's children whose value is a list, in their order there (an object's order:
+// whole numbers first, ascending); a read of the whole value. The caller's: pl_strings_free
 typedef struct {
-	int code;
-	size_t patch;
-} pl_mutated;
-// the item a write is at: the index-th item look gives (NULL: its first loaded); past the items
-// or below 0: range; pending: nothing-there. the walk says nothing to depend: a write reads nothing
-int pl_at(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const long *index, nd_node **out);
-// patches to the version slots.from of n's value (info NULL) or of its info object of name; the
-// versions slots.from to slots.to replaced by what they make, at from. no versions: {0, 1} makes
-// the first; past the versions: range. patched: as nd_update's, may be NULL. the old versions and
-// info arrays are left as they were, for their holders; a new info name is copied
-int pl_edit(const pl_places *p, nd_node *n, const char *info, pl_span slots,
-	const op_patch *patches, size_t np, const nd_each *patched, const void **change,
-	pl_mutated *mutated);
-// the value, or one info by name, of the item an address reaches: pl_at, then pl_edit. index NULL:
-// the first loaded; slotindex NULL: 0
-int pl_write(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const op_patch *patches, size_t np, const long *index, const pl_span *slotindex,
-	const void **change, pl_mutated *mutated);
-int pl_set(const pl_places *p, const pl_spot *at, const char *const *address, size_t naddress,
-	const char *name, const op_patch *patches, size_t np, const long *index,
-	const pl_span *slotindex, const void **change, pl_mutated *mutated);
+	size_t n;
+	char **names;
+} pl_strings;
+pl_strings pl_names(pl *p, pl_at at);
+void pl_strings_free(pl_strings s);
+
+// opened places
+typedef struct pl_held pl_held;
+// the address from the root, kept. NULL cannot happen. Walks nothing until pl_items
+pl_held *pl_open(pl *p, const char *const *address, size_t n);
+// what is there now, borrowed (see above). A walk is made only when the step before gave other
+// items or a children node it read is not what it was; each call tells every read the held
+// address rests on. After pl_drop: the empty list
+const pl_list *pl_items(pl_held *h);
+// lets go of what it shares; idempotent; the handle stays good (empty)
+void pl_drop(pl_held *h);
+// drops and frees the handle
+void pl_close(pl_held *h);
+
+// writing. An error is a code (0: done); *at (may be NULL) the name it was about when there was
+// one, a string the caller gave. A change is one nd_update on the parent's children node, with
+// the header. An index of PL_END is the end.
+//
+// *changed (may be NULL): the children nodes the write changed, in order: one for a write within
+// one parent, two for a move across parents (the one it went into first), none when nothing
+// changed or the write was refused. The caller's struct, filled in, nothing allocated: source and
+// id are the parent's as the write was given them (the pl_at's, or its item's: borrowed), node
+// the one children gave. The node's change has the patches that landed. A move across parents
+// whose second write fails (PL_OP) keeps the first
+typedef struct {
+	tb_key source, id;
+	nd_node *node;
+} pl_wrote;
+typedef struct {
+	size_t n;
+	pl_wrote nodes[2];
+} pl_changed;
+enum { PL_OK = 0, PL_NOT_A_NAME, PL_NOTHING_THERE, PL_ALREADY_THERE, PL_RANGE, PL_OP };
+// "not-a-name", "nothing-there", "already-there", "range"; "op" (op refused patches: never seen
+// from a sound node); "ok"
+const char *pl_code_name(int code);
+#define PL_END LONG_MIN
+
+// entry placed under name, at index (PL_END: the end)
+int pl_place(pl *p, pl_at at, const char *name, tb_key source, tb_key id, ch_header header, long index,
+	const char **err_at, pl_changed *changed);
+// the entry at index under name taken out; the last one: the name too
+int pl_unplace(pl *p, pl_at at, const char *name, long index, ch_header header, const char **err_at,
+	pl_changed *changed);
+// the entry at from under name moved to index to, counted with it taken out. to 0: the front
+int pl_order(pl *p, pl_at at, const char *name, long from, long to, ch_header header, const char **err_at,
+	pl_changed *changed);
+// everything under name moved to the name `to`
+int pl_rename(pl *p, pl_at at, const char *name, const char *to, ch_header header, const char **err_at,
+	pl_changed *changed);
+// the entry at index under one slot put under another, at toindex (PL_END: the end): one children
+// node (the same node, whatever keys reach it), one change, given with the target's key; two
+// nodes, a change on each, the one it goes into first
+int pl_move(pl *p, pl_at at, const char *name, long index, pl_at toat, const char *toname,
+	ch_header header, long toindex, const char **err_at, pl_changed *changed);
 
 #endif

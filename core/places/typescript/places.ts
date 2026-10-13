@@ -4,7 +4,7 @@
 // reads asks for an item's other parts elsewhere
 import type { ChangeHeader, Node } from "@ermine/node"
 import update from "@ermine/node/update"
-import type { Facts, Patch } from "@ermine/op/apply"
+import type { Patch } from "@ermine/op/apply"
 import { createTrie, type Entry as Held } from "./trie.ts"
 
 export type Key = string | symbol
@@ -44,10 +44,10 @@ export type Setup = {
 	children: (source: Key, id: Key) => Node<unknown> | undefined
 	// told of each read, as it is made
 	read?: (read: Read) => void
-	// told of each patch places' writes landed, with what it found (node's update's each), and
-	// the children node's source and id
-	each?: (source: Key, id: Key, patch: Patch, facts: Facts) => void
 }
+
+// a children node a write changed, and whose it is: the node's change has the patches that landed
+export type Changed = { readonly source: Key; readonly id: Key; readonly node: Node<unknown> }
 
 export type Code = "not-a-name" | "nothing-there" | "already-there" | "range"
 
@@ -75,22 +75,29 @@ function isMap(v: unknown): v is Record<string, unknown> {
 
 const isKey = (k: unknown): k is Key => typeof k === "string" || typeof k === "symbol"
 
+// an index from lo up to hi, a whole number
+const within = (i: number, lo: number, hi: number) => Number.isInteger(i) && i >= lo && i <= hi
+
 // the array under name in a children node; none, or not an array: undefined
 function array(node: Node<unknown> | undefined, name: string): readonly unknown[] | undefined {
 	const v = node?.value
-	if (!isMap(v) || !Object.hasOwn(v, name)) return undefined
+	if (!isMap(v)) return undefined
 	const list = v[name]
 	return Array.isArray(list) ? list : undefined
 }
 
-// an entry, or undefined for anything else in an array: it keeps its position, and is no item
-const entry = (e: unknown): Entry | undefined =>
-	Array.isArray(e) && e.length === 2 && isKey(e[0]) && isKey(e[1]) ? [e[0], e[1]] : undefined
+// a name holding something that is not an array: taken, never written over
+const taken = (node: Node<unknown>, name: string) =>
+	isMap(node.value) && Object.hasOwn(node.value, name) && !Array.isArray(node.value[name])
+
+// an entry; anything else in an array keeps its position, and is no item
+const isEntry = (e: unknown): e is Entry =>
+	Array.isArray(e) && e.length === 2 && isKey(e[0]) && isKey(e[1])
 
 // what a held place keeps per step: the items it was walked from, the children nodes they read
 // and at which change, what that gave, and how many opened places share it
 type Seen = { source: Key; id: Key; node: Node<unknown> | undefined; change: unknown }
-type Step = { from: readonly Item[] | null; items: Item[]; seen: Seen[]; opened: number }
+type Step = { from: readonly Item[] | null; items: readonly Item[]; seen: Seen[]; opened: number }
 
 export function createPlaces(setup: Setup) {
 	const { children, read: tell } = setup
@@ -106,9 +113,11 @@ export function createPlaces(setup: Setup) {
 			: from as Item
 
 	// the item the names are walked from, and the names. ".." takes back a name, else goes up the
-	// way the start was reached; above it: undefined
-	function plan(address: Address, from?: Item | Entry): [Item, string[]] | undefined {
+	// way the start was reached; above it: undefined. an address with no steps is the names
+	// already, given back as it is
+	function plan(address: Address, from?: Item | Entry): [Item, readonly string[]] | undefined {
 		let at: Item | undefined = begin(from)
+		if (!address.some(bad)) return [at, address]
 		const names: string[] = []
 		for (const s of address) {
 			if (s === ".") continue
@@ -127,10 +136,11 @@ export function createPlaces(setup: Setup) {
 			const node = children(up.source, up.id)
 			tell?.({ source: up.source, id: up.id, path: [name] })
 			seen?.push({ source: up.source, id: up.id, node, change: node?.change })
-			const list = array(node, name) ?? []
+			const list = array(node, name)
+			if (list === undefined) continue
 			for (let i = 0; i < list.length; i++) {
-				const e = entry(list[i])
-				if (e) out.push({ source: e[0], id: e[1], up, name, at: i })
+				const e = list[i]
+				if (isEntry(e)) out.push({ source: e[0], id: e[1], up, name, at: i })
 			}
 		}
 		return out
@@ -165,19 +175,39 @@ export function createPlaces(setup: Setup) {
 		const item = begin(at)
 		const v = children(item.source, item.id)?.value
 		tell?.({ source: item.source, id: item.id, path: [] })
-		return isMap(v) ? Object.keys(v).filter((k) => Array.isArray(v[k])) : []
+		const out: string[] = []
+		if (isMap(v)) { for (const k of Object.keys(v)) if (Array.isArray(v[k])) out.push(k) }
+		return out
 	}
 
 	// opened places: a trie of the opened addresses from the root, each step keeping what it
 	// read. places opened with the same beginning share its steps
 	const held = createTrie<Step>()
+	// every open is from the root: one start list, so their shared steps compare it as the same
+	const starts: readonly Item[] = [top]
+	const none: readonly Item[] = []
+
+	// two walks gave the same items: the same entries, found in the same items, at the same places
+	function alike(a: readonly Item[], b: readonly Item[]) {
+		if (a.length !== b.length) return false
+		for (let i = 0; i < a.length; i++) {
+			const x = a[i], y = b[i]
+			if (x.source !== y.source || x.id !== y.id || x.up !== y.up || x.name !== y.name) {
+				return false
+			}
+			if (x.at !== y.at) return false
+		}
+		return true
+	}
 
 	// a step still good: every children node it read is the one there, at the same change
-	const good = (s: Step) =>
-		s.seen.every((x) => {
+	function good(s: Step) {
+		for (const x of s.seen) {
 			const node = children(x.source, x.id)
-			return node === x.node && node?.change === x.change
-		})
+			if (node !== x.node || node?.change !== x.change) return false
+		}
+		return true
+	}
 
 	// the address from the root, opened: items() gives what is there now. a step is walked again
 	// only when the step before it gave other items, or a children node it read is not the one
@@ -185,25 +215,28 @@ export function createPlaces(setup: Setup) {
 	// the held address rests on. drop: let go
 	function open(address: Address) {
 		const p = plan(address)
-		const start = p ? [p[0]] : []
-		const names = p ? p[1] : []
+		const start = p ? starts : none
+		// its own copy: the hold outlives the call
+		const names = p ? p[1].slice() : []
 		const path: Held<Step>[] = []
-		for (let i = 1; i <= names.length; i++) {
-			const e = held.make(names.slice(0, i))
+		let e = held.root
+		for (const name of names) {
+			e = held.make([name], e)
 			e.value ??= { from: null, items: [], seen: [], opened: 0 }
 			e.value.opened++
 			path.push(e)
 		}
 		let dropped = false
 		function items(): readonly Item[] {
-			if (dropped || !p) return []
+			if (dropped || !p) return none
 			let before: readonly Item[] = start
 			for (let i = 0; i < path.length; i++) {
 				const s = path[i].value!
 				if (s.from !== before || !good(s)) {
 					s.from = before
 					s.seen = []
-					s.items = before.length ? step(before, names[i], s.seen) : []
+					const walked = before.length ? step(before, names[i], s.seen) : none
+					if (!alike(walked, s.items)) s.items = walked
 				} else if (tell) {
 					for (const x of s.seen) tell({ source: x.source, id: x.id, path: [names[i]] })
 				}
@@ -230,57 +263,65 @@ export function createPlaces(setup: Setup) {
 		return n
 	}
 
-	function write(parent: Item, n: Node<unknown>, patches: Patch[], header: ChangeHeader) {
-		const each = setup.each
-		update(
-			n,
-			patches,
-			header,
-			each ? { each: (p, f) => each(parent.source, parent.id, p, f) } : {},
-		)
+	function write(
+		parent: Item,
+		n: Node<unknown>,
+		patches: Patch[],
+		header: ChangeHeader,
+	): Changed[] {
+		update(n, patches, header)
+		return [{ source: parent.source, id: parent.id, node: n }]
 	}
 
 	// the patches that make sure n's value is a map, first
 	const base = (n: Node<unknown>): Patch[] => isMap(n.value) ? [] : [{ path: [], value: {} }]
 
+	// every write: the nodes it changed, in order. refused: it throws, and nothing changes
+
 	// entry placed under name, at index (default the end): one change on the parent's children
-	function place([at, name]: Slot, entry: Entry, header: ChangeHeader, index?: number) {
+	function place(
+		[at, name]: Slot,
+		entry: Entry,
+		header: ChangeHeader,
+		index?: number,
+	): Changed[] {
 		if (bad(name)) throw new PlacesError("not-a-name", name)
 		const parent = parentOf(at)
 		const n = node(parent)
+		if (taken(n, name)) throw new PlacesError("already-there", name)
 		const list = array(n, name)
 		const i = index ?? list?.length ?? 0
-		if (i < 0 || i > (list?.length ?? 0)) throw new PlacesError("range", name)
+		if (!within(i, 0, list?.length ?? 0)) throw new PlacesError("range", name)
 		const ps = base(n)
 		const put = [[entry[0], entry[1]]]
 		ps.push(list ? { path: [name], range: [i, i], value: put } : { path: [name], value: put })
-		write(parent, n, ps, header)
+		return write(parent, n, ps, header)
 	}
 
 	// the entry at index under name taken out; the last one: the name too. one change
-	function unplace([at, name]: Slot, index: number, header: ChangeHeader) {
+	function unplace([at, name]: Slot, index: number, header: ChangeHeader): Changed[] {
 		const parent = parentOf(at)
 		const n = node(parent)
 		const list = array(n, name)
 		if (!list?.length) throw new PlacesError("nothing-there", name)
-		if (index < 0 || index >= list.length) throw new PlacesError("range", name)
+		if (!within(index, 0, list.length - 1)) throw new PlacesError("range", name)
 		const ps: Patch[] = list.length === 1
 			? [{ path: [name] }]
 			: [{ path: [name], range: [index, index + 1] }]
-		write(parent, n, ps, header)
+		return write(parent, n, ps, header)
 	}
 
 	// the entry at from under name moved to index to, counted with it taken out: one change. to 0:
 	// the front, the one chosen
-	function order([at, name]: Slot, from: number, to: number, header: ChangeHeader) {
+	function order([at, name]: Slot, from: number, to: number, header: ChangeHeader): Changed[] {
 		const parent = parentOf(at)
 		const n = node(parent)
 		const list = array(n, name) ?? []
-		if (from < 0 || from >= list.length || to < 0 || to > list.length - 1) {
+		if (!within(from, 0, list.length - 1) || !within(to, 0, list.length - 1)) {
 			throw new PlacesError("range", name)
 		}
-		if (from === to) return
-		write(parent, n, [{
+		if (from === to) return []
+		return write(parent, n, [{
 			path: [name],
 			range: [to, to],
 			move: { path: [name], range: [from, from + 1] },
@@ -288,36 +329,46 @@ export function createPlaces(setup: Setup) {
 	}
 
 	// everything under name moved to the name to: one change
-	function rename([at, name]: Slot, to: string, header: ChangeHeader) {
+	function rename([at, name]: Slot, to: string, header: ChangeHeader): Changed[] {
 		if (bad(to)) throw new PlacesError("not-a-name", to)
 		const parent = parentOf(at)
 		const n = node(parent)
 		if (!array(n, name)?.length) throw new PlacesError("nothing-there", name)
-		if (to === name) return
+		if (to === name) return []
 		if (isMap(n.value) && Object.hasOwn(n.value, to)) throw new PlacesError("already-there", to)
-		write(parent, n, [{ path: [to], move: { path: [name] } }], header)
+		return write(parent, n, [{ path: [to], move: { path: [name] } }], header)
 	}
 
 	// the entry at index under one slot put under another, at toindex (default the end): one
-	// parent, one change; two, a change on each, the one it goes into first
-	function move(from: Slot, index: number, to: Slot, header: ChangeHeader, toindex?: number) {
+	// children node (the same node, whatever keys reach it), one change, returned with the key of
+	// the target; two nodes, a change on each, the one it goes into first
+	function move(
+		from: Slot,
+		index: number,
+		to: Slot,
+		header: ChangeHeader,
+		toindex?: number,
+	): Changed[] {
 		const [at, name] = from, [toat, toname] = to
 		if (bad(toname)) throw new PlacesError("not-a-name", toname)
 		const parent = parentOf(at), into = parentOf(toat)
 		const n = node(parent)
 		const list = array(n, name) ?? []
-		if (index < 0 || index >= list.length) {
+		if (!within(index, 0, list.length - 1)) {
 			throw new PlacesError(list.length ? "range" : "nothing-there", name)
 		}
-		const moved = entry(list[index])
-		if (!moved) throw new PlacesError("nothing-there", name)
-		if (parent.source === into.source && parent.id === into.id && name === toname) {
-			return order(from, index, toindex ?? list.length - 1, header)
+		const moved = list[index]
+		if (!isEntry(moved)) throw new PlacesError("nothing-there", name)
+		// the same node, not the same key: the table may hold one node under several keys
+		const same = children(into.source, into.id) === n
+		if (same && name === toname) {
+			return order(to, index, toindex ?? list.length - 1, header)
 		}
-		if (parent.source === into.source && parent.id === into.id) {
+		if (same) {
+			if (taken(n, toname)) throw new PlacesError("already-there", toname)
 			const target = array(n, toname)
 			const i = toindex ?? target?.length ?? 0
-			if (i < 0 || i > (target?.length ?? 0)) throw new PlacesError("range", toname)
+			if (!within(i, 0, target?.length ?? 0)) throw new PlacesError("range", toname)
 			const ps: Patch[] = []
 			if (!target) ps.push({ path: [toname], value: [] })
 			ps.push({
@@ -326,11 +377,9 @@ export function createPlaces(setup: Setup) {
 				move: { path: [name], range: [index, index + 1] },
 			})
 			if (list.length === 1) ps.push({ path: [name] })
-			write(parent, n, ps, header)
-			return
+			return write(into, n, ps, header)
 		}
-		place(to, moved, header, toindex)
-		unplace(from, index, header)
+		return [...place(to, moved, header, toindex), ...unplace(from, index, header)]
 	}
 
 	return { get, lookup, names, open, place, unplace, order, rename, move }

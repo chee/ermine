@@ -1,0 +1,34 @@
+{
+	"title": "an act that changes a key: another round runs what read it",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "a" },
+			"act": { "write": ["b", { "sum": [{ "given": "value" }, 1] }] }
+		},
+		{ "op": "compute", "name": "c", "owner": "o", "f": { "sum": [{ "read": "b" }] }, "to": "c" },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 2 } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "e", "tick": 1 },
+					{ "due": "c", "tick": 2 },
+					{ "starts": "e", "run": 1, "rank": 0 },
+					{ "ends": "e", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
+					{ "due": "c", "tick": 5 },
+					{ "acts": "e", "run": 1 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
+				]
+			}
+		}
+	]
+}

@@ -42,7 +42,7 @@ import {
 } from "@ermine/protect"
 import { capture, type FileLocation } from "@ermine/util/stacktrace"
 import { createTable } from "./table.ts"
-import { createTrackgraph, type Node as Track } from "./trackgraph.ts"
+import { createTracker, type Node as Track } from "@ermine/scheduler/tracker"
 
 type N = Node<unknown, Change>
 type V = Side<unknown, Change>
@@ -160,7 +160,7 @@ export type Tracker<W, T> = {
 export type Tracked<O> = { owner: O } | { spot: { id: string; part: Part } }
 
 function trackgraph<W>(): Tracker<W, Track<W>> {
-	const t = createTrackgraph<W>()
+	const t = createTracker<W>()
 	return { ...t, owners: (n) => t.readers(n).map((l) => l.from.owner) }
 }
 
@@ -210,7 +210,7 @@ export const ours: ReadonlySet<string> = new Set([
 		"core/node/typescript/update.ts",
 		"core/node/typescript/node.ts",
 		"core/graph/typescript/table.ts",
-		"core/graph/typescript/trackgraph.ts",
+		"core/scheduler/typescript/tracker.ts",
 		"core/util/typescript/stacktrace.ts",
 	].map((f) => new URL(`../../../${f}`, import.meta.url).href),
 ])

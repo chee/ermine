@@ -1,0 +1,338 @@
+{
+	"title": "unplace: one entry out; the last takes the name too; its refusals",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "t": [["a", "X"], ["b", "X"], ["c", "X"]], "one": [["s", "O"]] },
+			"expect": {}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 1,
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["a", "X"], ["c", "X"]], "one": [["s", "O"]] },
+						"time": 2,
+						"patches": [{ "path": ["t"], "range": [1, 2] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["t"],
+			"expect": {
+				"items": [
+					{ "source": "a", "id": "X", "name": "t", "at": 0, "path": ["t"] },
+					{ "source": "c", "id": "X", "name": "t", "at": 1, "path": ["t"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["t"] }]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["c", "X"]], "one": [["s", "O"]] },
+						"time": 3,
+						"patches": [{ "path": ["t"], "range": [0, 1] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["t"],
+			"expect": {
+				"items": [{ "source": "c", "id": "X", "name": "t", "at": 0, "path": ["t"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["t"] }]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "one": [["s", "O"]] },
+						"time": 4,
+						"patches": [{ "path": ["t"] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": { "node": { "value": { "one": [["s", "O"]] }, "time": 4 } }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 1,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": -1,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "one",
+			"index": 0,
+			"time": 5,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": {},
+						"time": 5,
+						"patches": [{ "path": ["one"] }]
+					}
+				]
+			}
+		},
+		{ "op": "node", "source": "s", "id": "R", "expect": { "node": { "value": {}, "time": 5 } } },
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "one",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "one", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "never",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "never", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "never",
+			"index": 5,
+			"expect": { "error": "nothing-there", "at": "never", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": ".",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": ".", "changes": [] }
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { ".": [["s", "D1"], ["s", "D2"]], "..": [["s", "DD"]] },
+			"expect": {}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": ".",
+			"index": 0,
+			"time": 8,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { ".": [["s", "D2"]], "..": [["s", "DD"]] },
+						"time": 8,
+						"patches": [{ "path": ["."], "range": [0, 1] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "..",
+			"index": 0,
+			"time": 9,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { ".": [["s", "D2"]] },
+						"time": 9,
+						"patches": [{ "path": [".."] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": { "node": { "value": { ".": [["s", "D2"]] }, "time": 9 } }
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "t": [["s", "A"], ["s", "B"]], "k": [["s", "K"]] },
+			"expect": {}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 2,
+			"expect": { "error": "range", "at": "t", "changes": [] }
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": -1,
+			"expect": { "error": "range", "at": "t", "changes": [] }
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "R",
+			"expect": {
+				"node": { "value": { "t": [["s", "A"], ["s", "B"]], "k": [["s", "K"]] }, "time": 0 }
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "nobody"],
+			"name": "t",
+			"index": 0,
+			"expect": { "error": "nothing-there", "changes": [] }
+		},
+		{
+			"op": "get",
+			"address": ["t"],
+			"save": "t",
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "t", "at": 0, "path": ["t"] },
+					{ "source": "s", "id": "B", "name": "t", "at": 1, "path": ["t"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["t"] }]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": { "item": "t", "at": 1 },
+			"name": "x",
+			"index": 0,
+			"expect": { "error": "nothing-there", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "B", "value": { "x": [["s", "X"]] }, "expect": {} },
+		{
+			"op": "unplace",
+			"parent": { "item": "t", "at": 1 },
+			"name": "x",
+			"index": 0,
+			"time": 6,
+			"expect": {
+				"changes": [
+					{ "source": "s", "id": "B", "value": {}, "time": 6, "patches": [{ "path": ["x"] }] }
+				]
+			}
+		},
+		{ "op": "node", "source": "s", "id": "B", "expect": { "node": { "value": {}, "time": 6 } } },
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "t": [["s", "A"], ["s", "A"], ["s", "A"]] },
+			"expect": {}
+		},
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 2,
+			"time": 7,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "R",
+						"value": { "t": [["s", "A"], ["s", "A"]] },
+						"time": 7,
+						"patches": [{ "path": ["t"], "range": [2, 3] }]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": ["t"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "t", "at": 0, "path": ["t"] },
+					{ "source": "s", "id": "A", "name": "t", "at": 1, "path": ["t"] }
+				],
+				"reads": [{ "source": "s", "id": "R", "path": ["t"] }]
+			}
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": [["s", "A"]], "expect": {} },
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "R", "expect": {} },
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		},
+		{ "op": "children", "source": "s", "id": "R", "value": { "t": 5 }, "expect": {} },
+		{
+			"op": "unplace",
+			"parent": ["s", "R"],
+			"name": "t",
+			"index": 0,
+			"expect": { "error": "nothing-there", "at": "t", "changes": [] }
+		}
+	]
+}

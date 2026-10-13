@@ -37,6 +37,13 @@ core/graph/c/scratch/
 core/graph/c/fuzz
 core/graph/c/corpus/
 core/graph/c/crash-*
+# libFuzzer (core/*/c/*_fuzz.sh): binaries, corpora, finds
+**/c/*-fuzz
+**/c/*-corpus/
+**/c/crash-*
+**/c/leak-*
+**/c/timeout-*
+**/c/oom-*
 *.swp
 .swp
 .DS_Store

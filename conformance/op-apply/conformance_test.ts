@@ -3,10 +3,10 @@
 //
 // The fuzzer makes values and patches, follows them with apply.ts, and asks the harness the same:
 // its answers must be what calling apply.ts gives. And, for apply.ts and the harness alike: many
-// patches in one call give what one call each gives, value and facts (one call walks a string from
-// where the last patch left off; one call each never does).
+// patches in one call give what one call each gives (one call walks a string from where the last
+// patch left off; one call each never does).
 import { assert, assertEquals } from "@std/assert"
-import apply, { ApplyError, type Facts, type Patch } from "@ermine/op/apply"
+import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { line, toJson } from "../pack/form.ts"
 
 const here = new URL(".", import.meta.url).pathname
@@ -271,26 +271,23 @@ function patch(pick: Pick, v: unknown, list: boolean): Patch {
 }
 
 // apply.ts called directly, answered as the harness answers
-function direct(value: unknown, patches: Patch[], list: boolean, each: boolean): Answer {
-	const told: Facts[] = []
+function direct(value: unknown, patches: Patch[], list: boolean): Answer {
 	try {
-		const v = apply(value, patches, { list, each: each ? (_p, f) => told.push(f) : undefined })
+		const v = apply(value, patches, { list })
 		const out: Answer = v === undefined ? {} : { value: toJson(v) }
-		if (each) out.facts = told
 		return JSON.parse(line(out))
 	} catch (e) {
 		if (!(e instanceof ApplyError)) throw e
 		return { error: { code: e.code, patch: e.patch } }
 	}
 }
-const request = (value: unknown, patches: Patch[], list: boolean, each: boolean): Request => ({
+const request = (value: unknown, patches: Patch[], list: boolean): Request => ({
 	op: "apply",
 	...(value === undefined ? {} : { value: toJson(value) }),
 	patches: patches.map((p) =>
 		isMap(p) && Object.hasOwn(p, "value") ? { ...p, value: toJson(p.value) } : p
 	),
 	...(list ? { list } : {}),
-	...(each ? { each } : {}),
 })
 
 type Run = {
@@ -330,23 +327,15 @@ function run(seed: number): Run {
 Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as one call each`, async () => {
 	const runs = Array.from({ length: SEEDS }, (_, i) => run(i + 1))
 	const requests: Request[] = [], expected: Answer[] = [], where: string[] = []
-	const add = (
-		seed: number,
-		what: string,
-		value: unknown,
-		ps: Patch[],
-		list: boolean,
-		each: boolean,
-	) => {
-		requests.push(request(value, ps, list, each))
-		expected.push(direct(value, ps, list, each))
+	const add = (seed: number, what: string, value: unknown, ps: Patch[], list: boolean) => {
+		requests.push(request(value, ps, list))
+		expected.push(direct(value, ps, list))
 		where.push(`seed ${seed}: ${what}`)
 	}
 	runs.forEach((r, i) => {
 		const seed = i + 1
-		add(seed, "all", r.start, r.good, r.list, true)
-		add(seed, "all, no facts", r.start, r.good, r.list, false)
-		r.good.forEach((p, k) => add(seed, `patch ${k} alone`, r.befores[k], [p], r.list, true))
+		add(seed, "all", r.start, r.good, r.list)
+		r.good.forEach((p, k) => add(seed, `patch ${k} alone`, r.befores[k], [p], r.list))
 		// an invalid patch where it fell: that index, whatever came before
 		for (const [k, p] of r.bad) {
 			add(
@@ -355,21 +344,19 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 				r.start,
 				[...r.good.slice(0, k), p, ...r.good.slice(k)],
 				r.list,
-				true,
 			)
 		}
 	})
 	const answers = await ask(requests)
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) => assertEquals(a, expected[i], `${where[i]}: ${line(requests[i])}`))
-	// one call, as one call each: the end, each patch's facts, an invalid patch's index. a list
-	// option's removal at [] leaves nothing there, where a next call starts as []: those runs are
-	// left out
+	// one call, as one call each: the end, an invalid patch's index. a list option's removal at []
+	// leaves nothing there, where a next call starts as []: those runs are left out
 	let at = 0
 	runs.forEach((r, i) => {
-		const all = answers[at], alone = answers.slice(at + 2, at + 2 + r.good.length)
-		const invalid = answers.slice(at + 2 + r.good.length, at + 2 + r.good.length + r.bad.length)
-		at += 2 + r.good.length + r.bad.length
+		const all = answers[at], alone = answers.slice(at + 1, at + 1 + r.good.length)
+		const invalid = answers.slice(at + 1 + r.good.length, at + 1 + r.good.length + r.bad.length)
+		at += 1 + r.good.length + r.bad.length
 		assertEquals(all.error, undefined, `seed ${i + 1}: all valid`)
 		if (r.list) return
 		const end = alone.length
@@ -378,7 +365,6 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 			? undefined
 			: JSON.parse(line(toJson(r.start)))
 		assertEquals(all.value, end, `seed ${i + 1}: the end`)
-		alone.forEach((a, k) => assertEquals(all.facts[k], a.facts[0], `seed ${i + 1}: patch ${k}`))
 		r.bad.forEach(([k], j) => assertEquals(invalid[j].error?.patch, k, `seed ${i + 1}: invalid`))
 	})
 })

@@ -1,0 +1,41 @@
+{
+	"title": "equal by its own comparison: a list equal by JSON stops there; by Object.is, a new list goes on",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "l",
+			"owner": "o",
+			"f": [{ "read": "a" }, { "read": "b" }],
+			"to": "l",
+			"equal": "json"
+		},
+		{
+			"op": "compute",
+			"name": "m",
+			"owner": "o",
+			"f": [{ "read": "a" }, { "read": "b" }],
+			"to": "m"
+		},
+		{
+			"op": "effect",
+			"name": "el",
+			"owner": "o",
+			"f": { "read": "l" },
+			"act": { "log": ["el", { "given": "value" }] }
+		},
+		{
+			"op": "effect",
+			"name": "em",
+			"owner": "o",
+			"f": { "read": "m" },
+			"act": { "log": ["em", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["el", [1, 2]], ["em", [1, 2]]] } },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 8 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["em", [1, 2]]] } }
+	]
+}

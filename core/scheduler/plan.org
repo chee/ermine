@@ -1,0 +1,124 @@
+#+title: plan: the scheduler
+#+author: LLM generated working output
+#+date: 2026-10-13
+
+Words: *decided*: chee's words, quoted. *lean*: chee thinking it through. *mine*: my proposal,
+open. *open*: not answered. Comes after notify (lowest library first).
+
+* What it is
+- just a scheduler, *decided*: "can we get the scheduler to _just_ be a scheduler?"
+- it runs code, it doesn't know processes, *decided*: "a scheduler that's a scheduler that works
+  like the current ermine scheduler that i've grown quite fond of, but without it knowing about
+  _processes_, it just knowing about running code. and it's the `ermine.ts` package whose job it is
+  to set up the whole program/process idea where it finds loaders"
+- it owns owners and tracking, *decided*: "the scheduler, i believe, owns the Owners tree and the
+  Tracking"
+- the ranked one stays: rounds, ranks (scheduler.ts, order.ts, rank.ts). alien.ts deleted, *decided*:
+  "we should delete alien.ts". Looked at and not taken: alien (lazy pull), Solid 2.0 (owners and
+  async built in, ~6k lines, no C), an Incremental-shaped redesign ("no i don't mean incremental
+  shaped lol")
+- push, a feeling, *lean*: "i do have this weird feeling, that i've never fully understood, that
+  opstreams/ermine needs to be a push scheduler"; the ranked one is push (eager, in rank order)
+
+* What stays, what moves (mine, from the files)
+| stays in the scheduler: running code              | moves to ermine.ts: programs and processes            |
+|---------------------------------------------------+-------------------------------------------------------|
+| rounds and ranks (scheduler.ts, order.ts, rank.ts) | processes.ts: start, kill, placing, children          |
+| tracking: tracker.ts (was the trackgraph), notify  | records.ts: values, status, runs written to the graph |
+| the owners tree                                    | programs/code, handlers, process-api; loaders         |
+| loops (causes.ts)                                  | asking protect: a guarded API per process             |
+| equal values stop there (helpers.ts)               |                                                       |
+| its tick, beside changes, never in them            |                                                       |
+
+It would import only: the tracker, notify, op's Patch and Facts (types). Not node, table, places,
+main, protect, programs, util. ermine.ts wires places' read hook and update's each into it.
+
+* Its interface (mine, a sketch)
+#+begin_src ts
+const s = createScheduler()
+const o = s.owner(parent?)            // the owners tree; dispose(o) takes everything under it
+s.cleanup(o, f) · s.dispose(o)
+s.run(o, f)                           // once, untracked: a setup
+s.compute(o, f)                       // tracked; runs again when what it read changes
+s.effect(o, f, act)                   // after the round's last run, sees every change
+s.read(source, id, path)              // the running computation read this (places' read, value reads)
+s.changed(source, id, patch, facts)   // this landed (update's each, places' each)
+#+end_src
+
+* Settled elsewhere that it must keep
+- the graph never starts or runs anything; processes are unique and local (settled)
+- a program: a setup, run once, untracked, giving a value; computes and effects for what updates;
+  no run on an equal value; runs are writes (10-09, 10-11)
+- async compute stays as it is, made visible (10-11)
+- time on a change is the wall clock; the scheduler's tick lives beside changes (10-13)
+- pending and status: the scheduler's contribution at a place, an entry in places' array; the app
+  or user can choose the winner (10-13); status as a version in front of a value is gone
+- protect: not the scheduler's; reads asked in the API a process is handed, still reported, so
+  rule changes rerun what read them (10-13)
+- tracker.ts: "beautiful already" (10-13), moved into the scheduler from core/graph
+
+* Wanted, later
+- a faithful trace of a run's reads, in order, recorded separately from the tracker, for
+  introspection and visualizing a run, *decided*: "i do!" (the tracker keeps no duplicates)
+- spotting a computation whose reads keep changing order, and letting a user switch it to ordered
+  reads (idea: "it'd be cool ... but, complexity no thx for now probably")
+- the tracker's `add`: kept for rebuilding who-read-what after a reload without re-running; throws
+  during a run
+
+* Naming, decided 10-13
+- the round is `pulse`: "make it s.pulse()"
+
+* Fine-grained: decided 10-13
+- *decided*: "okay so we drop each. i guess we'll keep move for now. and we replace notify with
+  tracked paths": each and op's facts leave apply, update and places (places' writes return the
+  nodes they touched); move stays for now; notify is replaced by tracking on patch paths (the
+  rule in core/scheduler/fine-grained.md)
+
+* Fine-grained: where it is
+- a fresh opinion (default model) in core/scheduler/fine-grained.md: tracking on patch paths, in the
+  scheduler in place of notify; spots (source, id, path); a patch marks reads at, under and above
+  its path, a splice marks from its start; no facts, no before-state, no chasing; anchors (cursors)
+  as a library over the op stream; compare-reads as the test oracle. Not decided
+- chee 10-13: "if we know "something here changed" and we have the patch, we can do fine grained.
+  this part, the applying of ops, we have to get right because it's one of the few parts of the
+  system that is kernelspace"; "maybe the tracking, happens on a patch path"; table events as a
+  patch at []: "oh cool"
+- copy-on-write per node, *lean*: "createNode(value, change, {cow: false})": copy-on-write by
+  default, in place when asked; the same flag tells the scheduler whether same-reference means
+  unchanged
+- things that aren't plain data (an Automerge doc with a counter, a store), 10-13: a server process
+  mirrors them as plain nodes, with handler nodes for actions ("ok that's cool, it's in the
+  graph"); { change, get(), mutate() } nodes, *decided*: they don't exist ("those are weird
+  live-node things"; "`change, get(), mutate() }` doesn't exist")
+- waiting on: copy-on-write or in-place (chee: "if you don't want it to be mutated don't put it in
+  the system, or structuredClone it first"; the worry: "time travel and weird behaviour in
+  render", tearing); move in local patches (lean: delete + add)
+
+* Open
+- push.ts (push-pull on shift's core): kept beside scheduler.ts, or gone like alien
+- computations depend on each other only through the graph, *decided* 10-13 ("i think we want
+  (b)"): a compute's result is handed out to be written to a node; others read that node; the
+  scheduler holds only each compute's last result, to compare
+- node types, *lean*: "the thing that is called `by` or `layer` or whatever, and `value` `children`
+  etc, might secretly be "node types""
+- main.ts, *lean*: "this "main" might not need to exist"; ermine.ts wires the libraries instead
+- the 10-06 answers ("placing starts and unplacing kills", stopping a process stops the ones it
+  started), to ask fresh when ermine.ts is designed; program lookup; runner vs loader
+
+* Built 10-13 (TypeScript)
+- paths.ts (+ C): tracked paths, notify's replacement; suite core/scheduler/conformance/paths/
+- scheduler.ts: running code only; owner/cleanup/dispose, run, compute(owner, f, set, equal?),
+  effect(owner, f, act, equal?), read(key), changed(keys), pulse(), tick(); hooks for moments; suite
+  core/scheduler/conformance/scheduler/ (26 scenarios + fuzz). The agent's own choices (open):
+  writers learned from who calls changed (so a first pulse can run a reader twice while an edge is
+  learned); effects compare with the value last acted on; computations are owners; a global read
+  can't refuse after an await (no AsyncContext), the run's own read can; the host drives pulses
+  (wake). Old suite in conformance/suites-aside/scheduler/; the C scheduler not ported yet
+- not wired: places' reads and update's changes into paths and the scheduler (ermine.ts)
+
+* Steps
+1. notify, rewritten (next): one per (source, id) node, fed by update's each, op's facts only
+2. scheduler.ts stripped to running code: owners, tracking (tracker + notify), rounds, loops,
+   equality, tick; tests, a suite, the C
+3. ermine.ts: processes, programs, loaders, records, the guarded API, the wiring
+4. a bench against today's scheduler

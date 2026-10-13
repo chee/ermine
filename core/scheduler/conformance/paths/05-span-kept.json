@@ -1,0 +1,32 @@
+{
+	"title": "a splice that keeps the list's length marks only its span",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "x"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "n"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [1, 3], "value": ["a", "b"] }],
+			"expect": [["l"], ["l", 1], ["l", 2, "x"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [3, 4], "value": [[]] }],
+			"expect": [["l"], ["l", 3]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [2, 2] }],
+			"expect": [["l"]]
+		}
+	]
+}

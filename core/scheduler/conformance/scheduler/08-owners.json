@@ -1,0 +1,38 @@
+{
+	"title": "disposing an owner takes everything under it: children first, newest first, then its cleanups, newest first",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "owner", "name": "p", "parent": "o", "expect": {} },
+		{ "op": "cleanup", "owner": "o", "do": { "log": "o1" }, "expect": {} },
+		{ "op": "compute", "name": "c", "owner": "p", "f": { "read": "x" }, "to": "c" },
+		{ "op": "owner", "name": "g", "parent": "p", "expect": {} },
+		{ "op": "cleanup", "owner": "g", "do": { "log": "g" }, "expect": {} },
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "g",
+			"f": { "read": "x" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "cleanup", "owner": "p", "do": { "log": "p" }, "expect": {} },
+		{ "op": "cleanup", "owner": "o", "do": { "log": "o2" }, "expect": {} },
+		{ "op": "owner", "name": "q", "parent": "o", "expect": {} },
+		{ "op": "cleanup", "owner": "q", "do": { "log": "q" }, "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 1]] } },
+		{ "op": "moments" },
+		{ "op": "dispose", "owner": "o", "expect": {} },
+		{ "op": "log", "expect": { "log": ["q", "g", "p", "o2", "o1"] } },
+		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } },
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{ "op": "owner", "name": "r", "parent": "o", "expect": { "error": "disposed" } },
+		{ "op": "compute", "name": "c2", "owner": "p", "f": 1, "expect": { "error": "disposed" } },
+		{ "op": "cleanup", "owner": "o", "do": { "log": "late" }, "expect": {} },
+		{ "op": "log", "expect": { "log": ["late"] } },
+		{ "op": "dispose", "owner": "o", "expect": {} },
+		{ "op": "log", "expect": { "log": [] } }
+	]
+}

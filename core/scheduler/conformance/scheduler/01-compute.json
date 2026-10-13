@@ -1,0 +1,44 @@
+{
+	"title": "a compute runs at the next pulse, again when a key it read changes; its result goes to set",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": { "sum": [{ "read": "a" }, { "read": "b" }] },
+			"to": "c"
+		},
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 3 } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "tick", "expect": { "tick": 3 } },
+		{ "op": "write", "values": { "a": 5 }, "expect": { "tick": 4 } },
+		{ "op": "write", "values": { "z": 1 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 7 } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 4 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } }
+	]
+}

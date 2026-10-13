@@ -1,0 +1,116 @@
+{
+	"title": "a read is deep: patches inside it mark it, patches beside it do not (from notify 05-deep)",
+	"steps": [
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"rows"
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": []
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"rows",
+				1
+			]
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "n",
+			"path": [
+				"rows",
+				0,
+				"v"
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows",
+						0,
+						"v"
+					],
+					"value": "c"
+				}
+			],
+			"expect": [
+				[
+					"rows"
+				],
+				[],
+				[
+					"rows",
+					0,
+					"v"
+				]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows",
+						0,
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": [
+				[
+					"rows"
+				],
+				[]
+			]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [
+				{
+					"path": [
+						"rows"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": [
+				[
+					"rows"
+				],
+				[],
+				[
+					"rows",
+					1
+				],
+				[
+					"rows",
+					0,
+					"v"
+				]
+			]
+		}
+	]
+}

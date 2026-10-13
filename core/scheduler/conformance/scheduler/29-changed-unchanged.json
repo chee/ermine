@@ -1,0 +1,103 @@
+{
+	"title": "changed says a key landed, though its value is the same: its readers run, an equal result stops there (old 26-empty-write-marks)",
+	"steps": [
+		{
+			"op": "owner",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"k": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": {
+				"read": "k"
+			},
+			"to": "c"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": {
+				"read": "c"
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments"
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"k"
+			],
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 5
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		}
+	]
+}

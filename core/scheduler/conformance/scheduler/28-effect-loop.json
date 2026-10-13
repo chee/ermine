@@ -1,0 +1,173 @@
+{
+	"title": "an effect writing what its own compute read: a loop through both; its latest run is not acted on (old 18-looping)",
+	"steps": [
+		{
+			"op": "owner",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": {
+				"read": "a"
+			},
+			"to": "c"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": {
+				"do": [
+					{
+						"log": [
+							"ran",
+							{
+								"read": "c"
+							}
+						]
+					},
+					{
+						"read": "c"
+					}
+				]
+			},
+			"act": {
+				"write": [
+					"a",
+					{
+						"sum": [
+							{
+								"given": "value"
+							},
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"ran",
+						0
+					],
+					[
+						"ran",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "c",
+						"tick": 5
+					},
+					{
+						"acts": "e",
+						"run": 1
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "e",
+						"tick": 6
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c",
+							"e"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": 1
+			}
+		}
+	]
+}

@@ -1,0 +1,48 @@
+{
+	"title": "a compute that throws: its run failed, the error told; nothing given to set, nothing after it runs",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": {
+				"if": [
+					{ "eq": [{ "read": "a" }, 0] },
+					{ "throw": "zero" },
+					{ "sum": [{ "read": "a" }] }
+				]
+			},
+			"to": "c"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"owner": "o",
+			"f": { "read": "c" },
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 1]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "a": 0 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 5 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "failed", "error": "zero" }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{ "op": "log", "expect": { "log": [] } },
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 6 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", 2]] } },
+		{ "op": "get", "key": "c", "expect": { "value": 2 } }
+	]
+}

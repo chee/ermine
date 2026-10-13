@@ -1,0 +1,31 @@
+{
+	"title": "a patch marks the reads at its path and above it, never beside it",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": [] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["other"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["doc", "body"], "range": [3, 3], "value": "x" }],
+			"expect": [[], ["doc"], ["doc", "body"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["doc", "title", "deeper"], "value": 1 }],
+			"expect": [[], ["doc"], ["doc", "title"]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["missing", "x"], "value": 1 }],
+			"expect": [[]]
+		}
+	]
+}

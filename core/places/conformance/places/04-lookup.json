@@ -1,0 +1,307 @@
+{
+	"title": "lookup: from the start, then each place it was found in, nearest first; all",
+	"steps": [
+		{ "op": "make", "root": ["s", "R"], "expect": {} },
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": { "a": [["s", "A"]], "fonts": [["s", "F0"]], "only": [["s", "O0"]] },
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": { "b": [["s", "B"]], "fonts": [["s", "F1"], ["s", "F1b"]] },
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "B",
+			"value": { "fonts": [["s", "F2"]] },
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"address": ["a", "b"],
+			"save": "b",
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["a"] },
+					{ "source": "s", "id": "A", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": { "item": "b" },
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F2", "name": "fonts", "at": 0, "path": ["a", "b", "fonts"] }
+				],
+				"reads": [{ "source": "s", "id": "B", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F2", "name": "fonts", "at": 0, "path": ["a", "b", "fonts"] },
+					{ "source": "s", "id": "F1", "name": "fonts", "at": 0, "path": ["a", "fonts"] },
+					{ "source": "s", "id": "F1b", "name": "fonts", "at": 1, "path": ["a", "fonts"] },
+					{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "B", "path": ["fonts"] },
+					{ "source": "s", "id": "A", "path": ["fonts"] },
+					{ "source": "s", "id": "R", "path": ["fonts"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["only"],
+			"from": { "item": "b" },
+			"expect": {
+				"items": [{ "source": "s", "id": "O0", "name": "only", "at": 0, "path": ["only"] }],
+				"reads": [
+					{ "source": "s", "id": "B", "path": ["only"] },
+					{ "source": "s", "id": "A", "path": ["only"] },
+					{ "source": "s", "id": "R", "path": ["only"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["only"],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [{ "source": "s", "id": "O0", "name": "only", "at": 0, "path": ["only"] }],
+				"reads": [
+					{ "source": "s", "id": "B", "path": ["only"] },
+					{ "source": "s", "id": "A", "path": ["only"] },
+					{ "source": "s", "id": "R", "path": ["only"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["none"],
+			"from": { "item": "b" },
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "B", "path": ["none"] },
+					{ "source": "s", "id": "A", "path": ["none"] },
+					{ "source": "s", "id": "R", "path": ["none"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["none"],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [],
+				"reads": [
+					{ "source": "s", "id": "B", "path": ["none"] },
+					{ "source": "s", "id": "A", "path": ["none"] },
+					{ "source": "s", "id": "R", "path": ["none"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": ["s", "A"],
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F1", "name": "fonts", "at": 0, "path": ["fonts"] },
+					{ "source": "s", "id": "F1b", "name": "fonts", "at": 1, "path": ["fonts"] }
+				],
+				"reads": [{ "source": "s", "id": "A", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": ["s", "A"],
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F1", "name": "fonts", "at": 0, "path": ["fonts"] },
+					{ "source": "s", "id": "F1b", "name": "fonts", "at": 1, "path": ["fonts"] }
+				],
+				"reads": [{ "source": "s", "id": "A", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": ["s", "R"],
+			"all": true,
+			"expect": {
+				"items": [{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": ["s", "B"],
+			"all": true,
+			"expect": {
+				"items": [{ "source": "s", "id": "F2", "name": "fonts", "at": 0, "path": ["fonts"] }],
+				"reads": [{ "source": "s", "id": "B", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": ["s", "nobody"],
+			"expect": { "items": [], "reads": [{ "source": "s", "id": "nobody", "path": ["fonts"] }] }
+		},
+		{
+			"op": "get",
+			"address": ["a"],
+			"save": "a",
+			"expect": {
+				"items": [{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["a"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["fonts"],
+			"from": { "item": "a" },
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F1", "name": "fonts", "at": 0, "path": ["a", "fonts"] },
+					{ "source": "s", "id": "F1b", "name": "fonts", "at": 1, "path": ["a", "fonts"] }
+				],
+				"reads": [{ "source": "s", "id": "A", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["b", "fonts"],
+			"from": { "item": "a" },
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F2", "name": "fonts", "at": 0, "path": ["a", "b", "fonts"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "A", "path": ["b"] },
+					{ "source": "s", "id": "B", "path": ["fonts"] },
+					{ "source": "s", "id": "R", "path": ["b"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["only"],
+			"from": { "item": "a" },
+			"all": true,
+			"expect": {
+				"items": [{ "source": "s", "id": "O0", "name": "only", "at": 0, "path": ["only"] }],
+				"reads": [
+					{ "source": "s", "id": "A", "path": ["only"] },
+					{ "source": "s", "id": "R", "path": ["only"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["..", "only"],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [{ "source": "s", "id": "O0", "name": "only", "at": 0, "path": ["only"] }],
+				"reads": [
+					{ "source": "s", "id": "A", "path": ["only"] },
+					{ "source": "s", "id": "R", "path": ["only"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["/", "fonts"],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] },
+					{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] },
+					{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] }
+				],
+				"reads": [
+					{ "source": "s", "id": "R", "path": ["fonts"] },
+					{ "source": "s", "id": "R", "path": ["fonts"] },
+					{ "source": "s", "id": "R", "path": ["fonts"] }
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": ["/", "fonts"],
+			"from": { "item": "b" },
+			"expect": {
+				"items": [{ "source": "s", "id": "F0", "name": "fonts", "at": 0, "path": ["fonts"] }],
+				"reads": [{ "source": "s", "id": "R", "path": ["fonts"] }]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": [".."],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] },
+					{ "source": "s", "id": "R", "path": [] }
+				],
+				"reads": []
+			}
+		},
+		{
+			"op": "lookup",
+			"address": [],
+			"from": { "item": "b" },
+			"all": true,
+			"expect": {
+				"items": [
+					{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] },
+					{ "source": "s", "id": "A", "name": "a", "at": 0, "path": ["a"] },
+					{ "source": "s", "id": "R", "path": [] }
+				],
+				"reads": []
+			}
+		},
+		{
+			"op": "lookup",
+			"address": [],
+			"from": { "item": "b" },
+			"expect": {
+				"items": [{ "source": "s", "id": "B", "name": "b", "at": 0, "path": ["a", "b"] }],
+				"reads": []
+			}
+		},
+		{
+			"op": "lookup",
+			"address": [".."],
+			"from": ["s", "A"],
+			"all": true,
+			"expect": { "items": [], "reads": [] }
+		}
+	]
+}

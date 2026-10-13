@@ -1,0 +1,41 @@
+{
+	"title": "an act that throws: the error told; the other effects act, and it acts again on the next value",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{
+			"op": "effect",
+			"name": "e1",
+			"owner": "o",
+			"f": { "read": "a" },
+			"act": { "do": [{ "log": ["e1", { "given": "value" }] }, { "throw": "bad" }] }
+		},
+		{
+			"op": "effect",
+			"name": "e2",
+			"owner": "o",
+			"f": { "read": "a" },
+			"act": { "log": ["e2", { "given": "value" }] }
+		},
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e1", 1], ["e2", 1]] } },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "e1", "tick": 1 },
+					{ "due": "e2", "tick": 2 },
+					{ "starts": "e1", "run": 1, "rank": 0 },
+					{ "ends": "e1", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "e2", "run": 1, "rank": 0 },
+					{ "ends": "e2", "run": 1, "ended": "done", "equal": false },
+					{ "acts": "e1", "run": 1, "error": "bad" },
+					{ "acts": "e2", "run": 1 }
+				]
+			}
+		},
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e1", 2], ["e2", 2]] } }
+	]
+}

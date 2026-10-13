@@ -3,15 +3,12 @@
 	"version": "0.0.0",
 	"exports": {
 		".": "./typescript/scheduler.ts",
-		"./alien": "./typescript/alien.ts",
 		"./causes": "./typescript/causes.ts",
 		"./helpers": "./typescript/helpers.ts",
 		"./order": "./typescript/order.ts",
-		"./push": "./typescript/push.ts",
 		"./rank": "./typescript/rank.ts",
-		"./types": "./typescript/types.ts",
 		"./notify": "./typescript/notify.ts",
-		"./processes": "./typescript/processes.ts",
-		"./records": "./typescript/records.ts"
+		"./paths": "./typescript/paths.ts",
+		"./tracker": "./typescript/tracker.ts"
 	}
 }

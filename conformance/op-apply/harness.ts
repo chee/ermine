@@ -3,14 +3,12 @@
 // by speaking this (OP_APPLY_HARNESS). A first argument: another module's apply to test instead
 // (core/op/typescript/optim/*.ts).
 //
-// { op: "apply", value?, patches, list?, each? }
+// { op: "apply", value?, patches, list? }
 //    value: the value the patches are applied to; absent: nothing there
 //    patches: a list, each as apply.ts has them (anything else in it: not-a-patch)
-//    list, each: true or absent; each: the facts each patch was told
+//    list: true or absent
 //    → { value? }                  the value after them; absent: nothing there
-//    → { value?, facts }           each: one Facts per patch, in the order told
 //    → { error: { code, patch } }  an ApplyError: its code and the patch's index
-// Facts as apply.ts: { place: { list, length, had }, from?, size? }.
 //
 // { op: "invert", value?, patches, list? }
 //    the undo of the patches on value (invert.ts); value, patches, list as apply's
@@ -26,11 +24,10 @@
 // {"/": {"map": {"/": x}}}; -0 written -0. Unlike ENCODING.tex, a string may hold lone
 // surrogates (\udxxx): apply counts each as a position.
 //
-// Checked here, for every implementation: each is never told when a call fails (if it was, the
-// facts come with the error); each is told patch k as its k-th; the value given and the patches'
-// values are unchanged after the call (an invert's too). Anything not understood, or one of these
-// broken: { error: why }, a string.
-import { ApplyError as Refused, type Facts, type Patch } from "@ermine/op/apply"
+// Checked here, for every implementation: the value given and the patches' values are unchanged
+// after the call (an invert's too). Anything not understood, or that broken: { error: why }, a
+// string.
+import { ApplyError as Refused, type Patch } from "@ermine/op/apply"
 import invert from "@ermine/op/invert"
 import { Stand } from "@ermine/encoding/cbor"
 import { fromJson, line, toJson } from "../pack/form.ts"
@@ -97,27 +94,17 @@ function answer(r: Request): unknown {
 		const after = [form(value), ...patches.map((p) => form(isMap(p) ? p.value : undefined))]
 		return after.some((a, i) => a !== before[i]) ? { error: "a value given changed" } : out
 	}
-	const told: Facts[] = []
-	let wrong = ""
-	const each = r.each === true
-		? (p: Patch, f: Facts) => {
-			if (p !== patches[told.length] && !wrong) wrong = `each told patch ${told.length} another`
-			told.push(f)
-		}
-		: undefined
 	let out: Record<string, unknown>
 	try {
-		const v = apply(value, patches, { list: r.list === true, each })
+		const v = apply(value, patches, { list: r.list === true })
 		out = v === undefined ? {} : { value: toJson(v) }
-		if (each) out.facts = told
 	} catch (e) {
 		if (!(e instanceof ApplyError)) throw e
 		out = { error: { code: e.code, patch: e.patch } }
-		if (told.length) out.facts = told
 	}
 	const after = [form(value), ...patches.map((p) => form(isMap(p) ? p.value : undefined))]
 	if (after.some((a, i) => a !== before[i])) return { error: "a value given changed" }
-	return wrong ? { error: wrong } : out
+	return out
 }
 
 function safe(text: string): string {

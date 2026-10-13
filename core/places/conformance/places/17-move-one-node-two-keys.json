@@ -1,0 +1,303 @@
+{
+	"title": "move between two keys holding one children node: one change on the node, the target's key",
+	"steps": [
+		{
+			"op": "make",
+			"root": [
+				"s",
+				"R"
+			],
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "X",
+			"value": {
+				"t": [
+					[
+						"e",
+						"0"
+					],
+					[
+						"e",
+						"1"
+					]
+				],
+				"u": [
+					[
+						"e",
+						"2"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "alias",
+			"source": "s",
+			"id": "X",
+			"as": [
+				"s",
+				"Y"
+			],
+			"expect": {}
+		},
+		{
+			"op": "move",
+			"parent": [
+				"s",
+				"X"
+			],
+			"name": "t",
+			"index": 1,
+			"to": {
+				"parent": [
+					"s",
+					"Y"
+				],
+				"name": "t"
+			},
+			"toindex": 0,
+			"time": 2,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "Y",
+						"value": {
+							"t": [
+								[
+									"e",
+									"1"
+								],
+								[
+									"e",
+									"0"
+								]
+							],
+							"u": [
+								[
+									"e",
+									"2"
+								]
+							]
+						},
+						"time": 2,
+						"patches": [
+							{
+								"path": [
+									"t"
+								],
+								"range": [
+									0,
+									0
+								],
+								"move": {
+									"path": [
+										"t"
+									],
+									"range": [
+										1,
+										2
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": [
+				"s",
+				"X"
+			],
+			"name": "t",
+			"index": 0,
+			"to": {
+				"parent": [
+					"s",
+					"Y"
+				],
+				"name": "u"
+			},
+			"toindex": 0,
+			"time": 3,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "Y",
+						"value": {
+							"t": [
+								[
+									"e",
+									"0"
+								]
+							],
+							"u": [
+								[
+									"e",
+									"1"
+								],
+								[
+									"e",
+									"2"
+								]
+							]
+						},
+						"time": 3,
+						"patches": [
+							{
+								"path": [
+									"u"
+								],
+								"range": [
+									0,
+									0
+								],
+								"move": {
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": [
+				"s",
+				"Y"
+			],
+			"name": "t",
+			"index": 0,
+			"to": {
+				"parent": [
+					"s",
+					"X"
+				],
+				"name": "v"
+			},
+			"time": 4,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "X",
+						"value": {
+							"u": [
+								[
+									"e",
+									"1"
+								],
+								[
+									"e",
+									"2"
+								]
+							],
+							"v": [
+								[
+									"e",
+									"0"
+								]
+							]
+						},
+						"time": 4,
+						"patches": [
+							{
+								"path": [
+									"v"
+								],
+								"value": []
+							},
+							{
+								"path": [
+									"v"
+								],
+								"range": [
+									0,
+									0
+								],
+								"move": {
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							},
+							{
+								"path": [
+									"t"
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "move",
+			"parent": [
+				"s",
+				"X"
+			],
+			"name": "v",
+			"index": 0,
+			"to": {
+				"parent": [
+					"s",
+					"Y"
+				],
+				"name": "u"
+			},
+			"time": 5,
+			"toindex": 9,
+			"expect": {
+				"error": "range",
+				"at": "u",
+				"changes": []
+			}
+		},
+		{
+			"op": "node",
+			"source": "s",
+			"id": "Y",
+			"expect": {
+				"node": {
+					"value": {
+						"u": [
+							[
+								"e",
+								"1"
+							],
+							[
+								"e",
+								"2"
+							]
+						],
+						"v": [
+							[
+								"e",
+								"0"
+							]
+						]
+					},
+					"time": 4
+				}
+			}
+		}
+	]
+}

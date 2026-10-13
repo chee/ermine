@@ -138,17 +138,6 @@ for (const [name, w] of Object.entries(each)) {
 	})
 }
 
-// patched given: the facts notify reads gathered per patch
-for (const name of ["typing", "appending", "puts", "moves"]) {
-	const w = work[name]
-	Deno.bench(`${name}: apply, each`, { group: `${name}, each` }, (b) => {
-		const v = w.start()
-		b.start()
-		apply(v, w.patches, { each: () => {} })
-		b.end()
-	})
-}
-
 // strings: positions as code points, walked. emoji typing: every character is four bytes
 const emoji: Patch[] = Array.from(
 	{ length: N },
@@ -166,12 +155,6 @@ for (const [name, w] of Object.entries(strings)) {
 		const v = w.start()
 		b.start()
 		apply(v, w.patches)
-		b.end()
-	})
-	Deno.bench(`${name}: apply, each`, { group }, (b) => {
-		const v = w.start()
-		b.start()
-		apply(v, w.patches, { each: () => {} })
 		b.end()
 	})
 	Deno.bench(`${name}: cabbages`, { group }, (b) => {

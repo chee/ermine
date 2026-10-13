@@ -1,0 +1,29 @@
+{
+	"title": "the tick: each change and each new computation takes the next; due once, at the first",
+	"steps": [
+		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "tick", "expect": { "tick": 0 } },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
+		{ "op": "changed", "keys": ["nobody"], "expect": { "tick": 2 } },
+		{ "op": "compute", "name": "c", "owner": "o", "f": { "read": "a" }, "to": "c" },
+		{ "op": "changed", "keys": ["a"], "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "changed", "keys": ["a"], "expect": { "tick": 6 } },
+		{ "op": "changed", "keys": ["a"], "expect": { "tick": 7 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 3 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
+					{ "due": "c", "tick": 6 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{ "op": "tick", "expect": { "tick": 7 } }
+	]
+}

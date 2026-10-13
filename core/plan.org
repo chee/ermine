@@ -132,8 +132,15 @@ chee 10-13:
   fuzz of holds against fresh walks. The hole, *decided*: "leave a hole for that bit": setup's
   children(by, id) says where a contributor's children of an id live. Reads of what is not there
   are told, *decided*: "i would like for a thing to be able to read a path that is not there, and
-  to know it tried to read it, so i can then put something there". C, the old conformance suite:
-  not yet
+  to know it tried to read it, so i can then put something there". Suite: core/places/conformance/
+  places/ (18 tests, fuzz against the TS). C: done 10-13 (core/places/c/places.{h,c}, on the C trie
+  and table), passing with sanitizers and leaks. Renames 10-13: by → source, hold → open, find →
+  get, add/remove → place/unplace, place(item) → path(item); ROOT = Symbol.for("ermine.places.root")
+- one children node under two keys: allowed, *decided* 10-13 ("yes, but [e1, e1] still seems
+  wrong?"): places decides "the same parent" by the node, not the key (being fixed)
+- string paths, *decided* 10-13 ("i actually want to do this, yes"): strings split on "/", arrays
+  for odd names, and a path`…${name}` tag whose interpolations are always one name. Built:
+  core/places/typescript/path.ts (parse, address, path); empty pieces skipped, as in unix (mine)
 - places' stack, *decided* 10-13: several contributions at one path, often the same id; "the order
   is not the same everywhere. that needs to go a layer up. at the places layer we need to be able
   to reorder them. and they may be of many more arbitrary kinds than that (time travel). the app
@@ -143,6 +150,16 @@ chee 10-13:
   places ignorant of meaning, unnamed contributions after named ones, the layer above writes the
   order. One list, *decided*: "no need to have two lists": at (parent, name), the entries there,
   in order; an entry's position is its order
+- graph/main.ts, *decided* 10-13: "we're gonna drop bound and the scheduler api. i think we've also
+  figured out how to make a whole bunch of this stuff not be the business of the graph at all"
+  then, *lean*: "this "main" might not need to exist"; moving on to the scheduler first; then,
+  *decided*: "main WILL go, but some of its logic may need to be in ermine.ts?"
+- places' writes return the nodes they touched, instead of an each (as places-fresh did), *lean*:
+  "this sounds pretty neat"; goes in with notify, when update's each and op's facts go
+- scheduler: its own plan, core/scheduler/plan.org
+- scheduler, 10-13: "can we get the scheduler to _just_ be a scheduler?"; "the scheduler might
+  actually not even _know_ about processes, it might just know about executing code" (lean); and,
+  *decided*: "the scheduler, i believe, owns the Owners tree and the Tracking"
 - notify: a rewrite, *decided* 10-13: "we definitely want to rewrite notify".
 - graph, scheduler: patched/changed plumbing gone; notify's own facts() likely has no caller once
   every change comes through apply (open).

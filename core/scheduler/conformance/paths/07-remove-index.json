@@ -1,0 +1,40 @@
+{
+	"title": "an unranged removal at a list index marks from that index on; a put there replaces",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "x"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 6] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["m", "j"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["m", "k"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 1] }],
+			"expect": [["l"], ["l", 1], ["l", 2, "x"], ["l", 6]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 4] }],
+			"expect": [["l"], ["l", 6]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 1], "value": "new" }],
+			"expect": [["l"], ["l", 1]]
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["m", "k"] }],
+			"expect": [["m", "k"]]
+		}
+	]
+}

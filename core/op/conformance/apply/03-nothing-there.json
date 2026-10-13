@@ -8,32 +8,14 @@
 		},
 		{
 			"op": "apply",
-			"patches": [],
-			"each": true,
-			"expect": {
-				"facts": []
-			}
-		},
-		{
-			"op": "apply",
 			"patches": [
 				{
 					"path": [],
 					"value": 1
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": 1,
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
-				]
+				"value": 1
 			}
 		},
 		{
@@ -356,25 +338,7 @@
 					"path": []
 				}
 			],
-			"each": true,
-			"expect": {
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					}
-				]
-			}
+			"expect": {}
 		},
 		{
 			"op": "apply",
@@ -443,32 +407,8 @@
 					"value": 2
 				}
 			],
-			"each": true,
 			"expect": {
-				"value": 2,
-				"facts": [
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": true
-						}
-					},
-					{
-						"place": {
-							"list": false,
-							"length": 0,
-							"had": false
-						}
-					}
-				]
+				"value": 2
 			}
 		},
 		{

@@ -319,6 +319,31 @@ Deno.test("invert: moves of a span move it back", () => {
 	)
 })
 
+Deno.test("invert: a span or an item taken from a list and landed in the same list", () => {
+	// a span taken from the front, landed on an item after it: the item's place shifts back
+	for (
+		const [v, p] of [
+			[[false, false, false], { path: [1], move: { path: [], range: [0, 1] } }],
+			[[1, 2, 3, 4, 5], { path: [2], move: { path: [], range: [0, 2] } }],
+			[[1, 2, 3, 4, 5], { path: [1], move: { path: [], range: [2, 4] } }],
+			[[1, 2, 3, 4], { path: [0], move: { path: [], range: [1, 3] } }],
+			[[1, 2, 3, 4], { path: [1], move: { path: [], range: [1, 1] } }],
+			[[5, 6, [2, 3], 4], { path: [1, 0], move: { path: [], range: [0, 1] } }],
+			[[1, [2, 3], 4, 5], { path: [1, 0], move: { path: [], range: [3, 4] } }],
+			[[1, 2, 3, 4], { path: [], range: [1, 2], move: { path: [], range: [0, 1] } }],
+			[[1, 2, 3, 4], { path: [2], move: { path: [0] } }],
+			[[1, 2, 3, 4], { path: [0], move: { path: [3] } }],
+		] as [unknown, Patch][]
+	) round(v, [p], {}, JSON.stringify(p))
+	assertEquals(
+		round([false, false, false], [{ path: [1], move: { path: [], range: [0, 1] } }]),
+		[
+			{ path: [], range: [0, 0], move: { path: [2], range: [0, 1] } },
+			{ path: [2], value: false },
+		],
+	)
+})
+
 Deno.test("invert: moves that cannot move back: what was put undone, what was taken put back", () => {
 	const v = { l: ["a", "b"], m: { x: 1, y: { z: 2 } }, n: [["p", "q"]], s: "s" }
 	// the whole replaced by a part of it
@@ -498,7 +523,7 @@ function patch(pick: Pick, v: unknown, list: boolean): Patch {
 		return { path: p, range: [g, g + (pick(3) ? 0 : 1)] }
 	}
 	if (list && pick(6) === 0) return { path: [], value: pick(4) ? [made(pick, 1)] : made(pick, 0) }
-	switch (pick(16)) {
+	switch (pick(18)) {
 		case 0:
 			return { path: any()[0], value: made(pick, 2) }
 		case 1:
@@ -554,6 +579,20 @@ function patch(pick: Pick, v: unknown, list: boolean): Patch {
 		}
 		case 14:
 			return { path: [], value: made(pick, 2) }
+		case 16:
+		case 17: {
+			// a span or an item of a list, landed in that list: on an item (or deeper), or in a span
+			const lists = all.filter(([, x]) => Array.isArray(x))
+			if (!lists.length) return { path: any()[0], move: { path: any()[0] } }
+			const [f, l] = lists[pick(lists.length)]
+			const n = (l as unknown[]).length
+			const take = pick(2) ? { path: f, range: span(pick, n) } : { path: [...f, pick(n + 1)] }
+			const at = pick(n + 1)
+			const to = pick(2)
+				? { path: [...f, at, ...(pick(3) ? [] : [pick(2)])] }
+				: { path: f, range: [at, at + pick(3)] as [number, number] }
+			return { ...to, move: take }
+		}
 		default: {
 			// what is not there, or a key of the wrong kind
 			const [p] = any()

@@ -1,0 +1,127 @@
+{
+	"title": "changes between pulses run what read them once, after the last (old 12-batch)",
+	"steps": [
+		{
+			"op": "owner",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"y": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"owner": "o",
+			"f": {
+				"do": [
+					{
+						"log": "ran"
+					},
+					{
+						"sum": [
+							{
+								"read": "x"
+							},
+							{
+								"read": "y"
+							}
+						]
+					}
+				]
+			},
+			"to": "c"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"ran"
+				]
+			}
+		},
+		{
+			"op": "moments"
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 2
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"x",
+				"y"
+			],
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"ran"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 4
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}
