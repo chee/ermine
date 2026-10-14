@@ -21,9 +21,13 @@ chee 10-14: "i think this is the plan."
   createNode). *decided* 10-14: chee renamed it from createChangeable to createEntry ("maybe we can
   call it a changeable" earlier). places' Entry ([source, id]) goes with this plan; pack's Entry and
   C's tb_entry clash with the name
-- createNode(entries): an object whose keys are table names, each an entry; no id. *decided* 10-14:
-  "we can do the (entries) one and make the other one a nicer api for later, like in the ermine
-  layer" (plain values with one shared change: later, in ermine)
+- createNode(values, change?, options?): a node made from plain values, each table's value made an
+  entry with the one change shared (the same time for all) and the one options; a table given
+  undefined is left out; no id. *decided* 10-14: "let's have it build it from plain values. a person
+  going the other way can const `const node: Node =` if they want to". (an earlier answer took
+  entries; it returned its argument.) files: core/node/typescript/entry.ts (createEntry, default)
+  and node.ts (createNode, default), *decided*: "node/typescript/entry should export default
+  createEntry and node/typescript/node should export default createNode"
 - node: everything at an id, the combination of its tables. *lean*: "i think for storage, a node
   is its _combined_ table values. i believe."
 - table: what holds entries under (table name, id). the store folds into it, *lean*: "would
@@ -149,7 +153,11 @@ chee 10-14: "i think this is the plan."
   about all 3". for a process at /work/clock: ./hehe = /work/clock/hehe (the process, one path, shown
   once); hehe = /work/hehe (the folder: the slot case, goes wherever the folder goes); ../hehe =
   /hehe; /hehe from its "/". so a process's cwd is the folder it sits in, and only "." breaks with
-  unix. for something that isn't a process, "." and the cwd are the same folder. a process's inner stuff and a placement into a shared folder are
+  unix. whoever starts a walk hands places its "/", its "." and its folder; places knows no process.
+- ".." at "/" is "/", *lean* 10-14: "this might actually come naturally if we say that `../../` at
+  `/` is `/` then `hehe` and `./hehe` and `../hehe` are all the same for host". so the host needs no
+  special case, and a boxed process can't climb out of its box. today ".." above the start gives
+  nothing, and the old api had an above-root error: both go a process's inner stuff and a placement into a shared folder are
   two wants, *decided*: "yes, they are. a proccess's inner stuff is inside the process"
 - *open*: whether an in-memory placement can itself be sent; inline nodes (no id: no references,
   tracked by address) or in-memory ids

@@ -1,18 +1,45 @@
 {
 	"title": "a write's header is the pairs of the scope open, from the root down, then the write's own: the first actor and reader lifted, the rest the metadata, in order; the time now, one site. nothing open: unscoped",
 	"steps": [
-		{ "op": "header", "expect": { "error": "unscoped" } },
+		{
+			"op": "header",
+			"expect": {
+				"error": "unscoped"
+			}
+		},
 		{
 			"op": "root",
 			"name": "chee",
-			"info": [["actor", "chee"], ["reader", "juno"], ["why", "test"]],
+			"info": [
+				[
+					"actor",
+					"chee"
+				],
+				[
+					"reader",
+					"juno"
+				],
+				[
+					"why",
+					"test"
+				]
+			],
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "save",
 			"parent": "chee",
-			"info": [["cause", "x"], ["actor", "notes"]],
+			"info": [
+				[
+					"cause",
+					"x"
+				],
+				[
+					"actor",
+					"notes"
+				]
+			],
 			"expect": {}
 		},
 		{
@@ -21,7 +48,12 @@
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [["why", "test"]],
+				"metadata": [
+					[
+						"why",
+						"test"
+					]
+				],
 				"timely": true,
 				"sites": 1
 			}
@@ -29,16 +61,40 @@
 		{
 			"op": "header",
 			"scope": "save",
-			"extra": [["then", "y"], ["actor", "games"]],
+			"extra": [
+				[
+					"then",
+					"y"
+				],
+				[
+					"actor",
+					"games"
+				]
+			],
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
 				"metadata": [
-					["why", "test"],
-					["cause", "x"],
-					["actor", "notes"],
-					["then", "y"],
-					["actor", "games"]
+					[
+						"why",
+						"test"
+					],
+					[
+						"cause",
+						"x"
+					],
+					[
+						"actor",
+						"notes"
+					],
+					[
+						"then",
+						"y"
+					],
+					[
+						"actor",
+						"games"
+					]
 				],
 				"timely": true,
 				"sites": 1
@@ -50,22 +106,62 @@
 			"expect": {
 				"actor": "chee",
 				"reader": "juno",
-				"metadata": [["why", "test"], ["cause", "x"], ["actor", "notes"]],
+				"metadata": [
+					[
+						"why",
+						"test"
+					],
+					[
+						"cause",
+						"x"
+					],
+					[
+						"actor",
+						"notes"
+					]
+				],
 				"timely": true,
 				"sites": 1
 			}
 		},
-		{ "op": "root", "name": "bare", "expect": {} },
-		{ "op": "header", "scope": "bare", "expect": { "timely": true, "sites": 1 } },
-		{ "op": "value", "source": "stored", "id": "A", "value": 1, "expect": {} },
 		{
-			"op": "edit",
-			"source": "stored",
-			"part": "value",
-			"id": "A",
-			"patches": [{ "path": [], "value": 2 }],
+			"op": "root",
+			"name": "bare",
 			"expect": {}
 		},
-		{ "op": "node", "source": "stored", "part": "value", "id": "A", "expect": { "value": 2 } }
+		{
+			"op": "header",
+			"scope": "bare",
+			"expect": {
+				"timely": true,
+				"sites": 1
+			}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "A",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"part": "value",
+			"id": "A",
+			"expect": {
+				"value": 2
+			}
+		}
 	]
 }

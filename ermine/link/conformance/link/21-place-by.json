@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
 			"value": {},
 			"expect": {}

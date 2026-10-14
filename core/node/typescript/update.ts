@@ -1,5 +1,5 @@
 import apply, { type Patch } from "@ermine/op/apply"
-import type { ChangeHeader, Entry } from "./node.ts"
+import type { ChangeHeader, Entry } from "./entry.ts"
 
 export default function update<V>(
 	entry: Entry<V>,

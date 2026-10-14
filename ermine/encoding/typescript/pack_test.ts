@@ -1,7 +1,7 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import { createTable } from "@ermine/graph/table"
+import { createTable, type Key } from "@ermine/graph/table"
 import * as cbor from "./cbor.ts"
 import { decode, encode, type Entry, pack, PackError, unpack } from "./pack.ts"
 
@@ -69,15 +69,15 @@ Deno.test("pack: a node under several keys is one node again", () => {
 })
 
 Deno.test("pack: a table's nodes in, a table's nodes out", () => {
-	const t = createTable<unknown>()
+	const t = createTable()
 	const root = n({ home: [["host", "a"]] }), a = n("hello")
-	t.add("children", "root", root)
+	t.add("children", "root", root as NodeEntry<Record<string, unknown>>)
 	t.add("value", "a", a)
 	const es: Entry[] = ["root", "a"].flatMap((id) =>
 		t.get(id).map(([part, node]) => [part, id, node] as const)
 	)
-	const u = createTable<unknown>()
-	for (const [part, id, node] of unpack(pack(es))) u.add(part, id, node)
+	const u = createTable()
+	for (const [part, id, node] of unpack(pack(es))) u.add(part as Key, id, node)
 	assertEquals(u.get("children", "root")!.value, root.value)
 	assertEquals(u.get("value", "a")!.value, "hello")
 })

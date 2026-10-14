@@ -11,7 +11,7 @@
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import apply from "@ermine/op/apply"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 import { createTable } from "@ermine/graph/table"
 import { createPlaces, type Item, path, PlacesError } from "@ermine/places"
 import { lookups } from "../places/typescript/lib.ts"
@@ -118,18 +118,18 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 Deno.test({
 	name: "places + table: a move between two keys holding one children node",
 	fn() {
-		const t = createTable<unknown>()
-		const n = createEntry<unknown>({ t: [["e", "0"], ["e", "1"]] }, { time: 0, actor: "me" })
-		t.add("stored", "X", n)
-		t.add("drag", "X", n)
+		const t = createTable()
+		const n = createEntry({ t: [["e", "0"], ["e", "1"]] }, { time: 0, actor: "me" })
+		t.add("children", "X", n)
+		t.add("children", "Y", n)
 		const p = createPlaces({
 			root: ["stored", "X"],
-			children: (source, id) => t.get(source, id),
+			children: (_, id) => t.get("children", id),
 		})
 		const out = p.move(
 			[["stored", "X"], "t"],
 			1,
-			[["drag", "X"], "t"],
+			[["stored", "Y"], "t"],
 			{ time: 1, actor: "me" },
 			0,
 		)

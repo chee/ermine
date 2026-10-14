@@ -1,8 +1,11 @@
 // a small graph for the cross-library fuzz tests: a table per source holding children nodes, as
 // places' own tests keep them, and random writes on it through places, and now and then a table
 // event (a children node put in place of another, taken out, put back)
-import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
-import { createTable, type Key } from "@ermine/graph/table"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
+import { createTable, type Id, type Table, type Tables } from "@ermine/graph/table"
+
+// any value goes in children here, on purpose: places takes what it cannot walk as taken
+type Children = Tables["children"]
 import {
 	type Address,
 	type Changed,
@@ -16,21 +19,21 @@ import {
 import type { Pick } from "./gen.ts"
 
 export const SYM = Symbol("x")
-export const SOURCES: readonly Key[] = ["stored", "drag", SYM]
+export const SOURCES: readonly Id[] = ["stored", "drag", SYM]
 export const IDS = ["R", "A", "B", "C", "D"]
 export const NAMES = ["a", "b", "c", "__proto__"]
 export const TOP: Entry = ["stored", "R"]
 
 // a whole-node event at a key: its children node put, replaced or taken out
-export type Event = { source: Key; id: Key }
+export type Event = { source: Id; id: Id }
 export type Wrote = { what: string; changed: Changed[]; events: Event[] }
 
 export function createWorld(pick: Pick, read?: (r: Read) => void) {
 	const one = <T>(xs: readonly T[]): T => xs[pick(xs.length)]
-	const tables = new Map<Key, ReturnType<typeof createTable<unknown>>>()
-	const table = (source: Key) =>
-		tables.get(source) ?? tables.set(source, createTable<unknown>()).get(source)!
-	const children = (source: Key, id: Key) =>
+	const tables = new Map<Id, Table>()
+	const table = (source: Id) =>
+		tables.get(source) ?? tables.set(source, createTable()).get(source)!
+	const children = (source: Id, id: Id) =>
 		table(source).get("children", id) as NodeEntry<unknown> | undefined
 	const p = createPlaces({ root: TOP, children, read })
 	// the same graph read with nothing told
@@ -60,7 +63,7 @@ export function createWorld(pick: Pick, read?: (r: Read) => void) {
 		for (const id of IDS) {
 			// D of "stored" has no children node: a parent that is not there
 			if (source === "stored" && id === "D") continue
-			table(source).add("children", id, createEntry<unknown>(value(), header()))
+			table(source).add("children", id, createEntry(value() as Children, header()))
 		}
 	}
 
@@ -144,7 +147,7 @@ export function createWorld(pick: Pick, read?: (r: Read) => void) {
 		const source = one(SOURCES), id = one(IDS)
 		const t = table(source), there = t.get("children", id)
 		if (there && pick(3) === 0) t.del("children", id)
-		else t.sub("children", id, createEntry<unknown>(pick(4) ? value() : undefined, h))
+		else t.sub("children", id, createEntry((pick(4) ? value() : undefined) as Children, h))
 		return { what: `event ${String(source)} ${id}`, changed: [], events: [{ source, id }] }
 	}
 

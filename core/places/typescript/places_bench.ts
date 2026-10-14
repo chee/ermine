@@ -8,7 +8,7 @@
 //
 // the world: a deep chain (8 names), a wide folder (5000 names), a fan (3 entries at a name, 4
 // deep: 81 items), a shallow name; nodes in a map per source, the hole as a scheduler would have it
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import type { createPlaces as create } from "./places.ts"
 
 const ROUNDS = 15

@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createEntry, { type ChangeHeader, type Entry } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import apply from "@ermine/op/apply"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable, type Id, type Table } from "@ermine/graph/table"
 import type { Item, PlacesError as PlacesErrorType, Read, Setup } from "../places.ts"
 import type * as Places from "../places.ts"
 
@@ -15,16 +15,16 @@ const h: ChangeHeader = { time: 1, actor: "me" }
 
 // a world: a table per source, each holding children nodes; the hole filled the B way
 function world(extra: Partial<Setup> = {}) {
-	const tables = new Map<Key, ReturnType<typeof createTable<unknown>>>()
-	const table = (source: Key) =>
-		tables.get(source) ?? tables.set(source, createTable<unknown>()).get(source)!
+	const tables = new Map<Id, Table>()
+	const table = (source: Id) =>
+		tables.get(source) ?? tables.set(source, createTable()).get(source)!
 	const reads: Read[] = []
-	const kids = (source: Key, id: Key, value: Record<string, unknown>) => {
-		const n = createEntry<unknown>(value, h)
+	const kids = (source: Id, id: Id, value: Record<string, unknown>) => {
+		const n = createEntry(value, h)
 		table(source).sub("children", id, n)
 		return n
 	}
-	const children = (source: Key, id: Key) =>
+	const children = (source: Id, id: Id) =>
 		table(source).get("children", id) as Entry<unknown> | undefined
 	const p = createPlaces({ root: ["stored", "R"], children, read: (r) => reads.push(r), ...extra })
 	return { p, kids, children, reads, table }
@@ -46,7 +46,7 @@ Deno.test("places: names walked through children, front first", () => {
 })
 
 Deno.test("places: a root given as an id has the source ROOT", () => {
-	const seen: [Key, Key][] = []
+	const seen: [Id, Id][] = []
 	const top = Symbol.for("ermine.places.root")
 	assertStrictEquals(ROOT, top)
 	const kids = createEntry<unknown>({ a: [["stored", "A"]] }, h)
@@ -165,7 +165,7 @@ Deno.test("places: place, at the end, at an index, a new name, a node with no va
 	assertEquals(n.change.op!.patches, [{ path: ["new"], value: [["stored", "N"]] }])
 	assertEquals(Object.keys(apply(n.value, n.change.op!.undo) as object), ["t"])
 	// a children node with no value yet
-	const empty = createEntry<unknown>(undefined, h)
+	const empty: Entry<Record<string, unknown>> = { change: h }
 	world().table("stored")
 	const w = world()
 	w.table("stored").add("children", "R", empty)
@@ -261,7 +261,7 @@ Deno.test("places: a write gives back the nodes it changed, in order; none when 
 	const { p, kids } = world()
 	const r = kids("stored", "R", { t: [["a", "X"], ["c", "X"]] })
 	const d = kids("drag", "D", {})
-	const ids = (cs: { source: Key; id: Key }[]) => cs.map((c) => [c.source, c.id])
+	const ids = (cs: { source: Id; id: Id }[]) => cs.map((c) => [c.source, c.id])
 	const placed = p.place([["stored", "R"], "t"], ["b", "X"], h)
 	assertEquals(ids(placed), [["stored", "R"]])
 	assertStrictEquals(placed[0].node, r)

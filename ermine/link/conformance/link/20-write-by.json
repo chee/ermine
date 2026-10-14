@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "X",
 			"value": 0,
 			"expect": {}
@@ -25,7 +24,6 @@
 								"lt": [
 									{
 										"read": [
-											"stored",
 											"value",
 											"X",
 											[]
@@ -37,7 +35,6 @@
 							{
 								"write": {
 									"op": "edit",
-									"source": "stored",
 									"part": "value",
 									"id": "X",
 									"patches": [
@@ -48,7 +45,6 @@
 													"add": [
 														{
 															"read": [
-																"stored",
 																"value",
 																"X",
 																[]
@@ -67,7 +63,6 @@
 					},
 					{
 						"read": [
-							"stored",
 							"value",
 							"X",
 							[]

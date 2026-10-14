@@ -1,9 +1,9 @@
-// link: the connections between the store, places, tracked paths and the scheduler, set up once
+// link: the connections between the table, places, tracked paths and the scheduler, set up once
 // by whoever makes them. it makes none of them and wraps none of their calls: callers use places
-// and the store themselves, with a scope open.
+// and the table themselves, with a scope open.
 //
-//   createStore((source, part, id) => link.event(source, part, id))
-//   createPlaces({ root, children: store.children, read: link.read })
+//   createTable((part, id) => link.event(part, id))
+//   createPlaces({ root, children: (_, id) => table.get("children", id), read: link.read })
 //   createScheduler({ forget: (key) => link.forget(key) })
 //   link.wrote(places.place(slot, entry, link.header()))
 //
@@ -17,26 +17,25 @@
 // order; the time now, whole seconds; the site of the call. no scope open: unscoped, and nothing
 // is written, as the header comes first
 //
-// paths keys a spot by two parts, (source, id); the store by three. the first two go into one
-// object per (source, part), made once and kept: the same always, so the key is the same by
-// identity. a spot nobody reads any more is let go: the scheduler's forget calls link's with each
+// paths keys a spot by two parts: the part goes into one object per part, made once and kept: the
+// same always, so the key is the same by identity, and the id is the second. a spot nobody reads any more is let go: the scheduler's forget calls link's with each
 // key it stops tracking. a spot read outside a run is tracked by none, so never let go
 //
 // spot(key) names a key told to the scheduler: one of this link's spots, held, is where it reads,
 // so a run's reads (the scheduler's ends moment) can be named as places in the graph. anything
 // else, or a spot let go: undefined
-import type { ChangeHeader, Entry } from "@ermine/node"
+import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import type { Key as Step } from "@ermine/op/apply"
 import type { Read as PlacesRead } from "@ermine/places"
 import { type Pair, type Scheduler, SchedulerError } from "@ermine/scheduler"
 import type { createPaths, Spot } from "@ermine/scheduler/paths"
-import type { Key, Part, Store } from "@ermine/store"
+import type { Id, Key, Table } from "@ermine/graph/table"
 import { capture } from "@ermine/util/stacktrace"
 
 export type Paths = ReturnType<typeof createPaths<unknown>>
 
 export type Setup = {
-	store: Store
+	table: Pick<Table, "get" | "who">
 	paths: Paths
 	scheduler: Pick<Scheduler, "read" | "changed" | "current">
 }
@@ -44,15 +43,14 @@ export type Setup = {
 // who a change is: its header, but the time, site and op
 export type Who = Omit<ChangeHeader, "time" | "external" | "op">
 
-// a node a write changed, and the source whose table it is in: places' Changed is one
-export type Wrote = { readonly source: Key; readonly node: Entry<unknown> }
+// an entry a write changed: places' Changed is one
+export type Wrote = { readonly node: Entry<unknown> }
 
-// where a spot reads: the node under (source, part, id), and the path in its value (kept by
-// paths, never change it); null: the change spot, reads of the change itself
+// where a spot reads: the entry under (part, id), and the path in its value (kept by paths, never
+// change it); null: the change spot, reads of the change itself
 export type Where = {
-	readonly source: Key
-	readonly part: Part
-	readonly id: Key
+	readonly part: Key
+	readonly id: Id
 	readonly path: readonly Step[] | null
 }
 
@@ -81,15 +79,13 @@ export function at(v: unknown, path: readonly Step[]): unknown {
 const ours = new Set([import.meta.url])
 
 export function createLink(setup: Setup): Link {
-	const { store, paths, scheduler } = setup
+	const { table, paths, scheduler } = setup
 
-	const firsts = new Map<Key, Map<Part, { source: Key; part: Part }>>()
-	// the one key part of (source, part)
-	function first(source: Key, part: Part) {
-		let parts = firsts.get(source)
-		if (parts === undefined) firsts.set(source, parts = new Map())
-		let p = parts.get(part)
-		if (p === undefined) parts.set(part, p = { source, part })
+	const firsts = new Map<Key, { part: Key }>()
+	// the one key object of a part
+	function first(part: Key) {
+		let p = firsts.get(part)
+		if (p === undefined) firsts.set(part, p = { part })
 		return p
 	}
 
@@ -114,8 +110,8 @@ export function createLink(setup: Setup): Link {
 	// where a key reads, when it is one of this link's spots, held; else undefined
 	function spot(key: unknown): Where | undefined {
 		if (!held(key)) return undefined
-		const { source, part } = key.source as { source: Key; part: Part }
-		return { source, part, id: key.id as Key, path: key.path }
+		const { part } = key.source as { part: Key }
+		return { part, id: key.id as Id, path: key.path }
 	}
 
 	// spots said changed, in one call, by the writer open; none: nothing said
@@ -123,39 +119,39 @@ export function createLink(setup: Setup): Link {
 		if (spots.length) scheduler.changed(spots, scheduler.current()?.by)
 	}
 
-	// places' read hook: a read of a children node's value at a path, or of its names
+	// places' read hook: a read of a children entry's value at a path, or of its names. places'
+	// source is passed over: one table holds every entry
 	const read = (r: PlacesRead) =>
-		tell(paths.spot(first(r.source, "children"), r.id, r.path, r.keys === true))
+		tell(paths.spot(first("children"), r.id, r.path, r.keys === true))
 
-	// the store's: a table event, every spot of its key
-	const event = (source: Key, part: Part, id: Key) => say(paths.event(first(source, part), id))
+	// the table's: a table event, every spot of its key
+	const event = (part: Key, id: Id) => say(paths.event(first(part), id))
 
-	// what a write changed: the spots each node's latest patches mark, at every key it is under in
-	// its source's table
+	// what a write changed: the spots each entry's latest patches mark, at every key it is under
 	function wrote(changed: readonly Wrote[]) {
 		const out: unknown[] = []
-		for (const { source, node } of changed) {
+		for (const { node } of changed) {
 			const op = node.change.op
 			if (op === undefined) continue
-			for (const [part, id] of store.who(source, node)) {
-				out.push(...paths.mark(first(source, part), id, op.patches))
+			for (const [part, id] of table.who(node)) {
+				out.push(...paths.mark(first(part as Key), id, op.patches))
 			}
 		}
 		say(out)
 	}
 
-	// what is at path in the value of the node under (source, part, id), the read told. path: kept
-	// by paths, never change it
-	function get(source: Key, part: Part, id: Key, path: readonly Step[] = []): unknown {
-		tell(paths.spot(first(source, part), id, path))
-		return at(store.get(source, part, id)?.value, path)
+	// what is at path in the value of the entry under (part, id), the read told. path: kept by
+	// paths, never change it
+	function get(part: Key, id: Id, path: readonly Step[] = []): unknown {
+		tell(paths.spot(first(part), id, path))
+		return at(table.get(part, id)?.value, path)
 	}
 
-	// the change of the node under (source, part, id), the read told at its change spot: any write
-	// to the node reruns it. none there: undefined
-	function change(source: Key, part: Part, id: Key): ChangeHeader | undefined {
-		tell(paths.change(first(source, part), id))
-		return store.get(source, part, id)?.change
+	// the change of the entry under (part, id), the read told at its change spot: any write to the
+	// entry reruns it. none there: undefined
+	function change(part: Key, id: Id): ChangeHeader | undefined {
+		tell(paths.change(first(part), id))
+		return table.get(part, id)?.change
 	}
 
 	// who the scope open says a write is, extra after its pairs. none open: undefined
@@ -189,12 +185,12 @@ export function createLink(setup: Setup): Link {
 
 export type Link = {
 	read: (r: PlacesRead) => void
-	event: (source: Key, part: Part, id: Key) => void
+	event: (part: Key, id: Id) => void
 	forget: (key: unknown) => void
 	spot: (key: unknown) => Where | undefined
 	wrote: (changed: readonly Wrote[]) => void
-	get: (source: Key, part: Part, id: Key, path?: readonly Step[]) => unknown
-	change: (source: Key, part: Part, id: Key) => ChangeHeader | undefined
+	get: (part: Key, id: Id, path?: readonly Step[]) => unknown
+	change: (part: Key, id: Id) => ChangeHeader | undefined
 	who: (extra?: Iterable<Pair>) => Who | undefined
 	header: (extra?: Iterable<Pair>) => ChangeHeader
 }

@@ -1,8 +1,23 @@
 {
 	"title": "a click dispatched in a run, its scope made under the run's: its write is by the run, its header the process's actor, the run's info, then the click's",
 	"steps": [
-		{ "op": "kids", "source": "stored", "id": "R", "value": {}, "expect": {} },
-		{ "op": "root", "name": "notes", "info": [["actor", "notes"]], "expect": {} },
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "notes",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "watch",
 			"name": "c",
@@ -11,16 +26,38 @@
 				"do": [
 					{
 						"if": [
-							{ "lt": [{ "count": { "get": ["x"] } }, 1] },
+							{
+								"lt": [
+									{
+										"count": {
+											"get": [
+												"x"
+											]
+										}
+									},
+									1
+								]
+							},
 							{
 								"within": [
-									[["event", "click"]],
+									[
+										[
+											"event",
+											"click"
+										]
+									],
 									{
 										"write": {
 											"op": "place",
-											"at": ["stored", "R"],
+											"at": [
+												"stored",
+												"R"
+											],
 											"name": "x",
-											"entry": ["stored", "X"]
+											"entry": [
+												"stored",
+												"X"
+											]
 										}
 									}
 								]
@@ -28,7 +65,13 @@
 							null
 						]
 					},
-					{ "count": { "get": ["x"] } }
+					{
+						"count": {
+							"get": [
+								"x"
+							]
+						}
+					}
 				]
 			},
 			"expect": {}
@@ -37,27 +80,86 @@
 			"op": "watch",
 			"name": "d",
 			"scope": "notes",
-			"f": { "within": [[["event", "click"]], { "header": null }] },
+			"f": {
+				"within": [
+					[
+						[
+							"event",
+							"click"
+						]
+					],
+					{
+						"header": null
+					}
+				]
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "c", "tick": 1 },
-					{ "due": "d", "tick": 2 },
-					{ "starts": "c", "run": 1, "rank": 0 },
-					{ "due": "c", "tick": 3, "by": "c" },
-					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "d", "run": 1, "rank": 0 },
-					{ "ends": "d", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 2, "rank": 0 },
-					{ "ends": "c", "run": 2, "ended": "done", "equal": true }
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"due": "d",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 3,
+						"by": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
 				]
 			}
 		},
-		{ "op": "state", "name": "c", "expect": { "runs": 2, "value": 1 } },
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
 		{
 			"op": "state",
 			"name": "d",
@@ -65,7 +167,20 @@
 				"runs": 1,
 				"value": {
 					"actor": "notes",
-					"metadata": [["run", 1], ["mark", 2], ["event", "click"]],
+					"metadata": [
+						[
+							"run",
+							1
+						],
+						[
+							"mark",
+							2
+						],
+						[
+							"event",
+							"click"
+						]
+					],
 					"timely": true,
 					"sites": 1
 				}

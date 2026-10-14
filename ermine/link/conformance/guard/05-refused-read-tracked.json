@@ -1,13 +1,39 @@
 {
 	"title": "a refused read is still tracked: a rule change reruns it",
 	"steps": [
-		{ "op": "value", "source": "stored", "id": "A", "value": "secret", "expect": {} },
-		{ "op": "value", "source": "stored", "id": "rules", "value": [], "expect": {} },
-		{ "op": "root", "name": "chee", "info": [["actor", "chee"]], "expect": {} },
+		{
+			"op": "value",
+			"id": "A",
+			"value": "secret",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "guard",
 			"name": "g",
-			"may": { "grants": ["stored", "value", "rules"] },
+			"may": {
+				"grants": [
+					"stored",
+					"value",
+					"rules"
+				]
+			},
 			"expect": {}
 		},
 		{
@@ -15,30 +41,83 @@
 			"name": "w",
 			"scope": "chee",
 			"guard": "g",
-			"f": { "try": { "read": [["stored", "A"], "value"] } },
+			"f": {
+				"try": {
+					"read": [
+						[
+							"stored",
+							"A"
+						],
+						"value"
+					]
+				}
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 1, "value": "refused" } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "refused"
+			}
+		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "rules",
-			"patches": [{ "path": [], "value": [{ "actor": "chee", "op": "read" }] }],
+			"patches": [
+				{
+					"path": [],
+					"value": [
+						{
+							"actor": "chee",
+							"op": "read"
+						}
+					]
+				}
+			],
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 2, "value": "secret" } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "secret"
+			}
+		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "rules",
-			"patches": [{ "path": [], "value": [] }],
+			"patches": [
+				{
+					"path": [],
+					"value": []
+				}
+			],
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 3, "value": "refused" } }
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": "refused"
+			}
+		}
 	]
 }

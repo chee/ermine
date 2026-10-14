@@ -4,7 +4,7 @@
 // names: blop.ts (BLOP.tex), as the history fixtures. apply.ts and commit.ts are never imported.
 import { encode, name } from "@ermine/encoding/blop"
 import mutate from "@ermine/op/mutate"
-import createEntry, { type Entry } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import createChange from "@ermine/change"
 import createBecause from "@ermine/change/because"
 import { toJson } from "../pack/form.ts"

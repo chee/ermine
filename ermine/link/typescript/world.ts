@@ -1,27 +1,26 @@
 // The world the link and guard harnesses share, made as a composer makes it: one scheduler, one
-// store, one paths and one places (root ["stored","R"]), joined by link. The harnesses add their
+// table, one paths and one places (root ["stored","R"]), joined by link. The harnesses add their
 // own reads and programs (link_harness.ts, guard_harness.ts), and speak the line protocol
 // through serve (conformance/typescript/harness.ts).
 //
-// sources and ids are strings. an entry is [source, id]; a part is any string ("children" is
-// places' hole). a value is plain JSON. a patch is
+// ids are strings. a part is any string ("children" is places' hole). an entry, places', is
+// [source, id]: the one table holds every entry, so the source names nothing (places' to drop). a value is plain JSON. a patch is
 // { path, range?, value?, move?: { path, range? } }. pairs: [[key, value]..]. the host writes
 // with its scope open, its info [["actor","test"]]: every write of the world's below is the
 // host's, from outside
 //
-// { op: "kids", source, id, value }          → {}   the children node there, replaced (a table event)
-// { op: "value", source, id, value }         → {}   the value node there, replaced
-// { op: "share", value, keys: [[source, part, id]..] } → {}   one node under all those keys (store.add)
-// { op: "drop", source }                     → {}   store.drop
-// { op: "del", source, part, id }            → {}   store.del
+// { op: "kids", id, value }                  → {}   the children entry there, replaced (a table event)
+// { op: "value", id, value }                 → {}   the value entry there, replaced
+// { op: "share", value, keys: [[part, id]..] } → {}   one entry under all those keys (table.add)
+// { op: "del", part, id }                    → {}   table.del
 //                                            → { error: "nothing-there" }
-// { op: "node", source, part, id }           → { value? }   the node's value as the store has it
+// { op: "node", part, id }                   → { value? }   the entry's value as the table has it
 //    (not a read: told to no one); none there, or no value: {}
 // { op: "kept" }                             → { keys, spots, steps }   what paths keeps
 // writes. a PlacesError or an ApplyError answers { error: code } and an ApplyError also
 // { patch: index }
-// { op: "edit", source, part, id, patches }                           → {}
-//    the patches to the node there, then said written; none there: a node made with them, added
+// { op: "edit", part, id, patches }                                   → {}
+//    the patches to the entry there, then said written; none there: an entry made with them, added
 // { op: "place", at, name, entry, index? }                            → {}
 // { op: "unplace", at, name, index }                                  → {}
 // { op: "order", at, name, from, to }                                 → {}
@@ -41,7 +40,7 @@
 //    timely, sites }: timely, its time is now in whole seconds; sites, how many its external has.
 //    nothing open: { error: "unscoped" }
 // anything not understood: { error: text }
-import createEntry, { type ChangeHeader } from "@ermine/node"
+import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"
 import { createPlaces, type Entry, type Item, PlacesError } from "@ermine/places"
@@ -53,7 +52,7 @@ import {
 	type Scope,
 } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createStore, type Key, type Part } from "@ermine/store"
+import { createTable, type Id, type Key } from "@ermine/graph/table"
 import { createLink, type Where } from "@ermine/link"
 
 import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
@@ -68,7 +67,7 @@ const nameOf = (c: Scope) => names.get(c)!
 // ended: where it reads, null: not one of link's spots
 export const spotted = new Map<Scope, Json[]>()
 export const where = (w: Where | undefined): Json =>
-	w === undefined ? null : { source: w.source, part: w.part, id: w.id, path: w.path }
+	w === undefined ? null : { part: w.part, id: w.id, path: w.path }
 
 export const s = createScheduler({
 	hook: (m) => {
@@ -77,12 +76,12 @@ export const s = createScheduler({
 	},
 	forget: (key) => l.forget(key),
 })
-export const store = createStore((source, part, id) => l.event(source, part, id))
+export const table = createTable((part, id) => l.event(part as Key, id))
 export const paths = createPaths<unknown>()
-export const l = createLink({ store, paths, scheduler: s })
+export const l = createLink({ table, paths, scheduler: s })
 export const places = createPlaces({
 	root: ["stored", "R"],
-	children: store.children,
+	children: (_, id) => table.get("children", id),
 	read: l.read,
 })
 export const host = s.root([["actor", "test"]])
@@ -147,19 +146,19 @@ export function summary(change: ChangeHeader): Json {
 	}
 }
 
-// a value write: the patches to the node there, then said written; none there: a node made with
-// them, then added (a table event)
-export function edit(source: Key, part: Part, id: Key, patches: Patch[]) {
+// a value write: the patches to the entry there, then said written; none there: an entry made
+// with them, then added (a table event)
+export function edit(part: Key, id: Id, patches: Patch[]) {
 	const h = l.header()
-	const there = store.get(source, part, id)
+	const there = table.get(part, id)
 	if (there === undefined) {
 		const node = createEntry<unknown>(undefined, h)
 		update(node, patches, h)
-		store.add(source, part, id, node)
+		table.add(part, id, node)
 		return node
 	}
 	update(there, patches, h)
-	l.wrote([{ source, node: there }])
+	l.wrote([{ node: there }])
 	return there
 }
 
@@ -168,7 +167,7 @@ export function write(r: Request): void {
 	const slot = (at: unknown, name: string) => [entry(at), name] as [Entry, string]
 	switch (r.op) {
 		case "edit":
-			edit(r.source, r.part, r.id, r.patches as Patch[])
+			edit(r.part, r.id, r.patches as Patch[])
 			return
 		case "place":
 			l.wrote(places.place(slot(r.at, r.name), entry(r.entry), l.header(), r.index))
@@ -231,26 +230,23 @@ export function worldAnswer(r: Request): Json | undefined {
 	const hosted = <T>(f: () => T) => s.run(host, f)
 	switch (r.op) {
 		case "kids":
-			hosted(() => store.sub(r.source, "children", r.id, createEntry(r.value, l.header())))
+			hosted(() => table.sub("children", r.id, createEntry(r.value, l.header())))
 			return {}
 		case "value":
-			hosted(() => store.sub(r.source, "value", r.id, createEntry<unknown>(r.value, l.header())))
+			hosted(() => table.sub("value", r.id, createEntry<unknown>(r.value, l.header())))
 			return {}
 		case "share": {
 			hosted(() => {
 				const node = createEntry<unknown>(r.value, l.header())
-				for (const [source, part, id] of r.keys) store.add(source, part, id, node)
+				for (const [part, id] of r.keys) table.add(part, id, node)
 			})
 			return {}
 		}
-		case "drop":
-			hosted(() => store.drop(r.source))
-			return {}
 		case "del":
-			hosted(() => store.del(r.source, r.part, r.id))
+			hosted(() => table.del(r.part, r.id))
 			return {}
 		case "node": {
-			const n = store.get(r.source, r.part, r.id)
+			const n = table.get(r.part, r.id)
 			return n === undefined || n.value === undefined ? {} : { value: n.value }
 		}
 		case "kept":

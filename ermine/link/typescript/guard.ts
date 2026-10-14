@@ -3,7 +3,7 @@
 // wraps nothing: whoever calls places or link asks first, or after for a list.
 //
 // a read is asked through link, told: a run asking tracks what the policy read, so a change to
-// the rules reruns it, refused or not. a write is asked of the store, told no one: a write makes
+// the rules reruns it, refused or not. a write is asked of the table, told no one: a write makes
 // no run depend on the rules. a no throws Refusal, a pending throws the scheduler's PENDING; a
 // list keeps a refused item in its place, as REFUSED. no policy: everything is allowed
 import type { Key as Step } from "@ermine/op/apply"
@@ -19,7 +19,7 @@ import {
 	yes,
 } from "@ermine/protect"
 import { PENDING } from "@ermine/scheduler"
-import type { Part, Store } from "@ermine/store"
+import type { Key, Table } from "@ermine/graph/table"
 import { at, type Link } from "./link.ts"
 
 // what a refused item is, in a list, in place of its source and id: a stand-in, refused if asked
@@ -34,7 +34,7 @@ export class Refusal extends Error {
 
 export type Setup = {
 	link: Pick<Link, "get" | "who">
-	store: Pick<Store, "get">
+	table: Pick<Table, "get">
 	// none: everything is allowed
 	may?: Policy
 	// where the asker is placed: its item, or an entry; none: at none (the host)
@@ -45,7 +45,7 @@ const isEntry = (x: Item | Entry): x is Entry => Array.isArray(x)
 
 // the node an item or entry is; an item also how it was reached, its path and route. an entry is
 // a node by id alone
-export function target(x: Item | Entry, part?: Part, field?: readonly Step[]): Target {
+export function target(x: Item | Entry, part?: Key, field?: readonly Step[]): Target {
 	if (isEntry(x)) return { source: x[0], id: x[1], part, field }
 	const route: Entry[] = []
 	for (let up: Item | undefined = x; up; up = up.up) route.unshift([up.source, up.id])
@@ -69,14 +69,15 @@ export function createGuard(setup: Setup): {
 	write: (op: string, ...targets: Target[]) => void
 	items: (list: readonly Item[]) => Item[]
 } {
-	const { link, store } = setup
+	const { link, table } = setup
 	const policy = setup.may ?? everything
 	const from = setup.from && place(setup.from)
-	// the policy asked: a read's reads told, a write's told no one
-	const told = may(policy, (source, part, id, field) => link.get(source, part as Part, id, field))
+	// the policy asked: a read's reads told, a write's told no one. protect's source is passed over:
+	// one table holds every entry
+	const told = may(policy, (_source, part, id, field) => link.get(part as Key, id, field))
 	const quiet = may(
 		policy,
-		(source, part, id, field) => at(store.get(source, part as Part, id)?.value, field ?? []),
+		(_source, part, id, field) => at(table.get(part as Key, id)?.value, field ?? []),
 	)
 
 	function asked(ask: (a: Ask) => Answer, op: string, t: Target): [Ask, Answer] {

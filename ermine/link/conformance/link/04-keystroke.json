@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "doc",
 			"value": {
 				"title": "hi",
@@ -22,7 +21,6 @@
 			"scope": "o",
 			"f": {
 				"read": [
-					"stored",
 					"value",
 					"doc",
 					[
@@ -38,7 +36,6 @@
 			"scope": "o",
 			"f": {
 				"read": [
-					"stored",
 					"value",
 					"doc",
 					[
@@ -54,7 +51,6 @@
 			"scope": "o",
 			"f": {
 				"read": [
-					"stored",
 					"value",
 					"doc"
 				]
@@ -67,7 +63,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "doc",
 			"patches": [

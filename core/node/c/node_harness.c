@@ -1,6 +1,6 @@
 // The C node on the line protocol (core/node/typescript/node_harness.ts documents it):
 // {op: "entry", value?, header?} -> {entry: {value?, change}}
-// {op: "node", entries: {<table>: {value?, header?}}} -> {node: {<table>: {value?, change}}}
+// {op: "node", values: {<table>: value}, header?} -> {node: {<table>: {value?, change}}}
 #include <stdio.h>
 #include <string.h>
 
@@ -16,18 +16,19 @@ static void entry(const op_value *request, FILE *out) {
 }
 
 static void node(const op_value *request, FILE *out) {
-	const op_value *entries = op_get(request, "entries");
-	if (entries == NULL || entries->type != OP_MAP) hh_fail("no entries");
-	size_t n = entries->count;
-	nd_slot *slots = hh_take((n ? n : 1) * sizeof *slots);
-	for (size_t i = 0; i < n; i++) {
-		slots[i] = (nd_slot){entries->keys[i], hh_entry(entries->items[i])};
-	}
-	nd_node made = nd_make_node(slots, n);
+	const op_value *values = op_get(request, "values");
+	if (values == NULL || values->type != OP_MAP) hh_fail("no values");
+	size_t n = values->count;
+	nd_value *given = hh_take((n ? n : 1) * sizeof *given);
+	for (size_t i = 0; i < n; i++) given[i] = (nd_value){values->keys[i], values->items[i]};
+	const op_value *header = op_get(request, "header");
+	ch_header h = header ? hh_header(header) : (ch_header){0};
+	nd_node *made = nd_make_node(given, n, &h, NULL);
+	if (made == NULL) hh_fail("out of memory");
 	fputs("{\"node\":", out);
-	hh_put_node(out, &made);
+	hh_put_node(out, made);
 	fputs("}", out);
-	for (size_t i = 0; i < n; i++) nd_free_entry(slots[i].entry);
+	nd_free_node(made);
 }
 
 void hh_answer(const op_value *request, FILE *out) {

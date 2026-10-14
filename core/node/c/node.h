@@ -81,22 +81,32 @@ nd_entry *nd_make_entry(op_value *value, const ch_header *header, const nd_entry
 void nd_free_entry(nd_entry *n);
 
 // everything at an id: a table name and its entry, for each table the id has. no id: that is the
-// table's key, a layer above's. all borrowed, nothing copied or checked: the caller keeps the slots,
-// the table names and the entries alive, and frees the entries (nd_free_entry) itself. table names
-// are meant to be distinct; nothing checks
+// table's key, a layer above's. table names are meant to be distinct; nothing checks
 typedef struct {
 	const char *table;
 	nd_entry *entry;
 } nd_slot;
 
 typedef struct {
-	const nd_slot *slots;
+	nd_slot *slots;
 	size_t length;
 } nd_node;
 
-// the node of these slots, by value: nothing allocated, nothing to free. length 0: a node with no
-// tables
-nd_node nd_make_node(const nd_slot *slots, size_t length);
+// a table name and its plain value, for nd_make_node. value NULL: that table left out
+typedef struct {
+	const char *table;
+	op_value *value;
+} nd_value;
+
+// a node made from plain values: each table's value made an entry by nd_make_entry, the one header
+// shared by them all (with no time, the time now, the same for every table) and the one options.
+// the node owns its slots and entries (nd_free_node); the table names are borrowed: the caller
+// keeps them alive. nothing checked. NULL when out of memory. header and options may be NULL. a
+// node made another way is just as good, but is the caller's to free
+nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header,
+	const nd_entry_options *options);
+// frees a node nd_make_node made: its slots and entries; not the table names
+void nd_free_node(nd_node *n);
 // the entry at a table name, NULL when the node has none
 nd_entry *nd_find(const nd_node *n, const char *table);
 

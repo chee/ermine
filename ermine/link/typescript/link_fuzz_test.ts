@@ -1,21 +1,20 @@
 // the slice fuzzed: random places writes, value edits, children edits and table events, the
 // host's, a pulse after each. then every compute's value is the graph read again from scratch:
-// places with nothing told, values straight from the store. at the end, every compute disposed:
+// places with nothing told, values straight from the table. at the end, every compute disposed:
 // no spot is kept (the scheduler's forget). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
 import { type Address, createPlaces, type Entry, type Item, PlacesError } from "@ermine/places"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createStore, type Key, type Part, TableError } from "@ermine/store"
+import { createTable, type Id, type Key, TableError } from "@ermine/graph/table"
 import { at, createLink } from "./link.ts"
 
 const SEEDS = 40
 const STEPS = 60
 const COMPUTES = 8
-const SOURCES = ["stored", "drag"]
 const IDS = ["R", "A", "B", "C", "D"]
 const NAMES = ["a", "b", "c"]
 const PATHS: Step[][] = [[], ["t"], ["u"], ["l"], ["l", 0], ["l", 1]]
@@ -38,7 +37,7 @@ function rand(seed: number) {
 type Ways = {
 	get: (address: Address) => readonly Item[]
 	names: (item: Item) => string[]
-	read: (source: string, id: string, path: readonly Step[]) => unknown
+	read: (id: string, path: readonly Step[]) => unknown
 }
 
 type Reach = { landed: number; refused: number; runs: number; events: number }
@@ -49,29 +48,31 @@ function seeded(seed: number, reach: Reach) {
 		hook: (m) => void ("starts" in m && reach.runs++),
 		forget: (key) => l.forget(key),
 	})
-	const store = createStore((source, part, id) => l.event(source, part, id))
+	const table = createTable((part, id) => l.event(part as Key, id))
 	const paths = createPaths<unknown>()
-	const l = createLink({ store, paths, scheduler: s })
-	const places = createPlaces({ root: TOP, children: store.children, read: l.read })
-	const plain = createPlaces({ root: TOP, children: store.children })
+	const l = createLink({ table, paths, scheduler: s })
+	const children = (_: unknown, id: Id) => table.get("children", id)
+	const places = createPlaces({ root: TOP, children, read: l.read })
+	const plain = createPlaces({ root: TOP, children })
 	const o = s.root()
 	// the host's writes, in its scope
 	const host = s.root([["actor", "fuzz"]])
 	const h = () => l.header()
-	// the patches to the node there, reported; none there: one made with them, added
-	function edit(source: Key, part: Part, id: Key, patches: Patch[]) {
-		const there = store.get(source, part, id)
+	// the patches to the entry there, reported; none there: one made with them, added
+	function edit(part: Key, id: Id, patches: Patch[]) {
+		const there = table.get(part, id)
 		if (there === undefined) {
 			const node = createEntry<unknown>(undefined, h())
 			update(node, patches, node.change)
-			store.add(source, part, id, node)
+			table.add(part, id, node)
 		} else {
 			update(there, patches, h())
-			l.wrote([{ source, node: there }])
+			l.wrote([{ node: there }])
 		}
 	}
 
-	const entry = (): Entry => [one(SOURCES), one(IDS)]
+	// places' entry: the source names nothing, one table holds every entry
+	const entry = (): Entry => ["stored", one(IDS)]
 	function kids(): Record<string, unknown> {
 		const v: Record<string, unknown> = {}
 		for (const name of NAMES) {
@@ -84,23 +85,21 @@ function seeded(seed: number, reach: Reach) {
 			? { t: pick(10), u: "abc".slice(pick(4)), l: [pick(9), pick(9)].slice(pick(3)) }
 			: "plain"
 	s.run(host, () => {
-		for (const source of SOURCES) {
-			for (const id of IDS) {
-				if (pick(5)) store.add(source, "children", id, createEntry(kids(), h()))
-				if (pick(4)) store.add(source, "value", id, createEntry<unknown>(value(), h()))
-			}
+		for (const id of IDS) {
+			if (pick(5)) table.add("children", id, createEntry(kids(), h()))
+			if (pick(4)) table.add("value", id, createEntry<unknown>(value(), h()))
 		}
 	})
 
 	const live: Ways = {
 		get: (a) => places.get(a),
 		names: (i) => places.names(i),
-		read: (source, id, path) => l.get(source, "value", id, path),
+		read: (id, path) => l.get("value", id, path),
 	}
 	const fresh: Ways = {
 		get: (a) => plain.get(a),
 		names: (i) => plain.names(i),
-		read: (source, id, path) => at(store.get(source, "value", id)?.value, path),
+		read: (id, path) => at(table.get("value", id)?.value, path),
 	}
 
 	// computes: a walk of an address (or a held one), then each item's value at a path, or names
@@ -114,7 +113,7 @@ function seeded(seed: number, reach: Reach) {
 				const key = `${String(i.source)}:${String(i.id)}#${i.at}`
 				return kind === 2
 					? [key, ways.names(i)]
-					: [key, ways.read(i.source as string, i.id as string, path) ?? null]
+					: [key, ways.read(i.id as string, path) ?? null]
 			}))
 		const c = {
 			what: `${["get", "open", "names"][kind]} ${address.join("/")} ${path.join(".")}`,
@@ -128,7 +127,7 @@ function seeded(seed: number, reach: Reach) {
 		return c
 	})
 
-	const slot = (): [Entry, string] => [[one(SOURCES), one(IDS)], one(NAMES)]
+	const slot = (): [Entry, string] => [entry(), one(NAMES)]
 	function patch(): Patch {
 		switch (pick(10)) {
 			case 0:
@@ -159,7 +158,7 @@ function seeded(seed: number, reach: Reach) {
 	// one random write; refused: it throws, and nothing changed
 	function write(): string {
 		const k = pick(16)
-		const source = one(SOURCES), id = one(IDS)
+		const id = one(IDS)
 		if (k === 0) {
 			const at = slot(), e = entry(), i = pick(2) ? undefined : pick(3)
 			l.wrote(places.place(at, e, h(), i))
@@ -187,36 +186,32 @@ function seeded(seed: number, reach: Reach) {
 		}
 		if (k < 9) {
 			const ps = Array.from({ length: 1 + pick(2) }, patch)
-			edit(source, "value", id, ps)
-			return `edit ${source} ${id} ${JSON.stringify(ps)}`
+			edit("value", id, ps)
+			return `edit ${id} ${JSON.stringify(ps)}`
 		}
 		if (k === 9) {
 			const v = kids()
-			edit(source, "children", id, [{ path: [], value: v }])
-			return `edit children ${source} ${id} ${JSON.stringify(v)}`
+			edit("children", id, [{ path: [], value: v }])
+			return `edit children ${id} ${JSON.stringify(v)}`
 		}
 		reach.events++
 		if (k === 10) {
-			store.sub(source, "children", id, createEntry(kids(), h()))
-			return `sub children ${source} ${id}`
+			table.sub("children", id, createEntry(kids(), h()))
+			return `sub children ${id}`
 		}
 		if (k === 11) {
-			store.sub(source, "value", id, createEntry<unknown>(value(), h()))
-			return `sub value ${source} ${id}`
+			table.sub("value", id, createEntry<unknown>(value(), h()))
+			return `sub value ${id}`
 		}
 		if (k === 12) {
 			const part = pick(2) ? "children" : "value"
-			store.del(source, part, id)
-			return `del ${source} ${part} ${id}`
+			table.del(part, id)
+			return `del ${part} ${id}`
 		}
-		if (k < 15) {
-			// one children node under another key too: a write through either reaches both
-			const from = one(IDS), shared = store.get(source, "children", from)
-			if (shared) store.sub(source, "children", id, shared)
-			return `share children ${source} ${from} at ${id}`
-		}
-		store.drop("drag")
-		return "drop drag"
+		// one children entry under another key too: a write through either reaches both
+		const from = one(IDS), shared = table.get("children", from)
+		if (shared) table.sub("children", id, shared)
+		return `share children ${from} at ${id}`
 	}
 
 	for (let step = 0; step < STEPS; step++) {

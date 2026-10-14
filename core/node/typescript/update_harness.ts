@@ -20,7 +20,7 @@
 // Values are in the JSON form (conformance/typescript/form.ts: revive reads it, toJson writes it),
 // typed arrays and bytes too.
 // Anything not understood: { error: "text" }.
-import createEntry, { type Entry } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"

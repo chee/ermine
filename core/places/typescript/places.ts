@@ -2,7 +2,7 @@
 // to an array of entries, in order: [source, id], what put it there and the id. the array is the
 // order: the front is first. places knows no source's meaning, and no part but children; whoever
 // reads asks for an item's other parts elsewhere
-import type { ChangeHeader, Entry as NodeEntry } from "@ermine/node"
+import type { ChangeHeader, Entry as NodeEntry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import { createTrie, type Entry as Held } from "./trie.ts"

@@ -3,7 +3,7 @@
 // shape of the value under each one known. a source's table is made when first written to, and
 // dropped whole when the source ends. one listener is told of every table event: a node added,
 // replaced or removed at a key
-import type { Entry } from "@ermine/node"
+import type { Entry } from "@ermine/node/entry"
 import { createTable, type Key, TableError } from "@ermine/graph/table"
 
 export type { Key }

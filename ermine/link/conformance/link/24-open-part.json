@@ -1,115 +1,323 @@
 {
 	"title": "any name is a part: reads and changes of run are tracked as value's are; one node under value and run, written through one, reruns the readers of both",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
 		{
 			"op": "watch",
 			"name": "w",
 			"scope": "o",
-			"f": { "read": ["stored", "run", "A", ["n"]] },
+			"f": {
+				"read": [
+					"run",
+					"A",
+					[
+						"n"
+					]
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "watch",
 			"name": "c",
 			"scope": "o",
-			"f": { "change": ["stored", "run", "A"] },
+			"f": {
+				"change": [
+					"run",
+					"A"
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "watch",
 			"name": "v",
 			"scope": "o",
-			"f": { "read": ["stored", "value", "A"] },
+			"f": {
+				"read": [
+					"value",
+					"A"
+				]
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 1, "value": null } },
-		{ "op": "state", "name": "c", "expect": { "runs": 1, "value": null } },
 		{
-			"op": "edit",
-			"source": "stored",
-			"part": "run",
-			"id": "A",
-			"patches": [{ "path": [], "value": { "n": 1, "m": 1 } }],
+			"op": "pulse",
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 2, "value": 1 } },
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
 		{
 			"op": "state",
 			"name": "c",
-			"expect": { "runs": 2, "value": [{ "path": [], "value": { "n": 1, "m": 1 } }] }
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
 		},
-		{ "op": "state", "name": "v", "expect": { "runs": 1, "value": null } },
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "run",
 			"id": "A",
-			"patches": [{ "path": ["m"], "value": 2 }],
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1,
+						"m": 1
+					}
+				}
+			],
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 2, "value": 1 } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
 		{
 			"op": "state",
 			"name": "c",
-			"expect": { "runs": 3, "value": [{ "path": ["m"], "value": 2 }] }
+			"expect": {
+				"runs": 2,
+				"value": [
+					{
+						"path": [],
+						"value": {
+							"n": 1,
+							"m": 1
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "v",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "edit",
+			"part": "run",
+			"id": "A",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 3,
+				"value": [
+					{
+						"path": [
+							"m"
+						],
+						"value": 2
+					}
+				]
+			}
 		},
 		{
 			"op": "node",
-			"source": "stored",
 			"part": "run",
 			"id": "A",
-			"expect": { "value": { "n": 1, "m": 2 } }
+			"expect": {
+				"value": {
+					"n": 1,
+					"m": 2
+				}
+			}
 		},
 		{
 			"op": "share",
-			"value": { "n": 7 },
-			"keys": [["stored", "value", "B"], ["stored", "run", "B"]],
+			"value": {
+				"n": 7
+			},
+			"keys": [
+				[
+					"value",
+					"B"
+				],
+				[
+					"run",
+					"B"
+				]
+			],
 			"expect": {}
 		},
 		{
 			"op": "watch",
 			"name": "wb",
 			"scope": "o",
-			"f": { "read": ["stored", "run", "B", ["n"]] },
+			"f": {
+				"read": [
+					"run",
+					"B",
+					[
+						"n"
+					]
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "watch",
 			"name": "vb",
 			"scope": "o",
-			"f": { "read": ["stored", "value", "B", ["n"]] },
+			"f": {
+				"read": [
+					"value",
+					"B",
+					[
+						"n"
+					]
+				]
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "wb", "expect": { "runs": 1, "value": 7 } },
-		{ "op": "state", "name": "vb", "expect": { "runs": 1, "value": 7 } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "wb",
+			"expect": {
+				"runs": 1,
+				"value": 7
+			}
+		},
+		{
+			"op": "state",
+			"name": "vb",
+			"expect": {
+				"runs": 1,
+				"value": 7
+			}
+		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "B",
-			"patches": [{ "path": ["n"], "value": 8 }],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 8
+				}
+			],
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "wb", "expect": { "runs": 2, "value": 8 } },
-		{ "op": "state", "name": "vb", "expect": { "runs": 2, "value": 8 } },
-		{ "op": "del", "source": "stored", "part": "run", "id": "A", "expect": {} },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 3, "value": null } },
-		{ "op": "state", "name": "c", "expect": { "runs": 4, "value": null } },
-		{ "op": "state", "name": "v", "expect": { "runs": 1, "value": null } },
-		{ "op": "state", "name": "wb", "expect": { "runs": 2, "value": 8 } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "wb",
+			"expect": {
+				"runs": 2,
+				"value": 8
+			}
+		},
+		{
+			"op": "state",
+			"name": "vb",
+			"expect": {
+				"runs": 2,
+				"value": 8
+			}
+		},
 		{
 			"op": "del",
-			"source": "stored",
 			"part": "run",
 			"id": "A",
-			"expect": { "error": "nothing-there" }
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 4,
+				"value": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "v",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "wb",
+			"expect": {
+				"runs": 2,
+				"value": 8
+			}
+		},
+		{
+			"op": "del",
+			"part": "run",
+			"id": "A",
+			"expect": {
+				"error": "nothing-there"
+			}
 		}
 	]
 }

@@ -15,17 +15,39 @@
 // { op: "del", part, node }               → {}                         the node from every id under the part
 // { op: "del", node }                     → {}                         the node from every key
 //                                         → { error: "nothing-there" } nothing to delete
+// { op: "events" }                        → { events }                 [[part, id]], every table event
+//                                                                      since last asked, in order
 //
 // Orders are the order added (table.ts). Anything not understood: { error: why }, not a code.
-import { createTable, TableError } from "./table.ts"
-import type { Key } from "./table.ts"
+import { createTable, type Event, type Id, TableError } from "./table.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import type { Entry } from "@ermine/node"
+import type { Entry } from "@ermine/node/entry"
+
+// the table checks no name and no shape: here, any key is a table name and any entry goes
+type Loose = {
+	add: (part: Id, id: Id, node: Entry<unknown>) => void
+	sub: (part: Id, id: Id, node: Entry<unknown>) => void
+	get: {
+		(part: Id, id: Id): Entry<unknown> | undefined
+		(part: Id, node: Entry<unknown>): Id[]
+		(id: Id): [Id, Entry<unknown>][]
+	}
+	who: (node: Entry<unknown>) => [Id, Id][]
+	del: {
+		(part: Id, id: Id): void
+		(part: Id, node: Entry<unknown>): void
+		(node: Entry<unknown>): void
+	}
+}
+const loose = (event?: (part: Id, id: Id) => void) =>
+	createTable(event as Event | undefined) as unknown as Loose
 
 // a node by name: an object the table never reads
 type N = Entry<unknown>
 
-const table = createTable<unknown>()
+// every table event, until asked
+const events: [Id, Id][] = []
+const table = loose((part, id) => events.push([part, id]))
 const nodes = new Map<string, N>()
 const names = new Map<object, string>()
 const symbols = new Map<string, symbol>()
@@ -39,7 +61,7 @@ function node(x: unknown): N {
 	}
 	return n
 }
-function key(x: unknown): Key {
+function key(x: unknown): Id {
 	if (typeof x === "string") return x
 	if (x !== null && typeof x === "object" && typeof (x as Request).symbol === "string") {
 		const name = (x as Request).symbol as string
@@ -49,7 +71,7 @@ function key(x: unknown): Key {
 	}
 	throw new Error("key: not a string or a symbol")
 }
-const text = (k: Key) => typeof k === "symbol" ? { symbol: k.description } : k
+const text = (k: Id) => typeof k === "symbol" ? { symbol: k.description } : k
 
 function answer(r: Request): Answer {
 	try {
@@ -72,6 +94,8 @@ function answer(r: Request): Answer {
 				}
 			case "who":
 				return { keys: table.who(node(r.node)).map(([p, i]) => [text(p), text(i)]) }
+			case "events":
+				return { events: events.splice(0).map(([p, i]) => [text(p), text(i)]) }
 			case "del":
 				if (r.part === undefined) table.del(node(r.node))
 				else if (r.node !== undefined) table.del(key(r.part), node(r.node))

@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
 			"value": {
 				"notes": [
@@ -17,7 +16,6 @@
 		},
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "N",
 			"value": {},
 			"expect": {}
@@ -53,7 +51,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "T",
 			"patches": [

@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
 			"value": {
 				"a": [
@@ -17,7 +16,6 @@
 		},
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "doc",
 			"value": {
 				"t": 1
@@ -43,7 +41,6 @@
 				},
 				{
 					"read": [
-						"stored",
 						"value",
 						"doc",
 						[

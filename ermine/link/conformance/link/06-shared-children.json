@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
 			"value": {
 				"p": [
@@ -28,12 +27,10 @@
 			},
 			"keys": [
 				[
-					"stored",
 					"children",
 					"P"
 				],
 				[
-					"stored",
 					"children",
 					"Q"
 				]

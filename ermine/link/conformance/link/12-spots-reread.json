@@ -3,7 +3,6 @@
 	"steps": [
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "ctl",
 			"value": {
 				"n": 0
@@ -12,7 +11,6 @@
 		},
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "doc",
 			"value": {},
 			"expect": {}
@@ -28,7 +26,6 @@
 			"scope": "o",
 			"f": {
 				"read": [
-					"stored",
 					"value",
 					"doc",
 					[
@@ -37,7 +34,6 @@
 								"f",
 								{
 									"read": [
-										"stored",
 										"value",
 										"ctl",
 										[
@@ -74,7 +70,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "doc",
 			"patches": [
@@ -93,7 +88,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "ctl",
 			"patches": [
@@ -128,7 +122,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "ctl",
 			"patches": [
@@ -155,7 +148,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "doc",
 			"patches": [
@@ -182,7 +174,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "doc",
 			"patches": [

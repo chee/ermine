@@ -1,15 +1,15 @@
-// the guard end to end: a composed world (store, places, paths, scheduler, link) and protect's
+// the guard end to end: a composed world (table, places, paths, scheduler, link) and protect's
 // policies. each test reads and writes as a process layer would: asking the guard, then calling
-// places, link and the store itself, with a scope open
+// places, link and the table itself, with a scope open
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import { createPlaces, type Entry, type Item } from "@ermine/places"
 import { all, grants, no, pending, type Policy, yes } from "@ermine/protect"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createStore, type Key, type Part } from "@ermine/store"
+import { createTable, type Id, type Key } from "@ermine/graph/table"
 import { createGuard, Refusal, REFUSED, type Setup, slot, target } from "./guard.ts"
 import { createLink } from "./link.ts"
 
@@ -17,41 +17,42 @@ const isEntry = (x: Item | Entry): x is Entry => Array.isArray(x)
 
 function world() {
 	const s = createScheduler({ forget: (key) => l.forget(key) })
-	const store = createStore((source, part, id) => l.event(source, part, id))
-	const l = createLink({ store, paths: createPaths<unknown>(), scheduler: s })
-	const places = createPlaces({ root: ["stored", "R"], children: store.children, read: l.read })
+	const table = createTable((part, id) => l.event(part as Key, id))
+	const l = createLink({ table, paths: createPaths<unknown>(), scheduler: s })
+	const places = createPlaces({
+		root: ["stored", "R"],
+		children: (_, id) => table.get("children", id),
+		read: l.read,
+	})
 	const host = s.root([["actor", "host"]])
 	const hosted = <T>(f: () => T) => s.run(host, f)
-	const guard = (more: Partial<Setup> = {}) => createGuard({ link: l, store, ...more })
-	function edit(source: Key, part: Part, id: Key, patches: Patch[]) {
+	const guard = (more: Partial<Setup> = {}) => createGuard({ link: l, table, ...more })
+	function edit(part: Key, id: Id, patches: Patch[]) {
 		const h = l.header()
-		const there = store.get(source, part, id)
+		const there = table.get(part, id)
 		if (there === undefined) {
 			const node = createEntry<unknown>(undefined, h)
 			update(node, patches, h)
-			store.add(source, part, id, node)
+			table.add(part, id, node)
 		} else {
 			update(there, patches, h)
-			l.wrote([{ source, node: there }])
+			l.wrote([{ node: there }])
 		}
 	}
-	const kids = (id: Key, v: Record<string, unknown>) =>
-		hosted(() => store.sub("stored", "children", id, createEntry(v, l.header())))
-	const value = (id: Key, v: unknown) =>
-		hosted(() => store.sub("stored", "value", id, createEntry<unknown>(v, l.header())))
-	const reset = (id: Key, v: unknown) =>
-		hosted(() => edit("stored", "value", id, [{ path: [], value: v }]))
+	const kids = (id: Id, v: Record<string, unknown>) =>
+		hosted(() => table.sub("children", id, createEntry(v, l.header())))
+	const value = (id: Id, v: unknown) =>
+		hosted(() => table.sub("value", id, createEntry<unknown>(v, l.header())))
+	const reset = (id: Id, v: unknown) => hosted(() => edit("value", id, [{ path: [], value: v }]))
 	const ids = (x: Item | Entry): Entry => isEntry(x) ? x : [x.source, x.id]
 	// a guarded read of a value, and a guarded write of one
 	const read = (g: ReturnType<typeof guard>, x: Item | Entry) => {
 		g.read(target(x, "value"))
-		const [source, id] = ids(x)
-		return l.get(source, "value", id)
+		return l.get("value", ids(x)[1])
 	}
 	const write = (g: ReturnType<typeof guard>, x: Item | Entry, v: unknown) => {
 		g.write("edit", target(x, "value", []))
-		const [source, id] = ids(x)
-		edit(source, "value", id, [{ path: [], value: v }])
+		edit("value", ids(x)[1], [{ path: [], value: v }])
 	}
 	// a compute of a process's, made in its scope, its results kept
 	function watch(process: Scope, f: () => unknown) {
@@ -60,7 +61,7 @@ function world() {
 		s.run(process, () => s.compute(() => (runs++, f()), (v) => void seen.push(v)))
 		return { seen, runs: () => runs }
 	}
-	return { s, l, store, places, hosted, guard, kids, value, reset, read, write, watch }
+	return { s, l, table, places, hosted, guard, kids, value, reset, read, write, watch }
 }
 
 const rules = grants({ source: "stored", part: "value", id: "rules" })
@@ -122,9 +123,9 @@ Deno.test("guard: a write can't name another actor: it is asked as the scope's",
 	// a scope under juno's naming chee only adds a pair
 	const forged = w.s.scope([["actor", "chee"]], juno)
 	assertEquals(tryout(() => w.s.run(forged, () => w.write(g, ["stored", "A"], 2))), "refused")
-	assertEquals(w.store.get("stored", "value", "A")?.value, 1)
+	assertEquals(w.table.get("value", "A")?.value, 1)
 	w.s.run(w.s.root([["actor", "chee"]]), () => w.write(g, ["stored", "A"], 2))
-	assertEquals(w.store.get("stored", "value", "A")?.value, 2)
+	assertEquals(w.table.get("value", "A")?.value, 2)
 })
 
 Deno.test("guard: a refused item stays in a list as REFUSED, in its place; asking of it is refused", () => {
@@ -167,7 +168,7 @@ Deno.test("guard: pending throws PENDING: the rules not there, a run ends pendin
 	assertEquals(seen, ["x"])
 	const later = w.guard({ may: grants({ source: "stored", part: "value", id: "later" }) })
 	assertEquals(tryout(() => w.s.run(notes, () => w.write(later, ["stored", "A"], 2))), "pending")
-	assertEquals(w.store.get("stored", "value", "A")?.value, "x")
+	assertEquals(w.table.get("value", "A")?.value, "x")
 })
 
 Deno.test("guard: a refused read is still tracked: a rule change reruns it", () => {
@@ -228,7 +229,7 @@ Deno.test("guard: a write's check doesn't make an effect depend on the rules", (
 	w.s.pulse()
 	w.reset("rules", [{ actor: "chee" }, { actor: "juno" }])
 	w.s.pulse()
-	assertEquals([acts, w.store.get("stored", "value", "A")?.value], [1, 1])
+	assertEquals([acts, w.table.get("value", "A")?.value], [1, 1])
 })
 
 Deno.test("guard: the three: where the asker is, the route to the target, the id", () => {

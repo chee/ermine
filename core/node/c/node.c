@@ -24,8 +24,29 @@ void nd_free_entry(nd_entry *n) {
 	free(n);
 }
 
-nd_node nd_make_node(const nd_slot *slots, size_t length) {
-	return (nd_node){slots, length};
+nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *header,
+	const nd_entry_options *options) {
+	nd_node *n = calloc(1, sizeof *n);
+	if (n == NULL) return NULL;
+	n->slots = calloc(length ? length : 1, sizeof *n->slots);
+	if (n->slots == NULL) return free(n), NULL;
+	// one time for every table
+	ch_header h = header != NULL ? *header : (ch_header){0};
+	if (!h.has_time) h.has_time = 1, h.time = (int64_t)time(NULL);
+	for (size_t i = 0; i < length; i++) {
+		if (values[i].value == NULL) continue;
+		nd_entry *e = nd_make_entry(values[i].value, &h, options);
+		if (e == NULL) return nd_free_node(n), NULL;
+		n->slots[n->length++] = (nd_slot){values[i].table, e};
+	}
+	return n;
+}
+
+void nd_free_node(nd_node *n) {
+	if (n == NULL) return;
+	for (size_t i = 0; i < n->length; i++) nd_free_entry(n->slots[i].entry);
+	free(n->slots);
+	free(n);
 }
 
 nd_entry *nd_find(const nd_node *n, const char *table) {

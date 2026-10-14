@@ -16,7 +16,7 @@
 // other key.
 // reading takes exactly what writing gives; loosyGoosy, a key it does not know is passed over
 import * as cbor from "./cbor.ts"
-import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import type { Patch, Target } from "@ermine/op/apply"
 import type { FileLocation } from "@ermine/util/stacktrace"
 

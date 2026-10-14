@@ -1,0 +1,144 @@
+{
+	"title": "one listener told of every table event, after it landed: added, replaced, taken out; the same node again is none",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "x",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "y",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"x"
+					],
+					[
+						"value",
+						"x"
+					],
+					[
+						"children",
+						"x"
+					],
+					[
+						"value",
+						"y"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "x",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"x"
+					],
+					[
+						"value",
+						"y"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "s"
+			},
+			"id": "z",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						{
+							"symbol": "s"
+						},
+						"z"
+					],
+					[
+						{
+							"symbol": "s"
+						},
+						"z"
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": []
+			}
+		}
+	]
+}

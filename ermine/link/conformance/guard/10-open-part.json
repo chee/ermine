@@ -1,22 +1,64 @@
 {
 	"title": "any name is a part: a read and a write of run are asked with run as the target's part; rules kept at run are tracked",
 	"steps": [
-		{ "op": "root", "name": "notes", "info": [["actor", "notes"]], "expect": {} },
 		{
-			"op": "edit",
-			"source": "stored",
-			"part": "run",
-			"id": "T",
-			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"op": "root",
+			"name": "notes",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
 			"expect": {}
 		},
-		{ "op": "guard", "name": "g", "may": { "access": ["stored", "run", "rules"] }, "expect": {} },
+		{
+			"op": "edit",
+			"part": "run",
+			"id": "T",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"access": [
+					"stored",
+					"run",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
 		{
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "try": { "read": [["stored", "T"], "run", ["n"]] } },
-			"expect": { "value": "pending" }
+			"e": {
+				"try": {
+					"read": [
+						[
+							"stored",
+							"T"
+						],
+						"run",
+						[
+							"n"
+						]
+					]
+				}
+			},
+			"expect": {
+				"value": "pending"
+			}
 		},
 		{
 			"op": "asks",
@@ -24,34 +66,84 @@
 				"asks": [
 					{
 						"op": "read",
-						"target": { "source": "stored", "id": "T", "part": "run", "field": ["n"] },
-						"who": { "actor": "notes" }
+						"target": {
+							"source": "stored",
+							"id": "T",
+							"part": "run",
+							"field": [
+								"n"
+							]
+						},
+						"who": {
+							"actor": "notes"
+						}
 					}
 				]
 			}
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "run",
 			"id": "rules",
-			"patches": [{ "path": [], "value": "allow" }],
+			"patches": [
+				{
+					"path": [],
+					"value": "allow"
+				}
+			],
 			"expect": {}
 		},
 		{
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "read": [["stored", "T"], "run", ["n"]] },
-			"expect": { "value": 1 }
+			"e": {
+				"read": [
+					[
+						"stored",
+						"T"
+					],
+					"run",
+					[
+						"n"
+					]
+				]
+			},
+			"expect": {
+				"value": 1
+			}
 		},
-		{ "op": "asks" },
+		{
+			"op": "asks"
+		},
 		{
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "edit": [["stored", "T"], "run", [{ "path": ["n"], "value": 2 }]] },
-			"expect": { "value": { "actor": "notes", "timely": true, "sites": 1 } }
+			"e": {
+				"edit": [
+					[
+						"stored",
+						"T"
+					],
+					"run",
+					[
+						{
+							"path": [
+								"n"
+							],
+							"value": 2
+						}
+					]
+				]
+			},
+			"expect": {
+				"value": {
+					"actor": "notes",
+					"timely": true,
+					"sites": 1
+				}
+			}
 		},
 		{
 			"op": "asks",
@@ -59,52 +151,124 @@
 				"asks": [
 					{
 						"op": "edit",
-						"target": { "source": "stored", "id": "T", "part": "run", "field": ["n"] },
-						"who": { "actor": "notes" }
+						"target": {
+							"source": "stored",
+							"id": "T",
+							"part": "run",
+							"field": [
+								"n"
+							]
+						},
+						"who": {
+							"actor": "notes"
+						}
 					}
 				]
 			}
 		},
 		{
 			"op": "node",
-			"source": "stored",
 			"part": "run",
 			"id": "T",
-			"expect": { "value": { "n": 2 } }
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
 		},
 		{
 			"op": "watch",
 			"name": "w",
 			"scope": "notes",
 			"guard": "g",
-			"f": { "try": { "read": [["stored", "T"], "run", ["n"]] } },
+			"f": {
+				"try": {
+					"read": [
+						[
+							"stored",
+							"T"
+						],
+						"run",
+						[
+							"n"
+						]
+					]
+				}
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 1, "value": 2 } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 2
+			}
+		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "run",
 			"id": "rules",
-			"patches": [{ "path": [], "value": "closed" }],
+			"patches": [
+				{
+					"path": [],
+					"value": "closed"
+				}
+			],
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "state", "name": "w", "expect": { "runs": 2, "value": "refused" } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "refused"
+			}
+		},
 		{
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "edit": [["stored", "T"], "run", [{ "path": ["n"], "value": 3 }]] },
-			"expect": { "error": "refused", "reason": "closed", "op": "edit" }
+			"e": {
+				"edit": [
+					[
+						"stored",
+						"T"
+					],
+					"run",
+					[
+						{
+							"path": [
+								"n"
+							],
+							"value": 3
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "closed",
+				"op": "edit"
+			}
 		},
 		{
 			"op": "node",
-			"source": "stored",
 			"part": "run",
 			"id": "T",
-			"expect": { "value": { "n": 2 } }
+			"expect": {
+				"value": {
+					"n": 2
+				}
+			}
 		}
 	]
 }

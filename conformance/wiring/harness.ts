@@ -100,7 +100,7 @@ import { createWiring } from "@ermine/subduction/wiring"
 import { id as idOf, is } from "@ermine/subduction/id"
 import { createScheduler } from "@ermine/scheduler"
 import { fromJson, line, toJson } from "../pack/form.ts"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 
 type Request = Record<string, unknown> & { op: string }
 // deno-lint-ignore no-explicit-any

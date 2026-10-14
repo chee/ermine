@@ -10,7 +10,7 @@
 // A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change,
 // cow?: false}, change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
 // reader, each metadata value and each patch's value in their JSON form (form.ts)
-import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import {
 	decode,
 	encode,

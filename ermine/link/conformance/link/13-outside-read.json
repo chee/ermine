@@ -3,14 +3,12 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
 			"value": {},
 			"expect": {}
 		},
 		{
 			"op": "value",
-			"source": "stored",
 			"id": "A",
 			"value": "one",
 			"expect": {}
@@ -35,7 +33,6 @@
 		},
 		{
 			"op": "read",
-			"source": "stored",
 			"part": "value",
 			"id": "A",
 			"expect": {
@@ -53,7 +50,6 @@
 		},
 		{
 			"op": "edit",
-			"source": "stored",
 			"part": "value",
 			"id": "A",
 			"patches": [

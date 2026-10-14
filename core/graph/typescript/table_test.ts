@@ -1,12 +1,31 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createEntry from "@ermine/node"
-import { createTable, TableError } from "./table.ts"
+import createEntry, { type Entry } from "@ermine/node/entry"
+import { createTable, type Event, type Id, TableError } from "./table.ts"
+
+// the table checks no name and no shape: here, any key is a table name and any entry goes
+type Loose = {
+	add: (part: Id, id: Id, node: Entry<unknown>) => void
+	sub: (part: Id, id: Id, node: Entry<unknown>) => void
+	get: {
+		(part: Id, id: Id): Entry<unknown> | undefined
+		(part: Id, node: Entry<unknown>): Id[]
+		(id: Id): [Id, Entry<unknown>][]
+	}
+	who: (node: Entry<unknown>) => [Id, Id][]
+	del: {
+		(part: Id, id: Id): void
+		(part: Id, node: Entry<unknown>): void
+		(node: Entry<unknown>): void
+	}
+}
+const loose = (event?: (part: Id, id: Id) => void) =>
+	createTable(event as Event | undefined) as unknown as Loose
 
 const code = (f: () => unknown) => (assertThrows(f, TableError) as TableError).code
 const node = (value?: unknown) => createEntry(value, { time: 0, actor: "host" })
 
 Deno.test("table: several parts at one id, got by part and id, and all at the id", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const value = node(1), kids = node({ b: "id-b" })
 	t.add("value", "a", value)
 	t.add("children", "a", kids)
@@ -18,7 +37,7 @@ Deno.test("table: several parts at one id, got by part and id, and all at the id
 })
 
 Deno.test("table: add refuses a different node under a taken key; the same node again is fine", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const n = node(1)
 	t.add("value", "a", n)
 	t.add("value", "a", n)
@@ -27,7 +46,7 @@ Deno.test("table: add refuses a different node under a taken key; the same node 
 })
 
 Deno.test("table: sub replaces; the old node loses that key only", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const old = node(1), next = node(2)
 	t.add("value", "a", old)
 	t.add("value", "b", old)
@@ -39,7 +58,7 @@ Deno.test("table: sub replaces; the old node loses that key only", () => {
 })
 
 Deno.test("table: one node under several keys; who gives them all, get its ids by part", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const n = node(1)
 	t.add("value", "a", n)
 	t.add("value", "b", n)
@@ -52,7 +71,7 @@ Deno.test("table: one node under several keys; who gives them all, get its ids b
 })
 
 Deno.test("table: del by key, by part and node, and the node from everywhere", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const n = node(1), m = node(2)
 	t.add("value", "a", n)
 	t.add("value", "b", n)
@@ -72,7 +91,7 @@ Deno.test("table: del by key, by part and node, and the node from everywhere", (
 })
 
 Deno.test("table: symbols as parts and ids", () => {
-	const t = createTable<unknown>()
+	const t = loose()
 	const part = Symbol("drag"), id = Symbol("here")
 	const n = node(1)
 	t.add(part, id, n)
@@ -81,4 +100,30 @@ Deno.test("table: symbols as parts and ids", () => {
 	assertEquals(t.who(n), [[part, id]])
 	t.del(part, id)
 	assertEquals(t.who(n), [])
+})
+
+Deno.test("table: one listener told of every event, after it landed; the same node again, none", () => {
+	const told: [unknown, unknown, unknown][] = []
+	const t = loose((part, id) => told.push([part, id, t.get(part, id)?.value]))
+	const a = createEntry(1, { time: 0, actor: "me" }), b = createEntry(2, { time: 0, actor: "me" })
+	t.add("value", "x", a)
+	t.add("value", "x", a)
+	t.sub("value", "x", a)
+	t.sub("value", "x", b)
+	t.add("children", "x", a)
+	t.add("value", "y", a)
+	t.del("value", "x")
+	t.del("value", a)
+	t.add("value", "z", b)
+	t.del(b)
+	assertEquals(told, [
+		["value", "x", 1],
+		["value", "x", 2],
+		["children", "x", 1],
+		["value", "y", 1],
+		["value", "x", undefined],
+		["value", "y", undefined],
+		["value", "z", 2],
+		["value", "z", undefined],
+	])
 })

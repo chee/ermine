@@ -3,70 +3,95 @@
 	"steps": [
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "R",
-			"value": { "apps": [["stored", "Apps"]], "notes": [["stored", "N"]] },
+			"value": {
+				"apps": [
+					[
+						"stored",
+						"Apps"
+					]
+				],
+				"notes": [
+					[
+						"stored",
+						"N"
+					]
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "Apps",
-			"value": { "notes": [["stored", "Notes"]] },
+			"value": {
+				"notes": [
+					[
+						"stored",
+						"Notes"
+					]
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "kids",
-			"source": "stored",
 			"id": "N",
-			"value": { "today": [["stored", "T"]] },
+			"value": {
+				"today": [
+					[
+						"stored",
+						"T"
+					]
+				]
+			},
 			"expect": {}
 		},
-		{ "op": "value", "source": "stored", "id": "T", "value": "hello", "expect": {} },
-		{ "op": "root", "name": "notes", "info": [["actor", "notes"]], "expect": {} },
+		{
+			"op": "value",
+			"id": "T",
+			"value": "hello",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "notes",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "guard",
 			"name": "g",
 			"may": "yes",
-			"from": { "get": ["apps", "notes"] },
+			"from": {
+				"get": [
+					"apps",
+					"notes"
+				]
+			},
 			"expect": {}
 		},
 		{
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "get": ["notes", "today"] },
-			"expect": { "value": ["stored:T"] }
-		},
-		{
-			"op": "asks",
+			"e": {
+				"get": [
+					"notes",
+					"today"
+				]
+			},
 			"expect": {
-				"asks": [
-					{
-						"op": "read",
-						"target": {
-							"source": "stored",
-							"id": "T",
-							"path": ["notes", "today"],
-							"route": [["stored", "R"], ["stored", "N"], ["stored", "T"]]
-						},
-						"who": { "actor": "notes" },
-						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
-						}
-					}
+				"value": [
+					"stored:T"
 				]
 			}
 		},
 		{
-			"op": "eval",
-			"guard": "g",
-			"scope": "notes",
-			"e": { "read": [{ "item": ["notes", "today"] }, "value"] },
-			"expect": { "value": "hello" }
-		},
-		{
 			"op": "asks",
 			"expect": {
 				"asks": [
@@ -75,28 +100,47 @@
 						"target": {
 							"source": "stored",
 							"id": "T",
-							"path": ["notes", "today"],
-							"route": [["stored", "R"], ["stored", "N"], ["stored", "T"]]
+							"path": [
+								"notes",
+								"today"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"N"
+								],
+								[
+									"stored",
+									"T"
+								]
+							]
 						},
-						"who": { "actor": "notes" },
-						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
-						}
-					},
-					{
-						"op": "read",
-						"target": {
-							"source": "stored",
-							"id": "T",
-							"part": "value",
-							"path": ["notes", "today"],
-							"route": [["stored", "R"], ["stored", "N"], ["stored", "T"]]
+						"who": {
+							"actor": "notes"
 						},
-						"who": { "actor": "notes" },
 						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
 						}
 					}
 				]
@@ -107,9 +151,19 @@
 			"guard": "g",
 			"scope": "notes",
 			"e": {
-				"edit": [{ "item": ["notes", "today"] }, "value", [{ "path": [], "value": "bye" }]]
+				"read": [
+					{
+						"item": [
+							"notes",
+							"today"
+						]
+					},
+					"value"
+				]
 			},
-			"expect": { "value": { "actor": "notes", "timely": true, "sites": 1 } }
+			"expect": {
+				"value": "hello"
+			}
 		},
 		{
 			"op": "asks",
@@ -120,29 +174,96 @@
 						"target": {
 							"source": "stored",
 							"id": "T",
-							"path": ["notes", "today"],
-							"route": [["stored", "R"], ["stored", "N"], ["stored", "T"]]
+							"path": [
+								"notes",
+								"today"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"N"
+								],
+								[
+									"stored",
+									"T"
+								]
+							]
 						},
-						"who": { "actor": "notes" },
+						"who": {
+							"actor": "notes"
+						},
 						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
 						}
 					},
 					{
-						"op": "edit",
+						"op": "read",
 						"target": {
 							"source": "stored",
 							"id": "T",
 							"part": "value",
-							"field": [],
-							"path": ["notes", "today"],
-							"route": [["stored", "R"], ["stored", "N"], ["stored", "T"]]
+							"path": [
+								"notes",
+								"today"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"N"
+								],
+								[
+									"stored",
+									"T"
+								]
+							]
 						},
-						"who": { "actor": "notes" },
+						"who": {
+							"actor": "notes"
+						},
 						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
 						}
 					}
 				]
@@ -152,8 +273,30 @@
 			"op": "eval",
 			"guard": "g",
 			"scope": "notes",
-			"e": { "read": [["stored", "T"], "value"] },
-			"expect": { "value": "bye" }
+			"e": {
+				"edit": [
+					{
+						"item": [
+							"notes",
+							"today"
+						]
+					},
+					"value",
+					[
+						{
+							"path": [],
+							"value": "bye"
+						}
+					]
+				]
+			},
+			"expect": {
+				"value": {
+					"actor": "notes",
+					"timely": true,
+					"sites": 1
+				}
+			}
 		},
 		{
 			"op": "asks",
@@ -161,11 +304,155 @@
 				"asks": [
 					{
 						"op": "read",
-						"target": { "source": "stored", "id": "T", "part": "value" },
-						"who": { "actor": "notes" },
+						"target": {
+							"source": "stored",
+							"id": "T",
+							"path": [
+								"notes",
+								"today"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"N"
+								],
+								[
+									"stored",
+									"T"
+								]
+							]
+						},
+						"who": {
+							"actor": "notes"
+						},
 						"from": {
-							"path": ["apps", "notes"],
-							"route": [["stored", "R"], ["stored", "Apps"], ["stored", "Notes"]]
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
+						}
+					},
+					{
+						"op": "edit",
+						"target": {
+							"source": "stored",
+							"id": "T",
+							"part": "value",
+							"field": [],
+							"path": [
+								"notes",
+								"today"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"N"
+								],
+								[
+									"stored",
+									"T"
+								]
+							]
+						},
+						"who": {
+							"actor": "notes"
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "notes",
+			"e": {
+				"read": [
+					[
+						"stored",
+						"T"
+					],
+					"value"
+				]
+			},
+			"expect": {
+				"value": "bye"
+			}
+		},
+		{
+			"op": "asks",
+			"expect": {
+				"asks": [
+					{
+						"op": "read",
+						"target": {
+							"source": "stored",
+							"id": "T",
+							"part": "value"
+						},
+						"who": {
+							"actor": "notes"
+						},
+						"from": {
+							"path": [
+								"apps",
+								"notes"
+							],
+							"route": [
+								[
+									"stored",
+									"R"
+								],
+								[
+									"stored",
+									"Apps"
+								],
+								[
+									"stored",
+									"Notes"
+								]
+							]
 						}
 					}
 				]

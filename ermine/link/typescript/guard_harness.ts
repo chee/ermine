@@ -36,7 +36,7 @@ import { PENDING } from "@ermine/scheduler"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/protect"
 import type { Entry, Item } from "@ermine/places"
 import type { Patch } from "@ermine/op/apply"
-import type { Part } from "@ermine/store"
+import type { Key } from "@ermine/graph/table"
 import { createGuard, Refusal, REFUSED, slot, target } from "@ermine/link/guard"
 import {
 	answered,
@@ -50,8 +50,8 @@ import {
 	places,
 	s,
 	scope,
-	store,
 	summary,
+	table,
 	write,
 } from "./world.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
@@ -138,8 +138,7 @@ function evaluate(e: Json, c: Ctx): Json {
 		const [ts, part, path] = p.read
 		const x = start(c, ts)
 		g.read(target(x, part, path))
-		const [source, id] = ids(x)
-		return l.get(source, part as Part, id, path) ?? null
+		return l.get(part as Key, ids(x)[1], path) ?? null
 	}
 	if ("edit" in p) {
 		const [ts, part, patches] = p.edit
@@ -151,8 +150,7 @@ function evaluate(e: Json, c: Ctx): Json {
 				[q.path, ...(q.move ? [q.move.path] : [])].map((f) => target(x, part, f))
 			),
 		)
-		const [source, id] = ids(x)
-		return summary(edit(source, part, id, list).change)
+		return summary(edit(part, ids(x)[1], list).change)
 	}
 	if ("place" in p) {
 		const [[ts, name], at] = p.place
@@ -194,7 +192,7 @@ function answer(r: Request): Json | undefined {
 				r.name,
 				createGuard({
 					link: l,
-					store,
+					table,
 					from,
 					may: r.may === undefined ? undefined : recording(policy(r.may)),
 				}),

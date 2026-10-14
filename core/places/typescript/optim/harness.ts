@@ -46,7 +46,7 @@
 // an item: { source, id, name?, at?, path }   name and at: none on a start. path: path(item)
 // a PlacesError answers { error: code, at? } (at: the name it was about, when there was one).
 // anything not understood: { error: "text" }
-import createEntry, { type Entry } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import type { Item } from "@ermine/places"
 import type * as Places from "@ermine/places"
 

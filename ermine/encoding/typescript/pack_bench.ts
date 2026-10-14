@@ -3,7 +3,7 @@
 // (integers, keys as made), so it is a bound, not a rival
 import { Encoder } from "cbor-x"
 import * as cbor from "./cbor.ts"
-import createEntry, { type Entry as NodeEntry } from "@ermine/node"
+import createEntry, { type Entry as NodeEntry } from "@ermine/node/entry"
 import { decode, encode, type Entry, pack, unpack } from "./pack.ts"
 
 const x = new Encoder({ useRecords: false })

@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 import { createStore, type Key, type Part, TableError } from "./store.ts"
 
 const h = { time: 1, actor: "me" }

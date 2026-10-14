@@ -1,24 +1,82 @@
 {
-	"title": "a node: any table name is a table, each entry apart",
+	"title": "a node: any table name is a table, __proto__ too",
 	"steps": [
 		{
 			"op": "node",
-			"entries": {
-				"": { "value": 0, "header": { "time": 1 } },
-				"a/b c": { "value": "slash", "header": { "time": 2 } },
-				"é 🦊": { "value": "fox", "header": { "time": 3 } },
-				"toString": { "value": 4, "header": { "time": 4 } },
-				"constructor": { "header": { "time": 5 } },
-				"mine": { "value": { "x": [1, null] }, "header": { "time": 6, "actor": "me" } }
+			"values": {
+				"": 0,
+				"a/b c": "slash",
+				"é 🦊": "fox",
+				"toString": 4,
+				"constructor": 5,
+				"__proto__": 6,
+				"mine": {
+					"x": [
+						1,
+						null
+					]
+				}
+			},
+			"header": {
+				"time": 1,
+				"actor": "me"
 			},
 			"expect": {
 				"node": {
-					"": { "value": 0, "change": { "time": 1 } },
-					"a/b c": { "value": "slash", "change": { "time": 2 } },
-					"é 🦊": { "value": "fox", "change": { "time": 3 } },
-					"toString": { "value": 4, "change": { "time": 4 } },
-					"constructor": { "change": { "time": 5 } },
-					"mine": { "value": { "x": [1, null] }, "change": { "time": 6, "actor": "me" } }
+					"": {
+						"value": 0,
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"a/b c": {
+						"value": "slash",
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"é 🦊": {
+						"value": "fox",
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"toString": {
+						"value": 4,
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"constructor": {
+						"value": 5,
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"__proto__": {
+						"value": 6,
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					},
+					"mine": {
+						"value": {
+							"x": [
+								1,
+								null
+							]
+						},
+						"change": {
+							"time": 1,
+							"actor": "me"
+						}
+					}
 				}
 			}
 		}

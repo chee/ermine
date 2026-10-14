@@ -18,7 +18,7 @@
 //    name of what get gives at the key when it is told (null: nothing: it is told after the change)
 //
 // Anything not understood: { error: why }, not a code.
-import createEntry, { type Entry } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import { createStore, type Key, type Part, TableError } from "./store.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 

@@ -11,7 +11,7 @@
 // the harness alone, then all that were valid in one change. Whatever answers must equal the
 // reference's answers, and the one change must end where the reference's patches one by one did.
 import { assert, assertEquals } from "@std/assert"
-import createEntry from "@ermine/node"
+import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { ask, command, reference, suite } from "../../../conformance/typescript/ask.ts"

@@ -1,25 +1,79 @@
 {
-	"title": "a node: the entries given by table name, each as an entry is made, and no others",
+	"title": "a node: each table's plain value made an entry, one header for them all, and no other tables",
 	"steps": [
 		{
 			"op": "node",
-			"entries": {
-				"value": { "value": { "title": "hi" }, "header": { "time": 5, "actor": "me" } },
-				"attributes": { "value": [["k", 1]], "header": { "time": 6, "actor": "you" } },
-				"children": { "value": [], "header": { "time": 7 } }
+			"values": {
+				"value": {
+					"title": "hi"
+				},
+				"attributes": [
+					[
+						"k",
+						1
+					]
+				],
+				"children": {}
+			},
+			"header": {
+				"time": 5,
+				"actor": "me"
 			},
 			"expect": {
 				"node": {
-					"value": { "value": { "title": "hi" }, "change": { "time": 5, "actor": "me" } },
-					"attributes": { "value": [["k", 1]], "change": { "time": 6, "actor": "you" } },
-					"children": { "value": [], "change": { "time": 7 } }
+					"value": {
+						"value": {
+							"title": "hi"
+						},
+						"change": {
+							"time": 5,
+							"actor": "me"
+						}
+					},
+					"attributes": {
+						"value": [
+							[
+								"k",
+								1
+							]
+						],
+						"change": {
+							"time": 5,
+							"actor": "me"
+						}
+					},
+					"children": {
+						"value": {},
+						"change": {
+							"time": 5,
+							"actor": "me"
+						}
+					}
 				}
 			}
 		},
 		{
 			"op": "node",
-			"entries": { "value": { "value": null } },
-			"expect": { "node": { "value": { "value": null, "change": { "time": "now" } } } }
+			"values": {
+				"value": null,
+				"children": {}
+			},
+			"expect": {
+				"node": {
+					"value": {
+						"value": null,
+						"change": {
+							"time": "now"
+						}
+					},
+					"children": {
+						"value": {},
+						"change": {
+							"time": "now"
+						}
+					}
+				}
+			}
 		}
 	]
 }

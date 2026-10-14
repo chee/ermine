@@ -1,12 +1,12 @@
 // The reference link (ermine/link/typescript/link.ts) on the line protocol: one JSON request per
 // line in, one answer per line out, in order. State lasts for the process: the world of world.ts,
 // the computes made by name. Another implementation joins by speaking this (HARNESS). The
-// world's requests (the store, the writes, the scheduler) are in world.ts; these are the link's
+// world's requests (the table, the writes, the scheduler) are in world.ts; these are the link's
 // own, with the programs.
 //
 // reads, outside any run (told to no one):
-// { op: "read", source, part, id, path? }   → { value? }
-// { op: "change", source, part, id }        → { patches? }   the patches of its latest edit
+// { op: "read", part, id, path? }           → { value? }
+// { op: "change", part, id }                → { patches? }   the patches of its latest edit
 // { op: "get", address, from? }             → { items }   "source:id", front first
 // { op: "names", at }                       → { names }
 // { op: "at", value, path }                 → { value? }   link's at
@@ -16,14 +16,14 @@
 // { op: "close", name }                     → {}   its drop
 // spots:
 // { op: "reads", name }                     → { reads }   the reads of the latest ended run of the
-//    compute named, in order, each as link's spot named it as the run ended: { source, part, id,
-//    path } (path null: the change spot), null: not one of link's spots; no run ended: []
+//    compute named, in order, each as link's spot named it as the run ended: { part, id, path }
+//    (path null: the change spot), null: not one of link's spots; no run ended: []
 // { op: "spot", key }                       → { spot? }   link's spot of a string key
 //
 // a program e: a number, string, boolean or null is itself; a list, its members evaluated; a map
 // is one of, or one of the world's plain forms (world.ts, basic):
-//   {"read":[source,part,id,path?]}   the value, or null (the path's steps evaluated)
-//   {"change":[source,part,id]}       the patches of its latest edit, or null
+//   {"read":[part,id,path?]}          the value, or null (the path's steps evaluated)
+//   {"change":[part,id]}              the patches of its latest edit, or null
 //   {"values":[name..]}               the value part of each item
 //   {"get":[name..]}   {"get":[name..],"from":[source,id]}    "source:id" of each item, a list
 //   {"names":[source,id]}   {"level":[source,id]}             the names; every item at a level
@@ -32,7 +32,7 @@
 //                                     run); null. {"eval":e} anywhere in it is e evaluated
 import type { Key as Step } from "@ermine/op/apply"
 import type { Computation } from "@ermine/scheduler"
-import type { Part } from "@ermine/store"
+import type { Key } from "@ermine/graph/table"
 import { at } from "@ermine/link"
 import {
 	answered,
@@ -57,21 +57,20 @@ type Json = unknown
 
 const held = new Map<string, ReturnType<typeof places.open>>()
 
-const patchesOf = (source: string, part: Part, id: string) =>
-	l.change(source, part, id)?.op?.patches
+const patchesOf = (part: Key, id: string) => l.change(part, id)?.op?.patches
 
 function evaluate(e: Json): Json {
 	if (e === null || typeof e !== "object") return e
 	if (Array.isArray(e)) return e.map(evaluate)
 	const m = e as Request
 	if ("read" in m) {
-		const [source, part, id, path] = m.read
-		return l.get(source, part, id, path && (evaluate(path) as Step[])) ?? null
+		const [part, id, path] = m.read
+		return l.get(part, id, path && (evaluate(path) as Step[])) ?? null
 	}
-	if ("change" in m) return patchesOf(...m.change as [string, Part, string]) ?? null
+	if ("change" in m) return patchesOf(...m.change as [Key, string]) ?? null
 	if ("get" in m) return places.get(m.get, m.from && entry(m.from)).map(item)
 	if ("values" in m) {
-		return places.get(m.values).map((i) => l.get(i.source, "value", i.id) ?? null)
+		return places.get(m.values).map((i) => l.get("value", i.id) ?? null)
 	}
 	if ("names" in m) return places.names(entry(m.names))
 	if ("level" in m) return places.members(entry(m.level)).map(item)
@@ -93,11 +92,11 @@ function answer(r: Request): Json | undefined {
 			return v === undefined ? {} : { value: v }
 		}
 		case "read": {
-			const v = l.get(r.source, r.part as Part, r.id, r.path)
+			const v = l.get(r.part as Key, r.id, r.path)
 			return v === undefined ? {} : { value: v }
 		}
 		case "change": {
-			const patches = patchesOf(r.source, r.part, r.id)
+			const patches = patchesOf(r.part, r.id)
 			return patches === undefined ? {} : { patches }
 		}
 		case "get":
