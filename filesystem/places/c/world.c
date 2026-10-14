@@ -134,6 +134,13 @@ static size_t nspotted, capspotted;
 
 op_value *world_where(const pl_where *w) {
 	op_value *o = op_map();
+	if (w->attached) {
+		op_value *names = op_list();
+		for (size_t i = 0; i < w->nnames; i++) op_push(names, op_str(w->names[i]));
+		op_set(o, "attached", names);
+		if (w->attached == 2) op_set(o, "names", op_bool(1));
+		return o;
+	}
 	op_set(o, "part", op_str(w->part.string));
 	op_set(o, "id", op_str(w->id.string));
 	if (w->change) {
@@ -661,6 +668,22 @@ static void in_header(void *data) {
 	pl_made_free(made);
 }
 
+// an attach or a detach, made in a scope
+typedef struct {
+	const op_value *r;
+	const char **path;
+	size_t n;
+	int code;
+} attaching;
+static void in_attach(void *data) {
+	attaching *c = data;
+	c->code = pl_attach(world_places, c->path, c->n, world_key(op_get(c->r, "id")));
+}
+static void in_detach(void *data) {
+	attaching *c = data;
+	pl_detach(world_places, c->path, c->n);
+}
+
 // the world's request; NULL: not one of them
 static op_value *world_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
@@ -685,6 +708,19 @@ static op_value *world_answer(const op_value *r) {
 		op_set(o, "spots", op_num((double)((int64_t)k.spots)));
 		op_set(o, "steps", op_num((double)((int64_t)k.steps)));
 		return o;
+	}
+	// attached in a named scope, gone with it; none named: the host's, which stays
+	if (strcmp(op, "attach") == 0 || strcmp(op, "detach") == 0) {
+		bool on = op[0] == 'a';
+		attaching c = {.r = r};
+		c.path = world_address(op_get(r, "path"), &c.n);
+		const char *scope = world_text(op_get(r, "scope"));
+		sc_scope *o = on && scope != NULL ? world_scope(scope) : world_host;
+		const char *bad = o == NULL ? "no such scope" : sc_setup(o, on ? in_attach : in_detach, &c);
+		free(c.path);
+		if (bad) return world_error(bad);
+		if (c.code) return world_error(pl_code_name(c.code));
+		return op_map();
 	}
 	if (strcmp(op, "root") == 0 || strcmp(op, "scope") == 0) {
 		size_t n;

@@ -130,12 +130,17 @@ const ch_header *pl_change(pl *l, tb_key part, tb_key id);
 // where a spot reads: the node under (part, id), and the path in its value, length keys; change:
 // the change spot, reads of the change itself, no path. The places' and paths' own, good while the
 // spot is held
+// attached: 0 for those, else the spot is of what is attached at the path names (1), or of the
+// names attached under it (2); part, id and path are then unset
 typedef struct {
 	tb_key part;
 	tb_key id;
 	const op_key *path;
 	size_t length;
 	int change;
+	int attached;
+	const char *const *names;
+	size_t nnames;
 } pl_where;
 // a key told to the scheduler (as a run's ends moment has it): when it is one of this places'
 // spots, held, 1 and *out where it reads; anything else, or a spot let go: 0
@@ -157,6 +162,11 @@ void pl_members_free(pl_members *list);
 // the steps of a path from an id, each a name and the id under it, one at a time as they are
 // taken; nothing under a name: the walk stops there. out has room for n; the steps taken
 size_t pl_walk(pl *p, tb_key from, const char *const *path, size_t n, pl_member *out);
+// the same, with above: from's path from the root (nabove names; known: it is given, else nothing
+// attached is asked). Each step asks first what is attached at above + path[..i+1], the read told;
+// an id attached there is taken, and the children are not read. pl_walk: known when from is the root
+size_t pl_walk_above(pl *p, tb_key from, const char *const *path, size_t n, pl_member *out,
+	const char *const *above, size_t nabove, int known);
 // the id at a path from the root; 1 and *out, or 0: nothing there
 int pl_get(pl *p, const char *const *path, size_t n, tb_key *out);
 // the names from where you are (a path from the root), then from each place above it, nearest
@@ -170,6 +180,18 @@ size_t pl_lookup(pl *p, const char *const *names, size_t nnames, const char *con
 // nothing there: none. The caller's, pl_members_free
 pl_members pl_members_at(pl *p, const char *const *path, size_t n);
 pl_members pl_list(pl *p, const char *const *path, size_t n);
+
+// items attached at a path -----------------------------------------------------------------------
+
+// id attached at the path, in place of what was attached there; local, never saved. The names and
+// id are copied. 0, or PL_NOT_A_NAME (an empty path, or a bad last name). With a scope open, it is
+// detached when that scope is cleaned up, if the same id is still attached there
+int pl_attach(pl *p, const char *const *path, size_t n, tb_key id);
+// what is attached at the path taken away; nothing: nothing
+void pl_detach(pl *p, const char *const *path, size_t n);
+// the names attached directly under a path, and their ids, in the order attached: a read, told.
+// The caller's, pl_members_free; names and ids are good as long as the places
+pl_members pl_attached_at(pl *p, const char *const *path, size_t n);
 
 // who ------------------------------------------------------------------------------------------
 

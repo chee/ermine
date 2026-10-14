@@ -2,7 +2,7 @@
 // each read told as walk and keys tell theirs
 import type { Id, Member, Path, Places } from "./places.ts"
 
-type Reads = Pick<Places, "root" | "walk" | "readKeys">
+type Reads = Pick<Places, "root" | "walk" | "readKeys" | "attachedAt">
 
 // the id at a path from the root; nothing there: undefined
 export function get(places: Reads, path: Path): Id | undefined {
@@ -27,7 +27,7 @@ export function lookup(
 	for (const step of places.walk(from)) ids.push(step.id)
 	for (let k = ids.length - 1; k >= 0; k--) {
 		let n = 0
-		for (const _ of places.walk(names, ids[k])) n++
+		for (const _ of places.walk(names, ids[k], from.slice(0, k))) n++
 		if (n < names.length) continue
 		const found = [...from.slice(0, k), ...names]
 		if (!all) return found
@@ -36,15 +36,19 @@ export function lookup(
 	return all ? out : undefined
 }
 
-// the names at a path holding an id, and their ids, in their order there: a read of which names
-// there are, then of each. nothing there: none
+// the names at a path holding an id, and their ids, in their order there, then the names only
+// attached there, in the order attached: a read of which names there are, then of each. a name
+// both there and attached: the attached id. nothing there: none
 export function members(places: Reads, path: Path): Member[] {
 	const id = get(places, path)
 	if (id === undefined) return []
 	const out: Member[] = []
+	const seen = new Set<string>()
 	for (const name of places.readKeys("children", id)) {
-		for (const step of places.walk([name], id)) out.push(step)
+		seen.add(name)
+		for (const step of places.walk([name], id, path)) out.push(step)
 	}
+	for (const m of places.attachedAt(path)) if (!seen.has(m.name)) out.push(m)
 	return out
 }
 

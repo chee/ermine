@@ -162,8 +162,8 @@ chee 10-14: "i think this is the plan."
 - ".." at "/" is "/", *lean* 10-14: "this might actually come naturally if we say that `../../` at
   `/` is `/` then `hehe` and `./hehe` and `../hehe` are all the same for host". so the host needs no
   special case, and a boxed process can't climb out of its box. today ".." above the start gives
-  nothing, and the old api had an above-root error: both go a process's inner stuff and a placement into a shared folder are
-  two wants, *decided*: "yes, they are. a proccess's inner stuff is inside the process"
+  nothing, and the old api had an above-root error: both go
+- a process's inner stuff and a placement into a shared folder are two wants, *decided*: "yes, they are. a proccess's inner stuff is inside the process"
 - *open*: whether an in-memory placement can itself be sent; inline nodes (no id: no references,
   tracked by address) or in-memory ids
 - 10-14, chee, thinking aloud: "if it's not places's job then it's... maybe this is a separate thing.
@@ -172,6 +172,13 @@ chee 10-14: "i think this is the plan."
   the /dev /hw, but also for processes. processes will need to know where they are and when they
   call, say, `lookup` they get a tracked something they can read the value or a subvalue from right?
   so they'll need some kind of cwd too"
+- built 10-14 (TS; C by agent): places attach(path, id) / detach(path) / attachedAt(path), verbs
+  chosen by chee ("attach / detach"). *mine*: keyed by the path's names; a walk knowing its path
+  (from the root, or given above) asks what is attached at each step before the children; a walk
+  reaches it only through folders that are there; attached with a scope open it is detached when
+  the scope goes, with none it stays; members/list add attached names after the saved ones (a name
+  in both: the attached id); describe names the reads {attached: path} and {attached, names: true}.
+  scenario 27-attach
 
 * Saving and syncing
 - what's kept, sent, and sent ephemerally, *decided*, how *open*: "something that's a coordination

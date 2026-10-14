@@ -20,7 +20,35 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 // a pair: a part, a string copied; and the next of the pairs made (to free them)
 typedef struct {
 	tb_key part;
+	// 0: a table part's; 1: the source of the attached spots; 2: of the names attached
+	int kind;
 } pl_pair;
+
+// a path that has been asked about or attached at, and the names attached directly under it
+typedef struct apath apath;
+struct apath {
+	char *key;
+	char **names;
+	size_t n;
+	// what is attached here (a string kept till the places is freed); NULL: nothing
+	const char *id;
+	apath **kids;
+	size_t nkids;
+	apath *next;
+};
+// a cleanup of an attach: kept in a list, to free
+typedef struct cleaning cleaning;
+struct cleaning {
+	pl *l;
+	apath *rec;
+	const char *id;
+	cleaning *next;
+};
+typedef struct idstr idstr;
+struct idstr {
+	char *s;
+	idstr *next;
+};
 typedef struct pair pair;
 struct pair {
 	pl_pair pair;
@@ -54,6 +82,11 @@ struct pl {
 	// what writes asked to be kept, by node, and in a list
 	tb_table *holds;
 	hold *held;
+	// the sources of the attached spots, and what is attached
+	pl_pair attached_pair, names_pair;
+	apath *apaths;
+	cleaning *cleanings;
+	idstr *idstrs;
 };
 
 // the part of the key every spot of this places is under in `mine`
@@ -82,6 +115,8 @@ static pt_key pair_key(pl *l, tb_key part) { return pt_symbol(pair_of(l, part));
 
 pl *pl_new(void) {
 	pl *l = xalloc(sizeof *l);
+	l->attached_pair.kind = 1;
+	l->names_pair.kind = 2;
 	l->pairs = tb_new();
 	l->mine = tb_new();
 	l->holds = tb_new();
@@ -106,6 +141,22 @@ static void unhold(pl *l, hold *h) {
 void pl_free(pl *l) {
 	if (l == NULL) return;
 	while (l->held != NULL) unhold(l, l->held);
+	while (l->apaths != NULL) {
+		apath *a = l->apaths;
+		l->apaths = a->next;
+		for (size_t i = 0; i < a->n; i++) free(a->names[i]);
+		free(a->names), free(a->kids), free(a->key), free(a);
+	}
+	while (l->cleanings != NULL) {
+		cleaning *k = l->cleanings;
+		l->cleanings = k->next;
+		free(k);
+	}
+	while (l->idstrs != NULL) {
+		idstr *s = l->idstrs;
+		l->idstrs = s->next;
+		free(s->s), free(s);
+	}
 	tb_free(l->holds);
 	tb_free(l->mine);
 	tb_free(l->pairs);
@@ -170,8 +221,16 @@ int pl_spot(const pl *l, const void *key, pl_where *out) {
 	const pt_spot *s = key != NULL ? tb_get(l->mine, spot_part(), tb_symbol(key)) : NULL;
 	if (s == NULL) return 0;
 	const pl_pair *p = s->source.symbol;
+	if (p->kind != 0) {
+		for (const apath *a = l->apaths; a != NULL; a = a->next) {
+			if (strcmp(a->key, s->id.string) != 0) continue;
+			*out = (pl_where){.attached = p->kind, .names = (const char *const *)a->names, .nnames = a->n};
+			return 1;
+		}
+		return 0;
+	}
 	tb_key id = {.string = s->id.string, .symbol = s->id.symbol};
-	*out = (pl_where){p->part, id, s->path, s->length, s->change};
+	*out = (pl_where){.part = p->part, .id = id, .path = s->path, .length = s->length, .change = s->change};
 	return 1;
 }
 
@@ -314,40 +373,79 @@ static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	return child_of(tb_get(l->table, tb_string(children_part), id), name, out);
 }
 
-size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member *out) {
+static int same_key(tb_key a, tb_key b) {
+	if (a.symbol != NULL || b.symbol != NULL) return a.symbol == b.symbol;
+	return a.string != NULL && b.string != NULL && strcmp(a.string, b.string) == 0;
+}
+
+// the record of the path names (a path of above then path[..upto]), made if none
+static apath *apath_of(pl *l, const char *const *above, size_t nabove, const char *const *path,
+	size_t upto) {
+	size_t n = nabove + upto, len = 1;
+	for (size_t i = 0; i < n; i++) len += 24 + strlen(i < nabove ? above[i] : path[i - nabove]);
+	char *key = xalloc(len), *w = key;
+	for (size_t i = 0; i < n; i++) {
+		const char *name = i < nabove ? above[i] : path[i - nabove];
+		w += snprintf(w, len - (size_t)(w - key), "%zu:%s,", strlen(name), name);
+	}
+	for (apath *a = l->apaths; a != NULL; a = a->next) {
+		if (strcmp(a->key, key) == 0) return free(key), a;
+	}
+	apath *a = xalloc(sizeof *a);
+	a->key = key;
+	a->n = n;
+	a->names = xalloc(n * sizeof *a->names);
+	for (size_t i = 0; i < n; i++) a->names[i] = xdup(i < nabove ? above[i] : path[i - nabove]);
+	a->next = l->apaths;
+	l->apaths = a;
+	return a;
+}
+
+// what is attached at above + path[..upto], the read told; 1 and *out, or 0
+static int attached_to(pl *l, const char *const *above, size_t nabove, const char *const *path,
+	size_t upto, tb_key *out) {
+	apath *a = apath_of(l, above, nabove, path, upto);
+	tell(l, pt_spot_of(l->paths, pt_symbol(&l->attached_pair), pt_string(a->key), NULL, 0, 0));
+	if (a->id == NULL) return 0;
+	*out = tb_string(a->id);
+	return 1;
+}
+
+size_t pl_walk_above(pl *l, tb_key from, const char *const *path, size_t n, pl_member *out,
+	const char *const *above, size_t nabove, int known) {
 	tb_key at = from;
 	size_t i = 0;
 	for (; i < n; i++) {
 		tb_key id;
-		if (!step(l, at, path[i], &id)) break;
+		if (!(known && attached_to(l, above, nabove, path, i + 1, &id)) && !step(l, at, path[i], &id)) break;
 		out[i] = (pl_member){path[i], id};
 		at = id;
 	}
 	return i;
 }
 
+size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member *out) {
+	return pl_walk_above(l, from, path, n, out, NULL, 0, same_key(from, l->root));
+}
+
 int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
-	tb_key at = l->root;
-	for (size_t i = 0; i < n; i++) {
-		if (!step(l, at, path[i], &at)) return 0;
-	}
-	*out = at;
-	return 1;
+	pl_member *steps = xalloc((n + 1) * sizeof *steps);
+	size_t walked = pl_walk(l, l->root, path, n, steps);
+	if (walked == n) *out = n > 0 ? steps[n - 1].id : l->root;
+	free(steps);
+	return walked == n;
 }
 
 size_t pl_lookup(pl *l, const char *const *names, size_t nnames, const char *const *from,
 	size_t nfrom, int all, size_t *depths) {
 	tb_key *ids = xalloc((nfrom + 1) * sizeof *ids);
-	pl_member *steps = xalloc((nfrom + 1) * sizeof *steps);
+	pl_member *steps = xalloc((nfrom + nnames + 1) * sizeof *steps);
 	ids[0] = l->root;
 	size_t walked = pl_walk(l, l->root, from, nfrom, steps);
 	for (size_t i = 0; i < walked; i++) ids[i + 1] = steps[i].id;
 	size_t found = 0;
 	for (size_t k = walked + 1; k-- > 0;) {
-		tb_key at = ids[k];
-		int ok = 1;
-		for (size_t j = 0; j < nnames && ok; j++) ok = step(l, at, names[j], &at);
-		if (!ok) continue;
+		if (pl_walk_above(l, ids[k], names, nnames, steps, from, k, 1) < nnames) continue;
 		depths[found++] = k;
 		if (!all) break;
 	}
@@ -360,38 +458,114 @@ void pl_members_free(pl_members *list) {
 	*list = (pl_members){0};
 }
 
-// the names in a children entry that hold an id, and their ids, in their order there
-static pl_members members_of(const nd_entry *children) {
-	pl_members out = {0};
-	const op_value *v = children != NULL ? children->value : NULL;
-	if (!is_map(v)) return out;
-	out.items = xalloc(v->count * sizeof *out.items);
-	for (size_t i = 0; i < v->count; i++) {
-		if (v->items[i]->type == OP_STR) {
-			out.items[out.n++] = (pl_member){v->keys[i], tb_string(v->items[i]->str)};
-		}
-	}
-	return out;
-}
-
 // the members at a path, as list and members read them: which names there are, then each name,
-// whatever it holds (a step of a walk is read before what is there is looked at)
+// whatever it holds (a step of a walk is read before what is there is looked at), then the names
+// only attached there
 pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	tb_key id;
 	if (!pl_get(l, path, n, &id)) return (pl_members){0};
 	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
 	const nd_entry *children = tb_get(l->table, tb_string(children_part), id);
-	if (children != NULL && is_map(children->value)) {
-		const op_value *v = children->value;
-		for (size_t i = 0; i < v->count; i++) {
-			op_key key = {.type = OP_STR_KEY, .s = v->keys[i]};
-			tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
-		}
+	const op_value *v = children != NULL && is_map(children->value) ? children->value : NULL;
+	apath *here = apath_of(l, NULL, 0, path, n);
+	pl_members out = {0};
+	out.items = xalloc(((v != NULL ? v->count : 0) + here->nkids + 1) * sizeof *out.items);
+	for (size_t i = 0; v != NULL && i < v->count; i++) {
+		pl_member m;
+		if (pl_walk_above(l, id, (const char *const *)&v->keys[i], 1, &m, path, n, 1) == 1) out.items[out.n++] = m;
 	}
-	return members_of(children);
+	tell(l, pt_spot_of(l->paths, pt_symbol(&l->names_pair), pt_string(here->key), NULL, 0, 1));
+	for (size_t i = 0; i < here->nkids; i++) {
+		const char *name = here->kids[i]->names[here->kids[i]->n - 1];
+		if (v != NULL && op_get(v, name) != NULL) continue;
+		out.items[out.n++] = (pl_member){name, tb_string(here->kids[i]->id)};
+	}
+	return out;
 }
 
 pl_members pl_list(pl *l, const char *const *path, size_t n) { return pl_members_at(l, path, n); }
+
+// items attached at a path -----------------------------------------------------------------------
+
+static const char *keep_id(pl *l, const char *id) {
+	idstr *s = xalloc(sizeof *s);
+	s->s = xdup(id);
+	s->next = l->idstrs;
+	l->idstrs = s;
+	return s->s;
+}
+
+// the spots of the attached item at a record and of the names under its parent, said changed
+static void say_attached(pl *l, apath *rec, apath *parent) {
+	spots_vec out = {0};
+	size_t n;
+	pt_spot *const *spots = pt_event(l->paths, pt_symbol(&l->attached_pair), pt_string(rec->key), &n);
+	add_spots(&out, spots, n);
+	spots = pt_event(l->paths, pt_symbol(&l->names_pair), pt_string(parent->key), &n);
+	add_spots(&out, spots, n);
+	say(l, &out);
+	free(out.v);
+}
+
+static void detach_rec(pl *l, apath *rec, apath *parent) {
+	if (rec->id == NULL) return;
+	rec->id = NULL;
+	for (size_t i = 0; i < parent->nkids; i++) {
+		if (parent->kids[i] != rec) continue;
+		memmove(&parent->kids[i], &parent->kids[i + 1], (parent->nkids - i - 1) * sizeof *parent->kids);
+		parent->nkids--;
+		break;
+	}
+	say_attached(l, rec, parent);
+}
+
+static char *cleanup_detach(void *data) {
+	cleaning *c = data;
+	if (c->rec->id != NULL && strcmp(c->rec->id, c->id) == 0) {
+		apath *parent = apath_of(c->l, (const char *const *)c->rec->names, c->rec->n - 1, NULL, 0);
+		detach_rec(c->l, c->rec, parent);
+	}
+	return NULL;
+}
+
+int pl_attach(pl *l, const char *const *path, size_t n, tb_key id) {
+	if (n == 0 || !pl_is_name(path[n - 1])) return PL_NOT_A_NAME;
+	apath *rec = apath_of(l, NULL, 0, path, n), *parent = apath_of(l, NULL, 0, path, n - 1);
+	int was = rec->id != NULL;
+	rec->id = keep_id(l, id.string);
+	if (!was) {
+		parent->kids = realloc(parent->kids, (parent->nkids + 1) * sizeof *parent->kids);
+		if (parent->kids == NULL) abort();
+		parent->kids[parent->nkids++] = rec;
+	}
+	say_attached(l, rec, parent);
+	if (sc_current(l->scheduler) != NULL) {
+		cleaning *c = xalloc(sizeof *c);
+		*c = (cleaning){l, rec, rec->id, l->cleanings};
+		l->cleanings = c;
+		char *bad = sc_cleanup(l->scheduler, cleanup_detach, c);
+		free(bad);
+	}
+	return 0;
+}
+
+void pl_detach(pl *l, const char *const *path, size_t n) {
+	if (n == 0) return;
+	apath *rec = apath_of(l, NULL, 0, path, n), *parent = apath_of(l, NULL, 0, path, n - 1);
+	detach_rec(l, rec, parent);
+}
+
+pl_members pl_attached_at(pl *l, const char *const *path, size_t n) {
+	apath *here = apath_of(l, NULL, 0, path, n);
+	tell(l, pt_spot_of(l->paths, pt_symbol(&l->names_pair), pt_string(here->key), NULL, 0, 1));
+	pl_members out = {0};
+	out.items = xalloc((here->nkids + 1) * sizeof *out.items);
+	for (size_t i = 0; i < here->nkids; i++) {
+		apath *k = here->kids[i];
+		out.items[out.n++] = (pl_member){k->names[k->n - 1], tb_string(k->id)};
+	}
+	return out;
+}
 
 // writing ---------------------------------------------------------------------------------------
 

@@ -66,7 +66,11 @@ const nameOf = (c: Scope) => names.get(c)!
 // ended: where it reads, null: not one of places' spots
 export const spotted = new Map<Scope, Json[]>()
 export const where = (w: Where | undefined): Json =>
-	w === undefined ? null : { part: w.part, id: w.id, path: w.path }
+	w === undefined
+		? null
+		: "attached" in w
+		? { attached: w.attached, ...w.names ? { names: true } : {} }
+		: { part: w.part, id: w.id, path: w.path }
 
 export const s = createScheduler({
 	hook: (m) => {
@@ -241,6 +245,13 @@ export function worldAnswer(r: Request): Json | undefined {
 		}
 		case "kept":
 			return paths.kept()
+		// attached in a named scope, gone with it; none named: the host's, which stays
+		case "attach":
+			s.run(r.scope === undefined ? host : scope(r.scope), () => places.attach(r.path, id(r.id)))
+			return {}
+		case "detach":
+			hosted(() => places.detach(r.path))
+			return {}
 		case "edit":
 		case "place":
 		case "unplace":

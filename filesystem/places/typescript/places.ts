@@ -45,16 +45,19 @@ export type Setup = {
 	root: Id
 	table: Pick<Table, "get" | "who">
 	paths: Paths
-	scheduler: Pick<Scheduler, "read" | "changed" | "current">
+	scheduler: Pick<Scheduler, "read" | "changed" | "current" | "cleanup">
 }
 
 // where a spot reads: the entry under (part, id), and the path in its value (kept by paths, never
 // change it); null: the change spot, reads of the change itself
-export type Where = {
-	readonly part: Key
-	readonly id: Id
-	readonly path: readonly Step[] | null
-}
+export type Where =
+	| {
+		readonly part: Key
+		readonly id: Id
+		readonly path: readonly Step[] | null
+	}
+	// what is attached at a path; names: which names are attached under it
+	| { readonly attached: Path; readonly names?: true }
 
 // a name in a children entry, and the id under it
 export type Member = { readonly name: string; readonly id: Id }
@@ -132,6 +135,8 @@ export function createPlaces(setup: Setup): Places {
 	// where a key reads, when it is one of this places' spots, held; else undefined
 	function describe(key: unknown): Where | undefined {
 		if (!held(key)) return undefined
+		if (key.source === ATTACHED) return { attached: JSON.parse(key.id as string) }
+		if (key.source === NAMES) return { attached: JSON.parse(key.id as string), names: true }
 		const { part } = key.source as { part: Key }
 		return { part, id: key.id as Id, path: key.path }
 	}
@@ -182,15 +187,79 @@ export function createPlaces(setup: Setup): Places {
 	// the steps of a path from an id (none given: the root), each a name and the id under it, one
 	// at a time as they are taken, each the read of its name in the children of the id before.
 	// nothing under a name: the walk stops there
-	function* walk(path: Path, from: Id = root): Generator<Member> {
+	// above: from's path from the root, so the walk asks what is attached at each path first (the
+	// ephemeral wins); from the root, it is []; from another id with none given, nothing attached is
+	// asked
+	function* walk(path: Path, from: Id = root, above?: Path): Generator<Member> {
+		const base = above ?? (from === root ? [] : undefined)
 		let at = from
-		for (const name of path) {
-			tell(paths.spot(first("children"), at, [name]))
-			const id = child(table.get("children", at), name)
+		for (let i = 0; i < path.length; i++) {
+			const name = path[i]
+			let id = base && attachedTo([...base, ...path.slice(0, i + 1)])
+			if (id === undefined) {
+				tell(paths.spot(first("children"), at, [name]))
+				id = child(table.get("children", at), name)
+			}
 			if (id === undefined) return
 			yield { name, id }
 			at = id
 		}
+	}
+
+	// items attached at a path: local, never saved or sent, seen by a walk that knows its path before
+	// what the children there say. by path: an item attached at /work/apps/x is seen through that path,
+	// not wherever the folder behind it is also. a walk reaches it only through folders that are
+	// there. attached with a scope open, it is detached when that scope is cleaned up; with none
+	// (the host), when detached. a path's key: its names as JSON (a name may hold "/")
+	const attached = new Map<string, Id>()
+	// per path, the names attached directly under it, in the order attached
+	const under = new Map<string, Map<string, Id>>()
+	const keyOf = (path: Path) => JSON.stringify(path)
+	// the sources of their spots
+	const ATTACHED = {}, NAMES = {}
+
+	// what is attached at a path, the read told; none: undefined
+	function attachedTo(path: Path): Id | undefined {
+		const k = keyOf(path)
+		tell(paths.spot(ATTACHED, k, []))
+		return attached.get(k)
+	}
+
+	// an id attached at a path, in place of anything attached there before
+	function attach(path: Path, id: Id) {
+		if (path.length === 0) throw new PlacesError("not-a-name", "")
+		const name = path[path.length - 1]
+		if (bad(name)) throw new PlacesError("not-a-name", name)
+		const k = keyOf(path), parent = keyOf(path.slice(0, -1))
+		attached.set(k, id)
+		let names = under.get(parent)
+		if (names === undefined) under.set(parent, names = new Map())
+		names.set(name, id)
+		say([...paths.event(ATTACHED, k), ...paths.event(NAMES, parent)])
+		if (scheduler.current() !== undefined) {
+			const was = [...path]
+			scheduler.cleanup(() => {
+				if (attached.get(k) === id) detach(was)
+			})
+		}
+	}
+
+	// what is attached at a path taken away; nothing there: nothing
+	function detach(path: Path) {
+		const k = keyOf(path)
+		if (!attached.has(k)) return
+		const parent = keyOf(path.slice(0, -1))
+		attached.delete(k)
+		under.get(parent)?.delete(path[path.length - 1])
+		say([...paths.event(ATTACHED, k), ...paths.event(NAMES, parent)])
+	}
+
+	// the names attached directly under a path, and their ids, in the order attached: a read of
+	// which there are
+	function attachedAt(path: Path): Member[] {
+		const k = keyOf(path)
+		tell(paths.spot(NAMES, k, [], true))
+		return [...under.get(k) ?? []].map(([name, id]) => ({ name, id }))
 	}
 
 	return {
@@ -203,6 +272,9 @@ export function createPlaces(setup: Setup): Places {
 		readKeys,
 		readChange,
 		walk,
+		attach,
+		detach,
+		attachedAt,
 	}
 }
 
@@ -222,7 +294,12 @@ export type Places = {
 	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[]) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
-	walk: (path: Path, from?: Id) => Generator<Member>
+	walk: (path: Path, from?: Id, above?: Path) => Generator<Member>
+
+	// in-memory items at a path
+	attach: (path: Path, id: Id) => void
+	detach: (path: Path) => void
+	attachedAt: (path: Path) => Member[]
 }
 
 // writing: a parent's children entry, given as it is, changed by update. each gives back the

@@ -318,12 +318,13 @@ Deno.test("places: spot names a run's reads, in order, as the run ends; anything
 	assertEquals(named, [
 		{ part: "value", id: "A", path: ["t"] },
 		{ part: "value", id: "A", path: null },
+		{ attached: ["a"] },
 		{ part: "children", id: "R", path: ["a"] },
 		{ part: "attributes", id: "A", path: ["t"] },
 	])
 	for (const k of ["A", { part: "value" }, undefined]) assertEquals(l.describe(k), undefined)
 	// read no more: the attributes' ["t"] spot is let go
-	const gone = keys[3]
+	const gone = keys[4]
 	s.changed([keys[0]])
 	s.pulse()
 	ends()
@@ -540,4 +541,60 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 	assertEquals(made?.actor, "notes")
 	assertEquals(made?.metadata, [["run", 1], ["mark", 1], ["event", "click"]])
 	assert(moments.some((m) => "due" in m && m.due === c && m.writer === c))
+})
+
+Deno.test("places: an attached item wins over what is saved at its path, and goes back when detached; readers rerun", () => {
+	const { s, l, kids, watch, walk } = world()
+	kids("R", { dev: "D", x: "X" })
+	kids("D", {})
+	const x = watch(() => walk(["x"]))
+	const clock = watch(() => walk(["dev", "clock"]))
+	const names = watch(() => list(l, ["dev"]).join())
+	s.pulse()
+	assertEquals([x.value, clock.value, names.value], ["X", "", ""])
+	s.run(s.root(), () => {
+		l.attach(["x"], "mem:x")
+		l.attach(["dev", "clock"], "mem:clock")
+	})
+	s.pulse()
+	assertEquals([x.value, clock.value, names.value], ["mem:x", "mem:clock", "clock"])
+	l.detach(["x"])
+	s.pulse()
+	assertEquals([x.value, clock.value], ["X", "mem:clock"])
+})
+
+Deno.test("places: attached in a scope, detached when the scope goes; with none open, it stays", () => {
+	const { s, l, walk } = world()
+	const p = s.root()
+	s.run(p, () => l.attach(["here"], "mine"))
+	l.attach(["host"], "hosts")
+	assertEquals([walk(["here"]), walk(["host"])], ["mine", "hosts"])
+	s.dispose(p)
+	assertEquals([walk(["here"]), walk(["host"])], ["", "hosts"])
+})
+
+Deno.test("places: an attached item is seen by path, through folders that are there; lookup and members find it", () => {
+	const { s, l, kids, walk } = world()
+	kids("R", { work: "W", other: "W" })
+	kids("W", { apps: "A" })
+	kids("A", {})
+	l.attach(["work", "apps", "p1"], "P1")
+	assertEquals(walk(["work", "apps", "p1"]), "P1")
+	// the same folder through another path: not there
+	assertEquals(walk(["other", "apps", "p1"]), "")
+	// a folder not there: not reached
+	l.attach(["nope", "p2"], "P2")
+	assertEquals(walk(["nope", "p2"]), "")
+	assertEquals(members(l, ["work", "apps"]), [{ name: "p1", id: "P1" }])
+	assertEquals(lookup(l, ["p1"], ["work", "apps"]), ["work", "apps", "p1"])
+	assertEquals(lookup(l, ["apps", "p1"], ["work", "apps"]), ["work", "apps", "p1"])
+	assertEquals(lookup(l, ["p1"], ["other", "apps"]), undefined)
+	s.pulse()
+})
+
+Deno.test("places: attaching a name that is not one is refused", () => {
+	const { l } = world()
+	for (const bad of [[], [""], ["a", "."], [".."], ["/"]]) {
+		assertThrows(() => l.attach(bad, "x"))
+	}
 })

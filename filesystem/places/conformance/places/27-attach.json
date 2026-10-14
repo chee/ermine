@@ -1,0 +1,234 @@
+{
+	"title": "an item attached at a path is local and wins over what is saved there, seen by that path through folders that are there; readers rerun when it comes and goes; attached in a scope it goes with the scope",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"dev": "D",
+				"x": "X",
+				"other": "D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "D",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"get": [
+					"x"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "clock",
+			"scope": "o",
+			"f": {
+				"get": [
+					"dev",
+					"clock"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "names",
+			"scope": "o",
+			"f": {
+				"join": {
+					"names": [
+						"dev"
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "x",
+			"expect": {
+				"runs": 1,
+				"value": "X"
+			}
+		},
+		{
+			"op": "state",
+			"name": "clock",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 1,
+				"value": ""
+			}
+		},
+		{
+			"op": "attach",
+			"path": [
+				"x"
+			],
+			"id": "mem:x",
+			"expect": {}
+		},
+		{
+			"op": "attach",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"id": "mem:clock",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "x",
+			"expect": {
+				"runs": 2,
+				"value": "mem:x"
+			}
+		},
+		{
+			"op": "state",
+			"name": "clock",
+			"expect": {
+				"runs": 2,
+				"value": "mem:clock"
+			}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 2,
+				"value": "clock"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"other",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "detach",
+			"path": [
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "x",
+			"expect": {
+				"runs": 3,
+				"value": "X"
+			}
+		},
+		{
+			"op": "root",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "attach",
+			"path": [
+				"dev",
+				"mine"
+			],
+			"id": "mem:mine",
+			"scope": "p",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 3,
+				"value": "clock,mine"
+			}
+		},
+		{
+			"op": "dispose",
+			"name": "p",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 4,
+				"value": "clock"
+			}
+		},
+		{
+			"op": "attach",
+			"path": [
+				"nope",
+				"y"
+			],
+			"id": "mem:y",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"nope",
+				"y"
+			],
+			"expect": {}
+		},
+		{
+			"op": "attach",
+			"path": [
+				"dev",
+				".."
+			],
+			"id": "z",
+			"expect": {
+				"error": "not-a-name"
+			}
+		}
+	]
+}
