@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Key, type Patch } from "./apply.ts"
-import invert, { type Options } from "./invert.ts"
+import invert from "./invert.ts"
 
 // a fuzz's numbers: xorshift (an LCG's low bits repeat, so % k of one is patterned)
 const xs = (x: number) => {
@@ -53,14 +53,14 @@ function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 // a copy that keeps lone surrogates, typed arrays, key order
 const snap = (v: unknown) => v === undefined ? undefined : structuredClone(v)
 
-// the patches, their undo, and the way back: the value as apply has it (the list option's empty
-// list: nothing). the value given and the patches' values unchanged, key order too
-function round(value: unknown, ps: Patch[], o: Options = {}, why = ""): Patch[] {
+// the patches, their undo, and the way back. the value given and the patches' values unchanged,
+// key order too
+function round(value: unknown, ps: Patch[], why = ""): Patch[] {
 	const was = snap(value), values = ps.map((p) => snap(p?.value))
-	const out = apply(value, ps, o)
-	const undo = invert(value, ps, o)
-	const back = apply(out, undo, o)
-	const d = differ(back, apply(value, [], o))
+	const out = apply(value, ps)
+	const undo = invert(value, ps)
+	const back = apply(out, undo)
+	const d = differ(back, value)
 	assert(d === "", `${why} round trip: ${d}\n${show(value)}\n${show(ps)}\nundo ${show(undo)}`)
 	assert(differ(value, was, true) === "", `${why} the value given changed`)
 	ps.forEach((p, i) =>
@@ -163,27 +163,6 @@ Deno.test("invert: nothing there; a put at [] made it, its undo leaves nothing",
 		{ path: [] },
 		{ path: [], value: { a: 1 } },
 	])
-})
-
-Deno.test("invert: the list option, as apply's", () => {
-	const list = { list: true }
-	assertEquals(round(undefined, [{ path: [], range: [0, 0], value: ["a"] }], list), [
-		{ path: [], range: [0, 1] },
-	])
-	// a list left empty is nothing; its undo starts from []
-	assertEquals(round(["a"], [{ path: [0] }], list), [{ path: [], range: [0, 0], value: ["a"] }])
-	assertEquals(round(["a"], [{ path: [] }, { path: [], value: ["b"] }], list), [
-		{ path: [] },
-		{ path: [], value: ["a"] },
-	])
-	round(["a", "b"], [{ path: [], range: [0, 0], move: { path: [], range: [1, 2] } }], list)
-	round(["a", ["b"]], [{ path: [], move: { path: [1] } }], list)
-	round([], [{ path: [], range: [0, 0], value: [1, 2] }, { path: [0] }], list)
-	assertEquals(error(() => invert(["a"], [{ path: [], value: "x" }], list)).code, "wrong-kind")
-	// a value given not a list: its undo puts it back, which the list option refuses
-	const undo = invert("abc", [{ path: [], value: ["x"] }], list)
-	assertEquals(undo, [{ path: [], value: "abc" }])
-	assertEquals(error(() => apply(["x"], undo, list)).code, "wrong-kind")
 })
 
 Deno.test("invert: patches apply refuses, its error: the same code, the same index", () => {
@@ -334,11 +313,11 @@ Deno.test("invert: a span or an item taken from a list and landed in the same li
 			[[1, 2, 3, 4], { path: [2], move: { path: [0] } }],
 			[[1, 2, 3, 4], { path: [0], move: { path: [3] } }],
 		] as [unknown, Patch][]
-	) round(v, [p], {}, JSON.stringify(p))
+	) round(v, [p], JSON.stringify(p))
 	assertEquals(
 		round([false, false, false], [{ path: [1], move: { path: [], range: [0, 1] } }]),
 		[
-			{ path: [], range: [0, 0], move: { path: [2], range: [0, 1] } },
+			{ path: [], range: [0, 0], move: { path: [1], range: [0, 1] } },
 			{ path: [2], value: false },
 		],
 	)
@@ -510,7 +489,7 @@ function filling(pick: Pick, s: unknown): unknown {
 	if (Array.isArray(s)) return Array.from({ length: pick(3) }, () => made(pick, 1))
 	return elements(pick, s!.constructor as (typeof KINDS)[number], pick(3))
 }
-function patch(pick: Pick, v: unknown, list: boolean): Patch {
+function patch(pick: Pick, v: unknown): Patch {
 	const all = v === undefined ? [] : places(v)
 	const any = () => all.length ? all[pick(all.length)] : [[], undefined] as [Key[], unknown]
 	const seqs = all.filter(([, x]) => isSeq(x)), maps = all.filter(([, x]) => isMap(x))
@@ -522,7 +501,6 @@ function patch(pick: Pick, v: unknown, list: boolean): Patch {
 		const g = pick((isSeq(s) ? len(s) : 0) + 1)
 		return { path: p, range: [g, g + (pick(3) ? 0 : 1)] }
 	}
-	if (list && pick(6) === 0) return { path: [], value: pick(4) ? [made(pick, 1)] : made(pick, 0) }
 	switch (pick(18)) {
 		case 0:
 			return { path: any()[0], value: made(pick, 2) }
@@ -606,10 +584,7 @@ Deno.test("invert: fuzz, the round trip of random patches; refused ones as apply
 	for (let seed = 1; seed <= 40; seed++) {
 		let x = seed
 		const pick = (n: number) => (x = xs(x)) % n
-		const list = seed % 5 === 0
-		const start = list
-			? (pick(3) ? Array.from({ length: pick(5) }, () => made(pick, 1)) : undefined)
-			: pick(8)
+		const start = pick(8)
 			? {
 				s: text(pick, 8),
 				l: made(pick, 2),
@@ -617,14 +592,12 @@ Deno.test("invert: fuzz, the round trip of random patches; refused ones as apply
 				m: made(pick, 2),
 			}
 			: made(pick, 3)
-		const o = { list }
 		let v: unknown = start
 		const good: Patch[] = [], bad: [number, Patch][] = []
 		for (let tries = 0; good.length < 24 && tries < 100; tries++) {
-			const p = patch(pick, v, list)
+			const p = patch(pick, v)
 			try {
-				// all from the start: the list option's nothing is not [] mid-call
-				const next = apply(start, [...good, p], o)
+				const next = apply(start, [...good, p])
 				good.push(p)
 				v = next
 			} catch (e) {
@@ -632,14 +605,14 @@ Deno.test("invert: fuzz, the round trip of random patches; refused ones as apply
 				if (bad.length < 3) bad.push([good.length, p])
 			}
 		}
-		round(start, good, o, `seed ${seed}`)
+		round(start, good, `seed ${seed}`)
 		// every patch alone, and every way back from part way
 		for (let k = 1; k < good.length; k += 5) {
-			round(start, good.slice(0, k), o, `seed ${seed} ${k}`)
+			round(start, good.slice(0, k), `seed ${seed} ${k}`)
 		}
 		for (const [k, p] of bad) {
 			const ps = [...good.slice(0, k), p, ...good.slice(k)]
-			const a = error(() => apply(start, ps, o)), b = error(() => invert(start, ps, o))
+			const a = error(() => apply(start, ps)), b = error(() => invert(start, ps))
 			assertEquals([b.code, b.patch], [a.code, a.patch], `seed ${seed}`)
 		}
 	}
@@ -679,6 +652,6 @@ Deno.test("invert: fuzz, typing and moving text with lone surrogates", () => {
 				if (!(e instanceof ApplyError)) throw e
 			}
 		}
-		round(start, ps, {}, `seed ${seed}`)
+		round(start, ps, `seed ${seed}`)
 	}
 })

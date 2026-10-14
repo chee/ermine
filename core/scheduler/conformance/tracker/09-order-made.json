@@ -14,8 +14,8 @@
 		{ "op": "untrack", "from": "r5", "to": "hot" },
 		{ "op": "untrack", "from": "r7", "to": "hot" },
 		{ "op": "untrack", "from": "r2", "to": "hot" },
-		{ "op": "readers", "of": "hot", "expect": ["r0", "r4", "r6"] },
+		{ "op": "readers", "of": "hot", "expect": { "names": ["r0", "r4", "r6"] } },
 		{ "op": "add", "from": "r1", "to": "hot" },
-		{ "op": "readers", "of": "hot", "expect": ["r0", "r4", "r6", "r1"] }
+		{ "op": "readers", "of": "hot", "expect": { "names": ["r0", "r4", "r6", "r1"] } }
 	]
 }

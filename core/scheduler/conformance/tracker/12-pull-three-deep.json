@@ -14,11 +14,11 @@
 		{ "op": "track", "from": "p", "to": "q" },
 		{ "op": "track", "from": "p", "to": "e" },
 		{ "op": "end", "from": "p" },
-		{ "op": "reads", "of": "p", "expect": ["a", "q", "e"] },
-		{ "op": "reads", "of": "q", "expect": ["b", "r", "d"] },
-		{ "op": "reads", "of": "r", "expect": ["c"] },
-		{ "op": "readers", "of": "q", "expect": ["p"] },
-		{ "op": "readers", "of": "r", "expect": ["q"] },
-		{ "op": "readers", "of": "c", "expect": ["r"] }
+		{ "op": "reads", "of": "p", "expect": { "names": ["a", "q", "e"] } },
+		{ "op": "reads", "of": "q", "expect": { "names": ["b", "r", "d"] } },
+		{ "op": "reads", "of": "r", "expect": { "names": ["c"] } },
+		{ "op": "readers", "of": "q", "expect": { "names": ["p"] } },
+		{ "op": "readers", "of": "r", "expect": { "names": ["q"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r"] } }
 	]
 }

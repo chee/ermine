@@ -1,19 +1,19 @@
 {
 	"title": "a read of a key whose writer is due stops the run; it runs again after that writer",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "write", "values": { "flag": false, "x": 1 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",
 			"name": "q",
-			"owner": "o",
+			"scope": "o",
 			"f": { "if": [{ "read": "flag" }, { "read": "w" }, 0] },
 			"to": "q"
 		},
 		{
 			"op": "compute",
 			"name": "w",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "x" }, 1] },
 			"to": "w"
 		},

@@ -1,11 +1,11 @@
 {
 	"title": "a compute returning pending: its run ends pending, nothing given to set",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "if": [{ "eq": [{ "read": "a" }, null] }, { "pending": null }, { "read": "a" }] },
 			"to": "c"
 		},

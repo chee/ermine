@@ -1,0 +1,160 @@
+{
+	"title": "at steps into a typed array by index, in range or nothing; bytes are one whole value, never stepped into",
+	"steps": [
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"W",
+				3
+			],
+			"expect": {
+				"value": -4
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"W",
+				1
+			],
+			"expect": {
+				"value": 1.5
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"W",
+				4
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"W",
+				-1
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"W",
+				1,
+				0
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"W": {
+					"/": {
+						"float32": [
+							0.5,
+							1.5,
+							2.5,
+							-4
+						]
+					}
+				},
+				"B": {
+					"/": {
+						"bytes": "AQID"
+					}
+				}
+			},
+			"path": [
+				"B",
+				1
+			],
+			"expect": {}
+		}
+	]
+}

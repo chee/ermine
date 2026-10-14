@@ -14,7 +14,7 @@
 				{ "path": ["doc", "title"], "range": [0, 0], "value": "b" },
 				{ "path": ["doc", "body"], "value": "c" }
 			],
-			"expect": [["doc"], ["doc", "title"], ["doc", "body"]]
+			"expect": { "spots": [["doc"], ["doc", "title"], ["doc", "body"]] }
 		},
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
@@ -27,8 +27,8 @@
 				{ "path": ["l"], "range": [1, 1], "value": ["x"] },
 				{ "path": ["l", 0], "value": "y" }
 			],
-			"expect": [["l", 0], ["l", 1], ["l", 2]]
+			"expect": { "spots": [["l", 0], ["l", 1], ["l", 2]] }
 		},
-		{ "op": "mark", "source": "v", "id": "n", "patches": [], "expect": [] }
+		{ "op": "mark", "source": "v", "id": "n", "patches": [], "expect": { "spots": [] } }
 	]
 }

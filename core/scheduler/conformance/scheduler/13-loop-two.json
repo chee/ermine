@@ -1,18 +1,18 @@
 {
 	"title": "two computes each writing what the other reads: a loop through both",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "compute",
 			"name": "a",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "y" }, 1] },
 			"to": "x"
 		},
 		{
 			"op": "compute",
 			"name": "b",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "x" }, 1] },
 			"to": "y"
 		},
@@ -26,10 +26,10 @@
 					{ "starts": "a", "run": 1, "rank": 0 },
 					{ "ends": "a", "run": 1, "ended": "done", "equal": false },
 					{ "starts": "b", "run": 1, "rank": 0 },
-					{ "due": "a", "tick": 4 },
+					{ "due": "a", "tick": 4, "by": "b" },
 					{ "ends": "b", "run": 1, "ended": "done", "equal": false },
 					{ "starts": "a", "run": 2, "rank": 0 },
-					{ "due": "b", "tick": 5 },
+					{ "due": "b", "tick": 5, "by": "a" },
 					{ "ends": "a", "run": 2, "ended": "done", "equal": false },
 					{ "starts": "b", "run": 2, "rank": 0 },
 					{ "ends": "b", "run": 2, "ended": "looping", "equal": false, "through": ["a", "b"] }

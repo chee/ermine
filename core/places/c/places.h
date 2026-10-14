@@ -1,7 +1,7 @@
 // Places (typescript/places.ts), in C: names from a root, walked through children nodes. A children
 // node's value maps each name to a list of entries, in order: [source, id], what put it there and
 // the id. The list is the order: the front is first. Places knows no source's meaning, and no part
-// but children. Same rules as places.ts, which the suite in conformance/places/ holds both to.
+// but children. Same rules as places.ts, which the suite in core/places/conformance/places/ holds both to.
 //
 // KEYS. A source or an id is a tb_key (table.h): a string, or a symbol (the caller's token, equal
 // by address). A string key places gives you lives as long as the item it is in; a string key you
@@ -23,7 +23,8 @@
 //
 // OPENED PLACES. pl_open walks an address from the root, kept: pl_items gives what is there now,
 // as a list places owns (borrowed: good until the next pl_items of that opened place that walks
-// again, or its pl_drop, or pl_close; keep items with pl_item_ref). Nothing changed: the very
+// again, or its pl_drop, or pl_close; keep items with pl_item_ref). A children node changed in place
+// (in_place) keeps its value, so a step that read one is walked again on every call. Nothing changed: the very
 // same list (same pointer and serial), and a step walked again that gives alike items keeps its
 // old list, so what stands on it is kept too. Opened places on one beginning share its steps.
 #ifndef PLACES_H
@@ -80,16 +81,16 @@ typedef struct {
 static inline pl_at pl_at_item(const pl_item *item) { return (pl_at){.item = item}; }
 static inline pl_at pl_at_entry(tb_key source, tb_key id) { return (pl_at){NULL, source, id}; }
 
-// the setup: the hole and the tellings. A read is told as `read(source, id, name)`: it rested on
-// the children of id as source has them, at `name` in that node's value, NULL: the whole value;
-// told whether or not anything was there
+// the setup: the hole and the tellings. A read is told as `read(source, id, name, keys)`: it rested
+// on the children of id as source has them, at `name` in that node's value. keys: a read of which
+// names there are (name NULL), not of what is under them. Told whether or not anything was there
 typedef struct {
 	// where names start: an id with the source pl_root(), or an entry. copied
 	tb_key root_source, root_id;
 	// the children node of id as source has it; NULL: not there (not loaded, or never made)
 	nd_node *(*children)(void *ctx, tb_key source, tb_key id);
 	// told of each read, as it is made. May be NULL
-	void (*read)(void *ctx, tb_key source, tb_key id, const char *name);
+	void (*read)(void *ctx, tb_key source, tb_key id, const char *name, int keys);
 	// a value in an entry that is not a string: 1 and *token if it is a symbol. NULL hook: none is
 	int (*symbol)(void *ctx, const op_value *v, const void **token);
 	// the value that stands for a symbol, new (the caller of the hook is its holder). NULL hook:
@@ -98,6 +99,14 @@ typedef struct {
 	void *ctx;
 } pl_setup;
 
+// a sink for the reads of one call: given to the call, it is told them instead of the setup's
+// `read`. NULL for a call: the setup's. Places keeps it only as long as the call (an opened place:
+// its open, or an items call), never in what opened places share
+typedef struct {
+	void (*read)(void *ctx, tb_key source, tb_key id, const char *name, int keys);
+	void *ctx;
+} pl_sink;
+
 typedef struct pl pl;
 // out of memory aborts, as everywhere in core. Close every opened place before pl_free
 pl *pl_new(const pl_setup *setup);
@@ -105,32 +114,49 @@ pl *pl_new(const pl_setup *setup);
 void pl_free(pl *p);
 
 // reading
+// Every reading call takes a sink `read` (see pl_sink), NULL: the setup's.
 // the address: n steps, in order: a name, "." here, ".." back one, "/" the root. A name is any
 // other string. `from` NULL: the root.
 
 // what is at the address, front first
-pl_list *pl_get(pl *p, const char *const *address, size_t n, const pl_at *from);
+pl_list *pl_get(pl *p, const char *const *address, size_t n, const pl_at *from, const pl_sink *read);
 // the address from the start, then from each place the start was found in, nearest first: what
 // the nearest gives (all 0), or what each gives, nearest first
-pl_list *pl_lookup(pl *p, const char *const *address, size_t n, const pl_at *from, int all);
+pl_list *pl_lookup(pl *p, const char *const *address, size_t n, const pl_at *from, int all,
+	const pl_sink *read);
 
 // the names in an item's children whose value is a list, in their order there (an object's order:
-// whole numbers first, ascending); a read of the whole value. The caller's: pl_strings_free
+// whole numbers first, ascending); a keys read. The caller's: pl_strings_free
 typedef struct {
 	size_t n;
 	char **names;
 } pl_strings;
-pl_strings pl_names(pl *p, pl_at at);
+pl_strings pl_names(pl *p, pl_at at, const pl_sink *read);
 void pl_strings_free(pl_strings s);
+
+// every item at a level: each name's entries in an item's children, in name order (as pl_names)
+// then slot order. Its reads: a keys read, and each name's list, as pl_get tells for [name]. The
+// caller's: pl_list_free. (pl_members is the kept one, of an opened place)
+pl_list *pl_members_at(pl *p, pl_at at, const pl_sink *read);
 
 // opened places
 typedef struct pl_held pl_held;
-// the address from the root, kept. NULL cannot happen. Walks nothing until pl_items
-pl_held *pl_open(pl *p, const char *const *address, size_t n);
+// the address from the root, kept. NULL cannot happen. Walks nothing until pl_items. read: the sink
+// for its items calls when they are not given one (NULL: the setup's); it must outlive the handle
+pl_held *pl_open(pl *p, const char *const *address, size_t n, const pl_sink *read);
 // what is there now, borrowed (see above). A walk is made only when the step before gave other
 // items or a children node it read is not what it was; each call tells every read the held
-// address rests on. After pl_drop: the empty list
-const pl_list *pl_items(pl_held *h);
+// address rests on, to read, else the one given to pl_open, else the setup's (a walk again is the
+// asker's). After pl_drop: the empty list
+const pl_list *pl_items(pl_held *h, const pl_sink *read);
+// the members of each of the opened place's items, concatenated in item order, each in name order
+// then slot order (pl_members of each), kept across calls: per item, a name whose list is the one
+// walked last time keeps its items (its read is told again, so it stays tracked); a name with a new
+// list is walked again; a name gone is let go. A children node in place (in_place) changes its lists
+// without a new one: every name is walked again. The sink as for pl_items. Borrowed: good until the
+// next pl_members of this opened place, its pl_drop, or pl_close (keep items with pl_item_ref).
+// After pl_drop: the empty list
+const pl_list *pl_members(pl_held *h, const pl_sink *read);
 // lets go of what it shares; idempotent; the handle stays good (empty)
 void pl_drop(pl_held *h);
 // drops and frees the handle

@@ -119,11 +119,11 @@ Deno.test("places: lookup, the nearest enclosing place first; all, each", () => 
 	assertEquals(p.lookup(["none"], b), [])
 })
 
-Deno.test("places: names in an item's children, as one read of its whole value", () => {
+Deno.test("places: names in an item's children, as one keys read", () => {
 	const { p, kids, reads } = world()
 	kids("stored", "R", { b: [["stored", "B"]], a: [["stored", "A"]], bad: 5 })
 	assertEquals(p.names(["stored", "R"]), ["b", "a"])
-	assertEquals(reads.at(-1), { source: "stored", id: "R", path: [] })
+	assertEquals(reads.at(-1), { source: "stored", id: "R", path: [], keys: true })
 	assertEquals(p.names(["stored", "nobody"]), [])
 })
 
@@ -178,7 +178,7 @@ Deno.test("places: place refuses a non-name, a parent with no children node, an 
 	const { p, kids } = world()
 	kids("stored", "R", { t: [["stored", "A"]] })
 	const R = ["stored", "R"] as const
-	for (const name of [".", "..", "/"]) {
+	for (const name of ["", ".", "..", "/"]) {
 		assertEquals(code(() => p.place([R, name], R, h)), "not-a-name")
 	}
 	assertEquals(code(() => p.place([["stored", "nobody"], "t"], R, h)), "nothing-there")

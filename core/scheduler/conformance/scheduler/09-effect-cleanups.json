@@ -1,11 +1,11 @@
 {
 	"title": "an effect is an owner: its cleanups run before its next act, and when it goes",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "effect",
 			"name": "e",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "x" },
 			"act": {
 				"do": [
@@ -34,7 +34,7 @@
 			}
 		},
 		{ "op": "log", "expect": { "log": [] } },
-		{ "op": "dispose", "owner": "e", "expect": {} },
+		{ "op": "dispose", "scope": "e", "expect": {} },
 		{ "op": "log", "expect": { "log": [["undo", 2]] } }
 	]
 }

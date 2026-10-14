@@ -1,0 +1,80 @@
+{
+	"title": "a read outside any run is told to no one: its node changing runs nothing",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "A",
+			"value": "one",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"quote": "q"
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"expect": {
+				"value": "one"
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"x"
+			],
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"patches": [
+				{
+					"path": [],
+					"value": "two"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "q"
+			}
+		}
+	]
+}

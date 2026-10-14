@@ -1,0 +1,7 @@
+{
+	"title": "a time that is not whole: not the encoding of a pack",
+	"bytes": "a2646b65797381836576616c75656161f90000656e6f64657381a1666368616e6765a16474696d65fb41da39deb2600000",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

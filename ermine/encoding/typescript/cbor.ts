@@ -12,11 +12,13 @@
 //   never written
 // - a stand-in, what a live value is sent as: tag 0x12345678 (head da12345678)
 //   over its kind, any value; a live value itself has no encoding
+// - a symbol has no encoding, anywhere: in a value, or as a map's key. Getting
+//   rid of them first is the caller's
 //
 // Bytes are a Uint8Array, any view, given and given back; decoded, a fresh
 // one. A typed array is its own class. Decoding accepts exactly what encoding
-// gives. A stand-in is the class Stand, holding its kind; a symbol, a function,
-// a Map, an ArrayBuffer (for now), any other class's object is live.
+// gives. A stand-in is the class Stand, holding its kind; a function, a Map,
+// an ArrayBuffer (for now), any other class's object is live.
 
 /** A value as this codec holds it. */
 export type Value =
@@ -297,6 +299,9 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		if (proto !== Object.prototype && proto !== null) {
 			throw new CborError("a live value has no encoding")
 		}
+		if (Object.getOwnPropertySymbols(x).length) {
+			throw new CborError("a symbol key has no encoding")
+		}
 		const ks = Object.keys(x), bs = ks.map(key)
 		// insertion sort: maps are small
 		for (let i = 1; i < ks.length; i++) {
@@ -314,7 +319,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (deep) open.delete(x)
 }
 
-/** The deterministic CBOR of a value. A live value, or anything not a value, throws. */
+/** The deterministic CBOR of a value. A live value, a symbol, or anything not a value, throws. */
 export function encode(x: Value): Uint8Array {
 	const out = new Out()
 	value(out, x, new Set(), 0)

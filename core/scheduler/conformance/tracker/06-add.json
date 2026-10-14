@@ -4,7 +4,7 @@
 		{ "op": "add", "from": "ui", "to": "a" },
 		{ "op": "add", "from": "ui", "to": "b" },
 		{ "op": "add", "from": "ui", "to": "a" },
-		{ "op": "reads", "of": "ui", "expect": ["a", "b"] },
-		{ "op": "readers", "of": "a", "expect": ["ui"] }
+		{ "op": "reads", "of": "ui", "expect": { "names": ["a", "b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["ui"] } }
 	]
 }

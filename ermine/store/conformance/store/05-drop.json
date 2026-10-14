@@ -1,0 +1,43 @@
+{
+	"title": "drop takes a source's whole table, then an event at each key it held: ids in the order first held, a deleted id's gone, the parts of an id in the order taken",
+	"steps": [
+		{ "op": "add", "source": "drag", "part": "value", "id": "x", "node": "a", "expect": {} },
+		{ "op": "add", "source": "drag", "part": "children", "id": "x", "node": "b", "expect": {} },
+		{ "op": "add", "source": "drag", "part": "value", "id": "y", "node": "c", "expect": {} },
+		{ "op": "add", "source": "drag", "part": "value", "id": "z", "node": "d", "expect": {} },
+		{ "op": "del", "source": "drag", "part": "value", "id": "z", "expect": {} },
+		{ "op": "add", "source": "stored", "part": "value", "id": "x", "node": "e", "expect": {} },
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					["drag", "value", "x", "a"],
+					["drag", "children", "x", "b"],
+					["drag", "value", "y", "c"],
+					["drag", "value", "z", "d"],
+					["drag", "value", "z", null],
+					["stored", "value", "x", "e"]
+				]
+			}
+		},
+		{ "op": "drop", "source": "drag", "expect": {} },
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					["drag", "value", "x", null],
+					["drag", "children", "x", null],
+					["drag", "value", "y", null]
+				]
+			}
+		},
+		{ "op": "get", "source": "drag", "part": "value", "id": "x", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "value", "id": "x", "expect": { "node": "e" } },
+		{ "op": "who", "source": "drag", "node": "a", "expect": { "keys": [] } },
+		{ "op": "drop", "source": "drag", "expect": {} },
+		{ "op": "drop", "source": "never", "expect": {} },
+		{ "op": "events", "expect": { "events": [] } },
+		{ "op": "add", "source": "drag", "part": "value", "id": "x", "node": "f", "expect": {} },
+		{ "op": "get", "source": "drag", "part": "value", "id": "x", "expect": { "node": "f" } }
+	]
+}

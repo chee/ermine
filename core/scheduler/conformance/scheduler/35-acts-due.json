@@ -1,0 +1,29 @@
+{
+	"title": "an act that makes another effect due again: that effect's act this round is skipped; it acts once, on the new value (proof C7)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "effect",
+			"name": "e1",
+			"scope": "o",
+			"f": { "read": "a" },
+			"act": {
+				"do": [
+					{ "log": ["e1", { "given": "value" }] },
+					{ "write": ["b", { "sum": [{ "given": "value" }, { "given": "value" }] }] }
+				]
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e2",
+			"scope": "o",
+			"f": [{ "read": "a" }, { "read": "b" }],
+			"act": { "log": ["e2", { "given": "value" }] },
+			"equal": "json"
+		},
+		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e1", 2], ["e2", [2, 4]]] } }
+	]
+}

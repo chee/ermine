@@ -1,0 +1,63 @@
+{
+	"title": "spot names a run's reads as places in the graph, in order, as it ends: a value at a path, the change spot, places' reads of children and of names, any part; a key not a spot is none",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": { "a": [["stored", "A"]] },
+			"expect": {}
+		},
+		{ "op": "value", "source": "stored", "id": "A", "value": { "t": [1, 2] }, "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "watch",
+			"name": "c",
+			"scope": "o",
+			"f": [
+				{ "read": ["stored", "value", "A", ["t", 1]] },
+				{ "change": ["stored", "value", "A"] },
+				{ "get": ["a"] },
+				{ "read": ["stored", "run", "A"] },
+				{ "read": ["stored", "value", "A", ["t", 1]] }
+			],
+			"expect": {}
+		},
+		{ "op": "watch", "name": "d", "scope": "o", "f": { "names": ["stored", "R"] }, "expect": {} },
+		{ "op": "reads", "name": "c", "expect": { "reads": [] } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "reads",
+			"name": "c",
+			"expect": {
+				"reads": [
+					{ "source": "stored", "part": "value", "id": "A", "path": ["t", 1] },
+					{ "source": "stored", "part": "value", "id": "A", "path": null },
+					{ "source": "stored", "part": "children", "id": "R", "path": ["a"] },
+					{ "source": "stored", "part": "run", "id": "A", "path": [] },
+					{ "source": "stored", "part": "value", "id": "A", "path": ["t", 1] }
+				]
+			}
+		},
+		{
+			"op": "reads",
+			"name": "d",
+			"expect": { "reads": [{ "source": "stored", "part": "children", "id": "R", "path": [] }] }
+		},
+		{ "op": "spot", "key": "A", "expect": {} },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "run",
+			"id": "A",
+			"patches": [{ "path": [], "value": 1 }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "state",
+			"name": "c",
+			"expect": { "runs": 2, "value": [2, null, ["stored:A"], 1, 2] }
+		}
+	]
+}

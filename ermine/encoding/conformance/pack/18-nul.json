@@ -1,0 +1,26 @@
+{
+	"title": "U+0000 in a part, an id, a value, a reader and a site: carried as any other character",
+	"entries": [
+		[
+			"v\u0000",
+			"\u0000",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": "a\u0000b",
+			"change": {
+				"time": 1,
+				"reader": "\u0000",
+				"external": [
+					{
+						"file": "a\u0000.ts",
+						"line": 1,
+						"function": "\u0000f"
+					}
+				]
+			}
+		}
+	]
+}

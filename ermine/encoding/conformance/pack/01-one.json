@@ -1,0 +1,22 @@
+{
+	"title": "one node under one key, its bytes fixed",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": "hi",
+			"change": {
+				"time": 1,
+				"actor": "x"
+			}
+		}
+	],
+	"expect": {
+		"bytes": "a2646b65797381836576616c75656161f90000656e6f64657381a26576616c7565626869666368616e6765a26474696d65f93c00656163746f726178"
+	}
+}

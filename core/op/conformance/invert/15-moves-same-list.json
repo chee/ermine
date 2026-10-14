@@ -1,0 +1,266 @@
+{
+	"title": "a span taken from a list, landed on an item of that list: the item's place shifts by the span put back in front of it",
+	"steps": [
+		{
+			"op": "invert",
+			"value": [
+				false,
+				false,
+				false
+			],
+			"patches": [
+				{
+					"path": [
+						1
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								1
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					},
+					{
+						"path": [
+							2
+						],
+						"value": false
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": [
+				1,
+				2,
+				3,
+				4,
+				5
+			],
+			"patches": [
+				{
+					"path": [
+						2
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								2
+							],
+							"range": [
+								0,
+								2
+							]
+						}
+					},
+					{
+						"path": [
+							4
+						],
+						"value": 5
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": [
+				1,
+				2,
+				3,
+				4,
+				5
+			],
+			"patches": [
+				{
+					"path": [
+						1
+					],
+					"move": {
+						"path": [],
+						"range": [
+							2,
+							4
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							2,
+							2
+						],
+						"move": {
+							"path": [
+								1
+							],
+							"range": [
+								0,
+								2
+							]
+						}
+					},
+					{
+						"path": [
+							1
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": [
+				5,
+				6,
+				[
+					2,
+					3
+				],
+				4
+			],
+			"patches": [
+				{
+					"path": [
+						1,
+						0
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								1,
+								0
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					},
+					{
+						"path": [
+							2,
+							0
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": {
+				"l": [
+					1,
+					2,
+					3,
+					4
+				]
+			},
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							3
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							1,
+							1
+						],
+						"move": {
+							"path": [
+								"l",
+								0
+							],
+							"range": [
+								0,
+								2
+							]
+						}
+					},
+					{
+						"path": [
+							"l",
+							0
+						],
+						"value": 1
+					}
+				]
+			}
+		}
+	]
+}

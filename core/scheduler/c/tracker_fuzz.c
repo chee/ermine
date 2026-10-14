@@ -1,8 +1,7 @@
 // libFuzzer target: the input bytes are a sequence of operations over a few nodes, applied to
-// the tracker and to a small model (conformance/tracker/model.ts, in C). After every step:
-// reads and readers agree with the model exactly (a run never links a spot twice), no reader
-// outside a run has two links to one spot, and the laws hold (both lists doubly linked and
-// agreeing; add in a run fails).
+// the tracker and to a small model (tracker_model.ts, in C). After every step:
+// reads and readers agree with the model exactly (links may repeat, as in alien-signals), and
+// the laws hold (both lists doubly linked and agreeing; add in a run fails).
 #include "tracker.h"
 
 #include <stdio.h>
@@ -14,24 +13,26 @@ enum { NODES = 8, READERS = 4, MAX = 64 };
 typedef struct {
 	int to;
 	unsigned id;
+	unsigned gen;
 } mlink;
 
 typedef struct {
 	mlink reads[MAX];
 	int length;
 	int open, at;
-	unsigned read; // bit per node read in this run
+	unsigned gen; // the tick of this run
 } mreader;
 
 typedef struct {
 	int from;
 	unsigned id;
+	unsigned gen;
 } mreader_of;
 
 static mreader model[NODES];
 static mreader_of readers[NODES][MAX];
 static int readers_length[NODES];
-static unsigned ids;
+static unsigned ids, ticks;
 static tg_node *nodes[NODES];
 static int names[NODES];
 
@@ -49,29 +50,33 @@ static void model_drop(int to, unsigned id) {
 	}
 }
 
-static void model_insert(int r, int at, int a) {
+static void model_insert(int r, int at, int a, unsigned gen) {
 	mreader *m = &model[r];
 	memmove(&m->reads[at + 1], &m->reads[at], (m->length - at) * sizeof m->reads[0]);
-	m->reads[at] = (mlink){a, ++ids};
+	m->reads[at] = (mlink){a, ++ids, gen};
 	m->length++;
-	readers[a][readers_length[a]++] = (mreader_of){r, ids};
+	readers[a][readers_length[a]++] = (mreader_of){r, ids, gen};
 }
 
+static void model_set_gen(int r, int a, unsigned id, unsigned gen) {
+	for (int i = 0; i < readers_length[a]; i++)
+		if (readers[a][i].id == id) readers[a][i].gen = gen;
+	(void)r;
+}
+
+// the same checks as tg_track: same spot as the last read, next in order, newest reader is this run
 static void model_track(int r, int a) {
 	mreader *m = &model[r];
-	int next = m->at < m->length && m->reads[m->at].to == a;
-	if (m->read & (1u << a)) {
-		// read already: an old link to it met in order is a second one, and goes
-		if (next) {
-			model_drop(a, m->reads[m->at].id);
-			memmove(&m->reads[m->at], &m->reads[m->at + 1], (m->length - m->at - 1) * sizeof m->reads[0]);
-			m->length--;
-		}
+	if (m->at > 0 && m->reads[m->at - 1].to == a) return;
+	if (m->at < m->length && m->reads[m->at].to == a) {
+		m->reads[m->at].gen = m->gen;
+		model_set_gen(r, a, m->reads[m->at].id, m->gen);
+		m->at++;
 		return;
 	}
-	if (next) m->at++;
-	else model_insert(r, m->at++, a);
-	m->read |= 1u << a;
+	int n = readers_length[a];
+	if (n > 0 && readers[a][n - 1].from == r && readers[a][n - 1].gen == m->gen) return;
+	model_insert(r, m->at++, a, m->gen);
 }
 
 static void model_end(int r) {
@@ -86,7 +91,7 @@ static void model_add(int r, int a) {
 	mreader *m = &model[r];
 	for (int i = 0; i < m->length; i++)
 		if (m->reads[i].to == a) return;
-	model_insert(r, m->length, a);
+	model_insert(r, m->length, a, 0);
 }
 
 static void model_untrack(int r, int a) { // a < 0: all
@@ -98,8 +103,6 @@ static void model_untrack(int r, int a) { // a < 0: all
 		m->length--;
 		if (m->open && i < m->at) m->at--;
 	}
-	if (a >= 0) m->read &= ~(1u << a);
-	else m->read = 0;
 }
 
 static int index_of(tg_node *n) {
@@ -124,8 +127,6 @@ static void check(int step) {
 				if (l->from != t) die("a read's from is not its node", step);
 				if (l->to == nodes[a]) forward++;
 			}
-			// outside a run (after every end), never two links to one spot
-			if (forward > 1 && !model[n].open) die("two links to one spot outside a run", step);
 			for (tg_link *l = nodes[a]->first; l != NULL; l = l->after)
 				if (l->from == t) back++;
 			if (forward != back) die("symmetry broken", step);
@@ -149,6 +150,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	memset(model, 0, sizeof model);
 	memset(readers_length, 0, sizeof readers_length);
 	ids = 0;
+	ticks = 0;
 	for (int i = 0; i < NODES; i++) {
 		names[i] = i;
 		nodes[i] = tg_node_new(&names[i]);
@@ -159,7 +161,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		// track in a run, add and begin outside one (add in a run fails)
 		if (op == 0 && !m->open) {
 			tg_begin(nodes[r]);
-			m->open = 1, m->at = 0, m->read = 0;
+			m->open = 1, m->at = 0, m->gen = ++ticks;
 		} else if (op == 1 && m->open) {
 			if (m->length >= MAX - 1) continue;
 			if (tg_track(nodes[r], nodes[a]) != 0) abort();

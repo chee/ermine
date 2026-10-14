@@ -1,0 +1,119 @@
+{
+	"title": "a keystroke in doc.body: a reader of doc.title does not rerun",
+	"steps": [
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "doc",
+			"value": {
+				"title": "hi",
+				"body": "abc"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "title",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"doc",
+					[
+						"title"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "body",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"doc",
+					[
+						"body"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "all",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"doc"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "doc",
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "d"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "title",
+			"expect": {
+				"runs": 1,
+				"value": "hi"
+			}
+		},
+		{
+			"op": "state",
+			"name": "body",
+			"expect": {
+				"runs": 2,
+				"value": "abcd"
+			}
+		},
+		{
+			"op": "state",
+			"name": "all",
+			"expect": {
+				"runs": 2,
+				"value": {
+					"title": "hi",
+					"body": "abcd"
+				}
+			}
+		}
+	]
+}

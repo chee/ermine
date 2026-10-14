@@ -80,7 +80,7 @@ static void make(int c, fz_bytes *b) {
 	nodes[c] = NULL;
 	if (fz_byte(b) % 5 == 4) return;
 	op_value *v = children_value(b);
-	nodes[c] = nd_make(v, &(ch_header){.has_time = 1, .time = 0, .actor = "setup"});
+	nodes[c] = nd_make(v, &(ch_header){.has_time = 1, .time = 0, .actor = "setup"}, NULL);
 	op_free(v);
 }
 
@@ -125,15 +125,15 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			*o = (held){0};
 			o->n = c % (DEEP + 1);
 			for (size_t i = 0; i < o->n; i++) o->address[i] = names[fz_byte(&b) % 7];
-			o->h = pl_open(p, o->address, o->n);
+			o->h = pl_open(p, o->address, o->n, NULL);
 		} else if (op == 1 && h != NULL) {
-			const pl_list *got = pl_items(h->h);
+			const pl_list *got = pl_items(h->h, NULL);
 			if (h->dropped) {
 				if (got->n != 0 || got->serial != 0) die("a dropped place is not empty", step);
 				continue;
 			}
 			if (h->read && !h->dirty && (got != h->last || got->serial != h->serial)) die("nothing changed, and another list", step);
-			pl_list *fresh = pl_get(p, h->address, h->n, NULL);
+			pl_list *fresh = pl_get(p, h->address, h->n, NULL, NULL);
 			if (fresh->n != got->n) die("an opened place's items are not a fresh get's (length)", step);
 			for (size_t i = 0; i < got->n; i++)
 				if (!same_item(got->items[i], fresh->items[i])) die("an opened place's items are not a fresh get's", step);

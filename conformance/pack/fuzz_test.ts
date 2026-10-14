@@ -1,42 +1,22 @@
 // The reference against a pack harness, on what the scenarios never write. PACK_HARNESS: the other
-// implementation (default: the reference, against itself). Values of every kind (form.ts): bytes,
-// typed arrays of each kind, NaN, the infinities, -0, floats of each width, strings around each
-// head's size, astral and escaped, maps of many keys, "/" and "__proto__" as keys.
-// - across: each packs and encodes to the same bytes; each reads the other's back as the graph
-//   the reference walked
-// - mutated: bytes cut, grown and flipped; both say the same of each: the same graph or node, or
-//   the same code
+// implementation (default: the reference, against itself). A few ids, each with some of value,
+// attributes and children; nodes shared between keys; values
+// of every kind (form.ts): bytes, typed arrays of each kind, NaN, the infinities, -0, floats of
+// each width, strings around each head's size, astral and escaped, maps of many keys, "/" and
+// "__proto__" as keys.
+// - across: each packs and encodes to the same bytes; each reads the other's back as the model
+//   says: keys sorted, nodes numbered as first named
+// - mutated: bytes cut, grown and flipped; both say the same of each
 // a few dozen seeds (memory: fuzz runs small)
 import { assertEquals } from "@std/assert"
 import { line, toJson } from "./form.ts"
+import { ask } from "./ask.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`.split(" ")
 const subject = (Deno.env.get("PACK_HARNESS") ?? reference.join(" ")).split(" ")
 
 const SEEDS = 40, MUTATIONS = 20
-
-type Request = Record<string, unknown> & { op: string }
-type Answer = { graph?: unknown; node?: unknown; bytes?: string; code?: string; error?: string }
-
-async function ask(command: string[], requests: Request[]): Promise<Answer[]> {
-	const child = new Deno.Command(command[0], {
-		args: command.slice(1),
-		stdin: "piped",
-		stdout: "piped",
-		signal: AbortSignal.timeout(60_000),
-	}).spawn()
-	const output = child.output()
-	const w = child.stdin.getWriter()
-	await w.write(new TextEncoder().encode(requests.map((r) => line(r)).join("\n") + "\n"))
-	await w.close()
-	const { stdout, success } = await output
-	const answers = new TextDecoder().decode(stdout).trim().split("\n").filter((l) => l)
-		.map((l) => JSON.parse(l))
-	assertEquals(success, true, "the harness ends well")
-	assertEquals(answers.length, requests.length, "an answer per request")
-	return answers
-}
 
 function rand(seed: number) {
 	let x = seed * 2654435761 >>> 0 || 1
@@ -85,7 +65,7 @@ const NUMBERS = [
 	Infinity,
 	-Infinity,
 	3.4028234663852886e38,
-	1760000000000,
+	1760000000,
 ]
 const TYPED = [
 	Int8Array,
@@ -118,7 +98,7 @@ function values(pick: (n: number) => number) {
 		return t
 	}
 	const value = (depth: number): unknown => {
-		switch (pick(depth > 2 ? 6 : 10)) {
+		switch (pick(depth > 2 ? 7 : 12)) {
 			case 0:
 				return [null, true, false][pick(3)]
 			case 1:
@@ -132,6 +112,10 @@ function values(pick: (n: number) => number) {
 				return typed()
 			case 6:
 			case 7:
+				// an entry: a source and an id
+				return ["src", `n${pick(4)}`]
+			case 8:
+			case 9:
 				return Array.from({ length: pick(pick(2) ? 4 : 30) }, () => value(depth + 1))
 			default: {
 				const n = pick(5) === 0 ? 30 : pick(5)
@@ -155,38 +139,90 @@ function values(pick: (n: number) => number) {
 	return value
 }
 
-// a graph of a few nodes, some ids not loaded
-function graph(seed: number) {
+type Node = { value?: unknown; change: Record<string, unknown>; cow?: false }
+type Table = { entries: unknown[][]; nodes: Node[] }
+
+// a few ids, each with some parts; a node now and then under a second key
+function table(seed: number): Table {
 	const pick = rand(seed)
 	const value = values(pick)
-	const ids = Array.from({ length: 1 + pick(6) }, (_, i) => `n${i}`)
-	const any = () => pick(5) ? ids[pick(ids.length)] : `gone${pick(3)}`
-	const version = (list: boolean) => {
-		const v: Record<string, unknown> = {
-			content: list ? Array.from({ length: pick(4) }, any) : toJson(value(0)),
-			change: toJson(value(1)),
-		}
-		if (pick(3) === 0) v.because = toJson(value(1))
-		return v
-	}
-	const versions = (list: boolean) => Array.from({ length: pick(3) }, () => version(list))
-	const named = (list: boolean) =>
-		["a", "b", "c", "type", "é"].filter(() => pick(2)).map((name) => [name, versions(list)])
-	const nodes = ids.map((id) => {
-		const header: Record<string, unknown> = {}
-		if (pick(2)) header.time = 1760000000000 + pick(1000)
-		if (pick(2)) header.actor = toJson(value(1))
-		if (pick(3) === 0) header.reader = STRINGS[pick(STRINGS.length)]
+	const nodes: Node[] = []
+	const node = (): Node => {
+		const change: Record<string, unknown> = { time: 1760000000 + pick(1000) }
+		if (pick(2)) change.actor = toJson(value(1))
 		if (pick(3) === 0) {
-			const site: Record<string, unknown> = { file: "file:///a.ts", line: 1 + pick(99) }
-			if (pick(2)) site.column = 1 + pick(80)
-			if (pick(2)) site.function = "f"
-			header.site = site
+			change.reader = STRINGS[pick(STRINGS.length)]
 		}
-		if (pick(4) === 0) header.cause = toJson(value(1))
-		return { id, value: versions(false), info: named(false), children: named(true), header }
+		if (pick(3) === 0) {
+			change.external = Array.from({ length: 1 + pick(2) }, () => {
+				const site: Record<string, unknown> = { file: "file:///a.ts", line: 1 + pick(99) }
+				if (pick(2)) site.column = pick(80)
+				if (pick(2)) site.function = "f"
+				return site
+			})
+		}
+		if (pick(3) === 0) {
+			change.metadata = Array.from(
+				{ length: pick(4) },
+				() => [["sync", "why"][pick(2)], toJson(value(1))],
+			)
+		}
+		if (pick(3) === 0) {
+			const patch = () => {
+				const p: Record<string, unknown> = { path: ["a", pick(3)] }
+				if (pick(2)) p.range = [0, pick(3)]
+				if (pick(2)) p.value = toJson(value(1))
+				else if (pick(3) === 0) p.move = { path: ["b"] }
+				return p
+			}
+			change.op = {
+				patches: Array.from({ length: pick(3) }, patch),
+				undo: Array.from({ length: pick(3) }, patch),
+			}
+		}
+		const n: Node = { change }
+		if (pick(4)) n.value = toJson(value(0))
+		if (pick(4) === 0) n.cow = false
+		return n
+	}
+	const parts = ["value", "attributes", "children", "drag"]
+	const ids = Array.from(
+		{ length: 1 + pick(5) },
+		(_, i) => `n${i}`,
+	)
+	const entries: unknown[][] = []
+	for (const id of ids) {
+		for (const part of parts) {
+			if (pick(3) === 0) continue
+			// now and then a node already under another key
+			const n = nodes.length && pick(5) === 0
+				? pick(nodes.length)
+				: (nodes.push(node()), nodes.length - 1)
+			entries.push([part, id, n])
+		}
+	}
+	return { entries, nodes }
+}
+
+// a string's order: its UTF-8, the shorter first
+const utf8 = new TextEncoder()
+function before(a: string, b: string): number {
+	const x = utf8.encode(a), y = utf8.encode(b)
+	if (x.length !== y.length) return x.length - y.length
+	for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]
+	return 0
+}
+// what reading back gives, plainly: the keys sorted, the nodes numbered as first named
+function model(t: Table): Table {
+	const rows = [...t.entries] as [string, string, number][]
+	rows.sort((a, b) => before(a[0], b[0]) || before(a[1], b[1]))
+	const numbers = new Map<number, number>(), nodes: Node[] = []
+	const entries = rows.map(([p, i, n]) => {
+		let k = numbers.get(n)
+		if (k === undefined) numbers.set(n, k = nodes.length), nodes.push(t.nodes[n])
+		return [p, i, k]
 	})
-	return { root: "n0", nodes }
+	return { entries, nodes }
 }
 
 // a map's keys in any order are the same map
@@ -237,81 +273,58 @@ function mutate(seed: number, bytes: string): string[] {
 	})
 }
 
-const graphs = Array.from({ length: SEEDS }, (_, i) => graph(i + 1))
+const tables = Array.from({ length: SEEDS }, (_, i) => table(i + 1))
 
-Deno.test(`fuzz: ${SEEDS} graphs across, each reads the other's bytes`, async () => {
-	const asks = (g: ReturnType<typeof graph>) => [
-		{ op: "walk", ...g },
-		{ op: "pack", ...g },
-		...g.nodes.map((node) => ({ op: "encode", node })),
-	]
+Deno.test(`fuzz: ${SEEDS} tables across, each reads the other's bytes as the model says`, async () => {
+	const asks = (
+		t: Table,
+	) => [{ op: "pack", ...t }, ...t.nodes.map((node) => ({ op: "encode", node }))]
 	const [ours, theirs] = await Promise.all([
-		ask(subject, graphs.flatMap(asks)),
-		ask(reference, graphs.flatMap(asks)),
+		ask(subject, tables.flatMap(asks)),
+		ask(reference, tables.flatMap(asks)),
 	])
-	assertEquals(ours, theirs, "walk, pack and encode: the same answers, the same bytes")
-	// the bytes each made, read by the other
-	const reads = (a: Answer[]) => {
-		const out: Request[] = []
+	assertEquals(ours, theirs, "pack and encode: the same answers, the same bytes")
+	const reads = (a: typeof ours) => {
+		const out: Record<string, unknown>[] = []
 		let at = 0
-		for (const g of graphs) {
-			at++
+		for (const t of tables) {
 			out.push({ op: "unpack", bytes: a[at++].bytes })
-			for (const _ of g.nodes) out.push({ op: "decode", bytes: a[at++].bytes })
+			for (const _ of t.nodes) out.push({ op: "decode", bytes: a[at++].bytes })
 		}
 		return out
 	}
 	const [cross, back] = await Promise.all([
-		ask(reference, reads(ours)),
-		ask(subject, reads(theirs)),
+		ask(reference, reads(ours) as never),
+		ask(subject, reads(theirs) as never),
 	])
-	let at = 0, k = 0
-	for (const [i, g] of graphs.entries()) {
-		const walked = theirs[at].graph
-		at += 2 + g.nodes.length
-		assertEquals(cross[k].graph, walked, `seed ${i + 1}: theirs read by the reference`)
-		assertEquals(back[k].graph, walked, `seed ${i + 1}: the reference's read by theirs`)
-		k++
-		for (const n of g.nodes) {
-			assertEquals(cross[k].node, back[k].node, `seed ${i + 1}: ${n.id} decoded`)
-			k++
+	let at = 0
+	for (const [i, t] of tables.entries()) {
+		const m = model(t)
+		for (const [name, a] of [["reference", cross], ["subject", back]] as const) {
+			assertEquals(
+				stable({ entries: a[at].entries, nodes: a[at].nodes }),
+				stable(m),
+				`seed ${i + 1}: ${name} unpacks as the model says`,
+			)
+			t.nodes.forEach((n, k) =>
+				assertEquals(
+					stable(a[at + 1 + k].node),
+					stable(n),
+					`seed ${i + 1}: ${name} decodes node ${k}`,
+				)
+			)
 		}
+		at += 1 + t.nodes.length
 	}
 })
 
-Deno.test(`fuzz: ${SEEDS} × ${MUTATIONS} mutated bytes, both say the same`, async () => {
-	const packed = await ask(
-		reference,
-		graphs.flatMap((g) => [
-			{ op: "pack", ...g },
-			{ op: "encode", node: g.nodes[g.nodes.length - 1] },
-		]),
+Deno.test(`fuzz: ${SEEDS * MUTATIONS} mutated packs, both say the same`, async () => {
+	const packed = await ask(reference, tables.map((t) => ({ op: "pack", ...t })))
+	const reads = packed.flatMap((a, i) =>
+		mutate(i + 1, a.bytes!).flatMap((bytes) => [{ op: "unpack", bytes }, { op: "decode", bytes }])
 	)
-	const requests: Request[] = []
-	for (let i = 0; i < SEEDS; i++) {
-		for (const bytes of mutate(i + 1, packed[2 * i].bytes!)) {
-			requests.push({ op: "unpack", bytes })
-		}
-		for (const bytes of mutate(i + 1000, packed[2 * i + 1].bytes!)) {
-			requests.push({ op: "decode", bytes })
-		}
+	const [ours, theirs] = await Promise.all([ask(subject, reads), ask(reference, reads)])
+	for (let i = 0; i < reads.length; i++) {
+		assertEquals(stable(ours[i]), stable(theirs[i]), `${reads[i].op} ${reads[i].bytes}`)
 	}
-	const [ours, theirs] = await Promise.all([ask(subject, requests), ask(reference, requests)])
-	const wrong = requests.map((r, i) => ({ r, a: ours[i], b: theirs[i] }))
-		.filter(({ a, b }) => stable(a) !== stable(b))
-	const kept = theirs.filter((a) => a.graph || a.node).length
-	console.log(`${requests.length} mutated, ${kept} still read`)
-	// where they differ: the first path, and what each says there
-	const where = (a: unknown, b: unknown, path: string): string | undefined => {
-		if (stable(a) === stable(b)) return
-		if (a && b && typeof a === "object" && typeof b === "object") {
-			for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
-				const d = where((a as never)[k], (b as never)[k], `${path}.${k}`)
-				if (d) return d
-			}
-		}
-		return `${path}: ${line(a)?.slice(0, 80)} / ${line(b)?.slice(0, 80)}`
-	}
-	if (wrong.length) console.log(`first: ${wrong[0].r.op} ${wrong[0].r.bytes}`)
-	assertEquals(wrong.slice(0, 5).map(({ r, a, b }) => `${r.op}: ${where(a, b, "")}`), [])
 })

@@ -1,0 +1,211 @@
+{
+	"title": "symbols as sources and as ids: equal by identity, not by name or text",
+	"steps": [
+		{
+			"op": "add",
+			"source": {
+				"symbol": "s"
+			},
+			"part": "value",
+			"id": {
+				"symbol": "i"
+			},
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"source": "s",
+			"part": "value",
+			"id": "i",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"source": {
+				"symbol": "s"
+			},
+			"part": "value",
+			"id": "i",
+			"node": "c",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"source": {
+				"symbol": "s"
+			},
+			"part": "value",
+			"id": {
+				"symbol": "i"
+			},
+			"expect": {
+				"node": "a"
+			}
+		},
+		{
+			"op": "get",
+			"source": "s",
+			"part": "value",
+			"id": "i",
+			"expect": {
+				"node": "b"
+			}
+		},
+		{
+			"op": "get",
+			"source": {
+				"symbol": "s"
+			},
+			"part": "value",
+			"id": "i",
+			"expect": {
+				"node": "c"
+			}
+		},
+		{
+			"op": "children",
+			"source": {
+				"symbol": "s"
+			},
+			"id": {
+				"symbol": "i"
+			},
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"source": {
+				"symbol": "s"
+			},
+			"part": "children",
+			"id": {
+				"symbol": "i"
+			},
+			"node": "k",
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": {
+				"symbol": "s"
+			},
+			"id": {
+				"symbol": "i"
+			},
+			"expect": {
+				"node": "k"
+			}
+		},
+		{
+			"op": "who",
+			"source": {
+				"symbol": "s"
+			},
+			"node": "a",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						{
+							"symbol": "i"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						{
+							"symbol": "s"
+						},
+						"value",
+						{
+							"symbol": "i"
+						},
+						"a"
+					],
+					[
+						"s",
+						"value",
+						"i",
+						"b"
+					],
+					[
+						{
+							"symbol": "s"
+						},
+						"value",
+						"i",
+						"c"
+					],
+					[
+						{
+							"symbol": "s"
+						},
+						"children",
+						{
+							"symbol": "i"
+						},
+						"k"
+					]
+				]
+			}
+		},
+		{
+			"op": "drop",
+			"source": {
+				"symbol": "s"
+			},
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"source": "s",
+			"part": "value",
+			"id": "i",
+			"expect": {
+				"node": "b"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						{
+							"symbol": "s"
+						},
+						"value",
+						{
+							"symbol": "i"
+						},
+						null
+					],
+					[
+						{
+							"symbol": "s"
+						},
+						"children",
+						{
+							"symbol": "i"
+						},
+						null
+					],
+					[
+						{
+							"symbol": "s"
+						},
+						"value",
+						"i",
+						null
+					]
+				]
+			}
+		}
+	]
+}

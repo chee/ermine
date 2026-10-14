@@ -1,0 +1,65 @@
+{
+	"title": "a refused item stays in a list as REFUSED, in its place; reading, editing or placing under it is refused, never asked",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": { "a": [["stored", "X"], ["stored", "Y"]] },
+			"expect": {}
+		},
+		{ "op": "root", "name": "chee", "info": [["actor", "chee"]], "expect": {} },
+		{ "op": "guard", "name": "g", "may": { "denyid": "Y" }, "expect": {} },
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": { "get": ["a"], "full": true },
+			"expect": { "value": [["stored", "X", "a", 0], ["REFUSED", "REFUSED", "a", 1]] }
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": { "members": ["stored", "R"] },
+			"expect": { "value": ["stored:X", "REFUSED"] }
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": { "try": { "read": [{ "item": ["a"], "n": 1 }, "value"] } },
+			"expect": { "value": "refused" }
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"try": { "edit": [{ "item": ["a"], "n": 1 }, "value", [{ "path": [], "value": 1 }]] }
+			},
+			"expect": { "value": "refused" }
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": { "try": { "place": [[{ "item": ["a"], "n": 1 }, "n"], ["stored", "Q"]] } },
+			"expect": { "value": "refused" }
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": { "read": [{ "item": ["a"], "n": 1 }, "value"] },
+			"expect": { "error": "refused", "reason": "refused", "op": "read" }
+		},
+		{
+			"op": "node",
+			"source": "stored",
+			"part": "children",
+			"id": "R",
+			"expect": { "value": { "a": [["stored", "X"], ["stored", "Y"]] } }
+		}
+	]
+}

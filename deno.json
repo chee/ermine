@@ -9,14 +9,18 @@
 		"./core/protect",
 		"./ermine/encoding",
 		"./ermine/programs",
+		"./ermine/store",
+		"./ermine/link",
 		"./extensions/subduction",
 		"./playground/files",
 		"./playground/solid",
 		"./playground/demos/console",
-		"./playground/places-fresh"
+		"./playground/places-fresh",
+		"./playground/pack-indexeddb"
 	],
 	"tasks": {
-		"test": "deno test --allow-run --allow-read --allow-env",
+		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",
+		"conformance": "deno test --quiet --allow-run --allow-read --allow-env conformance/run.ts --",
 		"check": "deno check .",
 		"bench": "deno bench",
 		"bundle": "deno run --allow-read --allow-write --allow-run playground/bundle/bundle.ts"

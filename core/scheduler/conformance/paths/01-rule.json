@@ -13,13 +13,13 @@
 				["doc", "titles"],
 				["other"]
 			],
-			"expect": [true, true, true, true, false, false, false]
+			"expect": { "marks": [true, true, true, true, false, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["doc"] },
 			"paths": [["doc"], ["doc", "title"], ["doc", "body", 3, "x"], [], ["docs"]],
-			"expect": [true, true, true, true, false]
+			"expect": { "marks": [true, true, true, true, false] }
 		},
 		{
 			"op": "marks",
@@ -35,31 +35,31 @@
 				["l", 9],
 				["l", "1"]
 			],
-			"expect": [true, true, false, true, true, true, false, false, false]
+			"expect": { "marks": [true, true, false, true, true, true, false, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [1, 2], "value": ["x", "y"] },
 			"paths": [["l"], ["l", 0], ["l", 1], ["l", 2], ["l", 9, "deep"], ["l", "n"]],
-			"expect": [true, false, true, true, true, false]
+			"expect": { "marks": [true, false, true, true, true, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [2, 4] },
 			"paths": [["l"], ["l", 1], ["l", 2], ["l", 5]],
-			"expect": [true, false, true, true]
+			"expect": { "marks": [true, false, true, true] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [2, 2] },
 			"paths": [["l"], ["l", 1], ["l", 2], ["l", 5]],
-			"expect": [true, false, false, false]
+			"expect": { "marks": [true, false, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["s"], "range": [1, 2], "value": "x" },
 			"paths": [["s"], ["s", 0], ["s", 1], ["s", 4]],
-			"expect": [true, false, true, true]
+			"expect": { "marks": [true, false, true, true] }
 		},
 		{
 			"op": "marks",
@@ -74,67 +74,67 @@
 				["l", "3"],
 				["m", 3]
 			],
-			"expect": [true, true, true, false, true, true, false, false]
+			"expect": { "marks": [true, true, true, false, true, true, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l", 2], "value": 1 },
 			"paths": [["l", 2], ["l", 2, "x"], ["l"], ["l", 1], ["l", 3]],
-			"expect": [true, true, true, false, false]
+			"expect": { "marks": [true, true, true, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["m", "k"] },
 			"paths": [["m", "k"], ["m"], ["m", "j"], ["m", "l"]],
-			"expect": [true, true, false, false]
+			"expect": { "marks": [true, true, false, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["d"], "move": { "path": ["c"] } },
 			"paths": [[], ["b"], ["c"], ["c", "x"], ["d"], ["d", "y"], ["e"]],
-			"expect": [true, false, true, true, true, true, false]
+			"expect": { "marks": [true, false, true, true, true, true, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["m", 0], "move": { "path": ["l", 1] } },
 			"paths": [["l"], ["l", 0], ["l", 1], ["l", 4], ["m"], ["m", 0], ["m", 1]],
-			"expect": [true, false, true, true, true, true, false]
+			"expect": { "marks": [true, false, true, true, true, true, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [3, 4] } },
 			"paths": [["l"], ["l", 0], ["l", 2], ["l", 3], ["l", 8]],
-			"expect": [true, true, true, true, true]
+			"expect": { "marks": [true, true, true, true, true] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [0, 1], "move": { "path": ["l"], "range": [3, 4] } },
 			"paths": [["l"], ["l", 0], ["l", 1], ["l", 2], ["l", 3], ["l", 8]],
-			"expect": [true, true, false, false, true, true]
+			"expect": { "marks": [true, true, false, false, true, true] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": ["l"], "range": [1, 2], "move": { "path": ["x"] } },
 			"paths": [["x"], ["l"], ["l", 0], ["l", 1], ["l", 2]],
-			"expect": [true, true, false, true, false]
+			"expect": { "marks": [true, true, false, true, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": [], "value": {} },
 			"paths": [[], ["a"], ["a", 0, "b"]],
-			"expect": [true, true, true]
+			"expect": { "marks": [true, true, true] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": [0] },
 			"paths": [[], [0], [1], ["0"]],
-			"expect": [true, true, true, false]
+			"expect": { "marks": [true, true, true, false] }
 		},
 		{
 			"op": "marks",
 			"patch": { "path": [], "range": [1, 2], "value": [5] },
 			"paths": [[], [0], [1], [1, "x"], [2]],
-			"expect": [true, false, true, true, false]
+			"expect": { "marks": [true, false, true, true, false] }
 		}
 	]
 }

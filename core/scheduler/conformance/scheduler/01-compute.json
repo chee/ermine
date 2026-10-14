@@ -1,12 +1,12 @@
 {
 	"title": "a compute runs at the next pulse, again when a key it read changes; its result goes to set",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "a" }, { "read": "b" }] },
 			"to": "c"
 		},

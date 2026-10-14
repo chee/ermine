@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-nd_node *nd_make(op_value *value, const ch_header *header) {
+nd_node *nd_make(op_value *value, const ch_header *header, const nd_options *options) {
 	nd_node *n = calloc(1, sizeof *n);
 	if (n == NULL) return NULL;
 	if (header != NULL) n->change = *header;
@@ -11,6 +11,7 @@ nd_node *nd_make(op_value *value, const ch_header *header) {
 		n->change.has_time = 1;
 		n->change.time = (int64_t)time(NULL);
 	}
+	n->in_place = options != NULL && options->in_place;
 	n->value = op_ref(value);
 	return n;
 }

@@ -1,0 +1,23 @@
+{
+	"title": "two computes each changing, in its run, what the other reads: the loop ends (proof C4)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "x",
+			"scope": "o",
+			"f": { "do": [{ "write": ["kx", { "sum": [{ "read": "ky" }, 1] }] }, 0] }
+		},
+		{
+			"op": "compute",
+			"name": "z",
+			"scope": "o",
+			"f": { "do": [{ "write": ["ky", { "sum": [{ "read": "kx" }, 1] }] }, 0] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } }
+	]
+}

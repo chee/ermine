@@ -2,7 +2,7 @@
 	"title": "changes between pulses run what read them once, after the last (old 12-batch)",
 	"steps": [
 		{
-			"op": "owner",
+			"op": "root",
 			"name": "o",
 			"expect": {}
 		},
@@ -19,7 +19,7 @@
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": {
 				"do": [
 					{

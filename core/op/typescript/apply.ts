@@ -1,7 +1,9 @@
 // patches applied to one value: the value after them. what a patch touches is new, the rest is
 // shared; a copy made here may change in place, since only the end is ever seen. any patch
 // invalid: it throws, and nothing changes. asked for, the undo of the patches too (invert.ts says
-// what it is), built as each lands: one walk
+// what it is), built as each lands: one walk. with cow: false nothing is copied: the containers
+// given change in place (a string, or a typed array that changes length, is put new in its
+// parent), and a throw undoes what was done, by the undo built on the way
 import { count, type Hint, joins, near, walk } from "@ermine/util/walk-string"
 
 export type Key = string | number
@@ -12,12 +14,12 @@ export type Target = { path: readonly Key[]; range?: Span }
 export type Patch = Target & { value?: unknown; move?: Target }
 
 export type Options = {
-	// the value is a list: nothing there starts as [], anything but a list is wrong-kind, and a list
-	// left empty is nothing (it was there only when not empty)
-	list?: boolean
 	// the undo of the patches (invert.ts) is pushed here once all have landed, in the order to
 	// apply it; a call that throws leaves it untouched
 	undo?: Patch[]
+	// false: change the value given in place, not a copy of it. the value returned is the one given
+	// unless the whole was replaced. default true
+	cow?: boolean
 }
 
 export type Code = "not-a-patch" | "no-key" | "range" | "wrong-kind" | "into-itself"
@@ -77,10 +79,11 @@ function shape(p: Patch): boolean {
 type Took = { m: unknown; back: Target; untake: Patch | null; taking: boolean; listed: boolean }
 
 // one edit's content, changed patch by patch; undo: the undo is wanted
-function createWork(root: unknown, undo: boolean) {
+function createWork(root: unknown, undo: boolean, cow: boolean) {
 	// made here: may change in place, until the undo holds it. few, scanned; past 16, a WeakSet
 	let own: object[] | WeakSet<object> | undefined
 	const mine = <T extends object>(c: T): T => {
+		if (!cow) return c
 		if (own === undefined) own = [c]
 		else if (!Array.isArray(own)) own.add(c)
 		else if (own.length < 16) own.push(c)
@@ -88,7 +91,7 @@ function createWork(root: unknown, undo: boolean) {
 		return c
 	}
 	const copy = <T extends object>(v: T): T =>
-		own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
+		!cow || own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
 			? v
 			: mine((isList(v) ? v.slice() : { ...v }) as T)
 	const work = { root }
@@ -99,7 +102,9 @@ function createWork(root: unknown, undo: boolean) {
 		for (let i = 0; i < path.length - 1; i++) {
 			const at = v as Record<Key, unknown>
 			const next = at[enter(at, path[i])]
-			v = at[path[i]] = copyIn(next)
+			const c = copyIn(next)
+			if (c !== next) at[path[i]] = c
+			v = c
 		}
 		return v as Record<Key, unknown>
 	}
@@ -175,12 +180,18 @@ function createWork(root: unknown, undo: boolean) {
 			if (w !== undefined && (!typed(w) || w.constructor !== t.constructor)) fail("wrong-kind")
 			size = w ? (w as Typed).length : 0
 			joined = false
-			const n = new (t.constructor as new (n: number) => Typed)(t.length - (b - a) + size)
-			n.set(t.subarray(0, a), 0)
-			if (w) n.set(w as Typed, a)
-			n.set(t.subarray(b), a + size)
 			taken = back = t.slice(a, b)
-			set(path, n)
+			const len = t.length - (b - a) + size
+			// in place only when the length stays
+			if (!cow && len === t.length) {
+				if (w) t.set(w as Typed, a)
+			} else {
+				const n = new (t.constructor as new (n: number) => Typed)(len)
+				n.set(t.subarray(0, a), 0)
+				if (w) n.set(w as Typed, a)
+				n.set(t.subarray(b), a + size)
+				set(path, n)
+			}
 			end = a + size
 		}
 		if (!un) return null
@@ -262,10 +273,11 @@ function createWork(root: unknown, undo: boolean) {
 			get(F)
 			return
 		}
-		let m: unknown, took: Took | undefined
+		let m: unknown, took: Took | undefined, taken0: Patch | null = null
 		if (from.range) {
 			const c = from.range[0]
-			const untake = splice(F, c, from.range[1], undefined)
+			taken0 = splice(F, c, from.range[1], undefined)
+			const untake = held(taken0)
 			m = taken
 			if (un) {
 				took = { m, back: { path: F, range: [c, c] }, untake, taking: joined, listed: false }
@@ -278,21 +290,31 @@ function createWork(root: unknown, undo: boolean) {
 				const listed = F.length > 0 && isList(get(F, F.length - 1)),
 					f = F[F.length - 1] as number
 				const back: Target = listed ? { path: F.slice(0, -1), range: [f, f] } : { path: F }
-				const untake = listed ? { ...back, value: mine([m]) } : { path: F, value: m }
+				taken0 = listed ? { ...back, value: mine([m]) } : { path: F, value: m }
+				const untake = held(taken0)
 				took = { m, back, untake, taking: false, listed }
 			}
 		}
-		if (!p.range) {
-			const listy = un !== undefined && P.length > 0 && isList(get(P, P.length - 1))
-			const old = set(P, m)
-			if (took) un!.unland(p, from, took, old, listy)
-			return
+		try {
+			if (!p.range) {
+				const listy = un !== undefined && P.length > 0 && isList(get(P, P.length - 1))
+				const old = set(P, m)
+				if (took) un!.unland(p, from, took, old, listy)
+				return
+			}
+			// one element into a list's span: as a list of one
+			const one = isList(get(P)) && !from.range
+			const unput = splice(P, p.range[0], p.range[1], one ? [m] : m)
+			if (took) un!.unfill(p, from, took, one, unput)
+		} catch (e) {
+			// in place the take stands: the undo must have it put back
+			if (!cow && took) un!.push(taken0)
+			throw e
 		}
-		// one element into a list's span: as a list of one
-		const one = isList(get(P)) && !from.range
-		const unput = splice(P, p.range[0], p.range[1], one ? [m] : m)
-		if (took) un!.unfill(p, from, took, one, unput)
 	}
+	// in place, what the undo holds of what moved is a copy: the tree goes on changing
+	const held = (u: Patch | null): Patch | null =>
+		cow || u === null || !("value" in u) ? u : { ...u, value: clone(u.value) }
 
 	// the undo's part, made only when wanted
 	const un = undo ? undoer() : undefined
@@ -337,7 +359,11 @@ function createWork(root: unknown, undo: boolean) {
 				if (n) push({ ...back, move: { path: P, range: [0, n] } })
 				// P's place moved by the n put back in front of it, if both are in one list
 				return push(
-					!n ? unset : old === ABSENT ? { path: shift(P, back, n) } : { path: shift(P, back, n), value: old },
+					!n
+						? unset
+						: old === ABSENT
+						? { path: shift(P, back, n) }
+						: { path: shift(P, back, n), value: old },
 				)
 			}
 			const there: Patch = { ...back, move: { path: P } }
@@ -377,6 +403,24 @@ function createWork(root: unknown, undo: boolean) {
 	}
 
 	return { work, step, undone: un?.undone }
+}
+
+// lists, maps and typed arrays copied all the way down; the rest (strings, numbers, bytes) as is
+function clone(v: unknown): unknown {
+	if (isList(v)) return v.map(clone)
+	if (isMap(v)) {
+		const o: Record<string, unknown> = {}
+		for (const k of Object.keys(v)) {
+			Object.defineProperty(o, k, {
+				value: clone(v[k]),
+				writable: true,
+				enumerable: true,
+				configurable: true,
+			})
+		}
+		return o
+	}
+	return typed(v) ? v.slice() : v
 }
 
 const same = (a: readonly Key[], b: readonly Key[]) =>
@@ -420,27 +464,37 @@ export default function apply(
 	patches: Iterable<Patch>,
 	options: Options = {},
 ): unknown {
-	const list = options.list === true, undo = options.undo
-	const empty = (v: unknown) => list && isList(v) && v.length === 0
+	const undo = options.undo, cow = options.cow !== false
+	// in place the undo is built even if not asked for: it is how a refused patch is taken back
 	const { work, step, undone } = createWork(
-		value !== undefined ? value : list ? [] : ABSENT,
-		undo !== undefined,
+		value !== undefined ? value : ABSENT,
+		undo !== undefined || !cow,
+		cow,
 	)
 	// each patch's undo starts at its mark
 	const marks: number[] = []
 	let i = 0
-	for (const p of patches) {
-		try {
-			if (!shape(p)) fail("not-a-patch")
-			if (undo) marks.push(undone!.length)
-			step(p)
-			if (list && work.root !== ABSENT && !isList(work.root)) fail("wrong-kind")
-		} catch (e) {
-			if (e instanceof Fail) throw new ApplyError(e.code, i)
-			throw e
+	try {
+		for (const p of patches) {
+			try {
+				if (!shape(p)) fail("not-a-patch")
+				if (undone) marks.push(undone.length)
+				step(p)
+			} catch (e) {
+				if (e instanceof Fail) throw new ApplyError(e.code, i)
+				throw e
+			}
+			i++
 		}
-		i++
+	} catch (e) {
+		if (!cow) {
+			const back: Patch[] = []
+			unroll(undone!, marks, back)
+			const again = createWork(work.root, false, false)
+			for (const p of back) again.step(p)
+		}
+		throw e
 	}
 	if (undo) unroll(undone!, marks, undo)
-	return work.root === ABSENT || empty(work.root) ? undefined : work.root
+	return work.root === ABSENT ? undefined : work.root
 }

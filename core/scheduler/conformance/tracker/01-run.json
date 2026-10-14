@@ -5,11 +5,11 @@
 		{ "op": "track", "from": "v", "to": "a" },
 		{ "op": "track", "from": "v", "to": "b" },
 		{ "op": "end", "from": "v" },
-		{ "op": "reads", "of": "v", "expect": ["a", "b"] },
-		{ "op": "readers", "of": "a", "expect": ["v"] },
+		{ "op": "reads", "of": "v", "expect": { "names": ["a", "b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["v"] } },
 		{ "op": "begin", "from": "w" },
 		{ "op": "track", "from": "w", "to": "a" },
 		{ "op": "end", "from": "w" },
-		{ "op": "readers", "of": "a", "expect": ["v", "w"] }
+		{ "op": "readers", "of": "a", "expect": { "names": ["v", "w"] } }
 	]
 }

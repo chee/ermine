@@ -1,0 +1,5 @@
+name = "scheduler"
+defaultTargets = ["Scheduler"]
+
+[[lean_lib]]
+name = "Scheduler"

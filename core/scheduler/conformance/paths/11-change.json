@@ -8,24 +8,24 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["y"], "value": 1 }],
-			"expect": ["change"]
+			"expect": { "spots": ["change"] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["x"], "value": 1 }, { "path": ["y"] }],
-			"expect": ["change", ["x"]]
+			"expect": { "spots": ["change", ["x"]] }
 		},
-		{ "op": "mark", "source": "v", "id": "n", "patches": [], "expect": ["change"] },
+		{ "op": "mark", "source": "v", "id": "n", "patches": [], "expect": { "spots": ["change"] } },
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "m",
 			"patches": [{ "path": ["x"], "value": 1 }],
-			"expect": []
+			"expect": { "spots": [] }
 		},
 		{ "op": "change", "source": "v", "id": "n" },
-		{ "op": "event", "source": "v", "id": "n", "expect": ["change", ["x"]] }
+		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": ["change", ["x"]] } }
 	]
 }

@@ -1,0 +1,521 @@
+{
+	"title": "a call given its own sink reports there and not to the setup's; opens and re-walks",
+	"steps": [
+		{
+			"op": "make",
+			"root": [
+				"s",
+				"R"
+			],
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"s",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"B"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"address": [
+				"a",
+				"b"
+			],
+			"own": true,
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"a",
+				"nope"
+			],
+			"expect": {
+				"items": [],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"nope"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"address": [
+				"nope"
+			],
+			"own": true,
+			"expect": {
+				"items": [],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"nope"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"address": [
+				"a"
+			],
+			"from": [
+				"s",
+				"A"
+			],
+			"own": true,
+			"expect": {
+				"items": [],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "names",
+			"from": [
+				"s",
+				"A"
+			],
+			"own": true,
+			"expect": {
+				"names": [
+					"b"
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					}
+				]
+			}
+		},
+		{
+			"op": "names",
+			"from": [
+				"s",
+				"A"
+			],
+			"expect": {
+				"names": [
+					"b"
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					}
+				]
+			}
+		},
+		{
+			"op": "open",
+			"address": [
+				"a",
+				"b"
+			],
+			"as": "h",
+			"own": true,
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "B",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"C"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "C",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"D"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "h",
+			"own": true,
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "D",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "open",
+			"address": [
+				"a",
+				"b"
+			],
+			"as": "g",
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "g",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "D",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"b": [
+					[
+						"s",
+						"E"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "items",
+			"open": "g",
+			"own": true,
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "E",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "items",
+			"open": "g",
+			"own": true,
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "E",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [],
+				"own": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				],
+				"same": true
+			},
+			"skip": [
+				"same"
+			]
+		},
+		{
+			"op": "items",
+			"open": "g",
+			"skip": [
+				"same"
+			],
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "E",
+						"name": "b",
+						"at": 0,
+						"path": [
+							"a",
+							"b"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"b"
+						]
+					}
+				]
+			}
+		}
+	]
+}

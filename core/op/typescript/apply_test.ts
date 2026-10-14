@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
+import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "./apply.ts"
 import { squish } from "./squish.ts"
 
@@ -116,22 +116,6 @@ Deno.test("apply: nothing there; a put at [] makes a value, a removal there leav
 	}
 })
 
-Deno.test("apply: the list option starts as [], is a list, and is nothing when empty", () => {
-	assertEquals(apply(undefined, [], { list: true }), undefined)
-	assertEquals(apply(undefined, [{ path: [], range: [0, 0], value: ["m2"] }], { list: true }), [
-		"m2",
-	])
-	assertEquals(apply(["a"], [{ path: [0] }], { list: true }), undefined)
-	assertEquals(apply(["a"], [{ path: [0] }]), [], "without it, an empty list is there")
-	for (const value of ["", "abc", 5, null, { a: 1 }]) {
-		assertEquals(
-			code(() => apply(["m"], [{ path: [], value }], { list: true })),
-			"wrong-kind",
-			JSON.stringify(value),
-		)
-	}
-})
-
 Deno.test("apply: invalid, its code and index; nothing changes", () => {
 	const v = { s: "ab", l: [1], m: {} }
 	const cases: [Patch[], string, number][] = [
@@ -194,5 +178,82 @@ Deno.test("apply: fuzz, string edits in one call as one call each", () => {
 			}
 		}
 		assertEquals(apply({ s: start }, ps), one, `seed ${seed}`)
+	}
+})
+
+Deno.test("apply cow: false: the containers given change, the root returned is the one given", () => {
+	const l = [1, 2],
+		m: Record<string, Record<string, number>> = { a: { b: 1 } },
+		v = { t: "hi", l, m, n: new Int16Array([1, 2, 3]) }
+	const n = v.n
+	const out = apply(v, [
+		{ path: ["l"], range: [2, 2], value: [3] },
+		{ path: ["m", "a", "c"], value: 2 },
+		{ path: ["t"], range: [2, 2], value: "!" },
+		{ path: ["n"], range: [0, 2], value: new Int16Array([9, 8]) },
+	], { cow: false })
+	assertStrictEquals(out, v)
+	assertStrictEquals(v.l, l)
+	assertStrictEquals(v.m, m)
+	assertStrictEquals(v.m.a, m.a)
+	assertEquals(v, {
+		t: "hi!",
+		l: [1, 2, 3],
+		m: { a: { b: 1, c: 2 } },
+		n: new Int16Array([9, 8, 3]),
+	})
+	// a typed array whose length stays is changed where it is, a string is put new
+	assertStrictEquals(v.n, n)
+	apply(v, [{ path: ["n"], range: [1, 2] }], { cow: false })
+	assert(v.n !== n)
+	assertEquals(v.n, new Int16Array([9, 3]))
+	// the whole replaced: the root returned is the new one
+	assertEquals(apply(v, [{ path: [], value: 5 }], { cow: false }), 5)
+})
+
+Deno.test("apply cow: false: the same value and undo as copy-on-write", () => {
+	const make = () => ({ l: [1, [2, 3]], m: { a: { b: [4] }, c: "x" }, s: "héllo" })
+	const ps: Patch[] = [
+		{ path: ["l", 1], range: [0, 1] },
+		{ path: ["m", "a", "b"], range: [1, 1], value: [5] },
+		{ path: ["l", 0], move: { path: ["m", "a"] } },
+		{ path: ["s"], range: [1, 2], value: "e" },
+		{ path: ["m", "c"] },
+		{ path: ["m", "z"], move: { path: ["l", 0] } },
+	]
+	const was: Patch[] = [], now: Patch[] = []
+	const a = apply(make(), ps, { undo: was }), b = apply(make(), ps, { undo: now, cow: false })
+	assertEquals(b, a)
+	assertEquals(now, was)
+	// and no undo asked for
+	assertEquals(apply(make(), ps, { cow: false }), a)
+})
+
+Deno.test("apply cow: false: a refused patch undoes what was done, in place; the same error", () => {
+	const l = [1, [2, 3]], m = { a: { b: 1 }, c: 2 }
+	const v: Record<string, unknown> = { l, m, t: "abc", n: new Int8Array([1, 2]) }
+	const was = structuredClone(v)
+	const bad: Patch[][] = [
+		[{ path: ["l"], range: [0, 0], value: [0] }, { path: ["m", "a", "x"], value: 1 }, {
+			path: ["q", "r"],
+			value: 1,
+		}],
+		// a take, then a landing that is refused
+		[{ path: ["m", "c"] }, { path: ["t"], range: [9, 9], move: { path: ["l", 0] } }],
+		[{ path: ["m", "x", "y"], move: { path: ["m", "c"] } }],
+		[{ path: ["t"], range: [0, 1], value: "z" }, { path: [], value: 7 }, {
+			path: ["a"],
+			value: 1,
+		}],
+		[{ path: ["n"], range: [0, 1], value: new Int8Array([5]) }, { path: ["t", 0] }],
+	]
+	for (const ps of bad) {
+		const e = error(() => apply(structuredClone(v), ps))
+		const err = error(() => apply(v, ps, { cow: false }))
+		assertEquals([err.code, err.patch], [e.code, e.patch], JSON.stringify(ps))
+		assertEquals(v, was, JSON.stringify(ps))
+		assertStrictEquals(v.l, l)
+		assertStrictEquals(v.m, m)
+		assertEquals(Object.keys(v), ["l", "m", "t", "n"])
 	}
 })

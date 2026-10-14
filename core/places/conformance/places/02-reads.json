@@ -183,12 +183,18 @@
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": ["a"], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": ["a"],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "names",
 			"from": ["s", "nobody"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "nobody", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "nobody", "path": [], "keys": true }]
+			}
 		}
 	]
 }

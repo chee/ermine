@@ -137,10 +137,10 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			m.length = m.change ? 0 : t.length;
 			for (size_t i = 0; i < m.length; i++)
 				if (m.path[i].type == OP_NUM_KEY && m.path[i].n < 0) m.path[i].n = 0;
-			m.s = m.change ? pt_change_of(p, key_of(m.key), key_of(m.key)) : pt_spot_of(p, key_of(m.key), key_of(m.key), m.path, m.length);
+			m.s = m.change ? pt_change_of(p, key_of(m.key), key_of(m.key)) : pt_spot_of(p, key_of(m.key), key_of(m.key), m.path, m.length, 0);
 			for (int i = 0; i < nspots; i++) {
 				const mspot *o = &spots[i];
-				int is = o->alive && o->key == m.key && o->change == m.change && same_path(o->path, o->length, m.path, m.length);
+				int is = o->alive && o->key == m.key && o->change == m.change && same_path(o->path, o->length, m.path, m.length, 0);
 				if (is != (o->alive && o->s == m.s)) die(is ? "a spot asked for again is another" : "a new spot is one there", round);
 			}
 			if (m.s->change != m.change || !same_path(m.s->path, m.s->length, m.path, m.length) ||
@@ -166,7 +166,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 				const mspot *m = &spots[k];
 				if (!m->alive || m->change) continue;
 				op_value *x = seen(now, m->path, m->length), *y = seen(next, m->path, m->length);
-				int hit = pt_marks(&ps.p[i], m->path, m->length);
+				int hit = pt_marks(&ps.p[i], m->path, m->length, 0);
 				if (!fz_equal(x, y) && !hit && !joined(x, y)) {
 					fprintf(stderr, "fuzz: patch %zu changed a read of %zu keys, unmarked\n", i, m->length);
 					die("a read whose value changed is not marked", round);

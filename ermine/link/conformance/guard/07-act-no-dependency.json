@@ -1,0 +1,49 @@
+{
+	"title": "a write's check reads the rules told no one: an effect writing in its act does not come to depend on them",
+	"steps": [
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "rules",
+			"value": [{ "actor": "chee" }],
+			"expect": {}
+		},
+		{ "op": "value", "source": "stored", "id": "A", "value": 1, "expect": {} },
+		{ "op": "root", "name": "chee", "info": [["actor", "chee"]], "expect": {} },
+		{
+			"op": "guard",
+			"name": "g",
+			"may": { "grants": ["stored", "value", "rules"] },
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "e",
+			"scope": "chee",
+			"guard": "g",
+			"f": 3,
+			"effect": true,
+			"then": {
+				"edit": [
+					["stored", "A"],
+					"value",
+					[{ "path": [], "value": { "eval": { "given": null } } }]
+				]
+			},
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "e", "expect": { "runs": 1, "value": null } },
+		{ "op": "node", "source": "stored", "part": "value", "id": "A", "expect": { "value": 3 } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "rules",
+			"patches": [{ "path": [], "value": [{ "actor": "chee" }, { "actor": "juno" }] }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "e", "expect": { "runs": 1, "value": null } }
+	]
+}

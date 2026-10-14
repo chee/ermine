@@ -1,0 +1,81 @@
+{
+	"title": "a run ends with its reads, every one in order, a key read again read again: the tracker keeps it once; a stopped run's up to the read that stopped it; shown when asked",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "sum": [{ "read": "a" }, { "read": "b" }, { "read": "a" }] },
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 4 } },
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "done", "equal": false, "reads": ["a", "b", "a"] }
+				]
+			}
+		},
+		{ "op": "write", "values": { "a": 5 }, "expect": { "tick": 4 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 4 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "write", "values": { "flag": false, "x": 1 }, "expect": { "tick": 6 } },
+		{
+			"op": "compute",
+			"name": "q",
+			"scope": "o",
+			"f": { "if": [{ "read": "flag" }, { "sum": [{ "read": "w" }, { "read": "x" }] }, 0] },
+			"to": "q"
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": { "sum": [{ "read": "x" }, 1] },
+			"to": "w"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "flag": true, "x": 5 }, "expect": { "tick": 11 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{ "due": "q", "tick": 11 },
+					{ "due": "w", "tick": 11 },
+					{ "starts": "q", "run": 2, "rank": 0 },
+					{ "ends": "q", "run": 2, "ended": "stopped", "waits": "w", "reads": ["flag", "w"] },
+					{ "starts": "w", "run": 2, "rank": 0 },
+					{ "ends": "w", "run": 2, "ended": "done", "equal": false, "reads": ["x"] },
+					{ "starts": "q", "run": 3, "rank": 1 },
+					{
+						"ends": "q",
+						"run": 3,
+						"ended": "done",
+						"equal": false,
+						"reads": ["flag", "w", "x"]
+					}
+				]
+			}
+		},
+		{ "op": "get", "key": "q", "expect": { "value": 11 } }
+	]
+}

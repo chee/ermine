@@ -3,7 +3,7 @@
 	"steps": [
 		{ "op": "spot", "source": "v", "id": "later", "path": [] },
 		{ "op": "spot", "source": "v", "id": "later", "path": ["x"] },
-		{ "op": "event", "source": "v", "id": "later", "expect": [[], ["x"]] },
+		{ "op": "event", "source": "v", "id": "later", "expect": { "spots": [[], ["x"]] } },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["missing"] },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
 		{
@@ -11,14 +11,14 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["missing"], "value": 1 }],
-			"expect": [["missing"]]
+			"expect": { "spots": [["missing"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["a"], "value": { "b": 1 } }],
-			"expect": [["a"]]
+			"expect": { "spots": [["a"]] }
 		}
 	]
 }

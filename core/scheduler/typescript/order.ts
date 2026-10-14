@@ -10,7 +10,7 @@ export type Ordered<P> = { n: number; values: Set<P>; after?: P; state: string }
 
 type Entry<P> = { p: P; rank: number; mark: number }
 
-export function createOrder<P extends Ordered<P>>(all: () => Iterable<P>) {
+export function createOrder<P extends Ordered<P>>(all: () => Iterable<P>): Order<P> {
 	const due = new Map<P, number>()
 
 	let rankOf: Map<P, number> | undefined
@@ -151,4 +151,16 @@ export function createOrder<P extends Ordered<P>>(all: () => Iterable<P>) {
 	}
 }
 
-export type Order<P extends Ordered<P>> = ReturnType<typeof createOrder<P>>
+export type Order<P extends Ordered<P>> = {
+	at: (p: P) => number | undefined
+	has: (p: P) => boolean
+	set: (p: P, mark: number) => void
+	delete: (p: P) => void
+	size: () => number
+	rank: (p: P) => number
+	next: () => { p: P; rank: number }
+	started: (p: P) => void
+	sees: (p: P, next: Set<P>) => void
+	waits: (p: P, q: P | undefined) => void
+	gone: (p: P) => void
+}

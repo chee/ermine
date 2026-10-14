@@ -1,0 +1,20 @@
+{
+	"title": "a node given a time that is not whole: cannot-carry",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"change": {
+				"time": 1.5
+			}
+		}
+	],
+	"expect": {
+		"code": "cannot-carry"
+	}
+}

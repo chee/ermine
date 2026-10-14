@@ -1,0 +1,7 @@
+{
+	"title": "a head longer than it needs to be: not the canonical encoding",
+	"bytes": "a2646b6579739800656e6f64657380",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

@@ -11,8 +11,8 @@
 		{ "op": "track", "from": "v", "to": "x" },
 		{ "op": "track", "from": "v", "to": "c" },
 		{ "op": "end", "from": "v" },
-		{ "op": "reads", "of": "v", "expect": ["a", "x", "c"] },
-		{ "op": "readers", "of": "b", "expect": [] },
-		{ "op": "readers", "of": "x", "expect": ["v"] }
+		{ "op": "reads", "of": "v", "expect": { "names": ["a", "x", "c"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "readers", "of": "x", "expect": { "names": ["v"] } }
 	]
 }

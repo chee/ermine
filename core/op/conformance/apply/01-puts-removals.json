@@ -4200,34 +4200,6 @@
 					"a": 1
 				}
 			}
-		},
-		{
-			"op": "apply",
-			"patches": [
-				{
-					"path": [],
-					"value": [
-						1
-					]
-				},
-				{
-					"path": [
-						0
-					]
-				},
-				{
-					"path": [],
-					"value": [
-						2
-					]
-				}
-			],
-			"list": true,
-			"expect": {
-				"value": [
-					2
-				]
-			}
 		}
 	]
 }

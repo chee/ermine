@@ -1,0 +1,93 @@
+{
+	"title": "an opened place walks again for the run that asks",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"stored",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "A",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"name": "h",
+			"address": [
+				"a",
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"count": {
+					"items": "h"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 0
+			}
+		},
+		{
+			"op": "place",
+			"at": [
+				"stored",
+				"A"
+			],
+			"name": "b",
+			"entry": [
+				"stored",
+				"B"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "close",
+			"name": "h",
+			"expect": {}
+		}
+	]
+}

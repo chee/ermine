@@ -1,0 +1,71 @@
+{
+	"title": "change is tracked at the change spot: any write to the node reruns it, and only that",
+	"steps": [
+		{ "op": "value", "source": "stored", "id": "A", "value": { "x": 1, "y": 2 }, "expect": {} },
+		{ "op": "value", "source": "stored", "id": "B", "value": 0, "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "watch",
+			"name": "c",
+			"scope": "o",
+			"f": { "change": ["stored", "value", "A"] },
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "x",
+			"scope": "o",
+			"f": { "read": ["stored", "value", "A", ["x"]] },
+			"expect": {}
+		},
+		{ "op": "change", "source": "stored", "part": "value", "id": "nope", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "c", "expect": { "runs": 1, "value": null } },
+		{ "op": "state", "name": "x", "expect": { "runs": 1, "value": 1 } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"patches": [{ "path": ["y"], "value": 3 }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "state",
+			"name": "c",
+			"expect": { "runs": 2, "value": [{ "path": ["y"], "value": 3 }] }
+		},
+		{ "op": "state", "name": "x", "expect": { "runs": 1, "value": 1 } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "B",
+			"patches": [{ "path": [], "value": 1 }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "state",
+			"name": "c",
+			"expect": { "runs": 2, "value": [{ "path": ["y"], "value": 3 }] }
+		},
+		{ "op": "state", "name": "x", "expect": { "runs": 1, "value": 1 } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"patches": [{ "path": ["x"], "value": 9 }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "state",
+			"name": "c",
+			"expect": { "runs": 3, "value": [{ "path": ["x"], "value": 9 }] }
+		},
+		{ "op": "state", "name": "x", "expect": { "runs": 2, "value": 9 } }
+	]
+}

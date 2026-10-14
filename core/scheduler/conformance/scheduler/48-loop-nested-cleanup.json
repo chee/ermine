@@ -1,0 +1,55 @@
+{
+	"title": "a cleanup on a plain scope made in a run or an act, changing what its computation reads, written by the writer open: the loop ends, as one on the computation does (34)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"within": [[], {
+							"cleanup": [null, {
+								"write": ["k", { "sum": [{ "read": "k" }, 1] }, "open"]
+							}]
+						}]
+					},
+					{ "read": "k" }
+				]
+			},
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "write", "values": { "k": 10 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "k", "expect": { "value": 12 } },
+		{ "op": "get", "key": "c", "expect": { "value": 11 } },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "m" },
+			"act": {
+				"do": [
+					{ "log": ["act", { "given": "value" }] },
+					{
+						"within": [[], {
+							"cleanup": [null, {
+								"write": ["m", { "sum": [{ "given": "value" }, 1] }, "open"]
+							}]
+						}]
+					}
+				]
+			}
+		},
+		{ "op": "write", "values": { "m": 1 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 1]] } },
+		{ "op": "write", "values": { "m": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 5]] } },
+		{ "op": "get", "key": "m", "expect": { "value": 2 } }
+	]
+}

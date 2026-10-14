@@ -1,0 +1,89 @@
+{
+	"title": "a node taken out of the store (a table event): its readers rerun, and see nothing",
+	"steps": [
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "A",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"A"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": 1
+			}
+		},
+		{
+			"op": "del",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": null
+			}
+		},
+		{
+			"op": "del",
+			"source": "stored",
+			"part": "value",
+			"id": "A",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "A",
+			"value": 2,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": 2
+			}
+		}
+	]
+}

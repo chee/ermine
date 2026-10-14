@@ -1,0 +1,71 @@
+{
+	"title": "a keys read of a map of arrays: not woken inside a key's array or deeper, woken by a key added, removed, renamed, the value replaced, or an event",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a"], "range": [1, 1], "value": ["x"] }],
+			"expect": { "spots": [["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a"], "range": [0, 1] }],
+			"expect": { "spots": [["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a", 0], "value": "y" }],
+			"expect": { "spots": [["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a", 0, "k"], "value": "y" }],
+			"expect": { "spots": [["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["b"], "value": [] }],
+			"expect": { "spots": [{ "keys": [] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["b"] }],
+			"expect": { "spots": [{ "keys": [] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["c"], "move": { "path": ["b"] } }],
+			"expect": { "spots": [{ "keys": [] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a"], "move": { "path": ["b"] } }],
+			"expect": { "spots": [{ "keys": [] }, ["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": [], "value": { "a": [] } }],
+			"expect": { "spots": [{ "keys": [] }, ["a"]] }
+		},
+		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": [{ "keys": [] }, ["a"]] } }
+	]
+}

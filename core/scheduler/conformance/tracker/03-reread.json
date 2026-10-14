@@ -6,7 +6,7 @@
 		{ "op": "track", "from": "v", "to": "b" },
 		{ "op": "track", "from": "v", "to": "a" },
 		{ "op": "end", "from": "v" },
-		{ "op": "reads", "of": "v", "expect": ["a", "b"] },
-		{ "op": "readers", "of": "a", "expect": ["v"] }
+		{ "op": "reads", "of": "v", "expect": { "names": ["a", "b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["v"] } }
 	]
 }

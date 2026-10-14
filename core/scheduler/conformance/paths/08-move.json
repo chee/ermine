@@ -11,7 +11,7 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["d"], "move": { "path": ["c"] } }],
-			"expect": [[], ["c"], ["c", "x"], ["d"]]
+			"expect": { "spots": [[], ["c"], ["c", "x"], ["d"]] }
 		},
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
 		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
@@ -25,7 +25,7 @@
 			"patches": [
 				{ "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [3, 4] } }
 			],
-			"expect": [[], ["l", 0], ["l", 1], ["l", 2], ["l", 3], ["l", 4]]
+			"expect": { "spots": [[], ["l", 0], ["l", 1], ["l", 2], ["l", 3], ["l", 4]] }
 		},
 		{
 			"op": "mark",
@@ -34,21 +34,21 @@
 			"patches": [
 				{ "path": ["l"], "range": [0, 1], "move": { "path": ["l"], "range": [3, 4] } }
 			],
-			"expect": [[], ["l", 0], ["l", 3], ["l", 4]]
+			"expect": { "spots": [[], ["l", 0], ["l", 3], ["l", 4]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["b"], "move": { "path": ["l", 2] } }],
-			"expect": [[], ["b"], ["l", 2], ["l", 3], ["l", 4]]
+			"expect": { "spots": [[], ["b"], ["l", 2], ["l", 3], ["l", 4]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["l"], "range": [1, 2], "move": { "path": ["b"] } }],
-			"expect": [[], ["b"], ["l", 1]]
+			"expect": { "spots": [[], ["b"], ["l", 1]] }
 		}
 	]
 }

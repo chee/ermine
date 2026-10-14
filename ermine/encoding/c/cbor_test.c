@@ -136,6 +136,7 @@ static void vectors(const char *path) {
 		free(name);
 	}
 	printf("%d vectors\n", list->array.count);
+	jsonFree(list);
 	free(text);
 }
 
@@ -315,13 +316,17 @@ static void rejected(void) {
 
 static void unencodable(void) {
 	char *why = NULL;
-	expectNoEncoding("a lone surrogate", jsonParse("\"\\ud800\"", strlen("\"\\ud800\""), &why));
+	Json *lone = jsonParse("\"\\ud800\"", strlen("\"\\ud800\""), &why);
+	expectNoEncoding("a lone surrogate", lone);
+	jsonFree(lone);
 	Json *twice = jsonObject();
 	jsonAdd(twice, "a", jsonNull());
 	jsonAdd(twice, "a", jsonNull());
 	expectNoEncoding("a key twice", twice);
+	jsonFree(twice);
 	Json *key = jsonParse("{\"\\udfff\": 1}", strlen("{\"\\udfff\": 1}"), &why);
 	expectNoEncoding("a lone surrogate key", key);
+	jsonFree(key);
 }
 
 static void stands(void) {
@@ -330,12 +335,17 @@ static void stands(void) {
 	jsonPush(list, jsonStand(jsonString("canvas")));
 	jsonPush(list, jsonStand(jsonStand(jsonNull())));
 	roundTrip("stand-ins in a list", list);
+	jsonFree(list);
 	Json *kind = jsonObject();
 	jsonAdd(kind, "url", jsonString("x"));
 	Json *one = jsonStand(kind);
-	expectTrue("stand-ins of equal kinds are equal", jsonEqual(one, jsonShallow(one)));
-	expectTrue("stand-ins of other kinds are not", !jsonEqual(one, jsonStand(jsonNull())));
+	Json *same = jsonShallow(one), *other = jsonStand(jsonNull());
+	expectTrue("stand-ins of equal kinds are equal", jsonEqual(one, same));
+	expectTrue("stand-ins of other kinds are not", !jsonEqual(one, other));
 	expectTrue("a stand-in is not its kind", !jsonEqual(one, kind));
+	jsonFree(same);
+	jsonFree(other);
+	jsonFree(one);
 }
 
 static void shortBuffer(void) {

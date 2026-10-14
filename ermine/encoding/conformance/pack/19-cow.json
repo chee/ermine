@@ -1,0 +1,39 @@
+{
+	"title": "cow: false is kept, as the node has it; two equal nodes but for cow are two nodes",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		],
+		[
+			"value",
+			"b",
+			1
+		]
+	],
+	"nodes": [
+		{
+			"value": [
+				1
+			],
+			"change": {
+				"time": 1,
+				"actor": "a"
+			},
+			"cow": false
+		},
+		{
+			"value": [
+				1
+			],
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		}
+	],
+	"expect": {
+		"bytes": "a2646b65797382836576616c75656161f90000836576616c75656162f93c00656e6f64657382a363636f77f46576616c756581f93c00666368616e6765a26474696d65f93c00656163746f726161a26576616c756581f93c00666368616e6765a26474696d65f93c00656163746f726161"
+	}
+}

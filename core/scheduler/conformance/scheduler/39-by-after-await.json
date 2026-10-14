@@ -1,0 +1,95 @@
+{
+	"title": "changed with by, after an await: the writer is learned, and its own change is a loop through it; without by, the change is from outside",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "compute", "name": "b", "scope": "o", "f": { "read": "k" }, "to": "b" },
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": { "do": [{ "read": "k" }, { "wait": ["p", { "write": ["k", 1] }] }] },
+			"to": "a"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "resolve", "promise": "p", "value": null, "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [{ "due": "b", "tick": 4, "by": "a" }, { "due": "a", "tick": 4, "by": "a" }]
+			}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "starts": "b", "run": 2, "rank": 0 },
+					{ "ends": "b", "run": 2, "ended": "stopped", "waits": "a" },
+					{ "starts": "a", "run": 2, "rank": 0 },
+					{ "ends": "a", "run": 2, "ended": "pending" },
+					{ "starts": "b", "run": 3, "rank": 1 },
+					{ "ends": "b", "run": 3, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "resolve", "promise": "p", "value": null, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "b", "tick": 6, "by": "a" },
+					{ "ends": "a", "run": 2, "ended": "looping", "equal": false, "through": ["a"] },
+					{ "starts": "b", "run": 4, "rank": 1 },
+					{ "ends": "b", "run": 4, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{ "op": "get", "key": "a", "expect": { "value": null } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [] } },
+		{ "op": "compute", "name": "b2", "scope": "o", "f": { "read": "k2" }, "to": "b2" },
+		{
+			"op": "compute",
+			"name": "a2",
+			"scope": "o",
+			"f": { "do": [{ "read": "k2" }, { "wait": ["p2", { "write": ["k2", 1, null] }] }] },
+			"to": "a2"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "resolve", "promise": "p2", "value": null, "expect": {} },
+		{
+			"op": "moments",
+			"expect": { "moments": [{ "due": "b2", "tick": 10 }, { "due": "a2", "tick": 10 }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "starts": "b2", "run": 2, "rank": 0 },
+					{ "ends": "b2", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "a2", "run": 2, "rank": 0 },
+					{ "ends": "a2", "run": 2, "ended": "pending" }
+				]
+			}
+		},
+		{ "op": "resolve", "promise": "p2", "value": null, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "b2", "tick": 12 },
+					{ "due": "a2", "tick": 12 },
+					{ "starts": "b2", "run": 3, "rank": 0 },
+					{ "ends": "b2", "run": 3, "ended": "done", "equal": true },
+					{ "starts": "a2", "run": 3, "rank": 0 },
+					{ "ends": "a2", "run": 3, "ended": "pending" }
+				]
+			}
+		}
+	]
+}

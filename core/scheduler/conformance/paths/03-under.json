@@ -9,21 +9,21 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["doc"], "value": { "title": "t" } }],
-			"expect": [["doc", "title"], ["doc", "body", 2, "text"]]
+			"expect": { "spots": [["doc", "title"], ["doc", "body", 2, "text"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["doc"] }],
-			"expect": [["doc", "title"], ["doc", "body", 2, "text"]]
+			"expect": { "spots": [["doc", "title"], ["doc", "body", 2, "text"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [] }],
-			"expect": [["doc", "title"], ["doc", "body", 2, "text"], ["docs"]]
+			"expect": { "spots": [["doc", "title"], ["doc", "body", 2, "text"], ["docs"]] }
 		}
 	]
 }

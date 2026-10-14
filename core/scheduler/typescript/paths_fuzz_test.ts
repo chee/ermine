@@ -1,4 +1,4 @@
-// tracked paths against op, in process, where the paths suite's oracle fuzz (conformance/paths)
+// tracked paths against op, in process, where the paths suite's oracle fuzz (paths_harness_test.ts)
 // does not reach: values of lists nested in maps and lists, batches of up to six patches mixing
 // ranged and unranged moves (inside a list, between lists, to and from map keys) with splices,
 // removals that shift, and replaces. on copy-on-write values (op's apply), a read whose value is

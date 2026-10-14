@@ -1,0 +1,36 @@
+{
+	"title": "the same key twice with two nodes: already-there, that key",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		],
+		[
+			"value",
+			"a",
+			1
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		},
+		{
+			"value": 1,
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		}
+	],
+	"expect": {
+		"code": "already-there",
+		"part": "value",
+		"id": "a"
+	}
+}

@@ -5,10 +5,10 @@
 		{ "op": "add", "from": "v", "to": "b" },
 		{ "op": "add", "from": "v", "to": "c" },
 		{ "op": "untrack", "from": "v", "to": "b" },
-		{ "op": "reads", "of": "v", "expect": ["a", "c"] },
-		{ "op": "readers", "of": "b", "expect": [] },
+		{ "op": "reads", "of": "v", "expect": { "names": ["a", "c"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
 		{ "op": "untrack", "from": "v" },
-		{ "op": "reads", "of": "v", "expect": [] },
-		{ "op": "readers", "of": "a", "expect": [] }
+		{ "op": "reads", "of": "v", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } }
 	]
 }

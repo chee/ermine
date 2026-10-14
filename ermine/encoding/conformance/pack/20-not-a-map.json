@@ -1,0 +1,7 @@
+{
+	"title": "a list, not a pack",
+	"bytes": "81f93c00",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

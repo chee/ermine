@@ -1,0 +1,78 @@
+{
+	"title": "policies are colourless: one reads an access node, pending until it is there; composed, both nodes tracked; only the runs that asked rerun",
+	"steps": [
+		{ "op": "value", "source": "stored", "id": "A", "value": "x", "expect": {} },
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "rules",
+			"value": [{ "actor": "chee" }],
+			"expect": {}
+		},
+		{ "op": "root", "name": "chee", "info": [["actor", "chee"]], "expect": {} },
+		{
+			"op": "guard",
+			"name": "asking",
+			"may": {
+				"all": [
+					{ "access": ["stored", "value", "access"] },
+					{ "grants": ["stored", "value", "rules"] }
+				]
+			},
+			"expect": {}
+		},
+		{ "op": "guard", "name": "plain", "may": "yes", "expect": {} },
+		{
+			"op": "watch",
+			"name": "a",
+			"scope": "chee",
+			"guard": "asking",
+			"f": { "read": [["stored", "A"], "value"] },
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "p",
+			"scope": "chee",
+			"guard": "plain",
+			"f": { "read": [["stored", "A"], "value"] },
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "runs": 1, "value": null } },
+		{ "op": "state", "name": "p", "expect": { "runs": 1, "value": "x" } },
+		{ "op": "value", "source": "stored", "id": "access", "value": "allow", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "runs": 2, "value": "x" } },
+		{ "op": "state", "name": "p", "expect": { "runs": 1, "value": "x" } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "access",
+			"patches": [{ "path": [], "value": "deny" }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "runs": 3, "value": "x" } },
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "access",
+			"patches": [{ "path": [], "value": "allow" }],
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "rules",
+			"patches": [{ "path": [], "value": [] }],
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "runs": 4, "value": "x" } },
+		{ "op": "state", "name": "p", "expect": { "runs": 1, "value": "x" } }
+	]
+}

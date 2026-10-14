@@ -1,0 +1,50 @@
+{
+	"title": "a keys spot in a list: ranged writes reach it as a read of the same path would; a removal shifting it reaches it",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "m"], "keys": true },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [1, 2], "value": [9] }],
+			"expect": { "spots": [{ "keys": ["l"] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [1, 1], "value": [9, 9] }],
+			"expect": { "spots": [{ "keys": ["l"] }, { "keys": ["l", 2] }, { "keys": ["l", 2, "m"] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 0] }],
+			"expect": { "spots": [{ "keys": ["l"] }, { "keys": ["l", 2] }, { "keys": ["l", 2, "m"] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 3] }],
+			"expect": { "spots": [{ "keys": ["l"] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 2, "m", "x"], "value": 1 }],
+			"expect": { "spots": [{ "keys": ["l", 2, "m"] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 2, "m", "x", "y"], "value": 1 }],
+			"expect": { "spots": [] }
+		}
+	]
+}

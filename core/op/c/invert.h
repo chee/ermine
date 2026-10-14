@@ -2,7 +2,7 @@
 // that take what op_apply makes of a value back to the value. Same rules, the same undo, patch for
 // patch, as invert.ts:
 //   op_apply(op_apply(value, patches), undo) is value
-// on op_apply's terms: NULL is nothing there, the list option is op_apply's, a string's positions
+// on op_apply's terms: NULL is nothing there, a string's positions
 // are code points. Patches op_apply refuses: its code and index (op_apply decides).
 // The undo is in the order to apply it, the last patch's first; a patch may take several, or none.
 // A map's key put back goes last in its order (the canonical encoding sorts keys anyway). A move
@@ -19,15 +19,9 @@
 
 #include "apply.h"
 
-typedef struct {
-	// op_apply's: nothing there starts as [], anything but a list is wrong-kind, a list left empty
-	// is nothing
-	int list;
-} op_invert_options;
-
 // the undo of the patches on value, into *out. invalid: op_apply's code, *failed the patch's
-// index (may be NULL), *out left as it was. options may be NULL
-int op_invert(const op_value *value, const op_patch *patches, size_t n,
-	const op_invert_options *options, op_undo *out, size_t *failed);
+// index (may be NULL), *out left as it was
+int op_invert(const op_value *value, const op_patch *patches, size_t n, op_undo *out,
+	size_t *failed);
 
 #endif

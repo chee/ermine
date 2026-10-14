@@ -1,11 +1,11 @@
 {
 	"title": "disposed in a pulse: what was due, or waiting to act, does not run",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "effect",
 			"name": "e1",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "a" },
 			"act": {
 				"do": [
@@ -19,14 +19,14 @@
 		{
 			"op": "effect",
 			"name": "e2",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "a" },
 			"act": { "log": ["e2", { "given": "value" }] }
 		},
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "b" }, 100] },
 			"to": "c"
 		},
@@ -47,7 +47,7 @@
 					{ "ends": "e2", "run": 1, "ended": "done", "equal": false },
 					{ "starts": "c", "run": 1, "rank": 0 },
 					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
-					{ "due": "c", "tick": 6 },
+					{ "due": "c", "tick": 6, "by": "e1" },
 					{ "acts": "e1", "run": 1 }
 				]
 			}

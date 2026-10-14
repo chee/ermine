@@ -1,0 +1,39 @@
+{
+	"title": "whole numbers to the largest safe integer, either side",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"change": {
+				"time": -9007199254740991,
+				"external": [
+					{
+						"file": "a",
+						"line": 9007199254740991,
+						"column": 0
+					}
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"a",
+								9007199254740991
+							],
+							"range": [
+								-1,
+								9007199254740991
+							]
+						}
+					],
+					"undo": []
+				}
+			}
+		}
+	]
+}

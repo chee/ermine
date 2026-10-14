@@ -1,0 +1,148 @@
+{
+	"title": "who is the whole change: the actor and the reader are each matched, and either may be asked for alone",
+	"steps": [
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee",
+					"reader": "juno",
+					"op": "edit"
+				},
+				{
+					"reader": "fox",
+					"op": "read"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"time": 1,
+				"actor": "chee",
+				"reader": "juno",
+				"metadata": [
+					[
+						"site",
+						"x"
+					]
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee",
+				"reader": "fox"
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee"
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "x",
+				"reader": "fox"
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": "fox",
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			}
+		}
+	]
+}

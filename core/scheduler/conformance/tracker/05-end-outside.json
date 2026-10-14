@@ -3,8 +3,8 @@
 	"steps": [
 		{ "op": "add", "from": "ui", "to": "a" },
 		{ "op": "end", "from": "ui" },
-		{ "op": "reads", "of": "ui", "expect": ["a"] },
+		{ "op": "reads", "of": "ui", "expect": { "names": ["a"] } },
 		{ "op": "end", "from": "nobody" },
-		{ "op": "reads", "of": "nobody", "expect": [] }
+		{ "op": "reads", "of": "nobody", "expect": { "names": [] } }
 	]
 }

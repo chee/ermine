@@ -33,12 +33,12 @@
 					"value": 9
 				}
 			],
-			"expect": [
+			"expect": { "spots": [
 				[
 					"rows",
 					1
 				]
-			]
+			] }
 		},
 		{
 			"op": "mark",
@@ -54,7 +54,7 @@
 					"value": 9
 				}
 			],
-			"expect": []
+			"expect": { "spots": [] }
 		},
 		{
 			"op": "mark",
@@ -71,12 +71,12 @@
 					}
 				}
 			],
-			"expect": [
+			"expect": { "spots": [
 				[
 					"rows",
 					2
 				]
-			]
+			] }
 		}
 	]
 }

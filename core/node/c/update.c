@@ -2,9 +2,9 @@
 #include "update.h"
 
 int nd_update(nd_node *node, const op_patch *patches, size_t n, ch_header header,
-	const nd_update_options *options, size_t *failed) {
+	size_t *failed) {
 	op_undo undo = {0};
-	op_apply_options ao = {.list = options != NULL && options->list, .undo = &undo};
+	op_apply_options ao = {.undo = &undo, .in_place = node->in_place};
 	op_value *after = NULL;
 	int code = op_apply(node->value, patches, n, &ao, &after, failed);
 	if (code != OP_OK) return code;

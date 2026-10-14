@@ -1,6 +1,6 @@
 // The reference places (core/places/typescript/places.ts) on the line protocol: one JSON request per
 // line in, one answer per line out, in order. State lasts for the process. Another implementation
-// joins by speaking this (PLACES_HARNESS).
+// joins by speaking this (HARNESS).
 //
 // the world: per source, a map of id -> children node, filled by the requests below; that is the
 // hole `children(source, id)`. places made by "make" read it, and tell the harness every read.
@@ -51,7 +51,7 @@ import type { Item } from "@ermine/places"
 import type * as Places from "@ermine/places"
 
 // harness.ts on the version named by PLACES_MODULE (default ../places.ts), for the conformance
-// suite: PLACES_HARNESS="deno run --quiet --allow-env --allow-read core/places/typescript/optim/harness.ts"
+// suite: HARNESS="deno run --quiet --allow-env --allow-read core/places/typescript/optim/harness.ts"
 const { createPlaces, path, PlacesError, ROOT }: typeof Places = await import(
 	new URL(Deno.env.get("PLACES_MODULE") ?? "../places.ts", import.meta.url).href
 )

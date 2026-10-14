@@ -13,6 +13,10 @@ open. *open*: not answered. Comes after notify (lowest library first).
   to set up the whole program/process idea where it finds loaders"
 - it owns owners and tracking, *decided*: "the scheduler, i believe, owns the Owners tree and the
   Tracking"
+- owners and change info are one tree, the scope, *decided*: "oh silly owners should be a scope (in
+  shift/lift i actually called this concept "scope")"; "could the owner and change tree then be
+  collapsed into one thing? s.scope(changeinfo, parent?)"; "yes it's similar to the ownership graph
+  and trackgraph" (10-13). Its bracket is "a begin() end() thing … it's the same shape as the graph"
 - the ranked one stays: rounds, ranks (scheduler.ts, order.ts, rank.ts). alien.ts deleted, *decided*:
   "we should delete alien.ts". Looked at and not taken: alien (lazy pull), Solid 2.0 (owners and
   async built in, ~6k lines, no C), an Incremental-shaped redesign ("no i don't mean incremental
@@ -25,7 +29,7 @@ open. *open*: not answered. Comes after notify (lowest library first).
 |---------------------------------------------------+-------------------------------------------------------|
 | rounds and ranks (scheduler.ts, order.ts, rank.ts) | processes.ts: start, kill, placing, children          |
 | tracking: tracker.ts (was the trackgraph), notify  | records.ts: values, status, runs written to the graph |
-| the owners tree                                    | programs/code, handlers, process-api; loaders         |
+| the scopes tree (owners + change info)             | programs/code, handlers, process-api; loaders         |
 | loops (causes.ts)                                  | asking protect: a guarded API per process             |
 | equal values stop there (helpers.ts)               |                                                       |
 | its tick, beside changes, never in them            |                                                       |
@@ -36,13 +40,15 @@ main, protect, programs, util. ermine.ts wires places' read hook and update's ea
 * Its interface (mine, a sketch)
 #+begin_src ts
 const s = createScheduler()
-const o = s.owner(parent?)            // the owners tree; dispose(o) takes everything under it
-s.cleanup(o, f) · s.dispose(o)
-s.run(o, f)                           // once, untracked: a setup
-s.compute(o, f)                       // tracked; runs again when what it read changes
-s.effect(o, f, act)                   // after the round's last run, sees every change
-s.read(source, id, path)              // the running computation read this (places' read, value reads)
-s.changed(source, id, patch, facts)   // this landed (update's each, places' each)
+const root = s.root(info?)            // a scope with no parent; info: [key, value] pairs
+const o = s.scope(info?, parent?)     // under parent, else the open scope; none open: throws "unscoped"
+s.run(o, f)                           // the only bracket: f once, untracked, o open; restored in finally
+s.current()                           // { scope, pairs, by }; pairs outermost first
+s.cleanup(f) · s.dispose(o)           // cleanup on the open scope
+s.compute(f, set, equal?, key?)       // on the open scope; tracked; runs again when what it read changes
+s.effect(f, act, equal?)              // on the open scope; after the round's last run
+s.read(key)                           // the running computation read this
+s.changed(keys, by?)                  // these landed
 #+end_src
 
 * Settled elsewhere that it must keep
@@ -52,7 +58,22 @@ s.changed(source, id, patch, facts)   // this landed (update's each, places' eac
 - async compute stays as it is, made visible (10-11)
 - time on a change is the wall clock; the scheduler's tick lives beside changes (10-13)
 - pending and status: the scheduler's contribution at a place, an entry in places' array; the app
-  or user can choose the winner (10-13); status as a version in front of a value is gone
+  or user can choose the winner (10-13); status as a version in front of a value is gone. Again
+  10-13: "pending should go in the place i think"; an API like Solid's isPending/latest "can be a
+  userland library even if it's all there in the graph. finding conflicts, finding pendings,
+  finding latest. that's all userland i think"
+- scopes, 10-13 (the code is the truth):
+  - one tree: owner (what is made in it goes under it) and change info (pairs, a write's = each
+    scope's from the root down, outermost first)
+  - nothing open: scope, compute, effect, cleanup throw "unscoped"
+  - a run opens its own computation, info [["run", n], ["mark", tick]]
+  - after an await nothing is open, so nothing is made there and no write is somebody else's,
+    *decided*: "is there a way we can ensure that after an await they won't have ANY current
+    change/owner? like, it won't accidentally be somebody else's right?"; on reads after an await:
+    "it's a rule, worth documenting, and explaining" (10-13). Why: javascript has no async context
+  - `owner(parent?)` is gone
+- handlers a THING, *lean*: "i think this handler thing is why we're going to build handlers out as
+  a THING rather than just making them any ol slot you read" (10-13)
 - protect: not the scheduler's; reads asked in the API a process is handed, still reported, so
   rule changes rerun what read them (10-13)
 - tracker.ts: "beautiful already" (10-13), moved into the scheduler from core/graph
@@ -64,6 +85,11 @@ s.changed(source, id, patch, facts)   // this landed (update's each, places' eac
   reads (idea: "it'd be cool ... but, complexity no thx for now probably")
 - the tracker's `add`: kept for rebuilding who-read-what after a reload without re-running; throws
   during a run
+- lanes and queues, *lean*, on hold: "we'd add lanes to the scheduler and provide a rendereffect
+  api. but it's not clear yet which ones we need"; "we will need both of these, i imagine. lanes +
+  queues. we'll want optimistic state too, and transactions. but msybe there is an emergent way to
+  build them on the graph, but probably need the scheduler" (10-13). Solid 2.0's words: a lane per
+  transition or action, holding its optimistic guesses; render effects run in an earlier queue
 
 * Naming, decided 10-13
 - the round is `pulse`: "make it s.pulse()"
@@ -105,20 +131,50 @@ s.changed(source, id, patch, facts)   // this landed (update's each, places' eac
 - the 10-06 answers ("placing starts and unplacing kills", stopping a process stops the ones it
   started), to ask fresh when ermine.ts is designed; program lookup; runner vs loader
 
+* The latest run (ermine.ts, not the scheduler)
+- part of process: "okay, i think this is part of process yes" (10-13); was old records.ts's node
+  named run inside the process (deleted in 977c2ad)
+- on the change header, *lean*: "wonder if the run should go on the changeheader"; "why wouldn't
+  every run of a process be able to be a new change?" (10-13). update with no patches still makes a
+  change (core/node update.ts); paths.mark always gives the change spot, so readers of the change
+  rerun and readers of the value don't
+- or a part, *lean* (thinking): "oh maybe runs is another table at the same id! like attributes and
+  children!" (10-13). store.ts's Part is value | attributes | children today; places walks children
+  only, so a run part is found by id, never as a name
+
+* Decided later 10-13
+- the proof's findings: tests first, then fixes ("can you add tests yes, and then fix em. the proof
+  fixes"); a forget(key) hook so link can release spots ("oh i see")
+- `changed(keys, by)`: the writer given, not guessed; per-run reads through the run's own read; reads of the
+  change itself as their own call (not info(), which reads attributes) ("ok yeah,, yes do these
+  too")
+
 * Built 10-13 (TypeScript)
 - paths.ts (+ C): tracked paths, notify's replacement; suite core/scheduler/conformance/paths/
-- scheduler.ts: running code only; owner/cleanup/dispose, run, compute(owner, f, set, equal?),
-  effect(owner, f, act, equal?), read(key), changed(keys), pulse(), tick(); hooks for moments; suite
+- scheduler.ts: running code only; root/scope/current/cleanup/dispose, run(scope, f), compute(f, set,
+  equal?, key?), effect(f, act, equal?) on the open scope, read(key), changed(keys), pulse(), tick(); hooks for moments; suite
   core/scheduler/conformance/scheduler/ (26 scenarios + fuzz). The agent's own choices (open):
-  writers learned from who calls changed (so a first pulse can run a reader twice while an edge is
-  learned); effects compare with the value last acted on; computations are owners; a global read
+  writers learned from changed's `by` (the writing run's read, or a computation; none: from
+  outside) since 10-13; effects compare with the value last acted on; computations are scopes; a global read
   can't refuse after an await (no AsyncContext), the run's own read can; the host drives pulses
   (wake). Old suite in conformance/suites-aside/scheduler/; the C scheduler not ported yet
-- not wired: places' reads and update's changes into paths and the scheduler (ermine.ts)
+- 10-13, from the proof (proof.md §13), TS and C, suite 01-41: C1-C8, async3, D1-D3, partial set and
+  the fuzz's N1/N2 fixed; changed(keys, by); f throwing PENDING is pending; forget(key) when a key
+  loses its last reader (link releases its spot). The agent's choices (open): an effect is never a
+  writer; C7 skips the act; D3 "made since its last act goes before each run"; a set that throws
+  forgets its last result; N1/N2's fixes; a promise rejected with PENDING is pending; forget at
+  once, not only from the sweep; creation (F3) uses the running run (compute() has no by)
+- wired 10-13: ermine/store + ermine/link (reads → spots → read; writes report themselves)
+- scopes, built 10-13 (today): scheduler.ts, scheduler_test.ts, conformance scheduler/43-47 and
+  08-scopes. ermine/link is hooks plus wrote(changed), get, change, who and header; it wraps no
+  places call (callers use places and the store with a scope open); the header is the open scope's
+  pairs then the write's own. ermine/handle deleted; the policy behaviours are in
+  ermine/link/typescript/guard.ts. The Lean model is being moved to scopes
+- before that, not wired: places' reads and update's changes into paths and the scheduler (ermine.ts)
 
 * Steps
 1. notify, rewritten (next): one per (source, id) node, fed by update's each, op's facts only
-2. scheduler.ts stripped to running code: owners, tracking (tracker + notify), rounds, loops,
+2. scheduler.ts stripped to running code: scopes, tracking (tracker + notify), rounds, loops,
    equality, tick; tests, a suite, the C
 3. ermine.ts: processes, programs, loaders, records, the guarded API, the wiring
 4. a bench against today's scheduler

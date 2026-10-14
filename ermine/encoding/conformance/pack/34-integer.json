@@ -1,0 +1,7 @@
+{
+	"title": "a node's number as a CBOR integer: not the canonical encoding",
+	"bytes": "a2646b65797381836576616c7565616100656e6f64657381a1666368616e6765a16474696d65f93c00",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

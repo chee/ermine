@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert"
-import type { Patch } from "@ermine/scheduler/notify"
+import type { Patch } from "@ermine/op/apply"
 import createSquish, { decode, encode, squish } from "./squish.ts"
 
 const ins = (at: number, value: unknown, path: (string | number)[] = ["t"]): Patch => ({

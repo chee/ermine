@@ -2,7 +2,7 @@
 	"title": "an effect writing what its own compute read: a loop through both; its latest run is not acted on (old 18-looping)",
 	"steps": [
 		{
-			"op": "owner",
+			"op": "root",
 			"name": "o",
 			"expect": {}
 		},
@@ -18,7 +18,7 @@
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": {
 				"read": "a"
 			},
@@ -27,7 +27,7 @@
 		{
 			"op": "effect",
 			"name": "e",
-			"owner": "o",
+			"scope": "o",
 			"f": {
 				"do": [
 					{
@@ -112,7 +112,8 @@
 					},
 					{
 						"due": "c",
-						"tick": 5
+						"tick": 5,
+						"by": "e"
 					},
 					{
 						"acts": "e",
@@ -125,7 +126,8 @@
 					},
 					{
 						"due": "e",
-						"tick": 6
+						"tick": 6,
+						"by": "c"
 					},
 					{
 						"ends": "c",

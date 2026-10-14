@@ -1,0 +1,76 @@
+{
+	"title": "a node added where a walk stopped (a table event): the reader reruns",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"stored",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"get": [
+					"a",
+					"x"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": []
+			}
+		},
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "A",
+			"value": {
+				"x": [
+					[
+						"stored",
+						"X"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"stored:X"
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,164 @@
+{
+	"title": "a write refused changes nothing, and runs nothing: the places codes",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"stored",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"join": {
+					"names": [
+						"stored",
+						"R"
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "..",
+			"entry": [
+				"stored",
+				"X"
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "place",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "",
+			"entry": [
+				"stored",
+				"X"
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "place",
+			"at": [
+				"stored",
+				"nobody"
+			],
+			"name": "a",
+			"entry": [
+				"stored",
+				"X"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "place",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "a",
+			"entry": [
+				"stored",
+				"X"
+			],
+			"index": 5,
+			"expect": {
+				"error": "range"
+			}
+		},
+		{
+			"op": "unplace",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "zzz",
+			"index": 0,
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unplace",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "a",
+			"index": 3,
+			"expect": {
+				"error": "range"
+			}
+		},
+		{
+			"op": "order",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "a",
+			"from": 0,
+			"to": 2,
+			"expect": {
+				"error": "range"
+			}
+		},
+		{
+			"op": "rename",
+			"at": [
+				"stored",
+				"R"
+			],
+			"name": "zzz",
+			"to": "y",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "a"
+			}
+		}
+	]
+}

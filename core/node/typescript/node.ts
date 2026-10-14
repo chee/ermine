@@ -14,21 +14,32 @@ export type ChangeHeader = {
 	op?: { patches: readonly Patch[]; undo: readonly Patch[] }
 }
 
-// a value and its latest change; none: nothing there. where it is kept is a layer above's
+// a value and its latest change; none: nothing there. cow: false (only ever that, and only when
+// given at creation): update changes the value in place, not a copy of it. where it is kept is a
+// layer above's
 export type Node<V> = {
 	value?: V
 	change: ChangeHeader
+	cow?: false
+}
+
+export type Options = {
+	// false: the node's value is changed in place by update, and is the caller's to keep from
+	// others: put in nothing you do not want changed, or structuredClone it first
+	cow?: false
 }
 
 // kept by the caller; nothing checked: checks are a layer above's. the change given is the
 // node's, not copied; one with no time: a new change with the time now, whole seconds since 1970,
 // the one given unchanged
 export default function createNode<V>(
-	value?: V,
+	value: V,
 	change: ChangeHeader = {} as ChangeHeader,
+	options: Options = {},
 ): Node<V> {
 	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
 	const node: Node<V> = { change }
 	if (value !== undefined) node.value = value
+	if (options.cow === false) node.cow = false
 	return node
 }

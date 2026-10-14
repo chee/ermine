@@ -1,19 +1,52 @@
-// The C scheduler (scheduler.h) on the line protocol of conformance/scheduler/harness.ts: one JSON
-// request per line in, one answer per line out, in order. The programs are data, evaluated here
-// as the reference does (see its header). Values are Json, held; keys are interned strings.
+// The C scheduler (scheduler.h) on the line protocol of core/scheduler/typescript/scheduler_harness.ts
+// (conformance/c/harness.h has the loop). The programs are data, evaluated here as the reference
+// does (see its header). Values are op_values, held; keys are interned strings.
 //
 // async: {"wait":[p]} makes a promise with sc_promise_new and names it p; the run returns it
 // (SC_AWAIT). {"wait":[p,e]} also keeps e and the run, and resolve evaluates e through the run
 // first (a closed run refuses the read: stopped), then settles the promise with its value or
 // error, as a then does. the rest (the result lands at the next pulse) is the scheduler's.
+//
+// by, as the reference's: a write in a run (after an await too) names the run; in a set, act,
+// cleanup or run(), the computation's latest run (sc_latest); else none; "open": the writer open
+// (sc_current_by). a scope's info is the
+// request's own pairs; every line is retained to the end, so what points into one stays good. a pulse past ENDLESS
+// moments is left by a longjmp out of the hook: it answers {"error":"endless"}, and the
+// scheduler is not used again reliably (it leaks)
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
+#include <setjmp.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "scheduler.h"
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../conformance/c/harness.h"
+
+static void *allocate(size_t size) {
+	void *p = calloc(1, size ? size : 1);
+	if (p == NULL) abort();
+	return p;
+}
+static char *copyString(const char *s) { return strcpy(allocate(strlen(s) + 1), s); }
+static char *formatString(const char *format, ...) __attribute__((format(printf, 1, 2)));
+static char *formatString(const char *format, ...) {
+	va_list args;
+	va_start(args, format);
+	int n = vsnprintf(NULL, 0, format, args);
+	va_end(args);
+	char *out = allocate((size_t)n + 1);
+	va_start(args, format);
+	vsnprintf(out, (size_t)n + 1, format, args);
+	va_end(args);
+	return out;
+}
+// the string a value is; NULL when it is none
+static const char *text(const op_value *v) { return v && v->type == OP_STR ? v->str : NULL; }
+static bool is(const op_value *v, op_type t) { return v && v->type == t; }
+static op_value *integer(double n) { return op_num(n); }
 
 static sc_scheduler *sch;
 
@@ -22,7 +55,7 @@ static sc_scheduler *sch;
 // the value kept at a key; the key's pointer is the scheduler's key
 typedef struct entry {
 	char *key;
-	Json *value;
+	op_value *value;
 } entry;
 static entry **store;
 static size_t nstore, capstore;
@@ -46,31 +79,31 @@ static entry *entry_of(const char *key) {
 	return e;
 }
 
-static void keep(const char *key, Json *v) {
+static void keep(const char *key, op_value *v) {
 	entry *e = entry_of(key);
-	Json *was = e->value;
-	e->value = v ? jsonRef(v) : NULL;
-	jsonFree(was);
+	op_value *was = e->value;
+	e->value = v ? op_ref(v) : NULL;
+	op_free(was);
 }
 
-static sc_owner **named;
+static sc_scope **named;
 static size_t nnamed, capnamed;
 
-static sc_owner *owner_named(const char *name) {
+static sc_scope *scope_named(const char *name) {
 	for (size_t i = 0; i < nnamed; i++)
-		if (strcmp((char *)sc_owner_user(named[i]), name) == 0) return named[i];
+		if (strcmp((char *)sc_scope_user(named[i]), name) == 0) return named[i];
 	return NULL;
 }
 
-// names the owner; an error when the name is taken
-static char *name_it(sc_owner *o, const char *name) {
-	if (owner_named(name)) return formatString("name taken: %s", name);
-	sc_owner_set(o, copyString(name));
+// names the scope; an error when the name is taken
+static char *name_it(sc_scope *o, const char *name) {
+	if (scope_named(name)) return formatString("name taken: %s", name);
+	sc_scope_set(o, copyString(name));
 	PUSH(named, nnamed, capnamed, o);
 	return NULL;
 }
 
-static Json **logged;
+static op_value **logged;
 static size_t nlogged, caplogged;
 
 // moments, as told (named when asked: a new computation is due before it has a name)
@@ -78,12 +111,20 @@ typedef struct moment {
 	sc_moment m;
 	char *error;
 	sc_computation **through;
+	const void **reads;
 } moment;
 static moment *moments;
 static size_t nmoments, capmoments;
 
+// a pulse past this many moments is endless
+#define ENDLESS 10000
+static size_t told;
+static bool pulsing;
+static jmp_buf endless;
+
 static void hook(const sc_moment *m, void *data) {
 	(void)data;
+	if (pulsing && ++told > ENDLESS) longjmp(endless, 1);
 	moment x = {.m = *m};
 	x.error = m->error ? copyString(m->error) : NULL;
 	x.m.error = x.error;
@@ -92,12 +133,26 @@ static void hook(const sc_moment *m, void *data) {
 		memcpy(x.through, m->through, m->nthrough * sizeof *x.through);
 		x.m.through = x.through;
 	}
+	if (m->nreads) {
+		x.reads = allocate(m->nreads * sizeof *x.reads);
+		memcpy(x.reads, m->reads, m->nreads * sizeof *x.reads);
+		x.m.reads = x.reads;
+	}
 	PUSH(moments, nmoments, capmoments, x);
+}
+
+// the keys forgotten since last asked
+static op_value **forgotten;
+static size_t nforgotten, capforgotten;
+
+static void forget(const void *key, void *data) {
+	(void)data;
+	PUSH(forgotten, nforgotten, capforgotten, op_str(key));
 }
 
 static void drop(void *v, void *data) {
 	(void)data;
-	jsonFree(v);
+	op_free(v);
 }
 
 // equality --------------------------------------------------------------------------------------
@@ -106,20 +161,19 @@ static void drop(void *v, void *data) {
 static bool object_is(const void *a, const void *b, void *data) {
 	(void)data;
 	if (a == b) return true;
-	const Json *x = a, *y = b;
+	const op_value *x = a, *y = b;
 	if (x == NULL || y == NULL || x->type != y->type) return false;
 	switch (x->type) {
-	case JSON_NULL: return true;
-	case JSON_BOOLEAN: return x->boolean == y->boolean;
-	case JSON_NUMBER: return jsonSameNumber(x->number, y->number);
-	case JSON_STRING:
-		return x->stringLength == y->stringLength && memcmp(x->string, y->string, x->stringLength) == 0;
+	case OP_NULL: return true;
+	case OP_BOOL: return x->bool_ == y->bool_;
+	case OP_NUM: return (x->num == y->num && signbit(x->num) == signbit(y->num)) || (isnan(x->num) && isnan(y->num));
+	case OP_STR: return strcmp(x->str, y->str) == 0;
 	default: return false;
 	}
 }
 
-static bool same_json(const Json *a, const Json *b) {
-	char *x = jsonPrint(a), *y = jsonPrint(b);
+static bool same_json(const op_value *a, const op_value *b) {
+	char *x = op_json_text(a), *y = op_json_text(b);
 	bool same = strcmp(x, y) == 0;
 	free(x);
 	free(y);
@@ -135,26 +189,27 @@ static bool json_equal(const void *a, const void *b, void *data) {
 // what an expression is evaluated in: the run it reads through, the computation, an act's values
 typedef struct ctx {
 	sc_run *run;
-	sc_owner *self;
-	const Json *value;
-	const Json *previous;
+	sc_scope *self;
+	const op_value *value;
+	const op_value *previous;
 } ctx;
 
-// V_THROW and V_STOP end the evaluation, as a throw does
-typedef enum { V_OK, V_PENDING, V_PROMISE, V_THROW, V_STOP } vkind;
+// V_THROW, V_STOP and V_PENDS (PENDING thrown) end the evaluation, as a throw does
+typedef enum { V_OK, V_PENDING, V_PROMISE, V_THROW, V_STOP, V_PENDS } vkind;
+#define ENDS(v) ((v).k == V_THROW || (v).k == V_STOP || (v).k == V_PENDS)
 typedef struct val {
 	vkind k;
 	// V_OK: held
-	Json *j;
+	op_value *j;
 	// V_THROW: owned
 	char *err;
 	sc_promise *p;
 } val;
 
-static val ok(Json *j) { return (val){V_OK, j, NULL, NULL}; }
+static val ok(op_value *j) { return (val){V_OK, j, NULL, NULL}; }
 static val thrown(char *e) { return (val){V_THROW, NULL, e, NULL}; }
 static void release(val v) {
-	jsonFree(v.j);
+	op_free(v.j);
 	free(v.err);
 }
 
@@ -162,7 +217,7 @@ static void release(val v) {
 typedef struct waiting {
 	char *name;
 	sc_promise *p;
-	const Json *then;
+	const op_value *then;
 	ctx c;
 } waiting;
 static waiting **waits;
@@ -186,37 +241,112 @@ static waiting *wait_for(const char *name) {
 
 // closures for cleanups: kept to the end
 typedef struct closure {
-	const Json *e;
+	const op_value *e;
 	ctx c;
 } closure;
 static closure **closures;
 static size_t nclosures, capclosures;
 
-static val evaluate(const Json *e, const ctx *c);
+static val evaluate(const op_value *e, const ctx *c);
 
-static double num(const Json *j) {
-	if (j == NULL || j->type == JSON_NULL) return 0;
-	return j->type == JSON_NUMBER ? j->number : NAN;
+// the pair lists made from requests: kept to the end
+static sc_pair **infos;
+static size_t ninfos, capinfos;
+
+// a request's [[key, value]..] as pairs, its own keys and values; NULL, *n 0: none
+static const sc_pair *info_of(const op_value *list, size_t *n) {
+	*n = 0;
+	if (!is(list, OP_LIST) || list->count == 0) return NULL;
+	sc_pair *out = allocate(list->count * sizeof *out);
+	PUSH(infos, ninfos, capinfos, out);
+	for (size_t i = 0; i < list->count; i++) {
+		const op_value *p = list->items[i];
+		if (!is(p, OP_LIST) || p->count != 2 || !is(p->items[0], OP_STR)) continue;
+		out[(*n)++] = (sc_pair){text(p->items[0]), p->items[1]};
+	}
+	return out;
+}
+
+// what is open: {scope, pairs, by?}, by the computation of the writer; nothing: null. a
+// computation's info is the scheduler's, its values numbers; any other's is a request's
+static op_value *current(void) {
+	sc_scope *open = sc_current(sch);
+	if (open == NULL) return op_null();
+	size_t depth = 0;
+	for (sc_scope *o = open; o; o = sc_scope_parent(o)) depth++;
+	sc_scope **chain = allocate(depth * sizeof *chain);
+	size_t k = depth;
+	for (sc_scope *o = open; o; o = sc_scope_parent(o)) chain[--k] = o;
+	op_value *pairs = op_list();
+	size_t total = 0;
+	for (size_t i = 0; i < depth; i++) {
+		size_t n;
+		const sc_pair *info = sc_scope_info(chain[i], &n);
+		bool ours = sc_latest(chain[i]) != NULL;
+		for (size_t j = 0; j < n; j++) {
+			op_value *p = op_list();
+			op_push(p, op_str(info[j].key));
+			op_push(p, ours ? integer((int64_t)*(const uint64_t *)info[j].value) : op_ref((op_value *)info[j].value));
+			op_push(pairs, p);
+		}
+		total += n;
+	}
+	free(chain);
+	// the scheduler's own list agrees
+	sc_pair *flat = allocate((total + 1) * sizeof *flat);
+	if (sc_pairs(sch, flat, total) != total) abort();
+	free(flat);
+	op_value *out = op_map();
+	const char *name = sc_scope_user(open);
+	op_set(out, "scope", name ? op_str(name) : op_null());
+	op_set(out, "pairs", pairs);
+	sc_run *by = sc_current_by(sch);
+	if (by) op_set(out, "by", op_str(sc_scope_user(sc_run_of(by))));
+	return out;
+}
+
+// why nothing could be made in the scope open: none open, or it is gone
+static char *unmade(void) { return copyString(sc_current(sch) ? SC_DISPOSED : SC_UNSCOPED); }
+
+// who a change in this code is by: the run, else the computation's latest
+static sc_run *by_of(const ctx *c) {
+	if (c->run) return c->run;
+	return c->self ? sc_latest(c->self) : NULL;
+}
+
+static double num(const op_value *j) {
+	if (j == NULL || j->type == OP_NULL) return 0;
+	return j->type == OP_NUM ? j->num : NAN;
 }
 
 #define EVAL(var, expr) \
 	val var = evaluate((expr), c); \
-	if (var.k == V_THROW || var.k == V_STOP) return var
+	if (ENDS(var)) return var
 
 // e evaluated to a string, copied; NULL when it is not one
-static val string_of(const Json *e, const ctx *c, char **out) {
+static val string_of(const op_value *e, const ctx *c, char **out) {
 	*out = NULL;
 	EVAL(v, e);
-	if (v.j && jsonIsString(v.j)) *out = copyString(jsonText(v.j));
+	if (v.j && is(v.j, OP_STR)) *out = copyString(text(v.j));
 	release(v);
 	return ok(NULL);
 }
 
 struct inrun {
-	const Json *e;
+	const op_value *e;
 	const ctx *c;
 	val v;
 };
+// a cleanup made with a scope open
+struct incleanup {
+	char *(*f)(void *);
+	void *data;
+	char *bad;
+};
+static void in_cleanup(void *data) {
+	struct incleanup *k = data;
+	k->bad = sc_cleanup(sch, k->f, k->data);
+}
 static void in_run(void *data) {
 	struct inrun *r = data;
 	ctx inner = *r->c;
@@ -224,10 +354,10 @@ static void in_run(void *data) {
 	r->v = evaluate(r->e, &inner);
 }
 
-// a value's error, if it threw; the rest let go
+// a value's error, if it threw ("pending" for PENDING); the rest let go
 static char *error_of(val v) {
-	char *e = v.k == V_THROW ? v.err : NULL;
-	v.err = NULL;
+	char *e = v.k == V_THROW ? v.err : v.k == V_PENDS ? copyString("pending") : NULL;
+	if (v.k == V_THROW) v.err = NULL;
 	release(v);
 	return e;
 }
@@ -239,7 +369,7 @@ static char *cleanup_run(void *data) {
 	return error_of(evaluate(k->e, &inner));
 }
 
-static closure *closure_of(const Json *e, const ctx *c) {
+static closure *closure_of(const op_value *e, const ctx *c) {
 	closure *k = allocate(sizeof *k);
 	k->e = e;
 	k->c = *c;
@@ -248,27 +378,27 @@ static closure *closure_of(const Json *e, const ctx *c) {
 	return k;
 }
 
-static val evaluate(const Json *e, const ctx *c) {
-	if (e == NULL || e->type == JSON_NULL || e->type == JSON_BOOLEAN || e->type == JSON_NUMBER ||
-		e->type == JSON_STRING)
-		return ok(e ? jsonRef((Json *)e) : jsonNull());
-	if (e->type == JSON_ARRAY) {
-		Json *out = jsonArray();
-		for (int i = 0; i < e->array.count; i++) {
-			val v = evaluate(e->array.items[i], c);
-			if (v.k == V_THROW || v.k == V_STOP) return jsonFree(out), v;
-			jsonPush(out, v.j ? v.j : jsonNull());
+static val evaluate(const op_value *e, const ctx *c) {
+	if (e == NULL || e->type == OP_NULL || e->type == OP_BOOL || e->type == OP_NUM ||
+		e->type == OP_STR)
+		return ok(e ? op_ref((op_value *)e) : op_null());
+	if (e->type == OP_LIST) {
+		op_value *out = op_list();
+		for (size_t i = 0; i < e->count; i++) {
+			val v = evaluate(e->items[i], c);
+			if (ENDS(v)) return op_free(out), v;
+			op_push(out, v.j ? v.j : op_null());
 		}
 		return ok(out);
 	}
-	if (e->type != JSON_OBJECT || e->object.count == 0) return thrown(copyString("unknown form undefined"));
-	const char *form = e->object.members[0].key;
-	const Json *arg = e->object.members[0].value;
-	const Json *a0 = NULL, *a1 = NULL, *a2 = NULL;
-	if (jsonIsArray(arg)) {
-		if (arg->array.count > 0) a0 = arg->array.items[0];
-		if (arg->array.count > 1) a1 = arg->array.items[1];
-		if (arg->array.count > 2) a2 = arg->array.items[2];
+	if (e->type != OP_MAP || e->count == 0) return thrown(copyString("unknown form undefined"));
+	const char *form = e->keys[0];
+	const op_value *arg = e->items[0];
+	const op_value *a0 = NULL, *a1 = NULL, *a2 = NULL;
+	if (is(arg, OP_LIST)) {
+		if (arg->count > 0) a0 = arg->items[0];
+		if (arg->count > 1) a1 = arg->items[1];
+		if (arg->count > 2) a2 = arg->items[2];
 	}
 	if (strcmp(form, "read") == 0) {
 		char *k;
@@ -280,20 +410,20 @@ static val evaluate(const Json *e, const ctx *c) {
 		sc_read_status st = c->run ? sc_run_read(c->run, en->key) : sc_read(sch, en->key);
 		if (st == SC_STOP) return (val){V_STOP, NULL, NULL, NULL};
 		if (st == SC_CLOSED) return thrown(copyString(SC_STOPPED));
-		return ok(en->value ? jsonRef(en->value) : jsonNull());
+		return ok(en->value ? op_ref(en->value) : op_null());
 	}
 	if (strcmp(form, "sum") == 0 || strcmp(form, "mod") == 0) {
 		bool sum = form[0] == 's';
 		double n = 0, first = 0;
-		for (int i = 0; i < (jsonIsArray(arg) ? arg->array.count : 0); i++) {
-			EVAL(v, arg->array.items[i]);
+		for (size_t i = 0; i < (is(arg, OP_LIST) ? arg->count : 0); i++) {
+			EVAL(v, arg->items[i]);
 			double x = num(v.j);
 			release(v);
 			if (sum) n += x;
 			else if (i == 0) first = x;
 			else n = fmod(first, x);
 		}
-		return ok(jsonNumber(n));
+		return ok(op_num(n));
 	}
 	if (strcmp(form, "eq") == 0) {
 		EVAL(x, a0);
@@ -301,31 +431,31 @@ static val evaluate(const Json *e, const ctx *c) {
 		bool same = x.j && y.j ? same_json(x.j, y.j) : x.j == y.j;
 		release(x);
 		release(y);
-		return ok(jsonBoolean(same));
+		return ok(op_bool(same));
 	}
 	if (strcmp(form, "if") == 0) {
 		EVAL(t, a0);
-		bool yes = t.j && t.j->type == JSON_BOOLEAN && t.j->boolean;
+		bool yes = t.j && t.j->type == OP_BOOL && t.j->bool_;
 		release(t);
 		return evaluate(yes ? a1 : a2, c);
 	}
 	if (strcmp(form, "given") == 0) {
-		const char *which = jsonText(arg);
-		const Json *j = which && strcmp(which, "value") == 0 ? c->value
+		const char *which = text(arg);
+		const op_value *j = which && strcmp(which, "value") == 0 ? c->value
 			: which && strcmp(which, "previous") == 0 ? c->previous : NULL;
-		return ok(j ? jsonRef((Json *)j) : jsonNull());
+		return ok(j ? op_ref((op_value *)j) : op_null());
 	}
 	if (strcmp(form, "log") == 0) {
 		EVAL(v, arg);
-		PUSH(logged, nlogged, caplogged, v.j ? jsonRef(v.j) : jsonNull());
+		PUSH(logged, nlogged, caplogged, v.j ? op_ref(v.j) : op_null());
 		return v;
 	}
 	if (strcmp(form, "do") == 0) {
-		val last = ok(jsonNull());
-		for (int i = 0; i < (jsonIsArray(arg) ? arg->array.count : 0); i++) {
+		val last = ok(op_null());
+		for (size_t i = 0; i < (is(arg, OP_LIST) ? arg->count : 0); i++) {
 			release(last);
-			last = evaluate(arg->array.items[i], c);
-			if (last.k == V_THROW || last.k == V_STOP) return last;
+			last = evaluate(arg->items[i], c);
+			if (ENDS(last)) return last;
 		}
 		return last;
 	}
@@ -341,10 +471,18 @@ static val evaluate(const Json *e, const ctx *c) {
 		keep(k, v.j);
 		const void *key = entry_of(k)->key;
 		free(k);
-		sc_changed(sch, &key, 1);
+		const char *said = text(a2);
+		sc_run *by = a2 == NULL ? by_of(c) : said && strcmp(said, "open") == 0 ? sc_current_by(sch) : NULL;
+		sc_changed(sch, &key, 1, by);
 		return v;
 	}
-	if (strcmp(form, "throw") == 0) return thrown(copyString(jsonText(arg) ? jsonText(arg) : "null"));
+	if (strcmp(form, "throw") == 0) {
+		EVAL(v, arg);
+		if (v.k == V_PENDING) return (val){V_PENDS, NULL, NULL, NULL};
+		char *why = copyString(v.j && text(v.j) ? text(v.j) : "null");
+		release(v);
+		return thrown(why);
+	}
 	if (strcmp(form, "pending") == 0) return (val){V_PENDING, NULL, NULL, NULL};
 	if (strcmp(form, "wait") == 0) {
 		char *name;
@@ -376,31 +514,70 @@ static val evaluate(const Json *e, const ctx *c) {
 		if (bad) return thrown(copyString(bad));
 		return r.v;
 	}
-	if (strcmp(form, "cleanup") == 0) {
-		const char *name = jsonText(a0);
-		sc_owner *o = name ? owner_named(name) : NULL;
-		if (o == NULL) return thrown(formatString("no owner %s", name ? name : "null"));
-		char *bad = sc_cleanup(o, cleanup_run, closure_of(a1, c));
+	if (strcmp(form, "in") == 0) {
+		const char *name = text(a0);
+		sc_scope *o = name ? scope_named(name) : NULL;
+		if (o == NULL) return thrown(formatString("no scope %s", name ? name : "null"));
+		struct inrun r = {a1, c, ok(NULL)};
+		const char *bad = sc_setup(o, in_run, &r);
+		if (bad) return thrown(copyString(bad));
+		return r.v;
+	}
+	if (strcmp(form, "scope") == 0) {
+		const char *name = text(a0);
+		const char *up = text(a2);
+		sc_scope *parent = up ? scope_named(up) : NULL;
+		if (up && parent == NULL) return thrown(formatString("no scope %s", up));
+		size_t n;
+		const sc_pair *info = info_of(a1, &n);
+		sc_scope *o = sc_scope_new(sch, info, n, parent);
+		if (o == NULL) return thrown(parent ? copyString(SC_DISPOSED) : unmade());
+		char *bad = name_it(o, name ? name : "");
 		if (bad) return thrown(bad);
-		return ok(jsonNull());
+		return ok(op_null());
+	}
+	if (strcmp(form, "within") == 0) {
+		size_t n;
+		const sc_pair *info = info_of(a0, &n);
+		sc_scope *o = sc_scope_new(sch, info, n, NULL);
+		if (o == NULL) return thrown(unmade());
+		struct inrun r = {a1, c, ok(NULL)};
+		const char *bad = sc_setup(o, in_run, &r);
+		if (bad) return thrown(copyString(bad));
+		return r.v;
+	}
+	if (strcmp(form, "current") == 0) return ok(current());
+	if (strcmp(form, "cleanup") == 0) {
+		// on the scope open when it is the one named (or none is), else with that one open
+		const char *name = text(a0);
+		sc_scope *o = name ? scope_named(name) : NULL;
+		if (o == NULL && !is(a0, OP_NULL)) return thrown(formatString("no scope %s", name ? name : "null"));
+		struct incleanup k = {cleanup_run, closure_of(a1, c), NULL};
+		if (o == NULL || sc_current(sch) == o) in_cleanup(&k);
+		else {
+			const char *why = sc_setup(o, in_cleanup, &k);
+			if (why) return thrown(copyString(why));
+		}
+		if (k.bad) return thrown(k.bad);
+		return ok(op_null());
 	}
 	if (strcmp(form, "dispose") == 0) {
-		const char *name = jsonText(arg);
-		sc_owner *o = name ? owner_named(name) : NULL;
-		if (o == NULL) return thrown(formatString("no owner %s", name ? name : "null"));
+		const char *name = text(arg);
+		sc_scope *o = name ? scope_named(name) : NULL;
+		if (o == NULL) return thrown(formatString("no scope %s", name ? name : "null"));
 		char *bad = sc_dispose(o);
 		if (bad) return thrown(bad);
-		return ok(jsonNull());
+		return ok(op_null());
 	}
-	if (strcmp(form, "quote") == 0) return ok(jsonRef((Json *)arg));
+	if (strcmp(form, "quote") == 0) return ok(op_ref((op_value *)arg));
 	return thrown(formatString("unknown form %s", form));
 }
 
 // a computation's program
 
 typedef struct prog {
-	const Json *f;
-	const Json *act;
+	const op_value *f;
+	const op_value *act;
 	const char *to;
 	sc_computation *self;
 } prog;
@@ -423,7 +600,7 @@ static char *program_set(void *value, void *data) {
 	prog *p = data;
 	if (p->to == NULL) return NULL;
 	keep(p->to, value);
-	sc_changed(sch, (const void *[]){p->to}, 1);
+	sc_changed(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
 	return NULL;
 }
 
@@ -435,17 +612,19 @@ static char *program_act(void *value, void *previous, void *data) {
 
 // requests --------------------------------------------------------------------------------------
 
-static Json **requests;
-static size_t nrequests, caprequests;
+// the lines asked, kept to the end: the programs and pairs point into them
+static hh_line **lines;
+static size_t nlines, caplines;
 
-static Json *answer_error(char *e) {
-	Json *o = jsonObject();
-	jsonAdd(o, "error", jsonStringTaking(e, strlen(e)));
+static op_value *answer_error(char *e) {
+	op_value *o = op_map();
+	op_set(o, "error", op_str(e));
+	free(e);
 	return o;
 }
-static Json *answer_tick(uint64_t t) {
-	Json *o = jsonObject();
-	jsonAdd(o, "tick", jsonInteger((int64_t)t));
+static op_value *answer_tick(uint64_t t) {
+	op_value *o = op_map();
+	op_set(o, "tick", integer((int64_t)t));
 	return o;
 }
 
@@ -458,231 +637,269 @@ static const char *ended_name(sc_ended e) {
 	default: return "looping";
 	}
 }
-static Json *name_json(const sc_computation *c) { return jsonString((const char *)sc_owner_user(c)); }
+static op_value *name_json(const sc_computation *c) { return op_str((const char *)sc_scope_user(c)); }
 
-static Json *moment_json(const moment *x) {
+// reads: an ends moment with its reads, the keys (the store's strings)
+static op_value *moment_json(const moment *x, bool reads) {
 	const sc_moment *m = &x->m;
-	Json *o = jsonObject();
+	op_value *o = op_map();
 	switch (m->kind) {
 	case SC_DUE:
-		jsonAdd(o, "due", name_json(m->c));
-		jsonAdd(o, "tick", jsonInteger((int64_t)m->tick));
+		op_set(o, "due", name_json(m->c));
+		op_set(o, "tick", integer((int64_t)m->tick));
+		if (m->by) op_set(o, "by", name_json(m->by));
 		break;
 	case SC_STARTS:
-		jsonAdd(o, "starts", name_json(m->c));
-		jsonAdd(o, "run", jsonInteger(m->run));
-		jsonAdd(o, "rank", jsonInteger(m->rank));
+		op_set(o, "starts", name_json(m->c));
+		op_set(o, "run", integer(m->run));
+		op_set(o, "rank", integer(m->rank));
 		break;
 	case SC_ACTS:
-		jsonAdd(o, "acts", name_json(m->c));
-		jsonAdd(o, "run", jsonInteger(m->run));
-		if (m->error) jsonAdd(o, "error", jsonString(m->error));
+		op_set(o, "acts", name_json(m->c));
+		op_set(o, "run", integer(m->run));
+		if (m->error) op_set(o, "error", op_str(m->error));
 		break;
 	case SC_ENDS:
-		jsonAdd(o, "ends", name_json(m->c));
-		jsonAdd(o, "run", jsonInteger(m->run));
-		jsonAdd(o, "ended", jsonString(ended_name(m->ended)));
-		if (m->equal >= 0) jsonAdd(o, "equal", jsonBoolean(m->equal));
-		if (m->error) jsonAdd(o, "error", jsonString(m->error));
-		if (m->waits) jsonAdd(o, "waits", name_json(m->waits));
+		op_set(o, "ends", name_json(m->c));
+		op_set(o, "run", integer(m->run));
+		op_set(o, "ended", op_str(ended_name(m->ended)));
+		if (m->equal >= 0) op_set(o, "equal", op_bool(m->equal));
+		if (m->error) op_set(o, "error", op_str(m->error));
+		if (m->waits) op_set(o, "waits", name_json(m->waits));
 		if (m->nthrough) {
-			Json *t = jsonArray();
-			for (size_t i = 0; i < m->nthrough; i++) jsonPush(t, name_json(m->through[i]));
-			jsonAdd(o, "through", t);
+			op_value *t = op_list();
+			for (size_t i = 0; i < m->nthrough; i++) op_push(t, name_json(m->through[i]));
+			op_set(o, "through", t);
+		}
+		if (reads) {
+			op_value *k = op_list();
+			for (size_t i = 0; i < m->nreads; i++) op_push(k, op_str(m->reads[i]));
+			op_set(o, "reads", k);
 		}
 		break;
 	}
 	return o;
 }
 
-static sc_owner *need_owner(const Json *name, char **bad) {
-	const char *n = jsonText(name);
-	sc_owner *o = n ? owner_named(n) : NULL;
-	if (o == NULL) *bad = formatString("no owner %s", n ? n : "null");
+static sc_scope *need_scope(const op_value *name, char **bad) {
+	const char *n = text(name);
+	sc_scope *o = n ? scope_named(n) : NULL;
+	if (o == NULL) *bad = formatString("no scope %s", n ? n : "null");
 	return o;
 }
 
-static Json *make_computation(const Json *r, bool effect) {
+// a computation made with a scope open
+struct making {
+	sc_def def;
+	bool effect;
+	sc_computation *c;
+};
+static void in_making(void *data) {
+	struct making *m = data;
+	m->c = m->effect ? sc_effect(sch, m->def) : sc_compute(sch, m->def);
+}
+
+static op_value *make_computation(const op_value *r, bool effect) {
 	char *bad = NULL;
-	sc_owner *o = need_owner(jsonGet(r, "owner"), &bad);
+	sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 	if (!o) return answer_error(bad);
 	prog *p = allocate(sizeof *p);
 	PUSH(progs, nprogs, capprogs, p);
-	p->f = jsonGet(r, "f");
-	p->act = jsonGet(r, "act");
-	const char *to = jsonText(jsonGet(r, "to"));
+	p->f = op_get(r, "f");
+	p->act = op_get(r, "act");
+	const char *to = text(op_get(r, "to"));
 	p->to = to ? entry_of(to)->key : NULL;
-	const char *eq = jsonText(jsonGet(r, "equal"));
+	const char *eq = text(op_get(r, "equal"));
+	const op_value *declared = op_get(r, "declared");
 	sc_def def = {.f = program_f,
 		.equal = eq && strcmp(eq, "json") == 0 ? json_equal : object_is,
+		.key = !effect && p->to && declared && declared->type == OP_BOOL && declared->bool_ ? p->to : NULL,
 		.data = p};
 	if (effect) def.act = program_act;
 	else def.set = program_set;
-	sc_computation *c = effect ? sc_effect(o, def) : sc_compute(o, def);
+	struct making m = {def, effect, NULL};
+	const char *why = sc_setup(o, in_making, &m);
+	if (why) return answer_error(copyString(why));
+	sc_computation *c = m.c;
 	if (c == NULL) return answer_error(copyString(SC_DISPOSED));
 	p->self = c;
-	bad = name_it(c, jsonText(jsonGet(r, "name")));
-	return bad ? answer_error(bad) : jsonObject();
+	bad = name_it(c, text(op_get(r, "name")));
+	return bad ? answer_error(bad) : op_map();
 }
 
-static Json *settle(const Json *r, bool resolve) {
-	const char *name = jsonText(jsonGet(r, "promise"));
+static op_value *settle(const op_value *r, bool resolve) {
+	const char *name = text(op_get(r, "promise"));
 	waiting *w = name ? wait_for(name) : NULL;
 	if (w == NULL) return answer_error(formatString("no promise %s", name ? name : "null"));
 	for (size_t i = 0; i < nwaits; i++)
 		if (waits[i] == w) waits[i] = waits[--nwaits];
 	if (!resolve) {
-		const char *why = jsonText(jsonGet(r, "error"));
+		const char *why = text(op_get(r, "error"));
 		sc_reject(w->p, copyString(why ? why : "null"));
 	} else if (w->then) {
 		val v = evaluate(w->then, &w->c);
 		if (v.k == V_THROW) sc_reject(w->p, v.err);
-		else if (v.k == V_PENDING) sc_resolve_pending(w->p);
-		else sc_resolve(w->p, v.j ? v.j : jsonNull());
+		else if (v.k == V_PENDING || v.k == V_PENDS) sc_resolve_pending(w->p);
+		else sc_resolve(w->p, v.j ? v.j : op_null());
 	} else {
-		const Json *value = jsonGet(r, "value");
-		sc_resolve(w->p, value ? jsonRef((Json *)value) : jsonNull());
+		const op_value *value = op_get(r, "value");
+		sc_resolve(w->p, value ? op_ref((op_value *)value) : op_null());
 	}
 	wait_free(w);
-	return jsonObject();
+	return op_map();
 }
 
-static Json *answer(const Json *r) {
-	const char *op = jsonText(jsonGet(r, "op"));
+static op_value *answer(const op_value *r) {
+	const char *op = text(op_get(r, "op"));
 	if (op == NULL) return answer_error(copyString("no op"));
 	char *bad = NULL;
-	if (strcmp(op, "owner") == 0) {
-		const Json *parent = jsonGet(r, "parent");
-		sc_owner *p = NULL;
-		if (parent && parent->type != JSON_NULL && !(p = need_owner(parent, &bad))) return answer_error(bad);
-		sc_owner *o = sc_owner_new(sch, p);
-		if (o == NULL) return answer_error(copyString(SC_DISPOSED));
-		bad = name_it(o, jsonText(jsonGet(r, "name")));
-		return bad ? answer_error(bad) : jsonObject();
+	if (strcmp(op, "root") == 0 || strcmp(op, "scope") == 0) {
+		const op_value *parent = op_get(r, "parent");
+		sc_scope *p = NULL;
+		if (parent && parent->type != OP_NULL && !(p = need_scope(parent, &bad))) return answer_error(bad);
+		size_t n;
+		const sc_pair *info = info_of(op_get(r, "info"), &n);
+		sc_scope *o = op[0] == 'r' ? sc_root(sch, info, n) : sc_scope_new(sch, info, n, p);
+		if (o == NULL) return answer_error(p ? copyString(SC_DISPOSED) : unmade());
+		bad = name_it(o, text(op_get(r, "name")));
+		return bad ? answer_error(bad) : op_map();
+	}
+	if (strcmp(op, "current") == 0) {
+		op_value *out = op_map();
+		op_set(out, "value", current());
+		return out;
 	}
 	if (strcmp(op, "compute") == 0) return make_computation(r, false);
 	if (strcmp(op, "effect") == 0) return make_computation(r, true);
 	if (strcmp(op, "cleanup") == 0 || strcmp(op, "run") == 0) {
-		sc_owner *o = need_owner(jsonGet(r, "owner"), &bad);
+		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 		if (!o) return answer_error(bad);
 		ctx c = {NULL, o, NULL, NULL};
 		if (op[0] == 'c') {
-			bad = sc_cleanup(o, cleanup_run, closure_of(jsonGet(r, "do"), &c));
-			return bad ? answer_error(bad) : jsonObject();
+			struct incleanup k = {cleanup_run, closure_of(op_get(r, "do"), &c), NULL};
+			const char *why = sc_setup(o, in_cleanup, &k);
+			if (why) return answer_error(copyString(why));
+			return k.bad ? answer_error(k.bad) : op_map();
 		}
-		struct inrun in = {jsonGet(r, "do"), &c, ok(NULL)};
+		struct inrun in = {op_get(r, "do"), &c, ok(NULL)};
 		const char *why = sc_setup(o, in_run, &in);
 		if (why) return answer_error(copyString(why));
 		if (in.v.k == V_THROW) return answer_error(in.v.err);
-		Json *out = jsonObject();
-		jsonAdd(out, "value", in.v.j ? in.v.j : jsonNull());
+		op_value *out = op_map();
+		op_set(out, "value", in.v.j ? in.v.j : op_null());
 		return out;
 	}
 	if (strcmp(op, "dispose") == 0) {
-		sc_owner *o = need_owner(jsonGet(r, "owner"), &bad);
+		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 		if (!o) return answer_error(bad);
 		bad = sc_dispose(o);
-		return bad ? answer_error(bad) : jsonObject();
+		return bad ? answer_error(bad) : op_map();
 	}
 	if (strcmp(op, "write") == 0 || strcmp(op, "changed") == 0) {
 		bool write = op[0] == 'w';
-		const Json *list = jsonGet(r, write ? "values" : "keys");
-		size_t n = write ? (jsonIsObject(list) ? (size_t)list->object.count : 0)
-			: (jsonIsArray(list) ? (size_t)list->array.count : 0);
+		const op_value *list = op_get(r, write ? "values" : "keys");
+		size_t n = write ? (is(list, OP_MAP) ? list->count : 0)
+			: (is(list, OP_LIST) ? list->count : 0);
 		const void **keys = allocate((n + 1) * sizeof *keys);
 		for (size_t i = 0; i < n; i++) {
-			const char *k = write ? list->object.members[i].key : jsonText(list->array.items[i]);
+			const char *k = write ? list->keys[i] : text(list->items[i]);
 			if (k == NULL) {
 				free(keys);
 				return answer_error(copyString("bad key"));
 			}
-			if (write) keep(k, list->object.members[i].value);
+			if (write) keep(k, list->items[i]);
 			keys[i] = entry_of(k)->key;
 		}
-		uint64_t t = sc_changed(sch, keys, n);
+		uint64_t t = sc_changed(sch, keys, n, NULL);
 		free(keys);
 		return answer_tick(t);
 	}
 	if (strcmp(op, "pulse") == 0) {
+		told = 0;
+		pulsing = true;
+		if (setjmp(endless) != 0) {
+			pulsing = false;
+			return answer_error(copyString("endless"));
+		}
 		sc_pulse(sch);
-		return jsonObject();
+		pulsing = false;
+		return op_map();
 	}
 	if (strcmp(op, "resolve") == 0) return settle(r, true);
 	if (strcmp(op, "reject") == 0) return settle(r, false);
 	if (strcmp(op, "get") == 0) {
-		const char *k = jsonText(jsonGet(r, "key"));
+		const char *k = text(op_get(r, "key"));
 		entry *e = k ? entry_of(k) : NULL;
-		Json *out = jsonObject();
-		jsonAdd(out, "value", e && e->value ? jsonRef(e->value) : jsonNull());
+		op_value *out = op_map();
+		op_set(out, "value", e && e->value ? op_ref(e->value) : op_null());
 		return out;
 	}
 	if (strcmp(op, "log") == 0) {
-		Json *list = jsonArray();
-		for (size_t i = 0; i < nlogged; i++) jsonPush(list, logged[i]);
+		op_value *list = op_list();
+		for (size_t i = 0; i < nlogged; i++) op_push(list, logged[i]);
 		nlogged = 0;
-		Json *out = jsonObject();
-		jsonAdd(out, "log", list);
+		op_value *out = op_map();
+		op_set(out, "log", list);
 		return out;
 	}
 	if (strcmp(op, "moments") == 0) {
-		Json *list = jsonArray();
+		const op_value *reads = op_get(r, "reads");
+		op_value *list = op_list();
 		for (size_t i = 0; i < nmoments; i++) {
-			jsonPush(list, moment_json(&moments[i]));
+			op_push(list, moment_json(&moments[i], is(reads, OP_BOOL) && reads->bool_));
 			free(moments[i].error);
 			free(moments[i].through);
+			free(moments[i].reads);
 		}
 		nmoments = 0;
-		Json *out = jsonObject();
-		jsonAdd(out, "moments", list);
+		op_value *out = op_map();
+		op_set(out, "moments", list);
+		return out;
+	}
+	if (strcmp(op, "forgotten") == 0) {
+		op_value *list = op_list();
+		for (size_t i = 0; i < nforgotten; i++) op_push(list, forgotten[i]);
+		nforgotten = 0;
+		op_value *out = op_map();
+		op_set(out, "keys", list);
 		return out;
 	}
 	if (strcmp(op, "tick") == 0) return answer_tick(sc_tick(sch));
 	return answer_error(formatString("unknown op %s", op));
 }
 
-int main(void) {
-	sch = sc_new((sc_options){.hook = hook, .drop = drop});
-	char *line = NULL;
-	size_t cap = 0;
-	ssize_t n;
-	while ((n = getline(&line, &cap, stdin)) >= 0) {
-		size_t len = (size_t)n;
-		while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r' || line[len - 1] == ' ')) len--;
-		if (len == 0) continue;
-		char *why = NULL;
-		Json *r = jsonParse(line, len, &why);
-		Json *out;
-		if (r == NULL) {
-			out = answer_error(why);
-		} else {
-			PUSH(requests, nrequests, caprequests, r);
-			out = answer(r);
-		}
-		char *text = jsonPrint(out);
-		fputs(text, stdout);
-		fputc('\n', stdout);
-		fflush(stdout);
-		free(text);
-		jsonFree(out);
-	}
-	free(line);
+void hh_answer(const op_value *r, FILE *out) {
+	if (sch == NULL) sch = sc_new((sc_options){.hook = hook, .drop = drop, .forget = forget});
+	PUSH(lines, nlines, caplines, hh_retain());
+	op_value *a = answer(r);
+	op_json_write(out, a);
+	op_free(a);
+}
+
+void hh_finish(void) {
+	if (sch == NULL) return;
 	for (size_t i = 0; i < nwaits; i++) wait_free(waits[i]);
 	for (size_t i = 0; i < nold; i++) wait_free(old[i]);
-	for (size_t i = 0; i < nnamed; i++) free(sc_owner_user(named[i]));
+	for (size_t i = 0; i < nnamed; i++) free(sc_scope_user(named[i]));
 	sc_free(sch);
 	for (size_t i = 0; i < nmoments; i++) {
 		free(moments[i].error);
 		free(moments[i].through);
+		free(moments[i].reads);
 	}
-	for (size_t i = 0; i < nlogged; i++) jsonFree(logged[i]);
+	for (size_t i = 0; i < nlogged; i++) op_free(logged[i]);
+	for (size_t i = 0; i < nforgotten; i++) op_free(forgotten[i]);
+	free(forgotten);
 	for (size_t i = 0; i < nstore; i++) {
-		jsonFree(store[i]->value);
+		op_free(store[i]->value);
 		free(store[i]->key);
 		free(store[i]);
 	}
 	for (size_t i = 0; i < nprogs; i++) free(progs[i]);
 	for (size_t i = 0; i < nclosures; i++) free(closures[i]);
-	for (size_t i = 0; i < nrequests; i++) jsonFree(requests[i]);
+	for (size_t i = 0; i < ninfos; i++) free(infos[i]);
+	free(infos);
+	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);
 	free(store);
 	free(named);
 	free(logged);
@@ -691,6 +908,5 @@ int main(void) {
 	free(old);
 	free(progs);
 	free(closures);
-	free(requests);
-	return 0;
+	free(lines);
 }

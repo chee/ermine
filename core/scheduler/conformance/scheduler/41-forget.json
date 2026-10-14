@@ -1,0 +1,25 @@
+{
+	"title": "forget: told each key the scheduler stops tracking, when its last reader's run reads it no more, or its last reader goes",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "flag": false } },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "if": [{ "read": "flag" }, { "read": "b" }, { "read": "a" }] },
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "forgotten", "expect": { "keys": [] } },
+		{ "op": "write", "values": { "flag": true } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "forgotten", "expect": { "keys": ["a"] } },
+		{ "op": "compute", "name": "d", "scope": "o", "f": { "read": "b" }, "to": "d" },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "dispose", "scope": "c", "expect": {} },
+		{ "op": "forgotten", "expect": { "keys": ["flag"] } },
+		{ "op": "dispose", "scope": "d", "expect": {} },
+		{ "op": "forgotten", "expect": { "keys": ["b"] } }
+	]
+}

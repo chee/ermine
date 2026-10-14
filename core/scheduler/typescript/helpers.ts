@@ -9,4 +9,4 @@ export const same = (
 	equal: ((a: unknown, b: unknown) => boolean) | undefined,
 	a: unknown,
 	b: unknown,
-) => equal ? equal(a, b) : Object.is(a, b)
+): boolean => equal ? equal(a, b) : Object.is(a, b)

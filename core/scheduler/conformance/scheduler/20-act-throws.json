@@ -1,18 +1,18 @@
 {
 	"title": "an act that throws: the error told; the other effects act, and it acts again on the next value",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "effect",
 			"name": "e1",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "a" },
 			"act": { "do": [{ "log": ["e1", { "given": "value" }] }, { "throw": "bad" }] }
 		},
 		{
 			"op": "effect",
 			"name": "e2",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "a" },
 			"act": { "log": ["e2", { "given": "value" }] }
 		},

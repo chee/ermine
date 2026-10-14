@@ -34,12 +34,12 @@
 					]
 				}
 			],
-			"expect": [
+			"expect": { "spots": [
 				[
 					"title"
 				],
 				[]
-			]
+			] }
 		},
 		{
 			"op": "mark",
@@ -53,12 +53,12 @@
 					"value": "b"
 				}
 			],
-			"expect": [
+			"expect": { "spots": [
 				[
 					"title"
 				],
 				[]
-			]
+			] }
 		},
 		{
 			"op": "mark",
@@ -71,9 +71,9 @@
 					]
 				}
 			],
-			"expect": [
+			"expect": { "spots": [
 				[]
-			]
+			] }
 		}
 	]
 }

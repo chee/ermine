@@ -5,13 +5,19 @@
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{ "op": "children", "source": "s", "id": "R", "expect": {} },
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "children",
@@ -34,26 +40,35 @@
 			"from": ["s", "R"],
 			"expect": {
 				"names": ["b", "a", "empty", "z"],
-				"reads": [{ "source": "s", "id": "R", "path": [] }]
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
 			}
 		},
 		{ "op": "children", "source": "s", "id": "R", "value": [["x", "y"]], "expect": {} },
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{ "op": "children", "source": "s", "id": "R", "value": "text", "expect": {} },
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{ "op": "children", "source": "s", "id": "R", "value": {}, "expect": {} },
 		{
 			"op": "names",
 			"from": ["s", "R"],
-			"expect": { "names": [], "reads": [{ "source": "s", "id": "R", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "children",
@@ -72,7 +87,7 @@
 			"from": ["s", "R"],
 			"expect": {
 				"names": ["__proto__", "constructor", "toString", "hasOwnProperty"],
-				"reads": [{ "source": "s", "id": "R", "path": [] }]
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
 			}
 		},
 		{
@@ -136,7 +151,10 @@
 		{
 			"op": "names",
 			"from": ["s", "P"],
-			"expect": { "names": ["x"], "reads": [{ "source": "s", "id": "P", "path": [] }] }
+			"expect": {
+				"names": ["x"],
+				"reads": [{ "source": "s", "id": "P", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "get",
@@ -152,12 +170,18 @@
 		{
 			"op": "names",
 			"from": { "item": "p" },
-			"expect": { "names": ["x"], "reads": [{ "source": "s", "id": "P", "path": [] }] }
+			"expect": {
+				"names": ["x"],
+				"reads": [{ "source": "s", "id": "P", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "names",
 			"from": ["other", "P"],
-			"expect": { "names": [], "reads": [{ "source": "other", "id": "P", "path": [] }] }
+			"expect": {
+				"names": [],
+				"reads": [{ "source": "other", "id": "P", "path": [], "keys": true }]
+			}
 		},
 		{
 			"op": "children",
@@ -177,7 +201,7 @@
 			"from": ["s", "R"],
 			"expect": {
 				"names": ["", " ", "a b", "é", "\u0000"],
-				"reads": [{ "source": "s", "id": "R", "path": [] }]
+				"reads": [{ "source": "s", "id": "R", "path": [], "keys": true }]
 			}
 		},
 		{

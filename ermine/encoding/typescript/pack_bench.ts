@@ -1,30 +1,34 @@
-// deno bench --allow-env newcore/encoding/ts/pack_bench.ts
-// pack and the canonical codec (ENCODING.tex) against cbor-x, the speed to reach: cbor-x writes
-// no canonical form (integers, keys as made), so it is a bound, not a rival
+// deno bench --allow-env ermine/encoding/typescript/pack_bench.ts
+// pack and the canonical codec against cbor-x, the speed to reach: cbor-x writes no canonical form
+// (integers, keys as made), so it is a bound, not a rival
 import { Encoder } from "cbor-x"
 import * as cbor from "./cbor.ts"
 import createNode, { type Node } from "@ermine/node"
-import { decode, encode, pack, unpack } from "./pack.ts"
-import { createTable } from "@ermine/graph/table"
+import { decode, encode, type Entry, pack, unpack } from "./pack.ts"
 
 const x = new Encoder({ useRecords: false })
-const at = <C>(content: C) => ({ content, change: { time: 1760000000000, actor: "a", node: "x" } })
+const at = (time: number) => ({ time, actor: "host" })
 
-// a tree of 1000 nodes, 10 under each, each a small value, a type and two versions of its list
-const t = createTable<unknown, unknown>()
+// a tree of 1000 ids, 10 under each: each a small value, a type attribute and its children
 const N = 1000
+const entries: Entry[] = []
 for (let i = 0; i < N; i++) {
-	const kids = Array.from({ length: 10 }, (_, k) => `n${i * 10 + k + 1}`).filter((id) =>
-		Number(id.slice(1)) < N
-	)
-	t.intro(createNode<unknown, unknown>(`n${i}`, {
-		value: [at({ title: `note ${i}`, done: i % 2 === 0, size: i * 1.5 })],
-		info: [["type", [at("public.folder")]]],
-		children: [["home", [at(kids), at(kids.slice(1))]]],
-	}, { header: { time: 1760000000000 + i, actor: "host" } }))
+	const kids = Array.from({ length: 10 }, (_, k) => i * 10 + k + 1).filter((k) => k < N)
+	const id = `n${i}`, time = 1760000000 + i
+	entries.push([
+		"value",
+		id,
+		createNode({ title: `note ${i}`, done: i % 2 === 0, size: i * 1.5 }, at(time)),
+	])
+	entries.push(["attributes", id, createNode({ type: "public.folder" }, at(time))])
+	entries.push([
+		"children",
+		id,
+		createNode({ home: kids.map((k) => ["host", `n${k}`]) }, at(time)),
+	])
 }
-const graph = pack("n0", t.get)
-const one = t.get("n1")!
+const graph = pack(entries)
+const one: Node<unknown> = entries[0][2]
 const node = encode(one)
 
 // values alone
@@ -34,26 +38,15 @@ const numbers = Array.from({ length: 10_000 }, (_, i) => i * 0.25)
 const typed = new Float64Array(numbers)
 const values = { small, text, numbers, typed }
 
-Deno.bench("pack 1000 nodes", { group: "graph", baseline: true }, () => void pack("n0", t.get))
-Deno.bench("unpack 1000 nodes", { group: "graph" }, () => void unpack(graph))
+Deno.bench("pack 3000 nodes", { group: "graph", baseline: true }, () => void pack(entries))
+Deno.bench("unpack 3000 nodes", { group: "graph" }, () => void unpack(graph))
 Deno.bench("encode one node", { group: "node", baseline: true }, () => void encode(one))
 Deno.bench("decode one node", { group: "node" }, () => void decode(node))
 
-const shaped = (n: Node<unknown, unknown>) => ({
-	id: n.id,
-	value: n.value,
-	info: [...n.info],
-	children: [...n.children],
-	header: n.header,
-})
-const all = Array.from({ length: N }, (_, i) => shaped(t.get(`n${i}`)!))
-const bound = x.encode({ root: "n0", nodes: all, missing: [] })
-Deno.bench(
-	"cbor-x: 1000 nodes, encode",
-	{ group: "graph" },
-	() => void x.encode({ root: "n0", nodes: all, missing: [] }),
-)
-Deno.bench("cbor-x: 1000 nodes, decode", { group: "graph" }, () => void x.decode(bound))
+const shaped = entries.map(([part, id, n]) => [part, id, { value: n.value, change: n.change }])
+const bound = x.encode(shaped)
+Deno.bench("cbor-x: 3000 nodes, encode", { group: "graph" }, () => void x.encode(shaped))
+Deno.bench("cbor-x: 3000 nodes, decode", { group: "graph" }, () => void x.decode(bound))
 
 for (const [name, v] of Object.entries(values)) {
 	const c = cbor.encode(v as cbor.Value), b = x.encode(v)

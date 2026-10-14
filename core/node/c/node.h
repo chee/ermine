@@ -55,17 +55,27 @@ typedef struct {
 // value: NULL, none. change: the latest change's header, borrowed pieces and all:
 // the caller keeps them alive while the node refers to them. undo: the node's own, for update's
 // undo (update.h): not read or set by a caller
+// in_place: update changes the containers of the value in place (op_apply's in_place); set by
+// nd_make only
 typedef struct {
 	op_value *value;
 	ch_header change;
 	op_undo undo;
+	int in_place;
 } nd_node;
+
+// what nd_make is given besides: in_place 1, a node whose value update changes in place. Whatever
+// else holds the value then sees it change: put in nothing you do not want changed, or copy it
+// first
+typedef struct {
+	int in_place;
+} nd_options;
 
 // kept by the caller; nothing checked: checks are a layer above's. The node takes an op_ref on the
 // value (NULL: none), so the caller may op_free its own hold. header: the node's change, as given,
 // not copied (NULL: an empty one); with no time, the time now, whole seconds since 1970. NULL
-// when out of memory
-nd_node *nd_make(op_value *value, const ch_header *header);
+// when out of memory. options may be NULL
+nd_node *nd_make(op_value *value, const ch_header *header, const nd_options *options);
 // frees what the node owns: its hold on the value, its undo. Nothing given to it
 void nd_free(nd_node *n);
 

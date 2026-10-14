@@ -1,0 +1,42 @@
+{
+	"title": "the same key twice with one node: once",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		],
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		}
+	],
+	"expect": {
+		"entries": [
+			[
+				"value",
+				"a",
+				0
+			]
+		],
+		"nodes": [
+			{
+				"value": 1,
+				"change": {
+					"time": 1,
+					"actor": "a"
+				}
+			}
+		]
+	}
+}

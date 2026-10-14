@@ -1,0 +1,183 @@
+{
+	"title": "an edit of a node not there makes and adds it (a table event); an invalid patch changes nothing",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"x",
+					[
+						"a"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "node",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "node",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"a",
+						0
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "node",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 5
+				},
+				{
+					"path": [
+						"z",
+						"y"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 1
+			}
+		},
+		{
+			"op": "node",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		}
+	]
+}

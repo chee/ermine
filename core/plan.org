@@ -141,6 +141,20 @@ chee 10-13:
 - string paths, *decided* 10-13 ("i actually want to do this, yes"): strings split on "/", arrays
   for odd names, and a path`…${name}` tag whose interpolations are always one name. Built:
   core/places/typescript/path.ts (parse, address, path); empty pieces skipped, as in unix (mine)
+- ermine.ts bit by bit, *decided* 10-13: "we probably should do `ermine.ts` bit by bit, i don't want
+  a 9000 line file"; the split, "i like this split": store, link, handle, processes, records,
+  handlers, programs, guard; ermine.ts only composes them. Store: a table per source, *decided*
+  ("yes" to B)
+- `createNode(value, change, { cow: false })`, *decided* 10-13 ("yeah let's add `cow: false`"):
+  in place, still atomic; being built
+- main and notify deleted 10-13 ("delete `main` and notify"); squish's plain apply moved to
+  conformance/squish/apply.ts
+- places' reads carry a read per call (get/lookup/names/open take one; else the sink), *decided*
+  10-13 ("per-call read soundss fine though"), so a handle's walks count for its own run, never
+  another's. A run ends when f returns (an async f: at its first await); its own read after that
+  throws "stopped" and counts for no run. To revisit: whether reads after an await need anything
+  ("` even after an await,`............ this is very curious, i wonder ifit's needed")
+- a process is a node, *decided* 10-13 ("a process is a node")
 - places' stack, *decided* 10-13: several contributions at one path, often the same id; "the order
   is not the same everywhere. that needs to go a layer up. at the places layer we need to be able
   to reorder them. and they may be of many more arbitrary kinds than that (time travel). the app

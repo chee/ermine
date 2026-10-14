@@ -227,6 +227,24 @@ Deno.test("cbor: a value that holds itself has no encoding", () => {
 	assertEquals(hex(encode([shared, shared])), "8281f93c0081f93c00")
 })
 
+// a symbol anywhere: none, getting rid of them is the caller's
+const s = Symbol("s"), r = Symbol.for("ermine.places.root")
+const SYMBOLS: [string, unknown][] = [
+	["a symbol for a name", r],
+	["a symbol in a map", { a: s, b: 1 }],
+	["a symbol key", { [s]: 1, b: 2 }],
+	["a symbol in a list", [1, s]],
+	["an entry by a symbol", { a: [[r, "x"]] }],
+	["a symbol deep", { a: [{ b: [1, s] }] }],
+	["a symbol as a stand-in's kind", new Stand(s as never)],
+]
+
+for (const [name, x] of SYMBOLS) {
+	Deno.test(`cbor: ${name} has no encoding`, () => {
+		assertThrows(() => encode(x as Value), CborError)
+	})
+}
+
 // a small deterministic generator for round trips
 function rng(seed: number) {
 	return () => {

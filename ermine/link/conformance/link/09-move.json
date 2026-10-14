@@ -1,0 +1,118 @@
+{
+	"title": "a move between two folders reports both nodes",
+	"steps": [
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"stored",
+						"A"
+					]
+				],
+				"b": [
+					[
+						"stored",
+						"B"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "A",
+			"value": {
+				"x": [
+					[
+						"stored",
+						"X"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"source": "stored",
+			"id": "B",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "from",
+			"scope": "o",
+			"f": {
+				"get": [
+					"a",
+					"x"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "to",
+			"scope": "o",
+			"f": {
+				"get": [
+					"b",
+					"y"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "move",
+			"at": [
+				"stored",
+				"A"
+			],
+			"name": "x",
+			"index": 0,
+			"to": {
+				"at": [
+					"stored",
+					"B"
+				],
+				"name": "y"
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "from",
+			"expect": {
+				"runs": 2,
+				"value": []
+			}
+		},
+		{
+			"op": "state",
+			"name": "to",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"stored:X"
+				]
+			}
+		}
+	]
+}

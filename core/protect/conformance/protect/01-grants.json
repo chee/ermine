@@ -1,0 +1,291 @@
+{
+	"title": "a grant matches when every field it has matches; the rules node is read, and told",
+	"steps": [
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee",
+					"op": "read"
+				},
+				{
+					"actor": "juno",
+					"op": "edit",
+					"id": "A"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes",
+				"reads": [
+					[
+						"s",
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "B"
+			},
+			"expect": {
+				"answer": "yes",
+				"reads": [
+					[
+						"s",
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant",
+				"reads": [
+					[
+						"s",
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes",
+				"reads": [
+					[
+						"s",
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "juno"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "B"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			},
+			"who": {
+				"actor": "juno"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			},
+			"who": {
+				"actor": "nobody"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "anything at all",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": "relay"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "relay",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": {
+					"any": [
+						"thing",
+						1
+					]
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "share",
+			"target": {},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": null
+			}
+		}
+	]
+}

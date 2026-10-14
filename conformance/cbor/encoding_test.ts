@@ -52,13 +52,7 @@ const stable = (x: unknown) =>
 				: v,
 	)
 
-const node = (value: unknown) => ({
-	id: "v",
-	value: [{ content: value, change: null }],
-	info: [],
-	children: [],
-	header: {},
-})
+const node = (value: unknown) => ({ value, change: { time: 0 } })
 
 // each vector: what went wrong, or nothing
 async function run(command: string[]): Promise<[Vector, string][]> {
@@ -80,7 +74,7 @@ async function run(command: string[]): Promise<[Vector, string][]> {
 		if (!e.bytes) {
 			return wrong.push([v, `${v.from}: refused (${e.code}): ${line(v.value).slice(0, 100)}`])
 		}
-		const got = (decoded[k++].node as { value: { content: unknown }[] }).value[0].content
+		const got = (decoded[k++].node as { value: unknown }).value
 		if (stable(got) !== stable(v.back)) {
 			const was = line(v.back).slice(0, 100)
 			wrong.push([v, `${v.from}: reads back ${line(got).slice(0, 100)}, the old suite ${was}`])

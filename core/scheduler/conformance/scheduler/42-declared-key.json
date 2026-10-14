@@ -1,0 +1,50 @@
+{
+	"title": "a compute's key, given: its reader waits for it from the first pulse, and is given once, the writer's result (02-ranks, learned, has the reader run first)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
+		{ "op": "compute", "name": "c", "scope": "o", "f": { "read": "b" }, "to": "c", "expect": {} },
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": { "sum": [{ "read": "a" }, 1] },
+			"to": "b",
+			"declared": true,
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 2 },
+					{ "due": "b", "tick": 3 },
+					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "ends": "c", "run": 1, "ended": "stopped", "waits": "b" },
+					{ "starts": "b", "run": 1, "rank": 0 },
+					{ "ends": "b", "run": 1, "ended": "done", "equal": false },
+					{ "starts": "c", "run": 2, "rank": 1 },
+					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": 2 } },
+		{ "op": "write", "values": { "a": 10 }, "expect": { "tick": 6 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "b", "tick": 6 },
+					{ "starts": "b", "run": 2, "rank": 0 },
+					{ "due": "c", "tick": 7, "by": "b" },
+					{ "ends": "b", "run": 2, "ended": "done", "equal": false },
+					{ "starts": "c", "run": 3, "rank": 1 },
+					{ "ends": "c", "run": 3, "ended": "done", "equal": false }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": 11 } }
+	]
+}

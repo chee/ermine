@@ -1,220 +1,96 @@
-// Runs the scenarios and the fuzzer against a pack harness. PACK_HARNESS: the command for another
-// implementation (default: the reference). The encoding is canonical (ENCODING.tex), so bytes are
-// compared: each graph is walked, and packed to the reference's bytes, which read back as it; each
-// of its nodes encoded alone to the reference's bytes, which decode back as it.
-// A scenario: {title, root, nodes, expect: {nodes: [ids], missing}} or {expect: {code, id?}},
-// which pack gives, and walk too unless it is cannot-carry; or {title, bytes, expect: {code}},
-// unpacked, or decoded as one node with "node": true
+// Runs the scenarios (ermine/encoding/conformance/pack) against a pack harness. PACK_HARNESS: the
+// command for another implementation (default: the reference). The encoding is canonical, so bytes
+// are compared: each set of entries packs to the reference's bytes, which unpack as expected; each
+// node read back encodes alone to the reference's bytes, which decode back as it.
+// A scenario: {title, entries, nodes, expect?}: expect {bytes?, entries?, nodes?}, what unpack
+// gives (none: the entries and nodes as given), or {code, part?, id?}, pack refused; or {title,
+// bytes, node?, expect: {code} or {entries, nodes}}, read by unpack, or by decode with "node":
+// true. options: pack's and encode's ({op: false}); reading: unpack's and decode's ({loosyGoosy:
+// true}). part and id are compared only where the scenario names them
 import { assertEquals } from "@std/assert"
+import { ask } from "./ask.ts"
 
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`.split(" ")
 const subject = (Deno.env.get("PACK_HARNESS") ?? reference.join(" ")).split(" ")
+const dir = `${here}../../ermine/encoding/conformance/pack`
 
-type Version = { content: unknown; change: unknown; because?: unknown }
-type Shown = {
-	id: string
-	value: Version[]
-	info: [string, Version[]][]
-	children: [string, Version[]][]
-	header: Record<string, unknown>
-}
+type Node = { value?: unknown; change: Record<string, unknown> }
+type Shown = { entries: unknown[][]; nodes: Node[] }
 type Request = Record<string, unknown> & { op: string }
-type Answer = {
-	graph?: { root: string; nodes: Shown[]; missing: string[] }
-	node?: Shown
+type Answer = Partial<Shown> & {
+	node?: Node
 	bytes?: string
 	code?: string
+	part?: string
 	id?: string
 	error?: string
 }
-type Expect = { nodes?: string[]; missing?: string[]; code?: string; id?: string }
-type Scenario = {
+type Expect = Partial<Shown> & {
+	bytes?: string
+	node?: Node
+	code?: string
+	part?: string
+	id?: string
+}
+type Scenario = Partial<Shown> & {
 	title: string
-	root?: string
-	nodes?: Shown[]
 	bytes?: string
 	node?: boolean
-	expect: Expect
+	options?: Record<string, unknown>
+	reading?: Record<string, unknown>
+	expect?: Expect
 }
 
-async function ask(command: string[], requests: Request[]): Promise<Answer[]> {
-	if (requests.length === 0) return []
-	const child = new Deno.Command(command[0], {
-		args: command.slice(1),
-		stdin: "piped",
-		stdout: "piped",
-		// a harness that loops fails, not hangs
-		signal: AbortSignal.timeout(30_000),
-	}).spawn()
-	// answers read while requests are written: a full pipe either way never stops both
-	const output = child.output()
-	const w = child.stdin.getWriter()
-	await w.write(new TextEncoder().encode(requests.map((r) => JSON.stringify(r)).join("\n") + "\n"))
-	await w.close()
-	const { stdout } = await output
-	const answers = new TextDecoder().decode(stdout).trim().split("\n").map((l) => JSON.parse(l))
-	assertEquals(answers.length, requests.length, "an answer per request")
-	return answers
+// a refusal, with part and id where the scenario names them
+function refused(a: Answer, e: Expect) {
+	const got: Expect = { code: a.code }
+	if (e.part !== undefined) got.part = a.part
+	if (e.id !== undefined) got.id = a.id
+	return got
+}
+const want = (e: Expect) => {
+	const out: Expect = { code: e.code }
+	if (e.part !== undefined) out.part = e.part
+	if (e.id !== undefined) out.id = e.id
+	return out
 }
 
-// the graph expected: the given nodes, by id, in the order expected
-function expected(s: Scenario) {
-	const by = new Map(s.nodes!.map((n) => [n.id, n]))
-	return {
-		root: s.root!,
-		nodes: s.expect.nodes!.map((id) => by.get(id)!),
-		missing: s.expect.missing!,
-	}
-}
-const error = (e: Expect) => e.id === undefined ? { code: e.code } : { code: e.code, id: e.id }
-const failed = (a: Answer) => a.id === undefined ? { code: a.code } : { code: a.code, id: a.id }
-
-// every graph scenario, each way, in three runs
-async function check(scenarios: Scenario[], name: (i: number) => string) {
-	const graphs = scenarios.map((s, i) => ({ s, i })).filter(({ s }) => s.expect.code === undefined)
-	const given = (s: Scenario) => ({ root: s.root, nodes: s.nodes })
-	const asks = (s: Scenario) => [
-		{ op: "pack", ...given(s) },
-		...s.nodes!.map((node) => ({ op: "encode", node })),
-	]
-	const ours = await ask(
-		subject,
-		graphs.flatMap(({ s }) => [{ op: "walk", ...given(s) }, ...asks(s)]),
-	)
-	const theirs = await ask(reference, graphs.flatMap(({ s }) => asks(s)))
-	const reads: Request[] = []
-	let at = 0, from = 0
-	graphs.forEach(({ s, i }) => {
-		const walked = ours[at++]
-		assertEquals(walked.graph, expected(s), `${name(i)}: walk`)
-		const bytes = [ours[at++], ...s.nodes!.map(() => ours[at++])]
-		const want = [theirs[from++], ...s.nodes!.map(() => theirs[from++])]
-		assertEquals(bytes[0].bytes, want[0].bytes, `${name(i)}: pack, the reference's bytes`)
-		s.nodes!.forEach((n, k) =>
-			assertEquals(bytes[k + 1].bytes, want[k + 1].bytes, `${name(i)}: encode ${n.id}`)
-		)
-		reads.push({ op: "unpack", bytes: want[0].bytes })
-		for (const b of want.slice(1)) reads.push({ op: "decode", bytes: b.bytes })
-	})
-	const back = await ask(subject, reads)
-	at = 0
-	graphs.forEach(({ s, i }) => {
-		assertEquals(back[at++].graph, expected(s), `${name(i)}: unpack`)
-		for (const n of s.nodes!) assertEquals(back[at++].node, n, `${name(i)}: decode ${n.id}`)
-	})
-}
-
-for await (const f of Deno.readDir(`${here}../../ermine/encoding/conformance/pack`)) {
+for await (const f of Deno.readDir(dir)) {
 	if (!f.name.endsWith(".json")) continue
-	const s = JSON.parse(
-		await Deno.readTextFile(`${here}../../ermine/encoding/conformance/pack/${f.name}`),
-	) as Scenario
+	const s = JSON.parse(await Deno.readTextFile(`${dir}/${f.name}`)) as Scenario
 	Deno.test(`${f.name}: ${s.title}`, async () => {
 		if (s.bytes !== undefined) {
-			const [a] = await ask(subject, [{ op: s.node ? "decode" : "unpack", bytes: s.bytes }])
-			assertEquals(failed(a), error(s.expect))
-			return
-		}
-		if (s.expect.code !== undefined) {
-			const given = { root: s.root, nodes: s.nodes }
-			const [walked, packed] = await ask(subject, [{ op: "walk", ...given }, {
-				op: "pack",
-				...given,
+			const [a] = await ask(subject, [{
+				op: s.node ? "decode" : "unpack",
+				bytes: s.bytes,
+				reading: s.reading,
 			}])
-			assertEquals(failed(packed), error(s.expect), "pack")
-			if (s.expect.code === "cannot-carry") assertEquals(walked.error, undefined, "walk")
-			else assertEquals(failed(walked), error(s.expect), "walk")
+			if (s.expect?.code !== undefined) return assertEquals(refused(a, s.expect), want(s.expect))
+			if (s.node) return assertEquals(a.node, s.expect!.node)
+			assertEquals({ entries: a.entries, nodes: a.nodes }, {
+				entries: s.expect!.entries,
+				nodes: s.expect!.nodes,
+			})
 			return
 		}
-		await check([s], () => f.name)
+		const given = { op: "pack", entries: s.entries, nodes: s.nodes, options: s.options }
+		const [ours] = await ask(subject, [given])
+		if (s.expect?.code !== undefined) return assertEquals(refused(ours, s.expect), want(s.expect))
+		const [theirs] = await ask(reference, [given])
+		assertEquals(ours.bytes, theirs.bytes, "pack: the reference's bytes")
+		if (s.expect?.bytes !== undefined) assertEquals(ours.bytes, s.expect.bytes, "pack: the bytes")
+		const expected: Shown = {
+			entries: s.expect?.entries ?? s.entries!,
+			nodes: s.expect?.nodes ?? s.nodes!,
+		}
+		const [back] = await ask(subject, [{ op: "unpack", bytes: theirs.bytes, reading: s.reading }])
+		assertEquals({ entries: back.entries, nodes: back.nodes }, expected, "unpack")
+		// each node alone: the reference's bytes, read back as it
+		const asks = expected.nodes.map((node) => ({ op: "encode", node, options: s.options }))
+		const [one, two] = await Promise.all([ask(subject, asks), ask(reference, asks)])
+		assertEquals(one, two, "encode: the reference's bytes")
+		const nodes = await ask(subject, two.map((a) => ({ op: "decode", bytes: a.bytes })))
+		assertEquals(nodes.map((a) => a.node), expected.nodes, "decode")
 	})
 }
-
-// a few dozen seeds (memory: fuzz runs small)
-const SEEDS = 40
-const NAMES = ["a", "b", "c", "d"]
-
-function rand(seed: number) {
-	let x = seed * 2654435761 >>> 0 || 1
-	return (n: number) => {
-		x ^= x << 13
-		x ^= x >>> 17
-		x ^= x << 5
-		return (x >>> 0) % n
-	}
-}
-
-// PACK.tex's walk read plainly: the root, then each id in each version of each list, once
-function model(root: string, nodes: Shown[]): Expect {
-	const by = new Map(nodes.map((n) => [n.id, n]))
-	const order = [root], missing: string[] = [], seen = new Set([root])
-	for (let i = 0; i < order.length; i++) {
-		for (const [, vs] of by.get(order[i])!.children) {
-			for (const v of vs) {
-				for (const id of v.content as unknown[]) {
-					if (typeof id !== "string" || seen.has(id)) continue
-					seen.add(id)
-					if (by.has(id)) order.push(id)
-					else missing.push(id)
-				}
-			}
-		}
-	}
-	return { nodes: order, missing }
-}
-
-Deno.test(`fuzz: ${SEEDS} seeds, every way`, async () => {
-	const scenarios: Scenario[] = []
-	for (let seed = 1; seed <= SEEDS; seed++) {
-		const pick = rand(seed)
-		const ids = Array.from({ length: 1 + pick(7) }, (_, i) => `n${i}`)
-		const anyId = () => pick(5) ? ids[pick(ids.length)] : `gone${pick(3)}`
-		const json = (depth: number): unknown => {
-			switch (pick(depth > 1 ? 6 : 8)) {
-				case 0:
-					return null
-				case 1:
-					return pick(2) === 0
-				case 2:
-					return pick(1 << 20) - (1 << 19)
-				case 3:
-					return pick(100) + 0.5
-				case 4:
-					return ["", "x", "é", "日本", 'a"b\\c\n'][pick(5)]
-				case 5:
-					return 2 ** 40 + pick(9)
-				case 6:
-					return Array.from({ length: pick(3) }, () => json(depth + 1))
-				default:
-					return Object.fromEntries(NAMES.slice(0, pick(3)).map((k) => [k, json(depth + 1)]))
-			}
-		}
-		const version = (list: boolean): Version => {
-			const v: Version = {
-				content: list ? Array.from({ length: pick(4) }, anyId) : json(0),
-				change: { time: pick(1000), actor: NAMES[pick(4)], node: "n" },
-			}
-			if (pick(3) === 0) v.because = json(1)
-			return v
-		}
-		const versions = (list: boolean) => Array.from({ length: pick(3) }, () => version(list))
-		const named = (list: boolean) =>
-			NAMES.filter(() => pick(2)).map((name) => [name, versions(list)] as [string, Version[]])
-		const nodes = ids.map((id): Shown => {
-			const header: Record<string, unknown> = {}
-			if (pick(2)) header.time = pick(2) ? pick(1 << 30) : 1760000000000 + pick(1000)
-			if (pick(2)) header.actor = json(1)
-			if (pick(3) === 0) header.reader = NAMES[pick(4)]
-			if (pick(3) === 0) {
-				header.site = { file: "file:///a.ts", line: 1 + pick(99) }
-				if (pick(2)) (header.site as Record<string, unknown>).column = 1 + pick(80)
-				if (pick(2)) (header.site as Record<string, unknown>).function = "f"
-			}
-			if (pick(4) === 0) header.cause = json(1)
-			return { id, value: versions(false), info: named(false), children: named(true), header }
-		})
-		scenarios.push({ title: `seed ${seed}`, root: "n0", nodes, expect: model("n0", nodes) })
-	}
-	await check(scenarios, (i) => `seed ${i + 1}`)
-})

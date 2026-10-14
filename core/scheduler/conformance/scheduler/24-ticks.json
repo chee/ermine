@@ -1,11 +1,11 @@
 {
 	"title": "the tick: each change and each new computation takes the next; due once, at the first",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "tick", "expect": { "tick": 0 } },
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
 		{ "op": "changed", "keys": ["nobody"], "expect": { "tick": 2 } },
-		{ "op": "compute", "name": "c", "owner": "o", "f": { "read": "a" }, "to": "c" },
+		{ "op": "compute", "name": "c", "scope": "o", "f": { "read": "a" }, "to": "c" },
 		{ "op": "changed", "keys": ["a"], "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "changed", "keys": ["a"], "expect": { "tick": 6 } },

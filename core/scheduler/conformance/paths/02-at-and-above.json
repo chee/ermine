@@ -11,21 +11,21 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["doc", "body"], "range": [3, 3], "value": "x" }],
-			"expect": [[], ["doc"], ["doc", "body"]]
+			"expect": { "spots": [[], ["doc"], ["doc", "body"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["doc", "title", "deeper"], "value": 1 }],
-			"expect": [[], ["doc"], ["doc", "title"]]
+			"expect": { "spots": [[], ["doc"], ["doc", "title"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["missing", "x"], "value": 1 }],
-			"expect": [[]]
+			"expect": { "spots": [[]] }
 		}
 	]
 }

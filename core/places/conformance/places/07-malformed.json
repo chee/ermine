@@ -126,7 +126,8 @@
 					{
 						"source": "s",
 						"id": "R",
-						"path": []
+						"path": [],
+						"keys": true
 					}
 				]
 			}
@@ -295,7 +296,8 @@
 					{
 						"source": "s",
 						"id": "R",
-						"path": []
+						"path": [],
+						"keys": true
 					}
 				]
 			}

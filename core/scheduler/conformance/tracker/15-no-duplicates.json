@@ -1,5 +1,5 @@
 {
-	"title": "a spot read again in a run is never linked twice, whoever read it between",
+	"title": "a spot read again in a run is linked again where the checks miss (not the last read, not next in order, not the spot's newest reader)",
 	"steps": [
 		{ "op": "begin", "from": "p" },
 		{ "op": "track", "from": "p", "to": "a" },
@@ -16,10 +16,10 @@
 		{ "op": "end", "from": "r" },
 		{ "op": "end", "from": "q" },
 		{ "op": "end", "from": "p" },
-		{ "op": "reads", "of": "p", "expect": ["a", "b"] },
-		{ "op": "reads", "of": "q", "expect": ["a", "b"] },
-		{ "op": "reads", "of": "r", "expect": ["a"] },
-		{ "op": "readers", "of": "a", "expect": ["p", "q", "r"] },
-		{ "op": "readers", "of": "b", "expect": ["p", "q"] }
+		{ "op": "reads", "of": "p", "expect": { "names": ["a", "b", "a", "b"] } },
+		{ "op": "reads", "of": "q", "expect": { "names": ["a", "b", "a"] } },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["p", "q", "r", "p", "q"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["p", "q", "p"] } }
 	]
 }

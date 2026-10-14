@@ -1,0 +1,31 @@
+{
+	"title": "a symbol in a change: cannot-carry",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 1,
+				"metadata": [
+					[
+						"why",
+						{
+							"/": {
+								"symbol": "s"
+							}
+						}
+					]
+				]
+			}
+		}
+	],
+	"expect": {
+		"code": "cannot-carry"
+	}
+}

@@ -239,8 +239,9 @@ static const pl_item *begin_ref(pl *p, const pl_at *from) {
 	return item_new(from->source, from->id, NULL, NULL, 0);
 }
 
-static void tell(pl *p, const pl_item *at, const char *name) {
-	if (p->s.read != NULL) p->s.read(p->s.ctx, at->source, at->id, name);
+static void tell(pl *p, const pl_sink *to, const pl_item *at, const char *name, int keys) {
+	if (to != NULL) to->read(to->ctx, at->source, at->id, name, keys);
+	else if (p->s.read != NULL) p->s.read(p->s.ctx, at->source, at->id, name, keys);
 }
 
 // what a step read: the item, and the value found there (held; NULL: none)
@@ -262,11 +263,12 @@ static void seens_free(seens *s) {
 }
 
 // one name down from each item: every entry under the name in its children, in order
-static void step(pl *p, pl_item *const *items, size_t n, const char *name, vec *out, seens *sn) {
+static void step(pl *p, pl_item *const *items, size_t n, const char *name, const pl_sink *to, vec *out,
+		seens *sn) {
 	for (size_t k = 0; k < n; k++) {
 		pl_item *up = items[k];
 		nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
-		tell(p, up, name);
+		tell(p, to, up, name, 0);
 		if (sn != NULL) {
 			if (sn->n == sn->cap) {
 				sn->cap = sn->cap ? sn->cap * 2 : 4;
@@ -283,7 +285,7 @@ static void step(pl *p, pl_item *const *items, size_t n, const char *name, vec *
 }
 
 static int bad(const char *name) {
-	return strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, "/") == 0;
+	return name[0] == '\0' || strcmp(name, ".") == 0 || strcmp(name, "..") == 0 || strcmp(name, "/") == 0;
 }
 static int names_only(const char *const *address, size_t n) {
 	for (size_t i = 0; i < n; i++) if (bad(address[i])) return 0;
@@ -331,7 +333,7 @@ static int plan(pl *p, const char *const *address, size_t n, const pl_at *from, 
 
 // what is at the address, front first, as a vec the caller frees. Two lists swapped: the items a
 // step reads from, and what it finds
-static vec get(pl *p, const char *const *address, size_t n, const pl_at *from) {
+static vec get(pl *p, const char *const *address, size_t n, const pl_at *from, const pl_sink *to) {
 	vec items = {0}, next = {0};
 	const pl_item *at;
 	const char *const *names;
@@ -339,7 +341,7 @@ static vec get(pl *p, const char *const *address, size_t n, const pl_at *from) {
 	if (!plan(p, address, n, from, &at, &names, &nn)) return items;
 	push(&items, (pl_item *)at);
 	for (size_t i = 0; i < nn && items.n; i++) {
-		step(p, items.v, items.n, names[i], &next, NULL);
+		step(p, items.v, items.n, names[i], to, &next, NULL);
 		clear(&items);
 		vec was = items;
 		items = next;
@@ -350,17 +352,18 @@ static vec get(pl *p, const char *const *address, size_t n, const pl_at *from) {
 	return items;
 }
 
-pl_list *pl_get(pl *p, const char *const *address, size_t n, const pl_at *from) {
-	vec out = get(p, address, n, from);
+pl_list *pl_get(pl *p, const char *const *address, size_t n, const pl_at *from, const pl_sink *read) {
+	vec out = get(p, address, n, from, read);
 	return list_make(p, &out);
 }
 
-pl_list *pl_lookup(pl *p, const char *const *address, size_t n, const pl_at *from, int all) {
+pl_list *pl_lookup(pl *p, const char *const *address, size_t n, const pl_at *from, int all,
+	const pl_sink *read) {
 	vec out = {0};
 	const pl_item *at = begin_ref(p, from);
 	while (at != NULL) {
 		pl_at here = pl_at_item(at);
-		vec found = get(p, address, n, &here);
+		vec found = get(p, address, n, &here, read);
 		for (size_t i = 0; i < found.n; i++) push(&out, found.v[i]);
 		free(found.v);
 		if (found.n && !all) {
@@ -402,10 +405,10 @@ static char *name_in(pl_strings *out, char *at, const char *name) {
 	return at + strlen(name) + 1;
 }
 
-pl_strings pl_names(pl *p, pl_at at) {
+pl_strings pl_names(pl *p, pl_at at, const pl_sink *read) {
 	const pl_item *item = begin_ref(p, &at);
 	nd_node *node = p->s.children(p->s.ctx, item->source, item->id);
-	tell(p, item, NULL);
+	tell(p, read, item, NULL, 1);
 	pl_strings out = {0};
 	const op_value *m = map_of(node);
 	if (m != NULL) {
@@ -432,6 +435,63 @@ pl_strings pl_names(pl *p, pl_at at) {
 }
 void pl_strings_free(pl_strings s) { free(s.names); }
 
+// --- members ---
+
+// the indices of the list values in a map, in an object's name order: whole numbers first,
+// ascending, then the rest as made. *n of them; the caller frees
+typedef struct {
+	unsigned long num;
+	size_t at;
+} numbered;
+static int by_num(const void *a, const void *b) {
+	unsigned long x = ((const numbered *)a)->num, y = ((const numbered *)b)->num;
+	return x < y ? -1 : x > y;
+}
+static size_t *name_order(const op_value *m, size_t *n) {
+	size_t *out = xalloc((m->count ? m->count : 1) * sizeof *out);
+	numbered *nums = xalloc((m->count ? m->count : 1) * sizeof *nums);
+	size_t k = 0, c = 0;
+	for (size_t i = 0; i < m->count; i++) {
+		unsigned long x;
+		if (m->items[i]->type == OP_LIST && index_key(m->keys[i], &x)) nums[c++] = (numbered){x, i};
+	}
+	qsort(nums, c, sizeof *nums, by_num);
+	for (size_t i = 0; i < c; i++) out[k++] = nums[i].at;
+	free(nums);
+	for (size_t i = 0; i < m->count; i++) {
+		unsigned long x;
+		if (m->items[i]->type == OP_LIST && !index_key(m->keys[i], &x)) out[k++] = i;
+	}
+	*n = k;
+	return out;
+}
+
+// the entries of a list under name in up's children, as items, in order
+static void entries(pl *p, pl_item *up, const char *name, const op_value *list, vec *out) {
+	for (size_t i = 0; i < list->count; i++) {
+		tb_key source, id;
+		if (entry(p, list->items[i], &source, &id)) push(out, item_new(source, id, up, name, i));
+	}
+}
+
+pl_list *pl_members_at(pl *p, pl_at at, const pl_sink *read) {
+	pl_item *up = (pl_item *)begin_ref(p, &at);
+	nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
+	tell(p, read, up, NULL, 1);
+	vec out = {0};
+	const op_value *m = map_of(node);
+	if (m != NULL) {
+		size_t n, *order = name_order(m, &n);
+		for (size_t k = 0; k < n; k++) {
+			tell(p, read, up, m->keys[order[k]], 0);
+			entries(p, up, m->keys[order[k]], m->items[order[k]], &out);
+		}
+		free(order);
+	}
+	pl_item_free(up);
+	return list_make(p, &out);
+}
+
 // --- opened places ---
 
 typedef struct {
@@ -442,10 +502,26 @@ typedef struct {
 } held_step;
 
 // the path: a trie entry per name, which holds the name (kept while this is open)
+// what an opened place keeps of one item's members: per name, the list walked and the items it gave
+typedef struct {
+	char *name;
+	op_value *list; // held; NULL: given away
+	vec items;
+} kept_name;
+typedef struct {
+	pl_item *up; // held
+	kept_name *names;
+	size_t n, cap;
+} kept_level;
+
 struct pl_held {
 	pl *p;
+	kept_level *levels;
+	size_t nlevels;
+	pl_list *members; // the last result, ours
 	int valid;
 	int dropped;
+	const pl_sink *opened; // the open's sink, or NULL
 	tr_entry **path;
 	size_t n;
 };
@@ -458,9 +534,10 @@ static void step_free(held_step *s) {
 	free(s);
 }
 
-pl_held *pl_open(pl *p, const char *const *address, size_t n) {
+pl_held *pl_open(pl *p, const char *const *address, size_t n, const pl_sink *read) {
 	pl_held *h = xalloc(sizeof *h);
 	h->p = p;
+	h->opened = read;
 	const pl_item *at;
 	const char *const *names;
 	size_t nn;
@@ -495,18 +572,21 @@ static int alike(const vec *a, const pl_list *b) {
 	return 1;
 }
 
-// a step still good: every children node it read has the value it had
+// a step still good: every children node it read has the value it had. A node changed in place
+// keeps its value: its step is never good
 static int good(pl *p, const held_step *s) {
 	for (size_t i = 0; i < s->seen.n; i++) {
 		const seen *x = &s->seen.v[i];
 		nd_node *node = p->s.children(p->s.ctx, x->up->source, x->up->id);
+		if (node != NULL && node->in_place) return 0;
 		if ((node != NULL ? node->value : NULL) != x->value) return 0;
 	}
 	return 1;
 }
 
-const pl_list *pl_items(pl_held *h) {
+const pl_list *pl_items(pl_held *h, const pl_sink *read) {
 	pl *p = h->p;
+	if (read == NULL) read = h->opened;
 	if (h->dropped || !h->valid) return &none;
 	const pl_list *before = p->starts;
 	for (size_t i = 0; i < h->n; i++) {
@@ -516,22 +596,101 @@ const pl_list *pl_items(pl_held *h) {
 			s->from = before->serial;
 			seens_free(&s->seen);
 			vec walked = {0};
-			if (before->n) step(p, before->items, before->n, name, &walked, &s->seen);
+			if (before->n) step(p, before->items, before->n, name, read, &walked, &s->seen);
 			if (!alike(&walked, s->items)) {
 				pl_list_free(s->items);
 				s->items = list_make(p, &walked);
 			} else vec_free(&walked);
 		} else {
-			for (size_t k = 0; k < s->seen.n; k++) tell(p, s->seen.v[k].up, name);
+			for (size_t k = 0; k < s->seen.n; k++) tell(p, read, s->seen.v[k].up, name, 0);
 		}
 		before = s->items;
 	}
 	return before;
 }
 
+static void level_free(kept_level *l) {
+	for (size_t i = 0; i < l->n; i++) {
+		free(l->names[i].name);
+		op_free(l->names[i].list);
+		vec_free(&l->names[i].items);
+	}
+	free(l->names);
+	pl_item_free(l->up);
+}
+static void levels_free(pl_held *h) {
+	for (size_t i = 0; i < h->nlevels; i++) level_free(&h->levels[i]);
+	free(h->levels);
+	h->levels = NULL;
+	h->nlevels = 0;
+	pl_list_free(h->members);
+	h->members = NULL;
+}
+
+const pl_list *pl_members(pl_held *h, const pl_sink *read) {
+	pl *p = h->p;
+	if (read == NULL) read = h->opened;
+	if (h->dropped || !h->valid) return &none;
+	const pl_list *its = pl_items(h, read);
+	kept_level *next = xalloc((its->n ? its->n : 1) * sizeof *next);
+	vec out = {0};
+	// the old levels are looked up from a cursor: the items come in the same order mostly
+	size_t from = 0;
+	for (size_t k = 0; k < its->n; k++) {
+		pl_item *up = its->items[k];
+		nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
+		tell(p, read, up, NULL, 1);
+		kept_level *was = NULL;
+		for (size_t j = 0; j < h->nlevels && was == NULL; j++) {
+			kept_level *c = &h->levels[(from + j) % h->nlevels];
+			if (c->up == up) was = c, from = (from + j + 1) % h->nlevels;
+		}
+		kept_level *l = &next[k];
+		l->up = pl_item_ref(up);
+		const op_value *m = map_of(node);
+		if (m == NULL) continue;
+		size_t n, *order = name_order(m, &n);
+		l->names = xalloc((n ? n : 1) * sizeof *l->names);
+		size_t at = 0;
+		for (size_t q = 0; q < n; q++) {
+			const char *name = m->keys[order[q]];
+			const op_value *list = m->items[order[q]];
+			tell(p, read, up, name, 0);
+			kept_name *e = &l->names[l->n++];
+			kept_name *old = NULL;
+			for (size_t j = 0; was != NULL && j < was->n && old == NULL; j++) {
+				kept_name *c = &was->names[(at + j) % was->n];
+				if (c->list != NULL && strcmp(c->name, name) == 0) old = c, at = (at + j + 1) % was->n;
+			}
+			if (old != NULL && old->list == list && !(node != NULL && node->in_place)) {
+				*e = *old;
+				old->list = NULL;
+				old->name = NULL;
+				old->items = (vec){0};
+			} else {
+				*e = (kept_name){.name = xdup(name), .list = op_ref((op_value *)list)};
+				entries(p, up, name, list, &e->items);
+			}
+			for (size_t i = 0; i < e->items.n; i++) push(&out, pl_item_ref(e->items.v[i]));
+		}
+		free(order);
+	}
+	// the old levels and what is left in them go; the new are kept
+	kept_level *old = h->levels;
+	size_t nold = h->nlevels;
+	h->levels = next;
+	h->nlevels = its->n;
+	for (size_t i = 0; i < nold; i++) level_free(&old[i]);
+	free(old);
+	pl_list_free(h->members);
+	h->members = list_make(p, &out);
+	return h->members;
+}
+
 void pl_drop(pl_held *h) {
 	if (h->dropped) return;
 	h->dropped = 1;
+	levels_free(h);
 	if (!h->valid) return;
 	for (size_t i = 0; i < h->n; i++) {
 		held_step *s = h->path[i]->value;
@@ -597,7 +756,7 @@ static const char kept_part;
 static int write(pl *p, tb_key source, tb_key id, nd_node *n, blk *b, op_patch *ps, size_t nps,
 	ch_header header, pl_changed *changed) {
 	size_t failed;
-	if (nd_update(n, ps, nps, header, NULL, &failed) != OP_OK) {
+	if (nd_update(n, ps, nps, header, &failed) != OP_OK) {
 		blk_free(p, b);
 		return PL_OP;
 	}

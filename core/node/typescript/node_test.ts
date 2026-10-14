@@ -41,3 +41,9 @@ Deno.test("createNode: the value given is the node's, not copied", () => {
 	const v = { a: [1] }
 	assertStrictEquals(createNode(v).value, v)
 })
+
+Deno.test("createNode: cow: false is remembered, and only that", () => {
+	assertEquals(createNode(1, undefined, { cow: false }).cow, false)
+	assertEquals("cow" in createNode(1), false)
+	assertEquals("cow" in createNode(1, undefined, {}), false)
+})

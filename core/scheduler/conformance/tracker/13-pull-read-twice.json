@@ -14,9 +14,9 @@
 		{ "op": "end", "from": "q" },
 		{ "op": "track", "from": "p", "to": "q" },
 		{ "op": "end", "from": "p" },
-		{ "op": "reads", "of": "p", "expect": ["q"] },
-		{ "op": "reads", "of": "q", "expect": ["a"] },
-		{ "op": "readers", "of": "q", "expect": ["p"] },
-		{ "op": "readers", "of": "a", "expect": ["q"] }
+		{ "op": "reads", "of": "p", "expect": { "names": ["q"] } },
+		{ "op": "reads", "of": "q", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "q", "expect": { "names": ["p"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["q"] } }
 	]
 }

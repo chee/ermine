@@ -1,8 +1,8 @@
 // addresses as strings: "/notes/today" is ["/", "notes", "today"]. a string is split at each "/";
-// a leading "/" is the root; empty pieces are skipped, as in unix ("a//b" is a, b). a name that
-// holds a "/", or is "", needs the array form, or the tag: in path`/notes/${title}`, whatever is
-// put in is always one name, never split
-import type { Address } from "./places.ts"
+// a leading "/" is the root; empty pieces are skipped, as in unix ("a//b" is a, b): no name is "".
+// a name that holds a "/" needs the array form, or the tag: in path`/notes/${title}`, whatever is
+// put in is always one name, never split, and "" is refused
+import { type Address, PlacesError } from "./places.ts"
 
 // a string's steps
 export function parse(s: string): string[] {
@@ -22,7 +22,11 @@ export function path(strings: TemplateStringsArray, ...names: unknown[]): string
 		// a "/" leading a literal part that follows a name only separates
 		if (i > 0 && steps[0] === "/") steps.shift()
 		out.push(...steps)
-		if (i < names.length) out.push(String(names[i]))
+		if (i < names.length) {
+			const name = String(names[i])
+			if (name === "") throw new PlacesError("not-a-name", name)
+			out.push(name)
+		}
 	}
 	return out
 }

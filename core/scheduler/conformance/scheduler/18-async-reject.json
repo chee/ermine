@@ -1,8 +1,8 @@
 {
 	"title": "a promise rejected: the run failed, the error told",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
-		{ "op": "compute", "name": "c", "owner": "o", "f": { "wait": ["p"] }, "to": "c" },
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": ["p"] }, "to": "c" },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "reject", "promise": "p", "error": "nope", "expect": {} },
 		{ "op": "pulse", "expect": {} },

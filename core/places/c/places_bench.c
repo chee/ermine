@@ -59,11 +59,12 @@ static nd_node *children(void *ctx, tb_key source, tb_key id) {
 	holes++;
 	return tb_get(world, source, id);
 }
-static void told(void *ctx, tb_key source, tb_key id, const char *name) {
+static void told(void *ctx, tb_key source, tb_key id, const char *name, int keys) {
 	(void)ctx;
 	(void)source;
 	(void)id;
 	(void)name;
+	(void)keys;
 	reads++;
 }
 
@@ -77,7 +78,7 @@ static op_value *entry(const char *id) {
 static void kids(const char *id, op_value *value) {
 	nd_node *old = tb_get(world, S, tb_string(id));
 	if (old != NULL) nd_free(old);
-	nd_node *n = nd_make(value, &h);
+	nd_node *n = nd_make(value, &h, NULL);
 	op_free(value);
 	tb_sub(world, S, tb_string(id), n);
 }
@@ -171,44 +172,44 @@ static void got(pl_list *l) {
 	sink += l->n;
 	pl_list_free(l);
 }
-static void get_shallow(void) { got(pl_get(quiet, a, 1, NULL)); }
-static void get_shallow_read(void) { got(pl_get(telling, a, 1, NULL)); }
-static void get_deep(void) { got(pl_get(quiet, deep, DEPTH, NULL)); }
-static void get_deep_read(void) { got(pl_get(telling, deep, DEPTH, NULL)); }
+static void get_shallow(void) { got(pl_get(quiet, a, 1, NULL, NULL)); }
+static void get_shallow_read(void) { got(pl_get(telling, a, 1, NULL, NULL)); }
+static void get_deep(void) { got(pl_get(quiet, deep, DEPTH, NULL, NULL)); }
+static void get_deep_read(void) { got(pl_get(telling, deep, DEPTH, NULL, NULL)); }
 static void get_deep_from_item(void) {
 	pl_at at = pl_at_item(deep_item);
-	got(pl_get(quiet, up_leaf, 2, &at));
+	got(pl_get(quiet, up_leaf, 2, &at, NULL));
 }
-static void get_dots(void) { got(pl_get(quiet, dots, 5, NULL)); }
-static void get_wide_name(void) { got(pl_get(quiet, wide_name, 2, NULL)); }
-static void get_fan(void) { got(pl_get(quiet, fan, 5, NULL)); }
-static void get_missing(void) { got(pl_get(quiet, nope, 1, NULL)); }
+static void get_dots(void) { got(pl_get(quiet, dots, 5, NULL, NULL)); }
+static void get_wide_name(void) { got(pl_get(quiet, wide_name, 2, NULL, NULL)); }
+static void get_fan(void) { got(pl_get(quiet, fan, 5, NULL, NULL)); }
+static void get_missing(void) { got(pl_get(quiet, nope, 1, NULL, NULL)); }
 static void lookup_missing(void) {
 	pl_at at = pl_at_item(deep_item);
-	got(pl_lookup(quiet, nope, 1, &at, 0));
+	got(pl_lookup(quiet, nope, 1, &at, 0, NULL));
 }
 static void lookup_at_root(void) {
 	pl_at at = pl_at_item(deep_item);
-	got(pl_lookup(quiet, a, 1, &at, 0));
+	got(pl_lookup(quiet, a, 1, &at, 0, NULL));
 }
 static void lookup_all(void) {
 	pl_at at = pl_at_item(deep_item);
-	got(pl_lookup(quiet, leaf, 1, &at, 1));
+	got(pl_lookup(quiet, leaf, 1, &at, 1, NULL));
 }
 static void names_wide(void) {
-	pl_strings s = pl_names(quiet, W);
+	pl_strings s = pl_names(quiet, W, NULL);
 	sink += s.n;
 	pl_strings_free(s);
 }
 static void open_drop_deep(void) {
-	pl_held *o = pl_open(quiet, deep, DEPTH);
-	sink += pl_items(o)->n;
+	pl_held *o = pl_open(quiet, deep, DEPTH, NULL);
+	sink += pl_items(o, NULL)->n;
 	pl_close(o);
 }
-static void items_same(void) { sink += pl_items(one_quiet)->n; }
-static void items_same_read(void) { sink += pl_items(one_told)->n; }
+static void items_same(void) { sink += pl_items(one_quiet, NULL)->n; }
+static void items_same_read(void) { sink += pl_items(one_told, NULL)->n; }
 static void all(void) {
-	for (size_t i = 0; i < MANY; i++) sink += pl_items(many[i])->n;
+	for (size_t i = 0; i < MANY; i++) sink += pl_items(many[i], NULL)->n;
 }
 static void unrelated_change(void) {
 	pl_place(telling, R, "other", S, o, h, PL_END, NULL, NULL);
@@ -285,16 +286,16 @@ int main(void) {
 	quiet = pl_new(&s);
 	s.read = told;
 	telling = pl_new(&s);
-	pl_list *d = pl_get(quiet, deep, DEPTH, NULL);
+	pl_list *d = pl_get(quiet, deep, DEPTH, NULL, NULL);
 	deep_item = pl_item_ref(d->items[0]);
 	pl_list_free(d);
 	// opened places sharing a beginning: wide-0 .. wide-999 under wide, from the places told of reads
 	for (size_t i = 0; i < MANY; i++) {
 		const char *address[2] = {"wide", wide[i]};
-		many[i] = pl_open(telling, address, 2);
+		many[i] = pl_open(telling, address, 2, NULL);
 	}
-	one_quiet = pl_open(quiet, deep, DEPTH);
-	one_told = pl_open(telling, deep, DEPTH);
+	one_quiet = pl_open(quiet, deep, DEPTH, NULL);
+	one_told = pl_open(telling, deep, DEPTH, NULL);
 
 	static double times[CASES][ROUNDS];
 	static double counts[CASES][4]; // allocs, frees, holes, reads per rep, from the last round

@@ -1,646 +1,756 @@
+// Nodes under keys (pack.h), in C. A node is built as a Json tree, and
+// written by cbor.c: the one canonical encoding, so the bytes are pack.ts's. Reading is the
+// reverse: cbor.c's tree is checked as pack.ts checks it, then made into nodes.
 #include "pack.h"
 
 #include "cbor.h"
-#include "json.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// room for need items of size in *p, *capacity long
-static int grow(void *p, size_t *capacity, size_t need, size_t size) {
-	if (need <= *capacity) return 1;
-	size_t c = *capacity ? *capacity * 2 : 16;
-	while (c < need) c *= 2;
-	void *q = realloc(*(void **)p, c * size);
-	if (q == NULL) return 0;
-	*(void **)p = q;
-	*capacity = c;
-	return 1;
-}
+_Static_assert(sizeof(long) == sizeof(int64_t), "a long holds a time");
+_Static_assert((int)JSON_FLOAT64 == (int)OP_FLOAT64 && (int)JSON_INT8 == (int)OP_INT8 &&
+		(int)JSON_UINT32 == (int)OP_UINT32,
+	"typed arrays' kinds are in one order");
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+#error "a typed array is copied between json.h and value.h as it is: little-endian machines only"
+#endif
 
-// --- the walk ---
-
-// ids seen: open addressing, kept at most half full
-typedef struct {
-	const char **slots;
-	size_t capacity, count;
-} seen;
-
-static uint64_t hash(const char *s) {
-	uint64_t h = 14695981039346656037u;
-	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211u;
-	return h;
-}
-
-// 1: added; 0: there already; -1: out of memory
-static int see(seen *s, const char *id) {
-	if (2 * (s->count + 1) > s->capacity) {
-		size_t c = s->capacity ? s->capacity * 2 : 64;
-		const char **slots = calloc(c, sizeof *slots);
-		if (slots == NULL) return -1;
-		for (size_t i = 0; i < s->capacity; i++) {
-			if (s->slots[i] == NULL) continue;
-			size_t j = hash(s->slots[i]) & (c - 1);
-			while (slots[j]) j = (j + 1) & (c - 1);
-			slots[j] = s->slots[i];
-		}
-		free(s->slots);
-		s->slots = slots;
-		s->capacity = c;
+static void *xrealloc(void *p, size_t n) {
+	void *q = realloc(p, n);
+	if (q == NULL && n != 0) {
+		fputs("pack: out of memory\n", stderr);
+		abort();
 	}
-	size_t j = hash(id) & (s->capacity - 1);
-	for (; s->slots[j]; j = (j + 1) & (s->capacity - 1))
-		if (strcmp(s->slots[j], id) == 0) return 0;
-	s->slots[j] = id;
-	s->count++;
-	return 1;
+	return q;
 }
+// room for one more at index count
+#define GROW(p, count, capacity) \
+	do { \
+		if ((count) == (capacity)) { \
+			(capacity) = (capacity) ? (capacity) * 2 : 8; \
+			(p) = xrealloc((p), (capacity) * sizeof *(p)); \
+		} \
+	} while (0)
 
-pk_code pk_walk(const char *root, pk_get get, void *context, pk_graph *out) {
-	*out = (pk_graph){0};
-	const nd_node *first = get(context, root);
-	if (first == NULL) return PK_NOTHING_THERE;
-	size_t capacity = 0, missing_capacity = 0;
-	seen s = {0};
-	out->root = root;
-	if (!grow(&out->nodes, &capacity, 1, sizeof *out->nodes) || see(&s, root) < 0) goto oom;
-	out->nodes[out->length++] = first;
-	for (size_t i = 0; i < out->length; i++) {
-		const nd_node *n = out->nodes[i];
-		for (size_t c = 0; c < n->children_length; c++) {
-			nd_object o = n->children[c].object;
-			for (size_t v = 0; v < o.length; v++) {
-				const nd_list *l = o.versions[v].content;
-				for (size_t k = 0; l && k < l->length; k++) {
-					const char *id = l->items[k].id;
-					if (id == NULL) continue;
-					int added = see(&s, id);
-					if (added < 0) goto oom;
-					if (!added) continue;
-					const nd_node *m = get(context, id);
-					if (m != NULL) {
-						if (!grow(&out->nodes, &capacity, out->length + 1, sizeof *out->nodes))
-							goto oom;
-						out->nodes[out->length++] = m;
-					} else {
-						if (!grow(&out->missing, &missing_capacity, out->missing_length + 1,
-							    sizeof *out->missing))
-							goto oom;
-						out->missing[out->missing_length++] = id;
-					}
-				}
-			}
-		}
+const char *pk_code_name(pk_code code) {
+	switch (code) {
+	case PK_NOT_A_PACK: return "not-a-pack";
+	case PK_NOT_A_NODE: return "not-a-node";
+	case PK_CANNOT_CARRY: return "cannot-carry";
+	case PK_ALREADY_THERE: return "already-there";
+	case PK_OK: break;
 	}
-	free(s.slots);
-	return PK_OK;
-oom:
-	free(s.slots);
-	pk_free(out);
-	return PK_NO_MEMORY;
+	return "";
 }
 
-// --- writing CBOR ---
+// --- bytes ---
 
-void pk_put(pk_bytes *b, const void *data, size_t length) {
-	if (b->failed) return;
-	if (!grow(&b->data, &b->capacity, b->length + length, 1)) {
-		b->failed = 1;
-		return;
-	}
-	memcpy(b->data + b->length, data, length);
-	b->length += length;
+static void room(pk_bytes *b, size_t more) {
+	if (b->length + more <= b->capacity) return;
+	size_t c = b->capacity ? b->capacity : 256;
+	while (c < b->length + more) c *= 2;
+	b->data = xrealloc(b->data, c);
+	b->capacity = c;
 }
 
+static void put(pk_bytes *b, const void *data, size_t n) {
+	room(b, n);
+	if (n) memcpy(b->data + b->length, data, n);
+	b->length += n;
+}
+
+// a head: the major type and its argument, in the fewest bytes
 static void head(pk_bytes *b, int major, uint64_t n) {
 	uint8_t h[9];
 	size_t size = 1;
-	int ai;
-	if (n < 24) ai = (int)n, size = 0;
-	else if (n <= 0xff) ai = 24, size = 1;
-	else if (n <= 0xffff) ai = 25, size = 2;
-	else if (n <= 0xffffffff) ai = 26, size = 4;
-	else ai = 27, size = 8;
-	h[0] = (uint8_t)(major << 5 | ai);
-	for (size_t i = 0; i < size; i++) h[1 + i] = (uint8_t)(n >> 8 * (size - 1 - i));
-	pk_put(b, h, 1 + size);
+	h[0] = (uint8_t)(major << 5);
+	if (n < 24) h[0] |= (uint8_t)n;
+	else {
+		int bytes = n < 0x100 ? 1 : n < 0x10000 ? 2 : n < 0x100000000u ? 4 : 8;
+		h[0] |= (uint8_t)(bytes == 1 ? 24 : bytes == 2 ? 25 : bytes == 4 ? 26 : 27);
+		for (int i = 0; i < bytes; i++) h[1 + i] = (uint8_t)(n >> (8 * (bytes - 1 - i)));
+		size += (size_t)bytes;
+	}
+	put(b, h, size);
 }
 
-typedef struct {
-	pk_bytes *b;
-	const pk_codec *codec;
-	int cannot;
-} writer;
-
-// U+0000 is held as C0 80, as json.h holds it, and written as the byte 00; text that is not UTF-8
-// (a lone surrogate) has no encoding
-static void str(writer *w, const char *s) {
-	pk_bytes *b = w->b;
-	size_t n = strlen(s), held = 0;
-	if (!cborText(s, n)) w->cannot = 1;
-	for (const char *q = s; (q = strstr(q, "\xC0\x80")) != NULL; q += 2) held++;
-	head(b, 3, n - held);
-	if (held == 0) {
-		pk_put(b, s, n);
+// text as cbor.c writes it: U+0000, held as C0 80, is the byte 00
+static void text(pk_bytes *b, const char *s) {
+	size_t n = strlen(s), real = n;
+	for (size_t i = 0; i + 1 < n; i++)
+		if ((unsigned char)s[i] == 0xC0 && (unsigned char)s[i + 1] == 0x80) real--, i++;
+	head(b, 3, real);
+	if (real == n) {
+		put(b, s, n);
 		return;
 	}
-	for (const char *q = s; *q; q++) {
-		if ((unsigned char)q[0] == 0xC0 && (unsigned char)q[1] == 0x80) pk_put(b, "", 1), q++;
-		else pk_put(b, q, 1);
-	}
-}
-
-// as the encoding writes numbers: the shortest float that holds it exactly, never an integer
-static void number(pk_bytes *b, int64_t v) {
-	double d = (double)v;
-	float f = (float)d;
-	if (v == 0) {
-		pk_put(b, "\xf9\x00\x00", 3);
-		return;
-	}
-	if ((double)f == d) {
-		// a half: 11 bits of mantissa, exponent -14 .. 15; or a subnormal
-		int e;
-		frexp(d, &e);
-		double a = fabs(d);
-		double scaled = e - 1 >= -14 ? ldexp(a, 10 - (e - 1)) : ldexp(a, 24);
-		if (e - 1 <= 15 && scaled == floor(scaled)) {
-			unsigned h = e - 1 >= -14 ? (unsigned)(e - 1 + 15) << 10 | ((unsigned)scaled - 1024)
-			                          : (unsigned)scaled;
-			if (d < 0) h |= 0x8000;
-			uint8_t x[3] = {0xf9, (uint8_t)(h >> 8), (uint8_t)h};
-			pk_put(b, x, 3);
-			return;
-		}
-		uint32_t bits;
-		memcpy(&bits, &f, 4);
-		uint8_t x[5] = {0xfa};
-		for (int i = 0; i < 4; i++) x[1 + i] = (uint8_t)(bits >> 8 * (3 - i));
-		pk_put(b, x, 5);
-		return;
-	}
-	uint64_t bits;
-	memcpy(&bits, &d, 8);
-	uint8_t x[9] = {0xfb};
-	for (int i = 0; i < 8; i++) x[1 + i] = (uint8_t)(bits >> 8 * (7 - i));
-	pk_put(b, x, 9);
-}
-
-static void put_value(writer *w, pk_field f, const void *v) {
-	if (!w->cannot && w->codec->encode(w->codec->context, f, v, w->b) != 0) w->cannot = 1;
-}
-
-static void put_versions(writer *w, nd_object o, int lists) {
-	head(w->b, 4, o.length);
-	for (size_t i = 0; i < o.length; i++) {
-		const nd_version *v = &o.versions[i];
-		head(w->b, 5, 1 + !!v->change + !!v->because);
-		if (v->change) str(w, "change"), put_value(w, PK_CHANGE, v->change);
-		if (v->because) str(w, "because"), put_value(w, PK_BECAUSE, v->because);
-		str(w, "content");
-		if (lists) {
-			const nd_list *l = v->content;
-			size_t n = l ? l->length : 0;
-			head(w->b, 4, n);
-			for (size_t k = 0; k < n; k++) {
-				if (l->items[k].id) str(w, l->items[k].id);
-				else w->cannot = 1;
-			}
-		} else put_value(w, PK_CONTENT, v->content);
-	}
-}
-
-static void put_entries(writer *w, const nd_entry *es, size_t n, int lists) {
-	head(w->b, 4, n);
+	room(b, real);
 	for (size_t i = 0; i < n; i++) {
-		head(w->b, 4, 2);
-		str(w, es[i].name);
-		put_versions(w, es[i].object, lists);
+		if ((unsigned char)s[i] == 0xC0 && i + 1 < n && (unsigned char)s[i + 1] == 0x80) {
+			b->data[b->length++] = 0;
+			i++;
+		} else b->data[b->length++] = (uint8_t)s[i];
 	}
 }
 
-// keys shorter first, then bytewise: site, time, actor, cause, reader, message, wallclock
-static void put_header(writer *w, const nd_header *h) {
-	head(w->b, 5,
-		!!h->has_time + !!h->actor + !!h->reader + !!h->has_site + !!h->cause + !!h->message + !!h->has_wallclock);
-	if (h->has_site) {
-		const nd_site *s = &h->site;
-		str(w, "site");
-		head(w->b, 5, 2 + !!s->has_column + !!s->function);
-		str(w, "file"), str(w, s->file);
-		str(w, "line"), number(w->b, s->line);
-		if (s->has_column) str(w, "column"), number(w->b, s->column);
-		if (s->function) str(w, "function"), str(w, s->function);
-	}
-	if (h->has_time) str(w, "time"), number(w->b, h->time);
-	if (h->actor) str(w, "actor"), put_value(w, PK_ACTOR, h->actor);
-	if (h->cause) str(w, "cause"), put_value(w, PK_CAUSE, h->cause);
-	if (h->reader) str(w, "reader"), str(w, h->reader);
-	if (h->message) str(w, "message"), str(w, h->message);
-	if (h->has_wallclock) str(w, "wallclock"), number(w->b, h->wallclock);
+// a number, as the shortest float
+static void number(pk_bytes *b, double d) {
+	Json j = {.type = JSON_NUMBER, .number = d};
+	unsigned char buf[9];
+	size_t n;
+	cborEncode(&j, buf, sizeof buf, &n, NULL);
+	put(b, buf, n);
 }
 
-// a node as written: id, info, value, header, children
-static void put_node(writer *w, const nd_node *n) {
-	head(w->b, 5, 5);
-	str(w, "id"), str(w, n->id);
-	str(w, "info"), put_entries(w, n->info, n->info_length, 0);
-	str(w, "value"), put_versions(w, n->value, 0);
-	str(w, "header"), put_header(w, &n->header);
-	str(w, "children"), put_entries(w, n->children, n->children_length, 1);
-}
-
-pk_code pk_pack(const char *root, pk_get get, void *context, const pk_codec *codec,
-	pk_bytes *out, const char **id) {
-	pk_graph g;
-	pk_code code = pk_walk(root, get, context, &g);
-	if (code != PK_OK) return code;
-	size_t start = out->length;
-	writer w = {out, codec, 0};
-	head(out, 5, 3);
-	str(&w, "root"), str(&w, root);
-	// the root's id is also its node's: that node names it
-	int bad = w.cannot;
-	w.cannot = 0;
-	str(&w, "nodes"), head(out, 4, g.length);
-	for (size_t i = 0; i < g.length && !w.cannot; i++) {
-		const nd_node *n = g.nodes[i];
-		put_node(&w, n);
-		if (w.cannot && id) *id = n->id;
-	}
-	str(&w, "missing"), head(out, 4, g.missing_length);
-	for (size_t i = 0; i < g.missing_length; i++) str(&w, g.missing[i]);
-	pk_free(&g);
-	code = w.cannot || bad ? PK_CANNOT_CARRY : out->failed ? PK_NO_MEMORY : PK_OK;
-	if (code != PK_OK && !out->failed) out->length = start;
-	return code;
-}
-
-pk_code pk_encode(const nd_node *node, const pk_codec *codec, pk_bytes *out) {
-	size_t start = out->length;
-	writer w = {out, codec, 0};
-	put_node(&w, node);
-	pk_code code = w.cannot ? PK_CANNOT_CARRY : out->failed ? PK_NO_MEMORY : PK_OK;
-	if (code != PK_OK && !out->failed) out->length = start;
-	return code;
-}
-
-// --- reading CBOR ---
-
-// everything unpack allocates but the nodes and the graph's arrays
-typedef struct {
-	void **items;
-	size_t length, capacity;
-} arena;
-
-typedef struct {
-	const uint8_t *p, *end;
-	int bad, oom;
-	arena *own;
-	const pk_codec *codec;
-} reader;
-
-static void *take(reader *r, size_t size) {
-	void *p = malloc(size ? size : 1);
-	if (p == NULL || !grow(&r->own->items, &r->own->capacity, r->own->length + 1, sizeof(void *))) {
-		free(p);
-		r->oom = 1;
-		return NULL;
-	}
-	return r->own->items[r->own->length++] = p;
-}
-
-static int failed(reader *r) {
-	return r->bad || r->oom;
-}
-
-// a head: its major type, *arg; *ai its additional information
-static int next(reader *r, uint64_t *arg, int *ai) {
-	*arg = 0;
-	if (failed(r) || r->p >= r->end) return r->bad = 1, -1;
-	uint8_t b = *r->p++;
-	*ai = b & 31;
-	if (*ai < 24) *arg = (uint64_t)*ai;
-	else if (*ai <= 27) {
-		size_t n = (size_t)1 << (*ai - 24);
-		if ((size_t)(r->end - r->p) < n) return r->bad = 1, -1;
-		for (size_t i = 0; i < n; i++) *arg = *arg << 8 | *r->p++;
-	} else return r->bad = 1, -1;
-	return b >> 5;
-}
-
-// a length of at most what is left: each item at least a byte
-static int fits(reader *r, uint64_t n) {
-	if (n > (uint64_t)(r->end - r->p)) r->bad = 1;
-	return !r->bad;
-}
-
-// one item of any kind, without reading it: no recursion, so a value may nest as deep as the
-// input is long (cbor.c's decoder is the same)
-static void skip(reader *r) {
-	uint64_t pending = 1; // items still to pass
-	while (pending && !failed(r)) {
-		uint64_t n;
-		int ai, major = next(r, &n, &ai);
-		if (failed(r)) return;
-		pending--;
-		switch (major) {
-		case 2:
-		case 3:
-			if (fits(r, n)) r->p += n;
-			break;
-		case 4:
-			if (fits(r, n)) pending += n;
-			break;
-		case 5:
-			if (fits(r, n)) pending += 2 * n;
-			break;
-		case 6: pending++; break;
-		}
-	}
-}
-
-static uint64_t expect(reader *r, int major) {
-	uint64_t n;
-	int ai;
-	if (next(r, &n, &ai) != major) r->bad = 1;
-	if (major >= 2 && major <= 5 && !failed(r)) fits(r, major == 5 ? 2 * n : n);
-	return failed(r) ? 0 : n;
-}
-
-// a key, in place
-static int key(reader *r, const uint8_t **s, size_t *n) {
-	*n = (size_t)expect(r, 3);
-	*s = r->p;
-	if (failed(r)) return 0;
-	r->p += *n;
+// a key as it sorts (the encoding of [part, id]), written to b; 0 when a string is no text
+static int key_bytes(pk_bytes *b, const char *part, const char *id) {
+	if (!cborText(part, strlen(part)) || !cborText(id, strlen(id))) return 0;
+	head(b, 4, 2);
+	text(b, part);
+	text(b, id);
 	return 1;
 }
-static int is(const uint8_t *s, size_t n, const char *name) {
-	return strlen(name) == n && memcmp(s, name, n) == 0;
+
+// --- values and Json ---
+
+// a container being made, and where it is in the one it comes from; kid: a stand-in's kind
+typedef struct {
+	const op_value *from;
+	Json *to, *kid;
+	size_t at;
+} down;
+
+static Json *leaf(const op_value *v) {
+	switch (v->type) {
+	case OP_NULL: return jsonNull();
+	case OP_BOOL: return jsonBoolean(v->bool_);
+	case OP_NUM: return jsonNumber(v->num);
+	case OP_STR: return jsonStringOfLength(v->str, v->bytes);
+	case OP_BYTES: return jsonBytes(v->data, v->bytes);
+	case OP_TYPED: return jsonTyped((JsonKind)v->kind, v->data, op_length(v));
+	default: return NULL;
+	}
 }
 
-// a text, as a C string: U+0000 held as C0 80
-static const char *text(reader *r) {
-	size_t n = (size_t)expect(r, 3);
-	if (failed(r)) return NULL;
-	size_t held = 0;
-	for (size_t i = 0; i < n; i++) held += r->p[i] == 0;
-	char *s = take(r, n + held + 1), *o = s;
-	if (s == NULL) return NULL;
+Json *pk_to_json(const op_value *root) {
+	down *stack = NULL;
+	size_t n = 0, capacity = 0;
+	Json *out = NULL;
+	const op_value *v = root;
+	for (;;) {
+		Json *j;
+		if (v != NULL) {
+			if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
+				GROW(stack, n, capacity);
+				Json *to = v->type == OP_LIST ? jsonArray() : v->type == OP_MAP ? jsonObject() : NULL;
+				stack[n++] = (down){v, to, NULL, 0};
+				v = NULL;
+				continue;
+			}
+			j = leaf(v);
+			v = NULL;
+			if (j == NULL) goto bad;
+		} else {
+			down *f = &stack[n - 1];
+			if (f->at < f->from->count) {
+				v = f->from->items[f->at++];
+				continue;
+			}
+			if (f->from->type == OP_STAND) j = f->kid != NULL ? jsonStand(f->kid) : NULL;
+			else j = f->to;
+			if (j == NULL) goto bad;
+			n--;
+		}
+		if (n == 0) {
+			out = j;
+			break;
+		}
+		down *f = &stack[n - 1];
+		if (f->from->type == OP_LIST) jsonPush(f->to, j);
+		else if (f->from->type == OP_MAP) jsonAdd(f->to, f->from->keys[f->at - 1], j);
+		else f->kid = j;
+	}
+	free(stack);
+	return out;
+bad:
+	for (size_t i = 0; i < n; i++) jsonFree(stack[i].to), jsonFree(stack[i].kid);
+	free(stack);
+	return NULL;
+}
+
+// the same, from Json
+typedef struct {
+	const Json *from;
+	op_value *to, *kid;
+	int at;
+} up;
+
+static op_value *of_leaf(const Json *j) {
+	switch (j->type) {
+	case JSON_NULL: return op_null();
+	case JSON_BOOLEAN: return op_bool(j->boolean);
+	case JSON_NUMBER: return op_num(j->number);
+	case JSON_STRING: return op_str_n(j->string, j->stringLength);
+	case JSON_BYTES: return op_bytes(j->bytes.data, j->bytes.length);
+	default: return op_typed((op_elements)j->typed.kind, j->typed.data, j->typed.count);
+	}
+}
+
+static int children(const Json *j) {
+	return j->type == JSON_ARRAY ? j->array.count : j->type == JSON_OBJECT ? j->object.count : 1;
+}
+
+op_value *pk_of_json(const Json *root) {
+	up *stack = NULL;
+	size_t n = 0, capacity = 0;
+	op_value *out = NULL;
+	const Json *j = root;
+	for (;;) {
+		op_value *v;
+		if (j != NULL) {
+			if (j->type == JSON_ARRAY || j->type == JSON_OBJECT || j->type == JSON_STAND) {
+				GROW(stack, n, capacity);
+				op_value *to = j->type == JSON_ARRAY ? op_list() : j->type == JSON_OBJECT ? op_map() : NULL;
+				stack[n++] = (up){j, to, NULL, 0};
+				j = NULL;
+				continue;
+			}
+			v = of_leaf(j);
+			j = NULL;
+		} else {
+			up *f = &stack[n - 1];
+			if (f->at < children(f->from)) {
+				int i = f->at++;
+				j = f->from->type == JSON_ARRAY ? f->from->array.items[i]
+					: f->from->type == JSON_OBJECT ? f->from->object.members[i].value
+					: f->from->stand.kind;
+				continue;
+			}
+			v = f->from->type == JSON_STAND ? op_stand(f->kid) : f->to;
+			n--;
+		}
+		if (n == 0) {
+			out = v;
+			break;
+		}
+		up *f = &stack[n - 1];
+		if (f->from->type == JSON_ARRAY) op_push(f->to, v);
+		else if (f->from->type == JSON_OBJECT) op_set(f->to, f->from->object.members[f->at - 1].key, v);
+		else f->kid = v;
+	}
+	free(stack);
+	return out;
+}
+
+// --- writing ---
+
+// whether a whole number is one pack writes: a safe integer, as whole reads it
+static int safe(long long v) { return v >= -9007199254740991LL && v <= 9007199254740991LL; }
+
+// path and range of a target, added to its object; 0 when a key is no key
+static int target(Json *to, const op_target *t) {
+	Json *path = jsonArray();
+	jsonAdd(to, "path", path);
+	for (size_t i = 0; i < t->length; i++) {
+		const op_key *k = &t->path[i];
+		if (k->type == OP_NUM_KEY && safe(k->n)) jsonPush(path, jsonNumber((double)k->n));
+		else if (k->type == OP_STR_KEY && k->s != NULL) jsonPush(path, jsonString(k->s));
+		else return 0;
+	}
+	if (t->has_range) {
+		if (!safe(t->from) || !safe(t->to)) return 0;
+		Json *range = jsonArray();
+		jsonPush(range, jsonNumber((double)t->from));
+		jsonPush(range, jsonNumber((double)t->to));
+		jsonAdd(to, "range", range);
+	}
+	return 1;
+}
+
+// a patch; NULL when it cannot be carried
+static Json *json_patch(const op_patch *p) {
+	Json *j = jsonObject();
+	if (!target(j, &p->place)) goto bad;
+	if (p->has_value) {
+		if (p->value == NULL) goto bad;
+		Json *v = pk_to_json(p->value);
+		if (v == NULL) goto bad;
+		jsonAdd(j, "value", v);
+	}
+	if (p->has_move) {
+		Json *move = jsonObject();
+		jsonAdd(j, "move", move);
+		if (!target(move, &p->move)) goto bad;
+	}
+	return j;
+bad:
+	jsonFree(j);
+	return NULL;
+}
+
+static int json_patches(Json *to, const char *name, const op_patch *ps, size_t n) {
+	Json *patches = jsonArray();
+	jsonAdd(to, name, patches);
 	for (size_t i = 0; i < n; i++) {
-		if (r->p[i] == 0) *o++ = (char)0xC0, *o++ = (char)0x80;
-		else *o++ = (char)r->p[i];
+		Json *p = json_patch(&ps[i]);
+		if (p == NULL) return 0;
+		jsonPush(patches, p);
 	}
-	*o = 0;
-	r->p += n;
-	return s;
+	return 1;
 }
 
-static double half(uint64_t h) {
-	int e = (int)(h >> 10 & 0x1f);
-	double m = (double)(h & 0x3ff);
-	double v = e == 0 ? ldexp(m, -24) : e == 31 ? (m ? NAN : INFINITY) : ldexp(m + 1024, e - 25);
-	return h & 0x8000 ? -v : v;
-}
-
-// a number: a float, whole (a time, a line, a column); integers are not numbers here
-static int64_t number_in(reader *r) {
-	uint64_t n;
-	int ai, major = next(r, &n, &ai);
-	if (failed(r)) return 0;
-	if (major == 7 && ai >= 25 && ai <= 27) {
-		double d;
-		if (ai == 25) d = half(n);
-		else if (ai == 26) {
-			float f;
-			uint32_t u = (uint32_t)n;
-			memcpy(&f, &u, 4);
-			d = f;
-		} else memcpy(&d, &n, 8);
-		if (d == floor(d) && fabs(d) < 9223372036854775807.0) return (int64_t)d;
+// a node as it is written; NULL when it cannot be carried
+static Json *json_node(const nd_node *n, const pk_options *o) {
+	const ch_header *h = &n->change;
+	Json *node = jsonObject(), *change = jsonObject();
+	jsonAdd(node, "change", change);
+	if (!h->has_time || !safe(h->time)) goto bad;
+	jsonAdd(change, "time", jsonNumber((double)h->time));
+	if (h->actor != NULL) {
+		Json *a = pk_to_json(h->actor);
+		if (a == NULL) goto bad;
+		jsonAdd(change, "actor", a);
 	}
-	r->bad = 1;
-	return 0;
+	if (h->reader != NULL) jsonAdd(change, "reader", jsonString(h->reader));
+	if (h->external != NULL) {
+		Json *sites = jsonArray();
+		jsonAdd(change, "external", sites);
+		for (size_t i = 0; i < h->external_length; i++) {
+			const ch_site *s = &h->external[i];
+			if (s->file == NULL || !safe(s->line) || (s->has_column && !safe(s->column))) goto bad;
+			Json *site = jsonObject();
+			jsonPush(sites, site);
+			jsonAdd(site, "file", jsonString(s->file));
+			jsonAdd(site, "line", jsonNumber((double)s->line));
+			if (s->has_column) jsonAdd(site, "column", jsonNumber((double)s->column));
+			if (s->function != NULL) jsonAdd(site, "function", jsonString(s->function));
+		}
+	}
+	if (h->metadata != NULL) {
+		Json *entries = jsonArray();
+		jsonAdd(change, "metadata", entries);
+		for (size_t i = 0; i < h->metadata_length; i++) {
+			const ch_entry *e = &h->metadata[i];
+			if (e->key == NULL || e->value == NULL) goto bad;
+			Json *v = pk_to_json(e->value);
+			if (v == NULL) goto bad;
+			Json *entry = jsonArray();
+			jsonPush(entries, entry);
+			jsonPush(entry, jsonString(e->key));
+			jsonPush(entry, v);
+		}
+	}
+	if (h->has_op && !(o != NULL && o->no_op)) {
+		Json *op = jsonObject();
+		jsonAdd(change, "op", op);
+		if (!json_patches(op, "patches", h->patches, h->patches_length) ||
+			!json_patches(op, "undo", h->undo, h->undo_length))
+			goto bad;
+	}
+	if (n->value != NULL) {
+		Json *v = pk_to_json(n->value);
+		if (v == NULL) goto bad;
+		jsonAdd(node, "value", v);
+	}
+	// cow: false is a node changed in place
+	if (n->in_place) jsonAdd(node, "cow", jsonBoolean(false));
+	return node;
+bad:
+	jsonFree(node);
+	return NULL;
 }
 
-// one value, by the codec
-static const void *read_value(reader *r, pk_field f) {
-	const uint8_t *start = r->p;
-	skip(r);
-	if (failed(r)) return NULL;
-	const void *v = NULL;
-	if (r->codec->decode(r->codec->context, f, start, (size_t)(r->p - start), &v) != 0) r->bad = 1;
+// a node's encoding, appended to out; 0 when it cannot be carried
+static int node_bytes(const nd_node *n, const pk_options *o, pk_bytes *out) {
+	Json *j = json_node(n, o);
+	if (j == NULL) return 0;
+	size_t length = 0;
+	room(out, 1);
+	int ok = cborEncode(j, out->data + out->length, out->capacity - out->length, &length, NULL);
+	if (ok && length > out->capacity - out->length) {
+		room(out, length);
+		ok = cborEncode(j, out->data + out->length, out->capacity - out->length, &length, NULL);
+	}
+	jsonFree(j);
+	if (ok) out->length += length;
+	return ok;
+}
+
+pk_code pk_encode(const nd_node *node, const pk_options *options, pk_bytes *out) {
+	return node_bytes(node, options, out) ? PK_OK : PK_CANNOT_CARRY;
+}
+
+// an entry with its key's encoding, at keys[off, off + length)
+typedef struct {
+	size_t off, length;
+	const pk_entry *entry;
+} row;
+
+static int compare(const uint8_t *keys, const row *a, const row *b) {
+	size_t n = a->length < b->length ? a->length : b->length;
+	int c = memcmp(keys + a->off, keys + b->off, n);
+	if (c != 0) return c;
+	return a->length < b->length ? -1 : a->length > b->length;
+}
+
+// stable, bottom-up: the rows by their keys' encodings
+static void sort(row *rows, size_t n, const uint8_t *keys) {
+	row *tmp = xrealloc(NULL, (n ? n : 1) * sizeof *tmp);
+	for (size_t width = 1; width < n; width *= 2) {
+		for (size_t lo = 0; lo < n; lo += 2 * width) {
+			size_t mid = lo + width < n ? lo + width : n, hi = lo + 2 * width < n ? lo + 2 * width : n;
+			size_t i = lo, j = mid, k = lo;
+			while (i < mid && j < hi) tmp[k++] = compare(keys, &rows[j], &rows[i]) < 0 ? rows[j++] : rows[i++];
+			while (i < mid) tmp[k++] = rows[i++];
+			while (j < hi) tmp[k++] = rows[j++];
+		}
+		memcpy(rows, tmp, n * sizeof *rows);
+	}
+	free(tmp);
+}
+
+// nodes numbered: open addressing on the node's address, kept under half full
+typedef struct {
+	const nd_node *node;
+	size_t number;
+} seat;
+
+pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *options, pk_bytes *out,
+	const pk_entry **at) {
+	pk_code code = PK_OK;
+	row *rows = xrealloc(NULL, (length ? length : 1) * sizeof *rows);
+	size_t n = 0, slots = 4, count = 0, written = 0;
+	pk_bytes keys = {0}, items = {0}, nodes = {0};
+	seat *seats = NULL;
+	for (size_t i = 0; i < length; i++) {
+		const pk_entry *e = &entries[i];
+		size_t off = keys.length;
+		// a symbol has no encoding
+		if (e->part.symbol != NULL || e->id.symbol != NULL ||
+			!key_bytes(&keys, e->part.string, e->id.string)) {
+			if (at != NULL) *at = e;
+			code = PK_CANNOT_CARRY;
+			goto done;
+		}
+		rows[n++] = (row){off, keys.length - off, e};
+	}
+	sort(rows, n, keys.data);
+	while (slots < 2 * n + 2) slots *= 2;
+	seats = xrealloc(NULL, slots * sizeof *seats);
+	memset(seats, 0, slots * sizeof *seats);
+	const row *last = NULL;
+	for (size_t i = 0; i < n; i++) {
+		const row *r = &rows[i];
+		const pk_entry *e = r->entry;
+		if (last != NULL && compare(keys.data, last, r) == 0) {
+			if (last->entry->node != e->node) {
+				if (at != NULL) *at = e;
+				code = PK_ALREADY_THERE;
+				goto done;
+			}
+			continue;
+		}
+		last = r;
+		size_t s = (size_t)(((uintptr_t)e->node >> 4) * 0x9E3779B97F4A7C15u) & (slots - 1);
+		while (seats[s].node != NULL && seats[s].node != e->node) s = (s + 1) & (slots - 1);
+		if (seats[s].node == NULL) {
+			if (!node_bytes(e->node, options, &nodes)) {
+				if (at != NULL) *at = e;
+				code = PK_CANNOT_CARRY;
+				goto done;
+			}
+			seats[s] = (seat){e->node, count++};
+		}
+		// the key's encoding with its list made one of three: [part, id, n]
+		put(&items, "\x83", 1);
+		put(&items, keys.data + r->off + 1, r->length - 1);
+		number(&items, (double)seats[s].number);
+		written++;
+	}
+	// "keys" sorts before "nodes": a map of two, the one way
+	put(out, "\xa2\x64keys", 6);
+	head(out, 4, written);
+	put(out, items.data, items.length);
+	put(out, "\x65nodes", 6);
+	head(out, 4, count);
+	put(out, nodes.data, nodes.length);
+done:
+	free(seats);
+	free(rows);
+	free(keys.data);
+	free(items.data);
+	free(nodes.data);
+	return code;
+}
+
+// --- reading ---
+
+typedef struct {
+	void **p;
+	size_t n, capacity;
+} pile;
+
+// what a read allocated: blocks, values and nodes, freed by pk_free
+typedef struct {
+	pile blocks, values, nodes;
+	int loose;
+} arena;
+
+static void add(pile *l, void *p) {
+	GROW(l->p, l->n, l->capacity);
+	l->p[l->n++] = p;
+}
+static void *grab(arena *a, size_t n) {
+	void *p = xrealloc(NULL, n ? n : 1);
+	memset(p, 0, n ? n : 1);
+	add(&a->blocks, p);
+	return p;
+}
+static char *dup(arena *a, const char *s, size_t n) {
+	char *p = grab(a, n + 1);
+	memcpy(p, s, n);
+	return p;
+}
+static op_value *hold(arena *a, op_value *v) {
+	add(&a->values, v);
 	return v;
 }
 
-static const nd_list *list(reader *r) {
-	size_t n = (size_t)expect(r, 4);
-	nd_list *l = take(r, sizeof *l);
-	nd_item *items = take(r, n * sizeof *items);
-	if (failed(r)) return NULL;
-	for (size_t i = 0; i < n && !failed(r); i++) items[i] = (nd_item){text(r), NULL};
-	*l = (nd_list){items, n};
-	return l;
+void pk_free(pk_read *r) {
+	arena *a = r->own;
+	if (a != NULL) {
+		for (size_t i = 0; i < a->nodes.n; i++) nd_free(a->nodes.p[i]);
+		for (size_t i = 0; i < a->values.n; i++) op_free(a->values.p[i]);
+		for (size_t i = 0; i < a->blocks.n; i++) free(a->blocks.p[i]);
+		free(a->nodes.p), free(a->values.p), free(a->blocks.p);
+		free(a);
+	}
+	*r = (pk_read){0};
 }
 
-static nd_object read_versions(reader *r, int lists) {
-	size_t n = (size_t)expect(r, 4);
-	nd_version *vs = take(r, n * sizeof *vs);
-	if (failed(r)) return (nd_object){0};
-	for (size_t i = 0; i < n && !failed(r); i++) {
-		vs[i] = (nd_version){0};
-		int content = 0;
-		size_t m = (size_t)expect(r, 5);
-		for (size_t k = 0; k < m && !failed(r); k++) {
-			const uint8_t *s;
-			size_t len;
-			if (!key(r, &s, &len)) break;
-			if (is(s, len, "content")) vs[i].content = lists ? list(r) : read_value(r, PK_CONTENT), content = 1;
-			else if (is(s, len, "change")) vs[i].change = read_value(r, PK_CHANGE);
-			else if (is(s, len, "because")) vs[i].because = read_value(r, PK_BECAUSE);
-			else skip(r);
+// a whole number, as pack.ts has it: a safe integer (to 2^53 - 1 either side), never -0
+static int whole(const Json *j, long *out) {
+	if (j == NULL || j->type != JSON_NUMBER) return 0;
+	double d = j->number;
+	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d) || (d == 0 && signbit(d)))
+		return 0;
+	*out = (long)d;
+	return 1;
+}
+
+static int array(const Json *j) { return j != NULL && j->type == JSON_ARRAY; }
+static int string(const Json *j) { return j != NULL && j->type == JSON_STRING; }
+
+#define KEYS(...) ((const char *const[]){__VA_ARGS__, NULL})
+
+// every key of need is in the object, and none but those of may
+static int only(const arena *a, const Json *o, const char *const *need, const char *const *may) {
+	if (o == NULL || o->type != JSON_OBJECT) return 0;
+	for (; *need; need++)
+		if (jsonGet(o, *need) == NULL) return 0;
+	for (int i = 0; !a->loose && i < o->object.count; i++) {
+		const char *const *m = may;
+		while (*m != NULL && strcmp(*m, o->object.members[i].key) != 0) m++;
+		if (*m == NULL) return 0;
+	}
+	return 1;
+}
+
+static int read_target(arena *a, const Json *x, op_target *t, const char *const *may) {
+	if (!only(a, x, KEYS("path"), may)) return 0;
+	const Json *path = jsonGet(x, "path");
+	if (!array(path)) return 0;
+	op_key *ks = grab(a, (size_t)path->array.count * sizeof *ks);
+	for (int i = 0; i < path->array.count; i++) {
+		const Json *k = path->array.items[i];
+		long m;
+		if (string(k)) ks[i] = (op_key){.type = OP_STR_KEY, .s = dup(a, k->string, k->stringLength)};
+		else if (whole(k, &m)) ks[i] = (op_key){.type = OP_NUM_KEY, .n = m};
+		else return 0;
+	}
+	t->path = ks;
+	t->length = (size_t)path->array.count;
+	const Json *range = jsonGet(x, "range");
+	if (range != NULL) {
+		if (!array(range) || range->array.count != 2) return 0;
+		if (!whole(range->array.items[0], &t->from) || !whole(range->array.items[1], &t->to)) return 0;
+		t->has_range = 1;
+	}
+	return 1;
+}
+
+static int read_patch(arena *a, const Json *x, op_patch *p) {
+	if (!read_target(a, x, &p->place, KEYS("path", "range", "value", "move"))) return 0;
+	const Json *v = jsonGet(x, "value"), *move = jsonGet(x, "move");
+	if (v != NULL) p->has_value = 1, p->value = hold(a, pk_of_json(v));
+	if (move != NULL) {
+		p->has_move = 1;
+		if (!read_target(a, move, &p->move, KEYS("path", "range"))) return 0;
+	}
+	return 1;
+}
+
+// the patches of a list; NULL when there are none
+static int read_patches(arena *a, const Json *given, const op_patch **out, size_t *n) {
+	if (!array(given)) return 0;
+	op_patch *ps = given->array.count ? grab(a, (size_t)given->array.count * sizeof *ps) : NULL;
+	for (int i = 0; i < given->array.count; i++)
+		if (!read_patch(a, given->array.items[i], &ps[i])) return 0;
+	*out = ps;
+	*n = (size_t)given->array.count;
+	return 1;
+}
+
+static int read_site(arena *a, const Json *x, ch_site *s) {
+	if (!only(a, x, KEYS("file", "line"), KEYS("file", "line", "column", "function"))) return 0;
+	const Json *file = jsonGet(x, "file"), *column = jsonGet(x, "column"), *function = jsonGet(x, "function");
+	if (!string(file) || !whole(jsonGet(x, "line"), &s->line)) return 0;
+	s->file = dup(a, file->string, file->stringLength);
+	if (column != NULL) {
+		if (!whole(column, &s->column)) return 0;
+		s->has_column = 1;
+	}
+	if (function != NULL) {
+		if (!string(function)) return 0;
+		s->function = dup(a, function->string, function->stringLength);
+	}
+	return 1;
+}
+
+static int read_header(arena *a, const Json *x, ch_header *h) {
+	if (!only(a, x, KEYS("time"), KEYS("time", "actor", "reader", "external", "metadata", "op"))) return 0;
+	long time;
+	if (!whole(jsonGet(x, "time"), &time)) return 0;
+	h->has_time = 1;
+	h->time = time;
+	const Json *actor = jsonGet(x, "actor"), *reader = jsonGet(x, "reader");
+	const Json *external = jsonGet(x, "external"), *metadata = jsonGet(x, "metadata"), *op = jsonGet(x, "op");
+	if (actor != NULL) h->actor = hold(a, pk_of_json(actor));
+	if (reader != NULL) {
+		if (!string(reader)) return 0;
+		h->reader = dup(a, reader->string, reader->stringLength);
+	}
+	if (external != NULL) {
+		if (!array(external)) return 0;
+		// an empty list is none yet, not none: a block of its own
+		ch_site *ss = grab(a, ((size_t)external->array.count + 1) * sizeof *ss);
+		for (int i = 0; i < external->array.count; i++)
+			if (!read_site(a, external->array.items[i], &ss[i])) return 0;
+		h->external = ss;
+		h->external_length = (size_t)external->array.count;
+	}
+	if (metadata != NULL) {
+		if (!array(metadata)) return 0;
+		ch_entry *es = grab(a, ((size_t)metadata->array.count + 1) * sizeof *es);
+		for (int i = 0; i < metadata->array.count; i++) {
+			const Json *e = metadata->array.items[i];
+			if (!array(e) || e->array.count != 2 || !string(e->array.items[0])) return 0;
+			es[i].key = dup(a, e->array.items[0]->string, e->array.items[0]->stringLength);
+			es[i].value = hold(a, pk_of_json(e->array.items[1]));
 		}
-		if (!content) r->bad = 1; // a version is its content
+		h->metadata = es;
+		h->metadata_length = (size_t)metadata->array.count;
 	}
-	return (nd_object){vs, n};
+	if (op != NULL) {
+		if (!only(a, op, KEYS("patches", "undo"), KEYS("patches", "undo"))) return 0;
+		if (!read_patches(a, jsonGet(op, "patches"), &h->patches, &h->patches_length)) return 0;
+		if (!read_patches(a, jsonGet(op, "undo"), &h->undo, &h->undo_length)) return 0;
+		h->has_op = 1;
+	}
+	return 1;
 }
 
-static size_t read_entries(reader *r, int lists, const nd_entry **out) {
-	size_t n = (size_t)expect(r, 4);
-	nd_entry *es = take(r, n * sizeof *es);
-	*out = es;
-	if (failed(r)) return 0;
-	for (size_t i = 0; i < n && !failed(r); i++) {
-		if (expect(r, 4) != 2) r->bad = 1;
-		const char *name = text(r);
-		es[i] = (nd_entry){name, read_versions(r, lists)};
+// a node as written, new; NULL when it is not one
+static nd_node *read_node(arena *a, const Json *x) {
+	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
+	const Json *cow = jsonGet(x, "cow");
+	// nothing but false
+	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
+	nd_options options = {.in_place = cow != NULL};
+	ch_header h = {0};
+	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
+	const Json *v = jsonGet(x, "value");
+	nd_node *n = nd_make(v != NULL ? hold(a, pk_of_json(v)) : NULL, &h, &options);
+	if (n == NULL) {
+		fputs("pack: out of memory\n", stderr);
+		abort();
 	}
+	add(&a->nodes, n);
 	return n;
 }
 
-static nd_site site(reader *r) {
-	nd_site s = {0};
-	int line = 0;
-	size_t m = (size_t)expect(r, 5);
-	for (size_t k = 0; k < m && !failed(r); k++) {
-		const uint8_t *name;
-		size_t len;
-		if (!key(r, &name, &len)) break;
-		if (is(name, len, "file")) s.file = text(r);
-		else if (is(name, len, "line")) s.line = (long)number_in(r), line = 1;
-		else if (is(name, len, "column")) s.column = (long)number_in(r), s.has_column = 1;
-		else if (is(name, len, "function")) s.function = text(r);
-		else skip(r);
+pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
+	*out = (pk_read){0};
+	Json *x = cborDecode(bytes, length, NULL, NULL);
+	if (x == NULL) return PK_NOT_A_PACK;
+	arena *a = xrealloc(NULL, sizeof *a);
+	*a = (arena){.loose = reading != NULL && reading->loosy};
+	pk_bytes key = {0}, last = {0};
+	nd_node **made = NULL;
+	pk_entry *entries = NULL;
+	size_t nn = 0, kn = 0, next = 0;
+	const Json *keys, *nodes;
+	if (!only(a, x, KEYS("keys", "nodes"), KEYS("keys", "nodes"))) goto bad;
+	keys = jsonGet(x, "keys"), nodes = jsonGet(x, "nodes");
+	if (!array(keys) || !array(nodes)) goto bad;
+	nn = (size_t)nodes->array.count, kn = (size_t)keys->array.count;
+	made = grab(a, nn * sizeof *made);
+	for (size_t i = 0; i < nn; i++)
+		if ((made[i] = read_node(a, nodes->array.items[i])) == NULL) goto bad;
+	entries = grab(a, kn * sizeof *entries);
+	for (size_t i = 0; i < kn; i++) {
+		const Json *k = keys->array.items[i];
+		if (!array(k) || k->array.count != 3) goto bad;
+		const Json *part = k->array.items[0], *id = k->array.items[1];
+		long m;
+		if (!string(part) || !string(id)) goto bad;
+		// numbered in the order first named
+		if (!whole(k->array.items[2], &m) || m < 0 || (size_t)m > next || (size_t)m >= nn) goto bad;
+		if ((size_t)m == next) next++;
+		// sorted, none twice
+		key.length = 0;
+		if (!key_bytes(&key, part->string, id->string)) goto bad;
+		if (i > 0) {
+			size_t c = key.length < last.length ? key.length : last.length;
+			int d = memcmp(last.data, key.data, c);
+			if (d > 0 || (d == 0 && last.length >= key.length)) goto bad;
+		}
+		pk_bytes swap = last;
+		last = key;
+		key = swap;
+		entries[i] = (pk_entry){tb_string(dup(a, part->string, part->stringLength)),
+			tb_string(dup(a, id->string, id->stringLength)), made[m]};
 	}
-	if (!s.file || !line) r->bad = 1;
-	return s;
+	// every node under a key
+	if (next != nn) goto bad;
+	free(key.data), free(last.data);
+	jsonFree(x);
+	*out = (pk_read){entries, kn, made, nn, a};
+	return PK_OK;
+bad:
+	free(key.data), free(last.data);
+	jsonFree(x);
+	pk_free(&(pk_read){.own = a});
+	return PK_NOT_A_PACK;
 }
 
-static nd_header read_header(reader *r) {
-	nd_header h = {0};
-	size_t m = (size_t)expect(r, 5);
-	for (size_t k = 0; k < m && !failed(r); k++) {
-		const uint8_t *s;
-		size_t len;
-		if (!key(r, &s, &len)) break;
-		if (is(s, len, "time")) h.has_time = 1, h.time = number_in(r);
-		else if (is(s, len, "actor")) h.actor = read_value(r, PK_ACTOR);
-		else if (is(s, len, "reader")) h.reader = text(r);
-		else if (is(s, len, "site")) h.has_site = 1, h.site = site(r);
-		else if (is(s, len, "cause")) h.cause = read_value(r, PK_CAUSE);
-		else if (is(s, len, "wallclock")) h.has_wallclock = 1, h.wallclock = number_in(r);
-		else if (is(s, len, "message")) h.message = text(r);
-		else skip(r);
+pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
+	*out = (pk_read){0};
+	Json *x = cborDecode(bytes, length, NULL, NULL);
+	if (x == NULL) return PK_NOT_A_NODE;
+	arena *a = xrealloc(NULL, sizeof *a);
+	*a = (arena){.loose = reading != NULL && reading->loosy};
+	nd_node *n = read_node(a, x);
+	jsonFree(x);
+	if (n == NULL) {
+		pk_free(&(pk_read){.own = a});
+		return PK_NOT_A_NODE;
 	}
-	return h;
-}
-
-// a node as written; every field must be there
-static nd_node *node(reader *r) {
-	const char *id = NULL;
-	nd_contents c = {0};
-	nd_header h = {0};
-	int value = 0, info = 0, children = 0, header = 0;
-	size_t m = (size_t)expect(r, 5);
-	for (size_t k = 0; k < m && !failed(r); k++) {
-		const uint8_t *s;
-		size_t len;
-		if (!key(r, &s, &len)) break;
-		if (is(s, len, "id")) id = text(r);
-		else if (is(s, len, "value")) c.value = read_versions(r, 0), value = 1;
-		else if (is(s, len, "info")) c.info_length = read_entries(r, 0, &c.info), info = 1;
-		else if (is(s, len, "children"))
-			c.children_length = read_entries(r, 1, &c.children), children = 1;
-		else if (is(s, len, "header")) h = read_header(r), header = 1;
-		else skip(r);
-	}
-	if (id == NULL || !value || !info || !children || !header) r->bad = 1;
-	if (failed(r)) return NULL;
-	nd_node *n = nd_make(id, &c, &h, NULL);
-	if (n == NULL) r->oom = 1;
-	return n;
-}
-
-static void forget(pk_graph *g) {
-	for (size_t i = 0; i < g->length; i++) nd_free((nd_node *)g->nodes[i]);
-	g->length = 0;
-}
-
-// whether the bytes are exactly one item in the canonical encoding (ENCODING.tex), values and
-// all: shortest heads, definite lengths, floats only, keys in order, UTF-8, nothing after
-static int canonical(const uint8_t *bytes, size_t length) {
-	return cborCheck(bytes, length, NULL, NULL);
-}
-
-pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out) {
-	*out = (pk_graph){0};
-	arena *own = calloc(1, sizeof *own);
-	if (own == NULL) return PK_NO_MEMORY;
-	out->own = own;
-	if (!canonical(bytes, length)) {
-		pk_free(out);
-		return PK_NOT_A_GRAPH;
-	}
-	reader r = {bytes, bytes + length, 0, 0, own, codec};
-	int nodes = 0, missing = 0;
-	size_t capacity = 0, missing_capacity = 0;
-	size_t m = (size_t)expect(&r, 5);
-	for (size_t k = 0; k < m && !failed(&r); k++) {
-		const uint8_t *s;
-		size_t len;
-		if (!key(&r, &s, &len)) break;
-		if (is(s, len, "root")) out->root = text(&r);
-		else if (is(s, len, "nodes")) {
-			// a key twice: the last, as cbor-x reads it
-			forget(out);
-			nodes = 1;
-			size_t n = (size_t)expect(&r, 4);
-			for (size_t i = 0; i < n && !failed(&r); i++) {
-				nd_node *x = node(&r);
-				if (x == NULL) break;
-				if (!grow(&out->nodes, &capacity, out->length + 1, sizeof *out->nodes)) {
-					nd_free(x);
-					r.oom = 1;
-					break;
-				}
-				out->nodes[out->length++] = x;
-			}
-		} else if (is(s, len, "missing")) {
-			missing = 1;
-			out->missing_length = 0;
-			size_t n = (size_t)expect(&r, 4);
-			for (size_t i = 0; i < n && !failed(&r); i++) {
-				const char *id = text(&r);
-				if (id == NULL) break;
-				if (!grow(&out->missing, &missing_capacity, out->missing_length + 1,
-					    sizeof *out->missing)) {
-					r.oom = 1;
-					break;
-				}
-				out->missing[out->missing_length++] = id;
-			}
-		} else skip(&r);
-	}
-	if (!failed(&r) && (out->root == NULL || !nodes || !missing || r.p != r.end)) r.bad = 1;
-	if (!failed(&r)) return PK_OK;
-	pk_code code = r.oom ? PK_NO_MEMORY : PK_NOT_A_GRAPH;
-	pk_free(out);
-	return code;
-}
-
-pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out) {
-	*out = (pk_graph){0};
-	if (!canonical(bytes, length)) return PK_NOT_A_NODE;
-	arena *own = calloc(1, sizeof *own);
-	if (own == NULL) return PK_NO_MEMORY;
-	out->own = own;
-	reader r = {bytes, bytes + length, 0, 0, own, codec};
-	nd_node *n = node(&r);
-	if (n != NULL && r.p != r.end) r.bad = 1;
-	if (n != NULL && !failed(&r) && (out->nodes = malloc(sizeof *out->nodes)) != NULL) {
-		out->nodes[0] = n;
-		out->length = 1;
-		out->root = n->id;
-		return PK_OK;
-	}
-	if (n != NULL) nd_free(n);
-	pk_code code = r.oom || n != NULL ? PK_NO_MEMORY : PK_NOT_A_NODE;
-	if (r.bad) code = PK_NOT_A_NODE;
-	pk_free(out);
-	return code;
-}
-
-void pk_free(pk_graph *g) {
-	arena *own = g->own;
-	if (own != NULL) {
-		forget(g);
-		for (size_t i = 0; i < own->length; i++) free(own->items[i]);
-		free(own->items);
-		free(own);
-	}
-	free(g->nodes);
-	free(g->missing);
-	*g = (pk_graph){0};
+	nd_node **made = grab(a, sizeof *made);
+	made[0] = n;
+	*out = (pk_read){NULL, 0, made, 1, a};
+	return PK_OK;
 }

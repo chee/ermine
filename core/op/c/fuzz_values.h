@@ -192,23 +192,6 @@ static inline void fz_patch_list(fz_bytes *b, const op_value *v, fz_patches *out
 	}
 }
 
-// KNOWN (core/op/c/repro-undo-ranged-move, as in apply.ts): a move whose take is a span
-// of a list and whose landing is unranged at or past the span's start in that list: the undo moves
-// the span back in front of the landing, then puts what the landing replaced at its old, unshifted
-// index. Its round trip is not checked
-static inline int fz_known(const fz_patches *ps) {
-	for (size_t i = 0; i < ps->n; i++) {
-		const op_patch *p = &ps->p[i];
-		const op_target *P = &p->place, *F = &p->move;
-		if (!p->has_move || !F->has_range || P->has_range || P->length <= F->length) continue;
-		size_t k = 0;
-		while (k < F->length && P->path[k].type == F->path[k].type &&
-			(P->path[k].type == OP_NUM_KEY ? P->path[k].n == F->path[k].n : strcmp(P->path[k].s, F->path[k].s) == 0)) k++;
-		if (k == F->length && P->path[k].type == OP_NUM_KEY && P->path[k].n >= F->from) return 1;
-	}
-	return 0;
-}
-
 static inline void fz_patches_free(fz_patches *ps) {
 	for (size_t i = 0; i < ps->n; i++) op_free(ps->values[i]);
 	ps->n = 0;

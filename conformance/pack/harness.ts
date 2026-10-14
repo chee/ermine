@@ -1,122 +1,118 @@
 // The reference pack.ts on the line protocol: one JSON request per line in, one answer per line
-// out, in order. Nodes are shown as the node harness shows them (nodes/node/conformance/harness.ts):
-// content, change, because, actor and cause any value in its JSON form (form.ts); in a list,
-// {"symbol": name} is a symbol.
-// Bytes are hex. Another implementation joins by speaking this.
-//   {op: "walk" | "pack", root, nodes}: the nodes loaded, then walked or packed from root
-//   {op: "unpack", bytes}
-//   {op: "encode", node}: one node alone; {op: "decode", bytes}
-// answers: {graph: {root, nodes, missing}}, {node}, {bytes}, or {code, id?} for a PackError
-import createNode, { type Header, type List, type Node, type Version } from "@ermine/node"
+// out, in order. Another implementation joins by speaking this. Bytes are hex.
+//   {op: "pack", entries: [[part, id, n], …], nodes: [node, …], options?}: each node under its
+//     keys, n its place in nodes, so a node under two keys is one node
+//   {op: "unpack", bytes, reading?}
+//   {op: "encode", node, options?}: one node alone; {op: "decode", bytes, reading?}
+// options: {op?: false}, pack.ts's Options; reading: {loosyGoosy?: true}, its Reading
+// answers: {bytes}; {entries, nodes}, the nodes numbered in the order the entries first name them;
+// {node}; or {code, part?, id?} for a PackError
+// A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change,
+// cow?: false}, change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
+// reader, each metadata value and each patch's value in their JSON form (form.ts)
+import createNode, { type ChangeHeader, type Node } from "@ermine/node"
 import {
 	decode,
 	encode,
-	type Graph,
+	type Entry,
+	type Key,
+	type Options,
 	pack,
 	PackError,
+	type Reading,
 	unpack,
-	walk,
 } from "@ermine/encoding/pack"
-import { createTable } from "@ermine/graph/table"
 import { FormError, fromJson, line, toJson } from "./form.ts"
 
-type V = Version<unknown, unknown>
-type N = Node<unknown, unknown>
-type Shown = {
-	id: string
-	value: V[]
-	info: [string, V[]][]
-	children: [string, V[]][]
-	header: Header
+type Fields = Record<string, unknown>
+export type Shown = { value?: unknown; change: Fields; cow?: false }
+type Request = {
+	op: string
+	entries?: [unknown, unknown, number][]
+	nodes?: Shown[]
+	node?: Shown
+	bytes?: string
+	options?: Options
+	reading?: Reading
 }
-type Request = { op: string; root?: string; nodes?: Shown[]; node?: Shown; bytes?: string }
 
-const symbol = (e: unknown): string | symbol =>
-	typeof e === "object" && e !== null && "symbol" in e ? Symbol.for(String(e.symbol)) : String(e)
-const unsymbol = (e: unknown) => typeof e === "symbol" ? { symbol: Symbol.keyFor(e) } : e
-const list = (vs: V[]): Version<List, unknown>[] =>
-	vs.map((v) => {
-		const out: Version<List, unknown> = {
-			content: (v.content as unknown[]).map(symbol),
-			change: fromJson(v.change),
-		}
-		if ("because" in v) out.because = fromJson(v.because)
-		return out
-	})
+const key = (k: unknown): Key =>
+	typeof k === "object" && k !== null && "symbol" in k ? Symbol.for(String(k.symbol)) : String(k)
+// a key as an answer names it
+const named = (k: Key) => typeof k === "symbol" ? { symbol: Symbol.keyFor(k) ?? k.description } : k
 
-const values = (vs: V[]): V[] =>
-	vs.map((v) => {
-		const out: V = { content: fromJson(v.content), change: fromJson(v.change) }
-		if ("because" in v) out.because = fromJson(v.because)
-		return out
-	})
-const header = (h: Header, f: (x: unknown) => unknown): Header => {
-	const out: Header = { ...h }
-	if ("actor" in h) out.actor = f(h.actor)
-	if ("cause" in h) out.cause = f(h.cause)
+// each patch's value, through f
+const patches = (ps: unknown, f: (x: unknown) => unknown) =>
+	(ps as Fields[]).map((p) => "value" in p ? { ...p, value: f(p.value) } : p)
+
+function header(c: Fields, f: (x: unknown) => unknown): Fields {
+	const out: Fields = { ...c }
+	if ("actor" in c) out.actor = f(c.actor)
+	// a string, but a symbol for a test of one
+	if ("reader" in c) out.reader = f(c.reader)
+	if ("metadata" in c) {
+		out.metadata = (c.metadata as [string, unknown][]).map(([k, v]) => [k, f(v)])
+	}
+	if ("op" in c) {
+		const op = c.op as Fields
+		out.op = { patches: patches(op.patches, f), undo: patches(op.undo, f) }
+	}
 	return out
 }
 
-const node = (s: Shown): N =>
-	createNode(s.id, {
-		value: values(s.value),
-		info: s.info.map(([name, vs]) => [name, values(vs)] as const),
-		children: s.children.map(([name, vs]) => [name, list(vs)] as const),
-	}, { header: header(s.header, fromJson) })
+const node = (s: Shown): Node<unknown> =>
+	createNode(
+		"value" in s ? fromJson(s.value) : undefined,
+		header(s.change, fromJson) as ChangeHeader,
+		s.cow === false ? { cow: false } : {},
+	)
 
-const json = (vs: V[]): V[] =>
-	vs.map((v) => {
-		const out: V = { content: toJson(v.content), change: toJson(v.change) }
-		if ("because" in v) out.because = toJson(v.because)
-		return out
-	})
-
-const show = (n: N): Shown => ({
-	id: n.id,
-	value: json(n.value),
-	info: [...n.info].map(([name, vs]) => [name, json(vs)]),
-	children: [...n.children].map(([name, vs]) => [
-		name,
-		vs.map((v) => {
-			const out: V = { content: v.content.map(unsymbol), change: toJson(v.change) }
-			if ("because" in v) out.because = toJson(v.because)
-			return out
-		}),
-	]),
-	header: header(n.header, toJson),
-})
-const graph = (g: Graph<unknown, unknown>) => ({
-	graph: { root: g.root, nodes: g.nodes.map(show), missing: g.missing },
-})
+function show(n: Node<unknown>): Shown {
+	const out: Shown = { change: header(n.change as unknown as Fields, toJson) }
+	if ("value" in n) out.value = toJson(n.value)
+	if (n.cow === false) out.cow = false
+	return out
+}
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 
-function loaded(nodes: Shown[]) {
-	const t = createTable<unknown, unknown>()
-	for (const s of nodes) t.intro(node(s))
-	return t.get
+function entries(r: Request): Entry[] {
+	const nodes = (r.nodes ?? []).map(node)
+	return (r.entries ?? []).map(([part, id, n]) => [key(part), key(id), nodes[n]] as const)
+}
+
+// the entries as the protocol shows them, the nodes numbered as first named
+function shown(es: Entry[]) {
+	const numbers = new Map<Node<unknown>, number>(), nodes: Shown[] = []
+	const out = es.map(([part, id, n]) => {
+		let i = numbers.get(n)
+		if (i === undefined) numbers.set(n, i = nodes.length), nodes.push(show(n))
+		return [part, id, i]
+	})
+	return { entries: out, nodes }
 }
 
 function answer(r: Request): unknown {
 	try {
 		switch (r.op) {
-			case "walk":
-				return graph(walk(r.root!, loaded(r.nodes ?? [])))
 			case "pack":
-				return { bytes: hex(pack(r.root!, loaded(r.nodes ?? []))) }
+				return { bytes: hex(pack(entries(r), r.options)) }
 			case "unpack":
-				return graph(unpack(unhex(r.bytes!)))
+				return shown(unpack(unhex(r.bytes!), r.reading))
 			case "encode":
-				return { bytes: hex(encode(node(r.node!))) }
+				return { bytes: hex(encode(node(r.node!), r.options)) }
 			case "decode":
-				return { node: show(decode(unhex(r.bytes!))) }
+				return { node: show(decode(unhex(r.bytes!), r.reading)) }
 			default:
 				return { error: `unknown op ${r.op}` }
 		}
 	} catch (e) {
 		if (e instanceof PackError) {
-			return e.id === undefined ? { code: e.code } : { code: e.code, id: e.id }
+			const out: Fields = { code: e.code }
+			if (e.part !== undefined) out.part = named(e.part)
+			if (e.id !== undefined) out.id = named(e.id)
+			return out
 		}
 		// a value whose form stands for none: the C harness's codec refuses it as it encodes
 		if (e instanceof FormError) return { code: "cannot-carry" }
@@ -139,3 +135,5 @@ for await (const chunk of Deno.stdin.readable.pipeThrough(new TextDecoderStream(
 	}
 	if (text) await out.write(encoder.encode(text))
 }
+if (buffer.trim() !== "") await out.write(encoder.encode(line(answer(JSON.parse(buffer))) + "\n"))
+await out.close()

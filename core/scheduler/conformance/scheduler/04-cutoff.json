@@ -1,26 +1,26 @@
 {
 	"title": "a result equal to the last stops there: nothing given to set, nothing after it runs",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",
 			"name": "p",
-			"owner": "o",
+			"scope": "o",
 			"f": { "mod": [{ "read": "x" }, 2] },
 			"to": "p"
 		},
 		{
 			"op": "compute",
 			"name": "q",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "p" }, 10] },
 			"to": "q"
 		},
 		{
 			"op": "effect",
 			"name": "e",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "q" },
 			"act": { "log": ["e", { "given": "value" }] }
 		},

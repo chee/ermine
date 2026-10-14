@@ -1,12 +1,12 @@
 {
 	"title": "a read after an await is refused: stopped; the run failed",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "wait": ["p", { "read": "a" }] },
 			"to": "c"
 		},

@@ -75,11 +75,11 @@ int main(void) {
 		for (int i = 0; i < sizes[s]; i++) {
 			snprintf(name, sizeof name, "field%d", i);
 			op_key key = str(name);
-			pt_spot_of(p, v, doc, &key, 1);
+			pt_spot_of(p, v, doc, &key, 1, 0);
 		}
 		op_key body = str("body");
-		pt_spot_of(p, v, doc, &body, 1);
-		pt_spot_of(p, v, doc, NULL, 0);
+		pt_spot_of(p, v, doc, &body, 1, 0);
+		pt_spot_of(p, v, doc, NULL, 0, 0);
 		printf("keystroke, %d readers of other fields\t%.3f µs\n", sizes[s], median(keystroke, 10000));
 		pt_free(p);
 	}
@@ -88,18 +88,18 @@ int main(void) {
 	for (int i = 0; i < 5000; i++) {
 		snprintf(name, sizeof name, "name%d", i);
 		op_key key = str(name);
-		pt_spot_of(p, v, folder, &key, 1);
+		pt_spot_of(p, v, folder, &key, 1, 0);
 	}
-	pt_spot_of(p, v, folder, NULL, 0);
+	pt_spot_of(p, v, folder, NULL, 0, 0);
 	printf("rename in 5000 names, 5000 readers\t%.3f µs\n", median(rename_, 10000));
 	pt_free(p);
 
 	p = pt_new();
 	for (long i = 0; i < 100; i++) {
 		op_key key = num(i);
-		pt_spot_of(p, v, stream, &key, 1);
+		pt_spot_of(p, v, stream, &key, 1, 0);
 	}
-	pt_spot_of(p, v, stream, NULL, 0);
+	pt_spot_of(p, v, stream, NULL, 0, 0);
 	printf("append, 100 index readers (one of 10k)\t%.3f µs\n", median(appends, 1) / 10000);
 	pt_free(p);
 

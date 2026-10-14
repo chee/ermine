@@ -1,0 +1,23 @@
+{
+	"title": "a flagged run that stops keeps its flag: a loop through two computes, one stopping on the other, ends (proof C1)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "x",
+			"scope": "o",
+			"f": { "sum": [{ "read": "k" }, 1, { "mod": [{ "read": "j" }, 1] }] },
+			"to": "k"
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": { "mod": [{ "read": "k" }, 1] },
+			"to": "j"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "k", "expect": { "value": 2 } },
+		{ "op": "get", "key": "j", "expect": { "value": 0 } }
+	]
+}

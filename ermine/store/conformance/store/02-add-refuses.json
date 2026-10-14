@@ -1,0 +1,23 @@
+{
+	"title": "add refuses a taken key; the same node again is nothing, and no event",
+	"steps": [
+		{ "op": "add", "source": "stored", "part": "value", "id": "x", "node": "a", "expect": {} },
+		{ "op": "add", "source": "stored", "part": "value", "id": "x", "node": "a", "expect": {} },
+		{
+			"op": "add",
+			"source": "stored",
+			"part": "value",
+			"id": "x",
+			"node": "b",
+			"expect": { "error": "already-there" }
+		},
+		{ "op": "get", "source": "stored", "part": "value", "id": "x", "expect": { "node": "a" } },
+		{ "op": "events", "expect": { "events": [["stored", "value", "x", "a"]] } },
+		{ "op": "add", "source": "drag", "part": "value", "id": "x", "node": "b", "expect": {} },
+		{ "op": "add", "source": "stored", "part": "children", "id": "x", "node": "b", "expect": {} },
+		{
+			"op": "events",
+			"expect": { "events": [["drag", "value", "x", "b"], ["stored", "children", "x", "b"]] }
+		}
+	]
+}

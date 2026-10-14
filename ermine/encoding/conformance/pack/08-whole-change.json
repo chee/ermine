@@ -1,0 +1,111 @@
+{
+	"title": "a change with every field: actor any value, sites, metadata repeating, op",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": {
+				"list": [
+					1,
+					3
+				],
+				"s": "Abc"
+			},
+			"change": {
+				"time": 1760000001,
+				"actor": {
+					"name": "chee",
+					"keys": [
+						1,
+						2
+					]
+				},
+				"reader": "r",
+				"external": [
+					{
+						"file": "a.ts",
+						"line": 1,
+						"column": 0
+					},
+					{
+						"file": "b.ts",
+						"line": 2,
+						"function": "f"
+					}
+				],
+				"metadata": [
+					[
+						"sync",
+						{
+							"lamport": 1
+						}
+					],
+					[
+						"why",
+						"x"
+					],
+					[
+						"why",
+						"y"
+					]
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"list"
+							],
+							"range": [
+								1,
+								2
+							]
+						},
+						{
+							"path": [
+								"s"
+							],
+							"range": [
+								0,
+								1
+							],
+							"value": "A"
+						},
+						{
+							"path": [
+								"t"
+							],
+							"move": {
+								"path": [
+									"s"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"list"
+							],
+							"range": [
+								1,
+								1
+							],
+							"value": [
+								2
+							]
+						}
+					]
+				}
+			}
+		}
+	]
+}

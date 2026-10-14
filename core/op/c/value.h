@@ -1,4 +1,4 @@
-// op's value, in C: what patches are applied to (apply.h) and what notify reads (notify.h).
+// op's value, in C: what patches are applied to (apply.h).
 // Out of memory aborts: nothing here returns it.
 #ifndef OP_VALUE_H
 #define OP_VALUE_H

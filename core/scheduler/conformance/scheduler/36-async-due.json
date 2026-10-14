@@ -1,0 +1,27 @@
+{
+	"title": "a promise settling while its compute is due again: the result is not landed; the compute's next run is (proof C8)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "x": "p1" }, "expect": { "tick": 1 } },
+		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": [{ "read": "x" }] }, "to": "c" },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": [{ "read": "c" }, { "read": "x" }],
+			"act": { "log": ["e", { "given": "value" }] },
+			"equal": "json"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["e", [null, "p1"]]] } },
+		{ "op": "resolve", "promise": "p1", "value": 10, "expect": {} },
+		{ "op": "write", "values": { "x": "p2" } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "log", "expect": { "log": [["e", [null, "p2"]]] } },
+		{ "op": "resolve", "promise": "p2", "value": 20, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 20 } },
+		{ "op": "log", "expect": { "log": [["e", [20, "p2"]]] } }
+	]
+}

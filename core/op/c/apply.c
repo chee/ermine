@@ -6,6 +6,11 @@
 // The undo, when wanted, takes its references the same way as each patch lands (push): what it
 // holds is made no more, so it is never changed in place again, and nothing put in by a patch is
 // dropped (the undo may hold it). Whatever is made and left over at the end is freed then.
+// In place (in_place): the containers given are the ones changed, so nothing is copied, and every
+// container in the value holds one reference on each item, as op_ref made them. What a patch puts
+// is held at once (hold), what leaves a container is let go of at the end of the call (orphans),
+// after the undo, which is always built, has taken its own. A call that fails is undone by that
+// undo, in place.
 #include "apply.h"
 
 #include <setjmp.h>
@@ -101,6 +106,13 @@ typedef struct {
 	jmp_buf jump;
 	int code;
 	int undo; // the undo wanted
+	int inplace; // the containers given change, not copies
+	// in place: what left a container, whose reference the container held: let go of at the end
+	op_value **orphans;
+	size_t orphaned, orphan_capacity;
+	// in place: a move's take, till its landing is done (a failed landing puts it back)
+	op_patch pending;
+	int has_pending;
 	op_undo undone; // each patch's undo, in the order they land
 	// the last splice's, for the undo: what the span held, how many positions went in, whether
 	// a lone high met a lone low at an edge
@@ -180,9 +192,9 @@ static op_value *made_str(work *w, const char *a, size_t na, const char *b, size
 	return made(w, op_str_take(buf, na + nb + nc));
 }
 
-// a copy to change in place: v itself when it was made here
+// a copy to change in place: v itself when it was made here, or in place
 static op_value *own(work *w, op_value *v) {
-	if (pset_has(&w->made, v)) return v;
+	if (w->inplace || pset_has(&w->made, v)) return v;
 	op_value *c = made(w, v->type == OP_MAP ? op_map() : op_list());
 	if (v->count) {
 		c->items = grab(NULL, v->count * sizeof *c->items);
@@ -204,6 +216,25 @@ static void hold(work *w, op_value *v) {
 		return;
 	}
 	for (size_t i = 0; i < v->count; i++) hold(w, v->items[i]);
+}
+// in place, and c is a container given, or one that has been held: its items each have a reference.
+// A container still made here (such as one that a patch put at the root from a span it took) holds
+// none yet: they are taken when it is held
+static int real(work *w, const op_value *c) { return w->inplace && !pset_has(&w->made, c); }
+// in place: v left a container, whose reference to it is now the call's
+static void orphan(work *w, op_value *v) {
+	if (v == NULL) return;
+	if (w->orphaned == w->orphan_capacity) {
+		w->orphan_capacity = w->orphan_capacity ? w->orphan_capacity * 2 : 16;
+		w->orphans = grab(w->orphans, w->orphan_capacity * sizeof *w->orphans);
+	}
+	w->orphans[w->orphaned++] = v;
+}
+static void release(work *w) {
+	for (size_t i = 0; i < w->orphaned; i++) op_free(w->orphans[i]);
+	free(w->orphans);
+	w->orphans = NULL;
+	w->orphaned = w->orphan_capacity = 0;
 }
 // what is still made is let go of
 static void let_go(work *w) {
@@ -318,15 +349,15 @@ static op_key *longer(const op_target *t, op_key last) {
 	ks[t->length] = last;
 	return ks;
 }
-// path, once one element is put in at the gap of at, a list's range; NULL: as it is (else
+// path, once n elements are put in at the gap of at, a list's range; NULL: as it is (else
 // malloc'd: the caller frees it)
-static op_key *shift(const op_target *path, const op_target *at) {
-	size_t n = at->length;
-	if (!at->has_range || path->length <= n || !within(at, path)) return NULL;
-	if (path->path[n].n < at->from) return NULL;
+static op_key *shift(const op_target *path, const op_target *at, long n) {
+	size_t d = at->length;
+	if (!at->has_range || path->length <= d || !within(at, path)) return NULL;
+	if (path->path[d].n < at->from) return NULL;
 	op_key *ks = grab(NULL, path->length * sizeof *ks);
 	memcpy(ks, path->path, path->length * sizeof *ks);
-	ks[n].n++;
+	ks[d].n += n;
 	return ks;
 }
 // where the key of a map is, or -1
@@ -402,18 +433,25 @@ static op_value *set(work *w, const op_key *path, size_t n, op_value *v, int dro
 		if (k.type != OP_NUM_KEY) fail(w, OP_WRONG_KIND);
 		if ((size_t)k.n >= at->count) fail(w, OP_NO_KEY);
 		old = at->items[k.n];
+		int kept = real(w, at);
+		if (kept) hold(w, v), orphan(w, old);
 		if (v == NULL) list_splice(at, (size_t)k.n, (size_t)k.n + 1, NULL, 0);
 		else at->items[k.n] = v;
-		if (drop_old && old != v) drop(w, old);
+		if (drop_old && !kept && old != v) drop(w, old);
 		return old;
 	}
 	if (k.type != OP_STR_KEY) fail(w, OP_WRONG_KIND);
 	long i = map_at(at, k.s);
 	if (i < 0) {
-		if (v != NULL) op_set(at, k.s, v);
+		if (v != NULL) {
+			if (real(w, at)) hold(w, v);
+			op_set(at, k.s, v);
+		}
 		return NULL;
 	}
 	old = at->items[i];
+	int kept = real(w, at);
+	if (kept) hold(w, v), orphan(w, old);
 	if (v != NULL) at->items[i] = v;
 	else {
 		free(at->keys[i]);
@@ -424,7 +462,7 @@ static op_value *set(work *w, const op_key *path, size_t n, op_value *v, int dro
 		at->index = NULL;
 		at->slots = 0;
 	}
-	if (drop_old && old != v) drop(w, old);
+	if (drop_old && !kept && old != v) drop(w, old);
 	return old;
 }
 
@@ -517,28 +555,38 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 		if (v != NULL && (v->type != OP_TYPED || v->kind != s->kind)) fail(w, OP_WRONG_KIND);
 		w->size = v ? op_length(v) : 0;
 		if (taken) back = w->taken = made_typed(w, s->kind, s->data + x, y - x, NULL, 0, NULL, 0);
-		out = made_typed(w, s->kind, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
-			s->bytes - y);
-		set(w, path, n, out, 0);
-		drop(w, s);
+		if (w->inplace && w->size * z == y - x) {
+			// the length stays: the elements change where they are
+			if (v) memcpy(s->data + x, v->data, v->bytes);
+		} else {
+			out = made_typed(w, s->kind, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
+				s->bytes - y);
+			set(w, path, n, out, 0);
+			drop(w, s);
+		}
 		if (v && !w->undo) drop(w, v);
 		end = a + (long)w->size;
 	} else {
 		if ((size_t)b > s->count) fail(w, OP_RANGE);
 		if (v != NULL && v->type != OP_LIST) fail(w, OP_WRONG_KIND);
 		out = own(w, s);
+		int kept = real(w, out);
 		size_t gone = (size_t)(b - a);
 		if (taken) {
 			back = w->taken = made_list(w, gone);
 			memcpy(back->items, out->items + a, gone * sizeof *out->items);
 			back->count = gone;
-		} else {
+		} else if (!kept) {
 			for (size_t i = 0; i < gone; i++) drop(w, out->items[a + i]);
 		}
+		if (kept)
+			for (size_t i = 0; i < gone; i++) orphan(w, out->items[a + i]);
 		w->size = v ? v->count : 0;
 		list_splice(out, (size_t)a, (size_t)b, v ? v->items : NULL, w->size);
+		if (kept)
+			for (size_t i = 0; i < w->size; i++) hold(w, out->items[a + i]);
 		if (v && !w->undo) drop_shell(w, v);
-		set(w, path, n, out, 0);
+		if (!w->inplace) set(w, path, n, out, 0);
 		end = a + (long)w->size;
 	}
 	if (!w->undo) return 0;
@@ -546,6 +594,30 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 	if (empty && start == end) return 0;
 	*undo = (op_patch){.place = ranged(path, n, start, end), .has_value = !empty, .value = back};
 	return 1;
+}
+
+// in place: a copy of the containers and typed arrays of v, down; the rest (strings, bytes,
+// numbers) is never changed in place and is shared. What the undo holds of what moved is such a
+// copy, since the tree goes on changing
+static op_value *deep(work *w, op_value *v) {
+	switch (v->type) {
+	case OP_LIST: {
+		op_value *l = made_list(w, v->count);
+		for (size_t i = 0; i < v->count; i++) l->items[i] = deep(w, v->items[i]);
+		l->count = v->count;
+		return l;
+	}
+	case OP_MAP: {
+		op_value *m = made(w, op_map());
+		for (size_t i = 0; i < v->count; i++) op_set(m, v->keys[i], deep(w, v->items[i]));
+		return m;
+	}
+	case OP_TYPED: return made(w, op_typed(v->kind, v->data, op_length(v)));
+	default: return v;
+	}
+}
+static void keep_apart(work *w, op_patch *u) {
+	if (w->inplace && u->has_value) u->value = deep(w, (op_value *)u->value);
 }
 
 // a move's take, for the undo: what moved, the gap it left (back), what puts it back there
@@ -583,7 +655,11 @@ static void unland(work *w, const op_patch *p, const took *t, op_value *old, int
 			op_patch mv = {.place = t->back, .has_move = 1, .move = ranged(P->path, P->length, 0, n)};
 			push(w, &mv);
 		}
+		// P's place moved by the n put back in front of it, if both are in one list
+		op_key *moved = n ? shift(P, &t->back, n) : NULL;
+		if (moved) unset.place = target(moved, P->length);
 		push(w, &unset);
+		free(moved);
 		return;
 	}
 	op_patch there = {.place = t->back, .has_move = 1, .move = target(P->path, P->length)};
@@ -611,7 +687,7 @@ static void unland(work *w, const op_patch *p, const took *t, op_value *old, int
 		return;
 	}
 	push(w, &there);
-	op_key *moved = shift(P, &t->back);
+	op_key *moved = shift(P, &t->back, 1);
 	op_patch put = {.place = target(moved ? moved : P->path, P->length), .has_value = 1, .value = old};
 	push(w, &put);
 	free(moved);
@@ -663,6 +739,7 @@ static void move(work *w, const op_patch *p) {
 	if (from->has_range) {
 		t.has_untake = splice(w, from->path, from->length, from->from, from->to, NULL, 1, &t.untake);
 		t.m = w->taken, t.taking = w->joined;
+		if (w->inplace && t.has_untake) w->pending = t.untake, w->has_pending = 1;
 		if (w->undo) t.back = ranged(from->path, from->length, from->from, from->from);
 	} else {
 		t.m = set(w, from->path, from->length, NULL, 0);
@@ -679,13 +756,16 @@ static void move(work *w, const op_patch *p) {
 				t.untake = (op_patch){.place = t.back, .has_value = 1, .value = t.m};
 			}
 			t.has_untake = 1;
+			if (w->inplace) w->pending = t.untake, w->has_pending = 1;
 		}
 	}
+	if (w->has_pending) keep_apart(w, &t.untake);
 	op_value *moved = t.m;
 	if (!pl->has_range) {
 		int listy = w->undo && pl->length > 0 && is_list(get(w, pl->path, pl->length - 1));
 		op_value *old = set(w, pl->path, pl->length, moved, !w->undo);
 		if (w->undo) unland(w, p, &t, old, listy);
+		w->has_pending = 0;
 		return;
 	}
 	op_value *v = get(w, pl->path, pl->length);
@@ -695,6 +775,7 @@ static void move(work *w, const op_patch *p) {
 	int has_unput = splice(w, pl->path, pl->length, pl->from, pl->to, one ? one_of(w, moved) : moved,
 		0, &unput);
 	if (w->undo) unfill(w, p, &t, one, has_unput ? &unput : NULL);
+	w->has_pending = 0;
 }
 
 // the patch landed: its undo pushed when wanted
@@ -745,46 +826,71 @@ static int shape(const op_patch *p) {
 	return 1;
 }
 
+// the patches of the undo so far, the last patch's first, for patches 0 .. last
+static op_patch *reversed(work *w, const size_t *marks, size_t last, size_t *count) {
+	op_patch *back = grab(NULL, w->undone.n * sizeof *back);
+	size_t m = 0;
+	for (size_t j = last + 1, e = w->undone.n; j-- > 0; e = marks[j])
+		for (size_t k = marks[j]; k < e; k++) back[m++] = w->undone.patches[k];
+	*count = m;
+	return back;
+}
+
+// in place, a call that failed: what it did is undone, in place, by the undo it built
+static void roll_back(work *w, const size_t *marks, size_t failed) {
+	if (w->has_pending) push(w, &w->pending);
+	size_t n;
+	op_patch *back = reversed(w, marks, failed, &n);
+	// what is still made here stays made: its items have no references yet
+	work r = {.root = w->root, .inplace = 1, .made = w->made};
+	w->made = (pset){0};
+	if (setjmp(r.jump)) abort(); // an undo patch is never refused
+	for (size_t i = 0; i < n; i++) step(&r, &back[i]);
+	let_go(&r);
+	release(&r);
+	free(back);
+}
+
 int op_apply(const op_value *value, const op_patch *patches, size_t n,
 	const op_apply_options *options, op_value **out, size_t *failed) {
-	int list = options != NULL && options->list;
 	op_undo *undo = options != NULL ? options->undo : NULL;
-	work w = {.root = (op_value *)value, .undo = undo != NULL};
+	int inplace = options != NULL && options->in_place;
+	// in place the undo is built even if not asked for: it takes a failed call back
+	work w = {.root = (op_value *)value, .undo = undo != NULL || inplace, .inplace = inplace};
 	// each patch's undo starts at its mark
-	size_t *marks = undo ? grab(NULL, (n + 1) * sizeof *marks) : NULL;
+	size_t *marks = w.undo ? grab(NULL, (n + 1) * sizeof *marks) : NULL;
 	volatile size_t i = 0;
 	if (setjmp(w.jump)) {
+		if (inplace) roll_back(&w, marks, i);
 		// what was made here is left to go, the undo so far with it
 		let_go(&w);
+		release(&w);
 		op_undo_free(&w.undone);
 		free(marks);
 		if (failed) *failed = i;
 		return w.code;
 	}
-	// a list starts as []
-	if (list && w.root == NULL) w.root = made_list(&w, 0);
 	for (; i < n; i++) {
-		if (!shape(&patches[i])) fail(&w, OP_NOT_A_PATCH);
 		if (marks) marks[i] = w.undone.n;
+		if (!shape(&patches[i])) fail(&w, OP_NOT_A_PATCH);
 		step(&w, &patches[i]);
-		if (list && w.root != NULL && !is_list(w.root)) fail(&w, OP_WRONG_KIND);
 	}
-	// nothing there: none; a list left empty is that too
-	int gone = w.root == NULL || (list && is_list(w.root) && w.root->count == 0);
-	if (gone) *out = NULL;
+	// nothing there: none
+	if (w.root == NULL) *out = NULL;
 	else {
 		hold(&w, w.root);
 		*out = w.root;
 	}
 	// what is made and left over is let go of
 	let_go(&w);
+	release(&w);
 	if (undo) {
 		// the undo: the last patch's first
 		for (size_t j = n, e = w.undone.n; j-- > 0; e = marks[j])
 			for (size_t k = marks[j]; k < e; k++) *undo_add(undo) = w.undone.patches[k];
 		free(w.undone.patches);
-		free(marks);
-	}
+	} else op_undo_free(&w.undone);
+	free(marks);
 	return OP_OK;
 }
 

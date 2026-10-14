@@ -1,32 +1,32 @@
 {
 	"title": "effects act after the round's last run, in the order their runs ended",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "effect",
 			"name": "e1",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "a" },
 			"act": { "log": ["e1", { "given": "value" }] }
 		},
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "a" }, 1] },
 			"to": "c"
 		},
 		{
 			"op": "compute",
 			"name": "d",
-			"owner": "o",
+			"scope": "o",
 			"f": { "sum": [{ "read": "c" }, 1] },
 			"to": "d"
 		},
 		{
 			"op": "effect",
 			"name": "e2",
-			"owner": "o",
+			"scope": "o",
 			"f": { "read": "d" },
 			"act": { "log": ["e2", { "given": "value" }] }
 		},
@@ -45,10 +45,10 @@
 					{ "starts": "e1", "run": 2, "rank": 0 },
 					{ "ends": "e1", "run": 2, "ended": "done", "equal": false },
 					{ "starts": "c", "run": 2, "rank": 0 },
-					{ "due": "d", "tick": 9 },
+					{ "due": "d", "tick": 9, "by": "c" },
 					{ "ends": "c", "run": 2, "ended": "done", "equal": false },
 					{ "starts": "d", "run": 2, "rank": 1 },
-					{ "due": "e2", "tick": 10 },
+					{ "due": "e2", "tick": 10, "by": "d" },
 					{ "ends": "d", "run": 2, "ended": "done", "equal": false },
 					{ "starts": "e2", "run": 2, "rank": 2 },
 					{ "ends": "e2", "run": 2, "ended": "done", "equal": false },

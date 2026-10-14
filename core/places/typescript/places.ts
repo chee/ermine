@@ -30,10 +30,19 @@ export type Item = {
 
 // what a read rested on: the children of id as source has them, at path in that node's value; []:
 // the whole value. told whether or not anything was there: a read of what is not there yet is
-// how a caller learns where to put something
-export type Read = { readonly source: Key; readonly id: Key; readonly path: readonly string[] }
+// how a caller learns where to put something. keys: a read of which names there are (path []),
+// not of what is under them
+export type Read = {
+	readonly source: Key
+	readonly id: Key
+	readonly path: readonly string[]
+	readonly keys?: true
+}
 
 // a name in a parent's children: the parent (an item, or an entry), and the name
+// where a read is told: the setup's, or one given to a call, used instead of it for that call
+export type Tell = (read: Read) => void
+
 export type Slot = readonly [parent: Item | Entry, name: string]
 
 export type Setup = {
@@ -43,7 +52,7 @@ export type Setup = {
 	// a source's nodes are kept is the caller's: one table for all, a table per source, anything
 	children: (source: Key, id: Key) => Node<unknown> | undefined
 	// told of each read, as it is made
-	read?: (read: Read) => void
+	read?: Tell
 }
 
 // a children node a write changed, and whose it is: the node's change has the patches that landed
@@ -65,7 +74,7 @@ export function path(item: Item): string[] {
 	return names.reverse()
 }
 
-const bad = (name: string) => name === "." || name === ".." || name === "/"
+const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
 function isMap(v: unknown): v is Record<string, unknown> {
 	if (v === null || typeof v !== "object" || Array.isArray(v)) return false
@@ -94,12 +103,25 @@ const taken = (node: Node<unknown>, name: string) =>
 const isEntry = (e: unknown): e is Entry =>
 	Array.isArray(e) && e.length === 2 && isKey(e[0]) && isKey(e[1])
 
+// the items an array under name in up's children holds, in order
+function entries(up: Item, name: string, list: readonly unknown[]): Item[] {
+	const out: Item[] = []
+	for (let i = 0; i < list.length; i++) {
+		const e = list[i]
+		if (isEntry(e)) out.push({ source: e[0], id: e[1], up, name, at: i })
+	}
+	return out
+}
+
+// what an opened place keeps of one item's level: per name, the array walked and the items it gave
+type Level = { names: Map<string, { list: readonly unknown[]; items: Item[] }> }
+
 // what a held place keeps per step: the items it was walked from, the children nodes they read
 // and at which change, what that gave, and how many opened places share it
 type Seen = { source: Key; id: Key; node: Node<unknown> | undefined; change: unknown }
 type Step = { from: readonly Item[] | null; items: readonly Item[]; seen: Seen[]; opened: number }
 
-export function createPlaces(setup: Setup) {
+export function createPlaces(setup: Setup): Places {
 	const { children, read: tell } = setup
 	const top: Item = Array.isArray(setup.root)
 		? { source: setup.root[0], id: setup.root[1] }
@@ -130,53 +152,74 @@ export function createPlaces(setup: Setup) {
 	}
 
 	// one name down from each item: every entry under the name in its children, in order
-	function step(items: readonly Item[], name: string, seen?: Seen[]): Item[] {
+	function step(items: readonly Item[], name: string, tell?: Tell, seen?: Seen[]): Item[] {
 		const out: Item[] = []
 		for (const up of items) {
 			const node = children(up.source, up.id)
 			tell?.({ source: up.source, id: up.id, path: [name] })
 			seen?.push({ source: up.source, id: up.id, node, change: node?.change })
 			const list = array(node, name)
-			if (list === undefined) continue
-			for (let i = 0; i < list.length; i++) {
-				const e = list[i]
-				if (isEntry(e)) out.push({ source: e[0], id: e[1], up, name, at: i })
-			}
+			if (list !== undefined) out.push(...entries(up, name, list))
 		}
 		return out
 	}
 
-	// what is at the address, front first: from the root, an item, or an entry
-	function get(address: Address, from?: Item | Entry): Item[] {
+	// what is at the address, front first: from the root, an item, or an entry. read: told the
+	// reads of this call, instead of the setup's
+	function get(address: Address, from?: Item | Entry, read: Tell | undefined = tell): Item[] {
 		const p = plan(address, from)
 		if (!p) return []
 		let items = [p[0]]
 		for (const name of p[1]) {
 			if (!items.length) break
-			items = step(items, name)
+			items = step(items, name, read)
 		}
 		return items
 	}
 
 	// the address from the start, then from each place the start was found in, nearest first:
-	// what the nearest gives; all: what each gives, nearest first
-	function lookup(address: Address, from?: Item | Entry, all = false): Item[] {
+	// what the nearest gives; all: what each gives, nearest first.
+	// read: as for get
+	function lookup(
+		address: Address,
+		from?: Item | Entry,
+		all = false,
+		read: Tell | undefined = tell,
+	): Item[] {
 		const out: Item[] = []
 		for (let at: Item | undefined = begin(from); at; at = at.up) {
-			const found = get(address, at)
+			const found = get(address, at, read)
 			if (found.length && !all) return found
 			out.push(...found)
 		}
 		return out
 	}
 
-	// the names in an item's children, in their order there; a read of the whole value
-	function names(at: Item | Entry): string[] {
+	// the names in an item's children, in their order there; a read of which names there are.
+	// read: as for get
+	function names(at: Item | Entry, read: Tell | undefined = tell): string[] {
 		const item = begin(at)
 		const v = children(item.source, item.id)?.value
-		tell?.({ source: item.source, id: item.id, path: [] })
+		read?.({ source: item.source, id: item.id, path: [], keys: true })
 		const out: string[] = []
 		if (isMap(v)) { for (const k of Object.keys(v)) if (Array.isArray(v[k])) out.push(k) }
+		return out
+	}
+
+	// every item at a level: each name's entries in an item's children, in name order then slot
+	// order. its reads: the keys read, and each name's array (as get([name], at, read) tells)
+	function members(at: Item | Entry, read: Tell | undefined = tell): Item[] {
+		const up = begin(at)
+		const v = children(up.source, up.id)?.value
+		read?.({ source: up.source, id: up.id, path: [], keys: true })
+		const out: Item[] = []
+		if (!isMap(v)) return out
+		for (const name of Object.keys(v)) {
+			const list = v[name]
+			if (!Array.isArray(list)) continue
+			read?.({ source: up.source, id: up.id, path: [name] })
+			out.push(...entries(up, name, list))
+		}
 		return out
 	}
 
@@ -209,11 +252,14 @@ export function createPlaces(setup: Setup) {
 		return true
 	}
 
-	// the address from the root, opened: items() gives what is there now. a step is walked again
+	// the address from the root, opened: items() gives what is there now; members() the members of
+	// every one of those items, kept across calls (below). a step is walked again
 	// only when the step before it gave other items, or a children node it read is not the one
 	// there or is at another change; nothing changed: the same list. each call tells every read
-	// the held address rests on. drop: let go
-	function open(address: Address) {
+	// the held address rests on, to the sink given to items, else the one given to open, else the
+	// setup's: whoever asks is who depends on it, and a re-walk is theirs. the sink is never kept
+	// in a shared step. drop: let go
+	function open(address: Address, opened: Tell | undefined = tell) {
 		const p = plan(address)
 		const start = p ? starts : none
 		// its own copy: the hold outlives the call
@@ -227,7 +273,7 @@ export function createPlaces(setup: Setup) {
 			path.push(e)
 		}
 		let dropped = false
-		function items(): readonly Item[] {
+		function items(read: Tell | undefined = opened): readonly Item[] {
 			if (dropped || !p) return none
 			let before: readonly Item[] = start
 			for (let i = 0; i < path.length; i++) {
@@ -235,22 +281,56 @@ export function createPlaces(setup: Setup) {
 				if (s.from !== before || !good(s)) {
 					s.from = before
 					s.seen = []
-					const walked = before.length ? step(before, names[i], s.seen) : none
+					const walked = before.length ? step(before, names[i], read, s.seen) : none
 					if (!alike(walked, s.items)) s.items = walked
-				} else if (tell) {
-					for (const x of s.seen) tell({ source: x.source, id: x.id, path: [names[i]] })
+				} else if (read) {
+					for (const x of s.seen) read({ source: x.source, id: x.id, path: [names[i]] })
 				}
 				before = s.items
 			}
 			return before
 		}
+		// the members of every item, concatenated in item order, each in name order then slot order,
+		// kept per item: a name whose array is the one walked last time keeps its items (its read
+		// is told again, so it stays tracked); a name with a new array is walked again; a name gone
+		// is let go. a children node in place (cow === false) changes its arrays without a new
+		// one: every name is walked again. the sink: as for items
+		let levels = new Map<Item, Level>()
+		function members(read: Tell | undefined = opened): Item[] {
+			if (dropped) return []
+			const out: Item[] = []
+			const next = new Map<Item, Level>()
+			for (const up of items(read)) {
+				const node = children(up.source, up.id)
+				read?.({ source: up.source, id: up.id, path: [], keys: true })
+				const was = levels.get(up)?.names
+				const level: Level = { names: new Map() }
+				next.set(up, level)
+				const v = node?.value
+				if (!isMap(v)) continue
+				for (const name of Object.keys(v)) {
+					const list = v[name]
+					if (!Array.isArray(list)) continue
+					read?.({ source: up.source, id: up.id, path: [name] })
+					const kept = was?.get(name)
+					const there = kept !== undefined && kept.list === list && node!.cow !== false
+						? kept
+						: { list, items: entries(up, name, list) }
+					level.names.set(name, there)
+					out.push(...there.items)
+				}
+			}
+			levels = next
+			return out
+		}
 		function drop() {
 			if (dropped) return
 			dropped = true
+			levels = new Map()
 			for (const e of path) if (--e.value!.opened === 0) e.value = undefined
 			if (path.length) held.prune(path[path.length - 1])
 		}
-		return { items, drop }
+		return { items, members, drop }
 	}
 
 	// writing
@@ -382,7 +462,22 @@ export function createPlaces(setup: Setup) {
 		return [...place(to, moved, header, toindex), ...unplace(from, index, header)]
 	}
 
-	return { get, lookup, names, open, place, unplace, order, rename, move }
+	return { get, lookup, names, members, open, place, unplace, order, rename, move }
 }
 
-export type Places = ReturnType<typeof createPlaces>
+export type Places = {
+	get: (address: Address, from?: Item | Entry, read?: Tell) => Item[]
+	lookup: (address: Address, from?: Item | Entry, all?: boolean, read?: Tell) => Item[]
+	names: (at: Item | Entry, read?: Tell) => string[]
+	members: (at: Item | Entry, read?: Tell) => Item[]
+	open: (address: Address, opened?: Tell) => {
+		items: (read?: Tell) => readonly Item[]
+		members: (read?: Tell) => readonly Item[]
+		drop: () => void
+	}
+	place: (slot: Slot, entry: Entry, header: ChangeHeader, index?: number) => Changed[]
+	unplace: (slot: Slot, index: number, header: ChangeHeader) => Changed[]
+	order: (slot: Slot, from: number, to: number, header: ChangeHeader) => Changed[]
+	rename: (slot: Slot, to: string, header: ChangeHeader) => Changed[]
+	move: (from: Slot, index: number, to: Slot, header: ChangeHeader, toindex?: number) => Changed[]
+}

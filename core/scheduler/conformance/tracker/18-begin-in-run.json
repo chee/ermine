@@ -1,0 +1,15 @@
+{
+	"title": "begin in a run is an error and changes nothing; after end it works again",
+	"steps": [
+		{ "op": "begin", "from": "p" },
+		{ "op": "track", "from": "p", "to": "a" },
+		{ "op": "begin", "from": "p", "fails": true },
+		{ "op": "track", "from": "p", "to": "b" },
+		{ "op": "reads", "of": "p", "expect": { "names": ["a", "b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["p"] } },
+		{ "op": "end", "from": "p" },
+		{ "op": "begin", "from": "p" },
+		{ "op": "end", "from": "p" },
+		{ "op": "reads", "of": "p", "expect": { "names": [] } }
+	]
+}

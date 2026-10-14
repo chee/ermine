@@ -10,7 +10,7 @@
 		{ "op": "untrack", "from": "v", "to": "a" },
 		{ "op": "track", "from": "v", "to": "b" },
 		{ "op": "end", "from": "v" },
-		{ "op": "reads", "of": "v", "expect": ["b"] },
-		{ "op": "readers", "of": "a", "expect": [] }
+		{ "op": "reads", "of": "v", "expect": { "names": ["b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } }
 	]
 }

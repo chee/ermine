@@ -1,0 +1,43 @@
+{
+	"title": "one tree: a scope is made under the one given, else the one open (none: unscoped); what is open shows the info of each scope from the root down; disposing a root takes what is under it",
+	"steps": [
+		{ "op": "scope", "name": "x", "expect": { "error": "unscoped" } },
+		{ "op": "current", "expect": { "value": null } },
+		{ "op": "root", "name": "a", "info": [["actor", "chee"]], "expect": {} },
+		{
+			"op": "scope",
+			"name": "b",
+			"parent": "a",
+			"info": [["app", "notes"], ["actor", "notes"]],
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "b",
+			"do": { "current": null },
+			"expect": {
+				"value": {
+					"scope": "b",
+					"pairs": [["actor", "chee"], ["app", "notes"], ["actor", "notes"]]
+				}
+			}
+		},
+		{
+			"op": "run",
+			"scope": "b",
+			"do": {
+				"do": [{ "scope": ["k", [["why", "save"]]] }, { "in": ["k", { "current": null }] }]
+			},
+			"expect": {
+				"value": {
+					"scope": "k",
+					"pairs": [["actor", "chee"], ["app", "notes"], ["actor", "notes"], ["why", "save"]]
+				}
+			}
+		},
+		{ "op": "current", "expect": { "value": null } },
+		{ "op": "dispose", "scope": "a", "expect": {} },
+		{ "op": "run", "scope": "k", "do": 1, "expect": { "error": "disposed" } },
+		{ "op": "scope", "name": "k2", "parent": "b", "expect": { "error": "disposed" } }
+	]
+}

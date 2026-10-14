@@ -1,11 +1,11 @@
 {
 	"title": "a compute changing a key it read, in its own run: a loop through it",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": { "write": ["k", { "sum": [{ "read": "k" }, 1] }] }
 		},
 		{ "op": "pulse", "expect": {} },
@@ -15,7 +15,7 @@
 				"moments": [
 					{ "due": "c", "tick": 1 },
 					{ "starts": "c", "run": 1, "rank": 0 },
-					{ "due": "c", "tick": 2 },
+					{ "due": "c", "tick": 2, "by": "c" },
 					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
 					{ "starts": "c", "run": 2, "rank": 0 },
 					{ "ends": "c", "run": 2, "ended": "looping", "equal": false, "through": ["c"] }

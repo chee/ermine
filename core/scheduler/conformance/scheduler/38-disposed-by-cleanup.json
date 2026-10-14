@@ -1,0 +1,43 @@
+{
+	"title": "a computation disposed by a cleanup run before its run or act: its f, or its act, is not called (proof D1, D2)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [{ "cleanup": ["c", { "dispose": "c" }] }, { "log": ["c", { "read": "k" }] }]
+			},
+			"to": "c"
+		},
+		{ "op": "scope", "name": "p", "parent": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "p",
+			"f": {
+				"do": [{ "cleanup": ["d", { "dispose": "p" }] }, { "log": ["d", { "read": "k" }] }]
+			},
+			"to": "d"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "k" },
+			"act": {
+				"do": [{ "log": ["e", { "given": "value" }] }, { "cleanup": ["e", { "dispose": "e" }] }]
+			}
+		},
+		{ "op": "write", "values": { "k": 1 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["c", 1], ["d", 1], ["e", 1]] } },
+		{ "op": "write", "values": { "k": 2 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [] } },
+		{ "op": "write", "values": { "k": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [] } }
+	]
+}

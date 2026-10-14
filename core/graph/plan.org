@@ -1,0 +1,221 @@
+#+title: plan: nodes as tables, paths in children
+#+author: LLM generated working output
+#+date: 2026-10-14
+
+Words: *decided*: chee's words, quoted. *lean*: chee thinking it through, quoted. *mine*: my
+proposal, open to change. *open*: not answered. Came out of "how would you do sync on this graph";
+chee 10-14: "i think this is the plan."
+
+* Why
+- [source, id] entries, *lean*: "this [source, id] thing may well be the wrong design"; "the need to
+  add [ROOT was already a sign that this was a mistake"
+- source mixes type with fate, *lean*: "the source is sometimes a type. type (as in shape) tells you
+  how to use something, but it doesn't tell you wther it syncs or not"
+- no special word for saved, *decided*: "i don't want "stored" to become a real thing"
+- several things at a slot did several jobs; most were states of one thing, not several things.
+  conflicts, *lean*: "conflict at the slot level is already probably not actually useful";
+  "maybe multivalueregister at the node level was the wrong soluton"
+
+* Words
+- changeable: a value and its latest change, what core/node makes today ({value?, change, cow?}).
+  *lean*: "maybe we can call it a changeable"
+- node: everything at an id, the combination of its tables. *lean*: "i think for storage, a node
+  is its _combined_ table values. i believe."
+- table: what holds changeables under (table name, id). the store folds into it, *lean*: "would
+  store even still exist? wouldnt it just be table no?"
+
+* The table and the node
+- (table name, id) → changeable; no source anywhere in the key
+- an id has the tables it has, not a fixed three, *decided*: "yes, this is actually already true".
+  something (a type) says which tables an id has; a reader finds a table it knows to look for
+- the unit of saving and sharing is the node: one record per id holding each table's changeable,
+  each with its own change (tables still change and merge apart). *mine*, following the above
+- pack's unit becomes the node, not [table, id]. *mine*
+
+* Children: names can be paths
+- children: an ordered list of [name, id]. a name may be a path: [["a", x], ["a/b/c", y]]; "/"
+  is illegal inside one name. *decided*: "what if those names could be themselves paths, (we make
+  `/` illegal in a name) and we say [["a",id], ["a/b/c", id]] then that folder is able to override
+  its children and if you share THAT then it goes with all its overrides and so the "my device's
+  mounts" table is not actually a special thing it's just the children on your root node"
+- children a plain map, *lean* 10-14: "children is maybe an Ordered Map, not a list ... we can only
+  have 1 name, name can only mean one thing. wait... it doesn't matter that it's ordererd anymore,
+  does it? it can just be a map!". *mine*, consequences: a repeated name can't be a union any more;
+  two placements under one name at once are a key conflict (the conflicts table), so children need
+  no element ids; canonical CBOR sorts map keys anyway; a manual order is a value of its own (as
+  todos keeps)
+- a node's own data stays its own: what overrides it sits outside it, in an ancestor's children,
+  *lean*: "this information should actually sit outside of the nodes themselves"
+- two folders on the route naming the same path, *decided*: "outer wins". the one nearer where
+  the walk started wins: anyone can override a shared folder for themselves, at their own root;
+  to adopt the shared folder's choice, delete your own entry
+- outer is relative to where the walk starts: from your root, your root's entries first; a walk
+  started at a process's place (chrooted) has that place outermost. *mine*
+- an outer redirect of a/b replaces the whole subtree: inner overrides beneath a/b are never seen.
+  *mine*, a consequence of outer wins at prefix level
+- the same name twice: a union, in order; the walk takes the first member that has the next name,
+  one route; the last name lists all its members (chee 10-05, 10-06). *mine* to use it for unions
+- dropping into a union: into any member, *decided*: "mount their folder and your folder over one
+  merged folder, and then you can drop things in any of them"
+- the walk, efficiently. *mine*: each folder's path-named entries in a small trie, built per
+  version of its children; as the walk takes a step it advances one cursor per outer folder whose
+  entries still match; the outermost cursor on a whole entry wins and the walk jumps to that id.
+  no overrides: one empty check. nothing new to track: overrides only come from folders on the
+  route, which a walk reads anyway. a redirect skips reading the folders it jumps over
+- today's places.ts step fans out from every item at each name (a union at each step multiplies
+  routes); the 10-05 rule is one route. fact
+
+* References and versions
+- an id anywhere an id goes, or a versioned id: ermine://b/commit/<hash>, b as of that commit,
+  read-only; a write from there is a commit on the old heads, a branch. *lean*: "so you're
+  suggesting an array of ids ermine://a ermine://b ermine://c and i can do
+  ermine://b/commit/da001e48b98b41779d9ab9fb4e28391094a92dab or whatever"
+- looking at an old version: only here, ephemerally shared, or persisted and shared, *decided*:
+  "there's ephemerally-shared and persisted-shared both of which are useful"
+- children of a versioned folder are plain ids: reached at their current version. the whole tree
+  as of a time needs the version to travel down the walk (a date does it: each id's heads then).
+  *mine*, open
+- rewind exists only with history, *decided*: "rewind would only exist when we have history, as
+  ephemeral would only exist when we have storage or network"
+
+* What things are of
+- of an id (a node's own data, and what its followers should see), of a slot (a name's order,
+  placements), of a path (computations, processes, your use of a node you mounted), *decided*: "i
+  think the first 3 are right - a little shaky on path"
+- of a reader (refused): *open*, "not sure bout that"
+- refused: an id with nothing in it you can open, *decided*: "this is kind of implicit. like
+  that's all you have"
+- your use of a node you mounted lives on your path, never on the node: mounting someone's e-ink
+  screen, *decided*: "it shouldn't get my tables"
+
+* States and layers
+- pending, error: an attribute on the computation's node, which sits at one place; never placed in
+  a slot, *decided*: "i think that's right yeah. the process node is not-persisted so it's okay
+  to have a live value like an error in a path"
+- patch node: {patches, on, at}: patches over a node, the version they were made against.
+  optimistic state, a drag; *lean*: "optimsitic state in ermine might be the same thing as the
+  patch node"; *decided*: "a patch node would also store what version it was a patch for so it
+  could be updated the same way selection state is in that demo"; "yeah, this would be a fun thing
+  to add". mountable anywhere a path-name goes: at your root, in a shared folder, in an unshared
+  one, or on the file (chee, the children idea above)
+- a patch node carried forward through each change that lands, as big-duet's caret is (shift);
+  stale when it can't follow. one library for carets, patch nodes and sync's anchors: "anchors
+  (cursors) as a library over the op stream" (core/scheduler/plan.org). *mine*
+- every thing at a path, not just the front one: a separate function, *decided*: "i think it's a
+  separate function like `entries(path)` or something"
+- conflicts: a conflicts table at the id, *lean*: "a conflicts table for the id maybe?". *mine*:
+  sync writes it from its history, one entry per conflicting spot (path, each head, its value,
+  who); rebuilt from history, so never saved itself; the value table holds one head
+- "come with me and bind what I bind": my overrides in a folder that is sent, never saved; you
+  mount it at your root and see what I bind as I bind it. *mine*, open (chee: "HOW is this going to
+  be communicated")
+
+* Ephemeral placement
+- places' job, *lean*: "i believe that this is places's job, with a table that's the in-memory items
+  at an address"; "it's in the graph but not the persisted part of the graph"
+- the cases, *lean*: "an in-memory node you mount at a path... but also being able tochoose to
+  transmit, choose to receive, someone else's persisted node over ephemeral channel and then you
+  place it ephemerally"
+- some nodes are ephemeral themselves, *lean*: "maybe you need to be able to provide places with a
+  thing like {attributes: , children: , value: } instead of an id?"; 10-11, for context: "an
+  ephemeral node is just an ephemeral node with an id"
+- *mine*: an ephemeral node needs no mark: storage saves what kept children reach, and a node placed
+  only in the in-memory table is never reached. the OS's /apps/<prog>/<pid> becomes an in-memory
+  placement, the saved folder stays clean. a placement ends when its placer ends (chee 10-12)
+- a name in both the in-memory table and the kept map, *decided*: "the ephemeral wins"
+- *open*: whether an in-memory placement can itself be sent; inline nodes (no id: no references,
+  tracked by address) or in-memory ids
+
+* Saving and syncing
+- what's kept, sent, and sent ephemerally, *decided*, how *open*: "something that's a coordination
+  between the user and the storage process and the sync process, somehow"
+- one sedimentree per node, *decided*: "21 one sedimentree per node yes"; each table's history
+  inside it, a commit naming its table (*mine*)
+- every head kept, merging a separate layer, *decided*: "24 yeah i think that's good." (10-13: "show
+  every head, merging will be a separate layer")
+- children merged by element ids, *decided* 10-13 ("in sync"); *open* whether it is still needed
+  with the new children shape
+- change identity (a patch node's at, sync's settles): *open*, "this, i think, has to be a
+  synclayer/historylayer thing... i _think_, maybe not actually hmm.... it dosn't matter right now"
+- Keyhive, *decided* 10-13: protect answers from Keyhive's local state; actor signed; ids that
+  aren't Keyhive doc ids stay unprotected; we build fragments
+
+* What it changes
+- places: entries are ids; names may be paths; outer wins; one route; no ROOT, no children(source,
+  id) hook
+- table and store: one table, keyed (table name, id); the store's source goes
+- link: tracked reads keyed by table, not (source, table)
+- guard: refused is an id with nothing you can open, not a REFUSED source
+- node: the changeable; node is the whole
+- pack: the node as the unit
+- hosts (slaygrounds and others): no "stored", "pending", ROOT, REFUSED; pending moves onto the
+  computation's node
+
+* Dropped
+- "stored" as a term; [source, id]; persistence as attributes on tables ("i was wrong"); a fixed
+  saved/shared table of examples ("every section of that table is wrong except for
+  shared-notsaved"); many ephemeral heads ("this might have been a psychedelic fever dream"); a kept
+  alternative and variants by reader (no use case)
+
+* Open
+- of a reader: real or not
+- how the person, storage and sync coordinate what's kept and sent
+- "come with me and bind what I bind" ephemerally
+- whole-tree versions: the version travelling down a walk
+- change identity: core, or sync/history
+- whether children still need element ids
+- renaming or moving a folder an override names by path: the override breaks, as a symlink does
+
+* Against the playground, 10-14
+Every demo in playground/ checked by reading (six agents; nothing built or run): the slaygrounds
+examples (42), playground/demos (39 with console's), experimental_os, files, term, automerge, solid,
+places-fresh, pack-indexeddb. None needs something impossible. Most change only in the host: entries
+become ids, the "stored" filters go, pending/error move onto the computation's node. Five need
+something the plan doesn't have yet: fancy-layers, protect, d2 (and console/core, workspace),
+experimental_os, files.
+
+Gaps found, most-hit first; ✦ touches the data structure:
+- lookup and "..": walking up, nearest wins (chee 10-14: "nearest wins for lookup. outer doesn't
+  exactly "win on the way down" conceptually"). *decided*: ".." is by path, "the thing at ".." is
+  whatever the rules outside say it is ... i think path's internal cache is going to do just fine
+  here": from /work/a/b, ".." is whatever the rules make /work/a, even if b was reached by a jump.
+  so a jump's route is its names: prog-build's escape.c still looks up through /c/vault. Unstated, and how it meets path entries and outer wins
+  (outer wins downward, nearest wins upward). desk, lamps, big-shell bin/, fancy-lisp, pipeline,
+  sequencer, react, solid, d2, cascade, dungeon, life, every t.find
+- ✦ a repeated name: the plan makes it a union (walk takes the first); many demos use it as an
+  ordered list, need the nth member, and repeat the same id (sequencer: verse twice). big-trello,
+  fancy-notebook, pipeline, sequencer, dungeon, automerge, big-shell @n
+- ✦ an entry in a saved or shared folder that is never kept: a process, a device, a host's slot.
+  experimental_os (/apps/<pid>, /dev/kbd, /hw), files (@files), desk's look process. The old
+  SYNC.tex rule: never committed, pinned after its shared left neighbour
+- nothing marks a node or value as never kept: process-owned nodes, functions in /bin and /apps,
+  an AudioContext at /audio, computations in data folders (nn). processes, react, solid, signals,
+  fancy-synth, fancy-sequencer, big-shell, fancy-desktop, nn, prog-build
+- not loaded, arriving, empty and refused read the same. terminal, lib-dom, console/core, files'
+  pending links, experimental_os
+- protect: why a read was refused; rules by process, by name and by actor, edited live in a node;
+  local ids that Keyhive can't cover; previewing as another person (a reader variant: dropped above
+  as having no use case, console/core has one). protect, d2, console/core, workspace, rules
+- ✦ patch nodes at a name: what a read gives (patched value or members), stacking order, how
+  entries() marks them; and pending on the target (a picture's readers seeing a filter coming).
+  fancy-layers, big-trello's drag ghost
+- conflicts: children conflicts have no shape (which table, list sides). sync, console/browser-sync,
+  console/order. the files store keeps no history, so it can't rebuild conflicts after a reload:
+  *decided*, "the files thing would just be rethought it's okay, the concept is still implementable"
+  (where history is saved, conflicts rebuild from it)
+- status: a "looping" status; who writes the status, and with which cause (one written from the hook
+  without a cause spun forever); where the rest of a run record lives (reads, how it ended).
+  lab-sheet, strings, why, processes
+- ✦ path names: a path through folders that don't exist (show/2/0 with no show): a read of what isn't
+  there, told, so something can be put there later (*decided* 10-13: "i would like for a thing to be
+  able to read a path that is not there, and to know it tried to read it"; 10-14: "it's okay it
+  doesn't exist, we mark it as a read"); whether listing a/b
+  shows names an outer a/b/x adds; one folder reached by two routes with different overrides; the
+  route of a path-named entry (prog-build: escape.c's keys come from sitting in /c/vault, which a
+  jump skips). prog-render, prog-build, files, experimental_os
+- one step across nodes, for undo and travel. big-rewind, big-trello
+- where an id is placed (reverse lookup). fancy-sequencer, lab-lamps
+- ✦ a versioned id with several heads. automerge, browser-sync. later: "/b/commit/hasha+hashb or
+  something" (chee 10-14)
+- arriving vs empty vs refused: moved to the sync plan (extensions/subduction/plan.org)
+- an app's data about a shared thing, kept neither on it nor per path. fancy-desktop's catclock

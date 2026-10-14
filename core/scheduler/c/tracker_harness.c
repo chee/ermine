@@ -1,11 +1,12 @@
-// The C trackgraph on the line protocol (newcore/conformance/trackgraph/harness.ts): one JSON request per
-// line in, one answer per line out. A node's owner is its name. Reads only the fixed shape the
-// tests send: a flat object of string fields.
-#include "tracker.h"
-
+// the C tracker (tracker.h) on the line protocol of core/scheduler/typescript/tracker_harness.ts. A
+// node's owner is its name.
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "tracker.h"
+#include "../../../conformance/c/harness.h"
 
 typedef struct {
 	char *name;
@@ -15,97 +16,73 @@ typedef struct {
 static entry *entries;
 static size_t count, capacity;
 
-static void fail(const char *why) {
-	fprintf(stderr, "harness: %s\n", why);
-	exit(1);
-}
-
 static tg_node *node(const char *name) {
 	for (size_t i = 0; i < count; i++)
 		if (strcmp(entries[i].name, name) == 0) return entries[i].node;
 	if (count == capacity) {
 		capacity = capacity ? capacity * 2 : 16;
 		entries = realloc(entries, capacity * sizeof *entries);
-		if (entries == NULL) fail("out of memory");
+		if (entries == NULL) hh_fail("out of memory");
 	}
 	char *copy = strdup(name);
 	tg_node *n = copy ? tg_node_new(copy) : NULL;
-	if (n == NULL) fail("out of memory");
+	if (n == NULL) hh_fail("out of memory");
 	entries[count++] = (entry){copy, n};
 	return n;
 }
 
-// the string value of "key" in a flat object, unescaped into out; 0 when absent
-static int field(const char *line, const char *key, char *out, size_t size) {
-	char pattern[64];
-	snprintf(pattern, sizeof pattern, "\"%s\"", key);
-	const char *p = strstr(line, pattern);
-	if (p == NULL) return 0;
-	p += strlen(pattern);
-	while (*p == ' ' || *p == ':') p++;
-	if (*p++ != '"') return 0;
-	size_t n = 0;
-	for (; *p && *p != '"'; p++) {
-		if (*p == '\\' && p[1]) p++;
-		if (n + 1 < size) out[n++] = *p;
+static void put_name(FILE *out, const void *owner) { op_json_string(out, owner); }
+
+void hh_answer(const op_value *r, FILE *out) {
+	const char *op = hh_str(r, "op");
+	if (op == NULL) hh_fail("no op");
+	const char *of = hh_str(r, "of");
+	if (strcmp(op, "reads") == 0 && of) {
+		fputs("{\"names\":[", out);
+		for (tg_link *l = node(of)->reads; l != NULL; l = l->next) {
+			put_name(out, l->to->owner);
+			if (l->next != NULL) putc(',', out);
+		}
+		fputs("]}", out);
+		return;
 	}
-	out[n] = 0;
-	return 1;
+	if (strcmp(op, "readers") == 0 && of) {
+		fputs("{\"names\":[", out);
+		for (tg_link *l = node(of)->first; l != NULL; l = l->after) {
+			put_name(out, l->from->owner);
+			if (l->after != NULL) putc(',', out);
+		}
+		fputs("]}", out);
+		return;
+	}
+	const char *from = hh_str(r, "from"), *to = hh_str(r, "to");
+	if (from == NULL) hh_fail("no from");
+	tg_node *f = node(from);
+	int ok = 0;
+	if (strcmp(op, "begin") == 0) ok = tg_begin(f);
+	else if (strcmp(op, "end") == 0) tg_end(f);
+	else if (strcmp(op, "track") == 0 && to) ok = tg_track(f, node(to));
+	else if (strcmp(op, "add") == 0 && to) ok = tg_add(f, node(to));
+	else if (strcmp(op, "untrack") == 0) tg_untrack(f, to ? node(to) : NULL);
+	else {
+		hh_unknown(out, r);
+		return;
+	}
+	if (ok == -2) {
+		hh_error(out, "%s in a run", op);
+		return;
+	}
+	if (ok != 0) hh_fail("out of memory");
+	fputs("{}", out);
 }
 
-static void string(const char *s) {
-	putchar('"');
-	for (; *s; s++) {
-		if (*s == '"' || *s == '\\') putchar('\\');
-		putchar(*s);
+void hh_finish(void) {
+	for (size_t i = 0; i < count; i++) {
+		tg_untrack(entries[i].node, NULL);
 	}
-	putchar('"');
-}
-
-int main(void) {
-	char line[4096], op[64], from[1024], to[1024], of[1024];
-	while (fgets(line, sizeof line, stdin)) {
-		if (strspn(line, " \t\r\n") == strlen(line)) continue;
-		if (!field(line, "op", op, sizeof op)) fail("no op");
-		int has_from = field(line, "from", from, sizeof from);
-		int has_to = field(line, "to", to, sizeof to);
-		int has_of = field(line, "of", of, sizeof of);
-		if (strcmp(op, "reads") == 0 && has_of) {
-			fputs("{\"names\":[", stdout);
-			for (tg_link *l = node(of)->reads; l != NULL; l = l->next) {
-				string(l->to->owner);
-				if (l->next != NULL) putchar(',');
-			}
-			puts("]}");
-			continue;
-		}
-		if (strcmp(op, "readers") == 0 && has_of) {
-			fputs("{\"names\":[", stdout);
-			for (tg_link *l = node(of)->first; l != NULL; l = l->after) {
-				string(l->from->owner);
-				if (l->after != NULL) putchar(',');
-			}
-			puts("]}");
-			continue;
-		}
-		if (!has_from) fail("no from");
-		tg_node *f = node(from);
-		int ok = 0;
-		if (strcmp(op, "begin") == 0) tg_begin(f);
-		else if (strcmp(op, "end") == 0) tg_end(f);
-		else if (strcmp(op, "track") == 0 && has_to) ok = tg_track(f, node(to));
-		else if (strcmp(op, "add") == 0 && has_to) ok = tg_add(f, node(to));
-		else if (strcmp(op, "untrack") == 0) tg_untrack(f, has_to ? node(to) : NULL);
-		else {
-			printf("{\"error\":\"unknown op %s\"}\n", op);
-			continue;
-		}
-		if (ok == -2) {
-			puts("{\"error\":\"add in a run\"}");
-			continue;
-		}
-		if (ok != 0) fail("out of memory");
-		puts("{}");
+	for (size_t i = 0; i < count; i++) {
+		tg_node_free(entries[i].node);
+		free(entries[i].name);
 	}
-	return 0;
+	free(entries);
 }

@@ -1,9 +1,9 @@
 {
 	"title": "a compute run again while pending: the earlier promise's settling lands nowhere",
 	"steps": [
-		{ "op": "owner", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "expect": {} },
 		{ "op": "write", "values": { "a": "p1" }, "expect": { "tick": 1 } },
-		{ "op": "compute", "name": "c", "owner": "o", "f": { "wait": [{ "read": "a" }] }, "to": "c" },
+		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": [{ "read": "a" }] }, "to": "c" },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "write", "values": { "a": "p2" }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },

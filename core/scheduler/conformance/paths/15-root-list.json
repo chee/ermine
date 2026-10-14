@@ -10,21 +10,21 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [], "range": [1, 2], "value": [5] }],
-			"expect": [[], [1, "x"]]
+			"expect": { "spots": [[], [1, "x"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [1] }],
-			"expect": [[], [1, "x"], [2]]
+			"expect": { "spots": [[], [1, "x"], [2]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [], "value": [] }],
-			"expect": [[], [0], [1, "x"], [2]]
+			"expect": { "spots": [[], [0], [1, "x"], [2]] }
 		}
 	]
 }

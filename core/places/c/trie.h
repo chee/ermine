@@ -1,7 +1,7 @@
 // The trie (typescript/trie.ts), in C: a tree of names, an entry per path made, each with its
 // parent, its kids by name and a value that is the caller's. Names are any C strings (no NUL byte:
 // TypeScript's may hold one); nothing is joined, so a name may hold "/" or be empty. Same rules as
-// trie.ts, which the suite in conformance/trie/ holds both to.
+// trie.ts, which the suite in core/places/conformance/trie/ holds both to.
 //
 // An entry is a pointer that stays the same while the entry is in the trie. Most entries have one
 // kid, which is kept in the entry itself; a kids table is made on the second kid, and then holds

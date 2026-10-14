@@ -1,0 +1,77 @@
+{
+	"title": "values of every kind",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": {
+				"bytes": {
+					"/": {
+						"bytes": "AQI"
+					}
+				},
+				"f32": {
+					"/": {
+						"float32": [
+							1.5,
+							"NaN",
+							"-Infinity"
+						]
+					}
+				},
+				"i64": {
+					"/": {
+						"int64": [
+							"-1",
+							"9007199254740993"
+						]
+					}
+				},
+				"live": {
+					"/": {
+						"live": "canvas"
+					}
+				},
+				"slash": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				},
+				"n": [
+					0,
+					1e+300,
+					0.1,
+					null,
+					true,
+					false,
+					{
+						"/": {
+							"number": "NaN"
+						}
+					}
+				],
+				"text": [
+					"",
+					"é",
+					"日本",
+					"a\"b\\c\n"
+				],
+				"empty": [
+					[],
+					{}
+				]
+			},
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		}
+	]
+}

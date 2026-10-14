@@ -1,0 +1,71 @@
+{
+	"title": "sub replaces, del takes out, each one event; the same node again, or a del of nothing, none",
+	"steps": [
+		{
+			"op": "sub",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"expect": { "node": "b" }
+		},
+		{ "op": "del", "source": "stored", "part": "attributes", "id": "x", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "attributes", "id": "x", "expect": {} },
+		{
+			"op": "del",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"expect": { "error": "nothing-there" }
+		},
+		{
+			"op": "del",
+			"source": "never",
+			"part": "value",
+			"id": "x",
+			"expect": { "error": "nothing-there" }
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					["stored", "attributes", "x", "a"],
+					["stored", "attributes", "x", "b"],
+					["stored", "attributes", "x", null]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"source": "stored",
+			"part": "attributes",
+			"id": "x",
+			"node": "c",
+			"expect": {}
+		},
+		{ "op": "events", "expect": { "events": [["stored", "attributes", "x", "c"]] } }
+	]
+}

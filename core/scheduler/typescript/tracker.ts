@@ -10,24 +10,30 @@ export type Link<O> = {
 	gen: number
 }
 
+// links may repeat: a reader can have two links to one spot (see track)
 // owner: the caller's thing, never read here
 // cursor: the last link this run confirmed; outside a run, the last link
 // gen: the tick this node's run began at; 0 outside a run
-// kept: gen, once the run has confirmed a link in order
-// touched: the tick of the last link made to this node
 // first, last: the readers' list
 export type Node<O> = {
 	owner: O
 	reads: Link<O> | null
 	cursor: Link<O> | null
 	gen: number
-	kept: number
-	touched: number
 	first: Link<O> | null
 	last: Link<O> | null
 }
 
-export function createTracker<O>() {
+export function createTracker<O>(): {
+	node: (owner: O) => Node<O>
+	begin: (f: Node<O>) => void
+	track: (f: Node<O>, t: Node<O>) => void
+	end: (f: Node<O>) => void
+	add: (f: Node<O>, t: Node<O>) => void
+	untrack: (f: Node<O>, t?: Node<O>) => void
+	reads: (f: Node<O>) => readonly Node<O>[]
+	readers: (t: Node<O>) => readonly Link<O>[]
+} {
 	type L = Link<O>
 	type N = Node<O>
 
@@ -41,8 +47,6 @@ export function createTracker<O>() {
 			reads: null,
 			cursor: null,
 			gen: 0,
-			kept: 0,
-			touched: 0,
 			first: null,
 			last: null,
 		}
@@ -57,7 +61,6 @@ export function createTracker<O>() {
 	}
 	function link(from: N, to: N, prev: L | null, next: L | null) {
 		const l: L = { from, to, prev, next, before: to.last, after: null, gen: from.gen }
-		to.touched = tick
 		if (prev !== null) prev.next = l
 		else from.reads = l
 		if (next !== null) next.prev = l
@@ -75,36 +78,27 @@ export function createTracker<O>() {
 		drop(l)
 	}
 
+	// not in a run already: end it first
 	function begin(f: N) {
+		if (f.gen !== 0) throw new Error("begin in a run: end it first")
 		f.gen = ++tick
 		f.cursor = null
 	}
 
-	// a link of f's to t, made or confirmed in f's run
-	function read(f: N, t: N) {
-		for (let l = t.last; l !== null; l = l.before) {
-			if (l.from === f && l.gen === f.gen) return true
-		}
-		return false
-	}
-
-	// shift's track: in order, the next link is confirmed; else a new one at the cursor.
-	// not in order: f may have read t already in this run, only if it confirmed a link in
-	// order, or a link was made to t since f began; else t is not looked through.
-	// in order, but t read already: t was linked anew in this run (so made since f began), and
-	// the next link is an old second one; it goes
+	// link's track (alien-signals, solid 2.0): the same spot as the last read, the next link in
+	// order, or t's newest reader being this run, are free; else a new link at the cursor.
+	// duplicates are allowed where these miss: reads b, a, b over old [a, b] ends with two b
 	function track(f: N, t: N) {
 		const cursor = f.cursor
+		if (cursor !== null && cursor.to === t) return
 		const next = cursor !== null ? cursor.next : f.reads
 		if (next !== null && next.to === t) {
-			if (t.touched >= f.gen && read(f, t)) return unlink(next)
 			next.gen = f.gen
 			f.cursor = next
-			f.kept = f.gen
 			return
 		}
-		if (cursor !== null && cursor.to === t) return
-		if ((f.kept === f.gen || t.touched >= f.gen) && read(f, t)) return
+		const last = t.last
+		if (last !== null && last.from === f && last.gen === f.gen) return
 		f.cursor = link(f, t, cursor, next)
 	}
 
@@ -134,7 +128,7 @@ export function createTracker<O>() {
 		f.cursor = link(f, t, f.cursor, null)
 	}
 
-	// untrack(from): all of from's. untrack(from, to): that one.
+	// untrack(from): all of from's. untrack(from, to): every link of from's to that one.
 	function untrack(f: N, t?: N) {
 		if (t === undefined) {
 			for (let l = f.reads; l !== null; l = l.next) drop(l)
@@ -147,6 +141,7 @@ export function createTracker<O>() {
 
 	const none: readonly never[] = Object.freeze([])
 
+	// every link, so a spot read twice is listed twice
 	function reads(f: N): readonly N[] {
 		if (f.reads === null) return none
 		const out: N[] = []

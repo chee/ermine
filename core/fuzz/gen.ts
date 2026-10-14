@@ -84,8 +84,8 @@ function filling(pick: Pick, s: unknown): unknown {
 	return elements(pick, s!.constructor as (typeof KINDS)[number], pick(3))
 }
 
-// a patch on v: of every kind, many valid, some not. list: the value is a list (apply's option)
-export function patch(pick: Pick, v: unknown, list = false): Patch {
+// a patch on v: of every kind, many valid, some not
+export function patch(pick: Pick, v: unknown): Patch {
 	const all = v === undefined ? [] : places(v)
 	const any = () => all.length ? all[pick(all.length)] : [[], undefined] as [Key[], unknown]
 	const seqs = all.filter(([, x]) => isSeq(x)), maps = all.filter(([, x]) => isMap(x))
@@ -97,8 +97,7 @@ export function patch(pick: Pick, v: unknown, list = false): Patch {
 		const g = pick((isSeq(s) ? len(s) : 0) + 1)
 		return { path: p, range: [g, g + (pick(3) ? 0 : 1)] }
 	}
-	if (list && pick(6) === 0) return { path: [], value: pick(4) ? [made(pick, 1)] : made(pick, 0) }
-	switch (pick(16)) {
+	switch (pick(18)) {
 		case 0:
 			return { path: any()[0], value: made(pick, 2) }
 		case 1:
@@ -154,6 +153,20 @@ export function patch(pick: Pick, v: unknown, list = false): Patch {
 		}
 		case 14:
 			return { path: [], value: made(pick, 2) }
+		case 16:
+		case 17: {
+			// a span or an item of a list, landed in that list: on an item (or deeper), or in a span
+			const lists = all.filter(([, x]) => Array.isArray(x))
+			if (!lists.length) return { path: any()[0], move: { path: any()[0] } }
+			const [f, l] = lists[pick(lists.length)]
+			const n = (l as unknown[]).length
+			const take = pick(2) ? { path: f, range: span(pick, n) } : { path: [...f, pick(n + 1)] }
+			const at = pick(n + 1)
+			const to = pick(2)
+				? { path: [...f, at, ...(pick(3) ? [] : [pick(2)])] }
+				: { path: f, range: [at, at + pick(3)] as [number, number] }
+			return { ...to, move: take }
+		}
 		default: {
 			// what is not there, or a key of the wrong kind
 			const [p] = any()
@@ -162,24 +175,22 @@ export function patch(pick: Pick, v: unknown, list = false): Patch {
 	}
 }
 
-// a start value: a list under the list option (or nothing), else mostly a map of each kind
-export function start(pick: Pick, list: boolean): unknown {
-	if (list) return pick(3) ? Array.from({ length: pick(5) }, () => made(pick, 1)) : undefined
+// a start value: mostly a map of each kind
+export function start(pick: Pick): unknown {
 	return pick(8)
 		? { s: text(pick, 8), l: made(pick, 2), t: elements(pick, Int16Array, 3), m: made(pick, 2) }
 		: made(pick, 3)
 }
 
-// patches from start, each valid after the ones before it (applied in one call from the start:
-// the list option's nothing is not [] mid-call), and some refused ones with where they fell
-export function batch(pick: Pick, from: unknown, list: boolean, most = 24) {
-	const o = { list }
+// patches from start, each valid after the ones before it, and some refused ones with where they
+// fell
+export function batch(pick: Pick, from: unknown, most = 24) {
 	let v = from
 	const good: Patch[] = [], bad: [number, Patch][] = []
 	for (let tries = 0; good.length < most && tries < 4 * most; tries++) {
-		const p = patch(pick, v, list)
+		const p = patch(pick, v)
 		try {
-			v = apply(from, [...good, p], o)
+			v = apply(from, [...good, p])
 			good.push(p)
 		} catch (e) {
 			if (!(e instanceof ApplyError)) throw e

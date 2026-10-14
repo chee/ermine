@@ -1,59 +1,6 @@
 {
-	"title": "edges fixed: the list option's string, a target's own fields, onto itself, a reversed range, and range before a value's kind",
+	"title": "edges fixed: a target's own fields, onto itself, a reversed range, and range before a value's kind",
 	"steps": [
-		{
-			"op": "apply",
-			"value": "",
-			"list": true,
-			"patches": [
-				{
-					"path": [],
-					"value": [
-						"a"
-					]
-				}
-			],
-			"expect": {
-				"value": [
-					"a"
-				]
-			}
-		},
-		{
-			"op": "apply",
-			"value": "",
-			"list": true,
-			"patches": [
-				{
-					"path": [],
-					"value": "b"
-				}
-			],
-			"expect": {
-				"error": {
-					"code": "wrong-kind",
-					"patch": 0
-				}
-			}
-		},
-		{
-			"op": "apply",
-			"value": [],
-			"list": true,
-			"patches": [
-				{
-					"path": [],
-					"value": [
-						"a"
-					]
-				}
-			],
-			"expect": {
-				"value": [
-					"a"
-				]
-			}
-		},
 		{
 			"op": "apply",
 			"value": {

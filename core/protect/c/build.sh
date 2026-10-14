@@ -1,5 +1,5 @@
 #!/bin/sh
-# builds protect's C harnesses (protect) with the root Makefile; CHECK=1: the harness-checks, with the
+# builds protect's C harness with the root Makefile; CHECK=1: the harness-check, with the
 # address and undefined-behaviour sanitizers
 set -e
 cd "$(dirname "$0")/../../.."

@@ -1,13 +1,14 @@
-// The C paths (paths.h) on the line protocol of conformance/paths/harness.ts: one JSON request per
-// line in, one answer per line out, in order. Lines are read and answers printed with
-// ermine/encoding/c/json.h. A symbol is a token per name, the harness's.
+// the C paths (paths.h) on the line protocol of core/scheduler/typescript/paths_harness.ts. A
+// symbol is a token per name, the harness's.
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "paths.h"
-#include "../../../ermine/encoding/c/json.h"
+#include "../../../conformance/c/harness.h"
+#include "../../../conformance/c/protocol.h"
 
 static pt_paths *paths;
 
@@ -16,9 +17,10 @@ static char **names;
 static size_t count, capacity;
 
 // a source or an id: a string, or {"symbol": name}; 0 when neither
-static int key_of(const Json *j, pt_key *out) {
-	if (jsonIsString(j)) return *out = pt_string(jsonText(j)), 1;
-	const char *name = jsonText(jsonGet(j, "symbol"));
+static int key_of(const op_value *x, pt_key *out) {
+	if (x == NULL) return 0;
+	if (x->type == OP_STR) return *out = pt_string(x->str), 1;
+	const char *name = x->type == OP_MAP ? hh_str(x, "symbol") : NULL;
 	if (name == NULL) return 0;
 	for (size_t i = 0; i < count; i++)
 		if (strcmp(names[i], name) == 0) return *out = pt_symbol(names[i]), 1;
@@ -27,205 +29,128 @@ static int key_of(const Json *j, pt_key *out) {
 		names = realloc(names, capacity * sizeof *names);
 		if (names == NULL) abort();
 	}
-	names[count] = copyString(name);
+	names[count] = strdup(name);
+	if (names[count] == NULL) abort();
 	*out = pt_symbol(names[count++]);
 	return 1;
 }
 
-// keys: numbers and strings; NULL when j is not a list of them. *n how many
-static op_key *path_of(const Json *j, size_t *n) {
-	if (!jsonIsArray(j)) return NULL;
-	op_key *keys = allocate(((size_t)j->array.count + 1) * sizeof *keys);
-	for (int i = 0; i < j->array.count; i++) {
-		const Json *k = j->array.items[i];
-		int64_t x;
-		if (jsonIsString(k)) keys[i] = (op_key){.type = OP_STR_KEY, .s = jsonText(k)};
-		else if (jsonIsWhole(k, &x) && x >= 0) keys[i] = (op_key){.type = OP_NUM_KEY, .n = (long)x};
-		else return free(keys), NULL;
+// keys: numbers and strings; NULL when x is not a list of them. *n how many
+static op_key *path_of(const op_value *x, size_t *n) {
+	if (x == NULL || x->type != OP_LIST) return NULL;
+	op_key *keys = hh_take((x->count + 1) * sizeof *keys);
+	for (size_t i = 0; i < x->count; i++) {
+		const op_value *k = x->items[i];
+		if (k->type == OP_STR) keys[i] = (op_key){.type = OP_STR_KEY, .s = k->str};
+		else if (k->type == OP_NUM && k->num >= 0 && k->num == floor(k->num) && k->num < 1e15)
+			keys[i] = (op_key){.type = OP_NUM_KEY, .n = (long)k->num};
+		else return NULL;
 	}
-	*n = (size_t)j->array.count;
+	*n = x->count;
 	return keys;
 }
 
-// the value: only its kind and a list's length are read, but it is made whole
-static op_value *value_of(const Json *j) {
-	switch (j->type) {
-	case JSON_NULL: return op_null();
-	case JSON_BOOLEAN: return op_bool(j->boolean);
-	case JSON_NUMBER: return op_num(j->number);
-	case JSON_STRING: return op_str_n(j->string, j->stringLength);
-	case JSON_ARRAY: {
-		op_value *v = op_list();
-		for (int i = 0; i < j->array.count; i++) op_push(v, value_of(j->array.items[i]));
-		return v;
+static void put_spot(FILE *out, const pt_spot *s) {
+	if (s->change) {
+		fputs("\"change\"", out);
+		return;
 	}
-	case JSON_OBJECT: {
-		op_value *v = op_map();
-		for (int i = 0; i < j->object.count; i++)
-			op_set(v, j->object.members[i].key, value_of(j->object.members[i].value));
-		return v;
-	}
-	default: return op_null();
-	}
-}
-
-static int target_of(const Json *j, op_target *t) {
-	*t = (op_target){0};
-	if (!jsonIsObject(j) || (t->path = path_of(jsonGet(j, "path"), &t->length)) == NULL) return 0;
-	const Json *r = jsonGet(j, "range");
-	if (r == NULL) return 1;
-	int64_t a, b;
-	if (!jsonIsArray(r) || r->array.count != 2 || !jsonIsWhole(r->array.items[0], &a) ||
-		!jsonIsWhole(r->array.items[1], &b))
-		return 0;
-	t->has_range = 1;
-	t->from = (long)a;
-	t->to = (long)b;
-	return 1;
-}
-static void free_patch(op_patch *p) {
-	free((void *)p->place.path);
-	free((void *)p->move.path);
-	op_free((op_value *)p->value);
-}
-static int patch_of(const Json *j, op_patch *p) {
-	*p = (op_patch){0};
-	if (!target_of(j, &p->place)) return 0;
-	const Json *v = jsonGet(j, "value"), *m = jsonGet(j, "move");
-	if (v != NULL) {
-		p->has_value = 1;
-		p->value = value_of(v);
-	}
-	if (m != NULL) {
-		p->has_move = 1;
-		if (!target_of(m, &p->move)) return 0;
-	}
-	return 1;
-}
-
-static Json *shown(const pt_spot *s) {
-	if (s->change) return jsonString("change");
-	Json *a = jsonArray();
+	if (s->keys) fputs("{\"keys\":", out);
+	putc('[', out);
 	for (size_t i = 0; i < s->length; i++) {
 		const op_key *k = &s->path[i];
-		jsonPush(a, k->type == OP_NUM_KEY ? jsonInteger(k->n) : jsonString(k->s));
+		if (i) putc(',', out);
+		if (k->type == OP_NUM_KEY) fprintf(out, "%ld", k->n);
+		else op_json_string(out, k->s);
 	}
-	return a;
+	putc(']', out);
+	if (s->keys) putc('}', out);
 }
-static Json *spots(pt_spot *const *out, size_t n) {
-	Json *a = jsonArray();
-	for (size_t i = 0; i < n; i++) jsonPush(a, shown(out[i]));
-	Json *o = jsonObject();
-	jsonAdd(o, "spots", a);
-	return o;
+static void put_spots(FILE *out, pt_spot *const *spots, size_t n) {
+	fputs("{\"spots\":[", out);
+	for (size_t i = 0; i < n; i++) {
+		if (i) putc(',', out);
+		put_spot(out, spots[i]);
+	}
+	fputs("]}", out);
 }
 
-static Json *answer(const Json *r, const char **why) {
-	const char *op = jsonText(jsonGet(r, "op"));
-	if (op == NULL) return *why = "no op", NULL;
+static int flag(const op_value *r, const char *name) {
+	const op_value *x = op_get(r, name);
+	return x != NULL && x->type == OP_BOOL && x->bool_;
+}
+
+void hh_start(void) { paths = pt_new(); }
+
+void hh_answer(const op_value *r, FILE *out) {
+	const char *op = hh_str(r, "op");
+	if (op == NULL) { hh_error(out, "no op"); return; }
 	if (strcmp(op, "kept") == 0) {
 		pt_kept k = pt_kept_of(paths);
-		Json *o = jsonObject();
-		jsonAdd(o, "keys", jsonInteger((int64_t)k.keys));
-		jsonAdd(o, "spots", jsonInteger((int64_t)k.spots));
-		jsonAdd(o, "steps", jsonInteger((int64_t)k.steps));
-		return o;
+		fprintf(out, "{\"keys\":%zu,\"spots\":%zu,\"steps\":%zu}", k.keys, k.spots, k.steps);
+		return;
 	}
 	if (strcmp(op, "marks") == 0) {
-		op_patch p;
-		const Json *ps = jsonGet(r, "paths");
-		if (!patch_of(jsonGet(r, "patch"), &p) || !jsonIsArray(ps)) {
-			free_patch(&p);
-			return *why = "bad patch or paths", NULL;
-		}
-		Json *a = jsonArray();
-		for (int i = 0; i < ps->array.count; i++) {
+		const op_value *ps = op_get(r, "paths"), *p = op_get(r, "patch");
+		if (p == NULL || ps == NULL || ps->type != OP_LIST) { hh_error(out, "bad patch or paths"); return; }
+		op_patch patch;
+		hh_patch(p, &patch);
+		int keys = flag(r, "keys");
+		int *marks = hh_take((ps->count + 1) * sizeof *marks);
+		for (size_t i = 0; i < ps->count; i++) {
 			size_t n;
-			op_key *path = path_of(ps->array.items[i], &n);
-			if (path == NULL) {
-				free_patch(&p);
-				jsonFree(a);
-				return *why = "bad path", NULL;
-			}
-			jsonPush(a, jsonBoolean(pt_marks(&p, path, n)));
-			free(path);
+			op_key *path = path_of(ps->items[i], &n);
+			if (path == NULL) { hh_error(out, "bad path"); return; }
+			marks[i] = pt_marks(&patch, path, n, keys);
 		}
-		free_patch(&p);
-		Json *o = jsonObject();
-		jsonAdd(o, "marks", a);
-		return o;
+		fputs("{\"marks\":[", out);
+		for (size_t i = 0; i < ps->count; i++) fputs(marks[i] ? (i ? ",true" : "true") : (i ? ",false" : "false"), out);
+		fputs("]}", out);
+		return;
 	}
 	pt_key source, id;
-	if (!key_of(jsonGet(r, "source"), &source) || !key_of(jsonGet(r, "id"), &id))
-		return *why = "a source or id is a string or a symbol", NULL;
-	if (strcmp(op, "change") == 0) return pt_change_of(paths, source, id), jsonObject();
+	if (!key_of(op_get(r, "source"), &source) || !key_of(op_get(r, "id"), &id)) {
+		{ hh_error(out, "a source or id is a string or a symbol"); return; }
+	}
+	if (strcmp(op, "change") == 0) {
+		pt_change_of(paths, source, id);
+		fputs("{}", out);
+		return;
+	}
 	size_t n = 0;
 	if (strcmp(op, "event") == 0) {
-		pt_spot *const *out = pt_event(paths, source, id, &n);
-		return spots(out, n);
+		pt_spot *const *spots = pt_event(paths, source, id, &n);
+		put_spots(out, spots, n);
+		return;
 	}
 	if (strcmp(op, "mark") == 0) {
-		const Json *ps = jsonGet(r, "patches");
-		if (!jsonIsArray(ps)) return *why = "no patches", NULL;
-		op_patch *patches = allocate(((size_t)ps->array.count + 1) * sizeof *patches);
-		int good = 1, i = 0;
-		for (; i < ps->array.count && good; i++) good = patch_of(ps->array.items[i], &patches[i]);
-		Json *o = NULL;
-		if (good) {
-			pt_spot *const *out = pt_mark(paths, source, id, patches, (size_t)i, &n);
-			o = spots(out, n);
-		} else *why = "bad patch";
-		while (i-- > 0) free_patch(&patches[i]);
-		free(patches);
-		return o;
+		const op_value *ps = op_get(r, "patches");
+		if (ps == NULL || ps->type != OP_LIST) { hh_error(out, "no patches"); return; }
+		op_patch *patches = hh_take((ps->count + 1) * sizeof *patches);
+		for (size_t i = 0; i < ps->count; i++) hh_patch(ps->items[i], &patches[i]);
+		pt_spot *const *spots = pt_mark(paths, source, id, patches, ps->count, &n);
+		put_spots(out, spots, n);
+		return;
 	}
-	const Json *pj = jsonGet(r, "path");
+	int keys = flag(r, "keys");
+	const op_value *pj = op_get(r, "path");
 	op_key *path = pj == NULL ? NULL : path_of(pj, &n);
-	if (pj != NULL && path == NULL) return *why = "bad path", NULL;
-	Json *o = jsonObject();
-	if (strcmp(op, "spot") == 0 && path == NULL) {
-		jsonFree(o);
-		o = NULL;
-		*why = "no path";
-	} else if (strcmp(op, "spot") == 0) pt_spot_of(paths, source, id, path, n);
-	// made, then let go: a spot not there stays not there
-	else if (strcmp(op, "release") == 0)
-		pt_release(paths, path ? pt_spot_of(paths, source, id, path, n) : pt_change_of(paths, source, id));
-	else {
-		jsonFree(o);
-		o = NULL;
-		*why = "unknown op";
+	if (pj != NULL && path == NULL) { hh_error(out, "bad path"); return; }
+	if (strcmp(op, "spot") == 0) {
+		if (path == NULL) { hh_error(out, "no path"); return; }
+		pt_spot_of(paths, source, id, path, n, keys);
+	} else if (strcmp(op, "release") == 0) {
+		// made, then let go: a spot not there stays not there
+		pt_release(paths, path ? pt_spot_of(paths, source, id, path, n, keys) : pt_change_of(paths, source, id));
+	} else {
+		hh_unknown(out, r);
+		return;
 	}
-	free(path);
-	return o;
+	fputs("{}", out);
 }
 
-int main(void) {
-	paths = pt_new();
-	char *line = NULL;
-	size_t size = 0;
-	ssize_t got;
-	while ((got = getline(&line, &size, stdin)) > 0) {
-		if (strspn(line, " \t\r\n") == (size_t)got) continue;
-		char *bad = NULL;
-		Json *r = jsonParse(line, (size_t)got, &bad);
-		const char *why = bad;
-		Json *a = r ? answer(r, &why) : NULL;
-		if (a == NULL) {
-			a = jsonObject();
-			jsonAdd(a, "error", jsonString(why ? why : "bad request"));
-		}
-		char *text = jsonPrint(a);
-		puts(text);
-		free(text);
-		jsonFree(a);
-		jsonFree(r);
-		free(bad);
-	}
-	fflush(stdout);
-	free(line);
+void hh_finish(void) {
 	pt_free(paths);
 	for (size_t i = 0; i < count; i++) free(names[i]);
 	free(names);
-	return 0;
 }

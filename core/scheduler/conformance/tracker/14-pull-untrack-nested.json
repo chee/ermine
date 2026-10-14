@@ -9,9 +9,9 @@
 		{ "op": "untrack", "from": "q" },
 		{ "op": "track", "from": "p", "to": "b" },
 		{ "op": "end", "from": "p" },
-		{ "op": "reads", "of": "p", "expect": ["a", "b"] },
-		{ "op": "reads", "of": "q", "expect": [] },
-		{ "op": "readers", "of": "a", "expect": ["p"] },
-		{ "op": "readers", "of": "b", "expect": ["p"] }
+		{ "op": "reads", "of": "p", "expect": { "names": ["a", "b"] } },
+		{ "op": "reads", "of": "q", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["p"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["p"] } }
 	]
 }

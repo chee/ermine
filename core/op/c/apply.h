@@ -18,6 +18,14 @@
 // walk. The undo holds its own: its keys copied, one reference on each value it holds, which may
 // share with the value given, the patches' values and the value made. A caller lets it go with
 // op_undo_free.
+//
+// In place (in_place): the containers of the value given are changed, not copied; a string is
+// replaced in its parent, and a typed array whose length changes too. Every container holds one
+// reference on each item, as op_ref made it: what a patch puts is held by the container it goes
+// in, what leaves one is let go of at the end of the call. *out is the value given (op_ref'd, a
+// hold for the caller as before) unless a patch replaced the whole. The patches' values, once
+// put, are the value's: a later patch changes them. A failed call is undone in place by the
+// undo it builds (made even when not asked for), a key put back going last in its map.
 #ifndef OP_APPLY_H
 #define OP_APPLY_H
 
@@ -71,17 +79,15 @@ typedef struct {
 } op_undo;
 
 typedef struct {
-	// the value is a list: nothing there starts as [], anything but a list is wrong-kind, and a
-	// list left empty is nothing
-	int list;
 	// given: the undo of the patches is added to it once all have landed, in the order to apply
 	// it; a failed call leaves it as it was. NULL: no undo is made
 	op_undo *undo;
+	// change the value given in place (see above); 0: a copy is changed
+	int in_place;
 } op_apply_options;
 
 // the patches, in order, to the value; *out the value after them. value NULL: nothing there; a
-// put at [] makes one, any other patch is no-key. *out NULL: nothing there (a removal at [], or
-// a list left empty). invalid: a code, *failed the patch's index (may be NULL), and nothing
+// put at [] makes one, any other patch is no-key. *out NULL: nothing there (a removal at []). invalid: a code, *failed the patch's index (may be NULL), and nothing
 // changes. options may be NULL
 int op_apply(const op_value *value, const op_patch *patches, size_t n,
 	const op_apply_options *options, op_value **out, size_t *failed);

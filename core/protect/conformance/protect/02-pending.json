@@ -1,0 +1,180 @@
+{
+	"title": "the rules not there: pending, waiting for them; once there, an answer; gone again, pending",
+	"steps": [
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"s",
+					"value",
+					"rules"
+				],
+				"reads": [
+					[
+						"s",
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "drop",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"source": "s",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"s",
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": "pending",
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"reads": []
+			},
+			"who": {
+				"actor": "chee"
+			}
+		}
+	]
+}

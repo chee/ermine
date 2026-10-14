@@ -1,7 +1,8 @@
 // unit tests for the tracker; the conformance suite covers the behaviour through a harness,
 // these reach the edges directly (the two lists, cursor, links' fields)
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import { createModel } from "../../../conformance/tracker/model.ts"
+import { createModel } from "./tracker_model.ts"
+import { createScheduler } from "./scheduler.ts"
 import { createTracker, type Node } from "./tracker.ts"
 
 function setup() {
@@ -185,7 +186,7 @@ Deno.test("a read made again after another reader read the spot: found by the cu
 	assertEquals(reads("r"), ["a"])
 })
 
-Deno.test("a read made again, not next to the first, is still one link", () => {
+Deno.test("a read made again, not next to the first, with another reader's link between: a second link", () => {
 	const { reads, readers, run, t, n } = setup()
 	t.begin(n("r"))
 	t.track(n("r"), n("a"))
@@ -193,30 +194,34 @@ Deno.test("a read made again, not next to the first, is still one link", () => {
 	run("s", "a") // a's last reader is now s, not r
 	t.track(n("r"), n("a"))
 	t.end(n("r"))
-	assertEquals(reads("r"), ["a", "b"])
-	assertEquals(readers("a"), ["r", "s"])
+	// a's newest reader is s, not r, and the cursor is on b: the check misses, a is linked twice
+	assertEquals(reads("r"), ["a", "b", "a"])
+	assertEquals(readers("a"), ["r", "s", "r"])
+	consistent({ n }, ["r", "s", "a", "b"])
 })
 
-Deno.test("a read made again whatever happened between: never a second link", () => {
+Deno.test("a read made again whatever happened between: duplicates where the checks miss", () => {
 	const { reads, readers, run, t, n } = setup()
 	t.begin(n("r"))
 	for (const x of ["a", "b", "c"]) t.track(n("r"), n(x))
 	run("s", "a", "b", "c")
 	run("u", "c", "b", "a")
-	// out of order, with s and u the last readers of each
+	// out of order, with s and u the last readers of each: b, a, c are linked again at the
+	// cursor; then a and b are r's own newest links, and are not linked a third time
 	for (const x of ["b", "a", "c", "a", "b"]) t.track(n("r"), n(x))
 	t.end(n("r"))
-	assertEquals(reads("r"), ["a", "b", "c"])
-	for (const x of ["a", "b", "c"]) assertEquals(readers(x), ["r", "s", "u"])
+	assertEquals(reads("r"), ["a", "b", "c", "b", "a", "c"])
+	for (const x of ["a", "b", "c"]) assertEquals(readers(x), ["r", "s", "u", "r"])
 })
 
-Deno.test("a read made out of order, then met in order again: one link, the old one goes", () => {
+Deno.test("a read made out of order, then met in order again: the old link stays, b is linked twice", () => {
 	const { n, reads, readers, run } = setup()
 	run("r", "a", "b")
 	run("r", "b", "a", "b")
-	assertEquals(reads("r"), ["b", "a"])
+	// b: new link in front (the old b is not next); a: confirmed; b: the old b is next, confirmed
+	assertEquals(reads("r"), ["b", "a", "b"])
 	assertEquals(readers("a"), ["r"])
-	assertEquals(readers("b"), ["r"])
+	assertEquals(readers("b"), ["r", "r"])
 	consistent({ n }, ["r", "a", "b"])
 })
 
@@ -494,6 +499,22 @@ Deno.test("add: throws in a run, changes nothing; works again after the run", ()
 	assertEquals(reads("r"), ["a", "b", "c"])
 })
 
+Deno.test("begin: throws in a run, changes nothing; works again after the run", () => {
+	const { t, n, reads, readers } = setup()
+	t.begin(n("r"))
+	t.track(n("r"), n("a"))
+	const gen = n("r").gen
+	assertThrows(() => t.begin(n("r")), Error, "begin in a run")
+	assertEquals(n("r").gen, gen)
+	t.track(n("r"), n("b"))
+	assertEquals(reads("r"), ["a", "b"])
+	assertEquals(readers("a"), ["r"])
+	t.end(n("r"))
+	t.begin(n("r"))
+	t.end(n("r"))
+	assertEquals(reads("r"), [])
+})
+
 Deno.test("a long run of out-of-order re-reads stays linear: nothing else read the spots", () => {
 	const { t, n } = setup()
 	const names = Array.from({ length: 2000 }, (_, i) => `a${i}`)
@@ -611,10 +632,10 @@ Deno.test("fuzz: 30 seeds against the model", () => {
 	}
 })
 
-// no duplicates on its own, no model: runs of random read orders with repeats, nested and
-// interleaved. after every end the reader's reads are the spots its run read, each once, in
-// first-read order, one link each; no reader outside a run holds two links to one spot
-Deno.test("fuzz: 40 seeds, after every end one link per spot read, in first-read order", () => {
+// runs of random read orders with repeats, nested and interleaved. after every end the
+// reader's reads, deduplicated, are the spots its run read, in first-read order; and the links
+// match the model exactly, after every step
+Deno.test("fuzz: 40 seeds, after every end the reads deduplicated are the distinct reads in first-read order", () => {
 	const READERS = ["p", "q", "r", "s"]
 	const SPOTS = ["a", "b", "c", "d", "p", "q"]
 	for (let seed = 1; seed <= 40; seed++) {
@@ -627,8 +648,13 @@ Deno.test("fuzz: 40 seeds, after every end one link per spot read, in first-read
 		}
 		const one = <T>(xs: T[]) => xs[pick(xs.length)]
 		const s = setup()
+		const m = createModel()
 		const open: string[] = []
 		const read = new Map<string, string[]>()
+		const same = (at: string, r: string, a: string) => {
+			assertEquals(s.reads(r), m.reads(r), `${at}: reads of ${r}`)
+			assertEquals(s.readers(a), m.readers(a), `${at}: readers of ${a}`)
+		}
 		for (let i = 0; i < 400; i++) {
 			const k = pick(10)
 			if (k < 2 && open.length < READERS.length) {
@@ -636,26 +662,60 @@ Deno.test("fuzz: 40 seeds, after every end one link per spot read, in first-read
 				open.push(r)
 				read.set(r, [])
 				s.t.begin(s.n(r))
+				m.begin(r)
 			} else if (k < 8 && open.length > 0) {
 				// mostly the innermost run; sometimes another, interleaved
 				const r = pick(4) === 0 ? one(open) : open[open.length - 1]
 				const a = one(SPOTS)
 				s.t.track(s.n(r), s.n(a))
+				m.track(r, a)
 				if (!read.get(r)!.includes(a)) read.get(r)!.push(a)
+				same(`seed ${seed}, step ${i}, track ${r} ${a}`, r, a)
 			} else if (open.length > 0) {
 				const r = pick(4) === 0 ? open.splice(pick(open.length), 1)[0] : open.pop()!
 				s.t.end(s.n(r))
+				m.end(r)
 				const at = `seed ${seed}, step ${i}, end ${r}`
-				assertEquals(s.reads(r), read.get(r), `${at}: reads`)
-				for (const y of READERS) {
-					if (open.includes(y)) continue
-					for (const a of SPOTS) {
-						const links = s.readers(a).filter((z) => z === y).length
-						assertEquals(links, s.reads(y).includes(a) ? 1 : 0, `${at}: ${y}'s links to ${a}`)
-					}
-				}
+				assertEquals([...new Set(s.reads(r))], read.get(r), `${at}: reads`)
+				for (const a of SPOTS) same(at, r, a)
 			}
 		}
 		consistent(s, [...READERS, ...SPOTS])
 	}
+})
+
+// a duplicate link is harmless to the scheduler: its reader is due once, and a run that no
+// longer reads the spot leaves no link of it behind
+Deno.test("scheduler: a reader linked twice to a spot runs once when it changes, and both links go", () => {
+	const s = createScheduler()
+	let runs = 0
+	let shape = ["a", "b"]
+	s.run(s.root(), () =>
+		s.compute((read) => {
+			runs++
+			for (const k of shape) read(k)
+			return runs
+		}, () => {}))
+	s.pulse()
+	assertEquals(runs, 1)
+	// old [a, b], read b, a, b: two links to b
+	shape = ["b", "a", "b"]
+	s.changed(["a"])
+	s.pulse()
+	assertEquals(runs, 2)
+	// changed on the doubled spot: due once, one run
+	s.changed(["b"])
+	s.pulse()
+	assertEquals(runs, 3)
+	// a run reading only a: the links to b are dropped, a change of b runs nothing
+	shape = ["a"]
+	s.changed(["b"])
+	s.pulse()
+	assertEquals(runs, 4)
+	s.changed(["b"])
+	s.pulse()
+	assertEquals(runs, 4)
+	s.changed(["a"])
+	s.pulse()
+	assertEquals(runs, 5)
 })

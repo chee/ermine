@@ -1,0 +1,211 @@
+{
+	"title": "each run reads the next path, after what it read changed: the old spot goes, what is still read is still told",
+	"steps": [
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "ctl",
+			"value": {
+				"n": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"source": "stored",
+			"id": "doc",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": [
+					"stored",
+					"value",
+					"doc",
+					[
+						{
+							"cat": [
+								"f",
+								{
+									"read": [
+										"stored",
+										"value",
+										"ctl",
+										[
+											"n"
+										]
+									]
+								}
+							]
+						}
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "kept",
+			"expect": {
+				"keys": 2,
+				"spots": 2,
+				"steps": 4
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "doc",
+			"patches": [
+				{
+					"path": [
+						"f0"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "ctl",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 3,
+				"value": null
+			}
+		},
+		{
+			"op": "kept",
+			"expect": {
+				"keys": 2,
+				"spots": 2,
+				"steps": 4
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "ctl",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "kept",
+			"expect": {
+				"keys": 2,
+				"spots": 2,
+				"steps": 4
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "doc",
+			"patches": [
+				{
+					"path": [
+						"f2"
+					],
+					"value": "last"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 5,
+				"value": "last"
+			}
+		},
+		{
+			"op": "edit",
+			"source": "stored",
+			"part": "value",
+			"id": "doc",
+			"patches": [
+				{
+					"path": [
+						"f1"
+					],
+					"value": "old"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 5,
+				"value": "last"
+			}
+		}
+	]
+}

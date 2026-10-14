@@ -194,7 +194,7 @@ Json *jsonParse(const char *text, size_t length, char **why);
  * shared): bytes, typed arrays, numbers JSON cannot write, a map whose only
  * key is "/", and a stand-in (its kind decoded in turn). False when a form
  * is malformed or a string or a key holds a lone surrogate: wrong-field.
- * *value may be replaced.
+ * *value stays the same value, now what its form stands for.
  */
 bool jsonDecode(Json **value);
 

@@ -1098,7 +1098,8 @@
 					{
 						"source": "s",
 						"id": "R",
-						"path": []
+						"path": [],
+						"keys": true
 					}
 				]
 			}
@@ -1487,6 +1488,27 @@
 			"expect": {
 				"error": "not-a-name",
 				"at": "/",
+				"changes": []
+			}
+		},
+		{
+			"op": "move",
+			"parent": [
+				"s",
+				"R"
+			],
+			"name": "a",
+			"index": 0,
+			"to": {
+				"parent": [
+					"s",
+					"R"
+				],
+				"name": ""
+			},
+			"expect": {
+				"error": "not-a-name",
+				"at": "",
 				"changes": []
 			}
 		},

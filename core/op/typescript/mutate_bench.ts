@@ -164,3 +164,33 @@ for (const [name, w] of Object.entries(strings)) {
 		b.end()
 	})
 }
+
+// one change on a big value, copy-on-write against cow: false (in place). each call changes the
+// value and changes it back, so it stays the size it is
+const big = {
+	list: Array.from({ length: 10_000 }, (_, i) => i),
+	map: Object.fromEntries(
+		Array.from({ length: 10_000 }, (_, i) => [`k${i}`, { a: { b: { c: i } } }]),
+	),
+}
+const append: Patch[] = [
+	{ path: ["list"], range: [10_000, 10_000], value: [1] },
+	{ path: ["list"], range: [10_000, 10_001] },
+]
+const deep: Patch[] = [
+	{ path: ["map", "k5000", "a", "b", "c"], value: -1 },
+	{ path: ["map", "k5000", "a", "b", "c"], value: 5000 },
+]
+for (
+	const [name, ps] of [["append to a list of 10k", append], [
+		"edit deep in a map of 10k",
+		deep,
+	]] as const
+) {
+	Deno.bench(`${name}: copy-on-write`, { group: name, baseline: true }, () => {
+		apply(big, ps)
+	})
+	Deno.bench(`${name}: cow: false`, { group: name }, () => {
+		apply(big, ps, { cow: false })
+	})
+}

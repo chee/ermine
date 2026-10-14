@@ -1,9 +1,11 @@
 {
 	"name": "@ermine/op",
 	"version": "0.0.0",
+	"license": "AGPL-3.0-or-later",
 	"exports": {
 		"./apply": "./typescript/apply.ts",
 		"./invert": "./typescript/invert.ts",
-		"./squish": "./typescript/squish.ts"
+		"./squish": "./typescript/squish.ts",
+		"./produce": "./typescript/produce.ts"
 	}
 }

@@ -1,0 +1,44 @@
+{
+	"title": "bytes are one whole value: never joined or cut (MUTATE.tex)",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
+				{ "path": ["b"], "range": [1, 1], "value": { "/": { "bytes": "AgM" } } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
+					{ "path": ["b"], "range": [1, 1], "value": { "/": { "bytes": "AgM" } } }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQID" } } },
+				{ "path": ["b"], "range": [1, 2] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AQID" } } },
+					{ "path": ["b"], "range": [1, 2] }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AP8" } } },
+				{ "path": ["b"], "range": [2, 2], "value": { "/": { "bytes": "" } } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["b"], "range": [0, 0], "value": { "/": { "bytes": "AP8" } } },
+					{ "path": ["b"], "range": [2, 2], "value": { "/": { "bytes": "" } } }
+				]
+			}
+		}
+	]
+}

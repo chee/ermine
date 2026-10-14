@@ -1,0 +1,71 @@
+{
+	"title": "a keys spot is reached at a place at it or above it, and one unranged step below it; deeper it is not",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a", "b", "c"], "value": 1 }],
+			"expect": { "spots": [{ "keys": ["a", "b"] }, ["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a", "b", "c", "d"], "value": 1 }],
+			"expect": { "spots": [["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a", "x"], "value": 1 }],
+			"expect": { "spots": [{ "keys": ["a"] }, ["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["z"] }],
+			"expect": { "spots": [{ "keys": [] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a"], "value": {} }],
+			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": [], "value": {} }],
+			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["q"], "move": { "path": ["a", "b"] } }],
+			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a", "b"], "value": 1 },
+			"paths": [[], ["a"], ["a", "b"], ["a", "b", "c"], ["x"]],
+			"keys": true,
+			"expect": { "marks": [false, true, true, true, false] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a", "b"], "value": 1 },
+			"paths": [[], ["a"], ["a", "b"], ["a", "b", "c"], ["x"]],
+			"expect": { "marks": [true, true, true, true, false] }
+		}
+	]
+}

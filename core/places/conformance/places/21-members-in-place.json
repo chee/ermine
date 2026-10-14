@@ -1,0 +1,397 @@
+{
+	"title": "members of an opened place over a children node changed in place: every name is walked again, and the members are right",
+	"steps": [
+		{
+			"op": "make",
+			"root": [
+				"s",
+				"R"
+			],
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "R",
+			"value": {
+				"a": [
+					[
+						"s",
+						"A"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "children",
+			"source": "s",
+			"id": "A",
+			"value": {
+				"x": [
+					[
+						"s",
+						"X1"
+					]
+				],
+				"y": [
+					[
+						"s",
+						"Y"
+					]
+				]
+			},
+			"inplace": true,
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"address": [
+				"a"
+			],
+			"as": "h",
+			"expect": {}
+		},
+		{
+			"op": "members",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "X1",
+						"name": "x",
+						"at": 0,
+						"path": [
+							"a",
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "Y",
+						"name": "y",
+						"at": 0,
+						"path": [
+							"a",
+							"y"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"y"
+						]
+					}
+				],
+				"same": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "members",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "X1",
+						"name": "x",
+						"at": 0,
+						"path": [
+							"a",
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "Y",
+						"name": "y",
+						"at": 0,
+						"path": [
+							"a",
+							"y"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"y"
+						]
+					}
+				],
+				"same": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "place",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "y",
+			"entry": [
+				"s",
+				"Q"
+			],
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"x": [
+								[
+									"s",
+									"X1"
+								]
+							],
+							"y": [
+								[
+									"s",
+									"Y"
+								],
+								[
+									"s",
+									"Q"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"y"
+								],
+								"range": [
+									1,
+									1
+								],
+								"value": [
+									[
+										"s",
+										"Q"
+									]
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "members",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "X1",
+						"name": "x",
+						"at": 0,
+						"path": [
+							"a",
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "Y",
+						"name": "y",
+						"at": 0,
+						"path": [
+							"a",
+							"y"
+						]
+					},
+					{
+						"source": "s",
+						"id": "Q",
+						"name": "y",
+						"at": 1,
+						"path": [
+							"a",
+							"y"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"x"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"y"
+						]
+					}
+				],
+				"same": [
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "unplace",
+			"parent": [
+				"s",
+				"A"
+			],
+			"name": "x",
+			"index": 0,
+			"expect": {
+				"changes": [
+					{
+						"source": "s",
+						"id": "A",
+						"value": {
+							"y": [
+								[
+									"s",
+									"Y"
+								],
+								[
+									"s",
+									"Q"
+								]
+							]
+						},
+						"time": 1,
+						"patches": [
+							{
+								"path": [
+									"x"
+								]
+							}
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "members",
+			"open": "h",
+			"expect": {
+				"items": [
+					{
+						"source": "s",
+						"id": "Y",
+						"name": "y",
+						"at": 0,
+						"path": [
+							"a",
+							"y"
+						]
+					},
+					{
+						"source": "s",
+						"id": "Q",
+						"name": "y",
+						"at": 1,
+						"path": [
+							"a",
+							"y"
+						]
+					}
+				],
+				"reads": [
+					{
+						"source": "s",
+						"id": "R",
+						"path": [
+							"a"
+						]
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [],
+						"keys": true
+					},
+					{
+						"source": "s",
+						"id": "A",
+						"path": [
+							"y"
+						]
+					}
+				],
+				"same": [
+					false,
+					false
+				]
+			}
+		}
+	]
+}

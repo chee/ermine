@@ -1,0 +1,33 @@
+{
+	"title": "a symbol as a part: cannot-carry, that key; getting rid of symbols is the caller's",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		],
+		[
+			{
+				"symbol": "drag"
+			},
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 1,
+				"actor": "a"
+			}
+		}
+	],
+	"expect": {
+		"code": "cannot-carry",
+		"part": {
+			"symbol": "drag"
+		},
+		"id": "a"
+	}
+}

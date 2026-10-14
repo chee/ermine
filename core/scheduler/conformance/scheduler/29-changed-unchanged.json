@@ -2,7 +2,7 @@
 	"title": "changed says a key landed, though its value is the same: its readers run, an equal result stops there (old 26-empty-write-marks)",
 	"steps": [
 		{
-			"op": "owner",
+			"op": "root",
 			"name": "o",
 			"expect": {}
 		},
@@ -18,7 +18,7 @@
 		{
 			"op": "compute",
 			"name": "c",
-			"owner": "o",
+			"scope": "o",
 			"f": {
 				"read": "k"
 			},
@@ -27,7 +27,7 @@
 		{
 			"op": "effect",
 			"name": "e",
-			"owner": "o",
+			"scope": "o",
 			"f": {
 				"read": "c"
 			},

@@ -511,6 +511,16 @@ static Json *formOf(const JsonMember *form) {
 	return typedOf(form->key, form->keyLength, form->value);
 }
 
+/** here becomes what made held (made itself goes), and the form it was is let go of; keep, a part of that form, stays */
+static void becomes(Json *here, Json *made, Json *keep) {
+	Json *form = allocate(sizeof *form);
+	*form = *here;
+	*here = *made;
+	if (keep) keep->refs++;
+	jsonFree(form);
+	free(made);
+}
+
 // No recursion: the places still to decode are kept on a stack of their own.
 bool jsonDecode(Json **value) {
 	Json ***stack = NULL;
@@ -537,18 +547,18 @@ bool jsonDecode(Json **value) {
 				Json *map = form->object.members[0].value;
 				ok = isSlashMap(map);
 				if (ok) {
-					*at = map;
+					becomes(here, map, map);
 					stack = growArray(stack, count, &capacity, sizeof *stack);
-					stack[count++] = &map->object.members[0].value;
+					stack[count++] = &here->object.members[0].value;
 				}
 			} else {
 				Json *made = formOf(&form->object.members[0]);
 				ok = made != NULL;
-				if (ok) *at = made;
-				if (ok && made->type == JSON_STAND) {
+				if (ok) becomes(here, made, made->type == JSON_STAND ? made->stand.kind : NULL);
+				if (ok && here->type == JSON_STAND) {
 					// its kind is decoded in turn
 					stack = growArray(stack, count, &capacity, sizeof *stack);
-					stack[count++] = &made->stand.kind;
+					stack[count++] = &here->stand.kind;
 				}
 			}
 		} else if (jsonIsObject(here)) {

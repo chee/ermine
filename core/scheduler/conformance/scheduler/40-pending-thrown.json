@@ -1,0 +1,83 @@
+{
+	"title": "PENDING thrown: the run ends pending, as returning it does; nothing set, the last result kept, no act. a promise rejected with it lands pending",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{ "eq": [{ "read": "x" }, 0] },
+					{ "throw": { "pending": null } },
+					{ "read": "x" }
+				]
+			},
+			"to": "c"
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"if": [
+					{ "eq": [{ "read": "x" }, 0] },
+					{ "throw": { "pending": null } },
+					{ "read": "x" }
+				]
+			},
+			"act": { "log": ["e", { "given": "value" }] }
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{ "op": "log", "expect": { "log": [["e", 1]] } },
+		{ "op": "moments" },
+		{ "op": "write", "values": { "x": 0 }, "expect": { "tick": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 5 },
+					{ "due": "e", "tick": 5 },
+					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "ends": "c", "run": 2, "ended": "pending" },
+					{ "starts": "e", "run": 2, "rank": 0 },
+					{ "ends": "e", "run": 2, "ended": "pending" }
+				]
+			}
+		},
+		{ "op": "get", "key": "c", "expect": { "value": 1 } },
+		{ "op": "log", "expect": { "log": [] } },
+		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 6 } },
+		{ "op": "pulse", "expect": {} },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{ "due": "c", "tick": 6 },
+					{ "due": "e", "tick": 6 },
+					{ "starts": "c", "run": 3, "rank": 0 },
+					{ "ends": "c", "run": 3, "ended": "done", "equal": true },
+					{ "starts": "e", "run": 3, "rank": 0 },
+					{ "ends": "e", "run": 3, "ended": "done", "equal": true }
+				]
+			}
+		},
+		{ "op": "log", "expect": { "log": [] } },
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": { "wait": ["pa", { "throw": { "pending": null } }] },
+			"to": "a"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments" },
+		{ "op": "resolve", "promise": "pa", "value": 1, "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "moments", "expect": { "moments": [{ "ends": "a", "run": 1, "ended": "pending" }] } },
+		{ "op": "get", "key": "a", "expect": { "value": null } }
+	]
+}

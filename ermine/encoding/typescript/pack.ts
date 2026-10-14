@@ -1,177 +1,296 @@
-// a graph from a root, or one node, as bytes in the canonical encoding (ENCODING.tex), and back
-// reachable: by any version of any list, not only the first; nothing loaded here, nothing placed
+// nodes under keys of a part and an id (the table's), as one item in the canonical encoding
+// (cbor.ts), and back. which nodes is the caller's: a walk, an id's parts, a whole table; nothing
+// is loaded or placed here. places are derived from the children nodes, never packed.
+//
+// a symbol anywhere, in a key or in a node, cannot be carried: getting rid of them first is the
+// caller's.
+//
+// written: {keys: [[part, id, n], …], nodes: [node, …]}. keys: sorted by their encodings, none
+// twice; n: the node's place in nodes, numbered in the order the keys first name them, so a node
+// under several keys is one node again when read. a node: {change, value?, cow?}, cow only ever
+// false, as the node has it (changed in place, not copied on write). a change: {time,
+// actor?, reader?, external?, metadata?, op?}; external: sites {file, line, column?, function?};
+// metadata: [name, value] lists; op: {patches, undo}, each patch {path, range?, value?, move?},
+// move {path, range?}. time, a site's line and column, a path's numbers and a range's ends are
+// whole: safe integers, never -0. a field not there is left out, never written as nothing; no
+// other key.
+// reading takes exactly what writing gives; loosyGoosy, a key it does not know is passed over
 import * as cbor from "./cbor.ts"
-import createNode, {
-	type ChangeHeader,
-	type List,
-	type Node,
-	type Side,
-} from "@ermine/node"
+import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import type { Patch, Target } from "@ermine/op/apply"
+import type { FileLocation } from "@ermine/util/stacktrace"
 
-// get: the node of an id, or none if it is not loaded (table.ts's get)
-export type Get<V, H> = (id: string) => Node<V, H> | undefined
+export type Key = string | symbol
 
-// root: the id walked from; nodes: the root first, then in the order reached;
-// missing: ids in a list reached but not loaded, in the order reached
-export type Graph<V, H> = { root: string; nodes: Node<V, H>[]; missing: string[] }
+// a node under a key: what pack is given and unpack gives
+export type Entry = readonly [part: Key, id: Key, node: Node<unknown>]
 
-export type Code = "nothing-there" | "cannot-carry" | "not-a-graph" | "not-a-node"
-
-export class PackError extends Error {
-	constructor(readonly code: Code, readonly id?: string) {
-		super(id === undefined ? code : `${code} (${id})`)
-	}
+export type Options = {
+	// false: a change's op (its latest patches and their undo) is not written. default true
+	op?: boolean
 }
 
-// the root and every node reachable from it; the root not loaded: nothing-there
-export function walk<V, H>(root: string, get: Get<V, H>): Graph<V, H> {
-	const first = get(root)
-	if (first === undefined) throw new PackError("nothing-there", root)
-	const nodes: Node<V, H>[] = [first], missing: string[] = []
-	const seen = new Set([root])
-	for (let i = 0; i < nodes.length; i++) {
-		for (const versions of nodes[i].children.values()) {
-			for (const v of versions) {
-				for (const id of v.content) {
-					if (typeof id !== "string" || seen.has(id)) continue
-					seen.add(id)
-					const n = get(id)
-					if (n === undefined) missing.push(id)
-					else nodes.push(n)
-				}
-			}
-		}
+export type Reading = {
+	// a key no map of a pack has is passed over, in every map, not refused. default false
+	loosyGoosy?: boolean
+}
+
+export type Code = "not-a-pack" | "not-a-node" | "cannot-carry" | "already-there"
+
+export class PackError extends Error {
+	// the key at fault, as far as there was one
+	constructor(readonly code: Code, readonly part?: Key, readonly id?: Key) {
+		super([code, part, id].filter((x) => x !== undefined).map(String).join(" "))
 	}
-	return { root, nodes, missing }
 }
 
 type Fields = { [k: string]: cbor.Value }
 
-// a field not there is left out, never written as nothing
-function defined(o: object): Fields {
-	const out: Fields = {}
-	for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v as cbor.Value
+function target(t: Target): Fields {
+	const out: Fields = { path: t.path as cbor.Value }
+	if (t.range !== undefined) out.range = t.range as cbor.Value
 	return out
 }
-const versions = <C, H>(vs: Side<C, H>[]) => vs.map(defined)
 
-// a node as written: id, value, info and children as entries in order, header
-function written<V, H>(n: Node<V, H>): Fields {
-	return {
-		id: n.id,
-		value: versions(n.value),
-		info: [...n.attributes].map(([name, vs]) => [name, versions(vs)]),
-		children: [...n.children].map(([name, vs]) => [name, versions(vs)]),
-		header: defined(n.change),
+function patch(p: Patch): Fields {
+	const out = target(p)
+	if (p.value !== undefined) out.value = p.value as cbor.Value
+	if (p.move !== undefined) out.move = target(p.move)
+	return out
+}
+
+function site(s: FileLocation): Fields {
+	const out: Fields = { file: s.file, line: s.line }
+	if (s.column !== undefined) out.column = s.column
+	if (s.function !== undefined) out.function = s.function
+	return out
+}
+
+function change(h: ChangeHeader, o: Options): Fields {
+	const out: Fields = { time: h.time }
+	if (h.actor !== undefined) out.actor = h.actor as cbor.Value
+	if (h.reader !== undefined) out.reader = h.reader
+	if (h.external !== undefined) out.external = h.external.map(site)
+	if (h.metadata !== undefined) out.metadata = h.metadata as cbor.Value
+	if (h.op !== undefined && o.op !== false) {
+		out.op = { patches: h.op.patches.map(patch), undo: h.op.undo.map(patch) }
+	}
+	return out
+}
+
+// a node as written
+function written(n: Node<unknown>, o: Options): Fields {
+	const out: Fields = { change: change(n.change, o) }
+	if (n.value !== undefined) out.value = n.value as cbor.Value
+	if (n.cow === false) out.cow = false
+	return out
+}
+
+// reading -------------------------------------------------------------------
+
+const isFields = (x: unknown): x is Fields =>
+	x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x) &&
+	!(x instanceof cbor.Stand)
+
+// a whole number C holds too: a safe integer, never -0
+const whole = (x: unknown) => Number.isSafeInteger(x) && !Object.is(x, -0)
+
+const isSpan = (x: unknown) => Array.isArray(x) && x.length === 2 && x.every(whole)
+const isPath = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string" || whole(e))
+const isEntry = (x: unknown) => Array.isArray(x) && x.length === 2 && typeof x[0] === "string"
+
+// how a map is read: every key of need there, and, unless loose, none but those of may
+class Reader {
+	constructor(readonly loose: boolean) {}
+
+	only(x: Fields, need: string[], may: string[]): boolean {
+		for (const k of need) if (!Object.hasOwn(x, k)) return false
+		if (!this.loose) { for (const k of Object.keys(x)) if (!may.includes(k)) return false }
+		return true
+	}
+
+	// a target's fields read, only those
+	target(x: unknown, also: string[]): Target | undefined {
+		if (!isFields(x) || !this.only(x, ["path"], ["path", "range", ...also])) return
+		if (!isPath(x.path) || ("range" in x && !isSpan(x.range))) return
+		const t: { path: Target["path"]; range?: Target["range"] } = {
+			path: x.path as unknown as Target["path"],
+		}
+		if ("range" in x) t.range = x.range as unknown as Target["range"]
+		return t
+	}
+
+	patch(x: unknown): Patch | undefined {
+		const p: Patch | undefined = this.target(x, ["value", "move"])
+		if (p === undefined) return
+		const f = x as Fields
+		if ("value" in f) p.value = f.value
+		if ("move" in f) {
+			const m = this.target(f.move, [])
+			if (m === undefined) return
+			p.move = m
+		}
+		return p
+	}
+
+	site(x: unknown): FileLocation | undefined {
+		if (!isFields(x) || !this.only(x, ["file", "line"], ["file", "line", "column", "function"])) {
+			return
+		}
+		if (typeof x.file !== "string" || !whole(x.line)) return
+		const s: FileLocation = { file: x.file, line: x.line as number }
+		if ("column" in x) {
+			if (!whole(x.column)) return
+			s.column = x.column as number
+		}
+		if ("function" in x) {
+			if (typeof x.function !== "string") return
+			s.function = x.function
+		}
+		return s
+	}
+
+	// each read by f; none when one is not
+	all<T>(x: unknown, f: (e: unknown) => T | undefined): T[] | undefined {
+		if (!Array.isArray(x)) return
+		const out: T[] = []
+		for (const e of x) {
+			const t = f(e)
+			if (t === undefined) return
+			out.push(t)
+		}
+		return out
+	}
+
+	// a change as written; none when it is not one
+	header(x: unknown): ChangeHeader | undefined {
+		const may = ["time", "actor", "reader", "external", "metadata", "op"]
+		if (!isFields(x) || !this.only(x, ["time"], may) || !whole(x.time)) return
+		const h = { time: x.time as number } as ChangeHeader
+		if ("actor" in x) h.actor = x.actor
+		if ("reader" in x) {
+			if (typeof x.reader !== "string") return
+			h.reader = x.reader
+		}
+		if ("external" in x) {
+			const sites = this.all(x.external, (e) => this.site(e))
+			if (sites === undefined) return
+			h.external = sites
+		}
+		if ("metadata" in x) {
+			if (!Array.isArray(x.metadata) || !x.metadata.every(isEntry)) return
+			h.metadata = x.metadata as unknown as [string, unknown][]
+		}
+		if ("op" in x) {
+			const op = x.op
+			if (!isFields(op) || !this.only(op, ["patches", "undo"], ["patches", "undo"])) return
+			const patches = this.all(op.patches, (e) => this.patch(e))
+			const undo = this.all(op.undo, (e) => this.patch(e))
+			if (patches === undefined || undo === undefined) return
+			h.op = { patches, undo }
+		}
+		return h
+	}
+
+	// a node as written, new; none when it is not one
+	node(x: unknown): Node<unknown> | undefined {
+		if (!isFields(x) || !this.only(x, ["change"], ["change", "value", "cow"])) return
+		if ("cow" in x && x.cow !== false) return
+		const h = this.header(x.change)
+		if (h === undefined) return
+		return createNode<unknown>(x.value, h, "cow" in x ? { cow: false } : {})
 	}
 }
 
-// what the encoding cannot carry (a symbol in a list, a function, a Map): cannot-carry
-function encoded(x: cbor.Value, id?: string): Uint8Array {
+const STRICT = new Reader(false), LOOSE = new Reader(true)
+const reader = (r: Reading) => r.loosyGoosy ? LOOSE : STRICT
+
+// writing -------------------------------------------------------------------
+
+// a node's encoding: anything not a value in it, or a change that is not one, is cannot-carry at
+// the key given
+function bytes(n: Node<unknown>, o: Options, part?: string, id?: string): Uint8Array {
+	const w = written(n, o)
+	if (STRICT.header(w.change) === undefined) throw new PackError("cannot-carry", part, id)
 	try {
-		return cbor.encode(x)
+		return cbor.encode(w)
 	} catch (e) {
-		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", id)
+		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", part, id)
 		throw e
 	}
 }
 
-// the graph from root as one item, {root, nodes, missing}; cannot-carry: the node's id
-export function pack<V, H>(root: string, get: Get<V, H>): Uint8Array {
-	const { nodes, missing } = walk(root, get)
-	const ws = nodes.map(written)
+function compare(a: Uint8Array, b: Uint8Array): number {
+	const n = Math.min(a.length, b.length)
+	for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] - b[i]
+	return a.length - b.length
+}
+
+// a key's encoding, its order; a string with a lone surrogate: cannot-carry
+function keyed(part: string, id: string): Uint8Array {
 	try {
-		return cbor.encode({ root, nodes: ws, missing })
+		return cbor.encode([part, id])
 	} catch (e) {
-		if (!(e instanceof cbor.CborError)) throw e
-		// which: each again, only when one failed
-		for (let i = 0; i < ws.length; i++) encoded(ws[i], nodes[i].id)
-		throw new PackError("cannot-carry")
+		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", part, id)
+		throw e
 	}
 }
 
-// one node alone, as a graph's nodes are written; cannot-carry: its id
-export function encode<V, H>(node: Node<V, H>): Uint8Array {
-	return encoded(written(node), node.id)
-}
+const LIST = (n: number): Uint8Array =>
+	n < 24
+		? Uint8Array.of(0x80 | n)
+		: n < 0x100
+		? Uint8Array.of(0x98, n)
+		: n < 0x10000
+		? Uint8Array.of(0x99, n >> 8, n & 0xff)
+		: Uint8Array.of(0x9a, n >>> 24, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff)
 
-const isFields = (x: unknown): x is Fields =>
-	x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x)
-const isIds = (x: unknown) => Array.isArray(x) && x.every((e) => typeof e === "string")
-
-// versions as written: maps; under children, each content a list of ids; other keys passed over
-function read(x: unknown, lists: boolean): Side<unknown, unknown>[] | undefined {
-	// a version is its content: there, or it is not one
-	if (!Array.isArray(x) || !x.every((v) => isFields(v) && "content" in v)) return
-	if (lists && !x.every((v) => isIds(v.content))) return
-	return x.map((v) => {
-		const out: Side<unknown, unknown> = { content: v.content, change: v.change }
-		if (!("change" in v)) delete (out as { change?: unknown }).change
-		if ("because" in v) out.because = v.because
-		return out
-	})
-}
-
-// a header as pack writes it: time a number, reader a string, site {file, line, column?,
-// function?}, wallclock a whole, message a string; actor and cause any value; other keys
-// passed over
-function header(x: unknown): ChangeHeader | undefined {
-	if (!isFields(x)) return
-	const h: ChangeHeader = {}
-	if ("time" in x) {
-		if (typeof x.time !== "number") return
-		h.time = x.time
-	}
-	if ("actor" in x) h.actor = x.actor
-	if ("reader" in x) {
-		if (typeof x.reader !== "string") return
-		h.reader = x.reader
-	}
-	if ("site" in x) {
-		const s = x.site
-		if (!isFields(s) || typeof s.file !== "string" || typeof s.line !== "number") return
-		if ("column" in s && typeof s.column !== "number") return
-		if ("function" in s && typeof s.function !== "string") return
-		h.site = { file: s.file, line: s.line }
-		if ("column" in s) h.site.column = s.column as number
-		if ("function" in s) h.site.function = s.function as string
-	}
-	if ("cause" in x) h.cause = x.cause
-	if ("wallclock" in x) {
-		const w = x.wallclock
-		if (typeof w !== "number" || !Number.isInteger(w) || w < 0 || Object.is(w, -0)) return
-		h.wallclock = w
-	}
-	if ("message" in x) {
-		if (typeof x.message !== "string") return
-		h.message = x.message
-	}
-	return h
-}
-
-function named(x: unknown, lists: boolean): [string, Side<unknown, unknown>[]][] | undefined {
-	if (!Array.isArray(x)) return
-	const out: [string, Side<unknown, unknown>[]][] = []
-	for (const e of x) {
-		if (!Array.isArray(e) || e.length !== 2 || typeof e[0] !== "string") return
-		const vs = read(e[1], lists)
-		if (vs === undefined) return
-		out.push([e[0], vs])
-	}
+function cat(xs: Uint8Array[]): Uint8Array {
+	const out = new Uint8Array(xs.reduce((n, x) => n + x.length, 0))
+	let at = 0
+	for (const x of xs) out.set(x, at), at += x.length
 	return out
 }
 
-// a node from what was written, every field there; none when it is not one
-function node<V, H>(x: unknown): Node<V, H> | undefined {
-	if (!isFields(x) || typeof x.id !== "string") return
-	const value = read(x.value, false), info = named(x.info, false)
-	const children = named(x.children, true), h = header(x.header)
-	if (!value || !info || !children || !h) return
-	return createNode(x.id, {
-		value: value as Side<V, H>[],
-		attributes: info as [string, Side<V, H>[]][],
-		children: children as [string, Side<List, H>[]][],
-	}, { header: h })
+// "keys" sorts before "nodes": a map of two, the one way
+const HEAD = cat([Uint8Array.of(0xa2), cbor.encode("keys")])
+const NODES = cbor.encode("nodes")
+
+// the nodes under their keys, as one item; the same key twice with two nodes: already-there; a
+// key with a symbol: cannot-carry, that key, the first given; a node that cannot be carried:
+// cannot-carry, its first key
+export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Array {
+	type Row = { part: string; id: string; node: Node<unknown>; key: Uint8Array }
+	const rows: Row[] = []
+	for (const [part, id, node] of entries) {
+		if (typeof part !== "string" || typeof id !== "string") {
+			throw new PackError("cannot-carry", part, id)
+		}
+		rows.push({ part, id, node, key: keyed(part, id) })
+	}
+	rows.sort((a, b) => compare(a.key, b.key))
+	const numbers = new Map<Node<unknown>, number>()
+	const nodes: Uint8Array[] = [], keys: cbor.Value[] = []
+	let last: Row | undefined
+	for (const r of rows) {
+		if (last !== undefined && compare(last.key, r.key) === 0) {
+			if (last.node !== r.node) throw new PackError("already-there", r.part, r.id)
+			continue
+		}
+		last = r
+		let n = numbers.get(r.node)
+		if (n === undefined) {
+			numbers.set(r.node, n = nodes.length)
+			nodes.push(bytes(r.node, options, r.part, r.id))
+		}
+		keys.push([r.part, r.id, n])
+	}
+	return cat([HEAD, cbor.encode(keys), NODES, LIST(nodes.length), ...nodes])
+}
+
+// one node alone, as a pack writes each node
+export function encode(node: Node<unknown>, options: Options = {}): Uint8Array {
+	return bytes(node, options)
 }
 
 function decoded(b: Uint8Array, code: Code): unknown {
@@ -183,24 +302,44 @@ function decoded(b: Uint8Array, code: Code): unknown {
 	}
 }
 
-// the nodes back, new objects, headers as written; none loaded: that is the caller's (intro)
-export function unpack<V, H>(b: Uint8Array): Graph<V, H> {
-	const g = decoded(b, "not-a-graph")
-	if (
-		!isFields(g) || typeof g.root !== "string" || !Array.isArray(g.nodes) || !isIds(g.missing)
-	) throw new PackError("not-a-graph")
-	const nodes: Node<V, H>[] = []
-	for (const x of g.nodes) {
-		const n = node<V, H>(x)
-		if (n === undefined) throw new PackError("not-a-graph")
+// the nodes under their keys, in the keys' order, new nodes made with createNode: one node for
+// each written, under every key that names it. putting them in a table is the caller's
+export function unpack(b: Uint8Array, reading: Reading = {}): Entry[] {
+	const r = reader(reading)
+	const no = () => new PackError("not-a-pack")
+	const x = decoded(b, "not-a-pack")
+	if (!isFields(x) || !r.only(x, ["keys", "nodes"], ["keys", "nodes"])) throw no()
+	if (!Array.isArray(x.keys) || !Array.isArray(x.nodes)) throw no()
+	const nodes: Node<unknown>[] = []
+	for (const f of x.nodes) {
+		const n = r.node(f)
+		if (n === undefined) throw no()
 		nodes.push(n)
 	}
-	return { root: g.root, nodes, missing: g.missing as string[] }
+	const out: Entry[] = []
+	let next = 0, last: Uint8Array | undefined
+	for (const k of x.keys) {
+		if (!Array.isArray(k) || k.length !== 3) throw no()
+		const [part, id, n] = k
+		if (typeof part !== "string" || typeof id !== "string") throw no()
+		// numbered in the order first named
+		if (typeof n !== "number" || !Number.isInteger(n) || Object.is(n, -0)) throw no()
+		if (n < 0 || n > next || n >= nodes.length) throw no()
+		if (n === next) next++
+		// sorted, none twice
+		const key = cbor.encode([part, id])
+		if (last !== undefined && compare(last, key) >= 0) throw no()
+		last = key
+		out.push([part, id, nodes[n]])
+	}
+	// every node under a key
+	if (next !== nodes.length) throw no()
+	return out
 }
 
 // one node back, as encode wrote it
-export function decode<V, H>(b: Uint8Array): Node<V, H> {
-	const n = node<V, H>(decoded(b, "not-a-node"))
+export function decode(b: Uint8Array, reading: Reading = {}): Node<unknown> {
+	const n = reader(reading).node(decoded(b, "not-a-node"))
 	if (n === undefined) throw new PackError("not-a-node")
 	return n
 }

@@ -1,0 +1,190 @@
+{
+	"title": "at: what is at a path; nothing there is nothing",
+	"steps": [
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [],
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						{
+							"b": "x"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"a",
+				1,
+				"b"
+			],
+			"expect": {
+				"value": "x"
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"a",
+				0
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"a",
+				5
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"a",
+				"0"
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				0
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"toString"
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": "x"
+					}
+				]
+			},
+			"path": [
+				"a",
+				1,
+				"b",
+				0
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": "str",
+			"path": [
+				0
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": null,
+			"path": [],
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "at",
+			"value": null,
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"value": [
+				[
+					"one"
+				],
+				"two"
+			],
+			"path": [
+				1
+			],
+			"expect": {
+				"value": "two"
+			}
+		}
+	]
+}

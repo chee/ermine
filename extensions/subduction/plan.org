@@ -1,0 +1,84 @@
+#+title: plan: sync, rewritten for the new graph
+#+author: LLM generated working output
+#+date: 2026-10-14
+
+Words: *decided*: chee's words, quoted. *lean*: chee thinking it through, quoted. *mine*: my
+proposal, open to change. *open*: not answered. From the sync talks of 10-13 and 10-14. The graph
+it syncs: core/graph/plan.org (nodes as tables, paths in children).
+
+* What it is
+- a rewrite, *decided*: "sync will be totally rewriten because of the new cleaner api"
+- a history that keeps everything, merging apart, *decided*: "i love the idea that sync just keeps
+  stuff in a CRDT-able history, with every conflict kept, and that we have a concept of a "merge"
+  commit, and then we can have a different layer handle actual merging, that could even be done as
+  a process on the graph"
+- every head kept, *decided*: "show every head, merging will be a separate layer"; 10-14: "yeah i
+  think that's good."
+- Subduction is the floor: storage and network. the in-memory graph is a view of the sedimentrees
+  (10-11: "sedimentree is the filesystem")
+
+* The unit
+- one sedimentree per node, *decided*: "one sedimentree per node yes"; a node is everything at an
+  id, all its tables (core/graph/plan.org)
+- inside it, each table's history apart: a commit names the table it changes. *mine*
+- the sync object and the unit of conflict differ (as in Automerge: the doc syncs, a key conflicts),
+  *lean*: "right but the sync object is still the doc"
+
+* Commits
+- a local change as a commit: the table, the id, its change header (time, actor, reader, external,
+  metadata) and patches; sync's head (parents, lamport, nonce) as a metadata entry; undo never
+  sent. *mine*
+- patches for merging: CRDT-shaped, *lean*: "blop, if it will still exist after the rewrite, should
+  convert patches into crdt-shaped things marking the the the insert was before or after, etc
+  right". anchors live in sync, *decided* 10-13: "in sync"; elements named by the commit that made
+  them and which of its inserts (10-13: "ok i like it"). *open*: whether children still need them
+  now that children may be a plain map (a placement conflict is then a key conflict)
+- a merge commit: an ordinary write whose parents are the heads it saw (10-09: "a write settles
+  every head the writer's last read showed"). *mine* to use it as the merge commit
+- change identity (a patch node's at, a commit's settles): *open*, "it dosn't matter right now"
+
+* Conflicts
+- not as items at a slot, *lean*: "conflict at the slot level is already probably not actually
+  useful"
+- a conflicts table at the id, *lean*: "a conflicts table for the id maybe?". *mine*: sync writes it
+  from its history, one entry per conflicting spot (table, path, each head, its value, who); the
+  value table holds one head; history is kept, so it rebuilds after a reload
+- finer than whole values, from the ops, *lean*: "with the subduction info we can also figure out a
+  more finegrained conflict ... we can give a more finegrained view of the conflict between a1 and
+  a2 no?"; *mine*: each side's ranges mapped back to the fork point before comparing (what eg-walker
+  does)
+
+* Versions
+- a versioned id, ermine://b/commit/<hash>, read-only; a write from it is a branch
+  (core/graph/plan.org)
+- several heads at once, *open*, "we will figure that out later. /b/commit/hasha+hashb or
+  something"
+
+* Arriving
+- *open*, for when sync is built (chee 10-14: "we will think about this when we are doing sync"): a
+  node placed by id whose data hasn't come over the network yet reads as nothing; telling arriving
+  from empty and from refused. terminal and lib-dom needed it. *mine*: sync could write an arriving
+  table or field at the id, as it writes conflicts
+
+* What leaves the device
+- kept, sent, sent ephemerally, *decided*, how *open*: "something that's a coordination between the
+  user and the storage process and the sync process, somehow"
+- ephemeral placement is places' (core/graph/plan.org): someone's persisted node can be received over
+  the ephemeral channel and placed ephemerally, *lean*: "choose to transmit, choose to receive,
+  someone else's persisted node over ephemeral channel and then you place it ephemerally"
+- *lean*: "the use of subduction might be making me conflate ephemeral and not saved and local."
+
+* Keyhive (next week, *lean*: "keyhive is a little future from now next week probably")
+- protect answers from Keyhive's local state, *decided*: "yes that is right"; protect also keeps its
+  own local rules
+- ids that aren't Keyhive doc ids stay unprotected, *decided*: "we'll keep those unprotected"
+- actor signed, *decided*: "actor is also going to be a sign"
+- fragments built by us, *decided*: "yeah, we make the fargment"
+- Keyhive's own events in the same storage, *decided*: "same storage, in a keyhive area"
+- relay can be denied: ids stay visible in a parent, bytes may not come, *decided*: "keyhive also
+  allows denying relay"; "the parent still knows it is there (its id is in the parent list)" —
+  "this isss true"
+- circles, *lean*: "circles might be different"
+
+* Looked at and not taken
+- HgCRDT / HgCPRDT (hypergraph CRDTs): "hmm seems like a bad fit"

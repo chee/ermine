@@ -2,7 +2,8 @@
 // and shape as paths.ts; the patches are op's (core/op/c/apply.h). Out of memory aborts: nothing
 // here returns it.
 //
-// A spot is (source, id, path): a read of path, deep, in the value at that key. Spots are kept by
+// A spot is (source, id, path): a read of path, deep, in the value at that key. A keys spot reads
+// which keys there are at path, not what is under them (see pt_marks). Spots are kept by
 // address, shared by everyone who reads the same path, in a trie per key; a list's number kids
 // are also kept in order, so a range finds those from its start with one binary search.
 // Pruning: pt_release lets a spot go; the wiring calls it once no reader holds the spot (its
@@ -38,6 +39,8 @@ typedef struct {
 	const op_key *path;
 	size_t length;
 	int change;
+	// a read of the keys at path only
+	int keys;
 	void *owner;
 	// the mark call that last gave it, so a call gives it once
 	uint64_t seen;
@@ -50,8 +53,10 @@ pt_paths *pt_new(void);
 // frees it and every spot
 void pt_free(pt_paths *p);
 
-// the spot of a read of path at (source, id): made or found. path: number and string keys only
-pt_spot *pt_spot_of(pt_paths *p, pt_key source, pt_key id, const op_key *path, size_t length);
+// the spot of a read of path at (source, id): made or found. path: number and string keys only.
+// keys: the spot of a read of the keys at path (a separate spot from the plain one)
+pt_spot *pt_spot_of(pt_paths *p, pt_key source, pt_key id, const op_key *path, size_t length,
+	int keys);
 // the change spot at (source, id): made or found
 pt_spot *pt_change_of(pt_paths *p, pt_key source, pt_key id);
 
@@ -67,8 +72,11 @@ pt_spot *const *pt_event(pt_paths *p, pt_key source, pt_key id, size_t *length);
 // left: never use s again
 void pt_release(pt_paths *p, pt_spot *s);
 
-// whether the patch marks a read of path: the rule, as a function
-int pt_marks(const op_patch *patch, const op_key *path, size_t length);
+// whether the patch marks a read of path: the rule, as a function. keys: a keys read of path,
+// reached where a read of path would be (a place at it or above it), and below it only by a place
+// exactly one step down and unranged (a key set, removed, taken or landed); deeper, or ranged into
+// a key's value, it is not
+int pt_marks(const op_patch *patch, const op_key *path, size_t length, int keys);
 
 // what is kept: keys with a spot, spots, trie steps (a kept key's [] and every other prefix of a
 // kept spot's path)

@@ -1,5 +1,5 @@
-// Bench for pack and the canonical CBOR codec (compare newcore/encoding/ts/pack_bench.ts): same workloads.
-// Values are Json (json.h); the codec is cborEncode / cborDecode. Not built with the sanitizers.
+// Bench for pack and the canonical CBOR codec (compare ../typescript/pack_bench.ts): same workloads.
+// Value samples are Json (json.h), written by cborEncode / cborDecode. Not built with the sanitizers.
 #define _POSIX_C_SOURCE 200809L
 #include "cbor.h"
 #include "json.h"
@@ -10,117 +10,49 @@
 #include <string.h>
 #include <time.h>
 
-// --- the codec ---
-
-static unsigned char *scratch;
-static size_t room;
-
-static int encode(void *context, pk_field field, const void *value, pk_bytes *out) {
-	(void)context, (void)field;
-	size_t n = 0;
-	const char *why;
-	if (!value || !cborEncode(value, scratch, room, &n, &why)) return 1;
-	if (n > room) {
-		scratch = realloc(scratch, room = n);
-		cborEncode(value, scratch, room, &n, &why);
-	}
-	pk_put(out, scratch, n);
-	return 0;
-}
-
-static int decode(void *context, pk_field field, const uint8_t *item, size_t length,
-	const void **value) {
-	(void)context, (void)field;
-	*value = cborDecode(item, length, NULL, NULL);
-	return *value == NULL;
-}
-
-static const pk_codec codec = {encode, decode, NULL};
-
-// --- the tree: 1000 nodes, 10 under each ---
+// --- the nodes: 1000 ids, three parts each ---
 
 #define N 1000
 
-typedef struct {
-	char ids[10][8];
-	nd_item items[10];
-	nd_list lists[2];
-	nd_version value, type, home[2];
-	nd_entry info, children;
-	nd_node *node;
-} holder;
+static pk_entry entries[3 * N];
+static nd_node *nodes[3 * N];
 
-static holder *held;
-
-static const nd_node *get(void *context, const char *id) {
-	(void)context;
-	return id[0] == 'n' ? held[atoi(id + 1)].node : NULL;
-}
-
-static Json *change(void) {
-	Json *c = jsonObject();
-	jsonAdd(c, "time", jsonNumber(1760000000000.0));
-	jsonAdd(c, "actor", jsonString("a"));
-	jsonAdd(c, "node", jsonString("x"));
-	return c;
+static ch_header header(int i) {
+	static const ch_site site = {"file:///a.ts", 12, 3, "f", 1};
+	return (ch_header){.has_time = 1, .time = 1760000000 + i, .actor = NULL, .reader = "host",
+		.external = &site, .external_length = 1};
 }
 
 static void build(void) {
-	held = calloc(N, sizeof *held);
 	for (int i = 0; i < N; i++) {
-		holder *h = &held[i];
-		size_t k = 0;
-		for (int j = 0; j < 10; j++) {
-			int id = i * 10 + j + 1;
-			if (id >= N) break;
-			snprintf(h->ids[k], sizeof h->ids[k], "n%d", id);
-			h->items[k].id = h->ids[k];
-			k++;
-		}
-		h->lists[0] = (nd_list){h->items, k};
-		h->lists[1] = (nd_list){h->items + (k ? 1 : 0), k ? k - 1 : 0};
+		static char ids[N][8];
+		snprintf(ids[i], sizeof ids[i], "n%d", i);
 		char title[32];
 		snprintf(title, sizeof title, "note %d", i);
-		Json *v = jsonObject();
-		jsonAdd(v, "title", jsonString(title));
-		jsonAdd(v, "done", jsonBoolean(i % 2 == 0));
-		jsonAdd(v, "size", jsonNumber(i * 1.5));
-		h->value = (nd_version){v, change(), NULL};
-		h->type = (nd_version){jsonString("public.folder"), change(), NULL};
-		h->home[0] = (nd_version){&h->lists[0], change(), NULL};
-		h->home[1] = (nd_version){&h->lists[1], change(), NULL};
-		h->info = (nd_entry){"type", {&h->type, 1}};
-		h->children = (nd_entry){"home", {h->home, 2}};
-		nd_contents c = {{&h->value, 1}, &h->info, 1, &h->children, 1};
-		nd_header header = {1, 1760000000000LL + i, jsonString("host"), NULL, 0, {0}, NULL};
-		char id[8];
-		snprintf(id, sizeof id, "n%d", i);
-		h->node = nd_make(id, &c, &header, NULL);
-	}
-}
-
-// --- freeing what the codec made when unpack read it ---
-
-static void drop(const void *v) {
-	if (v) jsonFree((Json *)v);
-}
-
-static void drop_object(const nd_object *o) {
-	for (size_t i = 0; i < o->length; i++) drop(o->versions[i].change), drop(o->versions[i].because);
-}
-
-static void drop_values(const pk_graph *g) {
-	for (size_t i = 0; i < g->length; i++) {
-		const nd_node *n = g->nodes[i];
-		for (size_t k = 0; k < n->value.length; k++) drop(n->value.versions[k].content);
-		drop_object(&n->value);
-		for (size_t e = 0; e < n->info_length; e++) {
-			for (size_t k = 0; k < n->info[e].object.length; k++)
-				drop(n->info[e].object.versions[k].content);
-			drop_object(&n->info[e].object);
+		op_value *v = op_map(), *home = op_list();
+		op_set(v, "title", op_str(title));
+		op_set(v, "done", op_bool(i % 2 == 0));
+		op_set(v, "size", op_num(i * 1.5));
+		for (int k = 1; k <= 10 && i * 10 + k < N; k++) {
+			op_value *entry = op_list();
+			op_push(entry, op_str("host"));
+			char kid[8];
+			snprintf(kid, sizeof kid, "n%d", i * 10 + k);
+			op_push(entry, op_str(kid));
+			op_push(home, entry);
 		}
-		for (size_t e = 0; e < n->children_length; e++) drop_object(&n->children[e].object);
-		drop(n->header.actor), drop(n->header.cause);
+		op_value *children = op_map();
+		op_set(children, "home", home);
+		op_value *type = op_map();
+		op_set(type, "type", op_str("public.folder"));
+		op_value *values[3] = {v, type, children};
+		const char *parts[3] = {"value", "attributes", "children"};
+		for (int p = 0; p < 3; p++) {
+			ch_header h = header(i);
+			nd_node *n = nd_make(values[p], &h, NULL);
+			nodes[3 * i + p] = n;
+			entries[3 * i + p] = (pk_entry){tb_string(parts[p]), tb_string(ids[i]), n};
+		}
 	}
 }
 
@@ -163,15 +95,14 @@ static pk_bytes graph_bytes, node_bytes;
 static void pack_job(void *x) {
 	(void)x;
 	pk_bytes b = {0};
-	pk_pack("n0", get, NULL, &codec, &b, NULL);
+	pk_pack(entries, 3 * N, NULL, &b, NULL);
 	free(b.data);
 }
 
 static void unpack_job(void *x) {
 	(void)x;
-	pk_graph g;
-	pk_unpack(graph_bytes.data, graph_bytes.length, &codec, &g);
-	drop_values(&g);
+	pk_read g;
+	pk_unpack(graph_bytes.data, graph_bytes.length, NULL, &g);
 	pk_free(&g);
 }
 
@@ -183,15 +114,14 @@ static void check_job(void *x) {
 static void encode_node_job(void *x) {
 	(void)x;
 	pk_bytes b = {0};
-	pk_encode(held[1].node, &codec, &b);
+	pk_encode(nodes[0], NULL, &b);
 	free(b.data);
 }
 
 static void decode_node_job(void *x) {
 	(void)x;
-	pk_graph g;
-	pk_decode(node_bytes.data, node_bytes.length, &codec, &g);
-	drop_values(&g);
+	pk_read g;
+	pk_decode(node_bytes.data, node_bytes.length, NULL, &g);
 	pk_free(&g);
 }
 
@@ -226,27 +156,23 @@ static void sampled(const char *name, Json *value) {
 }
 
 int main(void) {
-	room = 1 << 16;
-	scratch = malloc(room);
 	build();
 
 	// the bytes are right before they are timed
-	if (pk_pack("n0", get, NULL, &codec, &graph_bytes, NULL) != PK_OK) return puts("pack failed"), 1;
-	pk_graph g;
-	if (pk_unpack(graph_bytes.data, graph_bytes.length, &codec, &g) != PK_OK || g.length != N)
+	if (pk_pack(entries, 3 * N, NULL, &graph_bytes, NULL) != PK_OK) return puts("pack failed"), 1;
+	pk_read g;
+	if (pk_unpack(graph_bytes.data, graph_bytes.length, NULL, &g) != PK_OK || g.length != 3 * N)
 		return puts("unpack failed"), 1;
-	drop_values(&g);
 	pk_free(&g);
-	if (pk_encode(held[1].node, &codec, &node_bytes) != PK_OK) return puts("encode failed"), 1;
-	if (pk_decode(node_bytes.data, node_bytes.length, &codec, &g) != PK_OK || g.length != 1)
+	if (pk_encode(nodes[0], NULL, &node_bytes) != PK_OK) return puts("encode failed"), 1;
+	if (pk_decode(node_bytes.data, node_bytes.length, NULL, &g) != PK_OK || g.count != 1)
 		return puts("decode failed"), 1;
-	drop_values(&g);
 	pk_free(&g);
-	printf("graph %zu bytes, node %zu bytes\n", graph_bytes.length, node_bytes.length);
+	printf("pack %zu bytes, node %zu bytes\n", graph_bytes.length, node_bytes.length);
 
-	bench("pack 1000 nodes", pack_job, NULL);
-	bench("unpack 1000 nodes", unpack_job, NULL);
-	bench("cborDecode graph", check_job, NULL);
+	bench("pack 3000 nodes", pack_job, NULL);
+	bench("unpack 3000 nodes", unpack_job, NULL);
+	bench("cborDecode pack", check_job, NULL);
 	bench("encode one node", encode_node_job, NULL);
 	bench("decode one node", decode_node_job, NULL);
 

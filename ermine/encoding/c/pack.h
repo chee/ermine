@@ -1,73 +1,93 @@
-// A graph from a root, as bytes (newcore/encoding/PACK.tex), in C. Same shape as pack.ts: one canonical CBOR item,
-// {root, nodes, missing}. Values (content outside lists, change, because, actor, cause) are the
-// caller's: written and read by its codec, never read here.
+// Nodes under keys of a part and an id (ermine/encoding/typescript/pack.ts), in C: written as one
+// canonical CBOR item, {keys: [[part, id, n], ...], nodes: [node, ...]}, and read back. Which nodes
+// is the caller's; nothing is loaded or placed here. A node: {change, value?}; a change: {time,
+// actor?, reader?, external?, metadata?, op?}. Same bytes as pack.ts.
+//
+// SYMBOLS. A key with a symbol in it (table.h) cannot be carried: PK_CANNOT_CARRY, that key. An
+// op_value has no symbol, so there is nothing to look for in a value.
+//
+// VALUES. A node's value, its actor, each metadata value and each patch's value are op_values
+// (the header's actor and metadata values are void *: pack takes them as op_value *, and gives
+// them back as such). A number in a header that C holds whole (time, a site's line and column, a
+// path's keys, a range) is read only if it is one: a pack with another there is PK_NOT_A_PACK.
+//
+// Out of memory aborts, as elsewhere. Nothing recurses on a value's depth.
 #ifndef PACK_H
 #define PACK_H
 
-#include "../../../core/graph/c/node.h"
+#include "json.h"
+#include "../../../core/graph/c/table.h"
+#include "../../../core/node/c/node.h"
+
+#include <stdint.h>
 
 typedef enum {
 	PK_OK,
-	PK_NOTHING_THERE,
-	PK_CANNOT_CARRY,
-	PK_NOT_A_GRAPH,
+	PK_NOT_A_PACK,
 	PK_NOT_A_NODE,
-	PK_NO_MEMORY,
+	PK_CANNOT_CARRY,
+	PK_ALREADY_THERE,
 } pk_code;
+// the TypeScript code of a return: "not-a-pack", "not-a-node", "cannot-carry", "already-there";
+// "" for PK_OK
+const char *pk_code_name(pk_code code);
 
-// the node of an id, or NULL if it is not loaded
-typedef const nd_node *(*pk_get)(void *context, const char *id);
+// a node under a key: what pack is given and unpack gives. A node under several keys is one node,
+// the same pointer
+typedef struct {
+	tb_key part, id;
+	const nd_node *node;
+} pk_entry;
 
-// bytes being written; start at {0}; failed: out of memory. free(data) when done
+// bytes being written; start at {0}. free(data) when done
 typedef struct {
 	uint8_t *data;
 	size_t length, capacity;
-	int failed;
 } pk_bytes;
-void pk_put(pk_bytes *b, const void *data, size_t length);
 
-// which field a value is in: each may be a different type of the caller's
-typedef enum { PK_CONTENT, PK_CHANGE, PK_BECAUSE, PK_ACTOR, PK_CAUSE } pk_field;
-
+// how to write: zero is the default
 typedef struct {
-	// writes one CBOR item for value, in field; nonzero: it cannot be carried
-	int (*encode)(void *context, pk_field field, const void *value, pk_bytes *out);
-	// a value for field from the one CBOR item at item, length long; nonzero: not one it reads.
-	// What it gives is the caller's, kept after pk_free. Give non-NULL: NULL is not there
-	int (*decode)(void *context, pk_field field, const uint8_t *item, size_t length,
-		const void **value);
-	void *context;
-} pk_codec;
-
-// root: the id walked from; nodes: the root first, then in the order reached; missing: ids in a
-// list reached but not loaded, in the order reached
+	int no_op; // a change's op (patches and undo) is not written
+} pk_options;
+// how to read: zero is the default
 typedef struct {
-	const char *root;
-	const nd_node **nodes;
+	// in every map a key not known is passed over, not refused; none of it reaches a node. All else
+	// stays strict
+	int loosy;
+} pk_reading;
+
+// the entries as one item, appended to out. The same key twice with the same node is once; with
+// two nodes: PK_ALREADY_THERE. A node that cannot be carried (a string that is not text, a key with a symbol, a header that is no change): PK_CANNOT_CARRY. For both, *at
+// is the key at fault (the node's first key in the keys' order), if at is not NULL
+pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *options, pk_bytes *out,
+	const pk_entry **at);
+// one node alone, as a pack writes each node, appended to out; PK_CANNOT_CARRY as above
+pk_code pk_encode(const nd_node *node, const pk_options *options, pk_bytes *out);
+
+// what unpack or decode made: new nodes (nd_make), all freed by pk_free. entries: in the keys'
+// order, strings; nodes: one for each written, numbered in the order the keys first name them, so
+// a node under several keys is one node; decode gives one node and no entries
+typedef struct {
+	pk_entry *entries;
 	size_t length;
-	const char **missing;
-	size_t missing_length;
-	void *own; // unpack's: what it allocated, the nodes too
-} pk_graph;
+	nd_node **nodes;
+	size_t count;
+	void *own; // what it allocated
+} pk_read;
 
-// the root and every node reachable from it, by any version of any list; nodes and ids are the
-// get's. root not loaded: PK_NOTHING_THERE
-pk_code pk_walk(const char *root, pk_get get, void *context, pk_graph *out);
-// the walk as one CBOR item, appended to out. A symbol in a list, or a value the codec cannot
-// encode: PK_CANNOT_CARRY, *id the node's (id may be NULL)
-pk_code pk_pack(const char *root, pk_get get, void *context, const pk_codec *codec,
-	pk_bytes *out, const char **id);
-// new nodes, by nd_make, headers as written. Only the canonical encoding is read (ENCODING.tex:
-// shortest heads, definite lengths, floats not integers, keys in order); anything else, or a shape
-// that is not a graph: PK_NOT_A_GRAPH
-pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out);
-// one node alone, as a graph's nodes are written, appended to out. A symbol in a list, or a value
-// the codec cannot encode: PK_CANNOT_CARRY
-pk_code pk_encode(const nd_node *node, const pk_codec *codec, pk_bytes *out);
-// the node back, as encode wrote it: out->nodes[0] (length 1, root its id), a new node, headers
-// as written. Anything else, or a shape that is not a node: PK_NOT_A_NODE. pk_free it
-pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_codec *codec, pk_graph *out);
-// what walk, unpack or decode allocated
-void pk_free(pk_graph *g);
+// only the canonical encoding is read, and exactly what pack writes: anything else, or a shape that
+// is not a pack (a field missing or another, keys out of order or twice, nodes not numbered as first
+// named): PK_NOT_A_PACK. Nothing is made then
+pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out);
+// one node back, as encode wrote it: out->nodes[0]. Anything else: PK_NOT_A_NODE
+pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out);
+// what unpack or decode made, the nodes and what their headers refer to; no-op on {0}
+void pk_free(pk_read *r);
+
+// values as json.h holds them, for callers whose values are Json. pk_to_json: a fresh value, NULL
+// when a stand-in has no kind
+Json *pk_to_json(const op_value *v);
+// a fresh op_value holding what j holds (a stand-in, bytes, a typed array too); j is not changed
+op_value *pk_of_json(const Json *j);
 
 #endif

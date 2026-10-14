@@ -1,0 +1,43 @@
+{
+	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's and an effect's (proof C5)",
+	"steps": [
+		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{ "cleanup": ["c", { "write": ["k", { "sum": [{ "read": "k" }, 1] }] }] },
+					{ "read": "k" }
+				]
+			},
+			"to": "c"
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "c", "expect": { "value": null } },
+		{ "op": "write", "values": { "k": 10 }, "expect": { "tick": 3 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "get", "key": "k", "expect": { "value": 12 } },
+		{ "op": "get", "key": "c", "expect": { "value": 11 } },
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": { "read": "m" },
+			"act": {
+				"do": [
+					{ "log": ["act", { "given": "value" }] },
+					{ "cleanup": ["e", { "write": ["m", { "sum": [{ "given": "value" }, 1] }] }] }
+				]
+			}
+		},
+		{ "op": "write", "values": { "m": 1 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 1]] } },
+		{ "op": "write", "values": { "m": 5 } },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "log", "expect": { "log": [["act", 5]] } },
+		{ "op": "get", "key": "m", "expect": { "value": 2 } }
+	]
+}

@@ -1,0 +1,17 @@
+{
+	"title": "a table per source; a get of a source never written is nothing, and makes no table",
+	"steps": [
+		{ "op": "add", "source": "stored", "part": "value", "id": "x", "node": "a", "expect": {} },
+		{ "op": "add", "source": "drag", "part": "value", "id": "x", "node": "b", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "value", "id": "x", "expect": { "node": "a" } },
+		{ "op": "get", "source": "drag", "part": "value", "id": "x", "expect": { "node": "b" } },
+		{ "op": "get", "source": "pending", "part": "value", "id": "x", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "children", "id": "x", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "attributes", "id": "x", "expect": {} },
+		{ "op": "get", "source": "stored", "part": "value", "id": "y", "expect": {} },
+		{
+			"op": "events",
+			"expect": { "events": [["stored", "value", "x", "a"], ["drag", "value", "x", "b"]] }
+		}
+	]
+}
