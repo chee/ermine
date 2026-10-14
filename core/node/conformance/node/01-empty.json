@@ -2,9 +2,9 @@
 	"title": "no value: no value key; no header: a change with only the time now",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": "now"
 					}
@@ -12,10 +12,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"header": {},
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": "now"
 					}

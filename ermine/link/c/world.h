@@ -33,7 +33,7 @@ void world_finish(void);
 
 // what the harnesses keep until the end: a value made (programs and patches refer into it), a node
 void world_keep(op_value *value);
-void world_keep_node(nd_node *node);
+void world_keep_node(nd_entry *node);
 
 // calloc that aborts (zeroed), a copy of a string, a string as printf has it: all fresh, the caller's to free
 void *world_alloc(size_t size);
@@ -105,7 +105,7 @@ const op_value *world_reads(const sc_computation *c);
 // a value write, with a scope open: the patches to the node there, then said written; none there:
 // a node made with them, then added (a table event). 0, or op's code with *failed the patch; -1
 // with *why. *node (may be NULL): the node. The patches are the line's, or kept by world_keep
-int world_edit(tb_key source, const char *part, tb_key id, const op_value *patches, nd_node **node,
+int world_edit(tb_key source, const char *part, tb_key id, const op_value *patches, nd_entry **node,
 	const char **why, size_t *failed);
 // a write request ({edit, place, unplace, order, rename, move}), with a scope open. 0, or the
 // code, *why its name, *failed the patch an edit was about

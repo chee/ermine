@@ -1,8 +1,8 @@
 {
-	"title": "the header as the node's change, as given",
+	"title": "the header as the entry's change, as given",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"value": 1,
 			"header": {
 				"time": 9007199254740991,
@@ -26,7 +26,7 @@
 				]
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 1,
 					"change": {
 						"time": 9007199254740991,
@@ -53,13 +53,13 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"header": {
 				"time": 0,
 				"actor": "me"
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": 0,
 						"actor": "me"

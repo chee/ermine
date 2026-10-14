@@ -1,0 +1,16 @@
+{
+	"title": "a node with no tables is empty; an entry in it may have no value, and no header",
+	"steps": [
+		{ "op": "node", "entries": {}, "expect": { "node": {} } },
+		{
+			"op": "node",
+			"entries": { "children": {}, "value": { "header": { "time": 0 } } },
+			"expect": {
+				"node": {
+					"children": { "change": { "time": "now" } },
+					"value": { "change": { "time": 0 } }
+				}
+			}
+		}
+	]
+}

@@ -3,7 +3,7 @@
 // shape of the value under each one known. a source's table is made when first written to, and
 // dropped whole when the source ends. one listener is told of every table event: a node added,
 // replaced or removed at a key
-import type { Node } from "@ermine/node"
+import type { Entry } from "@ermine/node"
 import { createTable, type Key, TableError } from "@ermine/graph/table"
 
 export type { Key }
@@ -38,13 +38,13 @@ export function createStore(event?: Event): Store {
 	}
 
 	// the node under the key; none: undefined. a read makes no table
-	function get<P extends Part>(source: Key, part: P, id: Key): Node<Parts[P]> | undefined {
-		return tables.get(source)?.table.get(part, id) as Node<Parts[P]> | undefined
+	function get<P extends Part>(source: Key, part: P, id: Key): Entry<Parts[P]> | undefined {
+		return tables.get(source)?.table.get(part, id) as Entry<Parts[P]> | undefined
 	}
 
 	// the node under the key; another node there already: already-there (the table's). the same
 	// node again: nothing, and no event
-	function add<P extends Part>(source: Key, part: P, id: Key, node: Node<Parts[P]>) {
+	function add<P extends Part>(source: Key, part: P, id: Key, node: Entry<Parts[P]>) {
 		const t = made(source)
 		if (t.table.get(part, id) === node) return
 		t.table.add(part, id, node)
@@ -53,7 +53,7 @@ export function createStore(event?: Event): Store {
 	}
 
 	// the node under the key, in place of what was there. the same node: nothing, and no event
-	function sub<P extends Part>(source: Key, part: P, id: Key, node: Node<Parts[P]>) {
+	function sub<P extends Part>(source: Key, part: P, id: Key, node: Entry<Parts[P]>) {
 		const t = made(source)
 		if (t.table.get(part, id) === node) return
 		t.table.sub(part, id, node)
@@ -71,7 +71,7 @@ export function createStore(event?: Event): Store {
 	}
 
 	// every key the node is under in the source's table, as [part, id]; none: not there
-	const who = (source: Key, node: Node<unknown>): [Part, Key][] =>
+	const who = (source: Key, node: Entry<unknown>): [Part, Key][] =>
 		(tables.get(source)?.table.who(node) ?? []) as [Part, Key][]
 
 	// places' hole: the children node of id as source has it
@@ -92,11 +92,11 @@ export function createStore(event?: Event): Store {
 }
 
 export type Store = {
-	get: <P extends Part>(source: Key, part: P, id: Key) => Node<Parts[P]> | undefined
-	add: <P extends Part>(source: Key, part: P, id: Key, node: Node<Parts[P]>) => void
-	sub: <P extends Part>(source: Key, part: P, id: Key, node: Node<Parts[P]>) => void
+	get: <P extends Part>(source: Key, part: P, id: Key) => Entry<Parts[P]> | undefined
+	add: <P extends Part>(source: Key, part: P, id: Key, node: Entry<Parts[P]>) => void
+	sub: <P extends Part>(source: Key, part: P, id: Key, node: Entry<Parts[P]>) => void
 	del: (source: Key, part: Part, id: Key) => void
-	who: (source: Key, node: Node<unknown>) => [Part, Key][]
-	children: (source: Key, id: Key) => Node<Parts["children"]> | undefined
+	who: (source: Key, node: Entry<unknown>) => [Part, Key][]
+	children: (source: Key, id: Key) => Entry<Parts["children"]> | undefined
 	drop: (source: Key) => void
 }

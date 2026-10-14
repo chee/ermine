@@ -58,7 +58,7 @@
 // an item: { source, id, name?, at?, path }   name and at: none on a start. path: path(item)
 // a PlacesError answers { error: code, at? } (at: the name it was about, when there was one).
 // anything not understood: { error: "text" }
-import createNode, { type Node } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node"
 import { createPlaces, type Item, path, PlacesError, ROOT } from "@ermine/places"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 
@@ -94,16 +94,16 @@ const key = (x: unknown) => {
 	return k
 }
 
-const world = new Map<Key, Map<Key, Node<unknown>>>()
+const world = new Map<Key, Map<Key, Entry<unknown>>>()
 // the changes made to nodes in the request being answered
-let changed: { source: Key; id: Key; node: Node<unknown> }[] = []
+let changed: { source: Key; id: Key; node: Entry<unknown> }[] = []
 let reads: Json[] = []
 // what the sink given to the request being answered was told
 let own: Json[] = []
 const sink = (r: unknown) => void own.push(dehydrate(r))
 
 function made(source: Key, id: Key, value?: unknown, inplace = false) {
-	const node = createNode(value, { time: 0, actor: "setup" }, inplace ? { cow: false } : {})
+	const node = createEntry(value, { time: 0, actor: "setup" }, inplace ? { cow: false } : {})
 	let change = node.change
 	Object.defineProperty(node, "change", {
 		enumerable: true,
@@ -178,7 +178,7 @@ const entry = (x: unknown) => {
 }
 const slot = (parent: unknown, name: unknown) => [spec(parent), name] as [Spec, string]
 
-type Gave = readonly { source: Key; id: Key; node: Node<unknown> }[]
+type Gave = readonly { source: Key; id: Key; node: Entry<unknown> }[]
 function write(r: Request, f: (h: { time: number; actor: string }) => Gave): Answer {
 	const header = { time: r.time ?? 1, actor: "me" }
 	let error: Json = {}, gave: Gave = []

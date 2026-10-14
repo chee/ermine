@@ -88,7 +88,7 @@ typedef struct {
 	// where names start: an id with the source pl_root(), or an entry. copied
 	tb_key root_source, root_id;
 	// the children node of id as source has it; NULL: not there (not loaded, or never made)
-	nd_node *(*children)(void *ctx, tb_key source, tb_key id);
+	nd_entry *(*children)(void *ctx, tb_key source, tb_key id);
 	// told of each read, as it is made. May be NULL
 	void (*read)(void *ctx, tb_key source, tb_key id, const char *name, int keys);
 	// a value in an entry that is not a string: 1 and *token if it is a symbol. NULL hook: none is
@@ -174,7 +174,7 @@ void pl_close(pl_held *h);
 // whose second write fails (PL_OP) keeps the first
 typedef struct {
 	tb_key source, id;
-	nd_node *node;
+	nd_entry *node;
 } pl_wrote;
 typedef struct {
 	size_t n;

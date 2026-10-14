@@ -4,7 +4,7 @@
 // names: blop.ts (BLOP.tex), as the history fixtures. apply.ts and commit.ts are never imported.
 import { encode, name } from "@ermine/encoding/blop"
 import mutate from "@ermine/op/mutate"
-import createNode, { type Node } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node"
 import createChange from "@ermine/change"
 import createBecause from "@ermine/change/because"
 import { toJson } from "../pack/form.ts"
@@ -85,13 +85,13 @@ export const first = (a: B, b: B) =>
 // ---- the model: APPLY.tex walked through by hand, small enough to read whole
 const NONE = Symbol("none")
 type Side = unknown
-function scratch(object: Which, content: Side): Node<unknown, unknown> {
+function scratch(object: Which, content: Side): Entry<unknown, unknown> {
 	const vs = content === NONE ? [] : [{ content, change: {} }]
-	if (object === "value") return createNode("n", { value: vs })
-	if (object[0] === "info") return createNode("n", { info: [[object[1], vs]] })
-	return createNode("n", { children: [[object[1], vs as never]] })
+	if (object === "value") return createEntry("n", { value: vs })
+	if (object[0] === "info") return createEntry("n", { info: [[object[1], vs]] })
+	return createEntry("n", { children: [[object[1], vs as never]] })
 }
-function firstOf(node: Node<unknown, unknown>, object: Which): Side {
+function firstOf(node: Entry<unknown, unknown>, object: Which): Side {
 	const vs = object === "value"
 		? node.value
 		: (object[0] === "info" ? node.info : node.children).get(object[1]) ?? []

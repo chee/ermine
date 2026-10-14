@@ -9,7 +9,7 @@
 // values it kept are caught as it appends; the scenario then gives them back as edits, with a
 // folder's file id in the plan written as the path that holds it, and lays out by hand, as
 // edits, whatever part of the plan the crash is to have done.
-import createNode, { type Node } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node"
 import * as cbor from "@ermine/encoding/cbor"
 import * as manifest from "@ermine/files/manifest"
 import { mirror, type Saving, store } from "@ermine/files/store"
@@ -100,11 +100,11 @@ class Model {
 	}
 	/** The same, as store.ts takes it: new node objects. */
 	saving(ephemeral: string[] = []): Saving {
-		const table = new Map<string, Node<unknown, unknown>>()
+		const table = new Map<string, Entry<unknown, unknown>>()
 		for (const [id, n] of this.nodes) {
 			table.set(
 				id,
-				createNode(id, {
+				createEntry(id, {
 					value: n.value.map((v) => ({ ...v })),
 					info: [...n.info].map(([k, x]) => [k, x.map((v) => ({ ...v }))] as const),
 					children: [...n.children].map((

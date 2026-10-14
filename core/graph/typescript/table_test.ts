@@ -1,9 +1,9 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import { createTable, TableError } from "./table.ts"
 
 const code = (f: () => unknown) => (assertThrows(f, TableError) as TableError).code
-const node = (value?: unknown) => createNode(value, { time: 0, actor: "host" })
+const node = (value?: unknown) => createEntry(value, { time: 0, actor: "host" })
 
 Deno.test("table: several parts at one id, got by part and id, and all at the id", () => {
 	const t = createTable<unknown>()

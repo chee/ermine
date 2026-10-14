@@ -32,11 +32,11 @@ static hh_line **lines;
 static size_t nlines, caplines;
 static op_value **values;
 static size_t nvalues, capvalues;
-static nd_node **nodes;
+static nd_entry **nodes;
 static size_t nnodes, capnodes;
 
 void world_keep(op_value *value) { PUSH(values, nvalues, capvalues, value); }
-void world_keep_node(nd_node *node) { PUSH(nodes, nnodes, capnodes, node); }
+void world_keep_node(nd_entry *node) { PUSH(nodes, nnodes, capnodes, node); }
 
 void *world_alloc(size_t size) {
 	void *p = calloc(1, size ? size : 1);
@@ -379,7 +379,7 @@ op_value *world_summary(const ch_header *h) {
 	return o;
 }
 
-int world_edit(tb_key source, const char *part, tb_key id, const op_value *patches, nd_node **out,
+int world_edit(tb_key source, const char *part, tb_key id, const op_value *patches, nd_entry **out,
 	const char **why, size_t *failed) {
 	// the patches refer into the list, and are the line's: the node's change refers to them
 	size_t count = world_is(patches, OP_LIST) ? patches->count : 0;
@@ -389,12 +389,12 @@ int world_edit(tb_key source, const char *part, tb_key id, const op_value *patch
 	lk_made *made;
 	if (out != NULL) *out = NULL;
 	if (header_now(&h, &made, why)) return -1;
-	nd_node *node = st_get(world_store, source, part, id);
+	nd_entry *node = st_get(world_store, source, part, id);
 	int code;
 	if (node == NULL) {
-		node = nd_make(NULL, &h, NULL);
+		node = nd_make_entry(NULL, &h, NULL);
 		code = nd_update(node, list, count, h, failed);
-		if (code != OP_OK) nd_free(node);
+		if (code != OP_OK) nd_free_entry(node);
 		else {
 			world_keep_node(node);
 			st_add(world_store, source, part, id, node);
@@ -604,12 +604,12 @@ static op_value *with_value(const op_value *v) {
 }
 
 // a node of the value given, its header made now, held by the node. NULL: an error, in *out
-static nd_node *made_node(const op_value *value, op_value **out) {
+static nd_entry *made_node(const op_value *value, op_value **out) {
 	ch_header h;
 	lk_made *made;
 	const char *why;
 	if (header_now(&h, &made, &why)) return *out = world_error(why), NULL;
-	nd_node *node = nd_make((op_value *)value, &h, NULL);
+	nd_entry *node = nd_make_entry((op_value *)value, &h, NULL);
 	lk_hold(world_link, node, made, lk_made_free);
 	world_keep_node(node);
 	return node;
@@ -627,13 +627,13 @@ static void in_host(void *data) {
 	const char *op = world_text(op_get(r, "op"));
 	c->out = NULL;
 	if (strcmp(op, "kids") == 0 || strcmp(op, "value") == 0) {
-		nd_node *node = made_node(op_get(r, "value"), &c->out);
+		nd_entry *node = made_node(op_get(r, "value"), &c->out);
 		if (node == NULL) return;
 		st_sub(world_store, world_key(op_get(r, "source")), op[0] == 'k' ? "children" : "value",
 			world_key(op_get(r, "id")), node);
 		c->out = op_map();
 	} else if (strcmp(op, "share") == 0) {
-		nd_node *node = made_node(op_get(r, "value"), &c->out);
+		nd_entry *node = made_node(op_get(r, "value"), &c->out);
 		if (node == NULL) return;
 		const op_value *keys = op_get(r, "keys");
 		for (size_t i = 0; i < keys->count; i++) {
@@ -694,7 +694,7 @@ static op_value *world_answer(const op_value *r) {
 		return bad ? world_error(bad) : c.out;
 	}
 	if (strcmp(op, "node") == 0) {
-		const nd_node *n = st_get(world_store, world_key(op_get(r, "source")),
+		const nd_entry *n = st_get(world_store, world_key(op_get(r, "source")),
 			world_part(op_get(r, "part")), world_key(op_get(r, "id")));
 		return with_value(n ? n->value : NULL);
 	}
@@ -771,7 +771,7 @@ static op_value *world_answer(const op_value *r) {
 	return NULL;
 }
 
-static nd_node *children_of(void *ctx, tb_key source, tb_key id) {
+static nd_entry *children_of(void *ctx, tb_key source, tb_key id) {
 	(void)ctx;
 	return st_children(world_store, source, id);
 }
@@ -827,7 +827,7 @@ void world_finish(void) {
 	free(spotteds);
 	spotteds = NULL;
 	nspotted = capspotted = 0;
-	for (size_t i = 0; i < nnodes; i++) nd_free(nodes[i]);
+	for (size_t i = 0; i < nnodes; i++) nd_free_entry(nodes[i]);
 	for (size_t i = 0; i < nvalues; i++) op_free(values[i]);
 	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);
 	free(watches), free(named), free(moments), free(nodes), free(lines), free(values);

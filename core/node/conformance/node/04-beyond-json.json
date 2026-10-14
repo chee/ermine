@@ -2,14 +2,14 @@
 	"title": "bytes and typed arrays are values, given back whole",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"value": {
 				"/": {
 					"bytes": "AQID"
 				}
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"/": {
 							"bytes": "AQID"
@@ -22,7 +22,7 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": {
 				"/": {
 					"int8": [
@@ -33,7 +33,7 @@
 				}
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"/": {
 							"int8": [
@@ -50,7 +50,7 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": {
 				"a": [
 					{
@@ -64,7 +64,7 @@
 				]
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": [
 							{

@@ -20,10 +20,10 @@
 import { createTable, TableError } from "./table.ts"
 import type { Key } from "./table.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
-import type { Node } from "@ermine/node"
+import type { Entry } from "@ermine/node"
 
 // a node by name: an object the table never reads
-type N = Node<unknown>
+type N = Entry<unknown>
 
 const table = createTable<unknown>()
 const nodes = new Map<string, N>()

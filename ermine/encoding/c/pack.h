@@ -36,7 +36,7 @@ const char *pk_code_name(pk_code code);
 // the same pointer
 typedef struct {
 	tb_key part, id;
-	const nd_node *node;
+	const nd_entry *node;
 } pk_entry;
 
 // bytes being written; start at {0}. free(data) when done
@@ -62,15 +62,15 @@ typedef struct {
 pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *options, pk_bytes *out,
 	const pk_entry **at);
 // one node alone, as a pack writes each node, appended to out; PK_CANNOT_CARRY as above
-pk_code pk_encode(const nd_node *node, const pk_options *options, pk_bytes *out);
+pk_code pk_encode(const nd_entry *node, const pk_options *options, pk_bytes *out);
 
-// what unpack or decode made: new nodes (nd_make), all freed by pk_free. entries: in the keys'
+// what unpack or decode made: new nodes (nd_make_entry), all freed by pk_free. entries: in the keys'
 // order, strings; nodes: one for each written, numbered in the order the keys first name them, so
 // a node under several keys is one node; decode gives one node and no entries
 typedef struct {
 	pk_entry *entries;
 	size_t length;
-	nd_node **nodes;
+	nd_entry **nodes;
 	size_t count;
 	void *own; // what it allocated
 } pk_read;

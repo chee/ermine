@@ -3,7 +3,7 @@
 // (integers, keys as made), so it is a bound, not a rival
 import { Encoder } from "cbor-x"
 import * as cbor from "./cbor.ts"
-import createNode, { type Node } from "@ermine/node"
+import createEntry, { type Entry as NodeEntry } from "@ermine/node"
 import { decode, encode, type Entry, pack, unpack } from "./pack.ts"
 
 const x = new Encoder({ useRecords: false })
@@ -18,17 +18,17 @@ for (let i = 0; i < N; i++) {
 	entries.push([
 		"value",
 		id,
-		createNode({ title: `note ${i}`, done: i % 2 === 0, size: i * 1.5 }, at(time)),
+		createEntry({ title: `note ${i}`, done: i % 2 === 0, size: i * 1.5 }, at(time)),
 	])
-	entries.push(["attributes", id, createNode({ type: "public.folder" }, at(time))])
+	entries.push(["attributes", id, createEntry({ type: "public.folder" }, at(time))])
 	entries.push([
 		"children",
 		id,
-		createNode({ home: kids.map((k) => ["host", `n${k}`]) }, at(time)),
+		createEntry({ home: kids.map((k) => ["host", `n${k}`]) }, at(time)),
 	])
 }
 const graph = pack(entries)
-const one: Node<unknown> = entries[0][2]
+const one: NodeEntry<unknown> = entries[0][2]
 const node = encode(one)
 
 // values alone

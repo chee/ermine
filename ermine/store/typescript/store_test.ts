@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import { createStore, type Key, type Part, TableError } from "./store.ts"
 
 const h = { time: 1, actor: "me" }
@@ -12,7 +12,7 @@ function setup() {
 
 Deno.test("store: a table per source; get of a source never written is nothing", () => {
 	const { s } = setup()
-	const a = createNode("a", h), b = createNode("b", h)
+	const a = createEntry("a", h), b = createEntry("b", h)
 	s.add("stored", "value", "x", a)
 	s.add("drag", "value", "x", b)
 	assertStrictEquals(s.get("stored", "value", "x"), a)
@@ -23,7 +23,7 @@ Deno.test("store: a table per source; get of a source never written is nothing",
 
 Deno.test("store: add refuses a taken key; the same node again is nothing, no event", () => {
 	const { s, events } = setup()
-	const a = createNode("a", h), b = createNode("b", h)
+	const a = createEntry("a", h), b = createEntry("b", h)
 	s.add("stored", "value", "x", a)
 	s.add("stored", "value", "x", a)
 	const e = assertThrows(() => s.add("stored", "value", "x", b), TableError) as TableError
@@ -33,7 +33,7 @@ Deno.test("store: add refuses a taken key; the same node again is nothing, no ev
 
 Deno.test("store: sub replaces, del takes out, each one event; del of nothing throws", () => {
 	const { s, events } = setup()
-	const a = createNode({ name: "a" }, h), b = createNode({ name: "b" }, h)
+	const a = createEntry({ name: "a" }, h), b = createEntry({ name: "b" }, h)
 	s.sub("stored", "attributes", "x", a)
 	s.sub("stored", "attributes", "x", b)
 	s.sub("stored", "attributes", "x", b)
@@ -49,7 +49,7 @@ Deno.test("store: sub replaces, del takes out, each one event; del of nothing th
 
 Deno.test("store: who gives every key of a node in its source; children is places' hole", () => {
 	const { s } = setup()
-	const k = createNode({ a: [] }, h)
+	const k = createEntry({ a: [] }, h)
 	s.add("stored", "children", "x", k)
 	s.add("stored", "children", "y", k)
 	s.add("drag", "children", "z", k)
@@ -62,12 +62,12 @@ Deno.test("store: who gives every key of a node in its source; children is place
 
 Deno.test("store: drop takes a source's whole table, an event at each key it held", () => {
 	const { s, events } = setup()
-	s.add("drag", "value", "x", createNode(1, h))
-	s.add("drag", "children", "x", createNode({}, h))
-	s.add("drag", "value", "y", createNode(2, h))
-	s.add("drag", "value", "z", createNode(3, h))
+	s.add("drag", "value", "x", createEntry(1, h))
+	s.add("drag", "children", "x", createEntry({}, h))
+	s.add("drag", "value", "y", createEntry(2, h))
+	s.add("drag", "value", "z", createEntry(3, h))
 	s.del("drag", "value", "z")
-	s.add("stored", "value", "x", createNode(4, h))
+	s.add("stored", "value", "x", createEntry(4, h))
 	events.length = 0
 	s.drop("drag")
 	assertEquals(events, [["drag", "value", "x"], ["drag", "children", "x"], ["drag", "value", "y"]])
@@ -78,17 +78,17 @@ Deno.test("store: drop takes a source's whole table, an event at each key it hel
 	s.drop("never")
 	assertEquals(events, [])
 	// written again: a new table
-	s.add("drag", "value", "x", createNode(5, h))
+	s.add("drag", "value", "x", createEntry(5, h))
 	assertEquals(s.get("drag", "value", "x")?.value, 5)
 })
 
 Deno.test("store: an event is told after the change is in", () => {
 	const seen: unknown[] = []
 	const s = createStore((source, part, id) => void seen.push(s.get(source, part, id)?.value))
-	s.add("stored", "value", "x", createNode(1, h))
-	s.sub("stored", "value", "x", createNode(2, h))
+	s.add("stored", "value", "x", createEntry(1, h))
+	s.sub("stored", "value", "x", createEntry(2, h))
 	s.del("stored", "value", "x")
-	s.add("drag", "value", "x", createNode(3, h))
+	s.add("drag", "value", "x", createEntry(3, h))
 	s.drop("drag")
 	assertEquals(seen, [1, 2, undefined, 3, undefined])
 })
@@ -103,7 +103,7 @@ declare module "./store.ts" {
 
 Deno.test("store: a part added by declaration merging is a part like the others", () => {
 	const { s, events } = setup()
-	const r = createNode({ n: 1 }, h), v = createNode("v", h)
+	const r = createEntry({ n: 1 }, h), v = createEntry("v", h)
 	s.add("stored", "tally", "x", r)
 	s.add("stored", "value", "x", v)
 	const n: number | undefined = s.get("stored", "tally", "x")?.value?.n

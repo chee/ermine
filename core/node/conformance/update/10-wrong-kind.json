@@ -221,9 +221,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							"ab",

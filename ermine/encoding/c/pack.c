@@ -303,7 +303,7 @@ static int json_patches(Json *to, const char *name, const op_patch *ps, size_t n
 }
 
 // a node as it is written; NULL when it cannot be carried
-static Json *json_node(const nd_node *n, const pk_options *o) {
+static Json *json_node(const nd_entry *n, const pk_options *o) {
 	const ch_header *h = &n->change;
 	Json *node = jsonObject(), *change = jsonObject();
 	jsonAdd(node, "change", change);
@@ -364,7 +364,7 @@ bad:
 }
 
 // a node's encoding, appended to out; 0 when it cannot be carried
-static int node_bytes(const nd_node *n, const pk_options *o, pk_bytes *out) {
+static int node_bytes(const nd_entry *n, const pk_options *o, pk_bytes *out) {
 	Json *j = json_node(n, o);
 	if (j == NULL) return 0;
 	size_t length = 0;
@@ -379,7 +379,7 @@ static int node_bytes(const nd_node *n, const pk_options *o, pk_bytes *out) {
 	return ok;
 }
 
-pk_code pk_encode(const nd_node *node, const pk_options *options, pk_bytes *out) {
+pk_code pk_encode(const nd_entry *node, const pk_options *options, pk_bytes *out) {
 	return node_bytes(node, options, out) ? PK_OK : PK_CANNOT_CARRY;
 }
 
@@ -414,7 +414,7 @@ static void sort(row *rows, size_t n, const uint8_t *keys) {
 
 // nodes numbered: open addressing on the node's address, kept under half full
 typedef struct {
-	const nd_node *node;
+	const nd_entry *node;
 	size_t number;
 } seat;
 
@@ -522,7 +522,7 @@ static op_value *hold(arena *a, op_value *v) {
 void pk_free(pk_read *r) {
 	arena *a = r->own;
 	if (a != NULL) {
-		for (size_t i = 0; i < a->nodes.n; i++) nd_free(a->nodes.p[i]);
+		for (size_t i = 0; i < a->nodes.n; i++) nd_free_entry(a->nodes.p[i]);
 		for (size_t i = 0; i < a->values.n; i++) op_free(a->values.p[i]);
 		for (size_t i = 0; i < a->blocks.n; i++) free(a->blocks.p[i]);
 		free(a->nodes.p), free(a->values.p), free(a->blocks.p);
@@ -664,16 +664,16 @@ static int read_header(arena *a, const Json *x, ch_header *h) {
 }
 
 // a node as written, new; NULL when it is not one
-static nd_node *read_node(arena *a, const Json *x) {
+static nd_entry *read_node(arena *a, const Json *x) {
 	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
 	const Json *cow = jsonGet(x, "cow");
 	// nothing but false
 	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
-	nd_options options = {.in_place = cow != NULL};
+	nd_entry_options options = {.in_place = cow != NULL};
 	ch_header h = {0};
 	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
 	const Json *v = jsonGet(x, "value");
-	nd_node *n = nd_make(v != NULL ? hold(a, pk_of_json(v)) : NULL, &h, &options);
+	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, &h, &options);
 	if (n == NULL) {
 		fputs("pack: out of memory\n", stderr);
 		abort();
@@ -689,7 +689,7 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 	arena *a = xrealloc(NULL, sizeof *a);
 	*a = (arena){.loose = reading != NULL && reading->loosy};
 	pk_bytes key = {0}, last = {0};
-	nd_node **made = NULL;
+	nd_entry **made = NULL;
 	pk_entry *entries = NULL;
 	size_t nn = 0, kn = 0, next = 0;
 	const Json *keys, *nodes;
@@ -743,13 +743,13 @@ pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading
 	if (x == NULL) return PK_NOT_A_NODE;
 	arena *a = xrealloc(NULL, sizeof *a);
 	*a = (arena){.loose = reading != NULL && reading->loosy};
-	nd_node *n = read_node(a, x);
+	nd_entry *n = read_node(a, x);
 	jsonFree(x);
 	if (n == NULL) {
 		pk_free(&(pk_read){.own = a});
 		return PK_NOT_A_NODE;
 	}
-	nd_node **made = grab(a, sizeof *made);
+	nd_entry **made = grab(a, sizeof *made);
 	made[0] = n;
 	*out = (pk_read){NULL, 0, made, 1, a};
 	return PK_OK;

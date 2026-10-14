@@ -16,9 +16,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": null,
 					"change": {
 						"time": 1,
@@ -55,9 +55,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": null,
 					"change": {
 						"time": 1,
@@ -98,9 +98,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": 1,
 						"actor": "me",
@@ -140,9 +140,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": null
 					},

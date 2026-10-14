@@ -16,7 +16,7 @@ typedef struct named named;
 struct named {
 	named *next;
 	char *name;
-	nd_node *node;
+	nd_entry *node;
 };
 static named *nodes, *symbols;
 
@@ -26,12 +26,12 @@ static named *by_name(named **list, const char *name, int make_node) {
 	}
 	named *n = calloc(1, sizeof *n);
 	if (n == NULL || (n->name = strdup(name)) == NULL) hh_fail("out of memory");
-	if (make_node) n->node = nd_make(NULL, NULL, NULL);
+	if (make_node) n->node = nd_make_entry(NULL, NULL, NULL);
 	n->next = *list;
 	*list = n;
 	return n;
 }
-static named *node_named(const nd_node *node) {
+static named *node_named(const nd_entry *node) {
 	for (named *n = nodes; n != NULL; n = n->next) {
 		if (n->node == node) return n;
 	}
@@ -79,7 +79,7 @@ static void event(void *ctx, tb_key source, const char *part, tb_key id) {
 	putc(',', events);
 	put_key(events, id);
 	putc(',', events);
-	const nd_node *node = st_get(store, source, part, id);
+	const nd_entry *node = st_get(store, source, part, id);
 	if (node == NULL) fputs("null", events);
 	else op_json_string(events, node_named(node)->name);
 	putc(']', events);
@@ -96,7 +96,7 @@ static const char *code(FILE *out, int c) {
 	fputs("{}", out);
 	return NULL;
 }
-static const char *with_node(FILE *out, const nd_node *node) {
+static const char *with_node(FILE *out, const nd_entry *node) {
 	fputs("{", out);
 	if (node != NULL) {
 		fputs("\"node\":", out);
@@ -151,7 +151,7 @@ static const char *run(const op_value *r, FILE *out) {
 	if (strcmp(op, "add") == 0 || strcmp(op, "sub") == 0) {
 		const char *name = hh_str(r, "node");
 		if (name == NULL) return "node: not a name";
-		nd_node *node = by_name(&nodes, name, 1)->node;
+		nd_entry *node = by_name(&nodes, name, 1)->node;
 		if (op[0] == 'a') return code(out, st_add(store, source, part, id, node));
 		st_sub(store, source, part, id, node);
 		fputs("{}", out);
@@ -177,7 +177,7 @@ void hh_finish(void) {
 	while (nodes != NULL) {
 		named *x = nodes;
 		nodes = x->next;
-		nd_free(x->node);
+		nd_free_entry(x->node);
 		free(x->name);
 		free(x);
 	}

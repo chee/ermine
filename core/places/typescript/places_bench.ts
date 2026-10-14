@@ -8,7 +8,7 @@
 //
 // the world: a deep chain (8 names), a wide folder (5000 names), a fan (3 entries at a name, 4
 // deep: 81 items), a shallow name; nodes in a map per source, the hole as a scheduler would have it
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/node"
 import type { createPlaces as create } from "./places.ts"
 
 const ROUNDS = 15
@@ -68,12 +68,12 @@ const createPlaces: typeof create = mod.createPlaces
 
 type Key = string | symbol
 const h: ChangeHeader = { time: 1, actor: "me" }
-const world = new Map<Key, Map<Key, Node<unknown>>>()
+const world = new Map<Key, Map<Key, Entry<unknown>>>()
 const children = (source: Key, id: Key) => world.get(source)?.get(id)
 function kids(id: string, value: Record<string, unknown>) {
 	let ids = world.get("s")
 	if (!ids) world.set("s", ids = new Map())
-	const n = createNode<unknown>(value, h)
+	const n = createEntry<unknown>(value, h)
 	ids.set(id, n)
 	return n
 }

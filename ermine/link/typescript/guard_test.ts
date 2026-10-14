@@ -2,7 +2,7 @@
 // policies. each test reads and writes as a process layer would: asking the guard, then calling
 // places, link and the store itself, with a scope open
 import { assertEquals, assertInstanceOf, assertThrows } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import { createPlaces, type Entry, type Item } from "@ermine/places"
@@ -27,7 +27,7 @@ function world() {
 		const h = l.header()
 		const there = store.get(source, part, id)
 		if (there === undefined) {
-			const node = createNode<unknown>(undefined, h)
+			const node = createEntry<unknown>(undefined, h)
 			update(node, patches, h)
 			store.add(source, part, id, node)
 		} else {
@@ -36,9 +36,9 @@ function world() {
 		}
 	}
 	const kids = (id: Key, v: Record<string, unknown>) =>
-		hosted(() => store.sub("stored", "children", id, createNode(v, l.header())))
+		hosted(() => store.sub("stored", "children", id, createEntry(v, l.header())))
 	const value = (id: Key, v: unknown) =>
-		hosted(() => store.sub("stored", "value", id, createNode<unknown>(v, l.header())))
+		hosted(() => store.sub("stored", "value", id, createEntry<unknown>(v, l.header())))
 	const reset = (id: Key, v: unknown) =>
 		hosted(() => edit("stored", "value", id, [{ path: [], value: v }]))
 	const ids = (x: Item | Entry): Entry => isEntry(x) ? x : [x.source, x.id]

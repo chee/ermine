@@ -182,9 +182,9 @@
 			}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							1

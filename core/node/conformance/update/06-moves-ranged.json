@@ -46,9 +46,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							3,
@@ -132,9 +132,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							3,
@@ -224,9 +224,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							3,
@@ -312,9 +312,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							3,
@@ -556,9 +556,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"l": [
 							4,

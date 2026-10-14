@@ -1,7 +1,7 @@
 // a small graph for the cross-library fuzz tests: a table per source holding children nodes, as
 // places' own tests keep them, and random writes on it through places, and now and then a table
 // event (a children node put in place of another, taken out, put back)
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
 import { createTable, type Key } from "@ermine/graph/table"
 import {
 	type Address,
@@ -31,7 +31,7 @@ export function createWorld(pick: Pick, read?: (r: Read) => void) {
 	const table = (source: Key) =>
 		tables.get(source) ?? tables.set(source, createTable<unknown>()).get(source)!
 	const children = (source: Key, id: Key) =>
-		table(source).get("children", id) as Node<unknown> | undefined
+		table(source).get("children", id) as NodeEntry<unknown> | undefined
 	const p = createPlaces({ root: TOP, children, read })
 	// the same graph read with nothing told
 	const plain = createPlaces({ root: TOP, children })
@@ -60,7 +60,7 @@ export function createWorld(pick: Pick, read?: (r: Read) => void) {
 		for (const id of IDS) {
 			// D of "stored" has no children node: a parent that is not there
 			if (source === "stored" && id === "D") continue
-			table(source).add("children", id, createNode<unknown>(value(), header()))
+			table(source).add("children", id, createEntry<unknown>(value(), header()))
 		}
 	}
 
@@ -144,7 +144,7 @@ export function createWorld(pick: Pick, read?: (r: Read) => void) {
 		const source = one(SOURCES), id = one(IDS)
 		const t = table(source), there = t.get("children", id)
 		if (there && pick(3) === 0) t.del("children", id)
-		else t.sub("children", id, createNode<unknown>(pick(4) ? value() : undefined, h))
+		else t.sub("children", id, createEntry<unknown>(pick(4) ? value() : undefined, h))
 		return { what: `event ${String(source)} ${id}`, changed: [], events: [{ source, id }] }
 	}
 

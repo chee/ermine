@@ -2,25 +2,25 @@
 	"title": "a header with no time: the time now added, the rest as given; a time given, kept",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"value": 1,
 			"header": { "actor": "me", "metadata": [["why", "a test"]] },
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 1,
 					"change": { "actor": "me", "metadata": [["why", "a test"]], "time": "now" }
 				}
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"header": { "time": 0, "actor": "me" },
-			"expect": { "node": { "change": { "time": 0, "actor": "me" } } }
+			"expect": { "entry": { "change": { "time": 0, "actor": "me" } } }
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"header": { "time": -5 },
-			"expect": { "node": { "change": { "time": -5 } } }
+			"expect": { "entry": { "change": { "time": -5 } } }
 		}
 	]
 }

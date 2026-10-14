@@ -347,7 +347,7 @@ static op_value *eval_edit(const op_value *x, ctx *c) {
 	if (!ok) return NULL;
 	tb_key source, id;
 	start_ids(&s, &source, &id);
-	nd_node *node;
+	nd_entry *node;
 	const char *bad;
 	size_t failed;
 	if (world_edit(source, world_part(x->items[1]), id, patches, &node, &bad, &failed)) {

@@ -16,14 +16,14 @@
 // other key.
 // reading takes exactly what writing gives; loosyGoosy, a key it does not know is passed over
 import * as cbor from "./cbor.ts"
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
 import type { Patch, Target } from "@ermine/op/apply"
 import type { FileLocation } from "@ermine/util/stacktrace"
 
 export type Key = string | symbol
 
 // a node under a key: what pack is given and unpack gives
-export type Entry = readonly [part: Key, id: Key, node: Node<unknown>]
+export type Entry = readonly [part: Key, id: Key, node: NodeEntry<unknown>]
 
 export type Options = {
 	// false: a change's op (its latest patches and their undo) is not written. default true
@@ -79,7 +79,7 @@ function change(h: ChangeHeader, o: Options): Fields {
 }
 
 // a node as written
-function written(n: Node<unknown>, o: Options): Fields {
+function written(n: NodeEntry<unknown>, o: Options): Fields {
 	const out: Fields = { change: change(n.change, o) }
 	if (n.value !== undefined) out.value = n.value as cbor.Value
 	if (n.cow === false) out.cow = false
@@ -193,12 +193,12 @@ class Reader {
 	}
 
 	// a node as written, new; none when it is not one
-	node(x: unknown): Node<unknown> | undefined {
+	node(x: unknown): NodeEntry<unknown> | undefined {
 		if (!isFields(x) || !this.only(x, ["change"], ["change", "value", "cow"])) return
 		if ("cow" in x && x.cow !== false) return
 		const h = this.header(x.change)
 		if (h === undefined) return
-		return createNode<unknown>(x.value, h, "cow" in x ? { cow: false } : {})
+		return createEntry<unknown>(x.value, h, "cow" in x ? { cow: false } : {})
 	}
 }
 
@@ -209,7 +209,7 @@ const reader = (r: Reading) => r.loosyGoosy ? LOOSE : STRICT
 
 // a node's encoding: anything not a value in it, or a change that is not one, is cannot-carry at
 // the key given
-function bytes(n: Node<unknown>, o: Options, part?: string, id?: string): Uint8Array {
+function bytes(n: NodeEntry<unknown>, o: Options, part?: string, id?: string): Uint8Array {
 	const w = written(n, o)
 	if (STRICT.header(w.change) === undefined) throw new PackError("cannot-carry", part, id)
 	try {
@@ -260,7 +260,7 @@ const NODES = cbor.encode("nodes")
 // key with a symbol: cannot-carry, that key, the first given; a node that cannot be carried:
 // cannot-carry, its first key
 export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Array {
-	type Row = { part: string; id: string; node: Node<unknown>; key: Uint8Array }
+	type Row = { part: string; id: string; node: NodeEntry<unknown>; key: Uint8Array }
 	const rows: Row[] = []
 	for (const [part, id, node] of entries) {
 		if (typeof part !== "string" || typeof id !== "string") {
@@ -269,7 +269,7 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 		rows.push({ part, id, node, key: keyed(part, id) })
 	}
 	rows.sort((a, b) => compare(a.key, b.key))
-	const numbers = new Map<Node<unknown>, number>()
+	const numbers = new Map<NodeEntry<unknown>, number>()
 	const nodes: Uint8Array[] = [], keys: cbor.Value[] = []
 	let last: Row | undefined
 	for (const r of rows) {
@@ -289,7 +289,7 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 }
 
 // one node alone, as a pack writes each node
-export function encode(node: Node<unknown>, options: Options = {}): Uint8Array {
+export function encode(node: NodeEntry<unknown>, options: Options = {}): Uint8Array {
 	return bytes(node, options)
 }
 
@@ -302,7 +302,7 @@ function decoded(b: Uint8Array, code: Code): unknown {
 	}
 }
 
-// the nodes under their keys, in the keys' order, new nodes made with createNode: one node for
+// the nodes under their keys, in the keys' order, new nodes made with createEntry: one node for
 // each written, under every key that names it. putting them in a table is the caller's
 export function unpack(b: Uint8Array, reading: Reading = {}): Entry[] {
 	const r = reader(reading)
@@ -310,7 +310,7 @@ export function unpack(b: Uint8Array, reading: Reading = {}): Entry[] {
 	const x = decoded(b, "not-a-pack")
 	if (!isFields(x) || !r.only(x, ["keys", "nodes"], ["keys", "nodes"])) throw no()
 	if (!Array.isArray(x.keys) || !Array.isArray(x.nodes)) throw no()
-	const nodes: Node<unknown>[] = []
+	const nodes: NodeEntry<unknown>[] = []
 	for (const f of x.nodes) {
 		const n = r.node(f)
 		if (n === undefined) throw no()
@@ -338,7 +338,7 @@ export function unpack(b: Uint8Array, reading: Reading = {}): Entry[] {
 }
 
 // one node back, as encode wrote it
-export function decode(b: Uint8Array, reading: Reading = {}): Node<unknown> {
+export function decode(b: Uint8Array, reading: Reading = {}): NodeEntry<unknown> {
 	const n = reader(reading).node(decoded(b, "not-a-node"))
 	if (n === undefined) throw new PackError("not-a-node")
 	return n

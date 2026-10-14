@@ -15,7 +15,7 @@
 #define N 1000
 
 static pk_entry entries[3 * N];
-static nd_node *nodes[3 * N];
+static nd_entry *nodes[3 * N];
 
 static ch_header header(int i) {
 	static const ch_site site = {"file:///a.ts", 12, 3, "f", 1};
@@ -49,7 +49,7 @@ static void build(void) {
 		const char *parts[3] = {"value", "attributes", "children"};
 		for (int p = 0; p < 3; p++) {
 			ch_header h = header(i);
-			nd_node *n = nd_make(values[p], &h, NULL);
+			nd_entry *n = nd_make_entry(values[p], &h, NULL);
 			nodes[3 * i + p] = n;
 			entries[3 * i + p] = (pk_entry){tb_string(parts[p]), tb_string(ids[i]), n};
 		}

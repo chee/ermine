@@ -18,20 +18,20 @@
 //    name of what get gives at the key when it is told (null: nothing: it is told after the change)
 //
 // Anything not understood: { error: why }, not a code.
-import createNode, { type Node } from "@ermine/node"
+import createEntry, { type Entry } from "@ermine/node"
 import { createStore, type Key, type Part, TableError } from "./store.ts"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 
-const nodes = new Map<string, Node<unknown>>()
+const nodes = new Map<string, Entry<unknown>>()
 const names = new Map<object, string>()
 const symbols = new Map<string, symbol>()
 let events: unknown[][] = []
 
-function node(x: unknown): Node<unknown> {
+function node(x: unknown): Entry<unknown> {
 	if (typeof x !== "string") throw new Error("node: not a name")
 	let n = nodes.get(x)
 	if (!n) {
-		nodes.set(x, n = createNode(x, { time: 1, actor: "me" }))
+		nodes.set(x, n = createEntry(x, { time: 1, actor: "me" }))
 		names.set(n, x)
 	}
 	return n
@@ -51,7 +51,7 @@ function part(x: unknown): Part {
 	if (typeof x === "string") return x as Part
 	throw new Error("part: not a string")
 }
-const nameOf = (n: Node<unknown> | undefined) => n === undefined ? null : names.get(n)
+const nameOf = (n: Entry<unknown> | undefined) => n === undefined ? null : names.get(n)
 
 const store = createStore((source, p, id) => {
 	events.push([text(source), p, text(id), nameOf(store.get(source, p, id))])

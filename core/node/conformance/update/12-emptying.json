@@ -22,9 +22,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": 1,
 						"actor": "me",
@@ -58,9 +58,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 5,
 					"change": {
 						"time": 1,
@@ -106,9 +106,9 @@
 			}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": 1,
 						"actor": "me",
@@ -149,9 +149,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 7,
 					"change": {
 						"time": 1,
@@ -217,9 +217,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 3,
 					"change": {
 						"time": 1,
@@ -301,9 +301,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": "bax",
 					"change": {
 						"time": 1,

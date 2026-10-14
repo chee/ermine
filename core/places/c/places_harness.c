@@ -109,7 +109,7 @@ static int keq(tb_key a, tb_key b) {
 
 typedef struct {
 	tb_key source, id; // string keys are the world's own
-	nd_node *node;
+	nd_entry *node;
 	int borrowed; // an alias: the node is another cell's, which frees it
 } cell;
 static cell *world;
@@ -124,7 +124,7 @@ static cell *cell_of(tb_key source, tb_key id) {
 	for (size_t i = 0; i < nworld; i++) if (keq(world[i].source, source) && keq(world[i].id, id)) return &world[i];
 	return NULL;
 }
-static nd_node *children(void *ctx, tb_key source, tb_key id) {
+static nd_entry *children(void *ctx, tb_key source, tb_key id) {
 	(void)ctx;
 	cell *c = cell_of(source, id);
 	return c ? c->node : NULL;
@@ -188,12 +188,12 @@ static int gave_what_changed(const pl_changed *c) {
 
 static void made(tb_key source, tb_key id, op_value *value, int in_place) {
 	ch_header h = {.has_time = 1, .time = 0, .actor = setup_actor};
-	nd_options options = {.in_place = in_place};
-	nd_node *n = nd_make(value, &h, &options);
+	nd_entry_options options = {.in_place = in_place};
+	nd_entry *n = nd_make_entry(value, &h, &options);
 	if (n == NULL) hh_fail("out of memory");
 	cell *c = cell_of(source, id);
 	if (c) {
-		if (!c->borrowed) nd_free(c->node);
+		if (!c->borrowed) nd_free_entry(c->node);
 		c->node = n;
 		c->borrowed = 0;
 		return;
@@ -419,7 +419,7 @@ static void answer_write(FILE *out, int code, const char *at, const pl_changed *
 	}
 	fputs("\"changes\":[", out);
 	for (size_t i = 0; i < c->n; i++) {
-		const nd_node *n = c->nodes[i].node;
+		const nd_entry *n = c->nodes[i].node;
 		if (i) putc(',', out);
 		fputs("{\"source\":", out);
 		put_key(out, c->nodes[i].source);
@@ -459,7 +459,7 @@ static void answer(const op_value *r, FILE *out) {
 		tb_key source = key_of(must(r, "source")), id = key_of(must(r, "id"));
 		cell *c = cell_of(source, id);
 		if (c) {
-			if (!c->borrowed) nd_free(c->node);
+			if (!c->borrowed) nd_free_entry(c->node);
 			if (c->source.symbol == NULL) free((void *)c->source.string);
 			if (c->id.symbol == NULL) free((void *)c->id.string);
 			*c = world[--nworld];
@@ -472,7 +472,7 @@ static void answer(const op_value *r, FILE *out) {
 		tb_key asource = key_of(as->items[0]), aid = key_of(as->items[1]);
 		cell *c = cell_of(source, id);
 		if (c == NULL) refuse("alias: no node there");
-		nd_node *n = c->node;
+		nd_entry *n = c->node;
 		cell *a = cell_of(asource, aid);
 		if (a != NULL) refuse("alias: something is already there");
 		GROW(world, nworld, cworld);
@@ -686,7 +686,7 @@ void hh_answer(const op_value *r, FILE *out) {
 void hh_finish(void) {
 	forget_places();
 	for (size_t i = 0; i < nworld; i++) {
-		if (!world[i].borrowed) nd_free(world[i].node);
+		if (!world[i].borrowed) nd_free_entry(world[i].node);
 		if (world[i].source.symbol == NULL) free((void *)world[i].source.string);
 		if (world[i].id.symbol == NULL) free((void *)world[i].id.string);
 	}

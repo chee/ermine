@@ -25,7 +25,7 @@
 // spot(key) names a key told to the scheduler: one of this link's spots, held, is where it reads,
 // so a run's reads (the scheduler's ends moment) can be named as places in the graph. anything
 // else, or a spot let go: undefined
-import type { ChangeHeader, Node } from "@ermine/node"
+import type { ChangeHeader, Entry } from "@ermine/node"
 import type { Key as Step } from "@ermine/op/apply"
 import type { Read as PlacesRead } from "@ermine/places"
 import { type Pair, type Scheduler, SchedulerError } from "@ermine/scheduler"
@@ -45,7 +45,7 @@ export type Setup = {
 export type Who = Omit<ChangeHeader, "time" | "external" | "op">
 
 // a node a write changed, and the source whose table it is in: places' Changed is one
-export type Wrote = { readonly source: Key; readonly node: Node<unknown> }
+export type Wrote = { readonly source: Key; readonly node: Entry<unknown> }
 
 // where a spot reads: the node under (source, part, id), and the path in its value (kept by
 // paths, never change it); null: the change spot, reads of the change itself

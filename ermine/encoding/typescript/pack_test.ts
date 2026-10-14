@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
 import update from "@ermine/node/update"
 import { createTable } from "@ermine/graph/table"
 import * as cbor from "./cbor.ts"
@@ -8,7 +8,7 @@ import { decode, encode, type Entry, pack, PackError, unpack } from "./pack.ts"
 const code = (f: () => unknown) => (assertThrows(f, PackError) as PackError).code
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const h = (time = 1, actor: unknown = "a"): ChangeHeader => ({ time, actor })
-const n = (value: unknown, change = h()) => createNode(value, change)
+const n = (value: unknown, change = h()) => createEntry(value, change)
 
 Deno.test("pack: one node under one key, written as the module says", () => {
 	const b = pack([["value", "a", n("hi", { time: 1, actor: "x" })]])
@@ -101,7 +101,7 @@ Deno.test("pack: a change and its op come back as written", () => {
 })
 
 Deno.test("pack: cow: false is kept", () => {
-	const inPlace = createNode([1], h(), { cow: false })
+	const inPlace = createEntry([1], h(), { cow: false })
 	const back = decode(encode(inPlace))
 	assertEquals(back.cow, false)
 	assertEquals("cow" in decode(encode(n([1]))), false)
@@ -159,7 +159,7 @@ Deno.test("pack: loosyGoosy reading passes over keys it does not know, in every 
 })
 
 Deno.test("pack: no value, nothing written for it", () => {
-	const back = decode(encode(createNode(undefined, h())))
+	const back = decode(encode(createEntry(undefined, h())))
 	assertEquals("value" in back, false)
 })
 
@@ -281,7 +281,7 @@ Deno.test("pack: an empty pack", () => {
 })
 
 Deno.test("pack: round trips keep bytes", () => {
-	const nodes: Node<unknown>[] = [n(null), n([1, [2]]), n({ "": "" }), n("日本")]
+	const nodes: NodeEntry<unknown>[] = [n(null), n([1, [2]]), n({ "": "" }), n("日本")]
 	const es: Entry[] = nodes.map((node, i) => ["value", `n${i}`, node])
 	const b = pack(es)
 	assertEquals(hex(pack(unpack(b))), hex(b))

@@ -199,17 +199,17 @@ const char *pl_code_name(int code) {
 
 // --- reading values ---
 
-static const op_value *map_of(const nd_node *n) {
+static const op_value *map_of(const nd_entry *n) {
 	return n != NULL && n->value != NULL && n->value->type == OP_MAP ? n->value : NULL;
 }
 // the list under name in a children node; none, or not a list: NULL
-static const op_value *array(const nd_node *n, const char *name) {
+static const op_value *array(const nd_entry *n, const char *name) {
 	const op_value *m = map_of(n);
 	const op_value *l = m != NULL ? op_get(m, name) : NULL;
 	return l != NULL && l->type == OP_LIST ? l : NULL;
 }
 // a name holding something that is not a list: taken, never written over
-static int taken(const nd_node *n, const char *name) {
+static int taken(const nd_entry *n, const char *name) {
 	const op_value *m = map_of(n);
 	const op_value *v = m != NULL ? op_get(m, name) : NULL;
 	return v != NULL && v->type != OP_LIST;
@@ -267,7 +267,7 @@ static void step(pl *p, pl_item *const *items, size_t n, const char *name, const
 		seens *sn) {
 	for (size_t k = 0; k < n; k++) {
 		pl_item *up = items[k];
-		nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
+		nd_entry *node = p->s.children(p->s.ctx, up->source, up->id);
 		tell(p, to, up, name, 0);
 		if (sn != NULL) {
 			if (sn->n == sn->cap) {
@@ -407,7 +407,7 @@ static char *name_in(pl_strings *out, char *at, const char *name) {
 
 pl_strings pl_names(pl *p, pl_at at, const pl_sink *read) {
 	const pl_item *item = begin_ref(p, &at);
-	nd_node *node = p->s.children(p->s.ctx, item->source, item->id);
+	nd_entry *node = p->s.children(p->s.ctx, item->source, item->id);
 	tell(p, read, item, NULL, 1);
 	pl_strings out = {0};
 	const op_value *m = map_of(node);
@@ -476,7 +476,7 @@ static void entries(pl *p, pl_item *up, const char *name, const op_value *list, 
 
 pl_list *pl_members_at(pl *p, pl_at at, const pl_sink *read) {
 	pl_item *up = (pl_item *)begin_ref(p, &at);
-	nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
+	nd_entry *node = p->s.children(p->s.ctx, up->source, up->id);
 	tell(p, read, up, NULL, 1);
 	vec out = {0};
 	const op_value *m = map_of(node);
@@ -577,7 +577,7 @@ static int alike(const vec *a, const pl_list *b) {
 static int good(pl *p, const held_step *s) {
 	for (size_t i = 0; i < s->seen.n; i++) {
 		const seen *x = &s->seen.v[i];
-		nd_node *node = p->s.children(p->s.ctx, x->up->source, x->up->id);
+		nd_entry *node = p->s.children(p->s.ctx, x->up->source, x->up->id);
 		if (node != NULL && node->in_place) return 0;
 		if ((node != NULL ? node->value : NULL) != x->value) return 0;
 	}
@@ -638,7 +638,7 @@ const pl_list *pl_members(pl_held *h, const pl_sink *read) {
 	size_t from = 0;
 	for (size_t k = 0; k < its->n; k++) {
 		pl_item *up = its->items[k];
-		nd_node *node = p->s.children(p->s.ctx, up->source, up->id);
+		nd_entry *node = p->s.children(p->s.ctx, up->source, up->id);
 		tell(p, read, up, NULL, 1);
 		kept_level *was = NULL;
 		for (size_t j = 0; j < h->nlevels && was == NULL; j++) {
@@ -753,7 +753,7 @@ static const char kept_part;
 
 // the patches, as one change on the parent's children node; the block is kept until the node's
 // next write. done: the node added to changed
-static int write(pl *p, tb_key source, tb_key id, nd_node *n, blk *b, op_patch *ps, size_t nps,
+static int write(pl *p, tb_key source, tb_key id, nd_entry *n, blk *b, op_patch *ps, size_t nps,
 	ch_header header, pl_changed *changed) {
 	size_t failed;
 	if (nd_update(n, ps, nps, header, &failed) != OP_OK) {
@@ -784,9 +784,9 @@ static void ids(const pl_at *at, tb_key *source, tb_key *id) {
 	*source = at->item != NULL ? at->item->source : at->source;
 	*id = at->item != NULL ? at->item->id : at->id;
 }
-static nd_node *node_of(pl *p, tb_key source, tb_key id) { return p->s.children(p->s.ctx, source, id); }
+static nd_entry *node_of(pl *p, tb_key source, tb_key id) { return p->s.children(p->s.ctx, source, id); }
 // the patches that make sure n's value is a map, first
-static size_t base(blk *b, const nd_node *n, op_patch *ps) {
+static size_t base(blk *b, const nd_entry *n, op_patch *ps) {
 	if (map_of(n) != NULL) return 0;
 	ps[0] = (op_patch){.place = {.path = NULL, .length = 0}, .has_value = 1, .value = bval(b, op_map())};
 	return 1;
@@ -795,7 +795,7 @@ static size_t base(blk *b, const nd_node *n, op_patch *ps) {
 static int place_in(pl *p, tb_key ps_, tb_key pid, const char *name, tb_key source, tb_key id,
 	ch_header header, long index, const char **err_at, pl_changed *changed) {
 	if (bad(name)) return fail(PL_NOT_A_NAME, err_at, name);
-	nd_node *n = node_of(p, ps_, pid);
+	nd_entry *n = node_of(p, ps_, pid);
 	if (n == NULL) return fail(PL_NOTHING_THERE, err_at, NULL);
 	if (taken(n, name)) return fail(PL_ALREADY_THERE, err_at, name);
 	const op_value *list = array(n, name);
@@ -812,7 +812,7 @@ static int place_in(pl *p, tb_key ps_, tb_key pid, const char *name, tb_key sour
 
 static int unplace_in(pl *p, tb_key psrc, tb_key pid, const char *name, long index, ch_header header,
 	const char **err_at, pl_changed *changed) {
-	nd_node *n = node_of(p, psrc, pid);
+	nd_entry *n = node_of(p, psrc, pid);
 	if (n == NULL) return fail(PL_NOTHING_THERE, err_at, NULL);
 	const op_value *list = array(n, name);
 	if (list == NULL || list->count == 0) return fail(PL_NOTHING_THERE, err_at, name);
@@ -826,7 +826,7 @@ static int unplace_in(pl *p, tb_key psrc, tb_key pid, const char *name, long ind
 
 static int order_in(pl *p, tb_key psrc, tb_key pid, const char *name, long from, long to,
 	ch_header header, const char **err_at, pl_changed *changed) {
-	nd_node *n = node_of(p, psrc, pid);
+	nd_entry *n = node_of(p, psrc, pid);
 	if (n == NULL) return fail(PL_NOTHING_THERE, err_at, NULL);
 	const op_value *list = array(n, name);
 	long len = list != NULL ? (long)list->count : 0;
@@ -869,7 +869,7 @@ int pl_rename(pl *p, pl_at at, const char *name, const char *to, ch_header heade
 	if (bad(to)) return fail(PL_NOT_A_NAME, err_at, to);
 	tb_key ps, pid;
 	ids(&at, &ps, &pid);
-	nd_node *n = node_of(p, ps, pid);
+	nd_entry *n = node_of(p, ps, pid);
 	if (n == NULL) return fail(PL_NOTHING_THERE, err_at, NULL);
 	const op_value *list = array(n, name);
 	if (list == NULL || list->count == 0) return fail(PL_NOTHING_THERE, err_at, name);
@@ -889,7 +889,7 @@ int pl_move(pl *p, pl_at at, const char *name, long index, pl_at toat, const cha
 	tb_key ps, pid, ts, tid;
 	ids(&at, &ps, &pid);
 	ids(&toat, &ts, &tid);
-	nd_node *n = node_of(p, ps, pid);
+	nd_entry *n = node_of(p, ps, pid);
 	if (n == NULL) return fail(PL_NOTHING_THERE, err_at, NULL);
 	const op_value *list = array(n, name);
 	long len = list != NULL ? (long)list->count : 0;

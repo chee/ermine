@@ -42,7 +42,8 @@ it syncs: core/graph/plan.org (nodes as tables, paths in children).
   useful"
 - a conflicts table at the id, *lean*: "a conflicts table for the id maybe?". *mine*: sync writes it
   from its history, one entry per conflicting spot (table, path, each head, its value, who); the
-  value table holds one head; history is kept, so it rebuilds after a reload
+  value table holds one head: the first in the agreed order (higher lamport first; equal, the
+  greater name), until a merge; history is kept, so it rebuilds after a reload
 - finer than whole values, from the ops, *lean*: "with the subduction info we can also figure out a
   more finegrained conflict ... we can give a more finegrained view of the conflict between a1 and
   a2 no?"; *mine*: each side's ranges mapped back to the fork point before comparing (what eg-walker

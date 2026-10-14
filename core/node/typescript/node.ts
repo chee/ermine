@@ -17,29 +17,42 @@ export type ChangeHeader = {
 // a value and its latest change; none: nothing there. cow: false (only ever that, and only when
 // given at creation): update changes the value in place, not a copy of it. where it is kept is a
 // layer above's
-export type Node<V> = {
+export type Entry<V> = {
 	value?: V
 	change: ChangeHeader
 	cow?: false
 }
 
 export type Options = {
-	// false: the node's value is changed in place by update, and is the caller's to keep from
+	// false: the entry's value is changed in place by update, and is the caller's to keep from
 	// others: put in nothing you do not want changed, or structuredClone it first
 	cow?: false
 }
 
 // kept by the caller; nothing checked: checks are a layer above's. the change given is the
-// node's, not copied; one with no time: a new change with the time now, whole seconds since 1970,
+// entry's, not copied; one with no time: a new change with the time now, whole seconds since 1970,
 // the one given unchanged
-export default function createNode<V>(
+export default function createEntry<V>(
 	value: V,
 	change: ChangeHeader = {} as ChangeHeader,
 	options: Options = {},
-): Node<V> {
+): Entry<V> {
 	if (change.time === undefined) change = { ...change, time: Math.floor(Date.now() / 1000) }
-	const node: Node<V> = { change }
-	if (value !== undefined) node.value = value
-	if (options.cow === false) node.cow = false
-	return node
+	const entry: Entry<V> = { change }
+	if (value !== undefined) entry.value = value
+	if (options.cow === false) entry.cow = false
+	return entry
+}
+
+// everything at an id: table names to their entries (value, attributes, children, or any other
+// name). no id: that is the table's key, a layer above's. the entries are not copied or checked,
+// and the object given is the node: kept by the caller, never changed here
+export type Node<T extends Record<string, unknown> = Record<string, unknown>> = {
+	readonly [K in keyof T]: Entry<T[K]>
+}
+
+export function createNode<T extends Record<string, unknown>>(
+	entries: { readonly [K in keyof T]: Entry<T[K]> },
+): Node<T> {
+	return entries
 }

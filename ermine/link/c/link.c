@@ -118,7 +118,7 @@ void lk_free(lk *l) {
 
 static const char holding;
 
-void lk_hold(lk *l, const nd_node *node, void *block, void (*release)(void *block)) {
+void lk_hold(lk *l, const nd_entry *node, void *block, void (*release)(void *block)) {
 	tb_key part = tb_symbol(&holding), where = tb_symbol(node);
 	hold *old = tb_get(l->holds, part, where);
 	if (old != NULL) unhold(l, old);
@@ -217,13 +217,13 @@ const op_value *lk_at(const op_value *v, const op_key *path, size_t n, op_value 
 const op_value *lk_get(lk *l, tb_key source, const char *part, tb_key id, const op_key *path,
 	size_t n) {
 	tell(l, pt_spot_of(l->paths, pair_key(l, source, part), paths_key(id), path, n, 0));
-	const nd_node *node = st_get(l->store, source, part, id);
+	const nd_entry *node = st_get(l->store, source, part, id);
 	return node != NULL ? lk_at(node->value, path, n, &l->scratch) : NULL;
 }
 
 const ch_header *lk_change(lk *l, tb_key source, const char *part, tb_key id) {
 	tell(l, pt_change_of(l->paths, pair_key(l, source, part), paths_key(id)));
-	const nd_node *node = st_get(l->store, source, part, id);
+	const nd_entry *node = st_get(l->store, source, part, id);
 	return node != NULL ? &node->change : NULL;
 }
 
@@ -260,7 +260,7 @@ void lk_event(void *ctx, tb_key source, const char *part, tb_key id) {
 }
 
 // the spots a node's latest patches mark, at every key it is under in its source's table
-static void marked(lk *l, tb_key source, const nd_node *node, spots_vec *out) {
+static void marked(lk *l, tb_key source, const nd_entry *node, spots_vec *out) {
 	if (!node->change.has_op) return;
 	size_t keys;
 	const st_key *where = st_who(l->store, source, node, &keys);

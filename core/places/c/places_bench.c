@@ -54,7 +54,7 @@ static size_t holes, reads;
 static const tb_key S = {.string = "s"};
 static ch_header h = {.has_time = 1, .time = 1, .actor = "me"};
 
-static nd_node *children(void *ctx, tb_key source, tb_key id) {
+static nd_entry *children(void *ctx, tb_key source, tb_key id) {
 	(void)ctx;
 	holes++;
 	return tb_get(world, source, id);
@@ -76,9 +76,9 @@ static op_value *entry(const char *id) {
 }
 // takes value; the node in the world under id, in place of any there
 static void kids(const char *id, op_value *value) {
-	nd_node *old = tb_get(world, S, tb_string(id));
-	if (old != NULL) nd_free(old);
-	nd_node *n = nd_make(value, &h, NULL);
+	nd_entry *old = tb_get(world, S, tb_string(id));
+	if (old != NULL) nd_free_entry(old);
+	nd_entry *n = nd_make_entry(value, &h, NULL);
 	op_free(value);
 	tb_sub(world, S, tb_string(id), n);
 }

@@ -1,11 +1,11 @@
-// update on one node over many changes, where update_test.ts and the update suite do not reach:
+// update on one entry over many changes, where update_test.ts and the update suite do not reach:
 // random values of every kind and random batches, a new change each update,
 // the header given left as it was, refused batches changing nothing, and every change's op still
 // walking back and forth through the history after the changes that came later. a few dozen
 // seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import createNode, { type ChangeHeader, type Node } from "./node.ts"
+import createEntry, { type ChangeHeader, type Entry } from "./node.ts"
 import update from "./update.ts"
 import { differ, patch, rand, show, snap, start } from "../../fuzz/gen.ts"
 
@@ -18,7 +18,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, every change kept wa
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed)
 		const first = start(pick)
-		const n: Node<unknown> = createNode(first, { time: 0, actor: "host" })
+		const n: Entry<unknown> = createEntry(first, { time: 0, actor: "host" })
 		// what each update was given and made: the value before, the change, the value after
 		const history: { before: unknown; change: ChangeHeader; after: unknown }[] = []
 		const changes = new Set<ChangeHeader>([n.change])
@@ -118,7 +118,7 @@ Deno.test(`update fuzz: ${SEEDS} seeds, one update of many patches, as one updat
 			}
 		}
 		const h: ChangeHeader = { time: 1, actor: "me" }
-		const all = createNode(first, h), each = createNode(first, h)
+		const all = createEntry(first, h), each = createEntry(first, h)
 		update(all, ps, h)
 		const undos: Patch[][] = []
 		for (const p of ps) {
@@ -136,12 +136,12 @@ Deno.test(`update fuzz: ${SEEDS} seeds, one update of many patches, as one updat
 	}
 })
 
-Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, a node with cow: false as one without`, () => {
+Deno.test(`update fuzz: ${SEEDS} seeds × ${STEPS} updates, an entry with cow: false as one without`, () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed + 900)
 		const first = start(pick)
 		const h: ChangeHeader = { time: 0, actor: "host" }
-		const a = createNode(snap(first), h), b = createNode(snap(first), h, { cow: false })
+		const a = createEntry(snap(first), h), b = createEntry(snap(first), h, { cow: false })
 		for (let step = 0; step < STEPS; step++) {
 			const at = `seed ${seed}, step ${step}`
 			const ps: Patch[] = []

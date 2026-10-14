@@ -2,10 +2,10 @@
 	"title": "null is a value, kept; only not giving one means none",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"value": null,
 			"expect": {
-				"node": {
+				"entry": {
 					"value": null,
 					"change": {
 						"time": "now"
@@ -14,10 +14,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": false,
 			"expect": {
-				"node": {
+				"entry": {
 					"value": false,
 					"change": {
 						"time": "now"
@@ -26,9 +26,9 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": "now"
 					}

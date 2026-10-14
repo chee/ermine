@@ -125,12 +125,12 @@ static void told(st_store *s, tb_key source, const char *part, tb_key id) {
 	if (s->event != NULL) s->event(s->ctx, source, part, id);
 }
 
-nd_node *st_get(const st_store *s, tb_key source, const char *part, tb_key id) {
+nd_entry *st_get(const st_store *s, tb_key source, const char *part, tb_key id) {
 	const struct source *x = find(s, source);
 	return x == NULL ? NULL : tb_get(x->table, tb_string(part), id);
 }
 
-int st_add(st_store *s, tb_key source, const char *part, tb_key id, nd_node *node) {
+int st_add(st_store *s, tb_key source, const char *part, tb_key id, nd_entry *node) {
 	struct source *x = made(s, source);
 	if (tb_get(x->table, tb_string(part), id) == node) return 0;
 	int code = tb_add(x->table, tb_string(part), id, node);
@@ -140,7 +140,7 @@ int st_add(st_store *s, tb_key source, const char *part, tb_key id, nd_node *nod
 	return 0;
 }
 
-void st_sub(st_store *s, tb_key source, const char *part, tb_key id, nd_node *node) {
+void st_sub(st_store *s, tb_key source, const char *part, tb_key id, nd_entry *node) {
 	struct source *x = made(s, source);
 	if (tb_get(x->table, tb_string(part), id) == node) return;
 	tb_sub(x->table, tb_string(part), id, node);
@@ -160,7 +160,7 @@ int st_del(st_store *s, tb_key source, const char *part, tb_key id) {
 	return 0;
 }
 
-const st_key *st_who(st_store *s, tb_key source, const nd_node *node, size_t *length) {
+const st_key *st_who(st_store *s, tb_key source, const nd_entry *node, size_t *length) {
 	struct source *x = find(s, source);
 	*length = 0;
 	if (x == NULL) return NULL;
@@ -176,7 +176,7 @@ const st_key *st_who(st_store *s, tb_key source, const nd_node *node, size_t *le
 	return s->keys;
 }
 
-nd_node *st_children(const st_store *s, tb_key source, tb_key id) {
+nd_entry *st_children(const st_store *s, tb_key source, tb_key id) {
 	return st_get(s, source, "children", id);
 }
 

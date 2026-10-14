@@ -41,7 +41,7 @@
 //    timely, sites }: timely, its time is now in whole seconds; sites, how many its external has.
 //    nothing open: { error: "unscoped" }
 // anything not understood: { error: text }
-import createNode, { type ChangeHeader } from "@ermine/node"
+import createEntry, { type ChangeHeader } from "@ermine/node"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"
 import { createPlaces, type Entry, type Item, PlacesError } from "@ermine/places"
@@ -153,7 +153,7 @@ export function edit(source: Key, part: Part, id: Key, patches: Patch[]) {
 	const h = l.header()
 	const there = store.get(source, part, id)
 	if (there === undefined) {
-		const node = createNode<unknown>(undefined, h)
+		const node = createEntry<unknown>(undefined, h)
 		update(node, patches, h)
 		store.add(source, part, id, node)
 		return node
@@ -231,14 +231,14 @@ export function worldAnswer(r: Request): Json | undefined {
 	const hosted = <T>(f: () => T) => s.run(host, f)
 	switch (r.op) {
 		case "kids":
-			hosted(() => store.sub(r.source, "children", r.id, createNode(r.value, l.header())))
+			hosted(() => store.sub(r.source, "children", r.id, createEntry(r.value, l.header())))
 			return {}
 		case "value":
-			hosted(() => store.sub(r.source, "value", r.id, createNode<unknown>(r.value, l.header())))
+			hosted(() => store.sub(r.source, "value", r.id, createEntry<unknown>(r.value, l.header())))
 			return {}
 		case "share": {
 			hosted(() => {
-				const node = createNode<unknown>(r.value, l.header())
+				const node = createEntry<unknown>(r.value, l.header())
 				for (const [source, part, id] of r.keys) store.add(source, part, id, node)
 			})
 			return {}

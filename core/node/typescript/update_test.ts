@@ -1,11 +1,11 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
-import createNode, { type ChangeHeader, type Node } from "./node.ts"
+import createEntry, { type ChangeHeader, type Entry } from "./node.ts"
 import update from "./update.ts"
 
 const host: ChangeHeader = { time: 0, actor: "host" }
 const by: ChangeHeader = { time: 5, actor: "me" }
-const make = (value?: unknown): Node<unknown> => createNode(value, host)
+const make = (value?: unknown): Entry<unknown> => createEntry(value, host)
 const code = (f: () => unknown) => (assertThrows(f, ApplyError) as ApplyError).code
 
 Deno.test("update: the value the patches make; the change, the header with its op", () => {
@@ -82,16 +82,16 @@ Deno.test("update: patches given as any iterable", () => {
 	assertEquals(n.change.op!.patches, [{ path: ["b"], value: 2 }])
 })
 
-Deno.test("update: a node with cow: false changes its value in place", () => {
+Deno.test("update: an entry with cow: false changes its value in place", () => {
 	const value: { l: number[]; m: Record<string, number> } = { l: [1], m: { a: 1 } }
 	const l = value.l
-	const n = createNode<typeof value>(value, { time: 0, actor: "me" }, { cow: false })
+	const n = createEntry<typeof value>(value, { time: 0, actor: "me" }, { cow: false })
 	update(n, [{ path: ["l"], range: [1, 1], value: [2] }, { path: ["m", "b"], value: 2 }], by)
 	assertStrictEquals(n.value, value)
 	assertStrictEquals(n.value!.l, l)
 	assertEquals(value, { l: [1, 2], m: { a: 1, b: 2 } })
 	// the undo is the same as with copy-on-write
-	const other = createNode({ l: [1], m: { a: 1 } }, { time: 0, actor: "me" })
+	const other = createEntry({ l: [1], m: { a: 1 } }, { time: 0, actor: "me" })
 	update(other, [{ path: ["l"], range: [1, 1], value: [2] }, { path: ["m", "b"], value: 2 }], by)
 	assertEquals(n.change.op, other.change.op)
 	// refused: the value as it was, the change too

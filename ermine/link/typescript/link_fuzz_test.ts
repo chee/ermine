@@ -3,7 +3,7 @@
 // places with nothing told, values straight from the store. at the end, every compute disposed:
 // no spot is kept (the scheduler's forget). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import update from "@ermine/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
 import { type Address, createPlaces, type Entry, type Item, PlacesError } from "@ermine/places"
@@ -62,7 +62,7 @@ function seeded(seed: number, reach: Reach) {
 	function edit(source: Key, part: Part, id: Key, patches: Patch[]) {
 		const there = store.get(source, part, id)
 		if (there === undefined) {
-			const node = createNode<unknown>(undefined, h())
+			const node = createEntry<unknown>(undefined, h())
 			update(node, patches, node.change)
 			store.add(source, part, id, node)
 		} else {
@@ -86,8 +86,8 @@ function seeded(seed: number, reach: Reach) {
 	s.run(host, () => {
 		for (const source of SOURCES) {
 			for (const id of IDS) {
-				if (pick(5)) store.add(source, "children", id, createNode(kids(), h()))
-				if (pick(4)) store.add(source, "value", id, createNode<unknown>(value(), h()))
+				if (pick(5)) store.add(source, "children", id, createEntry(kids(), h()))
+				if (pick(4)) store.add(source, "value", id, createEntry<unknown>(value(), h()))
 			}
 		}
 	})
@@ -197,11 +197,11 @@ function seeded(seed: number, reach: Reach) {
 		}
 		reach.events++
 		if (k === 10) {
-			store.sub(source, "children", id, createNode(kids(), h()))
+			store.sub(source, "children", id, createEntry(kids(), h()))
 			return `sub children ${source} ${id}`
 		}
 		if (k === 11) {
-			store.sub(source, "value", id, createNode<unknown>(value(), h()))
+			store.sub(source, "value", id, createEntry<unknown>(value(), h()))
 			return `sub value ${source} ${id}`
 		}
 		if (k === 12) {

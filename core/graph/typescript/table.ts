@@ -1,6 +1,6 @@
 // nodes held in memory, each under keys of a part and an id: several parts at one id, one node
 // under any number of keys. what a part or an id means is a layer above's
-import type { Node } from "@ermine/node"
+import type { Entry } from "@ermine/node"
 
 export type Key = string | symbol
 
@@ -14,21 +14,21 @@ export class TableError extends Error {
 }
 
 export function createTable<V>(): {
-	add: (part: Key, id: Key, node: Node<V>) => void
-	sub: (part: Key, id: Key, node: Node<V>) => void
+	add: (part: Key, id: Key, node: Entry<V>) => void
+	sub: (part: Key, id: Key, node: Entry<V>) => void
 	get: {
-		(part: Key, id: Key): Node<V> | undefined
-		(part: Key, node: Node<V>): Key[]
-		(id: Key): [Key, Node<V>][]
+		(part: Key, id: Key): Entry<V> | undefined
+		(part: Key, node: Entry<V>): Key[]
+		(id: Key): [Key, Entry<V>][]
 	}
-	who: (node: Node<V>) => [Key, Key][]
+	who: (node: Entry<V>) => [Key, Key][]
 	del: {
 		(part: Key, id: Key): void
-		(part: Key, node: Node<V>): void
-		(node: Node<V>): void
+		(part: Key, node: Entry<V>): void
+		(node: Entry<V>): void
 	}
 } {
-	type N = Node<V>
+	type N = Entry<V>
 	// id → part → node, and node → part → ids
 	const at = new Map<Key, Map<Key, N>>()
 	const where = new Map<N, Map<Key, Set<Key>>>()

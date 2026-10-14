@@ -2,7 +2,7 @@
 // by link. computes read places and values; writes are made with a scope open, the host's or a
 // run's, and pulsed
 import { assert, assertEquals, assertThrows } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import { createPlaces } from "@ermine/places"
@@ -27,7 +27,7 @@ function world() {
 		const h = l.header()
 		const there = store.get(source, part, id)
 		if (there === undefined) {
-			const node = createNode<unknown>(undefined, h)
+			const node = createEntry<unknown>(undefined, h)
 			update(node, patches, h)
 			store.add(source, part, id, node)
 			return node
@@ -38,9 +38,9 @@ function world() {
 	}
 	// a node at (source, id), the host's, as a table event
 	const kids = (source: Key, id: Key, v: Record<string, unknown>) =>
-		hosted(() => store.sub(source, "children", id, createNode(v, l.header())))
+		hosted(() => store.sub(source, "children", id, createEntry(v, l.header())))
 	const value = (source: Key, id: Key, v: unknown) =>
-		hosted(() => store.sub(source, "value", id, createNode<unknown>(v, l.header())))
+		hosted(() => store.sub(source, "value", id, createEntry<unknown>(v, l.header())))
 	// a compute of notes's: its runs counted, its last value kept
 	function watch<T>(f: () => T) {
 		const w = { runs: 0, value: undefined as T | undefined }
@@ -137,7 +137,7 @@ Deno.test("link: one children node under two keys, written through one: both rea
 	const { s, l, store, places, hosted, kids, watch, walk } = world()
 	kids("stored", "R", { p: [["stored", "P"]], q: [["stored", "Q"]] })
 	hosted(() => {
-		const k = createNode({ n: [] }, l.header())
+		const k = createEntry({ n: [] }, l.header())
 		store.add("stored", "children", "P", k)
 		store.add("stored", "children", "Q", k)
 	})
@@ -310,7 +310,7 @@ Deno.test("link: a place write, and a table event, in a run are the run's own to
 	const d = s.run(notes, () =>
 		s.compute(() => {
 			const v = l.get("stored", "value", "Y")
-			if (v === undefined) store.add("stored", "value", "Y", createNode<unknown>(1, l.header()))
+			if (v === undefined) store.add("stored", "value", "Y", createEntry<unknown>(1, l.header()))
 			return v
 		}, () => {}))
 	s.pulse()

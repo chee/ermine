@@ -100,7 +100,7 @@ import { createWiring } from "@ermine/subduction/wiring"
 import { id as idOf, is } from "@ermine/subduction/id"
 import { createScheduler } from "@ermine/scheduler"
 import { fromJson, line, toJson } from "../pack/form.ts"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 
 type Request = Record<string, unknown> & { op: string }
 // deno-lint-ignore no-explicit-any
@@ -316,7 +316,7 @@ async function answer(r: Request): Promise<unknown> {
 				random,
 			})
 			held.scheduler = createScheduler({
-				root: createNode(r.root as string, {}),
+				root: createEntry(r.root as string, {}),
 				actor: r.actor,
 				site: () => undefined,
 				wallclock: () => undefined,

@@ -2,7 +2,7 @@
 	"title": "the value as given: any JSON, whole",
 	"steps": [
 		{
-			"op": "make",
+			"op": "entry",
 			"value": {
 				"title": "hi",
 				"tags": [
@@ -19,7 +19,7 @@
 				}
 			},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"title": "hi",
 						"tags": [
@@ -42,13 +42,13 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": [
 				1,
 				2
 			],
 			"expect": {
-				"node": {
+				"entry": {
 					"value": [
 						1,
 						2
@@ -60,10 +60,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": "é 🦊\n",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": "é 🦊\n",
 					"change": {
 						"time": "now"
@@ -72,10 +72,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": 0,
 			"expect": {
-				"node": {
+				"entry": {
 					"value": 0,
 					"change": {
 						"time": "now"
@@ -84,10 +84,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": "",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": "",
 					"change": {
 						"time": "now"
@@ -96,10 +96,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": [],
 			"expect": {
-				"node": {
+				"entry": {
 					"value": [],
 					"change": {
 						"time": "now"
@@ -108,10 +108,10 @@
 			}
 		},
 		{
-			"op": "make",
+			"op": "entry",
 			"value": {},
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {},
 					"change": {
 						"time": "now"

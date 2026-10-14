@@ -24,9 +24,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 1,
 						"l": [
@@ -105,9 +105,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [
@@ -205,9 +205,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [
@@ -259,9 +259,9 @@
 			}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [
@@ -300,9 +300,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [
@@ -342,9 +342,9 @@
 			"expect": {}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [
@@ -416,9 +416,9 @@
 			}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"value": {
 						"a": 10,
 						"l": [

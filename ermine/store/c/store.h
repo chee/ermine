@@ -31,13 +31,13 @@ st_store *st_new(st_event event, void *ctx);
 void st_free(st_store *s);
 
 // the node under the key, or NULL. A read makes no table
-nd_node *st_get(const st_store *s, tb_key source, const char *part, tb_key id);
+nd_entry *st_get(const st_store *s, tb_key source, const char *part, tb_key id);
 
 // the node under the key. 0; the same node there already: 0, nothing changed, no event; a different
 // node there: TB_ALREADY_THERE, nothing changed
-int st_add(st_store *s, tb_key source, const char *part, tb_key id, nd_node *node);
+int st_add(st_store *s, tb_key source, const char *part, tb_key id, nd_entry *node);
 // the node under the key, in place of what was there. The same node: nothing, no event
-void st_sub(st_store *s, tb_key source, const char *part, tb_key id, nd_node *node);
+void st_sub(st_store *s, tb_key source, const char *part, tb_key id, nd_entry *node);
 // the node under the key taken out: 0, or TB_NOTHING_THERE (nothing changed, no event)
 int st_del(st_store *s, tb_key source, const char *part, tb_key id);
 
@@ -45,10 +45,10 @@ int st_del(st_store *s, tb_key source, const char *part, tb_key id);
 // each was first taken; none: not there. An array of the store's own, live until the next call of
 // this one or the next change; the parts and ids in it are the table's copies, live until the key
 // is removed
-const st_key *st_who(st_store *s, tb_key source, const nd_node *node, size_t *length);
+const st_key *st_who(st_store *s, tb_key source, const nd_entry *node, size_t *length);
 
 // places' hole: the children node of id as the source has it
-nd_node *st_children(const st_store *s, tb_key source, tb_key id);
+nd_entry *st_children(const st_store *s, tb_key source, tb_key id);
 
 // the source's whole table gone, then an event at each key it held: ids in the order first held
 // (one deleted and held again is last), each id's parts in the order taken. none: nothing

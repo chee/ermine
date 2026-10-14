@@ -10,7 +10,7 @@
 // A part or an id: a string, or {"symbol": name}, Symbol.for(name). A node: {value?, change,
 // cow?: false}, change {time, actor?, reader?, external?, metadata?, op?}, the value, actor,
 // reader, each metadata value and each patch's value in their JSON form (form.ts)
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node"
 import {
 	decode,
 	encode,
@@ -60,14 +60,14 @@ function header(c: Fields, f: (x: unknown) => unknown): Fields {
 	return out
 }
 
-const node = (s: Shown): Node<unknown> =>
-	createNode(
+const node = (s: Shown): NodeEntry<unknown> =>
+	createEntry(
 		"value" in s ? fromJson(s.value) : undefined,
 		header(s.change, fromJson) as ChangeHeader,
 		s.cow === false ? { cow: false } : {},
 	)
 
-function show(n: Node<unknown>): Shown {
+function show(n: NodeEntry<unknown>): Shown {
 	const out: Shown = { change: header(n.change as unknown as Fields, toJson) }
 	if ("value" in n) out.value = toJson(n.value)
 	if (n.cow === false) out.cow = false
@@ -84,7 +84,7 @@ function entries(r: Request): Entry[] {
 
 // the entries as the protocol shows them, the nodes numbered as first named
 function shown(es: Entry[]) {
-	const numbers = new Map<Node<unknown>, number>(), nodes: Shown[] = []
+	const numbers = new Map<NodeEntry<unknown>, number>(), nodes: Shown[] = []
 	const out = es.map(([part, id, n]) => {
 		let i = numbers.get(n)
 		if (i === undefined) numbers.set(n, i = nodes.length), nodes.push(show(n))

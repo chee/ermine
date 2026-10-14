@@ -14,24 +14,24 @@ const now = () => Math.floor(Date.now() / 1000)
 
 // a time "now" in the expectation: within [from - 1, to + 1], then taken as the expectation's
 function match(got: unknown, want: Shown, at: string, from: number, to: number) {
-	const node = got as Shown | undefined
-	assert(node !== undefined, `${at}: no node`)
+	const entry = got as Shown | undefined
+	assert(entry !== undefined, `${at}: no entry`)
 	if (want.change.time === "now") {
-		const t = node.change.time
+		const t = entry.change.time
 		assert(
 			Number.isInteger(t) && t as number >= from - 1 && t as number <= to + 1,
 			`${at}: time ${t}`,
 		)
 		want = { ...want, change: { ...want.change, time: t } }
 	}
-	assertEquals(node, want, at)
+	assertEquals(entry, want, at)
 }
 
 Deno.test("an unknown op is an error, and the harness goes on", async () => {
 	const from = now()
-	const [a, b] = await ask(command("node"), [{ op: "nope" }, { op: "make" }])
+	const [a, b] = await ask(command("node"), [{ op: "nope" }, { op: "entry" }])
 	assert(a.error)
-	match(b.node, { change: { time: "now" } }, "make", from, now())
+	match(b.entry, { change: { time: "now" } }, "entry", from, now())
 })
 
 // a few dozen seeds (memory: fuzz runs small)
@@ -57,7 +57,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} requests against the model`, async (
 		const pick = rand(seed)
 		const steps: { request: Request; expect: Shown }[] = []
 		for (let k = 0; k < STEPS; k++) {
-			const request: Request = { op: "make" }
+			const request: Request = { op: "entry" }
 			const change: Change = {}
 			const expect: Shown = { change }
 			if (pick(4)) request.value = expect.value = json(pick)
@@ -86,6 +86,8 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} requests against the model`, async (
 		const from = now()
 		const answers = await ask(command("node"), steps.map((s) => s.request))
 		const to = now()
-		steps.forEach((s, i) => match(answers[i].node, s.expect, `seed ${seed}, step ${i}`, from, to))
+		steps.forEach((s, i) =>
+			match(answers[i].entry, s.expect, `seed ${seed}, step ${i}`, from, to)
+		)
 	}
 })

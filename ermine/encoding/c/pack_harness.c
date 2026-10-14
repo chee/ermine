@@ -38,7 +38,7 @@ static void *take(size_t size) {
 }
 
 static void clear(void) {
-	for (size_t i = 0; i < made.n; i++) nd_free(made.p[i]);
+	for (size_t i = 0; i < made.n; i++) nd_free_entry(made.p[i]);
 	for (size_t i = 0; i < values.n; i++) op_free(values.p[i]);
 	for (size_t i = 0; i < blocks.n; i++) free(blocks.p[i]);
 	made.n = values.n = blocks.n = 0;
@@ -156,15 +156,15 @@ static int header(Json *c, ch_header *h) {
 }
 
 // a node as the protocol has it, made; NULL: a value in it has no form
-static nd_node *node_of(Json *s) {
+static nd_entry *node_of(Json *s) {
 	Json **value = at(s, "value"), **change = at(s, "change");
 	op_value *v = NULL;
 	ch_header h = {0};
 	if (value != NULL && (v = value_of(value)) == NULL) return NULL;
 	bent = 0;
 	if (!header(*change, &h) || bent) return NULL;
-	nd_options options = {.in_place = at(s, "cow") != NULL};
-	nd_node *n = nd_make(v, &h, &options);
+	nd_entry_options options = {.in_place = at(s, "cow") != NULL};
+	nd_entry *n = nd_make_entry(v, &h, &options);
 	if (n == NULL) abort();
 	keep(&made, n);
 	return n;
@@ -199,7 +199,7 @@ static Json *show_patches(const op_patch *ps, size_t n) {
 	return list;
 }
 
-static Json *show_node(const nd_node *n) {
+static Json *show_node(const nd_entry *n) {
 	const ch_header *h = &n->change;
 	Json *out = jsonObject(), *c = jsonObject();
 	jsonAdd(out, "change", c);
@@ -307,7 +307,7 @@ static pk_reading reading_of(Json *r) {
 static void do_pack(Json *r) {
 	Json **given = at(r, "nodes"), **list = at(r, "entries");
 	size_t nn = given ? (size_t)(*given)->array.count : 0, ne = list ? (size_t)(*list)->array.count : 0;
-	nd_node **nodes = take(nn * sizeof *nodes + 1);
+	nd_entry **nodes = take(nn * sizeof *nodes + 1);
 	for (size_t i = 0; i < nn; i++) {
 		if ((nodes[i] = node_of((*given)->array.items[i])) == NULL) {
 			refused(PK_CANNOT_CARRY, NULL);
@@ -357,7 +357,7 @@ static void do_unpack(Json *r) {
 }
 
 static void do_encode(Json *r) {
-	nd_node *n = node_of(*at(r, "node"));
+	nd_entry *n = node_of(*at(r, "node"));
 	if (n == NULL) {
 		refused(PK_CANNOT_CARRY, NULL);
 		return;

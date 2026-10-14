@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
-import createNode, { type ChangeHeader, type Node } from "@ermine/node"
+import createEntry, { type ChangeHeader, type Entry } from "@ermine/node"
 import apply from "@ermine/op/apply"
 import { createTable, type Key } from "@ermine/graph/table"
 import type { Item, PlacesError as PlacesErrorType, Read, Setup } from "../places.ts"
@@ -20,12 +20,12 @@ function world(extra: Partial<Setup> = {}) {
 		tables.get(source) ?? tables.set(source, createTable<unknown>()).get(source)!
 	const reads: Read[] = []
 	const kids = (source: Key, id: Key, value: Record<string, unknown>) => {
-		const n = createNode<unknown>(value, h)
+		const n = createEntry<unknown>(value, h)
 		table(source).sub("children", id, n)
 		return n
 	}
 	const children = (source: Key, id: Key) =>
-		table(source).get("children", id) as Node<unknown> | undefined
+		table(source).get("children", id) as Entry<unknown> | undefined
 	const p = createPlaces({ root: ["stored", "R"], children, read: (r) => reads.push(r), ...extra })
 	return { p, kids, children, reads, table }
 }
@@ -49,7 +49,7 @@ Deno.test("places: a root given as an id has the source ROOT", () => {
 	const seen: [Key, Key][] = []
 	const top = Symbol.for("ermine.places.root")
 	assertStrictEquals(ROOT, top)
-	const kids = createNode<unknown>({ a: [["stored", "A"]] }, h)
+	const kids = createEntry<unknown>({ a: [["stored", "A"]] }, h)
 	const p = createPlaces({
 		root: "R",
 		children: (
@@ -165,7 +165,7 @@ Deno.test("places: place, at the end, at an index, a new name, a node with no va
 	assertEquals(n.change.op!.patches, [{ path: ["new"], value: [["stored", "N"]] }])
 	assertEquals(Object.keys(apply(n.value, n.change.op!.undo) as object), ["t"])
 	// a children node with no value yet
-	const empty = createNode<unknown>(undefined, h)
+	const empty = createEntry<unknown>(undefined, h)
 	world().table("stored")
 	const w = world()
 	w.table("stored").add("children", "R", empty)

@@ -2,7 +2,7 @@
 // to an array of entries, in order: [source, id], what put it there and the id. the array is the
 // order: the front is first. places knows no source's meaning, and no part but children; whoever
 // reads asks for an item's other parts elsewhere
-import type { ChangeHeader, Node } from "@ermine/node"
+import type { ChangeHeader, Entry as NodeEntry } from "@ermine/node"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
 import { createTrie, type Entry as Held } from "./trie.ts"
@@ -50,13 +50,13 @@ export type Setup = {
 	root: Key | Entry
 	// the children node of id as source has it; none: not there (not loaded, or never made). where
 	// a source's nodes are kept is the caller's: one table for all, a table per source, anything
-	children: (source: Key, id: Key) => Node<unknown> | undefined
+	children: (source: Key, id: Key) => NodeEntry<unknown> | undefined
 	// told of each read, as it is made
 	read?: Tell
 }
 
 // a children node a write changed, and whose it is: the node's change has the patches that landed
-export type Changed = { readonly source: Key; readonly id: Key; readonly node: Node<unknown> }
+export type Changed = { readonly source: Key; readonly id: Key; readonly node: NodeEntry<unknown> }
 
 export type Code = "not-a-name" | "nothing-there" | "already-there" | "range"
 
@@ -88,7 +88,7 @@ const isKey = (k: unknown): k is Key => typeof k === "string" || typeof k === "s
 const within = (i: number, lo: number, hi: number) => Number.isInteger(i) && i >= lo && i <= hi
 
 // the array under name in a children node; none, or not an array: undefined
-function array(node: Node<unknown> | undefined, name: string): readonly unknown[] | undefined {
+function array(node: NodeEntry<unknown> | undefined, name: string): readonly unknown[] | undefined {
 	const v = node?.value
 	if (!isMap(v)) return undefined
 	const list = v[name]
@@ -96,7 +96,7 @@ function array(node: Node<unknown> | undefined, name: string): readonly unknown[
 }
 
 // a name holding something that is not an array: taken, never written over
-const taken = (node: Node<unknown>, name: string) =>
+const taken = (node: NodeEntry<unknown>, name: string) =>
 	isMap(node.value) && Object.hasOwn(node.value, name) && !Array.isArray(node.value[name])
 
 // an entry; anything else in an array keeps its position, and is no item
@@ -118,7 +118,7 @@ type Level = { names: Map<string, { list: readonly unknown[]; items: Item[] }> }
 
 // what a held place keeps per step: the items it was walked from, the children nodes they read
 // and at which change, what that gave, and how many opened places share it
-type Seen = { source: Key; id: Key; node: Node<unknown> | undefined; change: unknown }
+type Seen = { source: Key; id: Key; node: NodeEntry<unknown> | undefined; change: unknown }
 type Step = { from: readonly Item[] | null; items: readonly Item[]; seen: Seen[]; opened: number }
 
 export function createPlaces(setup: Setup): Places {
@@ -345,7 +345,7 @@ export function createPlaces(setup: Setup): Places {
 
 	function write(
 		parent: Item,
-		n: Node<unknown>,
+		n: NodeEntry<unknown>,
 		patches: Patch[],
 		header: ChangeHeader,
 	): Changed[] {
@@ -354,7 +354,7 @@ export function createPlaces(setup: Setup): Places {
 	}
 
 	// the patches that make sure n's value is a map, first
-	const base = (n: Node<unknown>): Patch[] => isMap(n.value) ? [] : [{ path: [], value: {} }]
+	const base = (n: NodeEntry<unknown>): Patch[] => isMap(n.value) ? [] : [{ path: [], value: {} }]
 
 	// every write: the nodes it changed, in order. refused: it throws, and nothing changes
 

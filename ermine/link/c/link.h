@@ -132,6 +132,6 @@ void lk_made_free(void *made);
 
 // keeps something alive for the node's change to refer to (a header's block, a write's patches):
 // release(block) is called when the next lk_hold for the same node comes, or at lk_free
-void lk_hold(lk *l, const nd_node *node, void *block, void (*release)(void *block));
+void lk_hold(lk *l, const nd_entry *node, void *block, void (*release)(void *block));
 
 #endif

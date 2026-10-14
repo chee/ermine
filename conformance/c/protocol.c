@@ -1,4 +1,4 @@
-// patches, change headers and nodes on the line protocol (protocol.h)
+// patches, change headers, entries and nodes on the line protocol (protocol.h)
 #include "protocol.h"
 
 #include <limits.h>
@@ -99,12 +99,12 @@ ch_header hh_header(const op_value *p) {
 	return h;
 }
 
-nd_node *hh_node(const op_value *p) {
+nd_entry *hh_entry(const op_value *p) {
 	const op_value *given = op_get(p, "header");
 	ch_header h = given ? hh_header(given) : (ch_header){0};
-	nd_node *n = nd_make((op_value *)op_get(p, "value"), &h, NULL);
-	if (n == NULL) hh_fail("out of memory");
-	return n;
+	nd_entry *e = nd_make_entry((op_value *)op_get(p, "value"), &h, NULL);
+	if (e == NULL) hh_fail("out of memory");
+	return e;
 }
 
 // --- writing ---
@@ -192,14 +192,25 @@ void hh_put_header(FILE *out, const ch_header *h) {
 	putc('}', out);
 }
 
-void hh_put_node(FILE *out, const nd_node *n) {
+void hh_put_entry(FILE *out, const nd_entry *e) {
 	putc('{', out);
-	if (n->value) {
+	if (e->value) {
 		fputs("\"value\":", out);
-		op_json_write(out, n->value);
+		op_json_write(out, e->value);
 		putc(',', out);
 	}
 	fputs("\"change\":", out);
-	hh_put_header(out, &n->change);
+	hh_put_header(out, &e->change);
+	putc('}', out);
+}
+
+void hh_put_node(FILE *out, const nd_node *n) {
+	putc('{', out);
+	for (size_t i = 0; i < n->length; i++) {
+		if (i) putc(',', out);
+		op_json_string(out, n->slots[i].table);
+		putc(':', out);
+		hh_put_entry(out, n->slots[i].entry);
+	}
 	putc('}', out);
 }

@@ -113,7 +113,7 @@ static const op_value *quiet_reader(void *ctx, tb_key source, const char *part, 
 	gd *g = ctx;
 	size_t n;
 	op_key *keys = steps_of(path, &n);
-	const nd_node *node = st_get(g->store, source, part, id);
+	const nd_entry *node = st_get(g->store, source, part, id);
 	const op_value *v = node != NULL ? lk_at(node->value, keys, n, &g->scratch) : NULL;
 	free(keys);
 	return v;

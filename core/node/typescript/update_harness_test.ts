@@ -1,17 +1,17 @@
-// What the update suite asks of a harness besides its scenarios (conformance/run.ts): a node
+// What the update suite asks of a harness besides its scenarios (conformance/run.ts): an entry
 // request around every update of every scenario, an unknown op is an error and the harness goes on,
 // and a fuzzer against the reference library. Against HARNESS, else the reference
 // (update_harness.ts). The protocol: update_harness.ts.
 //
-// Around each update a node request is made before and after, and the answers must say: a
+// Around each update an entry request is made before and after, and the answers must say: a
 // successful update's undo, applied to the value after, gives the value before (maps by content),
-// and a failed one leaves the node as it was.
+// and a failed one leaves the entry as it was.
 //
 // The fuzzer makes patches against content it follows with the reference library; each goes to
 // the harness alone, then all that were valid in one change. Whatever answers must equal the
 // reference's answers, and the one change must end where the reference's patches one by one did.
 import { assert, assertEquals } from "@std/assert"
-import createNode from "@ermine/node"
+import createEntry from "@ermine/node"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { ask, command, reference, suite } from "../../../conformance/typescript/ask.ts"
@@ -31,26 +31,26 @@ const canon = (v: unknown): unknown =>
 		? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon((v as Answer)[k])]))
 		: v
 
-// the starts of nodes that change their value in place
+// the starts of entries that change their value in place
 const inPlace = (steps: Request[]) => steps.map((s) => s.op === "start" ? { ...s, cow: false } : s)
 
-// a node request before and after every update, and what they must say:
+// an entry request before and after every update, and what they must say:
 // asked: the requests to send; check: the answers to them (the scenario's own at its indexes)
 function around(
 	steps: Request[],
 ): { asked: Request[]; at: number[]; check: (a: Answer[]) => void } {
 	const asked: Request[] = [], at: number[] = []
 	for (const s of steps) {
-		if (s.op === "update") asked.push({ op: "node" })
+		if (s.op === "update") asked.push({ op: "entry" })
 		at.push(asked.length)
 		asked.push(s)
-		if (s.op === "update") asked.push({ op: "node" })
+		if (s.op === "update") asked.push({ op: "entry" })
 	}
 	const check = (a: Answer[]) => {
 		steps.forEach((s, k) => {
 			if (s.op !== "update") return
 			const i = at[k]
-			const before = a[i - 1].node, after = a[i + 1].node
+			const before = a[i - 1].entry, after = a[i + 1].entry
 			if (a[i].error) {
 				assertEquals(after, before, `step ${k}: a failed update changes nothing`)
 				return
@@ -67,7 +67,7 @@ function around(
 	return { asked, at, check }
 }
 
-// every scenario, as it is and with every node changing its value in place
+// every scenario, as it is and with every entry changing its value in place
 Deno.test("around every update: the undo takes the value back, a failed one changes nothing", async () => {
 	const dir = suite("update").fixtures
 	for (
@@ -161,7 +161,7 @@ function patch(pick: (n: number) => number, v: Record<string, unknown>): Patch {
 Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async () => {
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const pick = rand(seed)
-		const n = createNode<Record<string, unknown>>(content())
+		const n = createEntry<Record<string, unknown>>(content())
 		const patches: Patch[] = [], good: Patch[] = []
 		for (let k = 0; k < STEPS; k++) {
 			const p = patch(pick, structuredClone(n.value!))
@@ -175,7 +175,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 		}
 		const steps: Request[] = [start]
 		for (const p of patches) steps.push({ op: "update", patches: [p] })
-		steps.push(start, { op: "update", patches: good }, { op: "node" })
+		steps.push(start, { op: "update", patches: good }, { op: "entry" })
 		const { asked, check } = around(steps)
 		const mine: Answer[] = await ask(command("update"), asked)
 		if (Deno.env.get("HARNESS")) {
@@ -187,7 +187,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 		assertEquals(placed, mine, `seed ${seed}: in place`)
 		// the one change ends where the patches one by one did
 		assertEquals(
-			canon(mine[mine.length - 1].node.value),
+			canon(mine[mine.length - 1].entry.value),
 			canon(toJson(n.value)),
 			`seed ${seed}: the end`,
 		)

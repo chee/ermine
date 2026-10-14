@@ -176,9 +176,9 @@
 			}
 		},
 		{
-			"op": "node",
+			"op": "entry",
 			"expect": {
-				"node": {
+				"entry": {
 					"change": {
 						"time": 0
 					}

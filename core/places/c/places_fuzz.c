@@ -22,7 +22,7 @@ static void die(const char *why, int step) {
 
 // the hole: cell 0 the root (pl_root(), "R"), cells 1..4 ("s", "0".."3")
 static const char *const ids[CELLS] = {"R", "0", "1", "2", "3"};
-static nd_node *nodes[CELLS];
+static nd_entry *nodes[CELLS];
 static tb_key source_of(int c) { return c ? tb_string("s") : pl_root(); }
 static int cell_of(tb_key source, tb_key id) {
 	for (int c = 0; c < CELLS; c++) {
@@ -32,7 +32,7 @@ static int cell_of(tb_key source, tb_key id) {
 	}
 	return -1;
 }
-static nd_node *children(void *ctx, tb_key source, tb_key id) {
+static nd_entry *children(void *ctx, tb_key source, tb_key id) {
 	(void)ctx;
 	int c = cell_of(source, id);
 	return c < 0 ? NULL : nodes[c];
@@ -76,11 +76,11 @@ static op_value *children_value(fz_bytes *b) {
 	return m;
 }
 static void make(int c, fz_bytes *b) {
-	nd_free(nodes[c]);
+	nd_free_entry(nodes[c]);
 	nodes[c] = NULL;
 	if (fz_byte(b) % 5 == 4) return;
 	op_value *v = children_value(b);
-	nodes[c] = nd_make(v, &(ch_header){.has_time = 1, .time = 0, .actor = "setup"}, NULL);
+	nodes[c] = nd_make_entry(v, &(ch_header){.has_time = 1, .time = 0, .actor = "setup"}, NULL);
 	op_free(v);
 }
 
@@ -148,7 +148,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 		} else {
 			// a write: what every node was, before
 			op_value *was[CELLS];
-			const nd_node *node_was[CELLS];
+			const nd_entry *node_was[CELLS];
 			const op_patch *change_was[CELLS];
 			for (int k = 0; k < CELLS; k++) {
 				node_was[k] = nodes[k];
@@ -198,6 +198,6 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 	}
 	for (int i = 0; i < nheld; i++) pl_close(hs[i].h);
 	pl_free(p);
-	for (int c = 0; c < CELLS; c++) nd_free(nodes[c]), nodes[c] = NULL;
+	for (int c = 0; c < CELLS; c++) nd_free_entry(nodes[c]), nodes[c] = NULL;
 	return 0;
 }
