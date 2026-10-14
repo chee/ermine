@@ -1,0 +1,143 @@
+{
+	"title": "members at a path rerun on a new name there; the level above does not",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"a": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"x": "X"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "level",
+			"scope": "o",
+			"f": {
+				"join": {
+					"level": []
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "kept",
+			"scope": "o",
+			"f": {
+				"join": {
+					"level": [
+						"a"
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "level",
+			"expect": {
+				"runs": 1,
+				"value": "A"
+			}
+		},
+		{
+			"op": "state",
+			"name": "kept",
+			"expect": {
+				"runs": 1,
+				"value": "X"
+			}
+		},
+		{
+			"op": "place",
+			"at": "A",
+			"name": "y",
+			"id": "Y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "level",
+			"expect": {
+				"runs": 1,
+				"value": "A"
+			}
+		},
+		{
+			"op": "state",
+			"name": "kept",
+			"expect": {
+				"runs": 2,
+				"value": "X,Y"
+			}
+		},
+		{
+			"op": "place",
+			"at": "A",
+			"name": "z",
+			"expect": {},
+			"id": "Z"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "level",
+			"expect": {
+				"runs": 1,
+				"value": "A"
+			}
+		},
+		{
+			"op": "state",
+			"name": "kept",
+			"expect": {
+				"runs": 3,
+				"value": "X,Y,Z"
+			}
+		},
+		{
+			"op": "place",
+			"at": "R",
+			"name": "b",
+			"id": "B",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "level",
+			"expect": {
+				"runs": 2,
+				"value": "A,B"
+			}
+		}
+	]
+}

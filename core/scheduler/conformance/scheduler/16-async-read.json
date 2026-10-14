@@ -1,32 +1,100 @@
 {
-	"title": "a read after an await is refused: stopped; the run failed",
+	"title": "a read after an await counts for nothing: the run is done with what it read, and a change to it reruns nothing",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
-		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "wait": ["p", { "read": "a" }] },
+			"f": {
+				"wait": [
+					"p",
+					{
+						"read": "a"
+					}
+				]
+			},
 			"to": "c"
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "resolve", "promise": "p", "value": null, "expect": {} },
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "c", "tick": 2 },
-					{ "starts": "c", "run": 1, "rank": 0 },
-					{ "ends": "c", "run": 1, "ended": "pending" },
-					{ "ends": "c", "run": 1, "ended": "failed", "error": "stopped" }
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
 				]
 			}
 		},
-		{ "op": "get", "key": "c", "expect": { "value": null } },
-		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 3 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "moments", "expect": { "moments": [] } }
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
 	]
 }

@@ -56,21 +56,23 @@
 					}
 				}
 			],
-			"expect": { "spots": [
-				[
-					"meta",
-					"a",
-					"x"
-				],
-				[
-					"meta"
-				],
-				[
-					"meta",
-					"c",
-					"x"
+			"expect": {
+				"spots": [
+					[
+						"meta",
+						"a",
+						"x"
+					],
+					[
+						"meta"
+					],
+					[
+						"meta",
+						"c",
+						"x"
+					]
 				]
-			] }
+			}
 		}
 	]
 }

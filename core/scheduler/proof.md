@@ -61,8 +61,8 @@ $\mathrm{set}_c(v)$ writes $v$ at $\mathrm{out}(c)$ and then calls `changed([out
 
 Scopes form a forest (the code's tree of owners and change info; the old `owner(parent?)` is gone:
 `root(info?)`, `scope(info?, parent?)`, `run(scope, f)`). Each scope has an ordered list of children
-(scopes and computations) and an ordered list of cleanups. A computation is a scope too. Below, "owner"
-is the old name for a scope; line numbers are from before the change. The Lean model in
+(scopes and computations) and an ordered list of cleanups. A computation is a scope too. Below,
+"owner" is the old name for a scope; line numbers are from before the change. The Lean model in
 `core/scheduler/lean/` is being moved to scopes: nothing below is claimed of it yet.
 
 ### 1.3 The scheduler's state

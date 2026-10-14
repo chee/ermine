@@ -1,0 +1,279 @@
+{
+	"title": "three things decide: where the asker is, the path the target was reached by, the id",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"apps": "Apps",
+				"docs": "Docs",
+				"trash": "Docs"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "Apps",
+			"value": {
+				"notes": "Notes",
+				"games": "Games"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "Docs",
+			"value": {
+				"a": "D",
+				"secret": "S"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "Notes",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "Games",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "D",
+			"value": "doc",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee",
+					"op": "read",
+					"from": [
+						"apps",
+						"notes"
+					],
+					"path": [
+						"docs"
+					]
+				},
+				{
+					"actor": "chee",
+					"op": "read",
+					"id": "S",
+					"deny": true
+				},
+				{
+					"actor": "chee",
+					"op": "read",
+					"from": [
+						"apps",
+						"notes"
+					],
+					"path": [
+						"trash"
+					],
+					"id": "S"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "notes",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"from": [
+				"apps",
+				"notes"
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "games",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"from": [
+				"apps",
+				"games"
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "host",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"docs",
+					"a"
+				]
+			},
+			"expect": {
+				"value": "D"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "games",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"docs",
+					"a"
+				]
+			},
+			"expect": {
+				"value": "REFUSED"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"trash",
+					"a"
+				]
+			},
+			"expect": {
+				"value": "REFUSED"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"docs",
+					"secret"
+				]
+			},
+			"expect": {
+				"value": "REFUSED"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"trash",
+					"secret"
+				]
+			},
+			"expect": {
+				"value": "REFUSED"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "host",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"docs",
+					"a"
+				]
+			},
+			"expect": {
+				"value": "REFUSED"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"try": {
+					"read": [
+						"D",
+						"value"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"read": [
+					{
+						"at": [
+							"docs",
+							"a"
+						]
+					},
+					"value"
+				]
+			},
+			"expect": {
+				"value": "doc"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "notes",
+			"scope": "chee",
+			"e": {
+				"try": {
+					"read": [
+						{
+							"at": [
+								"trash",
+								"a"
+							]
+						},
+						"value"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		}
+	]
+}

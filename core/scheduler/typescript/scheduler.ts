@@ -18,19 +18,20 @@
 // a pulse runs what is due, in rounds: a round runs the due computations by rank (rank.ts,
 // order.ts), then acts on the effects' new values; acting may make more due, for another round.
 // a result equal to the last stops there. it holds no values but each computation's last result:
-// a compute's goes to its set, whose writer says changed(keys, by), and what read those keys is
+// a compute's goes to its set, whose writer says changed(keys, writer), and what read those keys is
 // due. keys are opaque, compared by identity.
 //
-// by: who made the change, told by the caller, never guessed from what is running. a caller who
-// knows the writer passes it: the writer open (current().by: whoever opened the scope said it),
-// a run's own read (that run), or a computation (its latest run). a compute named so becomes the
+// writer: who made the change, told by the caller, never guessed from what is running. a caller
+// who knows the writer passes it: the writer open (current().writer: whoever opened the scope said
+// it; in a run, the run), kept from before an await for a write after it, or a computation (its
+// latest run). a compute named so becomes the
 // keys' writer (its readers wait for it while it is due), and the change carries the run's cause
-// (loops, causes.ts). without by the change is from outside (the host, sync): no writer learned,
+// (loops, causes.ts). without a writer the change is from outside (the host, sync): no writer learned,
 // no cause. run(scope, f) keeps the writer open: a call made in a run is that run's doing.
 //
 // a run lasts until its function returns; for an async function, until its first await. only
-// reads made while it lasts are its reads: read what you need before you await. after, the run's
-// own read throws stopped, the global read (read(key)) counts for nothing, and nothing is open:
+// reads made while it lasts are its reads: read what you need before you await. after, a read
+// counts for nothing, and nothing is open:
 // no scope, so nothing is made there and no write is somebody else's. why: javascript has no
 // async context, so after an await nothing says which run the code is part of; every bracket has
 // closed by then, as code after an await runs on an empty stack. the web has the same rule for
@@ -55,7 +56,8 @@ export class SchedulerError extends Error {
 }
 
 export type Equal<T = unknown> = (a: T, b: T) => boolean
-// a run's own read: after the run returned (an await), it throws stopped
+// a run's own handle: the writer open while it runs (current().writer), kept for a write after an
+// await. read through, after the run returned, it throws stopped
 export type Read = (key: unknown) => void
 
 export type Pair = readonly [key: string, value: unknown]
@@ -73,13 +75,17 @@ export type Scope = {
 
 // what is open: the scope, the pairs of a write made now (the info of each scope from the root
 // down to it), and its writer; none: from outside
-export type Open = { readonly scope: Scope; readonly pairs: readonly Pair[]; readonly by?: By }
+export type Open = {
+	readonly scope: Scope
+	readonly pairs: readonly Pair[]
+	readonly writer?: Writer
+}
 
 // a computation is a scope too: what is under it goes before each run of a compute, and
 // before each act of an effect
 export type Computation = Scope & {
 	readonly kind: "compute" | "effect"
-	readonly f: (read: Read) => unknown
+	readonly f: (previous: unknown) => unknown
 	readonly set?: (value: never) => void
 	readonly act?: (value: never, previous: never) => void
 	readonly equal?: Equal
@@ -87,7 +93,7 @@ export type Computation = Scope & {
 	runs: number
 	// a compute's: the last result given to set; an effect's: the last acted on
 	last?: { value: unknown }
-	// its latest run: what by names when it is given the computation
+	// its latest run: what writer names when it is given the computation
 	ran?: Ran
 	// an effect's: at its last act, the scopes made up to then and its cleanups' count. what was
 	// made under it since goes before each run
@@ -107,8 +113,8 @@ export type Computation = Scope & {
 export type Ended = "done" | "pending" | "failed" | "stopped" | "looping"
 
 export type Moment =
-	// by: the computation of the run that made the change, when told
-	| { due: Computation; tick: number; by?: Computation }
+	// writer: the computation of the run that made the change, when told
+	| { due: Computation; tick: number; writer?: Computation }
 	| { starts: Computation; run: number; rank: number }
 	| {
 		ends: Computation
@@ -129,14 +135,14 @@ export type Options = {
 	hook?: (moment: Moment) => void
 	// told when a promise settled: its result waits for the next pulse
 	wake?: () => void
-	// told each key it stops tracking: one nobody reads any more, at once when its last reader's
-	// run did not read it again or its last reader was disposed (a sweep now and then catches any
+	// told each key it stops tracking: one nobody reads any more, at once when its last writer's
+	// run did not read it again or its last writer was disposed (a sweep now and then catches any
 	// other)
 	forget?: (key: unknown) => void
 }
 
 // who made a change: a run's own read (that run), or a computation (its latest run)
-export type By = Read | Computation
+export type Writer = Read | Computation
 
 // a run. pulse: the pulse its cause is of (causeOf). cut: a loop mark it made was dropped
 export type Ran = {
@@ -175,7 +181,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 	const nodes = new Map<unknown, Node<unknown>>()
 	// each key's writer: the compute last named by a change of it
 	const writers = new Map<unknown, Computation>()
-	// each run's own read, to the run: what by names
+	// each run's own read, to the run: what writer names
 	const handles = new WeakMap<Read, Ran>()
 	const live = new Set<Computation>()
 	const order = createOrder<Computation>(() => live)
@@ -194,7 +200,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 	let reading: Ran | undefined
 	let running: Ran | undefined
 	// what is open: the scope, and the writer; none: undefined
-	let open: { scope: Scope; by?: By } | undefined
+	let open: { scope: Scope; writer?: Writer } | undefined
 
 	// scopes
 
@@ -243,11 +249,11 @@ export function createScheduler(options: Options = {}): Scheduler {
 		for (let o: Scope | undefined = open.scope; o; o = o.parent) chain.push(o)
 		const pairs: Pair[] = []
 		for (let i = chain.length - 1; i >= 0; i--) pairs.push(...chain[i].info)
-		return { scope: open.scope, pairs, by: open.by }
+		return { scope: open.scope, pairs, writer: open.writer }
 	}
 
 	// a cleanup opens its scope: a computation's written by it, any other's by the writer open
-	const opens = (o: Scope) => ({ scope: o, by: "kind" in o ? o as Computation : open?.by })
+	const opens = (o: Scope) => ({ scope: o, writer: "kind" in o ? o as Computation : open?.writer })
 
 	// on the scope open; already gone, f runs now
 	function cleanup(f: () => unknown) {
@@ -295,7 +301,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 		if ("kind" in o) drop(o as Computation)
 		const failed = clean(o)
 		o.state = "gone"
-		// gone: by it names no run
+		// gone: as a writer it names no run
 		if ("kind" in o) (o as Computation).ran = undefined
 		const p = o.parent
 		if (p) {
@@ -345,7 +351,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 	// a scope under the one open
 	function make(
 		kind: "compute" | "effect",
-		f: (read: Read) => unknown,
+		f: (previous: unknown) => unknown,
 		then: (value: never, previous: never) => void,
 		equal?: Equal<never>,
 		key?: unknown,
@@ -395,15 +401,15 @@ export function createScheduler(options: Options = {}): Scheduler {
 		return r.cause
 	}
 
-	// by: the run that made the change
-	function mark(c: Computation, t: number, by?: Ran) {
+	// writer: the run that made the change
+	function mark(c: Computation, t: number, writer?: Ran) {
 		if (c.state !== "alive") return
-		const cause = by && causeOf(by)
+		const cause = writer && causeOf(writer)
 		if (cause) causes.keep(c, cause)
 		const loop = causes.loop(cause, c)
 		// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
-		if (loop && by!.loop) {
-			by!.cut = true
+		if (loop && writer!.loop) {
+			writer!.cut = true
 			return
 		}
 		c.loop = loop
@@ -414,15 +420,19 @@ export function createScheduler(options: Options = {}): Scheduler {
 		}
 		if (order.has(c)) return
 		order.set(c, t)
-		pass(by ? { due: c, tick: t, by: by.c } : { due: c, tick: t })
+		pass(writer ? { due: c, tick: t, writer: writer.c } : { due: c, tick: t })
 	}
 
-	// these keys changed: what read them is due, at the next tick. by: who made the change (the
+	// these keys changed: what read them is due, at the next tick. writer: who made the change (the
 	// header); a compute named so becomes their writer. an effect is no one's writer: it writes
 	// in its acts, after the round's runs
-	function changed(keys: readonly unknown[], by?: By): number {
+	function changed(keys: readonly unknown[], writer?: Writer): number {
 		const t = ++tick
-		const r = by === undefined ? undefined : typeof by === "function" ? handles.get(by) : by.ran
+		const r = writer === undefined
+			? undefined
+			: typeof writer === "function"
+			? handles.get(writer)
+			: writer.ran
 		const w = r?.c.kind === "compute" && r.c.state === "alive" ? r.c : undefined
 		for (const key of keys) {
 			if (w) write(w, key)
@@ -522,7 +532,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 		reading = r
 		tracker.begin(c.node)
 		try {
-			out = { value: enter({ scope: c, by: own }, () => c.f(own)) }
+			out = { value: enter({ scope: c, writer: own }, () => c.f(c.last?.value)) }
 		} catch (e) {
 			out = e === PENDING ? { value: PENDING } : { error: e }
 		} finally {
@@ -571,7 +581,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 			reading = undefined
 			running = r
 			try {
-				enter({ scope: c, by: c }, () => (c.set as (value: unknown) => void)(v))
+				enter({ scope: c, writer: c }, () => (c.set as (value: unknown) => void)(v))
 			} catch (e) {
 				failed = { error: e }
 			} finally {
@@ -652,7 +662,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 		}
 		try {
 			const act = c.act as (value: unknown, previous: unknown) => void
-			enter({ scope: c, by: c }, () => act(a.value, c.last?.value))
+			enter({ scope: c, writer: c }, () => act(a.value, c.last?.value))
 		} catch (e) {
 			failed ??= { error: e }
 		} finally {
@@ -709,7 +719,7 @@ export function createScheduler(options: Options = {}): Scheduler {
 		const was = reading
 		reading = undefined
 		try {
-			return enter({ scope: o, by: open?.by }, f)
+			return enter({ scope: o, writer: open?.writer }, f)
 		} finally {
 			reading = was
 		}
@@ -722,22 +732,24 @@ export function createScheduler(options: Options = {}): Scheduler {
 		cleanup,
 		dispose,
 		run,
-		// tracked; a result not equal to the last goes to set. first runs at the next pulse. key:
-		// where set's results land, when the caller knows; then readers of it wait for this compute
-		// from the first pulse, rather than once it has written
+		// tracked; a result not equal to the last goes to set. first runs at the next pulse. f is
+		// given its last result (the last given to set; none yet: undefined).
+		// key: where set's results land, when the caller knows; then readers of it wait for this
+		// compute from the first pulse, rather than once it has written
 		compute: <T>(
-			f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 			set: (value: T) => void,
 			equal?: Equal<T>,
 			key?: unknown,
-		): Computation => make("compute", f, set, equal as Equal<never>, key),
+		): Computation => make("compute", f as Computation["f"], set, equal as Equal<never>, key),
 		// tracked; a result not equal to the one it last acted on is acted on after the round's
-		// last run. first runs at the next pulse
+		// last run. first runs at the next pulse. f is given the last value acted on (none yet:
+		// undefined)
 		effect: <T>(
-			f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 			act: (value: T, previous: T | undefined) => void,
 			equal?: Equal<T>,
-		): Computation => make("effect", f, act, equal as Equal<never>),
+		): Computation => make("effect", f as Computation["f"], act, equal as Equal<never>),
 		read,
 		changed,
 		pulse,
@@ -754,18 +766,18 @@ export type Scheduler = {
 	dispose: (o: Scope) => void
 	run: <T>(o: Scope, f: () => T) => T
 	compute: <T>(
-		f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		set: (value: T) => void,
 		equal?: Equal<T>,
 		key?: unknown,
 	) => Computation
 	effect: <T>(
-		f: (read: Read) => T | PromiseLike<T> | typeof PENDING,
+		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		act: (value: T, previous: T | undefined) => void,
 		equal?: Equal<T>,
 	) => Computation
 	read: (key: unknown) => void
-	changed: (keys: readonly unknown[], by?: By) => number
+	changed: (keys: readonly unknown[], writer?: Writer) => number
 	pulse: () => void
 	tick: () => number
 }

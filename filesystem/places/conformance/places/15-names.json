@@ -1,0 +1,103 @@
+{
+	"title": "a reader of names does not rerun on a place inside one of its members, does when a name is added or taken away",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"a": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"join": {
+					"names": []
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "a"
+			}
+		},
+		{
+			"op": "place",
+			"at": "A",
+			"name": "z",
+			"id": "Z",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "a"
+			}
+		},
+		{
+			"op": "place",
+			"at": "R",
+			"name": "b",
+			"expect": {},
+			"id": "C"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "a,b"
+			}
+		},
+		{
+			"op": "unplace",
+			"at": "R",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": "a"
+			}
+		}
+	]
+}

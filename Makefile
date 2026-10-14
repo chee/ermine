@@ -42,18 +42,15 @@ transport_src = extensions/subduction/c/transport.c extensions/subduction/c/tran
 wiring_flags = $(transport_flags)
 wiring_libs = $(transport_libs)
 wiring_src = extensions/subduction/c/wiring.c extensions/subduction/c/wiring_harness.c $(filter-out extensions/subduction/c/transport_harness.c,$(transport_src)) \
-	core/scheduler/c/scheduler.c core/places/c/places.c core/scheduler/c/tracker.c
+	core/scheduler/c/scheduler.c filesystem/places/c/places.c core/scheduler/c/tracker.c
 fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) conformance/c/protocol.c core/places/c/places.c core/places/c/places_harness.c core/places/c/trie.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/apply.c core/op/c/invert.c
-trie_src = $(harness_src) core/places/c/trie.c core/places/c/trie_harness.c
-protect_src = core/protect/c/protect.c core/protect/c/protect_harness.c $(harness_src)
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/world.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
 update_src = $(harness_src) conformance/c/protocol.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-ermine-store_src = ermine/store/c/store.c ermine/store/c/store_harness.c core/graph/c/table.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c $(harness_src)
-link_src = $(harness_src) conformance/c/protocol.c ermine/link/c/link.c ermine/link/c/link_harness.c ermine/link/c/world.c ermine/store/c/store.c core/places/c/places.c core/places/c/trie.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-guard_src = $(harness_src) conformance/c/protocol.c ermine/link/c/link.c ermine/link/c/guard_harness.c ermine/link/c/guard.c core/protect/c/protect.c ermine/link/c/world.c ermine/store/c/store.c core/places/c/places.c core/places/c/trie.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/world.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/files/c/names.c playground/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/files/c/diag.c playground/files/c/diag_harness.c ermine/encoding/c/json.c
@@ -65,7 +62,7 @@ store_src = playground/files/c/store.c playground/files/c/store_harness.c playgr
 # sys.c's Trash against homes of its own, no suite
 sys_src = playground/files/c/sys.c playground/files/c/foundation.c playground/files/c/sys_harness.c
 program_src = playground/files/c/program.c playground/files/c/watch.c playground/files/c/program_harness.c $(filter-out playground/files/c/store_harness.c,$(store_src)) \
-	core/scheduler/c/scheduler.c core/places/c/places.c core/scheduler/c/tracker.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
+	core/scheduler/c/scheduler.c filesystem/places/c/places.c core/scheduler/c/tracker.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
 program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -framework CoreFoundation,) -lpthread
 manifest_src = playground/files/c/manifest.c playground/files/c/manifest_harness.c playground/files/c/diag.c core/node/c/node.c \
 	ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
@@ -92,13 +89,10 @@ commit = extensions/subduction/c/commit-harness
 squish = core/op/c/squish-harness
 op-apply = core/op/c/apply-harness
 paths = core/scheduler/c/paths-harness
-places = core/places/c/places-harness
-trie = core/places/c/trie-harness
-protect = core/protect/c/protect-harness
+places = filesystem/places/c/places-harness
+protect = filesystem/protect/c/protect-harness
 update = core/node/c/update-harness
-ermine-store = ermine/store/c/store-harness
-link = ermine/link/c/link-harness
-guard = ermine/link/c/guard-harness
+guard = filesystem/places/c/guard-harness
 scheduler = core/scheduler/c/scheduler-harness
 names = playground/files/c/names-harness
 diag = playground/files/c/diag-harness
@@ -108,7 +102,7 @@ store = playground/files/c/store-harness
 program = playground/files/c/program-harness
 sys = playground/files/c/sys-harness
 
-LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places trie protect update ermine-store link guard scheduler names diag layout manifest store program sys
+LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places protect update guard scheduler names diag layout manifest store program sys
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -151,17 +145,11 @@ paths_tests = $(wildcard core/scheduler/typescript/paths_harness_test.ts)
 scheduler_suite = scheduler
 scheduler_tests = $(wildcard core/scheduler/typescript/scheduler_harness_test.ts)
 places_suite = places
-places_tests = $(wildcard core/places/typescript/places_harness_test.ts)
-trie_suite = trie
-trie_tests = $(wildcard core/places/typescript/trie_harness_test.ts)
+places_tests = $(wildcard filesystem/places/typescript/places_harness_test.ts)
 protect_suite = protect
-protect_tests = $(wildcard core/protect/typescript/protect_harness_test.ts)
-ermine-store_suite = store
-ermine-store_tests = $(wildcard ermine/store/typescript/store_harness_test.ts)
-link_suite = link
-link_tests = $(wildcard ermine/link/typescript/link_harness_test.ts)
+protect_tests = $(wildcard filesystem/protect/typescript/protect_harness_test.ts)
 guard_suite = guard
-guard_tests = $(wildcard ermine/link/typescript/guard_harness_test.ts)
+guard_tests = $(wildcard filesystem/places/typescript/guard_harness_test.ts)
 # the rest: env var, then the folders of their scenarios (conformance/<lib>/)
 pack_test = PACK_HARNESS conformance/pack/ conformance/cbor/
 blop_test = BLOP_HARNESS conformance/blop/

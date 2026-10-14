@@ -1,0 +1,89 @@
+{
+	"title": "one children node under two keys, written through one: both readers rerun",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"p": "P",
+				"q": "Q"
+			},
+			"expect": {}
+		},
+		{
+			"op": "share",
+			"value": {},
+			"keys": [
+				[
+					"children",
+					"P"
+				],
+				[
+					"children",
+					"Q"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"get": [
+					"p",
+					"n"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "q",
+			"scope": "o",
+			"f": {
+				"get": [
+					"q",
+					"n"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"at": "P",
+			"name": "n",
+			"expect": {},
+			"id": "X"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "p",
+			"expect": {
+				"runs": 2,
+				"value": "X"
+			}
+		},
+		{
+			"op": "state",
+			"name": "q",
+			"expect": {
+				"runs": 2,
+				"value": "X"
+			}
+		}
+	]
+}

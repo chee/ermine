@@ -178,3 +178,12 @@ s.changed(keys, by?)                  // these landed
    equality, tick; tests, a suite, the C
 3. ermine.ts: processes, programs, loaders, records, the guarded API, the wiring
 4. a bench against today's scheduler
+- 10-14, chee: "let's give computations their prev value as their first arg:)". built: f(previous,
+  read), previous the last result given to set (an effect's: last acted on), undefined before
+  the first; an equal result is not set, so previous stays the last one set. scenario
+  50-previous; C ported by an agent
+- 10-14, chee: "make it f(previous). get can get the current scope with scheduler.current() and then
+  take the writer from that, which'll be what we do for the api for processes". built: f(previous);
+  reads all global (after an await a read counts for nothing; 16-async-read changed); a write after
+  an await names the run through current().writer kept from the run's start. by renamed writer
+  (chee chose "writer")

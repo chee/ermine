@@ -1,18 +1,42 @@
 {
 	"title": "disposed in a pulse: what was due, or waiting to act, does not run",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
 		{
 			"op": "effect",
 			"name": "e1",
 			"scope": "o",
-			"f": { "read": "a" },
+			"f": {
+				"read": "a"
+			},
 			"act": {
 				"do": [
-					{ "log": ["e1", { "given": "value" }] },
-					{ "dispose": "e2" },
-					{ "write": ["b", { "given": "value" }] },
-					{ "dispose": "c" }
+					{
+						"log": [
+							"e1",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"dispose": "e2"
+					},
+					{
+						"write": [
+							"b",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"dispose": "c"
+					}
 				]
 			}
 		},
@@ -20,40 +44,147 @@
 			"op": "effect",
 			"name": "e2",
 			"scope": "o",
-			"f": { "read": "a" },
-			"act": { "log": ["e2", { "given": "value" }] }
+			"f": {
+				"read": "a"
+			},
+			"act": {
+				"log": [
+					"e2",
+					{
+						"given": "value"
+					}
+				]
+			}
 		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "sum": [{ "read": "b" }, 100] },
+			"f": {
+				"sum": [
+					{
+						"read": "b"
+					},
+					100
+				]
+			},
 			"to": "c"
 		},
-		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 4 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["e1", 1]] } },
-		{ "op": "get", "key": "c", "expect": { "value": 100 } },
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e1",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 100
+			}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "e1", "tick": 1 },
-					{ "due": "e2", "tick": 2 },
-					{ "due": "c", "tick": 3 },
-					{ "starts": "e1", "run": 1, "rank": 0 },
-					{ "ends": "e1", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "e2", "run": 1, "rank": 0 },
-					{ "ends": "e2", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 1, "rank": 0 },
-					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
-					{ "due": "c", "tick": 6, "by": "e1" },
-					{ "acts": "e1", "run": 1 }
+					{
+						"due": "e1",
+						"tick": 1
+					},
+					{
+						"due": "e2",
+						"tick": 2
+					},
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "e1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "c",
+						"tick": 6,
+						"writer": "e1"
+					},
+					{
+						"acts": "e1",
+						"run": 1
+					}
 				]
 			}
 		},
-		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 7 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["e1", 2]] } }
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e1",
+						2
+					]
+				]
+			}
+		}
 	]
 }

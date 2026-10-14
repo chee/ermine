@@ -3,7 +3,6 @@
 // sweep, and scopes: what is open, and nothing after an await
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import {
-	type By,
 	type Computation,
 	createScheduler,
 	type Moment,
@@ -11,6 +10,7 @@ import {
 	PENDING,
 	SchedulerError,
 	type Scope,
+	type Writer,
 } from "./scheduler.ts"
 
 // a scheduler over a little store: write(key, value, by?) keeps it and says it changed. at(f): f
@@ -19,7 +19,7 @@ function setup() {
 	const moments: Moment[] = []
 	const s = createScheduler({ hook: (m) => void moments.push(m) })
 	const store = new Map<unknown, unknown>()
-	const write = (key: unknown, v: unknown, by?: By) => {
+	const write = (key: unknown, v: unknown, by?: Writer) => {
 		store.set(key, v)
 		return s.changed([key], by)
 	}
@@ -38,6 +38,37 @@ const unscoped = (f: () => unknown) => {
 	const e = assertThrows(f, SchedulerError)
 	assertEquals(e.code, "unscoped")
 }
+
+Deno.test("a computation's f is given its last result: a compute's last set, an effect's last acted on", () => {
+	const { s, at, write, get } = setup()
+	write("k", 1)
+	// results in the same ten are equal: an equal result is not set, so what is given stays the
+	// last one set, not the last result
+	const tens = (a: number, b: number) => Math.floor(a / 10) === Math.floor(b / 10)
+	const given: unknown[] = []
+	at(() =>
+		s.compute(
+			(previous: number | undefined) => (given.push(previous), get("k") as number),
+			() => {},
+			tens,
+		)
+	)
+	const acted: unknown[] = []
+	at(() =>
+		s.effect(
+			(previous: number | undefined) => (acted.push(previous), get("k") as number),
+			() => {},
+			tens,
+		)
+	)
+	for (const k of [5, 12, 13]) {
+		s.pulse()
+		write("k", k)
+	}
+	s.pulse()
+	assertEquals(given, [undefined, 1, 1, 12])
+	assertEquals(acted, [undefined, 1, 1, 12])
+})
 
 Deno.test("keys are opaque, by identity: strings, symbols, objects", () => {
 	const { s, at, write, get } = setup()
@@ -185,29 +216,31 @@ Deno.test("read: tracked in a run's synchronous part; outside a run, and in run(
 	assertEquals(runs, 2)
 })
 
-Deno.test("a run's own read after an await throws stopped; the plain read can't tell", async () => {
-	const { s, at, ends } = setup()
+Deno.test("after an await a read counts for nothing; the writer kept from the run's start still names the run", async () => {
+	const { s, at, ends, write, get, moments } = setup()
 	let resolve!: () => void
 	const gate = new Promise<void>((r) => resolve = r)
-	let caught: unknown
 	const c = at(() =>
-		s.compute(async (read) => {
+		s.compute(async () => {
+			const writer = s.current()?.writer
 			await gate
-			try {
-				read("a")
-			} catch (e) {
-				caught = e
-			}
+			get("a")
+			write("w", 1, writer)
 			return 1
 		}, () => {})
 	)
+	const b = at(() => s.compute(() => get("w"), () => {}))
 	s.pulse()
 	resolve()
 	await new Promise((r) => setTimeout(r, 0))
 	s.pulse()
-	assert(caught instanceof SchedulerError)
-	assertEquals(caught.code, "stopped")
 	assertEquals(ends(c).map((m) => m.ended), ["pending", "done"])
+	assert(moments.some((m) => "due" in m && m.due === b && m.writer === c))
+	// a was read after the await: nothing reruns c
+	const before = ends(c).length
+	write("a", 2)
+	s.pulse()
+	assertEquals(ends(c).length, before)
 })
 
 Deno.test("wake: told when a promise settles; its result lands at the next pulse", async () => {
@@ -351,7 +384,7 @@ function bounded(limit = 2000) {
 		},
 	})
 	const store = new Map<unknown, unknown>()
-	const write = (key: unknown, v: unknown, by?: By) => {
+	const write = (key: unknown, v: unknown, by?: Writer) => {
 		store.set(key, v)
 		return s.changed([key], by)
 	}
@@ -379,14 +412,14 @@ Deno.test("made in an act, under the effect, its set changing what the effect re
 })
 
 Deno.test("a cleanup writing what its computation read, on a plain scope made in the run: the loop ends, as one on the computation does", () => {
-	// written by the writer open (current().by), as a program that knows no more would
+	// written by the writer open (current().writer), as a program that knows no more would
 	const go = (nested: boolean) => {
 		const { s, at, write, get, store, runs } = bounded(50)
 		store.set("k", 0)
 		at(() =>
 			s.compute(() => {
 				const k = get("k") as number
-				const f = () => void write("k", k + 1, s.current()?.by)
+				const f = () => void write("k", k + 1, s.current()?.writer)
 				if (nested) s.run(s.scope(), () => s.cleanup(f))
 				else s.cleanup(f)
 				return 0
@@ -457,15 +490,14 @@ Deno.test("a set that writes and then throws: its next result is given to set, e
 	assertEquals(store.get("out"), 0)
 })
 
-Deno.test("changed with by: a run's own read names that run; without by, the change is outside", () => {
+Deno.test("changed with a writer: the run, from current().writer, names that run; without one, the change is outside", () => {
 	for (const named of [true, false]) {
 		const { s, at, write, get, moments } = setup()
 		write("x", 1)
 		// a writes w in its run; b reads w
 		const a = at(() =>
-			s.compute((read) => {
-				read("x")
-				write("w", get("x"), named ? read : undefined)
+			s.compute(() => {
+				write("w", get("x"), named ? s.current()?.writer : undefined)
 				return 0
 			}, () => {})
 		)
@@ -473,7 +505,7 @@ Deno.test("changed with by: a run's own read names that run; without by, the cha
 		s.pulse()
 		write("x", 2)
 		s.pulse()
-		const by = moments.flatMap((m) => "due" in m && m.due === b ? [m.by === a] : [])
+		const by = moments.flatMap((m) => "due" in m && m.due === b ? [m.writer === a] : [])
 		const ranks = moments.flatMap((m) => "starts" in m && m.starts === b ? [m.rank] : [])
 		// named: a is w's writer, so b ranks after it
 		assertEquals([by, ranks], named ? [[false, true], [0, 1]] : [[false, false], [0, 0]])
@@ -485,8 +517,8 @@ Deno.test("made in a run known to loop, its set changing what that run read: the
 	store.set("k", 0)
 	// each run makes a compute whose set says k changed, its value the same
 	at(() =>
-		s.compute((read) => {
-			read("k")
+		s.compute(() => {
+			s.read("k")
 			const c: Computation = s.compute(() => 0, (v) => {
 				store.set("k", v)
 				s.changed(["k"], c)
@@ -623,15 +655,15 @@ Deno.test("scope: run(o, f) opens o for f, the one before back after; a throw to
 	assertEquals(s.current(), undefined)
 })
 
-Deno.test("scope: a run opens its computation, its info the run's, written by its own read; a set and an act by the computation", () => {
+Deno.test("scope: a run opens its computation, its info the run's, written by the run; a set and an act by the computation", () => {
 	const { s, at, write, get } = setup()
 	const seen: Record<string, ReturnType<typeof s.current>> = {}
 	let c!: Computation, e!: Computation
 	let own!: unknown
 	const notes = at(() => s.scope([["actor", "notes"]]))
 	s.run(notes, () => {
-		c = s.compute((read) => {
-			own = read
+		c = s.compute(() => {
+			own = s.current()?.writer
 			get("a")
 			seen.run = s.current()
 			return 1
@@ -640,7 +672,7 @@ Deno.test("scope: a run opens its computation, its info the run's, written by it
 	})
 	const t = write("a", 1)
 	s.pulse()
-	const shown = (x: ReturnType<typeof s.current>) => [x!.scope, x!.pairs, x!.by]
+	const shown = (x: ReturnType<typeof s.current>) => [x!.scope, x!.pairs, x!.writer]
 	const pairs = (
 		n: number,
 		mark: number,
@@ -662,7 +694,7 @@ Deno.test("scope: a run's scope is its own: a pulse with another scope open lend
 	write("a", 1)
 	s.run(s.root([["actor", "host"]]), () => s.pulse())
 	assertStrictEquals(seen!.scope, c)
-	assertEquals([seen!.pairs.map(([k]) => k), typeof seen!.by], [["run", "mark"], "function"])
+	assertEquals([seen!.pairs.map(([k]) => k), typeof seen!.writer], [["run", "mark"], "function"])
 })
 
 Deno.test("scope: after an await in a run nothing is open; making is unscoped", async () => {
@@ -726,7 +758,7 @@ Deno.test("scope: a cleanup opens its scope: a computation's written by it", () 
 	write("a", 2)
 	s.pulse()
 	s.dispose(p)
-	assertEquals(seen.map((x) => [x!.scope, x!.by]), [[c, c], [p, undefined]])
+	assertEquals(seen.map((x) => [x!.scope, x!.writer]), [[c, c], [p, undefined]])
 	assertEquals(seen[1]!.pairs, [["why", "plain"]])
 })
 
@@ -736,8 +768,8 @@ Deno.test("scope: a click dispatched in a run, its scope made there, is under th
 	let own!: unknown
 	const notes = at(() => s.scope([["actor", "notes"]]))
 	const c = s.run(notes, () =>
-		s.compute((read) => {
-			own = read
+		s.compute(() => {
+			own = s.current()?.writer
 			get("a")
 			// dispatchEvent: sync, a scope of the event's, under the one open
 			s.run(s.scope([["event", "click"]]), () => void (seen = s.current()))
@@ -747,7 +779,7 @@ Deno.test("scope: a click dispatched in a run, its scope made there, is under th
 	s.pulse()
 	assertStrictEquals(seen!.scope.parent, c)
 	assertEquals(seen!.pairs.map(([k]) => k), ["actor", "run", "mark", "event"])
-	assertStrictEquals(seen!.by, own)
+	assertStrictEquals(seen!.writer, own)
 })
 
 Deno.test("scope: a handler's call, as a scope: under the definer's (it dies with it), the caller and trusted as its info", () => {

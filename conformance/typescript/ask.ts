@@ -35,7 +35,7 @@ export type Options = {
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
-	for (const group of ["core", "ermine"]) {
+	for (const group of ["core", "filesystem", "ermine"]) {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
 			const dir = `${root}${group}/${p.name}/conformance`
 			let names: Deno.DirEntry[]

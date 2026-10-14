@@ -1,12 +1,31 @@
 {
 	"title": "a run opens its computation, written by its own read, its info the run's: its number, the tick of the mark that made it due; an act is written by the effect",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "notes"]], "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "do": [{ "read": "x" }, { "current": null }] },
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"current": null
+					}
+				]
+			},
 			"to": "c",
 			"expect": {}
 		},
@@ -14,19 +33,41 @@
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
-			"f": { "read": "x" },
-			"act": { "log": { "current": null } },
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"log": {
+					"current": null
+				}
+			},
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "get",
 			"key": "c",
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [["actor", "notes"], ["run", 1], ["mark", 1]],
-					"by": "c"
+					"pairs": [
+						[
+							"actor",
+							"notes"
+						],
+						[
+							"run",
+							1
+						],
+						[
+							"mark",
+							1
+						]
+					],
+					"writer": "c"
 				}
 			}
 		},
@@ -34,20 +75,61 @@
 			"op": "log",
 			"expect": {
 				"log": [
-					{ "scope": "e", "pairs": [["actor", "notes"], ["run", 1], ["mark", 2]], "by": "e" }
+					{
+						"scope": "e",
+						"pairs": [
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"run",
+								1
+							],
+							[
+								"mark",
+								2
+							]
+						],
+						"writer": "e"
+					}
 				]
 			}
 		},
-		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 4 } },
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "get",
 			"key": "c",
 			"expect": {
 				"value": {
 					"scope": "c",
-					"pairs": [["actor", "notes"], ["run", 2], ["mark", 4]],
-					"by": "c"
+					"pairs": [
+						[
+							"actor",
+							"notes"
+						],
+						[
+							"run",
+							2
+						],
+						[
+							"mark",
+							4
+						]
+					],
+					"writer": "c"
 				}
 			}
 		},
@@ -55,7 +137,24 @@
 			"op": "log",
 			"expect": {
 				"log": [
-					{ "scope": "e", "pairs": [["actor", "notes"], ["run", 2], ["mark", 4]], "by": "e" }
+					{
+						"scope": "e",
+						"pairs": [
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"run",
+								2
+							],
+							[
+								"mark",
+								4
+							]
+						],
+						"writer": "e"
+					}
 				]
 			}
 		}

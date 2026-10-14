@@ -1,0 +1,380 @@
+{
+	"title": "rules that are not a list, entries that are not maps, the actor an object or a list, values as values",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": {
+				"actor": "chee"
+			},
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "rules are not a list"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "rules are not a list"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				1,
+				"x",
+				null,
+				[
+					"actor",
+					"chee"
+				],
+				{
+					"actor": "chee",
+					"op": "read"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": {
+						"name": "chee",
+						"keys": [
+							1,
+							2,
+							{
+								"a": true
+							}
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": {
+					"keys": [
+						1,
+						2,
+						{
+							"a": true
+						}
+					],
+					"name": "chee"
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": {
+					"keys": [
+						1,
+						2,
+						{
+							"a": false
+						}
+					],
+					"name": "chee"
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": {
+					"name": "chee"
+				}
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"id": 7
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "7"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"op": [
+						"read"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"path": "home"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"path": [
+					"home"
+				]
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"field": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A",
+				"field": [
+					"x"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "x"
+			}
+		}
+	]
+}

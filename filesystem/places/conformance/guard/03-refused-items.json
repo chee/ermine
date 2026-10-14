@@ -1,0 +1,164 @@
+{
+	"title": "a refused member stays in a list as REFUSED, in its place; reading, editing or placing under it is refused, never asked",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"a": "X",
+				"b": "Y"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"denyid": "Y"
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"get": [
+					"b"
+				],
+				"full": true
+			},
+			"expect": {
+				"value": [
+					"REFUSED",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"members": []
+			},
+			"expect": {
+				"value": [
+					"X",
+					"REFUSED"
+				]
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"try": {
+					"read": [
+						{
+							"at": [
+								"b"
+							]
+						},
+						"value"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"try": {
+					"edit": [
+						{
+							"at": [
+								"b"
+							]
+						},
+						"value",
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						]
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"try": {
+					"place": [
+						[
+							{
+								"at": [
+									"b"
+								]
+							},
+							"n"
+						],
+						"Q"
+					]
+				}
+			},
+			"expect": {
+				"value": "refused"
+			}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "chee",
+			"e": {
+				"read": [
+					{
+						"at": [
+							"b"
+						]
+					},
+					"value"
+				]
+			},
+			"expect": {
+				"error": "refused",
+				"reason": "refused",
+				"op": "read"
+			}
+		},
+		{
+			"op": "node",
+			"part": "children",
+			"id": "R",
+			"expect": {
+				"value": {
+					"a": "X",
+					"b": "Y"
+				}
+			}
+		}
+	]
+}

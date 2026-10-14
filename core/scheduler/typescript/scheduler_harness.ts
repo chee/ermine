@@ -4,8 +4,8 @@
 // The harness plays the host: it keeps a value at each key, and when a compute's result is set
 // it writes it at the compute's key (to) and says changed([to], the compute), as ermine.ts will.
 // Scopes and computations share one namespace of names. Keys are strings. A change the harness
-// makes in a computation's code names that computation as by (a write in a run: the run's own
-// read); the host's own (write, changed) name none. info: a scope's pairs, [[key, value]..]
+// makes in a computation's code names that computation as the writer (a write in a run: the run,
+// as current().writer gave it at the run's start); the host's own (write, changed) name none. info: a scope's pairs, [[key, value]..]
 //
 //   {"op":"root","name":s,"info"?:pairs}                                             → {}
 //   {"op":"scope","name":s,"info"?:pairs,"parent"?:p}  under p; none: under the one open
@@ -35,7 +35,7 @@
 //   {"op":"current"}   what is open, as the form current shows it              → {"value":v}
 //
 // a moment, computations by name, an error as below:
-//   {"due":c,"tick":t,"by"?:c}  {"starts":c,"run":n,"rank":r}  {"acts":c,"run":n,"error"?:s}
+//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n,"rank":r}  {"acts":c,"run":n,"error"?:s}
 //   {"ends":c,"run":n,"ended":"done"|"pending"|"failed"|"stopped"|"looping","equal"?:b,
 //    "error"?:s,"waits"?:c,"through"?:[c..],"reads"?:[k..]}   reads: when asked for
 // an error: a scheduler error's code ("stopped", "disposed"), "pending" for a thrown PENDING,
@@ -46,13 +46,15 @@
 //   {"read":k}          the key read (tracked in a run), its value; none: null
 //   {"sum":[e..]}       added; null is 0        {"mod":[a,b]}    a mod b; null is 0
 //   {"eq":[a,b]}        equal by JSON           {"if":[test,then,else]}   test true, then, else else
-//   {"given":"value"}  {"given":"previous"}   in an act: its value, and the one acted on before
+//   {"given":"value"}  {"given":"previous"}   in an act: its value, and the one acted on before;
+//                       {"given":"previous"} in a run: the computation's last result (a compute's
+//                       last given to set, an effect's last acted on); none yet: null
 //   {"log":e}           e logged; e             {"do":[e..]}     each in order; the last
-//   {"write":[k,e]}     e kept at k, then changed([k], by); e. by: in a run (after an await
-//                       too), the run's own read; in a set, act, cleanup or run(), the
+//   {"write":[k,e]}     e kept at k, then changed([k], writer); e. writer: in a run (after an await
+//                       too), the run (current().writer kept from its start); in a set, act, cleanup or run(), the
 //                       computation; else none
-//   {"write":[k,e,null]}  the same, said with no by: from outside
-//   {"write":[k,e,"open"]}  the same, by the writer open (current().by)
+//   {"write":[k,e,null]}  the same, said with no writer: from outside
+//   {"write":[k,e,"open"]}  the same, by the writer open (current().writer)
 //   {"throw":e}         e evaluated: PENDING (below) is thrown as itself, anything else as an
 //                       error of message e
 //   {"pending":null}    PENDING: returned by f, the compute's run ends pending; thrown, the same
@@ -62,13 +64,12 @@
 //   {"in":[s,e]}        e in run(s): untracked
 //   {"scope":[s,info,p?]}  s made under p, else under the one open; null
 //   {"within":[info,e]}  e in run(a new scope of info, under the one open, unnamed): untracked
-//   {"current":null}    what is open: {"scope":s,"pairs":[[k,v]..],"by"?:c}, by the computation
+//   {"current":null}    what is open: {"scope":s,"pairs":[[k,v]..],"writer"?:c}, the computation
 //                       of the writer; nothing: null
 //   {"cleanup":[s,e]}   e when s is cleaned up; s null: the scope open; null
 //   {"dispose":s}       s disposed; null
 //   {"quote":x}         x as it is
 import {
-	type By,
 	type Computation,
 	createScheduler,
 	type Moment,
@@ -77,6 +78,7 @@ import {
 	type Read,
 	SchedulerError,
 	type Scope,
+	type Writer,
 } from "@ermine/scheduler"
 import { serve } from "../../../conformance/typescript/harness.ts"
 
@@ -90,7 +92,7 @@ let moments: Moment[] = []
 let forgotten: unknown[] = []
 const named = new Map<string, Scope>()
 const names = new Map<Scope, string>()
-// each run's own read, to its computation's name
+// each run's handle (its current().writer), to its computation's name
 const readers = new WeakMap<Read, string>()
 const promises = new Map<string, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
 
@@ -106,7 +108,7 @@ const nameOf = (c: Computation) => names.get(c)!
 
 function moment(m: Moment, reads: boolean): Json {
 	if ("due" in m) {
-		return m.by ? { due: nameOf(m.due), tick: m.tick, by: nameOf(m.by) } : {
+		return m.writer ? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.writer) } : {
 			due: nameOf(m.due),
 			tick: m.tick,
 		}
@@ -153,12 +155,12 @@ function current(): Json {
 	const open = s.current()
 	if (open === undefined) return null
 	const out: Record<string, Json> = { scope: names.get(open.scope) ?? null, pairs: open.pairs }
-	const by = open.by === undefined
+	const writer = open.writer === undefined
 		? undefined
-		: typeof open.by === "function"
-		? readers.get(open.by)
-		: names.get(open.by)
-	if (by !== undefined) out.by = by
+		: typeof open.writer === "function"
+		? readers.get(open.writer)
+		: names.get(open.writer)
+	if (writer !== undefined) out.writer = writer
 	return out
 }
 
@@ -167,14 +169,15 @@ function keep(key: string, v: Json) {
 	else store.set(key, v)
 }
 
-// what an expression is evaluated in: the run's read, the computation, an act's values
-type Ctx = { read?: Read; self?: Scope; value?: Json; previous?: Json }
+// what an expression is evaluated in: the run's writer (current().writer at its start), the
+// computation, an act's values
+type Ctx = { writer?: Writer; self?: Scope; value?: Json; previous?: Json }
 
 const num = (v: Json) => (v === null || v === undefined ? 0 : v as number)
 
-// who a change in this code is by: the run's own read, else the computation
-const byOf = (ctx: Ctx): By | undefined =>
-	ctx.read ?? (ctx.self && "kind" in ctx.self ? ctx.self as Computation : undefined)
+// who a change in this code is by, its writer: the run, else the computation
+const writerOf = (ctx: Ctx): Writer | undefined =>
+	ctx.writer ?? (ctx.self && "kind" in ctx.self ? ctx.self as Computation : undefined)
 
 function evaluate(e: Json, ctx: Ctx): unknown {
 	if (e === null || typeof e !== "object") return e
@@ -184,8 +187,7 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 	switch (form) {
 		case "read": {
 			const k = evaluate(arg, ctx) as string
-			if (ctx.read) ctx.read(k)
-			else s.read(k)
+			s.read(k)
 			return store.get(k) ?? null
 		}
 		case "sum":
@@ -212,7 +214,10 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const k = evaluate(a[0], ctx) as string
 			const v = evaluate(a[1], ctx)
 			keep(k, v)
-			s.changed([k], a.length < 3 ? byOf(ctx) : a[2] === "open" ? s.current()?.by : undefined)
+			s.changed(
+				[k],
+				a.length < 3 ? writerOf(ctx) : a[2] === "open" ? s.current()?.writer : undefined,
+			)
 			return v
 		}
 		case "throw": {
@@ -228,19 +233,19 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			return a.length > 1 ? promise.then(() => evaluate(a[1], ctx)) : promise
 		}
 		case "run":
-			return s.run(ctx.self!, () => evaluate(arg, { ...ctx, read: undefined }))
+			return s.run(ctx.self!, () => evaluate(arg, { ...ctx, writer: undefined }))
 		case "in":
-			return s.run(scope(a[0]), () => evaluate(a[1], { ...ctx, read: undefined }))
+			return s.run(scope(a[0]), () => evaluate(a[1], { ...ctx, writer: undefined }))
 		case "scope":
 			name(s.scope(a[1] as Pair[], a[2] === undefined ? undefined : scope(a[2])), a[0] as string)
 			return null
 		case "within":
-			return s.run(s.scope(a[0] as Pair[]), () => evaluate(a[1], { ...ctx, read: undefined }))
+			return s.run(s.scope(a[0] as Pair[]), () => evaluate(a[1], { ...ctx, writer: undefined }))
 		case "current":
 			return current()
 		case "cleanup": {
 			// on the scope open when it is the one named (or none is), else with that one open
-			const f = () => evaluate(a[1], { ...ctx, read: undefined })
+			const f = () => evaluate(a[1], { ...ctx, writer: undefined })
 			if (a[0] === null) {
 				s.cleanup(f)
 				return null
@@ -262,11 +267,13 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 
 const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-// a computation's f, as the program: evaluated with its run's read
+// a computation's f, as the program: evaluated with its last result, and the run's writer kept
+// from its start (current().writer), so a write after an await is still the run's
 function program(r: Request, self: () => Scope) {
-	return (read: Read) => {
-		readers.set(read, r.name as string)
-		return evaluate(r.f, { read, self: self() })
+	return (previous: unknown) => {
+		const writer = s.current()?.writer
+		if (typeof writer === "function") readers.set(writer, r.name as string)
+		return evaluate(r.f, { writer, self: self(), previous: previous as Json })
 	}
 }
 

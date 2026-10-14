@@ -1,0 +1,119 @@
+{
+	"title": "a refused read is still tracked: a rule change reruns it",
+	"steps": [
+		{
+			"op": "value",
+			"id": "A",
+			"value": "secret",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "chee",
+			"guard": "g",
+			"f": {
+				"try": {
+					"read": [
+						"A",
+						"value"
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "refused"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "rules",
+			"patches": [
+				{
+					"path": [],
+					"value": [
+						{
+							"actor": "chee",
+							"op": "read"
+						}
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "secret"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "rules",
+			"patches": [
+				{
+					"path": [],
+					"value": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": "refused"
+			}
+		}
+	]
+}

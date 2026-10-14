@@ -143,6 +143,8 @@ struct noderec {
 
 struct tb_table {
 	map entries, ids, nodes, groups;
+	tb_event event;
+	void *ctx;
 	tb_key *ids_out;
 	size_t ids_count, ids_cap;
 	tb_entry *at_out;
@@ -151,11 +153,12 @@ struct tb_table {
 	size_t who_count, who_cap;
 };
 
-tb_table *tb_new(void) {
+tb_table *tb_make(tb_event event, void *ctx) {
 	tb_table *t = xrealloc(NULL, sizeof *t);
-	*t = (tb_table){0};
+	*t = (tb_table){.event = event, .ctx = ctx};
 	return t;
 }
+tb_table *tb_new(void) { return tb_make(NULL, NULL); }
 
 static void free_map(map *m) { free(m->buckets); }
 void tb_free(tb_table *t) {
@@ -307,6 +310,7 @@ int tb_add(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
 	if (e != NULL) return e->group->node->node == node ? 0 : TB_ALREADY_THERE;
 	place(t, part, id, node);
+	if (t->event) t->event(t->ctx, part, id);
 	return 0;
 }
 
@@ -318,11 +322,13 @@ void tb_sub(tb_table *t, tb_key part, tb_key id, void *node) {
 		tb_key p = keep(part), i = keep(id);
 		take(t, e);
 		place(t, p, i, node);
+		if (t->event) t->event(t->ctx, p, i);
 		drop(p);
 		drop(i);
 		return;
 	}
 	place(t, part, id, node);
+	if (t->event) t->event(t->ctx, part, id);
 }
 
 void *tb_get(const tb_table *t, tb_key part, tb_key id) {
@@ -365,30 +371,70 @@ const tb_where *tb_who(tb_table *t, const void *node, size_t *length) {
 	return t->who_out;
 }
 
+// keys kept to tell of after they are taken: the table's copies go with the entries
+typedef struct {
+	tb_key part, id;
+} told;
+static void told_free(told *v, size_t n) {
+	for (size_t i = 0; i < n; i++) drop(v[i].part), drop(v[i].id);
+	free(v);
+}
+static void told_all(tb_table *t, told *v, size_t n) {
+	for (size_t i = 0; i < n; i++) t->event(t->ctx, v[i].part, v[i].id);
+	told_free(v, n);
+}
+
 int tb_del(tb_table *t, tb_key part, tb_key id) {
 	entry *e = find_entry(t, part, id);
 	if (e == NULL) return TB_NOTHING_THERE;
+	if (t->event == NULL) {
+		take(t, e);
+		return 0;
+	}
+	// the keys may be the table's own copies, which take frees
+	tb_key p = keep(part), i = keep(id);
 	take(t, e);
+	t->event(t->ctx, p, i);
+	drop(p);
+	drop(i);
 	return 0;
 }
 
 int tb_del_part(tb_table *t, tb_key part, const void *node) {
 	group *g = find_group(t, node, part);
 	if (g == NULL) return TB_NOTHING_THERE;
+	told *v = NULL;
+	size_t n = 0;
+	if (t->event) {
+		v = xrealloc(NULL, g->count * sizeof *v);
+		for (entry *e = g->first; e; e = e->group_next) v[n++] = (told){keep(g->part), keep(e->id->id)};
+	}
 	// the last entry takes the group with it
 	while (g->first->group_next != NULL) take(t, g->first);
 	take(t, g->first);
+	if (t->event) told_all(t, v, n);
 	return 0;
 }
 
 int tb_del_node(tb_table *t, const void *node) {
 	noderec *n = find_node(t, node);
 	if (n == NULL) return TB_NOTHING_THERE;
+	told *v = NULL;
+	size_t count = 0, cap = 0;
+	if (t->event) {
+		for (group *g = n->first; g; g = g->next) {
+			for (entry *e = g->first; e; e = e->group_next) {
+				GROW(v, count, cap);
+				v[count++] = (told){keep(g->part), keep(e->id->id)};
+			}
+		}
+	}
 	for (;;) {
 		group *g = n->first;
 		if (g->first->group_next == NULL && g->next == NULL) break;
 		take(t, g->first);
 	}
 	take(t, n->first->first);
+	if (t->event) told_all(t, v, count);
 	return 0;
 }

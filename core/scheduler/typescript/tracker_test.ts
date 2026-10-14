@@ -691,9 +691,9 @@ Deno.test("scheduler: a reader linked twice to a spot runs once when it changes,
 	let runs = 0
 	let shape = ["a", "b"]
 	s.run(s.root(), () =>
-		s.compute((read) => {
+		s.compute(() => {
 			runs++
-			for (const k of shape) read(k)
+			for (const k of shape) s.read(k)
 			return runs
 		}, () => {}))
 	s.pulse()

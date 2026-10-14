@@ -1,22 +1,20 @@
-// places over nodes and a table, where places' own fuzz (places_test.ts) and the places suite do
-// not reach: writes from items as well as entries, names that are not names, arrays holding
-// what is no entry, names holding what is no array, children nodes put, replaced and taken out
+// places' writes over entries and a table, where places' own tests and suites do not reach: names
+// that are not names, names holding what is no id, children entries put, replaced and taken out
 // between writes. after every write:
-//   - each node it gave back is the one there now, at a new change, and that change's undo takes
-//     its value back to what it was; every other node is as it was (same node, change, value)
+//   - each entry it gave back is the one there now, at a new change, and that change's undo takes
+//     its value back to what it was; every other entry is as it was (same entry, change, value)
 //   - a refused write changes nothing at all
-//   - opened places (with ., .. and / steps) give what get gives
-//   - every item found (from the root, an entry or an item; get, lookup) is found again from its
-//     start by path(item); lookup with all is lib's lookups; names are the arrays' names
+//   - every path lookup finds has something at it, and the nearest is the first of all; list is
+//     the names holding ids
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import apply from "@ermine/op/apply"
-import createEntry from "@ermine/node/entry"
+import createEntry, { type Entry } from "@ermine/node/entry"
 import { createTable } from "@ermine/graph/table"
-import { createPlaces, type Item, path, PlacesError } from "@ermine/places"
-import { lookups } from "../places/typescript/lib.ts"
+import { move, PlacesError } from "@ermine/places"
 import { differ, isMap, rand, snap } from "./gen.ts"
-import { alike, createWorld, items, show, type Wrote } from "./world.ts"
+import { createWorld, show, type Wrote } from "./world.ts"
+import { get, list, lookup } from "@ermine/places/lib"
 
 const SEEDS = 40
 const STEPS = 60
@@ -26,8 +24,6 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 	for (let seed = 1; seed <= SEEDS; seed++) {
 		const { pick } = rand(seed)
 		const w = createWorld(pick)
-		const addresses = Array.from({ length: 6 }, () => w.address())
-		const holds = addresses.map((a) => w.p.open(a))
 		for (let step = 0; step < STEPS; step++) {
 			const before = w.nodes().map((x) => ({
 				...x,
@@ -43,18 +39,18 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				refused++
 			}
 			const at = `seed ${seed}, step ${step}: ${wrote?.what ?? "refused"}`
-			const changed = new Map<string, number>()
-			wrote?.changed.forEach((c, i) => changed.set(`${String(c.source)} ${String(c.id)}`, i))
-			assertEquals(changed.size, wrote?.changed.length ?? 0, `${at}: a node given twice`)
-			const evented = new Set(wrote?.events.map((e) => `${String(e.source)} ${String(e.id)}`))
+			const changed = new Map<Entry<unknown>, number>()
+			wrote?.changed.forEach((c, i) => changed.set(c, i))
+			assertEquals(changed.size, wrote?.changed.length ?? 0, `${at}: an entry given twice`)
+			const evented = new Set(wrote?.events.map((e) => e.id))
 			events += evented.size
 			for (const b of before) {
-				const key = `${String(b.source)} ${String(b.id)}`
-				const now = w.children(b.source, b.id)
-				if (evented.has(key)) continue
-				const i = changed.get(key)
+				const key = String(b.id)
+				const now = w.children(b.id)
+				if (evented.has(b.id)) continue
+				const i = b.node && changed.get(b.node)
 				if (i === undefined) {
-					// untouched: the same node, at the same change, its value as it was
+					// untouched: the same entry, at the same change, its value as it was
 					assertStrictEquals(now, b.node, `${at}: ${key}`)
 					assertStrictEquals(now?.change, b.change, `${at}: ${key}'s change`)
 					assertStrictEquals(now?.value, b.value, `${at}: ${key}'s value`)
@@ -62,49 +58,31 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 					continue
 				}
 				const c = wrote!.changed[i]
-				assertStrictEquals(c.node, now, `${at}: ${key} is the node there`)
-				assertStrictEquals(c.node, b.node, `${at}: ${key} the same node`)
-				assert(c.node.change !== b.change, `${at}: ${key} at a new change`)
-				const back = apply(c.node.value, c.node.change.op!.undo)
-				assertEquals(differ(back, b.was), "", `${at}: ${key}'s undo ${show(c.node.change.op)}`)
+				assertStrictEquals(c, now, `${at}: ${key} is the entry there`)
+				assert(c.change !== b.change, `${at}: ${key} at a new change`)
+				const back = apply(c.value, c.change.op!.undo)
+				assertEquals(differ(back, b.was), "", `${at}: ${key}'s undo ${show(c.change.op)}`)
 				assertEquals(differ(b.value, b.was, true), "", `${at}: ${key}'s old value changed`)
 				undone++
 			}
-			// opened places give what get gives
-			holds.forEach((held, i) => {
-				assertEquals(items(held.items()), items(w.p.get(addresses[i])), `${at}: hold ${i}`)
-			})
-			// items found are found again by their path, from their start
+			// what lookup finds is there; the nearest is the first of all
 			for (let k = 0; k < 4; k++) {
-				const from = w.from(), address = w.address()
-				const found = pick(2)
-					? w.p.get(address, from)
-					: w.p.lookup(address, from, pick(2) === 0)
-				for (const item of found) {
-					let start: Item = item
-					while (start.up) start = start.up
-					const again = w.p.get(path(item), start)
-					assert(
-						again.some((x) => alike(x, item)),
-						`${at}: ${show(item)} from ${show(from)} by ${show(address)}, again ${
-							items(again)
-						}`,
-					)
-				}
-				assertEquals(
-					items(w.p.lookup(address, from, true)),
-					items(lookups(w.p, address, w.p.get([], from)[0] ?? w.p.get([])[0])),
-					`${at}: lookups`,
-				)
+				const from = w.path(), names = w.path(2)
+				const all = lookup(w.p, names, from, true)
+				for (const found of all) assert(get(w.p, found) !== undefined, `${at}: ${show(found)}`)
+				assertEquals(lookup(w.p, names, from), all[0], `${at}: nearest`)
 			}
-			// names: the names holding arrays, in their order
-			for (const { source, id, node } of w.nodes()) {
-				const v = node?.value
-				const want = isMap(v) ? Object.keys(v).filter((k) => Array.isArray(v[k])) : []
-				assertEquals(w.p.names([source, id]), want, `${at}: names`)
+			// list: the names holding ids, in their order
+			for (let k = 0; k < 4; k++) {
+				const where = w.path()
+				const id = get(w.p, where)
+				const v = id === undefined ? undefined : w.children(id)?.value
+				const want = isMap(v)
+					? Object.keys(v).filter((k) => typeof v[k] === "string" || typeof v[k] === "symbol")
+					: []
+				assertEquals(list(w.p, where), want, `${at}: list ${show(where)}`)
 			}
 		}
-		for (const held of holds) held.drop()
 	}
 	assert(
 		undone > 1000 && refused > 200 && events > 50,
@@ -112,29 +90,18 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 	)
 })
 
-// the table holds one node under any number of keys, and places tells children nodes apart by the
-// node, not the key: a move between two keys whose children are one node is one change on it
-// (the patches of a move within one parent), given back once with the target's key
-Deno.test({
-	name: "places + table: a move between two keys holding one children node",
-	fn() {
-		const t = createTable()
-		const n = createEntry({ t: [["e", "0"], ["e", "1"]] }, { time: 0, actor: "me" })
-		t.add("children", "X", n)
-		t.add("children", "Y", n)
-		const p = createPlaces({
-			root: ["stored", "X"],
-			children: (_, id) => t.get("children", id),
-		})
-		const out = p.move(
-			[["stored", "X"], "t"],
-			1,
-			[["stored", "Y"], "t"],
-			{ time: 1, actor: "me" },
-			0,
-		)
-		assertEquals(n.value, { t: [["e", "1"], ["e", "0"]] })
-		const patches = out.flatMap((c) => c.node.change.op!.patches)
-		assert(patches.some((x) => "value" in x || x.move), `the place's patches: ${show(patches)}`)
-	},
+// the table holds one entry under any number of ids, and places' writes tell entries apart by the
+// entry, not the id: a move between two ids whose children are one entry is one change on it
+Deno.test("places + table: a move between two ids holding one children entry", () => {
+	const t = createTable()
+	const n = createEntry<Record<string, unknown>>({ t: "0" }, { time: 0, actor: "me" })
+	t.add("children", "X", n)
+	t.add("children", "Y", n)
+	const out = move([t.get("children", "X")!, "t"], [t.get("children", "Y")!, "u"], {
+		time: 1,
+		actor: "me",
+	})
+	assertEquals(n.value, { u: "0" })
+	assertEquals(out, [n])
+	assertEquals(n.change.op!.patches, [{ path: ["u"], move: { path: ["t"] } }])
 })

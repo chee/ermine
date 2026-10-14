@@ -48,17 +48,19 @@
 					"value": "c"
 				}
 			],
-			"expect": { "spots": [
-				[
-					"rows"
-				],
-				[],
-				[
-					"rows",
-					0,
-					"v"
+			"expect": {
+				"spots": [
+					[
+						"rows"
+					],
+					[],
+					[
+						"rows",
+						0,
+						"v"
+					]
 				]
-			] }
+			}
 		},
 		{
 			"op": "mark",
@@ -74,12 +76,14 @@
 					"value": 1
 				}
 			],
-			"expect": { "spots": [
-				[
-					"rows"
-				],
-				[]
-			] }
+			"expect": {
+				"spots": [
+					[
+						"rows"
+					],
+					[]
+				]
+			}
 		},
 		{
 			"op": "mark",
@@ -96,21 +100,23 @@
 					]
 				}
 			],
-			"expect": { "spots": [
-				[
-					"rows"
-				],
-				[],
-				[
-					"rows",
-					1
-				],
-				[
-					"rows",
-					0,
-					"v"
+			"expect": {
+				"spots": [
+					[
+						"rows"
+					],
+					[],
+					[
+						"rows",
+						1
+					],
+					[
+						"rows",
+						0,
+						"v"
+					]
 				]
-			] }
+			}
 		}
 	]
 }

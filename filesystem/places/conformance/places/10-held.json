@@ -1,0 +1,95 @@
+{
+	"title": "a path read reruns only on what it rests on",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"a": "A",
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"x": "X"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"get": [
+					"a",
+					"x"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "X"
+			}
+		},
+		{
+			"op": "place",
+			"at": "R",
+			"name": "c",
+			"id": "C",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "X"
+			}
+		},
+		{
+			"op": "unplace",
+			"at": "A",
+			"name": "x",
+			"expect": {}
+		},
+		{
+			"op": "place",
+			"at": "A",
+			"name": "x",
+			"id": "Y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "Y"
+			}
+		}
+	]
+}

@@ -1,62 +1,203 @@
 {
 	"title": "a diamond: each side once, the join after both, the effect once, on the whole",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
-		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
 		{
 			"op": "compute",
 			"name": "b",
 			"scope": "o",
-			"f": { "sum": [{ "read": "x" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "x"
+					},
+					1
+				]
+			},
 			"to": "b"
 		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "sum": [{ "read": "x" }, { "read": "x" }] },
+			"f": {
+				"sum": [
+					{
+						"read": "x"
+					},
+					{
+						"read": "x"
+					}
+				]
+			},
 			"to": "c"
 		},
 		{
 			"op": "compute",
 			"name": "d",
 			"scope": "o",
-			"f": { "sum": [{ "read": "b" }, { "read": "c" }] },
+			"f": {
+				"sum": [
+					{
+						"read": "b"
+					},
+					{
+						"read": "c"
+					}
+				]
+			},
 			"to": "d"
 		},
 		{
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
-			"f": { "read": "d" },
-			"act": { "log": ["e", { "given": "value" }] }
+			"f": {
+				"read": "d"
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					}
+				]
+			}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["e", 4]] } },
-		{ "op": "moments" },
-		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 9 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": [["e", 7]] } },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						4
+					]
+				]
+			}
+		},
+		{
+			"op": "moments"
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						7
+					]
+				]
+			}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "b", "tick": 9 },
-					{ "due": "c", "tick": 9 },
-					{ "starts": "b", "run": 2, "rank": 0 },
-					{ "due": "d", "tick": 10, "by": "b" },
-					{ "ends": "b", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 2, "rank": 0 },
-					{ "ends": "c", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "d", "run": 2, "rank": 1 },
-					{ "due": "e", "tick": 12, "by": "d" },
-					{ "ends": "d", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "e", "run": 2, "rank": 2 },
-					{ "ends": "e", "run": 2, "ended": "done", "equal": false },
-					{ "acts": "e", "run": 2 }
+					{
+						"due": "b",
+						"tick": 9
+					},
+					{
+						"due": "c",
+						"tick": 9
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "d",
+						"tick": 10,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"due": "e",
+						"tick": 12,
+						"writer": "d"
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 2
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
 				]
 			}
 		},
-		{ "op": "get", "key": "d", "expect": { "value": 7 } }
+		{
+			"op": "get",
+			"key": "d",
+			"expect": {
+				"value": 7
+			}
+		}
 	]
 }

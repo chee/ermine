@@ -1,0 +1,119 @@
+{
+	"title": "pending: the rules not there, the run ends pending, then runs once they are; a write throws pending and makes nothing",
+	"steps": [
+		{
+			"op": "value",
+			"id": "A",
+			"value": "x",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "chee",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "guard",
+			"name": "g",
+			"may": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "chee",
+			"guard": "g",
+			"f": {
+				"read": [
+					"A",
+					"value"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "x"
+			}
+		},
+		{
+			"op": "guard",
+			"name": "later",
+			"may": {
+				"grants": [
+					"value",
+					"later"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "later",
+			"scope": "chee",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [],
+							"value": 2
+						}
+					]
+				]
+			},
+			"expect": {
+				"error": "pending"
+			}
+		},
+		{
+			"op": "node",
+			"part": "value",
+			"id": "A",
+			"expect": {
+				"value": "x"
+			}
+		}
+	]
+}

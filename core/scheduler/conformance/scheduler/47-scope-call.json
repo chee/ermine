@@ -1,30 +1,82 @@
 {
 	"title": "a handler's call as a scope: under the definer's, the caller and trusted as its info, written by the caller's run; it goes with the definer, not the caller",
 	"steps": [
-		{ "op": "root", "name": "notes", "info": [["actor", "notes"]], "expect": {} },
+		{
+			"op": "root",
+			"name": "notes",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "scope",
 			"name": "handler",
 			"parent": "notes",
-			"info": [["handler", "click"]],
+			"info": [
+				[
+					"handler",
+					"click"
+				]
+			],
 			"expect": {}
 		},
-		{ "op": "root", "name": "games", "info": [["actor", "games"]], "expect": {} },
+		{
+			"op": "root",
+			"name": "games",
+			"info": [
+				[
+					"actor",
+					"games"
+				]
+			],
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "g",
 			"scope": "games",
 			"f": {
 				"do": [
-					{ "read": "x" },
-					{ "scope": ["call", [["caller", "games"], ["trusted", false]], "handler"] },
-					{ "in": ["call", { "current": null }] }
+					{
+						"read": "x"
+					},
+					{
+						"scope": [
+							"call",
+							[
+								[
+									"caller",
+									"games"
+								],
+								[
+									"trusted",
+									false
+								]
+							],
+							"handler"
+						]
+					},
+					{
+						"in": [
+							"call",
+							{
+								"current": null
+							}
+						]
+					}
 				]
 			},
 			"to": "g",
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "get",
 			"key": "g",
@@ -32,33 +84,74 @@
 				"value": {
 					"scope": "call",
 					"pairs": [
-						["actor", "notes"],
-						["handler", "click"],
-						["caller", "games"],
-						["trusted", false]
+						[
+							"actor",
+							"notes"
+						],
+						[
+							"handler",
+							"click"
+						],
+						[
+							"caller",
+							"games"
+						],
+						[
+							"trusted",
+							false
+						]
 					],
-					"by": "g"
+					"writer": "g"
 				}
 			}
 		},
-		{ "op": "dispose", "scope": "games", "expect": {} },
+		{
+			"op": "dispose",
+			"scope": "games",
+			"expect": {}
+		},
 		{
 			"op": "run",
 			"scope": "call",
-			"do": { "current": null },
+			"do": {
+				"current": null
+			},
 			"expect": {
 				"value": {
 					"scope": "call",
 					"pairs": [
-						["actor", "notes"],
-						["handler", "click"],
-						["caller", "games"],
-						["trusted", false]
+						[
+							"actor",
+							"notes"
+						],
+						[
+							"handler",
+							"click"
+						],
+						[
+							"caller",
+							"games"
+						],
+						[
+							"trusted",
+							false
+						]
 					]
 				}
 			}
 		},
-		{ "op": "dispose", "scope": "notes", "expect": {} },
-		{ "op": "run", "scope": "call", "do": 1, "expect": { "error": "disposed" } }
+		{
+			"op": "dispose",
+			"scope": "notes",
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "call",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		}
 	]
 }

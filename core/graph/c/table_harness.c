@@ -59,7 +59,36 @@ static void result(FILE *out, int code) {
 
 static tb_table *table;
 
-void hh_start(void) { table = tb_new(); }
+// every table event until asked: the keys, strings copied
+typedef struct {
+	tb_key part, id;
+} event;
+static event *events;
+static size_t nevents, capevents;
+static tb_key copy_key(tb_key k) {
+	if (k.symbol) return k;
+	char *s = strdup(k.string);
+	if (!s) abort();
+	return tb_string(s);
+}
+static void forget_events(void) {
+	for (size_t i = 0; i < nevents; i++) {
+		if (!events[i].part.symbol) free((char *)events[i].part.string);
+		if (!events[i].id.symbol) free((char *)events[i].id.string);
+	}
+	nevents = 0;
+}
+static void told(void *ctx, tb_key part, tb_key id) {
+	(void)ctx;
+	if (nevents == capevents) {
+		capevents = capevents ? capevents * 2 : 16;
+		events = realloc(events, capevents * sizeof *events);
+		if (!events) abort();
+	}
+	events[nevents++] = (event){copy_key(part), copy_key(id)};
+}
+
+void hh_start(void) { table = tb_make(told, NULL); }
 
 void hh_answer(const op_value *r, FILE *out) {
 	const char *o = hh_str(r, "op");
@@ -132,6 +161,18 @@ void hh_answer(const op_value *r, FILE *out) {
 			putc(']', out);
 		}
 		fputs("]}", out);
+	} else if (!strcmp(o, "events")) {
+		fputs("{\"events\":[", out);
+		for (size_t i = 0; i < nevents; i++) {
+			if (i) putc(',', out);
+			putc('[', out);
+			put_key(out, events[i].part);
+			putc(',', out);
+			put_key(out, events[i].id);
+			putc(']', out);
+		}
+		fputs("]}", out);
+		forget_events();
 	} else if (!strcmp(o, "del")) {
 		if (!vpart) {
 			named *n = node_of(vnode, &bad);
@@ -156,6 +197,8 @@ void hh_answer(const op_value *r, FILE *out) {
 
 void hh_finish(void) {
 	tb_free(table);
+	forget_events();
+	free(events);
 	while (nodes) { named *n = nodes; nodes = n->next; free(n->name); free(n); }
 	while (symbols) { named *n = symbols; symbols = n->next; free(n->name); free(n); }
 }

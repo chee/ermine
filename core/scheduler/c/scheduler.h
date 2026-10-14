@@ -14,9 +14,9 @@
 // keys are opaque: const void *, compared by identity, never NULL. values are opaque: void *,
 // compared by the computation's equal, else by pointer.
 //
-// by: who made a change, told by the caller of sc_changed, never guessed from what is running.
-// a caller who knows the writer passes the run: the writer open (sc_current_by), the one f was
-// given (held past its end with sc_run_ref, after an await), or a computation's latest
+// writer: who made a change, told by the caller of sc_changed, never guessed from what is running.
+// a caller who knows the writer passes the run: the writer open (sc_current_writer), the one f was
+// taken at f's start (held past its end with sc_run_ref, after an await), or a computation's latest
 // (sc_latest). a compute's run named so
 // makes it the keys' writer (its readers wait for it while it is due), and the change carries
 // the run's cause (loops). NULL: from outside (the host, sync): no writer learned, no cause.
@@ -88,8 +88,12 @@ typedef struct sc_out {
 
 // what a computation is made of
 typedef struct sc_def {
-	// each run. read through the run; after SC_STOP, return at once (what is returned is dropped)
-	sc_out (*f)(sc_run *run, void *data);
+	// each run. reads go through sc_read (after SC_STOP, return at once: what is returned is dropped);
+	// a read after an await counts for nothing. the run's writer: sc_current_writer at f's start,
+	// kept by f if it writes after an await.
+	// previous: the computation's last result (a compute's: the last given to set; an effect's: the
+	// last acted on), NULL for none. a result equal to the last is not kept, so it stays the last set
+	sc_out (*f)(void *previous, void *data);
 	// a compute's: a result not equal to the last. effects leave it NULL
 	char *(*set)(void *value, void *data);
 	// an effect's: a result not equal to the one last acted on, after the round's last run.
@@ -97,7 +101,7 @@ typedef struct sc_def {
 	char *(*act)(void *value, void *previous, void *data);
 	// NULL: pointers compared
 	bool (*equal)(const void *a, const void *b, void *data);
-	// a compute's: where set's results land, when known (NULL: learned from the by of changes)
+	// a compute's: where set's results land, when known (NULL: learned from the writer of changes)
 	const void *key;
 	void *data;
 } sc_def;
@@ -109,9 +113,9 @@ typedef enum { SC_DONE, SC_PENDED, SC_FAIL, SC_STOPPED_RUN, SC_LOOPING } sc_ende
 typedef struct sc_moment {
 	sc_moment_kind kind;
 	sc_computation *c;
-	// SC_DUE; by: the computation of the run that made the change, NULL when not told
+	// SC_DUE; writer: the computation of the run that made the change, NULL when not told
 	uint64_t tick;
-	sc_computation *by;
+	sc_computation *writer;
 	// SC_STARTS, SC_ENDS, SC_ACTS
 	unsigned run;
 	// SC_STARTS
@@ -165,7 +169,7 @@ const sc_pair *sc_scope_info(const sc_scope *o, size_t *n);
 
 // what is open: the scope (NULL: none), and its writer (NULL: from outside)
 sc_scope *sc_current(const sc_scheduler *s);
-sc_run *sc_current_by(const sc_scheduler *s);
+sc_run *sc_current_writer(const sc_scheduler *s);
 // the pairs of a write made now: the info of each scope from the root down to the one open, into
 // out, up to cap of them; how many there are. borrowed: good while the scopes are, and a
 // computation's until its next run
@@ -195,14 +199,14 @@ sc_run *sc_run_ref(sc_run *run);
 void sc_run_unref(sc_run *run);
 // the computation a run is of
 sc_computation *sc_run_of(const sc_run *run);
-// a computation's latest run (good until it runs again; sc_run_ref to keep it), what by names
+// a computation's latest run (good until it runs again; sc_run_ref to keep it), what writer names
 // for it; NULL when it has not run, is gone, or o is a plain scope
 sc_run *sc_latest(sc_scope *o);
 
-// these keys changed: what read them is due, at the next tick. by: who made the change (above);
+// these keys changed: what read them is due, at the next tick. writer: who made the change (above);
 // a compute's run becomes their writer. an effect is no one's writer: it writes in its acts,
 // after the round's runs. the tick
-uint64_t sc_changed(sc_scheduler *s, const void *const *keys, size_t count, sc_run *by);
+uint64_t sc_changed(sc_scheduler *s, const void *const *keys, size_t count, sc_run *writer);
 
 // rounds until nothing is due: the settled promises land, the due run by rank, the effects act.
 // a pulse in a pulse does nothing

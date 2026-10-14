@@ -1,0 +1,167 @@
+{
+	"title": "the rules not there: pending, waiting for them; once there, an answer; gone again, pending",
+	"steps": [
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"value",
+					"rules"
+				],
+				"reads": [
+					[
+						"value",
+						"rules"
+					]
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "drop",
+			"part": "value",
+			"id": "rules",
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"need": [
+					"value",
+					"rules"
+				]
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": "pending",
+			"what": "read",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "pending",
+				"reads": []
+			},
+			"who": {
+				"actor": "chee"
+			}
+		}
+	]
+}

@@ -1,0 +1,281 @@
+{
+	"title": "a grant for an id, for names under a path, for a field: a start of the target's",
+	"steps": [
+		{
+			"op": "load",
+			"part": "value",
+			"id": "rules",
+			"value": [
+				{
+					"actor": "chee",
+					"id": "A",
+					"field": [
+						"name"
+					]
+				},
+				{
+					"actor": "chee",
+					"path": [
+						"home",
+						"music"
+					]
+				},
+				{
+					"actor": "juno",
+					"id": "B",
+					"field": [
+						0
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A",
+				"field": [
+					"name"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A",
+				"field": [
+					"name",
+					"first"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A",
+				"field": [
+					"age"
+				]
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "A"
+			},
+			"expect": {
+				"answer": "no",
+				"reason": "no grant"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"path": [
+					"home",
+					"music"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"path": [
+					"home",
+					"music",
+					"jazz",
+					"a.flac"
+				],
+				"route": [
+					"R",
+					"H",
+					"M",
+					"J",
+					"F"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"path": [
+					"home"
+				]
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"path": [
+					"away",
+					"music"
+				]
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "read",
+			"target": {
+				"id": "M"
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "chee"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "B",
+				"field": [
+					0,
+					"x"
+				]
+			},
+			"expect": {
+				"answer": "yes"
+			},
+			"who": {
+				"actor": "juno"
+			}
+		},
+		{
+			"op": "ask",
+			"policy": {
+				"grants": [
+					"value",
+					"rules"
+				]
+			},
+			"what": "edit",
+			"target": {
+				"id": "B",
+				"field": [
+					"0"
+				]
+			},
+			"expect": {
+				"answer": "no"
+			},
+			"who": {
+				"actor": "juno"
+			}
+		}
+	]
+}

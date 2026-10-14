@@ -57,7 +57,7 @@ struct sc_scope {
 	// a compute's: the last result given to set; an effect's: the last acted on
 	bool has_last;
 	void *last;
-	// its latest run, held: what by names for it (sc_latest)
+	// its latest run, held: what writer names for it (sc_latest)
 	sc_run *ran;
 	// its latest run's info, and what its values point at
 	sc_pair run_info[2];
@@ -144,7 +144,7 @@ struct sc_scheduler {
 	sc_run *running;
 	// what is open: the scope, and its writer
 	sc_scope *open;
-	sc_run *open_by;
+	sc_run *open_writer;
 	size_t swept;
 };
 
@@ -272,7 +272,7 @@ const sc_pair *sc_scope_info(const sc_scope *o, size_t *n) {
 }
 
 sc_scope *sc_current(const sc_scheduler *s) { return s->open; }
-sc_run *sc_current_by(const sc_scheduler *s) { return s->open_by; }
+sc_run *sc_current_writer(const sc_scheduler *s) { return s->open_writer; }
 
 size_t sc_pairs(const sc_scheduler *s, sc_pair *out, size_t cap) {
 	size_t total = 0;
@@ -290,21 +290,21 @@ size_t sc_pairs(const sc_scheduler *s, sc_pair *out, size_t cap) {
 // what was open, to put back
 typedef struct {
 	sc_scope *scope;
-	sc_run *by;
+	sc_run *writer;
 } opened;
 
 // o open as a cleanup opens it: a computation's written by it, any other's by the writer open
 static opened opens(sc_scope *o) {
 	sc_scheduler *s = o->s;
-	opened was = {s->open, s->open_by};
+	opened was = {s->open, s->open_writer};
 	s->open = o;
-	if (o->kind != PLAIN) s->open_by = o->ran;
+	if (o->kind != PLAIN) s->open_writer = o->ran;
 	return was;
 }
 
 static void reopen(sc_scheduler *s, opened was) {
 	s->open = was.scope;
-	s->open_by = was.by;
+	s->open_writer = was.writer;
 }
 
 // a cleanup opens its scope
@@ -455,10 +455,10 @@ static cs_cause *cause_of(sc_scheduler *s, sc_run *r) {
 	return r->cause;
 }
 
-// by: the run that made the change
-static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *by) {
+// writer: the run that made the change
+static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
 	if (c->state != ALIVE) return;
-	cs_cause *cause = by ? cause_of(s, by) : NULL;
+	cs_cause *cause = writer ? cause_of(s, writer) : NULL;
 	if (cause) cs_keep(s->causes, &c->cs, cause);
 	size_t n = 0;
 	cs_item **items = cs_loop(s->causes, cause, &c->cs, &n);
@@ -469,8 +469,8 @@ static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *by) {
 		free(items);
 	}
 	// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
-	if (loop && by->nloop > 0) {
-		by->cut = true;
+	if (loop && writer->nloop > 0) {
+		writer->cut = true;
 		free(loop);
 		return;
 	}
@@ -484,7 +484,7 @@ static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *by) {
 	}
 	if (od_has(s->order, &c->od)) return;
 	od_set(s->order, &c->od, t);
-	tell(s, (sc_moment){.kind = SC_DUE, .c = c, .tick = t, .equal = -1, .by = by ? by->c : NULL});
+	tell(s, (sc_moment){.kind = SC_DUE, .c = c, .tick = t, .equal = -1, .writer = writer ? writer->c : NULL});
 }
 
 static void write(sc_scheduler *s, sc_scope *c, const void *key) {
@@ -495,15 +495,15 @@ static void write(sc_scheduler *s, sc_scope *c, const void *key) {
 	pm_set(&c->wrote, key, NULL);
 }
 
-uint64_t sc_changed(sc_scheduler *s, const void *const *keys, size_t count, sc_run *by) {
+uint64_t sc_changed(sc_scheduler *s, const void *const *keys, size_t count, sc_run *writer) {
 	uint64_t t = ++s->tick;
-	sc_scope *w = by && by->c->kind == COMPUTE && by->c->state == ALIVE ? by->c : NULL;
+	sc_scope *w = writer && writer->c->kind == COMPUTE && writer->c->state == ALIVE ? writer->c : NULL;
 	for (size_t i = 0; i < count; i++) {
 		const void *key = keys[i];
 		if (w) write(s, w, key);
 		tg_node *node = pm_get(&s->nodes, key);
 		if (node == NULL) continue;
-		for (tg_link *l = node->first; l != NULL; l = l->after) mark(s, l->from->owner, t, by);
+		for (tg_link *l = node->first; l != NULL; l = l->after) mark(s, l->from->owner, t, writer);
 	}
 	return t;
 }
@@ -606,17 +606,17 @@ static void result(sc_scheduler *s, sc_run *r, void *v) {
 		return;
 	}
 	if (!equal) {
-		sc_run *was = s->reading, *wasRunning = s->running, *wasby = s->open_by;
+		sc_run *was = s->reading, *wasRunning = s->running, *waswriter = s->open_writer;
 		sc_scope *wasopen = s->open;
 		s->reading = NULL;
 		s->running = r;
 		s->open = c;
-		s->open_by = c->ran;
+		s->open_writer = c->ran;
 		char *failed = c->def.set(v, c->def.data);
 		s->reading = was;
 		s->running = wasRunning;
 		s->open = wasopen;
-		s->open_by = wasby;
+		s->open_writer = waswriter;
 		if (failed) {
 			drop_value(s, v);
 			// a set that threw may have written part: the last is forgotten, so the next result
@@ -734,17 +734,17 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	c->info = c->run_info;
 	c->ninfo = 2;
 	sc_scope *wasopen = s->open;
-	sc_run *wasby = s->open_by;
+	sc_run *waswriter = s->open_writer;
 	s->reading = r;
 	s->open = c;
-	s->open_by = r;
+	s->open_writer = r;
 	tg_begin(c->node);
-	sc_out out = c->def.f(r, c->def.data);
+	sc_out out = c->def.f(c->has_last ? c->last : NULL, c->def.data);
 	r->open = false;
 	s->reading = was;
 	s->running = wasRunning;
 	s->open = wasopen;
-	s->open_by = wasby;
+	s->open_writer = waswriter;
 	end_run(s, c->node);
 	if (c->state != ALIVE) {
 		discard(s, out);
@@ -805,14 +805,14 @@ static void do_act(sc_scheduler *s, act *a) {
 		return;
 	}
 	sc_scope *wasopen = s->open;
-	sc_run *wasby = s->open_by;
+	sc_run *waswriter = s->open_writer;
 	s->open = c;
-	s->open_by = c->ran;
+	s->open_writer = c->ran;
 	char *error = c->def.act(a->value, c->has_last ? c->last : NULL, c->def.data);
 	s->reading = was;
 	s->running = wasRunning;
 	s->open = wasopen;
-	s->open_by = wasby;
+	s->open_writer = waswriter;
 	first_error(&failed, error);
 	if (c->has_last) drop_value(s, c->last);
 	c->last = a->value;

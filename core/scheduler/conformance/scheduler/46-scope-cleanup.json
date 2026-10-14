@@ -1,44 +1,167 @@
 {
 	"title": "a cleanup opens its scope: a computation's written by it; a cleanup added to the scope open, gone already, runs at once",
 	"steps": [
-		{ "op": "root", "name": "o", "info": [["actor", "notes"]], "expect": {} },
-		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "plain"]], "expect": {} },
-		{ "op": "cleanup", "scope": "p", "do": { "log": { "current": null } }, "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"notes"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "p",
+			"parent": "o",
+			"info": [
+				[
+					"why",
+					"plain"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "cleanup",
+			"scope": "p",
+			"do": {
+				"log": {
+					"current": null
+				}
+			},
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "do": [{ "read": "x" }, { "cleanup": ["c", { "log": { "current": null } }] }] },
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"cleanup": [
+							"c",
+							{
+								"log": {
+									"current": null
+								}
+							}
+						]
+					}
+				]
+			},
 			"to": "c",
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 3 } },
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "log",
 			"expect": {
 				"log": [
-					{ "scope": "c", "pairs": [["actor", "notes"], ["run", 1], ["mark", 1]], "by": "c" }
+					{
+						"scope": "c",
+						"pairs": [
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"run",
+								1
+							],
+							[
+								"mark",
+								1
+							]
+						],
+						"writer": "c"
+					}
 				]
 			}
 		},
-		{ "op": "dispose", "scope": "p", "expect": {} },
+		{
+			"op": "dispose",
+			"scope": "p",
+			"expect": {}
+		},
 		{
 			"op": "log",
-			"expect": { "log": [{ "scope": "p", "pairs": [["actor", "notes"], ["why", "plain"]] }] }
+			"expect": {
+				"log": [
+					{
+						"scope": "p",
+						"pairs": [
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"why",
+								"plain"
+							]
+						]
+					}
+				]
+			}
 		},
 		{
 			"op": "compute",
 			"name": "d",
 			"scope": "o",
 			"f": {
-				"do": [{ "dispose": "d" }, { "cleanup": ["d", { "log": "late" }] }, { "log": "after" }]
+				"do": [
+					{
+						"dispose": "d"
+					},
+					{
+						"cleanup": [
+							"d",
+							{
+								"log": "late"
+							}
+						]
+					},
+					{
+						"log": "after"
+					}
+				]
 			},
 			"to": "d",
 			"expect": {}
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "log", "expect": { "log": ["late", "after"] } }
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"late",
+					"after"
+				]
+			}
+		}
 	]
 }

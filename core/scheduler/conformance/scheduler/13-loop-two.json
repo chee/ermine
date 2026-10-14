@@ -1,42 +1,129 @@
 {
 	"title": "two computes each writing what the other reads: a loop through both",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "a",
 			"scope": "o",
-			"f": { "sum": [{ "read": "y" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "y"
+					},
+					1
+				]
+			},
 			"to": "x"
 		},
 		{
 			"op": "compute",
 			"name": "b",
 			"scope": "o",
-			"f": { "sum": [{ "read": "x" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "x"
+					},
+					1
+				]
+			},
 			"to": "y"
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "a", "tick": 1 },
-					{ "due": "b", "tick": 2 },
-					{ "starts": "a", "run": 1, "rank": 0 },
-					{ "ends": "a", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "b", "run": 1, "rank": 0 },
-					{ "due": "a", "tick": 4, "by": "b" },
-					{ "ends": "b", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "a", "run": 2, "rank": 0 },
-					{ "due": "b", "tick": 5, "by": "a" },
-					{ "ends": "a", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "b", "run": 2, "rank": 0 },
-					{ "ends": "b", "run": 2, "ended": "looping", "equal": false, "through": ["a", "b"] }
+					{
+						"due": "a",
+						"tick": 1
+					},
+					{
+						"due": "b",
+						"tick": 2
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 4,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 5,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"a",
+							"b"
+						]
+					}
 				]
 			}
 		},
-		{ "op": "get", "key": "x", "expect": { "value": 3 } },
-		{ "op": "get", "key": "y", "expect": { "value": 2 } }
+		{
+			"op": "get",
+			"key": "x",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "get",
+			"key": "y",
+			"expect": {
+				"value": 2
+			}
+		}
 	]
 }

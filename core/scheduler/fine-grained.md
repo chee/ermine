@@ -47,7 +47,7 @@ every shift marks the whole suffix: a later patch can only disagree with read-ti
 region that is already marked.
 
 **Table events.** add, sub and del at (part, id) are a patch at `[]` for that key. A node under
-several keys: the wiring (ermine/link) marks each key (`table.who`).
+several keys: the wiring (core/link) marks each key (`table.who`).
 
 **Keys reads.** A keys spot is `(source, id, path)` with a flag: a read of which keys there are at
 P, not of what is under them. It is kept beside the plain spot at P. A patch at Q marks it:
@@ -95,7 +95,7 @@ changed. The one exception: a put of an equal value still marks.
 | apply, invert, update, the op on the change, the update hook             | kernel (op, node)                                 |
 | spots, a read-path trie per (source, id), the marking rule               | scheduler, in place of notify                     |
 | tracker links, rounds, cutoff                                            | scheduler (as planned)                            |
-| reporting each key a node is under; table events as `[]`                 | wiring (ermine/link)                              |
+| reporting each key a node is under; table events as `[]`                 | wiring (core/link)                                |
 | a mutate-node's patches out: Automerge, Immer, a recording proxy         | that node kind's library                          |
 | anchors: cursors, selections, marks mapped through patches               | library, on the op stream                         |
 | keyed lists (by node id), selectors, collection deltas (filter, join)    | libraries, on top                                 |

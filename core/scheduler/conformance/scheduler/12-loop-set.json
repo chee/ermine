@@ -1,44 +1,145 @@
 {
 	"title": "a compute whose set changes what it read: a loop through it; its next new result is not set",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "sum": [{ "read": "c" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "c"
+					},
+					1
+				]
+			},
 			"to": "c"
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "c", "tick": 1 },
-					{ "starts": "c", "run": 1, "rank": 0 },
-					{ "due": "c", "tick": 2, "by": "c" },
-					{ "ends": "c", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 2, "rank": 0 },
-					{ "ends": "c", "run": 2, "ended": "looping", "equal": false, "through": ["c"] }
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 2,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c"
+						]
+					}
 				]
 			}
 		},
-		{ "op": "get", "key": "c", "expect": { "value": 1 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "moments", "expect": { "moments": [] } },
-		{ "op": "write", "values": { "c": 10 }, "expect": { "tick": 3 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "get", "key": "c", "expect": { "value": 11 } },
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"c": 10
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 11
+			}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "c", "tick": 3 },
-					{ "starts": "c", "run": 3, "rank": 0 },
-					{ "due": "c", "tick": 4, "by": "c" },
-					{ "ends": "c", "run": 3, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 4, "rank": 0 },
-					{ "ends": "c", "run": 4, "ended": "looping", "equal": false, "through": ["c"] }
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 4,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c"
+						]
+					}
 				]
 			}
 		}

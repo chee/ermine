@@ -34,8 +34,16 @@ typedef enum { TB_NOTHING_THERE = 1, TB_ALREADY_THERE } tb_code;
 // the TypeScript code of a return, "nothing-there" or "already-there"; "" for 0
 const char *tb_code_name(int code);
 
+// told after a table event landed, ctx the one given at making: an entry added, replaced or taken
+// out at a key. The same entry again is none. del of a node from a part, or from every key: one
+// event per key it was under, after all are taken, in tb_who's order. The keys are good for the
+// call
+typedef void (*tb_event)(void *ctx, tb_key part, tb_key id);
+
 // an empty table; out of memory aborts, as everywhere in core
 tb_table *tb_new(void);
+// the same, told every table event (event may be NULL: none)
+tb_table *tb_make(tb_event event, void *ctx);
 // frees the table and what it kept; not the nodes, nor the caller's tokens
 void tb_free(tb_table *t);
 

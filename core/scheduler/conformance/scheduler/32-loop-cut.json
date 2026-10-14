@@ -1,29 +1,95 @@
 {
 	"title": "a flagged run whose own change is cut there ends looping, though its result is equal (proof C3)",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
 		{
 			"op": "compute",
 			"name": "x",
 			"scope": "o",
-			"f": { "do": [{ "write": ["k", { "sum": [{ "read": "k" }, 1] }] }, 0] }
+			"f": {
+				"do": [
+					{
+						"write": [
+							"k",
+							{
+								"sum": [
+									{
+										"read": "k"
+									},
+									1
+								]
+							}
+						]
+					},
+					0
+				]
+			}
 		},
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "x", "tick": 1 },
-					{ "starts": "x", "run": 1, "rank": 0 },
-					{ "due": "x", "tick": 2, "by": "x" },
-					{ "ends": "x", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "x", "run": 2, "rank": 0 },
-					{ "ends": "x", "run": 2, "ended": "looping", "equal": true, "through": ["x"] }
+					{
+						"due": "x",
+						"tick": 1
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "x",
+						"tick": 2,
+						"writer": "x"
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "x",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 2,
+						"ended": "looping",
+						"equal": true,
+						"through": [
+							"x"
+						]
+					}
 				]
 			}
 		},
-		{ "op": "get", "key": "k", "expect": { "value": 2 } },
-		{ "op": "pulse", "expect": {} },
-		{ "op": "moments", "expect": { "moments": [] } }
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
 	]
 }

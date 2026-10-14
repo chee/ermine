@@ -47,9 +47,9 @@ chee 10-14: "i think this is the plan."
   `/` illegal in a name) and we say [["a",id], ["a/b/c", id]] then that folder is able to override
   its children and if you share THAT then it goes with all its overrides and so the "my device's
   mounts" table is not actually a special thing it's just the children on your root node"
-- children a plain map, *lean* 10-14: "children is maybe an Ordered Map, not a list ... we can only
-  have 1 name, name can only mean one thing. wait... it doesn't matter that it's ordererd anymore,
-  does it? it can just be a map!". *mine*, consequences: a repeated name can't be a union any more;
+- children a plain map, name to one id, *decided* 10-14 (chosen: "Plain map"; earlier: "children is
+  maybe an Ordered Map, not a list ... we can only have 1 name, name can only mean one thing.
+  wait... it doesn't matter that it's ordererd anymore, does it? it can just be a map!"). *mine*, consequences: a repeated name can't be a union any more;
   two placements under one name at once are a key conflict (the conflicts table), so children need
   no element ids; canonical CBOR sorts map keys anyway; a manual order is a value of its own (as
   todos keeps)
@@ -113,6 +113,10 @@ chee 10-14: "i think this is the plan."
 - pending, error: an attribute on the computation's node, which sits at one place; never placed in
   a slot, *decided*: "i think that's right yeah. the process node is not-persisted so it's okay
   to have a live value like an error in a path"
+  - built 10-14: filesystem/places status.ts. chee: "we'll just write `ermine.computer.status:
+    Symbol.for("ermine.pending")` or ermine.computer.status new Error"; on the computation's own node
+    (chosen: "The computation's own"). mine: looping an Error "looping", done removes it, stopped
+    leaves it; written from the scheduler's moments by the computation (scheduler.run(c, …))
 - patch node: {patches, on, at}: patches over a node, the version they were made against.
   optimistic state, a drag; *lean*: "optimsitic state in ermine might be the same thing as the
   patch node"; *decided*: "a patch node would also store what version it was a patch for so it
@@ -131,8 +135,9 @@ chee 10-14: "i think this is the plan."
   be communicated")
 
 * Ephemeral placement
-- places' job, *lean*: "i believe that this is places's job, with a table that's the in-memory items
-  at an address"; "it's in the graph but not the persisted part of the graph"
+- places' job, *decided* 10-14: "ah yes, the in-memory items at a path... yes that does sound like
+  places business!" (earlier, lean: "i believe that this is places's job, with a table that's the
+  in-memory items at an address"; "it's in the graph but not the persisted part of the graph")
 - the cases, *lean*: "an in-memory node you mount at a path... but also being able tochoose to
   transmit, choose to receive, someone else's persisted node over ephemeral channel and then you
   place it ephemerally"
@@ -161,6 +166,12 @@ chee 10-14: "i think this is the plan."
   two wants, *decided*: "yes, they are. a proccess's inner stuff is inside the process"
 - *open*: whether an in-memory placement can itself be sent; inline nodes (no id: no references,
   tracked by address) or in-memory ids
+- 10-14, chee, thinking aloud: "if it's not places's job then it's... maybe this is a separate thing.
+  idk. basically we need to be able to put an item at a path, and it to be there at that path (by
+  path, not by id) locally on the users machine. this is both for ephemeral/non-persisted nodes like
+  the /dev /hw, but also for processes. processes will need to know where they are and when they
+  call, say, `lookup` they get a tracked something they can read the value or a subvalue from right?
+  so they'll need some kind of cwd too"
 
 * Saving and syncing
 - what's kept, sent, and sent ephemerally, *decided*, how *open*: "something that's a coordination
@@ -182,10 +193,89 @@ chee 10-14: "i think this is the plan."
 - places: entries are ids; names may be paths; outer wins; one route; no ROOT, no children(source,
   id) hook; box (a walk's own "/"), part of this work, *decided* 10-14: "we're going to add box too as
   part of this"
-- table and store: one table, keyed (table name, id); the store's source goes
-- link: tracked reads keyed by table, not (source, table)
+  - moved 10-14 with protect and link to filesystem/ (chee: "i blieve places, protect, and link
+    should all move to /filesystem yes"); built from core/places, *decided*: "i think we want to use
+    core/places"
+  - part a, built 10-14: ids, one id per name (anything else under a name taken), items {id, up?,
+    name?}, reads {id, path, keys?}, createPlaces({root, table, read?}), place/unplace/rename/move
+    with no index, order gone. protect's route: ids. guard: refused by id. next: b the walk (path
+    names, outer wins), c box, d in-memory placements
+  - part b, built 10-14: path entries, outer wins replacing what's under, a walk on through folders
+    that aren't there, listing what the walk can reach on, a walk from an item re-walks its path
+  - a smaller places, 10-14. chee: "maybe for really core mechanics at this part, `lookup` should
+    only return the path it found, and `get` only return the id, and there is no "open" or "names"
+    or "members" ... as long as it will be possible for `link` ... to build everything it needs on
+    top of that". then: open and members move to link, *decided* ("sure"); list stays in places,
+    *decided* ("okay list is fine to stay"; "maybe names should be called list"). guard, *lean*:
+    "maybe guard _shouldn't_ want the id at every step. maybe it should only care about paths and
+    then ids for things that are actually trying to be read". a verb for overrides, *lean*: "we need
+    a new verb for creating one of these overrides, place and unplace are for doing things with
+    what's there now, and maybe we have overlay and unoverlay or something that take a path and an
+    override path and then an id"
+  - building 10-14, chee: "let's do get, lookup, open and members changes. and add a box". a box
+    is a path, *decided* (chosen: "A path"): found again from places' root on every walk, so a
+    process boxed at /work sees whatever /work is now
+    box out of places, *decided* 10-14: "take box out of places, we do it higher up" (chee: "maybe
+    it's done by creating a new places for a boxed node, higher up"): a box is a places made with
+    root the boxed folder's id; following the box's path is the maker's (look it up again, tracked,
+    and make a new places when it gives another id). get takes full paths, no cwd, *decided*
+    (chosen: "No, full paths"). chee 10-14: "i'm not feeling great about the api"
+  - outer wins set aside, *decided* 10-14: "let's forget outer wins for now" (after: "lookup walking
+    from the root feels insane"). with it go path entries, a walk through folders that aren't there,
+    and listing what path entries add: a walk is plain again, and lookup walks to where you are
+    once. "/" in a name, *decided* (chosen: "Allowed"): any string but "", ".", "..", "/" is a name,
+    and an address is a list of names, never split. overlays in their own table, *lean*: "overlays
+    in their own table is interesting"; "im nervous again about not allowing / in names"
+  - writes are plain exports on a children entry, *decided* 10-14: "none of these need state ...
+    they should just be plain exports"; they take the entry itself (chosen: "The entry itself"):
+    place(children, name, id, header), unplace, rename, move([from, name], [into, to], header).
+    walk, *decided*: "i think we should also provide "walk"", from any id, a step at a time
+    (chosen: "let's do 2 and 3"); then a plain export, *decided*: "if it takes an id, can it be a
+    plain export too, and take root+table? it wouldn't need read because it already yields name id":
+    walk(table, root, path) yields { name, id }, no read (the steps are the reads)
+  - places takes plain names, *decided* 10-14: "move plan to path.ts, places takes plain names":
+    path.ts has the steps (Address: names, ".", "..", "/") and plan, which turns them into names;
+    places' Path is names from the root, each looked up as it is
+  - places is plain functions, *decided* 10-14: "wait if we just took a table entry we wouldnt need
+    `createPlaces` at all"; "yes": walk(table, root, path), get(table, root, path), lookup(table,
+    root, names, from, all?), list(children), place/unplace/rename/move. no Tell: a walk's steps
+    are its reads, and link builds the tracked get, lookup, list, open and members on walk
+  - old places to the graveyard, link renamed places, *decided* 10-14: "walk is a very small function
+    and list is Object.keys, so what we do is move places to graveyard and then rename link to
+    places because it is actually the thing that makes the filesystem real". the trie goes too
+    (chosen: "Graveyard too"). in the new places, get(path) is the id at a path; link's value read
+    get(part, id, path) becomes read(part, id, path) (chosen: "get(path), read(...)"). path.ts
+    (steps, plan, the path tag) comes along
+  - places' api, 10-14: get/lookup/list/members a lib over walk and readKeys (chee: "make get/lookup/
+    list/members libs"); who/header out to header.ts as getWriter and createChangeHeader (chee: "make
+    createChangeHeader and getWriter"); open dropped (chee: "let's drop it"); walk(path, from?).
+    names, *decided* 10-14 ("let's do all these ... with markChanged or notifyChanged and `release`"):
+    onTableChange, release, describeRead (later describe, renamed in the file), markChanged (mine of the two offered), readValue, readKeys,
+    readChange, walk
+  - places' Tell (the read hook), *open* 10-14: chee, "hmm ok, this tell thing seems off, but maybe
+    it's ok". the shapes weighed: places tells each key it reads (today); places reads through a
+    reader it's given, as protect's policies do; places hands back what it rested on; link keeps
+    each answer and asks again on a children write, saying changed only when the answer differs
+    (with nothing from places, or the ids of the folders walked). chee's two wants, both held today
+    and tested in link_test.ts: a lookup hears when what it found goes or a closer one comes, not
+    farther or unrelated; a closer one with the same apple goes no further than the run
+  - link's name, *lean* 10-14: "maybe namespace when we get there" (once open, members, the cwd, box
+    and in-memory placements live in it)
+  - the per-process thing (a cwd, its own "/", its in-memory items, lookup results to read from),
+    *thought* 10-14: "maybe we call all this "box" who knows, cardboard box and blackbox"
+  - the process api, *thought* 10-14: "export default function ({create, destroy, open, read, edit,
+    compute, effect}) {} maybe. could be convinced to go the way of createMemo isPending but unsure".
+    wanted, *decided* 10-14: "we do want a watch, and a way of making a ref for live value we hold
+    that'll be kept across runs". later: "check the host.ts and all the needs files they made while
+    building demos"
+- table and store: one table, keyed (table name, id); the store's source goes. built 10-14: the
+  table's one listener told of every table event; Tables (each table's shape, open by declaration
+  merging), Key a table name, Id an id; ermine/store to be removed once the hosts are off it
+- link: tracked reads keyed by table, not (source, table). built 10-14, and moved to core/link
+  (chee: "we probably want to move link into core as part of this"); places' source passed over
+  until places changes
 - guard: refused is an id with nothing you can open, not a REFUSED source
-- node: createEntry makes an entry; createNode(entries) makes the whole
+- node: createEntry makes an entry; createNode(values) makes the whole. built 10-14
 - pack: the node as the unit
 - hosts (slaygrounds and others): no "stored", "pending", ROOT, REFUSED; pending moves onto the
   computation's node
@@ -208,6 +298,31 @@ chee 10-14: "i think this is the plan."
   stacking would need on to mean "whatever is under me here", but on is an id. with patch nodes,
   later
 - change identity blocks a patch node's at and versioned ids; both later
+- outer wins vs "closest to me", 10-14, *decided*: "let's build it with this feature, outer wins, paths
+  always mean the same thing relative to your root" (inner wins weighed and dropped: "having a slah
+  in it would be weirdly special ... so it's still not taking the "closest rule" in that sense").
+  through folders that don't exist, *decided* 10-14 (chosen: "Yes, X"): a root holding
+  {"work/a/x": X} and no "work" gives X at /work/a/x; listing, *decided* (chosen: "Shows work"):
+  listing / shows work, a name the walk can reach on, though /work itself isn't there.
+  before that, chee, "i wanted to alwys be able to
+  answer any qyestion with "place something closer" and "it was the closest thing too me" and this
+  does seem to violate that". facts: from your root, outer wins is closest to you; a process sitting
+  in /a resolves from "/" (*mine*), so an outer redirect beats what it places in its own folder;
+  measuring from where each asker sits gives two askers two answers for one path (the review's
+  "two starting points")
+- what places gives out. *decided* 10-13: "right, exactly. it should be a capability" (no .up or .id
+  to take apart); 10-14: "it actually might not be that it gives a capability. idk what places gives
+  you exactly. does it just give you the id? that's probably not right either. maybe it gives you
+  something that is a combination of your relative path to it and its id?". chee's questions:
+  is it safe to get the id here (probably, at the places level)? the relative path to the item,
+  from where you asked? tracked, so you get a new one when something is moved closer to you?
+  today .up feeds guard's route, path(item) and lookup's walk-up; .id feeds every value read
+  chee 10-14, thinking aloud ("this is just thoughts"): "i meant safe _to return_ if the person is
+  asking by path, they may not have the right to know id. then what you'd hand them back might be
+  a tracked token they can use to get access to the node for that id, that's kept in a weekmap";
+  "if you said `lookup` maybe you should get the path"
+  10-14, *decided*: "yeah the process api's open(path) will give back something of some kinda shape for
+  sure" (places' get gives the id, lookup the path; what open hands a process is its own thing)
 
 * Against the playground, 10-14
 Every demo in playground/ checked by reading (six agents; nothing built or run): the slaygrounds
@@ -225,7 +340,7 @@ Gaps found, most-hit first; ✦ touches the data structure:
   so a jump's route is its names: prog-build's escape.c still looks up through /c/vault. desk, lamps, big-shell bin/, fancy-lisp, pipeline,
   sequencer, react, solid, d2, cascade, dungeon, life, every t.find
 - ✦ a repeated name: many demos use it as an ordered list, need the nth member, and repeat the same
-  id (sequencer: verse twice). with children a plain map (*lean*), they use distinct names and keep
+  id (sequencer: verse twice). with children a plain map (*decided* 10-14), they use distinct names and keep
   their order as a value, as todos does. big-trello,
   fancy-notebook, pipeline, sequencer, dungeon, automerge, big-shell @n
 - ✦ an entry in a saved or shared folder that is never kept: a process, a device, a host's slot.

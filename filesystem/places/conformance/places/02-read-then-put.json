@@ -1,0 +1,91 @@
+{
+	"title": "a read of what is not there, then something put there: it reruns and sees it; a value nobody reads yet does not rerun it",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"values": [
+					"notes",
+					"today"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "T",
+			"patches": [
+				{
+					"path": [],
+					"value": "hello"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "place",
+			"at": "N",
+			"name": "today",
+			"expect": {},
+			"id": "T"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "hello"
+			}
+		}
+	]
+}

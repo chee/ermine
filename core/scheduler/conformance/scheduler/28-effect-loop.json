@@ -113,7 +113,7 @@
 					{
 						"due": "c",
 						"tick": 5,
-						"by": "e"
+						"writer": "e"
 					},
 					{
 						"acts": "e",
@@ -127,7 +127,7 @@
 					{
 						"due": "e",
 						"tick": 6,
-						"by": "c"
+						"writer": "c"
 					},
 					{
 						"ends": "c",

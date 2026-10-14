@@ -1,0 +1,72 @@
+{
+	"title": "a sibling renamed in a folder: a walker of another name does not rerun",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"a": "A",
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"get": [
+					"a"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"get": [
+					"c"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "rename",
+			"at": "R",
+			"name": "b",
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "a",
+			"expect": {
+				"runs": 1,
+				"value": "A"
+			}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"runs": 2,
+				"value": "B"
+			}
+		}
+	]
+}

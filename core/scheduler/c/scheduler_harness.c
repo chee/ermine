@@ -4,12 +4,13 @@
 //
 // async: {"wait":[p]} makes a promise with sc_promise_new and names it p; the run returns it
 // (SC_AWAIT). {"wait":[p,e]} also keeps e and the run, and resolve evaluates e through the run
-// first (a closed run refuses the read: stopped), then settles the promise with its value or
+// first (the read is the global one: after the await it counts for nothing), then settles the promise with its value or
 // error, as a then does. the rest (the result lands at the next pulse) is the scheduler's.
 //
-// by, as the reference's: a write in a run (after an await too) names the run; in a set, act,
+// writer, as the reference's: a computation's program takes sc_current_writer at its start and keeps
+// it in its context, so a write in a run (after an await too) names the run; in a set, act,
 // cleanup or run(), the computation's latest run (sc_latest); else none; "open": the writer open
-// (sc_current_by). a scope's info is the
+// (sc_current_writer). a scope's info is the
 // request's own pairs; every line is retained to the end, so what points into one stays good. a pulse past ENDLESS
 // moments is left by a longjmp out of the hook: it answers {"error":"endless"}, and the
 // scheduler is not used again reliably (it leaks)
@@ -186,9 +187,9 @@ static bool json_equal(const void *a, const void *b, void *data) {
 
 // programs --------------------------------------------------------------------------------------
 
-// what an expression is evaluated in: the run it reads through, the computation, an act's values
+// what an expression is evaluated in: the run's writer (sc_current_writer at its start), the computation, an act's values
 typedef struct ctx {
-	sc_run *run;
+	sc_run *run; // the writer kept
 	sc_scope *self;
 	const op_value *value;
 	const op_value *previous;
@@ -267,7 +268,7 @@ static const sc_pair *info_of(const op_value *list, size_t *n) {
 	return out;
 }
 
-// what is open: {scope, pairs, by?}, by the computation of the writer; nothing: null. a
+// what is open: {scope, pairs, writer?}, by the computation of the writer; nothing: null. a
 // computation's info is the scheduler's, its values numbers; any other's is a request's
 static op_value *current(void) {
 	sc_scope *open = sc_current(sch);
@@ -300,8 +301,8 @@ static op_value *current(void) {
 	const char *name = sc_scope_user(open);
 	op_set(out, "scope", name ? op_str(name) : op_null());
 	op_set(out, "pairs", pairs);
-	sc_run *by = sc_current_by(sch);
-	if (by) op_set(out, "by", op_str(sc_scope_user(sc_run_of(by))));
+	sc_run *writer = sc_current_writer(sch);
+	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_of(writer))));
 	return out;
 }
 
@@ -309,7 +310,7 @@ static op_value *current(void) {
 static char *unmade(void) { return copyString(sc_current(sch) ? SC_DISPOSED : SC_UNSCOPED); }
 
 // who a change in this code is by: the run, else the computation's latest
-static sc_run *by_of(const ctx *c) {
+static sc_run *writer_of(const ctx *c) {
 	if (c->run) return c->run;
 	return c->self ? sc_latest(c->self) : NULL;
 }
@@ -407,9 +408,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 		if (k == NULL) return thrown(copyString("read of a non-string"));
 		entry *en = entry_of(k);
 		free(k);
-		sc_read_status st = c->run ? sc_run_read(c->run, en->key) : sc_read(sch, en->key);
+		sc_read_status st = sc_read(sch, en->key);
 		if (st == SC_STOP) return (val){V_STOP, NULL, NULL, NULL};
-		if (st == SC_CLOSED) return thrown(copyString(SC_STOPPED));
 		return ok(en->value ? op_ref(en->value) : op_null());
 	}
 	if (strcmp(form, "sum") == 0 || strcmp(form, "mod") == 0) {
@@ -472,8 +472,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 		const void *key = entry_of(k)->key;
 		free(k);
 		const char *said = text(a2);
-		sc_run *by = a2 == NULL ? by_of(c) : said && strcmp(said, "open") == 0 ? sc_current_by(sch) : NULL;
-		sc_changed(sch, &key, 1, by);
+		sc_run *writer = a2 == NULL ? writer_of(c) : said && strcmp(said, "open") == 0 ? sc_current_writer(sch) : NULL;
+		sc_changed(sch, &key, 1, writer);
 		return v;
 	}
 	if (strcmp(form, "throw") == 0) {
@@ -584,9 +584,9 @@ typedef struct prog {
 static prog **progs;
 static size_t nprogs, capprogs;
 
-static sc_out program_f(sc_run *run, void *data) {
+static sc_out program_f(void *previous, void *data) {
 	prog *p = data;
-	ctx c = {run, p->self, NULL, NULL};
+	ctx c = {sc_current_writer(sch), p->self, NULL, previous};
 	val v = evaluate(p->f, &c);
 	switch (v.k) {
 	case V_OK: return (sc_out){.kind = SC_VALUE, .value = v.j};
@@ -647,7 +647,7 @@ static op_value *moment_json(const moment *x, bool reads) {
 	case SC_DUE:
 		op_set(o, "due", name_json(m->c));
 		op_set(o, "tick", integer((int64_t)m->tick));
-		if (m->by) op_set(o, "by", name_json(m->by));
+		if (m->writer) op_set(o, "writer", name_json(m->writer));
 		break;
 	case SC_STARTS:
 		op_set(o, "starts", name_json(m->c));

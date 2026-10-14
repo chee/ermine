@@ -1,0 +1,107 @@
+{
+	"title": "a compute's f is given its last result, the last given to set (none yet: null), each run",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "a"
+					},
+					{
+						"log": {
+							"given": "previous"
+						}
+					},
+					{
+						"sum": [
+							{
+								"given": "previous"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 3
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					null,
+					1,
+					2
+				]
+			}
+		}
+	]
+}

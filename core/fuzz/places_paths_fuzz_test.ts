@@ -1,30 +1,23 @@
-// places' reads as tracked paths' spots: walkers (get, lookup, names, opened places, lib's
-// lookups) over a small graph, each read places tells made a spot. after each random write
-// through places, or table event, the spots marked by the changed nodes' patches (paths' mark)
-// and by the events (paths' event):
+// places' reads as tracked paths' spots: walkers (get, lookup, list, members) over a
+// small graph, each read places tells a spot. after each random write, said written, or table
+// event, the spots places says changed:
 //   - include a spot of every walker whose result changed
-//   - include every spot whose children node, or whose value at the spot's path, is not the same
+//   - include every spot whose children entry, or whose value at the spot's path, is not the same
 //     reference as before (the oracle: values are copy-on-write)
-// spots no walker holds any more are released, as the wiring would; what is kept is what is
-// held. a few dozen seeds (fuzz runs small)
+// spots no walker holds any more are released, as the scheduler's forget would; what is kept is
+// what is held. a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import { type Item, PlacesError } from "@ermine/places"
-import { createPaths, type Spot } from "@ermine/scheduler/paths"
-import { lookups } from "../places/typescript/lib.ts"
+import { PlacesError } from "@ermine/places"
+import { get, list, lookup, members } from "@ermine/places/lib"
+import type { Spot } from "@ermine/scheduler/paths"
 import { isMap, rand } from "./gen.ts"
-import { createWorld, items, show, type Wrote } from "./world.ts"
+import { createWorld, show, type Wrote } from "./world.ts"
 
 const SEEDS = 40
 const STEPS = 50
 const MISSING = Symbol("missing")
 
-type Walker = {
-	what: string
-	walk: () => string
-	held?: { items: () => readonly Item[]; drop: () => void }
-	spots: Spot<never>[]
-	result: string
-}
+type Walker = { what: string; walk: () => string; spots: Spot<unknown>[]; result: string }
 
 // what the seeds reached, counted
 type Reach = { changed: number; marked: number }
@@ -32,35 +25,29 @@ type Reach = { changed: number; marked: number }
 // one seed's run
 function seeded(seed: number, reach: Reach) {
 	const { pick } = rand(seed)
-	const paths = createPaths<never>()
-	let current: Spot<never>[] | undefined
-	const made = new Set<Spot<never>>()
-	const w = createWorld(pick, (r) => {
-		const s = paths.spot(r.source, r.id, r.path)
-		made.add(s)
-		current?.push(s)
-	})
-	const { p } = w
+	let current: Spot<unknown>[] | undefined
+	const made = new Set<Spot<unknown>>()
+	const marks = new Set<unknown>()
+	const w = createWorld(
+		pick,
+		(s) => {
+			made.add(s)
+			current?.push(s)
+		},
+		(spots) => spots.forEach((s) => marks.add(s)),
+	)
+	const { p, paths } = w
 	function walker(): Walker {
-		const k = pick(6), address = w.address(), from = w.from(), all = pick(2) === 0
-		if (k === 0) {
-			const held = p.open(address)
-			return {
-				what: `open ${show(address)}`,
-				held,
-				walk: () => items(held.items()).join(),
-				spots: [],
-				result: "",
-			}
-		}
-		const walk = k === 1
-			? () => items(p.get(address, from)).join()
+		const k = pick(5), where = w.path(), names = w.path(2), all = pick(2) === 0
+		const what = `${k} ${show(names)} at ${show(where)}`
+		const walk = k <= 1
+			? () => show(get(p, where))
 			: k === 2
-			? () => items(p.lookup(address, from, all)).join()
+			? () => show(all ? lookup(p, names, where, true) : lookup(p, names, where))
 			: k === 3
-			? () => items(lookups(p, address, p.get([], from)[0] ?? p.get([])[0])).join()
-			: () => p.get(address, from).map((i) => p.names(i).join("+")).join()
-		return { what: `${k} ${show(address)} from ${show(from)}`, walk, spots: [], result: "" }
+			? () => show(list(p, where))
+			: () => show(members(p, where))
+		return { what, walk, spots: [], result: "" }
 	}
 	const run = (x: Walker) => {
 		current = []
@@ -71,9 +58,9 @@ function seeded(seed: number, reach: Reach) {
 	const walkers = Array.from({ length: 10 }, walker)
 	walkers.forEach(run)
 
-	// what a spot rests on: its key's node, and the value at its path in it
-	const rest = (s: Spot<never>) => {
-		const node = w.children(s.source as never, s.id as never)
+	// what a spot rests on: its key's entry, and the value at its path in it
+	const rest = (s: Spot<unknown>) => {
+		const node = w.children(s.id as never)
 		const v = node?.value
 		if (s.path!.length === 0) return [node, v]
 		const name = s.path![0] as string
@@ -82,6 +69,7 @@ function seeded(seed: number, reach: Reach) {
 
 	for (let step = 0; step < STEPS; step++) {
 		const rests = new Map(walkers.flatMap((x) => x.spots).map((s) => [s, rest(s)]))
+		marks.clear()
 		let wrote: Wrote | undefined
 		try {
 			wrote = w.write()
@@ -89,19 +77,12 @@ function seeded(seed: number, reach: Reach) {
 			if (!(e instanceof PlacesError)) throw e
 		}
 		const at = `seed ${seed}, step ${step}: ${wrote?.what ?? "refused"}`
-		const marks = new Set<Spot<never>>()
-		for (const c of wrote?.changed ?? []) {
-			for (const s of paths.mark(c.source, c.id, c.node.change.op!.patches)) marks.add(s)
-		}
-		for (const e of wrote?.events ?? []) {
-			for (const s of paths.event(e.source, e.id)) marks.add(s)
-		}
-		// every spot whose node or value there is another reference
+		// every spot whose entry or value there is another reference
 		for (const [s, [node, v]] of rests) {
 			const [nodeNow, vNow] = rest(s)
 			if (node === nodeNow && v === vNow) continue
 			reach.changed++
-			assert(marks.has(s), `${at}: ${show([s.source, s.id, s.path])} changed, not marked`)
+			assert(marks.has(s), `${at}: ${show([s.id, s.path])} changed, not marked`)
 		}
 		// every walker whose result changed
 		for (const x of walkers) {
@@ -123,7 +104,6 @@ function seeded(seed: number, reach: Reach) {
 		}
 		assertEquals(paths.kept().spots, held.size, `${at}: what is kept`)
 	}
-	for (const x of walkers) x.held?.drop()
 }
 
 Deno.test(`places + paths fuzz: ${SEEDS} seeds × ${STEPS} writes, what changed is marked`, () => {

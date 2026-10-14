@@ -14,12 +14,12 @@
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import {
-	type By,
 	type Computation,
 	createScheduler,
 	type Moment,
 	type Read,
 	type Scope,
+	type Writer,
 } from "./scheduler.ts"
 import type { Link, Node } from "./tracker.ts"
 import { rand } from "../../fuzz/gen.ts"
@@ -188,10 +188,10 @@ function seeded(seed: number, reach: Reach) {
 		const e = expr(r, keys, 2 + r.pick(2))
 		const o = r.one(scopes.filter((o) => o.state === "alive"))
 		const m = { name, kind, e } as Made
-		const f = (read: (key: unknown) => void) =>
+		const f = () =>
 			evaluate(e, (key) => {
 				m.run!.reads.add(key)
-				read(key)
+				s.read(key)
 				return store.get(key)
 			})
 		if (kind === "compute") {
@@ -383,7 +383,7 @@ async function loops(seed: number, reach: Loops) {
 		},
 	})
 	const store = new Map<string, number>()
-	const write = (key: string, v: number, by?: By) => {
+	const write = (key: string, v: number, by?: Writer) => {
 		store.set(key, v)
 		s.changed([key], by)
 	}
@@ -448,23 +448,25 @@ async function loops(seed: number, reach: Loops) {
 		let c!: Computation
 		if (p.kind === 0) {
 			// a compute whose set writes its key
-			c = s.compute((read) => (called(c, "f"), sum(read, ins)), (v) => {
+			c = s.compute(() => (called(c, "f"), sum(s.read, ins)), (v) => {
 				called(c, "set")
 				write(out, v, c)
 			})
 		} else if (p.kind === 1) {
 			// a compute writing in its run
-			c = s.compute((read) => {
+			c = s.compute(() => {
+				const writer = s.current()?.writer
 				called(c, "f")
-				const v = sum(read, ins)
-				write(other, (v + 1) % 5, read)
+				const v = sum(s.read, ins)
+				write(other, (v + 1) % 5, writer)
 				return v % 2
 			}, () => called(c, "set"))
 		} else if (p.kind === 2) {
 			// a compute whose cleanup writes, and now and then disposes it
-			c = s.compute((read) => {
+			c = s.compute(() => {
+				const writer = s.current()?.writer
 				called(c, "f")
-				const v = sum(read, ins)
+				const v = sum(s.read, ins)
 				s.cleanup(() => {
 					write(other, (v + 1) % 5, c)
 					if (p.dies && (store.get(other) ?? 0) > 2) s.dispose(c)
@@ -476,10 +478,11 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 3) {
 			// an effect: each run makes a scope under it; its act writes, and may make a compute
-			c = s.effect((read) => {
+			c = s.effect(() => {
+				const writer = s.current()?.writer
 				called(c, "f")
 				s.scope()
-				return sum(read, ins)
+				return sum(s.read, ins)
 			}, (v) => {
 				called(c, "act")
 				write(other, (v + 1) % 5, c)
@@ -488,11 +491,12 @@ async function loops(seed: number, reach: Loops) {
 			effects.push(c)
 		} else if (p.kind === 4) {
 			// an async compute: after its await it writes, with by or from outside
-			c = s.compute((read) => {
+			c = s.compute(() => {
+				const writer = s.current()?.writer
 				called(c, "f")
-				const v = sum(read, ins)
+				const v = sum(s.read, ins)
 				return new Promise<number>((done) => pending.push(() => done(v))).then((v) => {
-					write(other, (v + 1) % 5, p.named ? read : undefined)
+					write(other, (v + 1) % 5, p.named ? writer : undefined)
 					return v
 				})
 			}, (v: number) => {
@@ -502,10 +506,11 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 5) {
 			// a compute making a compute under itself in each run
-			c = s.compute((read) => {
+			c = s.compute(() => {
+				const writer = s.current()?.writer
 				called(c, "f")
 				if (make(c, p.makes!)) reach.made++
-				return sum(read, ins)
+				return sum(s.read, ins)
 			}, (v) => {
 				called(c, "set")
 				write(out, v, c)

@@ -13,7 +13,7 @@ import { assert, assertEquals } from "@std/assert"
 import { type Item, type Places, PlacesError } from "@ermine/places"
 import { createPaths, type Spot } from "@ermine/scheduler/paths"
 import { type Computation, createScheduler, type Owner } from "@ermine/scheduler"
-import { lookups } from "../places/typescript/lib.ts"
+import { lookups } from "../../filesystem/places/typescript/lib.ts"
 import { rand } from "./gen.ts"
 import { createWorld, items, show, type Wrote } from "./world.ts"
 

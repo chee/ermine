@@ -1,39 +1,125 @@
 {
 	"title": "through: only the computations on the loop, not every one in its causes (proof C2)",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
-		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 1 } },
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
 		{
 			"op": "compute",
 			"name": "u",
 			"scope": "o",
-			"f": { "sum": [{ "read": "x" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "x"
+					},
+					1
+				]
+			},
 			"to": "y"
 		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "sum": [{ "read": "y" }, { "read": "z" }, 1] },
+			"f": {
+				"sum": [
+					{
+						"read": "y"
+					},
+					{
+						"read": "z"
+					},
+					1
+				]
+			},
 			"to": "z"
 		},
-		{ "op": "pulse", "expect": {} },
-		{ "op": "moments" },
-		{ "op": "write", "values": { "x": 5 }, "expect": { "tick": 6 } },
-		{ "op": "pulse", "expect": {} },
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments"
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 5
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
 		{
 			"op": "moments",
 			"expect": {
 				"moments": [
-					{ "due": "u", "tick": 6 },
-					{ "starts": "u", "run": 2, "rank": 0 },
-					{ "due": "c", "tick": 7, "by": "u" },
-					{ "ends": "u", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 3, "rank": 1 },
-					{ "due": "c", "tick": 8, "by": "c" },
-					{ "ends": "c", "run": 3, "ended": "done", "equal": false },
-					{ "starts": "c", "run": 4, "rank": 1 },
-					{ "ends": "c", "run": 4, "ended": "looping", "equal": false, "through": ["c"] }
+					{
+						"due": "u",
+						"tick": 6
+					},
+					{
+						"starts": "u",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 7,
+						"writer": "u"
+					},
+					{
+						"ends": "u",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"due": "c",
+						"tick": 8,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c"
+						]
+					}
 				]
 			}
 		}
