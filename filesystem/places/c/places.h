@@ -6,7 +6,7 @@
 //   pl *p = pl_new();                                  // only itself: it is the ctx of the hooks
 //   tb_table *table = tb_make(pl_event, p);
 //   sc_scheduler *s = sc_new((sc_options){..});
-//   sc_on_untrack(s, pl_forget, p);
+//   sc_on_tracking_end(s, pl_forget, p);
 //   pl_connect(p, &(pl_setup){tb_string("R"), table, paths, s});
 //   ...
 //   pl_place(p, children, name, id, header, &changed); // a write
@@ -29,12 +29,17 @@
 //
 // CONTRIBUTORS (contributors.org). What answers one step of a walk: children is one (pl_children); a places
 // can be given others, asked in order at each step: the first answer is where the walk goes (pl_get),
-// all of them are what is there (pl_entries), and a folder's names are every contributor's, each name
+// all of them are what is there (pl_gets), and a folder's names are every contributor's, each name
 // once (pl_list, pl_members). None given: children alone, and the walk, list and members read just as
 // they always have. A contributor reads only through the reads of the places it is handed (pl_read,
 // pl_keys, pl_track). A cache (cache.h) works answers out outside any run: pl_record puts the reads a
-// call makes into a set in place of the scheduler, and pl_keep keeps a spot past pl_forget while the
-// cache reads it.
+// call makes into a set in place of the scheduler (and the spots it made, into fresh), and pl_keep
+// keeps a spot past pl_forget while the cache reads it. A cached answer reflects a write once it is
+// committed, so commit right after update.
+//
+// A VIEW (pl_view) is the same places from another root, with contributors of its own: everything
+// above is shared with the places it was made from, so a box (ermine/boxes), a view rooted at its
+// folder, needs nothing passed on to it.
 //
 // pl_spot names a key told to the scheduler: one of this places' spots, held, is where it reads, so
 // a run's reads (the scheduler's run end) can be named as places in the graph. Anything else,
@@ -65,7 +70,8 @@
 typedef struct pl pl;
 // only the places, so that it can be the ctx of the hooks below
 pl *pl_new(void);
-// forgets the holds, the pairs and what is open; none of what it was connected to
+// forgets the holds, the pairs, what is open and its views; none of what it was connected to. A
+// view (pl_view): only it, and its watches
 void pl_free(pl *p);
 
 // where a walk has got to: the id it is at, and its path (the names from the root to it). no path
@@ -93,10 +99,17 @@ typedef struct {
 	const char *from;
 	// the id it has at here + name: 1 and *out; none: 0
 	int (*step)(void *ctx, const pl_here *here, const char *name, pl *reads, tb_key *out);
-	// the names it has directly under here, in its order: each one step answers, added to out
+	// the names it has directly under here, in its order: each one step answers, or a level of its
+	// own, added to out
 	void (*names)(void *ctx, const pl_here *here, pl *reads, pl_namelist *out);
+	// whether here + name is a level of its own: no id, but names under it, so a walk goes on through it
+	// as if it were a folder (the walk, in places.c). NULL: never
+	int (*level)(void *ctx, const pl_here *here, const char *name, pl *reads);
 	void *ctx;
 } pl_contributor;
+// the id a walk is at on a level: not an id of any entry, so never given as an answer (pl_get: nothing
+// there)
+tb_key pl_level(void);
 // the children table: goes by the id, never the path. the default contributor
 extern const pl_contributor pl_children;
 
@@ -116,11 +129,17 @@ typedef struct {
 void pl_connect(pl *p, const pl_setup *setup);
 // where names start
 tb_key pl_root(const pl *p);
+// the same places from another root, asked by contributors of its own (the array kept, the
+// caller's, as are the contributors and root's string; none: children alone): one set of spots,
+// keeps, holds and watches, one commit (pl_commit on either) and one table hook (pl_event on either)
+// with p, so whoever writes tells it nothing more. A box's places (ermine/boxes). Its watches find
+// their path from its root. Let go by pl_free on it (its watches stopped), or with p's
+pl *pl_view(pl *p, tb_key root, const pl_contributor *const *contributors, size_t n);
 
 // hooks, ctx the pl
 // the table's (tb_event): a table event says changed every spot of its key
 void pl_event(void *ctx, tb_key part, tb_key id);
-// the scheduler's untrack listener (sc_on_untrack): a key that is one of this places' spots is released; any other is left alone.
+// the scheduler's untrack listener (sc_on_tracking_end): a key that is one of this places' spots is released; any other is left alone.
 // A spot kept (pl_keep) is not released: whoever keeps it calls this once its last keep is given back
 void pl_forget(const void *key, void *ctx);
 
@@ -273,8 +292,9 @@ int pl_set_del(pl_set *set, const void *item);
 void pl_set_free(pl_set *set);
 
 // f(ctx), with every read it makes (a spot, or a contributor's pl_track) put into reads and told to
-// no one: what a cache works out outside any run. inside another record, apart from it
-void pl_record(pl *p, void (*f)(void *ctx), void *ctx, pl_set *reads);
+// no one: what a cache works out outside any run. inside another record, apart from it. fresh (or
+// NULL): the spots f read that were not this places' before, so nothing else tracks or keeps them
+void pl_record(pl *p, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fresh);
 // a key of a contributor's own: told to the scheduler (the status as of any read), or while recording,
 // put into the set
 void pl_track(pl *p, const void *key);
@@ -285,7 +305,8 @@ size_t pl_keep(pl *p, const void *key, int n);
 
 // the filesystem, every read told ---------------------------------------------------------------
 
-// a name in a children entry, and the id under it. The name is borrowed from the table
+// a name in a children entry, and the id under it (a contributor's level: pl_level(), no id of its
+// own). The name is borrowed from the table
 typedef struct {
 	const char *name;
 	tb_key id;
@@ -317,9 +338,9 @@ typedef struct {
 void pl_answers_free(pl_answers *list);
 // every answer at here + name, in the contributors' order
 pl_answers pl_answers_at(pl *p, const pl_here *here, const char *name);
-// every answer at a path: the walk to the folder it is in, then every contributor asked its name. The
-// root: itself, from "root". Nothing there: none
-pl_answers pl_entries(pl *p, const char *const *path, size_t n);
+// every answer at a path: the walk to the folder it is in (a level too), then every contributor asked
+// its name. The root: itself, from "root". Nothing there, or a level: none
+pl_answers pl_gets(pl *p, const char *const *path, size_t n);
 
 // a name at a path, and the first contributor that gives it
 typedef struct {
@@ -333,7 +354,7 @@ typedef struct {
 void pl_nameds_free(pl_nameds *list);
 // the names under here, every contributor's in order, each name once: from the first that gives it
 pl_nameds pl_names(pl *p, const pl_here *here);
-// the id at a path from the root; 1 and *out, or 0: nothing there
+// the id at a path from the root; 1 and *out, or 0: nothing there, or a level
 int pl_get(pl *p, const char *const *path, size_t n, tb_key *out);
 // the names from where you are (a path from the root), then from each place above it, nearest
 // first: for each found, how many of from its path starts with (the path is that many of from,
@@ -350,9 +371,11 @@ void pl_keys(pl *p, tb_key part, tb_key id, const op_key *path, size_t n, int id
 // map whole, so any change to it reruns the reader (members); or the names the map holds, whatever
 // they hold, one read of which names there are, so only a name added or taken out reruns the
 // reader (list, its ids not told, left empty). Given contributors: list is every contributor's names,
-// each once; members those names, then each name's step as pl_get takes it, with its from.
-// nothing there: none. The caller's, pl_members_free
+// each once; members those names, then each name's step as pl_get takes it, with its from (a level:
+// the id pl_level(), no id of its own). At a level (no id, names under it), list and members read
+// under it as under a folder. nothing there: none. The caller's, pl_members_free
 pl_members pl_members_at(pl *p, const char *const *path, size_t n);
+// (lib.ts' list is an iterator, a generator; C has none, so this returns the array)
 pl_members pl_list(pl *p, const char *const *path, size_t n);
 
 // who ------------------------------------------------------------------------------------------

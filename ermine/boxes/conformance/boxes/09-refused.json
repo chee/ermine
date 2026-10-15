@@ -1,0 +1,215 @@
+{
+	"title": "refused, and nothing changes: box where something is (already-there), through a name holding no id (already-there), with no name or a name that is not one (not-a-name, no folder made on the way); createBox the same; unbox where nothing is, or with no name (nothing-there); an id in a parent box (nothing-there)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"fetch": "F0",
+				"odd": 5
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "work",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"node": "NG",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"odd"
+			],
+			"node": "X",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"odd",
+				"x"
+			],
+			"node": "X",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [],
+			"node": "X",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				".."
+			],
+			"node": "X",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"a",
+				""
+			],
+			"node": "X",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "create",
+			"name": "c",
+			"at": "work/odd/x",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "create",
+			"name": "c",
+			"at": [
+				"work",
+				"a",
+				""
+			],
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"nothing"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"nothing",
+				"x"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"fetch",
+				"x"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"odd"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"odd",
+				"x"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "create",
+			"name": "x",
+			"id": "W",
+			"parent": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"fetch": "F0",
+					"odd": 5
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"id": "R",
+			"expect": {
+				"value": {
+					"work": "W"
+				}
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"expect": {
+				"id": "F0"
+			}
+		}
+	]
+}

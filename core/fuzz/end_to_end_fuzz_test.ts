@@ -83,7 +83,7 @@ function seeded(seed: number, reach: Reach) {
 				f: (q) => show(all ? lookup(q, names, where, true) : lookup(q, names, where)),
 			}
 		}
-		if (k === 2) return { what, f: (q) => show(list(q, where)) }
+		if (k === 2) return { what, f: (q) => show([...list(q, where)]) }
 		if (k === 3) return { what, f: (q) => show(members(q, where)) }
 		if (k === 4) {
 			const id = w.entry(), path: Path = w.path(1)
@@ -92,7 +92,7 @@ function seeded(seed: number, reach: Reach) {
 				f: (q) => show(q.readValue("children", id, path)),
 			}
 		}
-		return { what, f: (q) => show(get(q, where)) + show(list(q, names)) }
+		return { what, f: (q) => show(get(q, where)) + show([...list(q, names)]) }
 	}
 	function compute(m: Made, f: () => string) {
 		m.c = s.runWithScope(m.o, () =>

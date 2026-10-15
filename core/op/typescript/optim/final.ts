@@ -177,8 +177,14 @@ const KINDS = new Set<unknown>([
 // what notify reads at an unranged place whose container is v, as it is now; nothing checked
 function factOf(v: unknown, k: Key): Fact {
 	// a list's: the index is in it
-	if (isList(v)) return { list: true, length: v.length, had: typeof k === "number" && k < v.length }
-	return { list: false, length: 0, had: v !== null && typeof v === "object" && Object.hasOwn(v, k) }
+	if (isList(v)) {
+		return { list: true, length: v.length, had: typeof k === "number" && k < v.length }
+	}
+	return {
+		list: false,
+		length: 0,
+		had: v !== null && typeof v === "object" && Object.hasOwn(v, k),
+	}
 }
 
 // one edit's content, changed patch by patch; list: a name's list, there only when not empty
@@ -326,7 +332,9 @@ class Work {
 			if (keep) taken = t.slice(a, b)
 			const C = t.constructor as Kind, spare = this.spare
 			let n: Typed
-			if (spare !== undefined && spare.has(t) && m * t.BYTES_PER_ELEMENT <= t.buffer.byteLength) {
+			if (
+				spare !== undefined && spare.has(t) && m * t.BYTES_PER_ELEMENT <= t.buffer.byteLength
+			) {
 				// made here, with room: changed in its buffer, a new view of it
 				spare.delete(t)
 				if (m >= t.length) {

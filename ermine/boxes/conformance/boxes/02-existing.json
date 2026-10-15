@@ -1,0 +1,253 @@
+{
+	"title": "createBox at a folder that is there uses it and writes nothing: its \"/\" is that folder, it sees what is in it (get, list, members, entries from children) and nothing above; by id the same; at \"/\" the host's root",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W",
+				"tools": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"notes": "N",
+				"clock": "C0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {
+				"pad": "P1"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "top",
+			"scope": "o",
+			"f": {
+				"names": [
+					"work"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"notes",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "work",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [],
+			"expect": {
+				"id": "W"
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"notes",
+				"pad"
+			],
+			"expect": {
+				"id": "P1"
+			}
+		},
+		{
+			"op": "list",
+			"box": "b",
+			"at": [],
+			"expect": {
+				"names": [
+					"clock",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "members",
+			"box": "b",
+			"at": [],
+			"expect": {
+				"members": [
+					{
+						"name": "clock",
+						"id": "C0",
+						"from": "children"
+					},
+					{
+						"name": "notes",
+						"id": "N",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "entries",
+			"box": "b",
+			"path": [
+				"notes"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "N",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "entries",
+			"box": "b",
+			"path": [],
+			"expect": {
+				"entries": [
+					{
+						"id": "W",
+						"from": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"work"
+			],
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"tools"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"notes",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "saved",
+			"id": "R",
+			"expect": {
+				"value": {
+					"work": "W",
+					"tools": "T"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"notes": "N",
+					"clock": "C0"
+				}
+			}
+		},
+		{
+			"op": "create",
+			"name": "e",
+			"id": "W",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "get",
+			"box": "e",
+			"path": [
+				"notes"
+			],
+			"expect": {
+				"id": "N"
+			}
+		},
+		{
+			"op": "create",
+			"name": "n",
+			"at": "work/notes",
+			"expect": {
+				"root": "N"
+			}
+		},
+		{
+			"op": "list",
+			"box": "n",
+			"at": [],
+			"expect": {
+				"names": [
+					"pad"
+				]
+			}
+		},
+		{
+			"op": "create",
+			"name": "r",
+			"at": "/",
+			"expect": {
+				"root": "R"
+			}
+		},
+		{
+			"op": "get",
+			"box": "r",
+			"path": [
+				"work",
+				"notes"
+			],
+			"expect": {
+				"id": "N"
+			}
+		}
+	]
+}

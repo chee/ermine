@@ -17,8 +17,16 @@
 // { op: "get", path }                      → { id? }
 // { op: "entries", path }                  → { entries }   each { id, from }
 // { op: "list", at }                       → { names }
-// { op: "members", at }                    → { members }   each { name, id, from }
+// { op: "members", at }                    → { members }   each { name, id?, from } (a level: no id)
 // { op: "lookup", names, from }            → { path? }
+// scope nodes (scopes.ts):
+// { op: "scope", name, parent }            → {}   a scope under the named one
+// { op: "give", scope, id? }               → { id }   the scope's node id, made the first time
+// { op: "nodeOf", scope }                  → { id? }
+// { op: "nearest", scope }                 → { id? }   its own, or the nearest above with one
+// { op: "write", id, part, value }         → {}   the entry there, replaced (a table event)
+// { op: "parts", id }                      → { parts }   the parts the table holds at the id, sorted
+// { op: "teardown", scope }                → {}
 // computes:
 // { op: "watch", name, scope, f }          → {}   a compute made with scope open, running the
 //    program f each run, its results compared as JSON. f: {"get":path} {"entries":path}
@@ -31,10 +39,11 @@ import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key } from "@ermine/table"
 import { children, createPlaces, place, PlacesError, rename } from "@ermine/places"
-import { entries, get, list, lookup, members } from "@ermine/places/lib"
+import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { addProcess, PROCESS, processes, removeProcess } from "./processes.ts"
+import { createScopeNodes } from "./scopes.ts"
 
 type Json = unknown
 
@@ -50,6 +59,7 @@ const places = createPlaces({
 })
 s.onTrackingEnd((key) => places.release(key))
 const host = s.createRootScope([["actor", "test"]])
+const nodes = createScopeNodes({ scheduler: s, table })
 const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 const header = () => createChangeHeader(s)
 
@@ -59,6 +69,11 @@ const watched = new Map<string, { runs: number; value: Json }>()
 const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const plain = (x: unknown): Json => JSON.parse(JSON.stringify(x ?? null))
 
+function named(name: unknown): Scope {
+	const o = scopes.get(name as string)
+	if (o === undefined) throw new Error(`no scope ${name}`)
+	return o
+}
 function kid(id: unknown) {
 	const n = table.get("children", String(id))
 	if (n === undefined) throw new PlacesError("nothing-there")
@@ -70,8 +85,8 @@ function evaluate(e: Json): Json {
 	if (Array.isArray(e)) return e.map(evaluate)
 	const m = e as Request
 	if ("get" in m) return get(places, m.get) ?? null
-	if ("entries" in m) return plain(entries(places, m.entries))
-	if ("names" in m) return list(places, m.names)
+	if ("entries" in m) return plain(gets(places, m.entries))
+	if ("names" in m) return [...list(places, m.names)]
 	if ("members" in m) return plain(members(places, m.members))
 	if ("lookup" in m) return lookup(places, m.lookup[0], m.lookup[1]) ?? null
 	throw new Error("unknown program")
@@ -110,9 +125,9 @@ function answer(r: Request): Json {
 			return id === undefined ? {} : { id }
 		}
 		case "entries":
-			return { entries: plain(entries(places, r.path)) }
+			return { entries: plain(gets(places, r.path)) }
 		case "list":
-			return { names: list(places, r.at) }
+			return { names: [...list(places, r.at)] }
 		case "members":
 			return { members: plain(members(places, r.at)) }
 		case "lookup": {
@@ -133,6 +148,30 @@ function answer(r: Request): Json {
 			watched.set(r.name, w)
 			return {}
 		}
+		case "scope": {
+			const up = scopes.get(r.parent)
+			if (up === undefined) throw new Error(`no scope ${r.parent}`)
+			scopes.set(r.name, s.createScope([], up))
+			return {}
+		}
+		case "give":
+			return { id: nodes.give(named(r.scope), r.id) }
+		case "nodeOf": {
+			const id = nodes.nodeOf(named(r.scope))
+			return id === undefined ? {} : { id }
+		}
+		case "nearest": {
+			const id = nodes.nearest(named(r.scope))
+			return id === undefined ? {} : { id }
+		}
+		case "write":
+			hosted(() => table.sub(r.part, r.id, createEntry(r.value, header())))
+			return {}
+		case "parts":
+			return { parts: [...table.get(r.id)].map(([part]) => part).sort() }
+		case "teardown":
+			s.teardown(named(r.scope))
+			return {}
 		case "pulse":
 			s.pulse()
 			return {}

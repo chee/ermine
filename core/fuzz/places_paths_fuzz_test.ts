@@ -45,7 +45,7 @@ function seeded(seed: number, reach: Reach) {
 			: k === 2
 			? () => show(all ? lookup(p, names, where, true) : lookup(p, names, where))
 			: k === 3
-			? () => show(list(p, where))
+			? () => show([...list(p, where)])
 			: () => show(members(p, where))
 		return { what, walk, spots: [], result: "" }
 	}

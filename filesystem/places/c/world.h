@@ -28,6 +28,10 @@ pc_cache *world_cached(void);
 // line, the caller's own and kept alive
 void world_contribute(const pl_contributor *const *list, size_t n);
 
+// the event and ctx the world's table is made with, set before the first line, the caller's own and
+// kept alive; never set: pl_event and the places, as the table always was
+void world_event(tb_event event, void *ctx);
+
 // a line answered: the world is made at the first, and every line is kept (retained) until
 // world_finish, for the programs, patches and scope info that refer into it. answer gives a
 // harness's answer to the request, or NULL: not one of its own (the world's is tried); the answer

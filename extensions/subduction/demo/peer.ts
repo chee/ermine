@@ -1,7 +1,7 @@
-// A device in Deno: the same node.ts a tab runs, its storage in a directory, its lines on the
+// a device in deno: the same node.ts a tab runs, its storage in a directory, its lines on the
 // terminal. Joins a folder by id, or makes one.
-//   deno run -A sync/demo/peer.ts [--name bob] [--folder ermine://…] [--store DIR] [--server ws://localhost:8321
-//     [--service localhost:8321]] [--legacy]
+//   deno run -A extensions/subduction/demo/peer.ts [--name bob] [--folder ermine://…] [--store DIR] [--server ws://localhost:8321
+//     [--service localhost:8321]] [--zeros]
 // stdin, a command a line:
 //   make TITLE [TEXT]      a note   |  edit TITLE TEXT   its text replaced   |  at TITLE FROM TO   cursor
 //   list                   notes and devices            |  quit
@@ -31,9 +31,7 @@ const describe = (v: View) =>
 	) +
 	"\n" +
 	v.peers.map((p) =>
-		`  ${p.live ? "*" : "-"} ${p.name}${p.self ? " (you)" : ""}${
-			p.note ? ` in ${p.note} ${p.from}-${p.to}` : ""
-		}`
+		`  * ${p.name}${p.self ? " (you)" : ""}${p.note ? ` in ${p.note} ${p.from}-${p.to}` : ""}`
 	).join("\n")
 const n = await start({
 	backend,
@@ -43,11 +41,10 @@ const n = await start({
 	folder: flag("folder"),
 	server: flag("server"),
 	service: flag("service"),
-	legacy: Deno.args.includes("--legacy"),
+	zeros: Deno.args.includes("--zeros"),
 	render: (v) => {
 		view = v
-		// not the age of a beat: only what is on show
-		const text = describe({ ...v, peers: v.peers.map((p) => ({ ...p, age: 0 })) })
+		const text = describe(v)
 		if (text !== last) console.log(last = text), console.log("--")
 	},
 	log: (l) => console.log("#", l),

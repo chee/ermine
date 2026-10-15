@@ -6,8 +6,9 @@
 // told through onRunEnd and onEffect, nothing more.
 //
 // a computation leaves a boundary's list when a later run of it ends any other way (done,
-// looping; a stopped run says nothing yet), or when it goes. a boundary's list changing tells its
-// listeners, in the run's end or the act; what they show is theirs to put in the graph.
+// looping; a stopped run says nothing yet), or when it goes. what a boundary holds changes at once;
+// its listeners are told once, after the pulse it changed in (a change between pulses: after the
+// next). what they show is theirs to put in the graph.
 //
 // listening to onRunEnd keeps every run's reads (as a trace does)
 import type { Computer, Scheduler, Scope } from "./scheduler.ts"
@@ -20,24 +21,35 @@ export type Caught = { computer: Computer; run: number; error?: unknown }
 export type Boundary = {
 	readonly kind: Kind
 	readonly scope: Scope
-	// what it holds now, in the order caught: a new list at each change, this one left as it is
+	// what it holds now, in the order caught: a new list after each change (made when asked), this
+	// one left as it is
 	caught: () => readonly Caught[]
-	// f told when what it holds changes; gives back the remove
+	// f told after a pulse in which what it holds changed; gives back the remove
 	on: (f: () => void) => () => void
 	// no longer a boundary: what it held goes up to the next one of its kind, at its next end
 	remove: () => void
 }
 
 export function createBoundaries(
-	s: Pick<Scheduler, "onRunEnd" | "onEffect" | "registerTeardown">,
+	s: Pick<Scheduler, "onRunEnd" | "onEffect" | "onAfterPulse" | "registerTeardown">,
 ): {
 	loading: (scope: Scope) => Boundary
 	errored: (scope: Scope) => Boundary
 } {
-	type B = Boundary & { list: Caught[]; fs: (() => void)[] }
+	// items: what it holds, with holes where one was let go (closed up once they are half); list:
+	// the copy caught() gives, made when asked after a change
+	type B = Boundary & {
+		items: (Caught | undefined)[]
+		holes: number
+		list: readonly Caught[] | undefined
+		fs: (() => void)[]
+		changed: boolean
+	}
 	const boundaries = { loading: new Map<Scope, B>(), errored: new Map<Scope, B>() }
-	// each computation caught, and where
-	const held = new Map<Computer, B>()
+	// each computation ever caught: the boundary holding it now, if any, and where in its items. one
+	// slot each, never deleted (a Map losing and gaining the same key slows as it grows, in V8)
+	type Slot = { b: B | undefined; i: number }
+	const held = new WeakMap<Computer, Slot>()
 
 	// the nearest boundary of a kind above c, not c itself
 	function nearest(kind: Kind, c: Computer): B | undefined {
@@ -48,30 +60,52 @@ export function createBoundaries(
 		}
 	}
 
+	// the boundaries changed since the last pulse, told after the next
+	let changed: B[] = []
 	function tell(b: B) {
-		for (const f of b.fs) f()
+		if (b.changed) return
+		b.changed = true
+		changed.push(b)
 	}
+	s.onAfterPulse(() => {
+		const bs = changed
+		changed = []
+		for (const b of bs) {
+			b.changed = false
+			for (const f of b.fs) f()
+		}
+	})
 
 	function release(c: Computer) {
-		const b = held.get(c)
+		const slot = held.get(c)
+		const b = slot?.b
 		if (b === undefined) return
-		held.delete(c)
-		b.list = b.list.filter((x) => x.computer !== c)
+		b.items[slot!.i] = undefined
+		slot!.b = undefined
+		b.list = undefined
+		if (++b.holes > b.items.length >> 1) {
+			b.items = b.items.filter((x) => x !== undefined)
+			b.items.forEach((x, i) => held.get(x!.computer)!.i = i)
+			b.holes = 0
+		}
 		tell(b)
 	}
 
 	// c caught by the nearest boundary of a kind, or by none: then only let go of
 	function catches(kind: Kind, c: Computer, run: number, error?: unknown) {
 		const b = nearest(kind, c)
-		const was = held.get(c)
-		if (was !== undefined && was !== b) release(c)
+		let slot = held.get(c)
+		if (slot?.b !== undefined && slot.b !== b) release(c)
 		if (b === undefined) return
 		const item: Caught = kind === "errored" ? { computer: c, run, error } : { computer: c, run }
-		if (was === b) b.list = b.list.map((x) => x.computer === c ? item : x)
+		if (slot === undefined) held.set(c, slot = { b: undefined, i: 0 })
+		if (slot.b === b) b.items[slot.i] = item
 		else {
-			held.set(c, b)
-			b.list = [...b.list, item]
+			slot.b = b
+			slot.i = b.items.length
+			b.items.push(item)
 		}
+		b.list = undefined
 		// a teardown of c runs at its next run's start, too: there it is still alive, and that run's
 		// end says what it is
 		s.registerTeardown(c, () => {
@@ -95,9 +129,12 @@ export function createBoundaries(
 		const b: B = {
 			kind,
 			scope,
+			items: [],
+			holes: 0,
 			list: [],
 			fs: [],
-			caught: () => b.list,
+			changed: false,
+			caught: () => b.list ??= b.items.filter((x) => x !== undefined),
 			on: (f) => {
 				b.fs = [...b.fs, f]
 				return () => void (b.fs = b.fs.filter((g) => g !== f))
@@ -105,7 +142,9 @@ export function createBoundaries(
 			remove: () => {
 				if (boundaries[kind].get(scope) !== b) return
 				boundaries[kind].delete(scope)
-				for (const x of b.list) held.delete(x.computer)
+				for (const x of b.items) if (x) held.get(x.computer)!.b = undefined
+				b.items = []
+				b.holes = 0
 				b.list = []
 				tell(b)
 			},

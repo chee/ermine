@@ -1,5 +1,5 @@
 // the demo, checked headless: three devices (Deno) sharing a folder through a Subduction server.
-//   deno run -A sync/demo/check.ts [--server ws://localhost:8321 --service localhost:8321]
+//   deno run -A extensions/subduction/demo/check.ts [--server ws://localhost:8321 --service localhost:8321]
 // with no --server a local subduction_cli is started. Throwaway data only.
 import { assertEquals } from "@std/assert"
 import { newSeed, start, type View } from "./node.ts"
@@ -31,7 +31,7 @@ async function until(what: string, f: () => boolean, ms = 20000) {
 const spawned = flag("server") ? undefined : await local(8321 + Math.floor(Math.random() * 500))
 const server = flag("server") ?? spawned!.url
 const service = flag("service") ?? spawned?.service
-const legacy = !/^wss?:\/\/(localhost|127\.)/.test(server)
+const zeros = !/^wss?:\/\/(localhost|127\.)/.test(server)
 let failed = false
 const devices: Record<string, Awaited<ReturnType<typeof start>>> = {}
 const views: Record<string, View | undefined> = {}
@@ -48,7 +48,7 @@ try {
 			folder,
 			server,
 			service,
-			legacy,
+			zeros,
 			render: (v) => views[name] = v,
 		})
 	const text = (n: "alice" | "bob" | "carol", title: string) =>
@@ -89,7 +89,7 @@ try {
 	await until("carol gets bob's edit", () => text("carol", "shopping")?.join() === "milk, eggs")
 	console.log("ok: edits flow")
 
-	// edits at once: both are facts; the list shows both, and keep picks one
+	// edits at once: two heads, the second in the conflicts table; the list shows both, and keep settles
 	await Promise.all([a.idle(), b.idle()])
 	a.edit("shopping", "milk, eggs", "milk, eggs, jam")
 	b.edit("shopping", "milk, eggs", "milk, eggs, tea")
@@ -98,13 +98,13 @@ try {
 		() => text("alice", "shopping")?.length === 2 && text("carol", "shopping")?.length === 2,
 	)
 	console.log("ok: concurrent edits are two versions:", JSON.stringify(text("carol", "shopping")))
-	a.keep("shopping", 0, 2)
+	a.keep("shopping", 0)
 	await until(
 		"one version again",
 		() => ["alice", "bob", "carol"].every((n) => text(n as "alice", "shopping")?.length === 1),
 	)
 	assertEquals(text("bob", "shopping"), text("carol", "shopping"))
-	console.log("ok: keep merged them into one:", JSON.stringify(text("carol", "shopping")))
+	console.log("ok: keep settled them into one:", JSON.stringify(text("carol", "shopping")))
 
 	// a second note, made by carol, reaches the others
 	await c.make("todo", "write demo")
@@ -120,7 +120,7 @@ try {
 		name: "bob",
 		colour: "#888",
 		folder: a.folder,
-		legacy,
+		zeros,
 		render: (v) => views.bob = v,
 	})
 	await until("bob's notes from storage", () => !!text("bob", "todo") && !!text("bob", "shopping"))
@@ -139,9 +139,8 @@ try {
 				"stored",
 				(await d.device.stored(id)).length,
 				"heads",
-				d.device.histories(id).heads("value").length,
-				JSON.stringify(d.device.taking(id)),
-				JSON.stringify(d.world.table.get("value", id)?.value),
+				d.device.history(id).heads().length,
+				JSON.stringify(d.table.get("value", id)?.value),
 			)
 		}
 	}

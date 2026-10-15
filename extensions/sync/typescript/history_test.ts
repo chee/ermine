@@ -1,0 +1,102 @@
+import { assert, assertEquals } from "@std/assert"
+import { type Commit, compare, encode, name } from "@ermine/encoding/commit"
+import { createHistory } from "./history.ts"
+import { replay } from "./replay.ts"
+import { snapshot, tablesOf } from "./snapshot.ts"
+
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
+let nonce = 0
+// a commit's bytes and name
+function make(
+	table: string,
+	parents: Uint8Array[],
+	lamport: number,
+	patches: Commit["patches"],
+	base?: Uint8Array,
+) {
+	const c: Commit = {
+		table,
+		actor: "t",
+		time: 1_760_000_000 + lamport,
+		signer: new Uint8Array(32).fill(1),
+		nonce: ++nonce,
+		parents: [...parents].sort(compare),
+		lamport,
+		patches,
+	}
+	if (parents.length > 1) c.base = base ?? c.parents[0]
+	const bytes = encode(c)
+	return { bytes, name: name(bytes) }
+}
+
+Deno.test("history: taken in order, a child before its parent waits, heads in the agreed order", () => {
+	const h = createHistory()
+	const a = make("value", [], 1, [{ path: [], value: { n: 0 } }])
+	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
+	const c = make("children", [a.name], 2, [{
+		path: [],
+		value: { x: "ermine://" + "ab".repeat(32) },
+	}])
+	assertEquals(h.add(b.bytes), { waiting: [hex(a.name)] })
+	assertEquals(h.add(a.bytes), "taken")
+	assertEquals(h.add(a.bytes), "passed")
+	assertEquals(h.all().map((k) => hex(k.name)), [hex(a.name), hex(b.name)])
+	assertEquals(h.add(c.bytes), "taken")
+	// two heads at lamport 2: the greater name first
+	const heads = h.heads().map((k) => hex(k.name))
+	assertEquals(heads, [hex(b.name), hex(c.name)].sort().reverse())
+	assertEquals(h.waiting(), [])
+})
+
+Deno.test("history: refused, a lamport not above its parents', patches check says no, what waits on a refused one", () => {
+	const h = createHistory((k) => k.table !== "nope")
+	const a = make("value", [], 1, [{ path: [], value: 1 }])
+	h.add(a.bytes)
+	assertEquals(h.add(make("value", [a.name], 1, []).bytes), { refused: "lamport" })
+	const bad = make("nope", [a.name], 2, [])
+	const after = make("value", [bad.name], 3, [])
+	assertEquals(h.add(after.bytes), { waiting: [hex(bad.name)] })
+	assertEquals(h.add(bad.bytes), { refused: "patches" })
+	assertEquals(h.refused().map((r) => r.refused).sort(), ["lamport", "parent", "patches"])
+	assertEquals(h.add(new Uint8Array([1, 2, 3])), { refused: "shape" })
+})
+
+Deno.test("replay: back along the bases, then forward, each table its own; a merge keeps what its patches say", () => {
+	const h = createHistory()
+	const a = make("value", [], 1, [{ path: [], value: { n: 0, list: [] } }])
+	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
+	const c = make("children", [b.name], 3, [{
+		path: [],
+		value: { k: "ermine://" + "cd".repeat(32) },
+	}])
+	const d = make("value", [a.name], 2, [{ path: ["list"], range: [0, 0], value: [1, 2] }])
+	for (const x of [a, b, c, d]) h.add(x.bytes)
+	assertEquals(replay(h, c.name)!.value.value, { n: 1, list: [] })
+	assertEquals(replay(h, c.name)!.children.value, { k: "ermine://" + "cd".repeat(32) })
+	assertEquals(replay(h, d.name)!.value.value, { n: 0, list: [1, 2] })
+	assertEquals(replay(h, d.name)!.children, undefined)
+	// a merge over c's line, saying what it takes from d's
+	const m = make("value", [c.name, d.name], 4, [{ path: ["list"], value: [1, 2] }], c.name)
+	h.add(m.bytes)
+	assertEquals(h.heads().map((k) => hex(k.name)), [hex(m.name)])
+	assertEquals(replay(h, m.name)!.value.value, { n: 1, list: [1, 2] })
+	assertEquals(replay(h, m.name)!.value.change.time, 1_760_000_004)
+	// each replay new: changing what one gave changes nothing kept
+	const one = replay(h, m.name)!
+	;(one.value.value as { n: number }).n = 99
+	assertEquals((replay(h, m.name)!.value.value as { n: number }).n, 1)
+})
+
+Deno.test("snapshot: replay starts at one, its tables new each time", () => {
+	const h = createHistory()
+	const a = make("value", [], 1, [{ path: [], value: { n: 0 } }])
+	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
+	const c = make("value", [b.name], 3, [{ path: ["n"], value: 2 }])
+	for (const x of [a, b, c]) h.add(x.bytes)
+	const packed = snapshot(replay(h, b.name)!)
+	let used = 0
+	const at = (n: Uint8Array) => compare(n, b.name) === 0 ? (used++, tablesOf(packed)) : undefined
+	assertEquals(replay(h, c.name, at)!.value.value, { n: 2 })
+	assertEquals(used, 1)
+	assert(tablesOf(packed).value.value !== tablesOf(packed).value.value)
+})

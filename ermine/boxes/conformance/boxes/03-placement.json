@@ -1,0 +1,250 @@
+{
+	"title": "box and unbox are placements in the box's folder: saved there, seen by the host's places and the box's, a host reader reruns; folders on the way are made; unbox takes the name out and leaves the folders",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "host",
+			"scope": "o",
+			"f": {
+				"get": [
+					"work",
+					"fetch"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "host",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "work",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"node": "NF",
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"notes": "N",
+					"fetch": "NF"
+				}
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"fetch"
+			],
+			"expect": {
+				"id": "NF"
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"expect": {
+				"id": "NF"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "host",
+			"expect": {
+				"runs": 2,
+				"value": "NF"
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": "keys/k",
+			"node": "K",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"keys",
+				"k"
+			],
+			"expect": {
+				"id": "K"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"keys",
+				"k"
+			],
+			"expect": {
+				"id": "K"
+			}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"notes": "N",
+					"fetch": "NF",
+					"keys": "new:keys"
+				}
+			}
+		},
+		{
+			"op": "members",
+			"box": "b",
+			"at": [
+				"keys"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "k",
+						"id": "K",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": [
+				"fetch",
+				"deep"
+			],
+			"node": "D",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"fetch",
+				"deep"
+			],
+			"expect": {
+				"id": "D"
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"notes": "N",
+					"keys": "new:keys"
+				}
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"fetch"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "host",
+			"expect": {
+				"runs": 3,
+				"value": null
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": "keys/k",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"box": "b",
+			"at": [
+				"keys"
+			],
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"keys"
+			],
+			"expect": {
+				"id": "new:keys"
+			}
+		}
+	]
+}

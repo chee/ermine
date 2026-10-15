@@ -412,7 +412,7 @@ Deno.test("places: a reader of names doesn't rerun on a place inside one of its 
 	const { s, l, places, hosted, kids, watch, kid } = world()
 	kids("R", { a: "A" })
 	kids("A", {})
-	const w = watch(() => list(places, []).join())
+	const w = watch(() => [...list(places, [])].join())
 	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.commit(f()))
 	s.pulse()
 	assertEquals([w.runs, w.value], [1, "a"])
@@ -685,4 +685,37 @@ Deno.test("places: many watches, many commits: each is told only its own node's 
 	hosted(() => edit("value", "N9", [{ path: [], value: "y" }]))
 	hosted(() => edit("value", "N10", [{ path: [], value: "y" }]))
 	assertEquals([counts[9], counts[10]], [COMMITS / 50 + 1, COMMITS / 50 + 1])
+})
+
+Deno.test("places: a view reads from its own root, nothing above it, and shares the spots, commit and watches", () => {
+	const w = world()
+	w.kids("R", { work: "W", tools: "T" })
+	w.kids("W", { notes: "N" })
+	const inside = w.l.view("W")
+	assertEquals([inside.root, get(inside, []), get(inside, ["notes"])], ["W", "W", "N"])
+	assertEquals([get(inside, ["work"]), get(inside, ["tools"])], [undefined, undefined])
+	assertEquals(lookup(inside, ["tools"], ["notes"]), undefined)
+	assertEquals(lookup(w.places, ["tools"], ["work", "notes"]), ["tools"])
+	// a reader through the view, and one through the host, of the same name
+	const seen = w.watch(() => [...list(inside, [])])
+	const host = w.watch(() => [...list(w.places, ["work"])])
+	w.s.pulse()
+	// a write committed to the host: the view's reader reruns too, nothing passed on
+	w.hosted(() => w.l.commit(place(w.kid("W"), "a", "A", createChangeHeader(w.s))))
+	w.s.pulse()
+	assertEquals([seen.runs, seen.value], [2, ["notes", "a"]])
+	// committed to the view: the host's reader reruns too
+	w.hosted(() => inside.commit(place(w.kid("W"), "b", "B", createChangeHeader(w.s))))
+	w.s.pulse()
+	assertEquals([host.runs, host.value], [3, ["notes", "a", "b"]])
+	// a table event, told to the host's hook alone, reaches the view's reader
+	w.kids("W", { c: "C" })
+	w.s.pulse()
+	assertEquals([seen.runs, seen.value], [4, ["c"]])
+	// a watch on the view finds its path from the view's root, told on a commit to the host
+	let told = 0
+	inside.watchPath(["c"], () => void told++)
+	w.value("C", 1)
+	w.hosted(() => w.edit("value", "C", [{ path: [], value: 2 }]))
+	assertEquals(told, 2)
 })

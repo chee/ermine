@@ -8,6 +8,7 @@
 
 #include "../../../filesystem/places/c/world.h"
 #include "processes.h"
+#include "scopes.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -22,6 +23,7 @@
 static pr_processes rows;
 static const pl_contributor *walk[2];
 static int begun;
+static sn *nodes;
 
 // reads -----------------------------------------------------------------------------------------
 
@@ -55,7 +57,7 @@ static op_value *get_json(const op_value *path) {
 static op_value *entries_json(const op_value *path) {
 	size_t n;
 	const char **names = world_address(path, &n);
-	pl_answers list = pl_entries(world_places, names, n);
+	pl_answers list = pl_gets(world_places, names, n);
 	free(names);
 	op_value *a = op_list();
 	for (size_t i = 0; i < list.n; i++) {
@@ -88,7 +90,8 @@ static op_value *members_json(const op_value *path) {
 	for (size_t i = 0; i < list.n; i++) {
 		op_value *m = op_map();
 		op_set(m, "name", op_str(list.items[i].name));
-		op_set(m, "id", op_str(list.items[i].id.string));
+		// a level: no id
+		if (list.items[i].id.string != NULL) op_set(m, "id", op_str(list.items[i].id.string));
 		if (list.items[i].from) op_set(m, "from", op_str(list.items[i].from));
 		op_push(a, m);
 	}
@@ -205,6 +208,39 @@ static void write(void *data) {
 	if (c->code > 0) c->why = pl_code_name(c->code);
 }
 
+// scope nodes: a write of a part's entry at an id, in the host's scope
+typedef struct {
+	const op_value *request;
+	const char *why;
+} putting;
+
+static void put(void *data) {
+	putting *c = data;
+	ch_header h;
+	pl_made *made;
+	char *bad = pl_header(world_places, NULL, 0, CH_HERE, &h, &made);
+	if (bad) {
+		free(bad);
+		c->why = SC_UNSCOPED;
+		return;
+	}
+	nd_entry *node = nd_make_entry((op_value *)op_get(c->request, "value"), &h, NULL);
+	pl_hold(world_places, node, made, pl_made_free);
+	world_keep_node(node);
+	tb_sub(world_table, tb_string(world_part(op_get(c->request, "part"))),
+		world_key(op_get(c->request, "id")), node);
+}
+
+static int part_order(const void *a, const void *b) {
+	return strcmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+static op_value *id_answer(const char *id) {
+	op_value *o = op_map();
+	if (id != NULL) op_set(o, "id", op_str(id));
+	return o;
+}
+
 // requests --------------------------------------------------------------------------------------
 
 static op_value *answer(const op_value *r) {
@@ -264,6 +300,39 @@ static op_value *answer(const op_value *r) {
 		else op_set(o, "path", found);
 		return o;
 	}
+	if (strcmp(op, "give") == 0 || strcmp(op, "nodeOf") == 0 || strcmp(op, "nearest") == 0) {
+		sc_scope *o = world_scope(world_text(op_get(r, "scope")));
+		if (o == NULL) return world_error("no such scope");
+		if (nodes == NULL) nodes = sn_new(world_scheduler, world_table);
+		if (op[0] == 'g') return id_answer(sn_give(nodes, o, world_text(op_get(r, "id"))));
+		return id_answer(op[0] == 'n' && op[1] == 'o' ? sn_node_of(nodes, o) : sn_nearest(nodes, o));
+	}
+	if (strcmp(op, "write") == 0) {
+		putting c = {.request = r};
+		const char *bad = world_hosted(put, &c);
+		if (bad == NULL) bad = c.why;
+		return bad ? world_error(bad) : op_map();
+	}
+	if (strcmp(op, "parts") == 0) {
+		size_t n;
+		const tb_entry *at = tb_at(world_table, world_key(op_get(r, "id")), &n);
+		const char **names = world_alloc((n + 1) * sizeof *names);
+		for (size_t i = 0; i < n; i++) names[i] = at[i].part.string;
+		qsort(names, n, sizeof *names, part_order);
+		op_value *a = op_list();
+		for (size_t i = 0; i < n; i++) op_push(a, op_str(names[i]));
+		free(names);
+		op_value *o = op_map();
+		op_set(o, "parts", a);
+		return o;
+	}
+	if (strcmp(op, "teardown") == 0) {
+		sc_scope *o = world_scope(world_text(op_get(r, "scope")));
+		if (o == NULL) return world_error("no such scope");
+		char *why = sc_teardown(o);
+		if (why) return world_error_take(why);
+		return op_map();
+	}
 	if (strcmp(op, "watch") == 0) {
 		program *p = world_alloc(sizeof *p);
 		p->f = op_get(r, "f");
@@ -289,6 +358,7 @@ void hh_answer(const op_value *request, FILE *out) {
 
 void hh_finish(void) {
 	world_finish();
+	if (nodes) sn_free(nodes);
 	for (size_t i = 0; i < nprograms; i++) free(programs[i]);
 	free(programs);
 }

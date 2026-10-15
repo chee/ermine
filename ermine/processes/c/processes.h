@@ -36,12 +36,17 @@
 typedef struct {
 	pl_contributor contributor;
 	tb_key root;
+	// the part its trie is on: PR_PART, or another's (pr_trie_init)
+	const char *part;
 } pr_processes;
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
-// alone, its path not known: nothing. names: the leaves directly under here's path (a level, with
-// processes deeper, is no name of its own: what is there is whatever else is). Reads through the
-// places it is handed
+// alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
+// level (processes deeper, no id: the walk goes through it, pl_list and pl_members_at show it).
+// Reads through the places it is handed
 void pr_processes_init(pr_processes *p, tb_key root);
+// the same walk of a trie of ids by path on root's part (ermine/boxes' boxed items): from, what its
+// answers say. part and from outlive the places
+void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from);
 
 // id running at path under root: its leaf put in, the levels on the way made. refused: no name, or a
 // name that is not one (PL_NOT_A_NAME); a process at the path, above it or under it
@@ -56,5 +61,12 @@ int pr_add(pl *l, tb_table *table, tb_key root, const char *const *path, size_t 
 // highest of them. none there: PL_NOTHING_THERE
 int pr_remove(pl *l, tb_table *table, tb_key root, const char *const *path, size_t n,
 	ch_header header, pl_changed *changed);
+
+// pr_add and pr_remove on any part (a string that outlives the table's entry): a leaf at path in
+// root's trie there, by the same rules
+int pr_add_leaf(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, tb_key id, ch_header header, pl_changed *changed, nd_entry **made);
+int pr_remove_leaf(pl *l, tb_table *table, const char *part, tb_key root, const char *const *path,
+	size_t n, ch_header header, pl_changed *changed);
 
 #endif

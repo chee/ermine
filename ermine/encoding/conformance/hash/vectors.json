@@ -1,0 +1,95 @@
+[
+	{
+		"value": null,
+		"hash": "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4"
+	},
+	{
+		"value": true,
+		"hash": "518f7263ffb8a410e4874915a1f9a3bd7f11daa2f490abcb00939cdeb002fc81"
+	},
+	{
+		"value": false,
+		"hash": "c12fc7f0c31ef2d9f0fcbd2e708b7adeb8bad0e60884f89a2073a16127521641"
+	},
+	{
+		"value": 0,
+		"hash": "046aa4275eb745107357d8ca71eccae67a5d9a6db452535981438055dee2a379"
+	},
+	{
+		"value": 1,
+		"hash": "09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69"
+	},
+	{
+		"value": -1,
+		"hash": "12b750c57dcf8b8c5960c931ebcf6cd6c16e2b191a937752e900062e1f3e699f"
+	},
+	{
+		"value": 1.5,
+		"hash": "21924cf649bbfa4004de6a5b134c6a1cfc5f56ffd355b938b52d91d0128c3571"
+	},
+	{
+		"value": 100000,
+		"hash": "74dbace0daa7e0dd8b4a63000bf11f1616c1bd6e55ee20eeb12a9cde0e148340"
+	},
+	{
+		"value": "",
+		"hash": "4d86d0ecb09ceacb693ff1906c2c81cfb38d835233adbd232942b763356da1d0"
+	},
+	{
+		"value": "clock",
+		"hash": "0a22247577e7f9b5d7878300b389636f82fceb60315d369e30d20b346acdb041"
+	},
+	{
+		"value": "ermine ✿",
+		"hash": "a283daadb629f52e28cdbfbdffa73484de093986af1552343b5d8d9385c081a9"
+	},
+	{
+		"value": [],
+		"hash": "bbe6a9f5a0146a1f4d0381e9b0ed1ac2f1a979ce9d5ad84e46ff0b58f36b5f46"
+	},
+	{
+		"value": [
+			1,
+			2,
+			3
+		],
+		"hash": "cf89de3e6c4513c2730bd28935d20d97c5ab3dc029559c4379d06f6c8b853730"
+	},
+	{
+		"value": {
+			"a": 1,
+			"b": 2
+		},
+		"hash": "a653b0a2109d94b8c22417ff991ebdadda2fb23d78cac5f5b7af0a647e0df336"
+	},
+	{
+		"value": {
+			"b": 2,
+			"a": 1
+		},
+		"hash": "a653b0a2109d94b8c22417ff991ebdadda2fb23d78cac5f5b7af0a647e0df336"
+	},
+	{
+		"value": {
+			"clock": "proc:7f3a",
+			"work": {
+				"plan": "n:plan"
+			}
+		},
+		"hash": "5e4291ae7a60d0e996fbe40a0945deb80770f067b57d389907a3eea0a70abefb"
+	},
+	{
+		"value": {
+			"value": {
+				"title": "notes"
+			},
+			"attributes": {
+				"type": "c"
+			},
+			"children": {
+				"on": "n:on"
+			}
+		},
+		"hash": "1677cf35b527272117e23d49cda03ad85575742b3af2a052e22f5299f24fb995"
+	}
+]

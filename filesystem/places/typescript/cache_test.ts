@@ -6,9 +6,10 @@ import { type Computer, createScheduler, type Ended } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { type Contributor, createPlaces, place, rename } from "./places.ts"
-import { entries, get, list, members } from "./lib.ts"
+import { get, gets, list, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 import { createPathCache } from "./cache.ts"
+import { keyed } from "@ermine/scheduler/selector"
 
 const verbose = Deno.args.includes("-v")
 const say = (...a: unknown[]) => verbose && console.log(...a)
@@ -211,18 +212,68 @@ Deno.test("cache: an entry a plain reader shares going leaves the plain reader's
 	assertEquals(plain.values, ["C0", undefined])
 })
 
+Deno.test("cache: a cache made after runs track a spot lets go only what it took itself", () => {
+	const w = world(undefined, false)
+	w.tree()
+	const plain = w.watch(() => get(w.places, ["work", "clock"]))
+	w.s.pulse()
+	const spots = w.count().spots
+	assert(spots > 0)
+	const cache = createPathCache({ places: w.places, scheduler: w.s })
+	// its entry made, read outside any run, and gone: the runs' spots are still kept
+	assertEquals(cache.get(["work", "clock"]), "C0")
+	assertEquals(cache.kept(), { entries: 0, reads: 0 })
+	assertEquals(w.count().spots, spots)
+	w.rename("W", "clock", "clock2")
+	w.s.pulse()
+	assertEquals(plain.values, ["C0", undefined])
+	w.s.teardown(plain.c)
+	assertEquals(w.count().spots, 0)
+})
+
+Deno.test("cache: a mark reaches only the caches holding one of its keys", () => {
+	const w = world()
+	w.tree()
+	w.kids("R", { work: "W", other: "O" })
+	w.kids("O", { x: "X" })
+	const b = createPathCache({ places: w.places, scheduler: w.s })
+	const a = w.cache
+	const ra = w.watch(() => a.get(["work", "clock"]))
+	const rb = w.watch(() => b.get(["other", "x"]))
+	w.s.pulse()
+	assertEquals([ra.value, rb.value], ["C0", "X"])
+	const told = keyed(w.s)
+	const before = told.deliveries()
+	// a change under /work: held by a, not by b
+	w.rename("W", "clock", "clock2")
+	w.s.pulse()
+	assertEquals(told.deliveries() - before, 1)
+	assertEquals([ra.values, rb.runs], [["C0", undefined], 1])
+	// a change under /other: held by b alone
+	const mid = told.deliveries()
+	w.rename("O", "x", "y")
+	w.s.pulse()
+	assertEquals(told.deliveries() - mid, 1)
+	assertEquals([ra.runs, rb.values], [2, ["X", undefined]])
+	// a change nobody holds: nobody is told
+	const last = told.deliveries()
+	w.kids("N", { z: "Z" })
+	w.s.pulse()
+	assertEquals(told.deliveries(), last)
+})
+
 Deno.test("cache: entries, list and members give lib's answers, and their readers rerun as lib's", () => {
 	for (const given of [undefined, true]) {
 		const w = world(given ? [{ ...childrenOf() }] : undefined)
 		w.tree()
 		w.kids("W", { clock: "C0", notes: "N", junk: [1] })
 		const at = (p: string[]) => ({
-			entries: entries(w.places, p),
-			list: list(w.places, p),
+			entries: gets(w.places, p),
+			list: [...list(w.places, p)],
 			members: members(w.places, p),
 		})
 		const cached = (p: string[]) => ({
-			entries: w.cache.entries(p),
+			entries: w.cache.gets(p),
 			list: w.cache.list(p),
 			members: w.cache.members(p),
 		})

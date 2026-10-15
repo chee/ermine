@@ -1,28 +1,40 @@
 // the filesystem's reads, built on a places' walk and keys: plain functions that take a places,
 // each read told as walk and keys tell theirs. a places given contributors: get and lookup go where
-// the first answer goes, entries gives every answer, list and members every contributor's names,
+// the first answer goes, gets gives every answer, list and members every contributor's names,
 // each name once (places.ts). given none: children alone, read as they always were
-import type { Answer, Id, Member, Path, Places } from "./places.ts"
+//
+// a level (a contributor's, places.ts: no id, names under it) is a name with no id: in its parent,
+// list gives its name and members gives it with the id level; at it, list, members and gets read
+// under it as under a folder, get finds no id, and lookup finds its path
+import { type Answer, type Id, level, type Member, type Path, type Places } from "./places.ts"
 
 type Reads =
 	& Pick<Places, "root" | "walk" | "readKeys" | "readValue">
 	& Partial<Pick<Places, "contributors" | "names">>
 
-// the id at a path from the root; nothing there: undefined
-export function get(places: Pick<Places, "root" | "walk">, path: Path): Id | undefined {
+// where a path's walk ends: an id, or level; the walk stopped short: undefined
+function reach(places: Pick<Places, "root" | "walk">, path: Path): Id | undefined {
 	let at: Id = places.root, n = 0
 	for (const step of places.walk(path)) at = step.id, n++
 	return n === path.length ? at : undefined
 }
 
+// the id at a path from the root; nothing there, or a level: undefined
+export function get(places: Pick<Places, "root" | "walk">, path: Path): Id | undefined {
+	const at = reach(places, path)
+	return at === level ? undefined : at
+}
+
 // every answer at a path, the first the one get gives, each with the contributor that gave it: the
-// walk to the folder it is in, then every contributor asked its name. the root: itself, from
-// "root". nothing there: none
-export function entries(places: Pick<Places, "root" | "walk" | "answers">, path: Path): Answer[] {
+// walk to the folder it is in (a level too), then every contributor asked its name. the root:
+// itself, from "root". nothing there, or a level: none
+export function gets(places: Pick<Places, "root" | "walk" | "answers">, path: Path): Answer[] {
 	if (path.length === 0) return [{ id: places.root, from: "root" }]
 	const up = path.slice(0, -1)
-	const id = get(places, up)
-	return id === undefined ? [] : places.answers({ id, path: up }, path[path.length - 1])
+	const id = reach(places, up)
+	return id === undefined
+		? []
+		: places.answers({ id, path: up }, path[path.length - 1]).filter((a) => a.id !== level)
 }
 
 // the names from where you are (a path from the root), then from each place above it, nearest
@@ -52,10 +64,10 @@ export function lookup(
 
 // the names at a path holding an id, and their ids, in their order there. children alone: one read
 // of the children map whole, so any change to it reruns the reader. contributors given: every
-// contributor's names (list's reads), then each name's step, as get takes it, with its from.
-// nothing there: none
+// contributor's names (list's reads), then each name's step, as get takes it, with its from (a
+// level: the id level, no id of its own). nothing there: none
 export function members(places: Reads, path: Path): Member[] {
-	const id = get(places, path)
+	const id = reach(places, path)
 	if (id === undefined) return []
 	if (places.contributors !== undefined && places.names !== undefined) {
 		const here = { id, path }
@@ -74,14 +86,16 @@ export function members(places: Reads, path: Path): Member[] {
 	return out
 }
 
-// the names at a path, in their order there: a read of which names there are, so a name added or
-// taken out reruns the reader. contributors given: every contributor's, each name once. nothing
-// there: none
-export function list(places: Reads, path: Path): string[] {
-	const id = get(places, path)
-	if (id === undefined) return []
+// the names at a path, one at a time (an iterator: C returns an array, it has no generators), in
+// their order there: a read of which names there are, so a name added or taken out reruns the
+// reader. contributors given: every contributor's, each name once, in canonical CBOR's key order.
+// nothing there: none. the read is made at the first next()
+export function* list(places: Reads, path: Path): Generator<string> {
+	const id = reach(places, path)
+	if (id === undefined) return
 	if (places.contributors !== undefined && places.names !== undefined) {
-		return places.names({ id, path }).map((n) => n.name)
+		for (const n of places.names({ id, path })) yield n.name
+		return
 	}
-	return places.readKeys("children", id)
+	yield* places.readKeys("children", id)
 }

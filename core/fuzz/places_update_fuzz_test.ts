@@ -83,7 +83,7 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				const id = get(w.p, where)
 				const v = id === undefined ? undefined : w.children(id)?.value
 				const want = isMap(v) ? Object.keys(v) : []
-				assertEquals(list(w.p, where), want, `${at}: list ${show(where)}`)
+				assertEquals([...list(w.p, where)], want, `${at}: list ${show(where)}`)
 			}
 		}
 	}

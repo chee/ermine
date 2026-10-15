@@ -91,11 +91,11 @@ function evaluate(e: Json): Json {
 		const id = get(places, m.values)
 		return id === undefined ? null : places.readValue("value", id) ?? null
 	}
-	if ("names" in m) return list(places, m.names)
+	if ("names" in m) return [...list(places, m.names)]
 	if ("level" in m) return ids(members(places, m.level))
 	if ("cached" in m) return cached().get(m.cached) ?? null
 	if ("cachedNames" in m) return [...cached().list(m.cachedNames)]
-	if ("cachedEntries" in m) return JSON.parse(JSON.stringify(cached().entries(m.cachedEntries)))
+	if ("cachedEntries" in m) return JSON.parse(JSON.stringify(cached().gets(m.cachedEntries)))
 	if ("cachedMembers" in m) return JSON.parse(JSON.stringify(cached().members(m.cachedMembers)))
 	if ("lookup" in m) {
 		const [names, from] = m.lookup
@@ -134,7 +134,7 @@ function answer(r: Request): Json | undefined {
 			return id === undefined ? {} : { id }
 		}
 		case "list":
-			return { names: list(places, r.at) }
+			return { names: [...list(places, r.at)] }
 		case "cached": {
 			const id = cached().get(r.path)
 			return id === undefined ? {} : { id }

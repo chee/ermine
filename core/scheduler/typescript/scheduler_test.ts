@@ -845,3 +845,28 @@ Deno.test("onTrackingStart: told when a key gains its first tracker, again after
 	// the second reader still reads x: no gone yet
 	assertEquals(told.filter(([w]) => w === "gone"), [])
 })
+
+Deno.test("onAfterPulse: told once a pulse is over, after its acts; not for a pulse called inside it; a pulse called there is a new one", () => {
+	const { s, at, write, get } = setup()
+	const told: string[] = []
+	s.onAfterPulse(() => void told.push("after"))
+	write("x", 1)
+	at(() => s.createEffect(() => (s.pulse(), get("x")), (v) => void told.push(`act ${v}`)))
+	s.pulse()
+	assertEquals(told, ["act 1", "after"])
+	// a pulse with nothing to do is a pulse
+	s.pulse()
+	assertEquals(told, ["act 1", "after", "after"])
+	// a listener that writes and pulses: a new pulse, told again
+	told.length = 0
+	let once = true
+	const off = s.onAfterPulse(() => {
+		if (!once) return
+		once = false
+		write("x", 2)
+		s.pulse()
+	})
+	s.pulse()
+	assertEquals(told, ["after", "act 2", "after"])
+	off()
+})

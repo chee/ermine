@@ -60,8 +60,9 @@ struct pl_watch {
 	size_t epoch;
 };
 
-struct pl {
-	tb_key root;
+// what every view of a places shares: the table, paths and scheduler, the spots, the holds and keeps,
+// the record, the watches and what it owns. the places pl_new made owns it, and its views
+typedef struct {
 	tb_table *table;
 	pt_paths *paths;
 	sc_scheduler *scheduler;
@@ -86,14 +87,26 @@ struct pl {
 	// the entries pl_upsert made: the places', let go of at pl_free
 	nd_entry **owned;
 	size_t nowned, capowned;
+	// where reads go while pl_record runs; none: the scheduler
+	pl_set *into;
+	// the spots it made (none of this places' before); none: not asked
+	pl_set *made;
+	// the keeps on spots, by (the one part, the spot): a count
+	tb_table *kept;
+	// the views made of it and not let go, a list
+	pl *views;
+} shared;
+
+struct pl {
+	tb_key root;
 	// what answers each step: the setup's, or children alone. given: whether any were given
 	const pl_contributor *const *asked;
 	size_t nasked;
 	int given;
-	// where reads go while pl_record runs; none: the scheduler
-	pl_set *into;
-	// the keeps on spots, by (the one part, the spot): a count
-	tb_table *kept;
+	shared *s;
+	// a view (pl_view): its own root and contributors, s another's; and the next view of s
+	int view;
+	pl *next;
 };
 
 // the part of the key every spot of this places is under in `mine`
@@ -108,13 +121,13 @@ static const char pairing;
 
 // the one pair of the part: its address is the key paths gets as a spot's source
 static const pl_pair *pair_of(pl *l, tb_key part) {
-	pair *p = tb_get(l->pairs, tb_symbol(&pairing), part);
+	pair *p = tb_get(l->s->pairs, tb_symbol(&pairing), part);
 	if (p != NULL) return &p->pair;
 	p = xalloc(sizeof *p);
 	p->pair.part = part.symbol ? part : tb_string(xdup(part.string));
-	p->next = l->all;
-	l->all = p;
-	tb_add(l->pairs, tb_symbol(&pairing), part, p);
+	p->next = l->s->all;
+	l->s->all = p;
+	tb_add(l->s->pairs, tb_symbol(&pairing), part, p);
 	return &p->pair;
 }
 static pt_key pair_key(pl *l, tb_key part) { return pt_symbol(pair_of(l, part)); }
@@ -123,31 +136,49 @@ static pt_key pair_key(pl *l, tb_key part) { return pt_symbol(pair_of(l, part));
 
 pl *pl_new(void) {
 	pl *l = xalloc(sizeof *l);
-	l->pairs = tb_new();
-	l->mine = tb_new();
-	l->holds = tb_new();
-	l->by_id = tb_new();
-	l->on_route = tb_new();
-	l->kept = tb_new();
+	l->s = xalloc(sizeof *l->s);
+	l->s->pairs = tb_new();
+	l->s->mine = tb_new();
+	l->s->holds = tb_new();
+	l->s->by_id = tb_new();
+	l->s->on_route = tb_new();
+	l->s->kept = tb_new();
 	return l;
+}
+
+static const pl_contributor *const alone[] = {&pl_children};
+
+// the contributors a places asks: the ones given, or children alone
+static void ask(pl *l, const pl_contributor *const *contributors, size_t n) {
+	l->given = n > 0;
+	l->asked = l->given ? contributors : alone;
+	l->nasked = l->given ? n : 1;
 }
 
 void pl_connect(pl *l, const pl_setup *setup) {
 	l->root = setup->root;
-	l->table = setup->table;
-	l->paths = setup->paths;
-	l->scheduler = setup->scheduler;
-	static const pl_contributor *const alone[] = {&pl_children};
-	l->given = setup->ncontributors > 0;
-	l->asked = l->given ? setup->contributors : alone;
-	l->nasked = l->given ? setup->ncontributors : 1;
+	l->s->table = setup->table;
+	l->s->paths = setup->paths;
+	l->s->scheduler = setup->scheduler;
+	ask(l, setup->contributors, setup->ncontributors);
+}
+
+pl *pl_view(pl *l, tb_key root, const pl_contributor *const *contributors, size_t n) {
+	pl *v = xalloc(sizeof *v);
+	v->root = root;
+	v->s = l->s;
+	v->view = 1;
+	ask(v, contributors, n);
+	v->next = l->s->views;
+	l->s->views = v;
+	return v;
 }
 
 tb_key pl_root(const pl *l) { return l->root; }
 
 static void unhold(pl *l, hold *h) {
 	if (h->prev != NULL) h->prev->next = h->next;
-	else l->held = h->next;
+	else l->s->held = h->next;
 	if (h->next != NULL) h->next->prev = h->prev;
 	h->release(h->block);
 	free(h);
@@ -155,25 +186,45 @@ static void unhold(pl *l, hold *h) {
 
 static void free_dead(pl *l);
 
+// a view let go: its watches stopped, and it out of the list
+static void free_view(pl *v) {
+	for (pl_watch *w = v->s->watches, *next; w != NULL; w = next) {
+		next = w->next;
+		if (w->l == v) pl_stop(w);
+	}
+	for (pl **at = &v->s->views; *at != NULL; at = &(*at)->next) {
+		if (*at != v) continue;
+		*at = v->next;
+		break;
+	}
+	free(v);
+}
+
 void pl_free(pl *l) {
 	if (l == NULL) return;
-	while (l->held != NULL) unhold(l, l->held);
-	while (l->watches != NULL) pl_stop(l->watches);
+	if (l->view) {
+		free_view(l);
+		return;
+	}
+	while (l->s->views != NULL) free_view(l->s->views);
+	while (l->s->held != NULL) unhold(l, l->s->held);
+	while (l->s->watches != NULL) pl_stop(l->s->watches);
 	free_dead(l);
-	for (size_t i = 0; i < l->nowned; i++) nd_free_entry(l->owned[i]);
-	free(l->owned);
-	tb_free(l->holds);
-	tb_free(l->kept);
-	tb_free(l->by_id);
-	tb_free(l->on_route);
-	tb_free(l->mine);
-	tb_free(l->pairs);
-	while (l->all != NULL) {
-		pair *p = l->all;
-		l->all = p->next;
+	for (size_t i = 0; i < l->s->nowned; i++) nd_free_entry(l->s->owned[i]);
+	free(l->s->owned);
+	tb_free(l->s->holds);
+	tb_free(l->s->kept);
+	tb_free(l->s->by_id);
+	tb_free(l->s->on_route);
+	tb_free(l->s->mine);
+	tb_free(l->s->pairs);
+	while (l->s->all != NULL) {
+		pair *p = l->s->all;
+		l->s->all = p->next;
 		if (p->pair.part.symbol == NULL) free((char *)p->pair.part.string);
 		free(p);
 	}
+	free(l->s);
 	free(l);
 }
 
@@ -191,16 +242,16 @@ static void unhold_chain(pl *l, hold *h) {
 static void hold_node(pl *l, const nd_entry *node, void *block, void (*release)(void *block),
 	int also) {
 	tb_key part = tb_symbol(&holding), where = tb_symbol(node);
-	hold *old = tb_get(l->holds, part, where);
+	hold *old = tb_get(l->s->holds, part, where);
 	hold *h = xalloc(sizeof *h);
 	h->block = block;
 	h->release = release;
-	h->next = l->held;
+	h->next = l->s->held;
 	if (h->next != NULL) h->next->prev = h;
-	l->held = h;
+	l->s->held = h;
 	if (also) h->chain = old;
 	else unhold_chain(l, old);
-	tb_sub(l->holds, part, where, h);
+	tb_sub(l->s->holds, part, where, h);
 }
 
 void pl_hold(pl *l, const nd_entry *node, void *block, void (*release)(void *block)) {
@@ -213,24 +264,26 @@ void pl_hold_also(pl *l, const nd_entry *node, void *block, void (*release)(void
 // reads -----------------------------------------------------------------------------------------
 
 sc_track_status pl_status(pl *l) {
-	sc_track_status status = l->status;
-	l->status = SC_OK;
+	sc_track_status status = l->s->status;
+	l->s->status = SC_OK;
 	return status;
 }
 
 // a spot of this places's, told to the scheduler (a read outside a run counts for nothing)
 static void tell(pl *l, pt_spot *s) {
-	if (tb_get(l->mine, spot_part(), tb_symbol(s)) == NULL) tb_add(l->mine, spot_part(), tb_symbol(s), s);
-	if (l->into != NULL) {
-		pl_set_add(l->into, s);
+	int known = tb_get(l->s->mine, spot_part(), tb_symbol(s)) != NULL;
+	if (!known) tb_add(l->s->mine, spot_part(), tb_symbol(s), s);
+	if (l->s->into != NULL) {
+		pl_set_add(l->s->into, s);
+		if (!known && l->s->made != NULL) pl_set_add(l->s->made, s);
 		return;
 	}
-	sc_track_status status = sc_track(l->scheduler, s);
-	if (status != SC_OK && l->status == SC_OK) l->status = status;
+	sc_track_status status = sc_track(l->s->scheduler, s);
+	if (status != SC_OK && l->s->status == SC_OK) l->s->status = status;
 }
 
 int pl_spot(const pl *l, const void *key, pl_where *out) {
-	const pt_spot *s = key != NULL ? tb_get(l->mine, spot_part(), tb_symbol(key)) : NULL;
+	const pt_spot *s = key != NULL ? tb_get(l->s->mine, spot_part(), tb_symbol(key)) : NULL;
 	if (s == NULL) return 0;
 	const pl_pair *p = s->source.symbol;
 	tb_key id = {.string = s->id.string, .symbol = s->id.symbol};
@@ -240,10 +293,10 @@ int pl_spot(const pl *l, const void *key, pl_where *out) {
 
 void pl_forget(const void *key, void *ctx) {
 	pl *l = ctx;
-	pt_spot *s = tb_get(l->mine, spot_part(), tb_symbol(key));
-	if (s == NULL || tb_get(l->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) return;
-	tb_del(l->mine, spot_part(), tb_symbol(key));
-	pt_release(l->paths, s);
+	pt_spot *s = tb_get(l->s->mine, spot_part(), tb_symbol(key));
+	if (s == NULL || tb_get(l->s->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) return;
+	tb_del(l->s->mine, spot_part(), tb_symbol(key));
+	pt_release(l->s->paths, s);
 }
 
 // sets, records and keeps ----------------------------------------------------------------------
@@ -357,29 +410,31 @@ void pl_set_free(pl_set *s) {
 	*s = (pl_set){0};
 }
 
-void pl_record(pl *l, void (*f)(void *ctx), void *ctx, pl_set *reads) {
-	pl_set *was = l->into;
-	l->into = reads;
+void pl_record(pl *l, void (*f)(void *ctx), void *ctx, pl_set *reads, pl_set *fresh) {
+	pl_set *was = l->s->into, *was_made = l->s->made;
+	l->s->into = reads;
+	l->s->made = fresh;
 	f(ctx);
-	l->into = was;
+	l->s->into = was;
+	l->s->made = was_made;
 }
 
 void pl_track(pl *l, const void *key) {
-	if (l->into != NULL) {
-		pl_set_add(l->into, key);
+	if (l->s->into != NULL) {
+		pl_set_add(l->s->into, key);
 		return;
 	}
-	sc_track_status status = sc_track(l->scheduler, key);
-	if (status != SC_OK && l->status == SC_OK) l->status = status;
+	sc_track_status status = sc_track(l->s->scheduler, key);
+	if (status != SC_OK && l->s->status == SC_OK) l->s->status = status;
 }
 
 size_t pl_keep(pl *l, const void *key, int n) {
-	if (tb_get(l->mine, spot_part(), tb_symbol(key)) == NULL) return 0;
+	if (tb_get(l->s->mine, spot_part(), tb_symbol(key)) == NULL) return 0;
 	tb_key part = tb_symbol(&spots), where = tb_symbol(key);
-	intptr_t now = (intptr_t)tb_get(l->kept, part, where) + n;
-	if (now > 0) tb_sub(l->kept, part, where, (void *)now);
+	intptr_t now = (intptr_t)tb_get(l->s->kept, part, where) + n;
+	if (now > 0) tb_sub(l->s->kept, part, where, (void *)now);
 	else {
-		tb_del(l->kept, part, where);
+		tb_del(l->s->kept, part, where);
 		now = 0;
 	}
 	return (size_t)now;
@@ -430,14 +485,14 @@ const op_value *pl_at(const op_value *v, const op_key *path, size_t n, op_value 
 }
 
 const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_t n) {
-	tell(l, pt_spot_of(l->paths, pair_key(l, part), paths_key(id), path, n, 0));
-	const nd_entry *node = tb_get(l->table, part, id);
-	return node != NULL ? pl_at(node->value, path, n, &l->scratch) : NULL;
+	tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 0));
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	return node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 }
 
 const ch_header *pl_change(pl *l, tb_key part, tb_key id) {
-	tell(l, pt_change_of(l->paths, pair_key(l, part), paths_key(id)));
-	const nd_entry *node = tb_get(l->table, part, id);
+	tell(l, pt_change_of(l->s->paths, pair_key(l, part), paths_key(id)));
+	const nd_entry *node = tb_get(l->s->table, part, id);
 	return node != NULL ? &node->change : NULL;
 }
 
@@ -460,7 +515,7 @@ static void add_spots(spots_vec *out, pt_spot *const *spots, size_t n) {
 
 // spots said changed, in one call, by the run open; none: nothing said
 static void say(pl *l, const spots_vec *spots) {
-	if (spots->n > 0) sc_mark(l->scheduler, spots->v, spots->n, sc_get_run(l->scheduler));
+	if (spots->n > 0) sc_mark(l->s->scheduler, spots->v, spots->n, sc_get_run(l->s->scheduler));
 }
 
 static int same_key(tb_key a, tb_key b) {
@@ -475,13 +530,13 @@ static void tell_watches(pl *l, const pl_fact *facts, size_t n);
 void pl_event(void *ctx, tb_key part, tb_key id) {
 	pl *l = ctx;
 	size_t n;
-	pt_spot *const *spots = pt_event(l->paths, pair_key(l, part), paths_key(id), &n);
+	pt_spot *const *spots = pt_event(l->s->paths, pair_key(l, part), paths_key(id), &n);
 	spots_vec out = {0};
 	add_spots(&out, spots, n);
 	say(l, &out);
 	free(out.v);
-	if (l->watches == NULL) return;
-	const nd_entry *entry = tb_get(l->table, part, id);
+	if (l->s->watches == NULL) return;
+	const nd_entry *entry = tb_get(l->s->table, part, id);
 	op_patch patch = {0};
 	if (entry != NULL && entry->value != NULL) {
 		patch.has_value = 1;
@@ -503,7 +558,7 @@ pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
 		const nd_entry *node = changed->entries[i];
 		if (!node->change.has_op) continue;
 		size_t keys;
-		const tb_where *where = tb_who(l->table, node, &keys);
+		const tb_where *where = tb_who(l->s->table, node, &keys);
 		for (size_t k = 0; k < keys; k++) {
 			if (out.n == capacity) {
 				capacity = capacity ? capacity * 2 : 4;
@@ -522,7 +577,7 @@ void pl_commit(pl *l, const pl_changed *changed) {
 	spots_vec out = {0};
 	for (size_t i = 0; i < facts.n; i++) {
 		size_t n;
-		pt_spot *const *spots = pt_mark(l->paths, pair_key(l, facts.items[i].part),
+		pt_spot *const *spots = pt_mark(l->s->paths, pair_key(l, facts.items[i].part),
 			paths_key(facts.items[i].id), facts.items[i].patches, facts.items[i].patches_length, &n);
 		add_spots(&out, spots, n);
 	}
@@ -599,8 +654,8 @@ static void key_disown(tb_key k) {
 
 // the watch out of the indexes, its id and route let go
 static void unindex(pl *l, pl_watch *w) {
-	if (w->has_id) bucket_del(l->by_id, w->id, w);
-	for (size_t i = 0; i < w->nroute; i++) bucket_del(l->on_route, w->route[i], w);
+	if (w->has_id) bucket_del(l->s->by_id, w->id, w);
+	for (size_t i = 0; i < w->nroute; i++) bucket_del(l->s->on_route, w->route[i], w);
 	if (w->has_id) key_disown(w->id);
 	for (size_t i = 0; i < w->nroute; i++) key_disown(w->route[i]);
 	free(w->route);
@@ -610,24 +665,46 @@ static void unindex(pl *l, pl_watch *w) {
 }
 
 // the watch finds its path again, from the table, untold; moves in the indexes
+static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const char **by);
+
 static void refind(pl *l, pl_watch *w) {
 	unindex(l, w);
 	w->route = xalloc((w->n + 1) * sizeof *w->route);
 	tb_key at = l->root;
 	int found = 1;
-	for (size_t i = 0; i < w->n; i++) {
-		w->route[w->nroute++] = key_own(at);
-		if (!child_of(tb_get(l->table, tb_string(children_part), at), w->path[i], &at)) {
-			found = 0;
-			break;
+	if (!l->given) {
+		for (size_t i = 0; i < w->n; i++) {
+			w->route[w->nroute++] = key_own(at);
+			if (!child_of(tb_get(l->s->table, tb_string(children_part), at), w->path[i], &at)) {
+				found = 0;
+				break;
+			}
 		}
+	} else {
+		// as pl_get finds it, through the contributors, the reads told to no one
+		pl_set told = {0}, *was = l->s->into;
+		l->s->into = &told;
+		pl_here here = {.id = l->root, .has_path = 1, .path = (const char *const *)w->path, .length = 0};
+		for (size_t i = 0; i < w->n; i++) {
+			if (!same_key(here.id, pl_level())) w->route[w->nroute++] = key_own(here.id);
+			const char *by;
+			if (!go(l, &here, w->path[i], &at, &by)) {
+				found = 0;
+				break;
+			}
+			here.id = at;
+			here.length = i + 1;
+		}
+		l->s->into = was;
+		pl_set_free(&told);
+		if (found && same_key(at, pl_level())) found = 0;
 	}
 	if (found) {
 		w->id = key_own(at);
 		w->has_id = 1;
-		bucket_add(l->by_id, w->id, w);
+		bucket_add(l->s->by_id, w->id, w);
 	}
-	for (size_t i = 0; i < w->nroute; i++) bucket_add(l->on_route, w->route[i], w);
+	for (size_t i = 0; i < w->nroute; i++) bucket_add(l->s->on_route, w->route[i], w);
 }
 
 pl_watch *pl_watch_path(pl *l, const char *const *path, size_t n, pl_watch_fn fn, void *ctx,
@@ -655,11 +732,11 @@ pl_watch *pl_watch_path(pl *l, const char *const *path, size_t n, pl_watch_fn fn
 			}
 		}
 	}
-	w->prev = l->watches_end;
+	w->prev = l->s->watches_end;
 	if (w->prev != NULL) w->prev->next = w;
-	else l->watches = w;
-	l->watches_end = w;
-	w->seq = l->seqs++;
+	else l->s->watches = w;
+	l->s->watches_end = w;
+	w->seq = l->s->seqs++;
 	refind(l, w);
 	return w;
 }
@@ -676,9 +753,9 @@ static void free_watch(pl_watch *w) {
 }
 
 static void free_dead(pl *l) {
-	while (l->dead != NULL) {
-		pl_watch *w = l->dead;
-		l->dead = w->next;
+	while (l->s->dead != NULL) {
+		pl_watch *w = l->s->dead;
+		l->s->dead = w->next;
 		free_watch(w);
 	}
 }
@@ -689,14 +766,14 @@ void pl_stop(pl_watch *w) {
 	w->stopped = 1;
 	unindex(l, w);
 	if (w->prev != NULL) w->prev->next = w->next;
-	else l->watches = w->next;
+	else l->s->watches = w->next;
 	if (w->next != NULL) w->next->prev = w->prev;
-	else l->watches_end = w->prev;
+	else l->s->watches_end = w->prev;
 	// a telling in progress may hold it: freed when the telling ends
 	w->prev = NULL;
-	w->next = l->dead;
-	l->dead = w;
-	if (l->telling == 0) free_dead(l);
+	w->next = l->s->dead;
+	l->s->dead = w;
+	if (l->s->telling == 0) free_dead(l);
 }
 
 // a watch and the index of the fact it is to be told
@@ -715,11 +792,11 @@ static int by_seq(const void *a, const void *b) {
 // in by_id. a watch stopped on the way is not told. then each watch with a changed children entry
 // on its route finds its path again
 static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
-	if (l->watches == NULL || n == 0) return;
+	if (l->s->watches == NULL || n == 0) return;
 	hit *hits = NULL;
 	size_t nh = 0, caph = 0;
 	for (size_t f = 0; f < n; f++) {
-		bucket *b = tb_get(l->by_id, tb_symbol(&bucket_tag), facts[f].id);
+		bucket *b = tb_get(l->s->by_id, tb_symbol(&bucket_tag), facts[f].id);
 		if (b == NULL) continue;
 		for (size_t i = 0; i < b->n; i++) {
 			pl_watch *w = b->v[i];
@@ -733,7 +810,7 @@ static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
 		}
 	}
 	qsort(hits, nh, sizeof *hits, by_seq);
-	l->telling++;
+	l->s->telling++;
 	for (size_t i = 0; i < nh; i++) {
 		pl_watch *w = hits[i].w;
 		if (w->stopped) continue;
@@ -756,15 +833,18 @@ static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
 		free(kept);
 	}
 	free(hits);
-	// the watches with a changed children entry on their route, each once
-	size_t epoch = ++l->epochs, nm = 0, capm = 0;
+	// the watches with a changed children entry on their route, each once (the view they were made
+	// on given contributors: any part but value, theirs)
+	size_t epoch = ++l->s->epochs, nm = 0, capm = 0;
 	pl_watch **moved = NULL;
 	for (size_t f = 0; f < n; f++) {
-		if (!same_key(facts[f].part, tb_string(children_part))) continue;
-		bucket *b = tb_get(l->on_route, tb_symbol(&bucket_tag), facts[f].id);
+		int kids = same_key(facts[f].part, tb_string(children_part));
+		int value = same_key(facts[f].part, tb_string("value"));
+		bucket *b = tb_get(l->s->on_route, tb_symbol(&bucket_tag), facts[f].id);
 		if (b == NULL) continue;
 		for (size_t i = 0; i < b->n; i++) {
 			pl_watch *w = b->v[i];
+			if (!kids && (!w->l->given || value)) continue;
 			if (w->epoch == epoch) continue;
 			w->epoch = epoch;
 			if (nm == capm) {
@@ -776,11 +856,11 @@ static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
 		}
 	}
 	for (size_t i = 0; i < nm; i++) {
-		if (!moved[i]->stopped) refind(l, moved[i]);
+		if (!moved[i]->stopped) refind(moved[i]->l, moved[i]);
 	}
 	free(moved);
-	l->telling--;
-	if (l->telling == 0) free_dead(l);
+	l->s->telling--;
+	if (l->s->telling == 0) free_dead(l);
 }
 
 // the filesystem, every read told ---------------------------------------------------------------
@@ -800,8 +880,8 @@ static int child_of(const nd_entry *children, const char *name, tb_key *out) {
 // the id under name in the children of id, the read told
 static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	op_key key = {.type = OP_STR_KEY, .s = name};
-	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
-	return child_of(tb_get(l->table, tb_string(children_part), id), name, out);
+	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), &key, 1, 0));
+	return child_of(tb_get(l->s->table, tb_string(children_part), id), name, out);
 }
 
 void pl_namelist_add(pl_namelist *list, const char *name) {
@@ -820,17 +900,19 @@ void pl_namelist_free(pl_namelist *list) {
 
 void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int ids,
 	pl_namelist *out) {
-	tell(l, pt_spot_of(l->paths, pair_key(l, part), paths_key(id), path, n, 1));
-	const nd_entry *node = tb_get(l->table, part, id);
-	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->scratch) : NULL;
+	tell(l, pt_spot_of(l->s->paths, pair_key(l, part), paths_key(id), path, n, 1));
+	const nd_entry *node = tb_get(l->s->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->s->scratch) : NULL;
 	if (!is_map(v)) return;
 	for (size_t i = 0; i < v->count; i++) {
 		if (!ids || v->items[i]->type == OP_STR) pl_namelist_add(out, v->keys[i]);
 	}
 }
 
+// a level has no id: nothing, nothing read
 static int children_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	(void)ctx;
+	if (same_key(here->id, pl_level())) return 0;
 	op_key key = {.type = OP_STR_KEY, .s = name};
 	const op_value *v = pl_read(l, tb_string(children_part), here->id, &key, 1);
 	if (v == NULL || v->type != OP_STR) return 0;
@@ -840,16 +922,31 @@ static int children_step(void *ctx, const pl_here *here, const char *name, pl *l
 
 static void children_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	(void)ctx;
+	if (same_key(here->id, pl_level())) return;
 	pl_keys(l, tb_string(children_part), here->id, NULL, 0, 0, out);
 }
 
-const pl_contributor pl_children = {"children", children_step, children_names, NULL};
+const pl_contributor pl_children = {"children", children_step, children_names, NULL, NULL};
+
+static const char level_tag;
+tb_key pl_level(void) { return tb_symbol(&level_tag); }
 
 // the first answer at here + name, each contributor asked in order; 1 and *out, *by
 static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const char **by) {
 	for (size_t i = 0; i < l->nasked; i++) {
 		const pl_contributor *c = l->asked[i];
 		if (c->step(c->ctx, here, name, l, out)) {
+			*by = c->from;
+			return 1;
+		}
+	}
+	// might be fishy. TODO is this fishy?
+	// no id anywhere, but a contributor has a level there (processes at /dev/clock, with no /dev
+	// saved): the walk goes on through it as if it were a folder
+	for (size_t i = 0; i < l->nasked; i++) {
+		const pl_contributor *c = l->asked[i];
+		if (c->level != NULL && c->level(c->ctx, here, name, l)) {
+			*out = pl_level();
 			*by = c->from;
 			return 1;
 		}
@@ -893,7 +990,8 @@ size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member 
 	return pl_walk_at(l, &here, path, n, out);
 }
 
-int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
+// where a path's walk ends: an id, or pl_level(); 1 and *out, or 0: the walk stopped short
+static int reach(pl *l, const char *const *path, size_t n, tb_key *out) {
 	tb_key at = l->root;
 	if (!l->given) {
 		for (size_t i = 0; i < n; i++) {
@@ -907,6 +1005,13 @@ int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
 	if (got == n && n > 0) at = steps[n - 1].id;
 	free(steps);
 	if (got < n) return 0;
+	*out = at;
+	return 1;
+}
+
+int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
+	tb_key at;
+	if (!reach(l, path, n, &at) || same_key(at, pl_level())) return 0;
 	*out = at;
 	return 1;
 }
@@ -943,20 +1048,38 @@ pl_answers pl_answers_at(pl *l, const pl_here *here, const char *name) {
 		tb_key id;
 		if (c->step(c->ctx, here, name, l, &id)) out.items[out.n++] = (pl_answer){id, c->from};
 	}
+	// none: a level there, if a contributor has one (as the walk takes it)
+	if (out.n == 0) {
+		for (size_t i = 0; i < l->nasked; i++) {
+			const pl_contributor *c = l->asked[i];
+			if (c->level != NULL && c->level(c->ctx, here, name, l)) {
+				out.items[out.n++] = (pl_answer){pl_level(), c->from};
+				break;
+			}
+		}
+	}
 	return out;
 }
 
-pl_answers pl_entries(pl *l, const char *const *path, size_t n) {
+pl_answers pl_gets(pl *l, const char *const *path, size_t n) {
 	if (n == 0) {
 		pl_answers out = {0};
 		out.items = xalloc(sizeof *out.items);
 		out.items[out.n++] = (pl_answer){l->root, "root"};
 		return out;
 	}
+	// the folder it is in: an id, or a level
 	tb_key id;
-	if (!pl_get(l, path, n - 1, &id)) return (pl_answers){0};
+	if (!reach(l, path, n - 1, &id)) return (pl_answers){0};
 	pl_here here = {.id = id, .has_path = 1, .path = path, .length = n - 1};
-	return pl_answers_at(l, &here, path[n - 1]);
+	pl_answers all = pl_answers_at(l, &here, path[n - 1]);
+	// a level is no answer
+	size_t kept = 0;
+	for (size_t i = 0; i < all.n; i++) {
+		if (!same_key(all.items[i].id, pl_level())) all.items[kept++] = all.items[i];
+	}
+	all.n = kept;
+	return all;
 }
 
 void pl_nameds_free(pl_nameds *list) {
@@ -965,6 +1088,13 @@ void pl_nameds_free(pl_nameds *list) {
 }
 
 static const char seen_tag;
+
+static int key_order(const void *a, const void *b) {
+	const char *x = ((const pl_named *)a)->name, *y = ((const pl_named *)b)->name;
+	size_t nx = strlen(x), ny = strlen(y);
+	if (nx != ny) return nx < ny ? -1 : 1;
+	return memcmp(x, y, nx);
+}
 
 pl_nameds pl_names(pl *l, const pl_here *here) {
 	pl_nameds out = {0};
@@ -987,6 +1117,9 @@ pl_nameds pl_names(pl *l, const pl_here *here) {
 		pl_namelist_free(&names);
 	}
 	tb_free(seen);
+	// several contributors: in the order canonical CBOR gives a map's keys (ermine/encoding, cbor.ts
+	// keyOrder): by the encoding of each, bytewise, so the shorter first, then by UTF-8
+	if (l->nasked > 1) qsort(out.items, out.n, sizeof *out.items, key_order);
 	return out;
 }
 
@@ -1011,10 +1144,10 @@ static pl_members members_of(const nd_entry *children) {
 
 // the members at a path: one read of the children map whole (any change to it reruns the reader),
 // each name holding an id with its id. contributors given: every contributor's names, each name's
-// step as pl_get takes it
+// step as pl_get takes it (a level: the id pl_level(), no id of its own); at a level too
 pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 	tb_key id;
-	if (!pl_get(l, path, n, &id)) return (pl_members){0};
+	if (!reach(l, path, n, &id)) return (pl_members){0};
 	if (l->given) {
 		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n};
 		pl_nameds names = pl_names(l, &here);
@@ -1027,16 +1160,16 @@ pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
 		pl_nameds_free(&names);
 		return out;
 	}
-	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
-	return members_of(tb_get(l->table, tb_string(children_part), id));
+	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
+	return members_of(tb_get(l->s->table, tb_string(children_part), id));
 }
 
 // the names at a path, every one the map holds, in their order there: one read of which names
 // there are (a name added or taken out reruns the reader); ids not told (left empty). contributors
-// given: every contributor's, each name once
+// given: every contributor's, each name once; at a level too
 pl_members pl_list(pl *l, const char *const *path, size_t n) {
 	tb_key id;
-	if (!pl_get(l, path, n, &id)) return (pl_members){0};
+	if (!reach(l, path, n, &id)) return (pl_members){0};
 	pl_members out = {0};
 	if (l->given) {
 		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n};
@@ -1048,8 +1181,8 @@ pl_members pl_list(pl *l, const char *const *path, size_t n) {
 		pl_nameds_free(&names);
 		return out;
 	}
-	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
-	const nd_entry *children = tb_get(l->table, tb_string(children_part), id);
+	tell(l, pt_spot_of(l->s->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
+	const nd_entry *children = tb_get(l->s->table, tb_string(children_part), id);
 	const op_value *v = children != NULL ? children->value : NULL;
 	if (!is_map(v)) return out;
 	out.items = xalloc(v->count * sizeof *out.items);
@@ -1279,26 +1412,26 @@ static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_ch
 }
 
 void pl_own(pl *l, nd_entry *node) {
-	if (l->nowned == l->capowned) {
-		l->capowned = l->capowned ? l->capowned * 2 : 8;
-		l->owned = realloc(l->owned, l->capowned * sizeof *l->owned);
-		if (l->owned == NULL) abort();
+	if (l->s->nowned == l->s->capowned) {
+		l->s->capowned = l->s->capowned ? l->s->capowned * 2 : 8;
+		l->s->owned = realloc(l->s->owned, l->s->capowned * sizeof *l->s->owned);
+		if (l->s->owned == NULL) abort();
 	}
-	l->owned[l->nowned++] = node;
+	l->s->owned[l->s->nowned++] = node;
 }
 
 int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
 	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
 	*changed = (pl_changed){0};
 	if (made != NULL) *made = NULL;
-	nd_entry *there = tb_get(l->table, part, id);
+	nd_entry *there = tb_get(l->s->table, part, id);
 	if (there == NULL) {
 		op_value *nested = nest(path, n, value);
 		nd_entry *node = nd_make_entry(nested, &header, NULL);
 		op_free(nested);
 		pl_own(l, node);
 		if (made != NULL) *made = node;
-		tb_add(l->table, part, id, node);
+		tb_add(l->s->table, part, id, node);
 		return 0;
 	}
 	// the first level the entry has no map for, or no key at: the nested remainder goes there
@@ -1337,13 +1470,13 @@ const op_value *pl_get_or_set(pl *l, tb_key part, tb_key id, const char *const *
 	nd_entry **made) {
 	*changed = (pl_changed){0};
 	if (made != NULL) *made = NULL;
-	const nd_entry *there = tb_get(l->table, part, id);
+	const nd_entry *there = tb_get(l->s->table, part, id);
 	const op_value *v = there != NULL ? value_at(there->value, path, n) : NULL;
 	if (v != NULL) return v;
 	op_value *fresh = make(ctx);
 	pl_upsert(l, part, id, path, n, fresh, header, changed, made);
 	op_free(fresh);
-	return value_at(((nd_entry *)tb_get(l->table, part, id))->value, path, n);
+	return value_at(((nd_entry *)tb_get(l->s->table, part, id))->value, path, n);
 }
 
 // who ------------------------------------------------------------------------------------------
@@ -1351,10 +1484,10 @@ const op_value *pl_get_or_set(pl *l, tb_key part, tb_key id, const char *const *
 // the pairs of a write made now: the scopes' from the root down, then extra. malloc'd, *total of
 // them; NULL: no scope open
 static sc_pair *pairs_of(pl *l, const sc_pair *extra, size_t n, size_t *total) {
-	if (sc_get_current_scope(l->scheduler) == NULL) return NULL;
-	size_t scoped = sc_get_info(l->scheduler, NULL, 0);
+	if (sc_get_current_scope(l->s->scheduler) == NULL) return NULL;
+	size_t scoped = sc_get_info(l->s->scheduler, NULL, 0);
 	sc_pair *all = xalloc((scoped + n) * sizeof *all);
-	sc_get_info(l->scheduler, all, scoped);
+	sc_get_info(l->s->scheduler, all, scoped);
 	for (size_t i = 0; i < n; i++) all[scoped + i] = extra[i];
 	*total = scoped + n;
 	return all;

@@ -90,7 +90,7 @@ function seeded(seed: number, reach: Reach) {
 
 	const live: Ways = {
 		get: (p) => get(places, p),
-		list: (p) => list(places, p),
+		list: (p) => [...list(places, p)],
 		read: (id, path) => l.readValue("value", id, path),
 	}
 	// from scratch: each name in the children value of the id before, nothing told

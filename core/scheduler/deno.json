@@ -11,6 +11,7 @@
 		"./paths": "./typescript/paths.ts",
 		"./tracker": "./typescript/tracker.ts",
 		"./trace": "./typescript/trace.ts",
-		"./boundaries": "./typescript/boundaries.ts"
+		"./boundaries": "./typescript/boundaries.ts",
+		"./selector": "./typescript/selector.ts"
 	}
 }

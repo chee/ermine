@@ -1,0 +1,187 @@
+{
+	"title": "createBox at a missing path makes the folders on the way: regular children placed where they are, saved, seen by the host's places (a reader of the folder above reruns); the box's \"/\" is the folder made, empty; a list of steps and a leading \"/\" alike",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "top",
+			"scope": "o",
+			"f": {
+				"names": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"work"
+				]
+			}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "somewhere/new-folder",
+			"expect": {
+				"root": "new:new-folder"
+			}
+		},
+		{
+			"op": "saved",
+			"id": "R",
+			"expect": {
+				"value": {
+					"work": "W",
+					"somewhere": "new:somewhere"
+				}
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"somewhere",
+				"new-folder"
+			],
+			"expect": {
+				"id": "new:new-folder"
+			}
+		},
+		{
+			"op": "members",
+			"at": [
+				"somewhere"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "new-folder",
+						"id": "new:new-folder"
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [],
+			"expect": {
+				"id": "new:new-folder"
+			}
+		},
+		{
+			"op": "list",
+			"box": "b",
+			"at": [],
+			"expect": {
+				"names": []
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"work"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"work",
+					"somewhere"
+				]
+			}
+		},
+		{
+			"op": "create",
+			"name": "c",
+			"at": [
+				"somewhere",
+				"other"
+			],
+			"expect": {
+				"root": "new:other"
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"somewhere"
+			],
+			"expect": {
+				"names": [
+					"new-folder",
+					"other"
+				]
+			}
+		},
+		{
+			"op": "create",
+			"name": "d",
+			"at": "/work/fresh",
+			"expect": {
+				"root": "new:fresh"
+			}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"fresh": "new:fresh"
+				}
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"fresh"
+			],
+			"expect": {
+				"id": "new:fresh"
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"work",
+					"somewhere"
+				]
+			}
+		}
+	]
+}

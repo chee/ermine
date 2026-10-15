@@ -25,7 +25,7 @@ if (!as) {
 const config = await fetch("config").then((r) => r.json()).catch(() => ({}))
 const server: string | undefined = params.get("server") ?? config.server ?? undefined
 const service: string | undefined = params.get("service") ?? config.service ?? undefined
-const legacy = params.has("legacy") ? params.get("legacy") !== "0" : !!config.legacy
+const zeros = params.has("zeros") ? params.get("zeros") !== "0" : !!config.zeros
 
 const backend = indexeddb("ermine-notes-" + as)
 let seed = await backend.host("seed")
@@ -47,7 +47,7 @@ const notes: Notes = await start({
 	folder,
 	server,
 	service,
-	legacy,
+	zeros,
 	render,
 	status: ({ server, detail }) => {
 		const el = $("#status")
@@ -82,7 +82,7 @@ $<HTMLFormElement>("#make").onsubmit = (e) => {
 	e.preventDefault()
 	const input = $<HTMLInputElement>("#title")
 	const title = input.value.trim()
-	if (!title || title.startsWith("here:") || shown?.notes.some((n) => n.title === title)) return
+	if (!title || shown?.notes.some((n) => n.title === title)) return
 	input.value = ""
 	notes.make(title).then(() => (current = title, render()))
 }
@@ -145,7 +145,7 @@ function render(v: View | undefined = shown) {
 function editor(note: Note, v: View) {
 	$("#name").textContent = note.title + (note.loaded ? "" : "  (not here yet)")
 	$("#versions").textContent = note.versions.length > 1
-		? `${note.versions.length} versions: edited at once, all kept`
+		? `${note.versions.length} versions: edited at once, the others are in the conflicts table`
 		: ""
 	const incoming = note.versions[0] ?? ""
 	if (incoming !== text || textarea.dataset.note !== note.title) {
@@ -185,7 +185,7 @@ function editor(note: Note, v: View) {
 			const d = document.createElement("div")
 			d.className = "fork"
 			d.innerHTML = `<button>keep this</button>${esc(t)}`
-			d.querySelector("button")!.onclick = () => notes.keep(note.title, k, note.versions.length)
+			d.querySelector("button")!.onclick = () => notes.keep(note.title, k)
 			forks.append(d)
 		})
 	}
@@ -200,18 +200,12 @@ function peers(list: Peer[]) {
 		)
 	) {
 		const li = document.createElement("li")
-		const where = !p.loaded
-			? "not here yet"
-			: !p.live
-			? (p.age === Infinity ? "not heard" : "away")
-			: p.note
+		const where = p.note
 			? `in ${p.note}${
 				p.from !== undefined ? ` ${p.from}${p.to !== p.from ? "–" + p.to : ""}` : ""
 			}`
 			: "here"
-		li.innerHTML = `<span class="dot ${
-			p.live ? "" : "away"
-		}" style="background:${p.colour}"></span><b>${esc(p.name)}${
+		li.innerHTML = `<span class="dot" style="background:${p.colour}"></span><b>${esc(p.name)}${
 			p.self ? " (you)" : ""
 		}</b><span class="w">${esc(where)}</span>`
 		ul.append(li)

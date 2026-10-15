@@ -27,6 +27,14 @@ void world_contribute(const pl_contributor *const *list, size_t n) {
 	ncontributors = n;
 }
 
+static tb_event table_event;
+static void *table_ctx;
+
+void world_event(tb_event event, void *ctx) {
+	table_event = event;
+	table_ctx = ctx;
+}
+
 pc_cache *world_cached(void) {
 	if (cache == NULL) cache = pc_new(world_places, world_scheduler);
 	return cache;
@@ -969,8 +977,8 @@ static void world_start(void) {
 	world_places = pl_new();
 	world_scheduler = sc_new((sc_options){.drop = world_drop});
 	sc_trace_start(world_scheduler, &trace, told_moment, NULL);
-	sc_on_untrack(world_scheduler, pl_forget, world_places);
-	world_table = tb_make(pl_event, world_places);
+	sc_on_tracking_end(world_scheduler, pl_forget, world_places);
+	world_table = table_event ? tb_make(table_event, table_ctx) : tb_make(pl_event, world_places);
 	world_paths = pt_new();
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
 		.scheduler = world_scheduler, .contributors = contributors,

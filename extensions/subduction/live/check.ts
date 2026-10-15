@@ -1,9 +1,12 @@
-// Live checks of sync over a real Subduction server, three peer.ts processes (A, B, C), fresh random
+// live checks of sync over a real subduction server, three peer.ts processes (A, B, C), fresh random
 // seeds, document and stores each run: only throwaway data is sent.
-//   deno run -A sync/live/check.ts [--server wss://galaxy.observer] [--legacy] [--bulk N] [--wait SECONDS]
-// --legacy: the documents' ids are 16 random bytes then 16 zero bytes (the form a server with no grant
-// for a document stores); otherwise 32 random bytes made as id.ts makes them. Exits 1 on a failure.
-import { id as idOf } from "../typescript/id.ts"
+//   deno run -A extensions/subduction/live/check.ts [--server wss://galaxy.observer] [--zeros]
+//     [--service NAME] [--local] [--bulk N] [--wait SECONDS]
+// --local: a subduction_cli on this machine (demo/server.ts) instead of --server
+// the document is minted by A's sync (sync.mint()) and told to B and C. --zeros: its last 16 bytes
+// are zero (the form a server with no grant for a document stores, until Keyhive). exits 1 on a
+// failure. the ephemeral checks send on topics (sync's channel), not on documents.
+import { local } from "../demo/server.ts"
 // deno-lint-ignore no-explicit-any
 type Any = any
 
@@ -11,8 +14,12 @@ const flag = (n: string) => {
 	const i = Deno.args.indexOf("--" + n)
 	return i >= 0 ? Deno.args[i + 1] : undefined
 }
-const server = flag("server") ?? "wss://galaxy.observer"
-const legacy = Deno.args.includes("--legacy")
+const spawned = Deno.args.includes("--local")
+	? await local(8321 + Math.floor(Math.random() * 500))
+	: undefined
+const server = spawned?.url ?? flag("server") ?? "wss://galaxy.observer"
+const service = spawned?.service ?? flag("service")
+const zeros = Deno.args.includes("--zeros")
 const bulk = Number(flag("bulk") ?? 100)
 const WAIT = Number(flag("wait") ?? 45) * 1000
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -21,8 +28,7 @@ const rand = (n: number) => {
 	for (let i = 0; i < n; i += 65536) crypto.getRandomValues(b.subarray(i, i + 65536))
 	return b
 }
-const newdoc = () =>
-	legacy ? "ermine://" + hex(rand(16)) + "0".repeat(32) : idOf("unlocked", rand(32))
+const newtopic = () => "live-check-" + hex(rand(16))
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const PEER = new URL("./peer.ts", import.meta.url).pathname
 
@@ -35,7 +41,7 @@ class Peer {
 	constructor(
 		readonly name: string,
 		readonly seed: string,
-		readonly doc: string,
+		readonly doc: string | undefined,
 		readonly dir: string,
 	) {
 		this.child = new Deno.Command("deno", {
@@ -46,12 +52,13 @@ class Peer {
 				PEER,
 				"--seed",
 				seed,
-				"--doc",
-				doc,
+				...doc ? ["--doc", doc] : [],
 				"--store",
 				dir,
 				"--server",
 				server,
+				...zeros ? ["--zeros"] : [],
+				...service ? ["--service", service] : [],
 			],
 			stdin: "piped",
 			stdout: "piped",
@@ -129,17 +136,18 @@ async function check(what: string, read: () => Promise<unknown>, want: (x: any) 
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-const doc = newdoc()
+let doc: string | undefined
 const seeds = [0, 1, 2].map(() => hex(rand(32)))
 const base = await Deno.makeTempDir({ prefix: "ermine-live-check-" })
 const dirs = [0, 1, 2].map((i) => `${base}/${"abc"[i]}`)
-console.log(`server ${server}, ${legacy ? "legacy" : "full"} ids, doc ${doc}`)
+console.log(`server ${server}, ${zeros ? "zeros" : "full"} ids`)
 const peers: Peer[] = []
 const spawn = async (i: number) => {
 	const p = new Peer("ABC"[i], seeds[i], doc, dirs[i])
 	peers.push(p)
 	await p.start()
-	console.log(`  ${p.name} up: key ${p.ready.key.slice(0, 8)}`)
+	doc ??= p.ready.doc
+	console.log(`  ${p.name} up: key ${p.ready.key.slice(0, 8)}, doc ${p.ready.doc}`)
 	return p
 }
 try {
@@ -155,24 +163,24 @@ try {
 
 	await Promise.all([a.ask({ cmd: "commit", value: "ca" }), b.ask({ cmd: "commit", value: "cb" })])
 	await check(
-		"(b) concurrent changes converge to the same versions",
+		"(b) concurrent changes converge to the same versions (one shown, one in conflicts)",
 		async () => [await a.ask({ cmd: "read" }), await b.ask({ cmd: "read" })],
 		(v) => same(v[0], ["ca", "cb"]) && same(v[1], v[0]),
 	)
 
-	const e1 = newdoc()
+	const e1 = newtopic()
 	await b.ask({ cmd: "view", doc: e1 })
 	await a.ask({ cmd: "ephemeral", doc: e1, value: "hello" }).catch((e) =>
 		console.log("  note: " + String(e).split("\n")[0])
 	)
 	await check(
-		"(c) an ephemeral change on A is heard on B",
+		"(c) an ephemeral message on A is heard on B",
 		() => b.ask({ cmd: "read", doc: e1 }),
 		(v) => same(v, ["hello"]),
 	)
 
 	const big = hex(rand(100000))
-	const e2 = newdoc()
+	const e2 = newtopic()
 	await b.ask({ cmd: "view", doc: e2 })
 	const sent = Date.now()
 	await a.ask({ cmd: "ephemeral", doc: e2, value: big }).catch((e) =>
@@ -180,7 +188,7 @@ try {
 	)
 	console.log(`  (A published the parts in ${((Date.now() - sent) / 1000).toFixed(1)} s)`)
 	await check(
-		"(d) a ~200 KB ephemeral change crosses in parts",
+		"(d) a ~200 KB ephemeral message crosses in parts",
 		() => b.ask({ cmd: "read", doc: e2 }),
 		(v) => Array.isArray(v) && v.length === 1 && String(v[0]).startsWith("len:200000:"),
 	)
@@ -221,6 +229,7 @@ try {
 } finally {
 	for (const p of peers) await p.quit()
 	await Deno.remove(base, { recursive: true }).catch(() => {})
+	spawned?.stop()
 }
 console.log(failed ? `${failed} FAILED` : "all ok")
 Deno.exit(failed ? 1 : 0)

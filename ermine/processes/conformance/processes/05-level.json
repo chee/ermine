@@ -1,0 +1,132 @@
+{
+	"title": "a walk goes on through a level of the rows as if it were a folder, with no saved folder: /dev/clock and what is in it are found, /dev itself is no id and no answer, and a reader of it reruns at the stop",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PON",
+			"value": {
+				"reset": "PRS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"dev",
+				"clock",
+				"on",
+				"reset"
+			],
+			"expect": {
+				"id": "PRS"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"dev"
+			],
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"dev",
+				"nothing"
+			],
+			"expect": {}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"dev"
+			],
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"get": [
+					"dev",
+					"clock",
+					"on"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "PON"
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": null
+			}
+		}
+	]
+}

@@ -136,6 +136,9 @@ void sc_free(sc_scheduler *s);
 // a key tracked in a run
 typedef void (*sc_track_fn)(const void *key, sc_run *run, void *data);
 sc_listener *sc_on_track(sc_scheduler *s, sc_track_fn f, void *data);
+// a key that gets its first tracker (none had it, or never before): told in the reading run, after the
+// track. Mirrors TS' onTrackingStart
+sc_listener *sc_on_tracking_start(sc_scheduler *s, sc_track_fn f, void *data);
 // a mark, and a new computer (due at once: no keys): what it made due, and its tick. run: who made
 // it, NULL for none
 typedef void (*sc_mark_fn)(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
@@ -154,10 +157,13 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data);
 // a promise settled: its result waits for the next pulse
 typedef void (*sc_settle_fn)(void *data);
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data);
+// a pulse ended: nothing due, every act done. a pulse called here is a new one
+typedef void (*sc_after_pulse_fn)(void *data);
+sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data);
 // a key nobody tracks any more: at once when its last tracker's run did not track it again or it
 // was torn down (a sweep now and then catches any other)
-typedef void (*sc_untrack_fn)(const void *key, void *data);
-sc_listener *sc_on_untrack(sc_scheduler *s, sc_untrack_fn f, void *data);
+typedef void (*sc_tracking_end_fn)(const void *key, void *data);
+sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data);
 void sc_remove_listener(sc_listener *l);
 
 // scopes: n pairs of info, borrowed. a new one with no parent

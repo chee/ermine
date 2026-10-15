@@ -1,8 +1,8 @@
 // The notes demo: a page per device, served with Deno.
-//   deno run -A sync/demo/serve.ts [--local | --server wss://galaxy.observer] [--port 8330]
+//   deno run -A extensions/subduction/demo/serve.ts [--local | --server wss://galaxy.observer] [--port 8330]
 // --local (default if subduction_cli is found): a Subduction server on this machine, open auth, data
 // thrown away on exit. Otherwise --server: wss://galaxy.observer needs only throwaway data, ids in
-// the legacy form (16 random bytes then zeros), which this sets. Open http://localhost:8330/ and then
+// minted with their last 16 bytes zero (sync's zeros option), which this sets. Open http://localhost:8330/ and then
 // the "another device" link (or the invite) in a second tab.
 import { local } from "./server.ts"
 
@@ -25,7 +25,7 @@ if (!server) {
 		console.log(`falling back to ${server} (throwaway data only)`)
 	}
 }
-const legacy = !/^wss?:\/\/(localhost|127\.)/.test(server)
+const zeros = !/^wss?:\/\/(localhost|127\.)/.test(server)
 
 const types: Record<string, string> = {
 	html: "text/html; charset=utf-8",
@@ -71,7 +71,7 @@ async function wasm(): Promise<Uint8Array> {
 		} catch { /* next */ }
 	}
 	throw new Error(
-		"subduction.wasm not in Deno's npm cache: run deno check sync/demo/node.ts first",
+		"subduction.wasm not in Deno's npm cache: run deno check extensions/subduction/demo/node.ts first",
 	)
 }
 const binary = await wasm()
@@ -84,7 +84,7 @@ const handler = async (req: Request) => {
 	if (path === "/style.css") return reply(await Deno.readFile(`${here}style.css`), "css")
 	if (path === "/page.ts") return bundle(`${here}page.ts`)
 	if (path === "/subduction.wasm") return reply(binary as BodyInit, "wasm")
-	if (path === "/config") return Response.json({ server, service: service ?? null, legacy })
+	if (path === "/config") return Response.json({ server, service: service ?? null, zeros })
 	return new Response("not found", { status: 404 })
 }
 Deno.serve(

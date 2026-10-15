@@ -163,7 +163,7 @@ static op_value *eval(const op_value *e, ctx *c) {
 	if ((x = op_get(e, "cachedEntries"))) {
 		size_t n;
 		const char **path = world_address(x, &n);
-		pc_answers list = pc_entries(world_cached(), path, n);
+		pc_answers list = pc_gets(world_cached(), path, n);
 		free(path);
 		op_value *a = op_list();
 		for (size_t i = 0; i < list.n; i++) {

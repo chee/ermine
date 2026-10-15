@@ -46,11 +46,11 @@ fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragme
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
-processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c ermine/processes/c/scopes.c
 protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
 update_src = $(harness_src) conformance/c/protocol.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c core/scheduler/c/selector.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/files/c/names.c playground/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/files/c/diag.c playground/files/c/diag_harness.c ermine/encoding/c/json.c
@@ -106,7 +106,43 @@ store = playground/files/c/store-harness
 program = playground/files/c/program-harness
 sys = playground/files/c/sys-harness
 
+# presence (playground/presence): its harness on places, the table and the scheduler (the C harness has no BroadcastChannel)
+presence_src = $(harness_src) playground/presence/c/presence_harness.c playground/presence/c/presence.c playground/presence/c/channel.c filesystem/places/c/places.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+presence = playground/presence/c/presence-harness
+presence_suite = presence
+presence_tests = $(wildcard playground/presence/typescript/presence_harness_test.ts)
 LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
+LIBS += presence
+# hash (ermine/encoding): a value's name, BLAKE3 of its canonical CBOR, against conformance/hash/vectors.json
+hash_src = ermine/encoding/c/hash_test.c ermine/encoding/c/hash.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+hash = ermine/encoding/c/hash-test
+LIBS += hash
+# patch nodes (playground/patch-nodes): the overlay and its harness, on the places harness's world
+patch_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) playground/patch-nodes/c/patch.c playground/patch-nodes/c/patch_harness.c
+patch = playground/patch-nodes/c/patch-harness
+patch_suite = patch
+patch_tests = $(wildcard playground/patch-nodes/typescript/patch_harness_test.ts)
+LIBS += patch
+# boxes (ermine/boxes): a "/" of a process's own, a plain folder, its places a view of the host's, on the places harness's world
+boxes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/boxes/c/boxes_harness.c
+boxes = ermine/boxes/c/boxes-harness
+boxes_suite = boxes
+boxes_tests = $(wildcard ermine/boxes/typescript/boxes_harness_test.ts)
+LIBS += boxes
+# programs (ermine/programs): satisfy and open (programs), build and start, on the places harness's world with boxes; the harnesses make it
+programs_base = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes.c ermine/boxes/c/boxes.c ermine/encoding/c/pack.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c ermine/encoding/c/hash.c $(blake3_src) ermine/programs/c/host.c
+programs_lib = ermine/programs/c/types.c ermine/programs/c/utis.c ermine/programs/c/programs.c ermine/programs/c/programs_json.c
+programs_src = $(programs_base) $(programs_lib) ermine/programs/c/programs_harness.c
+programs = ermine/programs/c/programs-harness
+programs_suite = programs
+programs_tests = $(wildcard ermine/programs/typescript/programs_harness_test.ts)
+programs-build_src = $(programs_base) ermine/programs/c/build.c ermine/programs/c/build_harness.c
+programs-build = ermine/programs/c/build-harness
+programs-build_suite = build
+programs-start_src = $(programs_base) $(programs_lib) ermine/programs/c/build.c ermine/programs/c/start.c ermine/programs/c/start_harness.c ermine/processes/c/scopes.c
+programs-start = ermine/programs/c/start-harness
+programs-start_suite = start
+LIBS += programs programs-build programs-start
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -199,19 +235,24 @@ $(foreach l,$(LIBS),$(eval $(call run,$(l))))
 # invert's suite alone, on op-apply's harness (the same protocol)
 op-invert = $(op-apply)
 $(eval $(call run,op-invert))
+# open's suite alone, on programs' harness (the same protocol)
+programs-open = $(programs)
+programs-open_suite = open
+$(eval $(call run,programs-open))
 
 test:
 	$(DENO)
 	deno task conformance
 
 TESTED = $(LIBS) op-invert
+TESTED += programs-open
 test-c: $(addprefix test-c-,$(TESTED))
 test-check: $(addprefix test-check-,$(TESTED))
 # the harnesses under macOS's leaks (conformance/leaks.sh): the sanitizers find no leaks there
 test-leaks: $(addprefix test-leaks-,$(TESTED))
 
 # benches, -O2, not part of all
-BENCHES = ermine/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench
+BENCHES = ermine/encoding/c/pack-bench core/scheduler/c/paths-bench core/op/c/squish-bench core/op/c/apply-bench playground/patch-nodes/c/patch-bench
 bench: $(BENCHES)
 ermine/encoding/c/pack-bench: core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_bench.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
@@ -220,6 +261,8 @@ core/scheduler/c/paths-bench: core/scheduler/c/paths.c core/op/c/value.c core/sc
 core/op/c/squish-bench: core/op/c/squish.c core/op/c/squish_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 core/op/c/apply-bench: core/op/c/apply.c core/op/c/value.c core/op/c/apply_bench.c
+	$(CC) $(CFLAGS) -o $@ $^ -lm
+playground/patch-nodes/c/patch-bench: $(filter-out filesystem/places/c/places_harness.c filesystem/places/c/world.c filesystem/places/c/status.c conformance/c/harness.c conformance/c/protocol.c core/op/c/json.c,$(places_src)) playground/patch-nodes/c/patch.c playground/patch-nodes/c/patch_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
 # the files tool: a command line over the C store (playground/files/c/files.c). Its synced document (host.c: the files program and

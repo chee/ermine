@@ -175,6 +175,7 @@ void cst_give(cst *s, sc_computer *c, tb_key id) {
 }
 
 void cst_stop(cst *s) {
+	if (s == NULL) return;
 	if (s->listener != NULL) sc_remove_listener(s->listener);
 	s->listener = NULL;
 }

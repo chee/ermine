@@ -83,6 +83,12 @@ export type Device = {
 	// an ephemeral one, the blop's bytes, not sealed, as given: taken in (refused as a receiver would
 	// refuse it, but still sent), published
 	publish(doc: string, blop: Uint8Array): Promise<void>
+	// bytes to whoever listens on a topic (a string, named by hash so it is never a document's):
+	// ephemeral, kept nowhere, not heard here. over LIMIT: sent as parts, joined at the other end
+	send(topic: string, bytes: Uint8Array): Promise<void>
+	// fn told each message on the topic: the sender's verifying key as lowercase hex, the bytes.
+	// subscribes as needed (queued: idle() waits for it); gives back the stop, which only removes fn
+	listen(topic: string, fn: (from: string, bytes: Uint8Array) => void): () => void
 	// addCommit as given: nothing checked or taken in first
 	put(doc: string, head: Uint8Array, parents: Uint8Array[], blob: Uint8Array): Promise<void>
 	// addFragment as given: nothing checked or taken in first
@@ -171,6 +177,11 @@ export function createDevice(
 	const documents = new Map<string, Document>()
 	const followed = new Set<string>()
 	const peers = new Map<string, sd.PeerId>()
+	// topics listened on, by their hash's hex: the Topic and who is told
+	const topics = new Map<
+		string,
+		{ topic: sd.Topic; fns: Set<(from: string, bytes: Uint8Array) => void> }
+	>()
 	// taking in and building, one at a time, in the order asked
 	let tail: Promise<unknown> = Promise.resolve()
 	let busy = 0
@@ -444,7 +455,6 @@ export function createDevice(
 	const joining = new Map<
 		string,
 		{
-			d: Document
 			from: Uint8Array
 			whole: Uint8Array
 			parts: number
@@ -484,15 +494,21 @@ export function createDevice(
 	}
 
 	// one part from a sender: kept with its whole's; when all are here, joined, the hash checked,
-	// and what they make heard as a payload (a bad hash: dropped)
-	async function gather(d: Document, p: NonNullable<ReturnType<typeof partOf>>, from: Uint8Array) {
+	// and what they make given to done as a payload (a bad hash: dropped). where: the document's id
+	// or the topic's hex, to keep the parts of one apart from another's
+	async function gather(
+		where: string,
+		p: NonNullable<ReturnType<typeof partOf>>,
+		from: Uint8Array,
+		done: (all: Uint8Array) => Promise<void>,
+	) {
 		expire()
-		const k = d.id + " " + hex(from) + " " + hex(p.whole)
+		const k = where + " " + hex(from) + " " + hex(p.whole)
 		let j = joining.get(k)
 		if (!j) {
 			joining.set(
 				k,
-				j = { d, from, whole: p.whole, parts: p.parts, got: new Map(), at: Date.now() },
+				j = { from, whole: p.whole, parts: p.parts, got: new Map(), at: Date.now() },
 			)
 		}
 		if (j.parts !== p.parts) return
@@ -505,21 +521,25 @@ export function createDevice(
 		let at = 0
 		for (let i = 0; i < j.parts; i++) all.set(j.got.get(i)!, at), at += j.got.get(i)!.length
 		if (hex(blake3(all)) !== hex(p.whole)) return
-		await hear(d, all, from)
+		await done(all)
 	}
 
 	// ---- building (FRAGMENT.tex)
 
-	async function building(d: Document) {
+	// the fragments not built yet, walked from these heads; none given: from every head
+	async function building(d: Document, from?: Uint8Array[]) {
 		if (d.deep === 0) return
 		const lookup = (id: Uint8Array) => {
 			const s = d.seen.get(hex(id))
 			if (!s) return
 			return s.ids.map(unhex)
 		}
-		const covered = new Set<string>()
-		for (const s of d.seen.keys()) for (const p of lookup(unhex(s)) ?? []) covered.add(hex(p))
-		const heads = [...d.seen.keys()].filter((s) => !covered.has(s)).map(unhex)
+		let heads = from
+		if (heads === undefined) {
+			const covered = new Set<string>()
+			for (const s of d.seen.keys()) for (const p of lookup(unhex(s)) ?? []) covered.add(hex(p))
+			heads = [...d.seen.keys()].filter((s) => !covered.has(s)).map(unhex)
+		}
 		const fresh = build(heads, lookup, (head) => d.fragments.get(hex(head)))
 		for (const f of fresh) d.fragments.set(hex(f.head), f)
 		for (const f of fresh) {
@@ -546,13 +566,16 @@ export function createDevice(
 		fragments: { head: sd.CommitId; boundary: sd.CommitId[]; blob: Uint8Array }[],
 	) {
 		const d = document(tree.toBytes())
+		const deep = d.deep
 		for (const c of commits) {
 			await commit(d, c.id.toBytes(), c.parents.map((p) => p.toBytes()), c.blob)
 		}
 		for (const f of fragments) {
 			await fragment(d, f.head.toBytes(), f.boundary.map((b) => b.toBytes()), f.blob)
 		}
-		await building(d)
+		// only a commit taken in that can head a fragment (a leading zero byte), or a fragment, makes
+		// one to build: walking every commit after each would make n commits cost n²
+		if (fragments.length || d.deep !== deep) await building(d)
 	}
 
 	// ---- Subduction
@@ -623,11 +646,25 @@ export function createDevice(
 		signer: { sign: (m) => options.signer.sign(m), verifyingKey: () => options.signer.key },
 		storage,
 		onEphemeral: (topic: sd.Topic, from: sd.PeerId, payload: Uint8Array) => {
-			const t = topic.toBytes(), d = documents.get(hex(t))
-			if (!d || !followed.has(hex(t))) return
+			const t = topic.toBytes(), k = hex(t), d = documents.get(k)
 			const part = partOf(payload)
+			// a channel topic (hashed, so never a document's) goes to its listeners
+			const c = topics.get(k)
+			if (c && !d) {
+				const who = hex(from.toBytes())
+				const tell = (bytes: Uint8Array) => {
+					for (const fn of [...c.fns]) fn(who, bytes)
+					return Promise.resolve()
+				}
+				if (part === undefined) tell(payload)
+				else if (part) later(() => gather(k, part, from.toBytes(), tell))
+				return
+			}
+			if (!d || !followed.has(k)) return
 			if (part === undefined) later(() => hear(d, payload, from.toBytes()))
-			else if (part) later(() => gather(d, part, from.toBytes()))
+			else if (part) {
+				later(() => gather(d.id, part, from.toBytes(), (all) => hear(d, all, from.toBytes())))
+			}
 		},
 	})
 
@@ -659,6 +696,15 @@ export function createDevice(
 		}
 	})
 	loaded.catch(() => {})
+
+	// a channel's topic: BLAKE3 of "ermine/v0/topic" then the topic's CBOR, so never a document's
+	function channelTopic(name: string) {
+		const prefix = new TextEncoder().encode("ermine/v0/topic"), tail = cbor.encode(name)
+		const id = blake3(Uint8Array.from([...prefix, ...tail])), k = hex(id)
+		let c = topics.get(k)
+		if (!c) topics.set(k, c = { topic: sd.Topic.fromBytes(id), fns: new Set() })
+		return c
+	}
 
 	// the document fetched from every peer, subscribed; then once more subscribed: what was added
 	// while the first was out (or before it was asked) is in neither its answer nor a push
@@ -720,8 +766,10 @@ export function createDevice(
 				if (!made) await commit(d, u.stored, parents, blob)
 				else if (!d.seen.has(hex(u.stored))) hand(d, u, sealed, parents.map(hex).sort(by))
 			})
-			await sub.addCommit(d.tree, commitId(u.stored), parents.map(commitId), blob)
-			await run(() => building(d))
+			// Subduction asks for a fragment when the commit is on a boundary (FragmentRequested), and
+			// that one is built, from it
+			const r = await sub.addCommit(d.tree, commitId(u.stored), parents.map(commitId), blob)
+			if (r) await run(() => building(d, [u.stored]))
 		},
 		async publish(doc, bytes) {
 			const d = named(doc)
@@ -739,6 +787,24 @@ export function createDevice(
 				const bytes = blob.subarray(i * PART, (i + 1) * PART)
 				await sub.publishEphemeral(d.topic, cbor.encode({ whole, part: i, parts, bytes }))
 			}
+		},
+		async send(topic, bytes) {
+			const t = channelTopic(topic).topic
+			if (bytes.length <= LIMIT && partOf(bytes) === undefined) {
+				return await sub.publishEphemeral(t, bytes)
+			}
+			// a payload that looks like a part is sent as parts too, so it arrives as it was sent
+			const whole = blake3(bytes), parts = Math.max(1, Math.ceil(bytes.length / PART))
+			for (let i = 0; i < parts; i++) {
+				const part = bytes.subarray(i * PART, (i + 1) * PART)
+				await sub.publishEphemeral(t, cbor.encode({ whole, part: i, parts, bytes: part }))
+			}
+		},
+		listen(topic, fn) {
+			const c = channelTopic(topic)
+			c.fns.add(fn)
+			later(() => sub.subscribeEphemeral([c.topic]))
+			return () => void c.fns.delete(fn)
 		},
 		async put(doc, head, parents, blob) {
 			const d = named(doc)

@@ -195,7 +195,14 @@ class Work {
 	// the span [a, b) of what is at path replaced by w (undefined: removed); what was there, when
 	// keep. all: a string's positions are all counted, for seq. the path walked once: its
 	// containers made own on the way in, the sequence put back at the end
-	splice(path: readonly Key[], a: number, b: number, w: unknown, all = false, keep = false): unknown {
+	splice(
+		path: readonly Key[],
+		a: number,
+		b: number,
+		w: unknown,
+		all = false,
+		keep = false,
+	): unknown {
 		let at: Record<Key, unknown> | undefined, k: Key = 0, v: unknown
 		if (path.length === 0) v = this.root
 		else {
@@ -247,7 +254,7 @@ class Work {
 			else {
 				const ws = w as unknown[]
 				// at the end: pushed, the list grows in place
-				if (a === l.length && !keep) for (let i = 0; i < ws.length; i++) l.push(ws[i])
+				if (a === l.length && !keep) { for (let i = 0; i < ws.length; i++) l.push(ws[i]) }
 				else if (ws.length === 1) taken = l.splice(a, b - a, ws[0])
 				else taken = l.splice(a, b - a, ...ws)
 			}

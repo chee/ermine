@@ -1,0 +1,334 @@
+{
+	"title": "list and members at a level of the rows with no saved folder (/dev, processes at /dev/clock) give the processes under it, and the root's give the level, with no id; gets under it agrees with get; lookup finds the level's path and what is under it; a reader of the level's listing reruns on a start and a stop under it, and not on one elsewhere; a reader of the root's only as the level goes",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"x"
+			],
+			"id": "X",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"dev"
+			],
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [
+				"dev"
+			],
+			"expect": {
+				"names": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "members",
+			"at": [
+				"dev"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "clock",
+						"id": "P",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"dev",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "members",
+			"at": [],
+			"expect": {
+				"members": [
+					{
+						"name": "dev",
+						"from": "process"
+					},
+					{
+						"name": "work",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "P",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"dev",
+				"nothing"
+			],
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"dev"
+			],
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"clock"
+			],
+			"from": [
+				"dev"
+			],
+			"expect": {
+				"path": [
+					"dev",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"dev"
+			],
+			"from": [
+				"work"
+			],
+			"expect": {
+				"path": [
+					"dev"
+				]
+			}
+		},
+		{
+			"op": "watch",
+			"name": "names",
+			"scope": "o",
+			"f": {
+				"names": [
+					"dev"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "top",
+			"scope": "o",
+			"f": {
+				"names": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"dev",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"dev",
+				"timer"
+			],
+			"id": "T",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"clock",
+					"timer"
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"dev",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"y"
+			],
+			"id": "Y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"clock",
+					"timer"
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"dev",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"dev",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 3,
+				"value": [
+					"timer"
+				]
+			}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"dev",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"dev",
+				"timer"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 4,
+				"value": []
+			}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"work"
+				]
+			}
+		}
+	]
+}

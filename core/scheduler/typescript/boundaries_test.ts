@@ -194,3 +194,24 @@ Deno.test("a list given out stays as it was", () => {
 	assertEquals(before.length, 1)
 	assertEquals(loading.caught(), [])
 })
+
+Deno.test("listeners are told once after a pulse, however much changed in it; between pulses, after the next", () => {
+	const { s, b, write, o, scope, compute } = setup()
+	const panel = scope(o)
+	const loading = b.loading(panel)
+	let told = 0
+	loading.on(() => void (told++, loading.caught()))
+	write("k", "wait")
+	const part = scope(panel)
+	for (let i = 0; i < 3; i++) compute(part, "k")
+	s.pulse()
+	assertEquals([told, loading.caught().length], [1, 3])
+	// a pulse that changes nothing it holds: not told
+	s.pulse()
+	assertEquals(told, 1)
+	// torn down between pulses: what it holds changes at once, told after the next pulse
+	s.teardown(part)
+	assertEquals([told, loading.caught().length], [1, 0])
+	s.pulse()
+	assertEquals(told, 2)
+})

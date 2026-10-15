@@ -1,10 +1,10 @@
 #+title: plan: sync, rewritten for the new graph
 #+author: LLM generated working output
-#+date: 2026-10-14
+#+date: 2026-10-14, updated 2026-10-15
 
 Words: *decided*: chee's words, quoted. *lean*: chee thinking it through, quoted. *mine*: my
-proposal, open to change. *open*: not answered. From the sync talks of 10-13 and 10-14. The graph
-it syncs: core/table/plan.org (nodes as tables, paths in children).
+proposal, open to change. *open*: not answered. From the sync talks of 10-13, 10-14 and 10-15. The
+graph it syncs: core/table/plan.org (nodes as tables, paths in children).
 
 * What it is
 - a rewrite, *decided*: "sync will be totally rewriten because of the new cleaner api"
@@ -16,31 +16,184 @@ it syncs: core/table/plan.org (nodes as tables, paths in children).
   think that's good."
 - Subduction is the floor: storage and network. the in-memory graph is a view of the sedimentrees
   (10-11: "sedimentree is the filesystem")
+- no graph change for any of it: sync, storage and files are processes on places' write hooks
+  (commit, eachEntryChange, watchPath, built 10-14) and the scheduler's onTrackingStart /
+  onTrackingEnd. *decided* 10-15, of that and the rest marked so below (commit ids as hashes,
+  versions and arriving through onTrackingStart, ephemeral overlays as patch nodes, storage keeping
+  commits and pack snapshots, files as a mirror): "yes, this sounds good"
+
+* Built, 10-15 (chee: "go ahead and build the subduction integration")
+- extensions/subduction/typescript/sync.ts, @ermine/subduction/sync: createSync({table, device,
+  signer, random?, zeros?, tables?, commit?}) → {mint, follow, wrote, tableChanged, settle, idle}. tests:
+  sync_test.ts (7). *mine*, all changeable:
+  - the node as one object: blop's object "value" holds { value, attributes, children }, each
+    commit's patches under its table's name. blop, history, apply, seal, transport, C and the
+    conformance suites unchanged; wiring makes and sends the commits; old wiring/world stay for the
+    demos using them
+  - the host hands sync what it wrote beside places: wrote(entries) after places.commit,
+    tableChanged(part, id) from the table's listener. sync writes what comes in to the table itself
+  - a write extends the head shown (at 0); other heads listed in the "conflicts" table at the id
+    ({head, lamport, signer, actor, tables that differ}); settle(id, change?) keeps the head shown
+  - copies at the edge, small: places changes children and attributes in place and the history
+    must never change, so a patch's values are copied going out (and an entry's whole value only
+    when it is put whole). coming in, the next commit on the head shown is applied as its own
+    patches (their values copied) and told through the host's commit (places.commit): 30k names,
+    one rename, about 10 µs, against about 50 ms to compare and copy the folder whole. whole copies
+    only when the head shown changes otherwise (a first load, a head in front, a settle)
+  - kept: an ermine:// id and the tables given (value, attributes, children); zeros mints ids with
+    the last 16 bytes zero
+- not yet: versions and arriving through onTrackingStart; following a node's children; ephemeral
+  overlays; transactions (anchor); CRDT-shaped patches; the time a commit is made carried whole (the
+  wallclock rides in metadata); the C; WebCrypto signing; trimming the envelope (node id, signer twice)
+- fixed on the way, transport.ts: fragments built only when Subduction asks (FragmentRequested), from
+  that commit, and on taking in only when a commit that can head one came: adding n commits to one
+  document was n² (1000: 36-187 s, now about 1 s)
+
+* Rewrite for the new shape, 10-15
+chee: "you own the confortmance suites, you were not meant to obey them you were meant to make them
+better because the graph is new shape and subduction can be rewriten for new shape"; snapshots,
+*decided*: "yes, i'd like that". The pieces, lowest first, each TypeScript and its suite; the C
+after, against the suites. All *mine* unless quoted.
+1. commit (replaces blop): one entry change. {table, parents, lamport, time, actor, reader?,
+   external?, metadata?, signer, nonce, patches, base?}: the table named, no per-name objects; no
+   node id (the sedimentree is the node's); the time whole seconds, not a wallclock in metadata;
+   base only with several parents (a merge's patches are over that one). canonical CBOR, named by
+   its BLAKE3 hash
+2. seal: {commit, signature}, the signer's key once (it is in the commit)
+3. history (replaces history.ts and apply.ts's sides): a node's commits by name, their parents,
+   the heads in the agreed order (higher lamport first; equal, the greater name), what waits on a
+   parent, what is refused. no values: the table is the head shown (chee: "it's already on the
+   node's change header isn't it?")
+4. replay: a node's tables at a commit: from the newest snapshot behind it, the commits after it
+   applied in order, each decoded from its bytes (nothing shared with the table or the history),
+   in place. for heads that don't show (conflicts), a head switch, a version (ermine://id/commit/…)
+5. snapshot: the node's kept tables at a head, packed (pack.ts: the node as the unit). carried in
+   each fragment beside its members' sealed commits: a fragment comes about once in 256 commits
+   (depth 1), so replay and loading start at most that far back. loading: the newest fragment's
+   snapshot, then the loose commits
+6. the check moves to the integration: a commit is refused when its patches don't apply to its
+   parent's node. own commits: already applied to the table. one arriving on the head shown: applied
+   to the table's entries, refused if they don't apply. any other: by replay
+7. transport: carries commits and fragments with snapshots; channels as built
+8. sync.ts: as built, without the combined object: commits name their table
+9. suites: commit, seal, history, replay, snapshot, transport written for this; blop, apply, the
+   old history, wiring and world retired once the demos have moved
+10. demos: extensions/subduction/demo and live, playground files, terminal and the OS's subduction
+    layer, onto sync.ts
+
+* Rewrite built, 10-15
+- @ermine/encoding/commit (ermine/encoding/typescript/commit.ts): the commit. extensions/sync
+  (@ermine/sync): seal.ts (WebCrypto, verify keys made once), history.ts (bytes, no values),
+  replay.ts, snapshot.ts, transport.ts (an agent's port: commits, two histories a document, own takes
+  unchecked and unannounced, fragments {members, snapshot?}), channel.ts, sync.ts. 25 tests
+- sync.ts: going out, a commit encoded from the change at once, kept as bytes: no copy. coming in on
+  the head shown, applied to the table by update, which is its check, told as patches. forks, merges,
+  head switches and conflicts by replay, whole. the ephemeral layer shows nowhere yet (overlays to
+  come), so what is only ephemeral is not checked
+- open, *mine*:
+  - a snapshot from a peer is taken as given: not signed, not checked against a replay. sign
+    fragments, or check a snapshot by replaying to it once
+  - @ermine/sync uses @ermine/subduction's fragment.ts: moves over when the old package goes
+  - ids: random 32 bytes (zeros: last 16 zero); binding a lock (old id.ts) waits for Keyhive
+  - suites and C for commit, seal, history, replay, snapshot, transport; the old suites (blop, apply,
+    history, commit, wiring, transport) retire with the old code
+- moved, 10-15 (agents): extensions/subduction/demo and live (checked against a local
+  subduction_cli: all ok), playground/demos browser-sync, console/browser-sync, console/order,
+  terminal (build and screenshots; the terminal's real flow not run). not: playground/experimental_os
+  (its own copy of core, another session's)
+- what the demos found missing: following a node's children by itself; ephemeral commits (overlays);
+  writing to a node before its history has come makes an entry that then conflicts with what comes
+  (arriving, above); a service option on createSync; listing a table's ids; merging what heads hold
+  (settle keeps the shown head, so a demo's merge writes first, then settles)
+
+* Benches and fixes, 10-15
+- chee: "do all of these and yes". fixed: forks keep each head that doesn't show its own tables,
+  moved on in place (sync's, never shared), conflicts worked out once a batch; snapshots taken
+  when the commits between the last one's head and this one's add up to about the node's size
+  (yes, chee), placed by each commit's position, packed by sync (snapshotOf gives bytes); a
+  snapshot's changes trimmed as a commit trims them (it read differently from a replay); big maps
+  sorted n log n in canonical CBOR, TS and C (was n²: 30k keys); hex by table; a device's own
+  commit named, decoded and checked once (take and history.add take made, seal a name)
+- end to end, CPU time, new against old (playground/commits/typescript/sync_bench.ts): typing 1000
+  until stored 2.6x, reload 2.1x, sync 1.3x; 1000 nodes until stored 4.3x; a 30k-name folder's
+  rename 95x writing, 32x until the receiver shows it; making it 1.2x; two hosts meeting after 50
+  apart 1.7x (was 8x slower); 2000 commits reload 3.0x. slower: settle 8 ms against 5; the first
+  snapshot of a big node (the 30k folder: a few hundred ms, once)
+- runs (chee 10-15, "do 1 and 2"): a fragment carries its members as columns
+  (extensions/sync/typescript/run.ts): lossless and the same bytes on any device; parents implied
+  when a chain, numbers as varint differences, runs of one value, typing as a string; about 70
+  bytes a commit, nearly all signature (was 276). a commit's nonce is now a count, the device's
+  own, from a random start. a fragment stored lets go of the loose commits it stands for: 2000
+  letters, 707 KB stored → 202 KB. one signature a run: later, with Keyhive (only the key's holder
+  could build it, so fragments would stop being the same on every device)
+- a followed document still empty is asked for again, 0.25 s doubling to 16 s: the first ask can
+  land while the server is still taking its first commits in (the notes demo lost a note that way)
+
+* Ids
+- kept means an ermine:// id, for now, *decided* 10-15: "let's say it means an ermine:// id right
+  now". anything else (a symbol, scope:<uuid>, a process's node) never leaves the device
+- 32 bytes, written ermine:// and hex: one sedimentree per node is keyed by it. a random id (or one
+  binding its lock, extensions/subduction/typescript/id.ts), never a hash of the content: an edit
+  would make a new node. commits are what is hashed (below). *mine*
+- until Keyhive, the last 16 bytes zero, *decided* 10-15: "until keyhive we're going to have to
+  replace the last 16 bytes with 0 that can be an option you pass into the subduction integreation".
+  a server with no Keyhive grant for a document (wss://galaxy.observer) stores it only then. today
+  demos do it themselves with fresh() (extensions/subduction/CLAUDE.md); in the integration it is an
+  option given once, applied to every id it mints. *mine*: the option's name and shape
+- being saved stays a side's choice, *lean* 10-14: "something might be permanent on their side and
+  ephemeral on mine": the id makes keeping possible; the storage process keeps
 
 * The unit
 - one sedimentree per node, *decided*: "one sedimentree per node yes"; a node is everything at an
   id, all its tables (core/table/plan.org)
-- inside it, each table's history apart: a commit names the table it changes. *mine*
+- parents per node, *decided* 10-15: "per node i think? oh, parents.... yeah i think for parents we
+  have to treat a node as one thing". a commit's parents are the node's heads, whichever table it
+  changes; the table is named in the commit
 - the sync object and the unit of conflict differ (as in Automerge: the doc syncs, a key conflicts),
   *lean*: "right but the sync object is still the doc"
 
 * Commits
-- a local change as a commit: the table, the id, its change header (time, actor, reader, external,
-  metadata) and patches; sync's head (parents, lamport, nonce) as a metadata entry; undo never
-  sent. *mine*
+- one commit per entry change, *decided* 10-15: "let's go with 1 commit per entry change". one
+  table at one id: what one update made
+- its body is already made, *mine*: update records it on the entry's change: time, actor, reader,
+  external, metadata, and op {patches, undo} (decided 10-12, "keep the latest op"). sync is a
+  process watching eachEntryChange / watchPath for ermine:// ids
+- a commit: {node, table, parents, lamport, the header without undo, patches}. parents and lamport
+  ride in the header's metadata, so the graph keeps no sync state. undo never sent. *mine*
+- its id: the BLAKE3 hash of its canonical CBOR (@ermine/encoding/hash, built 10-15). signed by
+  the actor, *decided*: "actor is also going to be a sign"; sealed when stored
 - patches for merging: CRDT-shaped, *lean*: "blop, if it will still exist after the rewrite, should
   convert patches into crdt-shaped things marking the the the insert was before or after, etc
   right". anchors live in sync, *decided* 10-13: "in sync"; elements named by the commit that made
-  them and which of its inserts (10-13: "ok i like it"). *open*: whether children still need them
-  now that children may be a plain map (a placement conflict is then a key conflict)
+  them and which of its inserts (10-13: "ok i like it"). children are a plain map since 10-14
+  (chosen: "Plain map"), so a placement conflict is a key conflict and children need no element
+  ids; lists inside values still do. *mine*
 - a merge commit: an ordinary write whose parents are the heads it saw (10-09: "a write settles
   every head the writer's last read showed"). *mine* to use it as the merge commit
-- change identity (a patch node's at, a commit's settles): *open*, "it dosn't matter right now"
+- change identity (a patch node's at, a commit's settles): the commit's id. *mine*; was *open*:
+  "it dosn't matter right now"
+
+* Transactions over commits
+- a toy, *decided* 10-15: "i'd love to see a separate toy example of you trying to do transactions
+  that way? ... whichever works and is most efficient": playground/transactions (ways of holding a
+  transaction's commits until all of them are here, measured; toy.ts, sizes.ts)
+- what it found, 10-15: every way but none shows a transaction whole or not at all. count ({id, n}
+  on each member) is held for good by a receiver that doesn't follow every node. list (every other
+  member's node on each) grows as n²: 13.6 KB at 20 nodes. record (a node per transaction) adds a
+  commit and a document each, log (one per device) a commit each; both need a round more
+- anchor: each member carries {id, n, at}, the node of one member, whose commit lists the other
+  members' nodes. linear (about 100 bytes a member), no extra commit or document, one round more
+  than list for a receiver following only some of the nodes. *mine*: the one to use
+- what a partial follower pays: to show a transaction whole it fetches the other members' nodes and
+  their history up to it, which reaches other transactions: following 1 node of 20 fetched about
+  110 KiB against 7 KiB, in the toy. old answer, 10-09: "Follow a document a held placement would
+  place" (yes). *open*: whole for what you follow, or whole everywhere
 
 * Conflicts
 - not as items at a slot, *lean*: "conflict at the slot level is already probably not actually
   useful"
-- a conflicts table at the id, *lean*: "a conflicts table for the id maybe?". *mine*: sync writes it
+- a conflicts table at the id, *lean*: "a conflicts table for the id maybe?"; 10-15: "and conflicts
+  on a table at the node? we'll make a nice UI for it at some point?". *mine*: sync writes it
   from its history, one entry per conflicting spot (table, path, each head, its value, who); the
   value table holds one head: the first in the agreed order (higher lamport first; equal, the
   greater name), until a merge; history is kept, so it rebuilds after a reload
@@ -52,22 +205,55 @@ it syncs: core/table/plan.org (nodes as tables, paths in children).
 * Versions
 - a versioned id, ermine://b/commit/<hash>, read-only; a write from it is a branch
   (core/table/plan.org)
+- provided, *mine*: when someone tracks a versioned id, sync builds the node at that commit from
+  history and places it in memory; it lets go at onTrackingEnd. onTrackingStart (the scheduler,
+  10-15): "a provider can start making it then"
 - several heads at once, *open*, "we will figure that out later. /b/commit/hasha+hashb or
   something"
 
 * Arriving
 - *open*, for when sync is built (chee 10-14: "we will think about this when we are doing sync"): a
   node placed by id whose data hasn't come over the network yet reads as nothing; telling arriving
-  from empty and from refused. terminal and lib-dom needed it. *mine*: sync could write an arriving
-  table or field at the id, as it writes conflicts
+  from empty and from refused. terminal and lib-dom needed it. *mine*: the same provider as
+  versions: an ermine:// id tracked and not here starts its loading, and sync writes an arriving
+  status at the id meanwhile, as it writes conflicts
 
 * What leaves the device
 - kept, sent, sent ephemerally, *decided*, how *open*: "something that's a coordination between the
   user and the storage process and the sync process, somehow"
+- which tables are kept: a per-table flag, maybe tables as nodes with {save, send}, *thought* 10-14,
+  "note that down to think about later" (core/table/plan.org)
 - ephemeral placement is places' (core/table/plan.org): someone's persisted node can be received over
   the ephemeral channel and placed ephemerally, *lean*: "choose to transmit, choose to receive,
   someone else's persisted node over ephemeral channel and then you place it ephemerally"
 - *lean*: "the use of subduction might be making me conflate ephemeral and not saved and local."
+
+* Ephemeral
+- over a kept id: a patch node {patches, on, at}, patches over a node and the version they were
+  made against (*decided*, core/table/plan.org), placed by places in memory ("the ephemeral wins").
+  sent as commits of the same shape, never sealed, never stored, on the node's own topic. *mine*
+- it ends when a real commit covering at lands: dropped, or carried forward as big-duet's caret is
+  (the anchors library). lanes and optimistic values meet it at transactions. *mine*
+- presence and running process names: rows in a part on the anchor's node, one per device, never
+  saved (*decided* structure, core/table/plan.org; built: playground/presence)
+- one channel, *thought* 10-14: "i wonder if we need to build a generic ephemeral-channel thing that
+  subduction or iroh or pigeons could plug". built since: playground/presence's Channel, send(topic,
+  bytes) and on(topic, fn)
+- presence over ours, *decided* 10-15: "can we also offer ermine playground's presence to use our
+  ephemeral channel?". *mine*: the integration gives a Channel over Subduction's ephemeral messages
+  (publishEphemeral, subscribeEphemeral, onEphemeral, by 32-byte topic): a topic string named by
+  hash (BLAKE3 of "ermine/v0/topic" and the string), so it never meets a document's own topic.
+  needs: transport.ts (today) keeps its Subduction private and drops a topic that is not a followed
+  document
+
+* Storage, pack, files
+- what every storage keeps, *mine*: commits, and snapshots: a pack of a node's kept tables at one
+  head (core/table/plan.org: "pack's unit becomes the node", mine). loading: a snapshot, then the
+  commits after it
+- sedimentree storage (Subduction, on disk or IndexedDB): the OS card's (os-card, 10-12)
+- files, a mirror, *mine*: kept nodes laid out as files (values by hash, a manifest) and file edits
+  made into commits. *decided*: "the files thing would just be rethought it's okay, the concept is
+  still implementable" (where history is saved, conflicts rebuild from it)
 
 * Keyhive (next week, *lean*: "keyhive is a little future from now next week probably")
 - protect answers from Keyhive's local state, *decided*: "yes that is right"; protect also keeps its

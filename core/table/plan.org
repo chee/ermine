@@ -233,7 +233,99 @@ chee 10-14: "i think this is the plan."
   step a computer, cached by (step, input hash) at /cache/<hash> (build systems a la carte); the pin
   recorded at start; loaders run on loaders (loaders/wasm on loaders/browser); a missing need is a
   read of what isn't there, its status the complaint, a mount the fix. fetch-as-a-file-in-the-box:
-  "i love the idea of that later"
+  "i love the idea of that later". *decided* 10-15: a computer's creation site in its scope ("yes i'd like that";
+  each scope adds its own to its parent's; captured once when made), waits for the other session to
+  leave core/scheduler; C for each new library ("yes i'd like that": patch nodes and presence ported
+  now, boxes/programs/loaders get C as they're built). TS already hashes with blake3
+  (npm:@noble/hashes, blop.ts); a hash helper beside pack when programs need it. cache, 10-15: a cache only
+  lets go of what it took itself ("yes"); between update and commit: "fine with either. maybe the
+  process api can hide that away when it hides, say, pulse away" (documented: commit right after
+  update); every cache hearing every mark: later, a keyed fan-out (createSelector's shape). programs
+  plan, 10-15: createPrograms takes makeApi(ctx) so the process API stays a separate task; addProcess
+  is the row, start the whole thing (and uses it). places answers 10-15: a walk goes on through a trie level as a folder ("i
+  _guess_? let's do that with a comment that says "might be fishy. TODO is this fishy?""); watchPath
+  finds its path through contributors as get does ("yes"); two contributors, one name: "first wins. i
+  think. get should probably actually always return an array, but that's a big change right now so
+  let's just add a `gets` that returns an array"; merged list order: "sort them the way the canonical
+  cbor will"; "list should just be an iterator"; the C hook rename: "do that now". createSelector,
+  *decided* 10-15: "do that now. also export this createSelector function so that people can use it
+  and we can put it in the eventual process api" (@ermine/scheduler/selector; the caches' keyed fan-out
+  built on it). naming, *decided* 10-15: "i don't want "bin/c" it can be "loaders/c" but also
+  "loaders" is not a special name the thing should say it wants to load "loaders/c"" (the program
+  names the path its loader is looked up at, like #!; that loader names its own, and so on until one
+  runs). demo, *decided*: "port catclock ~/soft/chee/patchwork-playground/catclock to C that would work
+  as wasm when handed a canvas, i wanna see that on ermineOS and browser"; browser: "yeah or sharedarraybuffer or
+  ImageData canvas one of them"; ermineOS, *decided*: "NO on ermineOS it should compile to native C and
+  then run _that_" (same source, a different box, a different chain: wasm in the browser, native on
+  the OS). a missing capability, *decided* 10-15: "i'm tlking about if it tries to like
+  `window.fetch` and it doesn't have network access, something like that, use indexeddb without
+  storage access" (the loader turns the platform's refusal: a Deno permission error, a CSP violation,
+  a SecurityError, a wasm LinkError, an unresolved native symbol; into a complaint on the process's
+  node: status plus ermine.process.needed [{what, tried, where}]). built 10-15, step 1: @ermine/encoding/hash
+  (TS: blake3 of canonical CBOR via @noble/hashes; C: ermine/encoding/c/hash.c hashValue), both
+  checked against ermine/encoding/conformance/hash/vectors.json (17). step 2, scope nodes: ermine/processes
+  scopes.ts createScopeNodes {give, nodeOf, nearest}, a map beside the scheduler, entries deleted at
+  the scope's teardown; scenario processes/04-scope-nodes; C by agent. chee: do all of it outside
+  core, marking "// core candidate" where core would make sense (here: a scope carrying its node id). step 3, boxes, REBUILT as plain folders, *decided* 10-15 (replacing my
+  overlay, kept below for history): "i've just realized there's a whole separate box tree and that's
+  why the computer is having a hard time. i think a box should normally just be a regular child
+  actually placed where it's placed"; "if i box something in a folder that i share, it's a choice
+  i've made. i just don't want it seeing above that folder, it can look in that folder and place
+  stuff"; "but often i'd be boxing in a new folder, so i'd want a way to be able to say
+  box("somewhere/folder-that-doesnt-exist-yet""; start, *decided*: "we're not always inside a box"
+  (so start takes a box or plain places, the root the outermost box; at absolute from it, array or
+  string: mine); cwd, *decided*: "it also would be useful with box to be able to start the process at
+  a different cwd than the root. so we are boxing /work and starting the process in /work/docs/mouse"
+  (mine: {cwd}, default the folder at sits in; ermine.process.cwd on the node). the overlay: step 3, boxes, names *decided* 10-15: "createBox(folder, parent)", "box(somebox, path, node)",
+  "unbox"; what's in a box: boxed(somebox) (my placeholder name). mine: the box's own node holds a trie
+  of boxed items; its places walks the folder with boxed items first, then processes(box), then
+  children; the folder is never edited; ermine/boxes, by agent. step 4, *decided* 10-15: the attribute is
+  `ermine.programs.loader: "loaders/c"` ("i'd like to just do `with:` but i think i shouldnt"). name,
+  *decided*: `lookupProgram` (not "plan": "i don't like `plan` i don't know what it's trying to
+  communicate"): finds the program by name from a place, nearest first, then follows its loaders.
+  renamed again 10-15, *decided*: `satisfy` ("let's just go with `satisfy`"), after lookupProgram,
+  collectLoaders and satisfyProgram. the chain's reading, *decided* 10-15: #! ("i want reading 2"): a node's
+  ermine.programs.loader says what runs THAT node ("the compiler is a program too"; "i thought clang
+  was a wasm program"); "in reading 2 the pipeline still works it's just we need a way of expressing
+  this, like if i had either the clang server c->wasm or the clang wasm c->wasm or any other way of
+  turning c into wasm, i need to be able to express with `loaders` (or something) that": OPEN.
+  catclock demo, *wanted*: "we should be compiling the C _in the browser_ using wasm clang. but i
+  like the idea of being able to switch between these two options in the demo"; *thought*: "what if
+  you could get a cache hit on the browsr from the version you built on the mac? maybe tht
+  impossible" (step 5 keys by the compiler's identity attribute, so it can, with a shared cache).
+  *thought* 10-15: "because the same C code should work on browser and ermineOS as long sa i have a
+  compiler that can output something that host can support"; "this is what i was trying to get at
+  with UTI because then there'd be a type, and the loader could say it knows how to take that type
+  and output the correct thing". (pointed me at .graveyard LOADERS.tex + LOADING.tex: read 10-15)
+  arguments, *lean* 10-15: "i like the idea of `ermine.process.args` that's neat. and then you could
+  also be like `ermine.process.args = ["hehe.txt"]` and put it in a box with hehe.txt that's neat and
+  on the graph" (args on the process's node; names in them resolve in the process's box). UTIs,
+  *thought*: "the nice thing with UTI is conformance, so it'd be possible to build a cool UI out
+  where you list all available programs for a file of a type, and you can show all available
+  chains, and also choose a program to run on a file too"; on "listing all chains needs matching": "right exactly";
+  *decided* 10-15: satisfy becomes matching by type (every chain listed), "Now, before step 6".
+  open with too, *decided*: "we want both open with AND run with". types, *decided* 10-15: "for now
+  we can have the host install a /types or something in the root" from arlac77/uti's
+  well-known-utis.mjs (447 entries {name, conformsTo, fileNameExtension, mimeType}; no
+  public.c-source in it, added).
+  renderers / prog-render, *thought* 10-15 (queued for later): "after the process api we have to
+  think about how renderers work. i guess they'll need a surface, they're maybe just a normal
+  program but they're given a surface to draw on"; "as part of starting processes we should be able
+  to pass args and also like a way to put named nodes inside them with values probably maybe";
+  "maybe a renderer is literally just it takes an arg"; "for programs to be able to declare
+  arg-schemas"; "we need some way of checking if something can open a node of a certain _shape_ too
+  rather than just type ... so the schema thing or something". fancy-notebook, *wanted*: "we need to
+  make our build-a-la-carte impl work in a way that supports fancy notebook" (its cache keys on
+  reads found during the run). desk: "underneath doesn't it want to use programs or processes? maybe
+  once i do the process api". levels (a path there only because something is boxed or a process
+  runs under it), *decided* 10-15: shown in the parent's list (chosen: "Show it"); lookup finds a
+  level's path (chosen: "Finds it"; get there still gives no id); list, members and
+  gets read under a level (fixed 10-15, chee: "fix"). satisfy/openwith, *decided* 10-15: "do satisfy and openwith as a
+  generator, i'd also like openwith as all lowercase like that and to separate its .ways from its
+  .why ... i'd like the normal openwith to just return the .ways - we should have a way to get the
+  whynots though" (mine, open: both yield ways; whynots by an onwhynot callback). DEPTH / too-deep
+  removed ("take out too-deep"); a bench asked for ("run a benchmarks").
+  makeApi → createProcessAPI, *decided* 10-15 (createPrograms takes createProcessAPI(ctx))
 - programs, *decided* 10-14: "a process is an instance of a program. a program is a node that declares
   what it needs and provides."
 - on Fable's proposal (core/table/proposal-processes-at-paths.org), 10-14: roots, *decided*: "most

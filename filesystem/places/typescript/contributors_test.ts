@@ -7,7 +7,7 @@ import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { asId, children, type Contributor, createPlaces } from "./places.ts"
-import { entries, get, list, lookup, members } from "./lib.ts"
+import { get, gets, list, lookup, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 
 // rows by path: the value entry "rows", a level a map, a leaf an id
@@ -50,7 +50,7 @@ Deno.test("contributors: children given alone answers and reads as places given 
 	const given = world([children])
 	const reads = (w: ReturnType<typeof world>) => [
 		w.tracked(() => get(w.places, ["work", "clock", "on"])),
-		w.tracked(() => list(w.places, ["work"])),
+		w.tracked(() => [...list(w.places, ["work"])]),
 		w.tracked(() => lookup(w.places, ["on"], ["work", "clock"])),
 	]
 	const r = reads(plain)
@@ -58,29 +58,29 @@ Deno.test("contributors: children given alone answers and reads as places given 
 	assertEquals(reads(given), r)
 	for (const p of [[], ["work"], ["work", "clock"], ["nope"]]) {
 		assertEquals(get(given.places, p), get(plain.places, p))
-		assertEquals(list(given.places, p), list(plain.places, p))
+		assertEquals([...list(given.places, p)], [...list(plain.places, p)])
 		assertEquals(
 			members(given.places, p).map(({ name, id }) => ({ name, id })),
 			members(plain.places, p),
 		)
 	}
-	assertEquals(entries(given.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
-	assertEquals(entries(plain.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
+	assertEquals(gets(given.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
+	assertEquals(gets(plain.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
 })
 
-Deno.test("contributors: the first answer wins, entries has them all, names merge each once", () => {
+Deno.test("contributors: the first answer wins, entries has them all, names merge each once, in canonical CBOR's key order", () => {
 	const w = world([rows, children])
 	w.put("value", "rows", { work: { clock: "P", timer: "T" } })
 	assertEquals(get(w.places, ["work", "clock", "on"]), "PON")
-	assertEquals(entries(w.places, ["work", "clock"]), [
+	assertEquals(gets(w.places, ["work", "clock"]), [
 		{ id: "P", from: "rows" },
 		{ id: "C0", from: "children" },
 	])
-	assertEquals(list(w.places, ["work"]), ["clock", "timer", "notes", "junk"])
+	assertEquals([...list(w.places, ["work"])], ["junk", "clock", "notes", "timer"])
 	assertEquals(members(w.places, ["work"]), [
 		{ name: "clock", id: "P", from: "rows" },
-		{ name: "timer", id: "T", from: "rows" },
 		{ name: "notes", id: "N", from: "children" },
+		{ name: "timer", id: "T", from: "rows" },
 	])
 	assertEquals(lookup(w.places, ["timer"], ["work", "notes"]), ["work", "timer"])
 	// children first: the saved one wins

@@ -250,6 +250,11 @@ function key(k: string): Uint8Array {
 	return b
 }
 
+/** How a map's keys are ordered: by their encodings, bytewise (so shorter first, then by UTF-8). */
+export function keyOrder(a: string, b: string): number {
+	return compare(key(a), key(b))
+}
+
 function compare(a: Uint8Array, b: Uint8Array): number {
 	const n = Math.min(a.length, b.length)
 	for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] - b[i]
@@ -302,13 +307,19 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		if (Object.getOwnPropertySymbols(x).length) {
 			throw new CborError("a symbol key has no encoding")
 		}
-		const ks = Object.keys(x), bs = ks.map(key)
-		// insertion sort: maps are small
-		for (let i = 1; i < ks.length; i++) {
-			const k = ks[i], b = bs[i]
-			let j = i - 1
-			for (; j >= 0 && compare(bs[j], b) > 0; j--) ks[j + 1] = ks[j], bs[j + 1] = bs[j]
-			ks[j + 1] = k, bs[j + 1] = b
+		let ks = Object.keys(x), bs = ks.map(key)
+		if (ks.length <= 16) {
+			// insertion sort: most maps are small
+			for (let i = 1; i < ks.length; i++) {
+				const k = ks[i], b = bs[i]
+				let j = i - 1
+				for (; j >= 0 && compare(bs[j], b) > 0; j--) ks[j + 1] = ks[j], bs[j + 1] = bs[j]
+				ks[j + 1] = k, bs[j + 1] = b
+			}
+		} else {
+			// a big one (a folder of 30k names): n log n, not n²
+			const order = ks.map((_, i) => i).sort((a, b) => compare(bs[a], bs[b]))
+			ks = order.map((i) => ks[i]), bs = order.map((i) => bs[i])
 		}
 		out.head(5, ks.length)
 		for (let i = 0; i < ks.length; i++) {

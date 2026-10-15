@@ -198,12 +198,16 @@ export function createScheduler(): Scheduler {
 		[computer: Computer, n: number, more: { error?: unknown }]
 	>()
 	const settles = told<[]>()
+	const afterPulses = told<[]>()
 	const untracks = told<[key: unknown]>()
 	const firstTracks = told<[key: unknown]>()
 
 	// a node per computation, and per key read
 	const tracker = createTracker<unknown>()
-	const nodes = new Map<unknown, Node<unknown>>()
+	// a key untracked stays as undefined (a Map losing and gaining the same key slows as it grows, in
+	// V8): nodes is made again once they are half
+	let nodes = new Map<unknown, Node<unknown> | undefined>()
+	let untracked = 0
 	// each key's writer: the compute last named by a change of it
 	const writers = new Map<unknown, Computer>()
 	const live = new Set<Computer>()
@@ -369,7 +373,13 @@ export function createScheduler(): Scheduler {
 	// a key nobody tracks now: untracked, and told
 	function unread(node: Node<unknown>) {
 		if (node.first !== null || nodes.get(node.owner) !== node) return
-		nodes.delete(node.owner)
+		nodes.set(node.owner, undefined)
+		if (++untracked > nodes.size >> 1 && nodes.size > 64) {
+			const kept = new Map<unknown, Node<unknown> | undefined>()
+			for (const [k, n] of nodes) if (n !== undefined) kept.set(k, n)
+			nodes = kept
+			untracked = 0
+		}
 		for (const f of untracks.fs) f(node.owner)
 	}
 
@@ -512,7 +522,10 @@ export function createScheduler(): Scheduler {
 		if (c.state !== "alive") return
 		let node = nodes.get(key)
 		const first = node === undefined
-		if (first) nodes.set(key, node = tracker.node(key))
+		if (first) {
+			if (nodes.has(key)) untracked--
+			nodes.set(key, node = tracker.node(key))
+		}
 		tracker.track(c.node, node!)
 		if (first) { for (const f of firstTracks.fs) f(key) }
 		if (ends.fs.length) {
@@ -771,13 +784,14 @@ export function createScheduler(): Scheduler {
 			pulses++
 			sweep()
 		}
+		for (const f of afterPulses.fs) f()
 	}
 
 	// keys nobody tracks, untracked now and then: any the ends and teardowns left
 	let swept = 0
 	function sweep() {
 		if (nodes.size < 2 * swept + 64) return
-		for (const node of nodes.values()) unread(node)
+		for (const node of nodes.values()) if (node !== undefined) unread(node)
 		swept = nodes.size
 	}
 
@@ -830,6 +844,7 @@ export function createScheduler(): Scheduler {
 		onRunEnd: ends.on,
 		onEffect: effects.on,
 		onSettle: settles.on,
+		onAfterPulse: afterPulses.on,
 		onTrackingEnd: untracks.on,
 		onTrackingStart: firstTracks.on,
 	}
@@ -892,6 +907,9 @@ export type Scheduler = {
 	) => () => void
 	// a promise settled: its result waits for the next pulse
 	onSettle: (f: () => void) => () => void
+	// a pulse ended: nothing due, every act done (not told when one threw). a pulse called here is
+	// a new one
+	onAfterPulse: (f: () => void) => () => void
 	// a key nobody tracks any more: at once when its last tracker's run did not track it again or
 	// it was torn down (a sweep now and then catches any other)
 	onTrackingEnd: (f: (key: unknown) => void) => () => void

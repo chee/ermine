@@ -278,7 +278,7 @@ class Work {
 			else {
 				const ws = w as unknown[]
 				// at the end: pushed, the list grows in place
-				if (a === l.length && !keep) for (let i = 0; i < ws.length; i++) l.push(ws[i])
+				if (a === l.length && !keep) { for (let i = 0; i < ws.length; i++) l.push(ws[i]) }
 				else if (ws.length === 1) taken = l.splice(a, b - a, ws[0])
 				else taken = l.splice(a, b - a, ...ws)
 			}

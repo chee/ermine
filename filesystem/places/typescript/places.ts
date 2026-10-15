@@ -10,8 +10,15 @@
 //
 // a children entry's value maps each name to one id; a name is any string but "", ".", ".." and
 // "/". a path is names from the root, each looked up as it is (path.ts turns steps with dots into
-// these). a box is a places made with another root, by whoever boxes. get, lookup, list and members
-// are built on walk and keys, in lib.ts; a write's header, from the scope open, in header.ts
+// these). get, lookup, list and members are built on walk and keys, in lib.ts; a write's header,
+// from the scope open, in header.ts
+//
+// a view (view(root, contributors)): the same places from another root, with contributors of its
+// own: one set of spots, holds and watches, one commit and one table hook with the places it came
+// from, so whoever writes tells it nothing more. a box (ermine/boxes) is one, rooted at its folder:
+// no path from its root reaches above it
+//
+//   const inside = places.view(folder, [processes(folder), children])
 //
 // a read is told to the scheduler as a spot (paths'), so a run reading tracks it; after an await
 // it counts for nothing. a walk reads each name in the children of the id before it. a write says
@@ -29,18 +36,21 @@
 //
 // contributors (contributors.org): what answers one step of a walk. children is one; a places can
 // be given others, asked in order at each step: the first answer is where the walk goes (get), all
-// of them are what is there (lib.ts' entries), and a folder's names are every contributor's, each
+// of them are what is there (lib.ts' gets), and a folder's names are every contributor's, each
 // name once (list, members). none given: children alone, and the walk, list and members read just
 // as they always have. a contributor reads only through the reads it is handed
 //
 //   createPlaces({ root, table, paths, scheduler, contributors: [another, children] })
 //
 // a cache (cache.ts) works answers out outside any run: record(f, into) puts the reads f makes into
-// a set in place of the scheduler, and hold keeps a spot past release while the cache reads it
+// a set in place of the scheduler (and the spots it made, to fresh), and hold keeps a spot past
+// release while the cache reads it. a cached answer reflects a write once it is committed, so commit
+// right after update
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Key as Step, Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
+import { keyOrder } from "@ermine/encoding/cbor"
 import type { createPaths, Spot } from "@ermine/scheduler/paths"
 import type { Id, Key, Table } from "@ermine/table"
 
@@ -60,6 +70,10 @@ export type Setup = {
 	// what answers each step, in order; none: children alone
 	contributors?: readonly Contributor[]
 }
+
+// the id a walk is at on a level (a contributor's level, with no id of its own): not an id of any
+// entry, so it is never given as an answer (lib's get: nothing there)
+export const level: Id = Symbol("level")
 
 // where a walk has got to: the id it is at, and its path (the names from the root to it). no path:
 // a walk from an id alone, where it is from the root not known
@@ -82,8 +96,11 @@ export type Contributor = {
 	readonly from: string
 	// the id it has at here + name; none: undefined
 	step(here: Here, name: string, reads: Reads): Id | undefined
-	// the names it has directly under here, in its order: each one step answers
+	// the names it has directly under here, in its order: each one step answers, or a level of its own
 	names(here: Here, reads: Reads): string[]
+	// whether here + name is a level of its own: no id, but names under it, so a walk goes on through
+	// it as if it were a folder (see places' walk). none: never
+	level?(here: Here, name: string, reads: Reads): boolean
 }
 
 // an answer at a path, and the contributor that gave it
@@ -100,8 +117,8 @@ export type Where = {
 	readonly path: readonly Step[] | null
 }
 
-// a name in a children entry, and the id under it. from: the contributor that gave it (none: a
-// places given no contributors, children alone)
+// a name in a children entry, and the id under it (a contributor's level: the id level, no id of
+// its own). from: the contributor that gave it (none: a places given no contributors, children alone)
 export type Member = { readonly name: string; readonly id: Id; readonly from?: string }
 
 // what landed at one key: the patches a write put there (a table event: one at the root, the value
@@ -136,11 +153,12 @@ const isId = (v: unknown): v is Id => typeof v === "string" || typeof v === "sym
 // v when it is an id; else undefined
 export const asId = (v: unknown): Id | undefined => isId(v) ? v : undefined
 
-// the children table: goes by the id, never the path. the default contributor
+// the children table: goes by the id, never the path (a level has none: nothing, nothing read). the
+// default contributor
 export const children: Contributor = {
 	from: "children",
-	step: ({ id }, name, r) => asId(r.read("children", id, [name])),
-	names: ({ id }, r) => r.keys("children", id),
+	step: ({ id }, name, r) => id === level ? undefined : asId(r.read("children", id, [name])),
+	names: ({ id }, r) => id === level ? [] : r.keys("children", id),
 }
 
 // a typed array: a sequence of its elements; bytes, a Uint8Array, one whole value (op's test)
@@ -180,11 +198,18 @@ function child(children: Entry<unknown> | undefined, name: string): Id | undefin
 	return isId(id) ? id : undefined
 }
 
+// a places' own: where names start, and the contributors that answer each step (none given: children
+// alone, walked as it always was); go, the first answer at one step
+type View = {
+	readonly root: Id
+	readonly given: readonly Contributor[] | undefined
+	readonly go: (here: Here, name: string) => Member | undefined
+}
+
 export function createPlaces(setup: Setup): Places {
-	const { root, table, paths, scheduler } = setup
-	// the contributors given; none: children alone, walked as it always was
-	const given = setup.contributors
-	const asked = given ?? [children]
+	const { table, paths, scheduler } = setup
+
+	// everything below but view is shared by every view: spots, holds, record, commit, watches
 
 	const firsts = new Map<Key, { part: Key }>()
 	// the one key object of a part
@@ -196,23 +221,31 @@ export function createPlaces(setup: Setup): Places {
 
 	// this places' spots: their owner, so forget knows them
 	const mine = {}
-	// where reads go while record runs; none: the scheduler
+	// where reads go while record runs, and the spots it made (none held before); none: the scheduler
 	let into: Set<unknown> | undefined
+	let made: Set<unknown> | undefined
 	function tell(s: Spot<unknown>) {
+		const known = s.owner === mine
 		s.owner = mine
 		if (into === undefined) scheduler.track(s)
-		else into.add(s)
+		else {
+			into.add(s)
+			if (!known) made?.add(s)
+		}
 	}
 
 	// f, with every read it makes (a spot, or a contributor's track) put into reads and told to no
-	// one: what a cache works out outside any run. inside another record, apart from it
-	function record<T>(f: () => T, reads: Set<unknown>): T {
-		const was = into
+	// one: what a cache works out outside any run. inside another record, apart from it. made: the
+	// spots f read that were not this places' before (so nothing else tracks or holds them)
+	function record<T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>): T {
+		const was = into, wasMade = made
 		into = reads
+		made = fresh
 		try {
 			return f()
 		} finally {
 			into = was
+			made = wasMade
 		}
 	}
 
@@ -299,8 +332,9 @@ export function createPlaces(setup: Setup): Places {
 	// watches
 
 	// a watch keeps the id its path finds now, and the ids of the folders on its route (the ones
-	// whose children it looked in). byId: the watches at an id; onRoute: the watches with an id on
-	// their route. both move when a children entry on a route changes
+	// whose children it looked in), as the view it was made on finds them (from: its root and
+	// contributors). byId: the watches at an id; onRoute: the watches with an id on their route. both
+	// move when a children entry on a route changes
 	type Watch = {
 		path: Path
 		part?: Key
@@ -310,6 +344,7 @@ export function createPlaces(setup: Setup): Places {
 		live: boolean
 		id: Id | undefined
 		route: Id[]
+		from: View
 	}
 	const watches = new Set<Watch>()
 	const byId = new Map<Id, Set<Watch>>()
@@ -330,14 +365,33 @@ export function createPlaces(setup: Setup): Places {
 
 	// the watch finds its path again, from the table, untold; moves in the indexes
 	function refind(w: Watch) {
+		const { root, given, go } = w.from
 		if (w.id !== undefined) unlink(byId, w.id, w)
 		for (const r of w.route) unlink(onRoute, r, w)
 		const route: Id[] = []
 		let at: Id | undefined = root
-		for (const name of w.path) {
-			route.push(at)
-			at = child(table.get("children", at), name)
-			if (at === undefined) break
+		if (given === undefined) {
+			for (const name of w.path) {
+				route.push(at)
+				at = child(table.get("children", at), name)
+				if (at === undefined) break
+			}
+		} else {
+			// as get finds it, through the contributors, the reads told to no one
+			record(() => {
+				let here: Here = { id: root, path: [] }
+				for (const name of w.path) {
+					if (here.id !== level) route.push(here.id)
+					const m = go(here, name)
+					if (m === undefined) {
+						at = undefined
+						break
+					}
+					at = m.id
+					here = { id: m.id, path: [...here.path!, name] }
+				}
+			}, new Set())
+			if (at === level) at = undefined
 		}
 		w.id = at
 		w.route = route
@@ -345,8 +399,13 @@ export function createPlaces(setup: Setup): Places {
 		for (const r of route) link(onRoute, r, w)
 	}
 
-	// fn told each fact landing at the node at path, from now; gives back the stop
-	function watchPath(path: Path, fn: (fact: Fact) => void, options: Watching = {}): () => void {
+	// fn told each fact landing at the node at path from the view's root, from now; gives back the stop
+	function watchPath(
+		from: View,
+		path: Path,
+		fn: (fact: Fact) => void,
+		options: Watching = {},
+	): () => void {
 		const w: Watch = {
 			path: [...path],
 			part: options.part,
@@ -356,6 +415,7 @@ export function createPlaces(setup: Setup): Places {
 			live: true,
 			id: undefined,
 			route: [],
+			from,
 		}
 		watches.add(w)
 		refind(w)
@@ -370,7 +430,7 @@ export function createPlaces(setup: Setup): Places {
 
 	// each watch told the facts at its node, in the order the watches were made; a fact costs one get
 	// in byId. a watch stopped on the way is not told. then each watch with a changed children entry
-	// on its route finds its path again
+	// on its route finds its path again (with contributors given, any part but value: theirs)
 	function tellWatches(facts: readonly Fact[]) {
 		if (watches.size === 0 || facts.length === 0) return
 		const hit = new Map<Watch, Fact[]>()
@@ -396,9 +456,13 @@ export function createPlaces(setup: Setup): Places {
 		}
 		const moved = new Set<Watch>()
 		for (const f of facts) {
-			if (f.part !== "children") continue
 			const set = onRoute.get(f.id)
-			if (set !== undefined) { for (const w of set) moved.add(w) }
+			if (set === undefined) continue
+			for (const w of set) {
+				if (f.part === "children" || (w.from.given !== undefined && f.part !== "value")) {
+					moved.add(w)
+				}
+			}
 		}
 		for (const w of moved) if (w.live) refind(w)
 	}
@@ -433,87 +497,109 @@ export function createPlaces(setup: Setup): Places {
 		track: (key) => into === undefined ? scheduler.track(key) : void into.add(key),
 	}
 
-	// the first answer at here + name, each contributor asked in order; none: undefined
-	function go(here: Here, name: string): Member | undefined {
-		for (const c of asked) {
-			const id = c.step(here, name, reads)
-			if (id !== undefined) return { name, id, from: c.from }
-		}
-	}
+	// a places from root, asked by its own contributors (none: children alone), sharing all of the above
+	function view(root: Id, given?: readonly Contributor[]): Places {
+		const asked = given ?? [children]
 
-	// the steps of a path from an id or a here (none given: the root), each a name and the id under
-	// it, one at a time as they are taken. nothing under a name: the walk stops there. children
-	// alone: each step the read of its name in the children of the id before. contributors given:
-	// each asked in order, the first answer taken, with its from; from an id alone (not the root),
-	// the path is not known, so a contributor going by path has nothing
-	function* walk(path: Path, from: Id | Here = root): Generator<Member> {
-		if (given === undefined) {
-			let at = typeof from === "object" ? from.id : from
+		// the first answer at here + name, each contributor asked in order; none: undefined
+		function go(here: Here, name: string): Member | undefined {
+			for (const c of asked) {
+				const id = c.step(here, name, reads)
+				if (id !== undefined) return { name, id, from: c.from }
+			}
+			// might be fishy. TODO is this fishy?
+			// no id anywhere, but a contributor has a level there (processes at /dev/clock, with no /dev
+			// saved): the walk goes on through it as if it were a folder
+			for (const c of asked) {
+				if (c.level?.(here, name, reads)) return { name, id: level, from: c.from }
+			}
+		}
+
+		const me: View = { root, given, go }
+
+		// the steps of a path from an id or a here (none given: the root), each a name and the id under
+		// it, one at a time as they are taken. nothing under a name: the walk stops there. children
+		// alone: each step the read of its name in the children of the id before. contributors given:
+		// each asked in order, the first answer taken, with its from; from an id alone (not the root),
+		// the path is not known, so a contributor going by path has nothing
+		function* walk(path: Path, from: Id | Here = root): Generator<Member> {
+			if (given === undefined) {
+				let at = typeof from === "object" ? from.id : from
+				for (const name of path) {
+					tell(paths.spot(first("children"), at, [name]))
+					const id = child(table.get("children", at), name)
+					if (id === undefined) return
+					yield { name, id }
+					at = id
+				}
+				return
+			}
+			let here: Here = typeof from === "object"
+				? from
+				: from === root
+				? { id: root, path: [] }
+				: { id: from }
 			for (const name of path) {
-				tell(paths.spot(first("children"), at, [name]))
-				const id = child(table.get("children", at), name)
-				if (id === undefined) return
-				yield { name, id }
-				at = id
-			}
-			return
-		}
-		let here: Here = typeof from === "object"
-			? from
-			: from === root
-			? { id: root, path: [] }
-			: { id: from }
-		for (const name of path) {
-			const m = go(here, name)
-			if (m === undefined) return
-			yield m
-			here = { id: m.id, path: here.path && [...here.path, name] }
-		}
-	}
-
-	// every answer at here + name, in the contributors' order
-	function answers(here: Here, name: string): Answer[] {
-		const out: Answer[] = []
-		for (const c of asked) {
-			const id = c.step(here, name, reads)
-			if (id !== undefined) out.push({ id, from: c.from })
-		}
-		return out
-	}
-
-	// the names under here, every contributor's in order, each name once: from the first that
-	// gives it
-	function names(here: Here): Named[] {
-		const out: Named[] = []
-		const seen = new Set<string>()
-		for (const c of asked) {
-			for (const name of c.names(here, reads)) {
-				if (seen.has(name)) continue
-				seen.add(name)
-				out.push({ name, from: c.from })
+				const m = go(here, name)
+				if (m === undefined) return
+				yield m
+				here = { id: m.id, path: here.path && [...here.path, name] }
 			}
 		}
-		return out
+
+		// every answer at here + name, in the contributors' order
+		function answers(here: Here, name: string): Answer[] {
+			const out: Answer[] = []
+			for (const c of asked) {
+				const id = c.step(here, name, reads)
+				if (id !== undefined) out.push({ id, from: c.from })
+			}
+			// none: a level there, if a contributor has one (go's, as the walk takes it)
+			if (out.length === 0) {
+				for (const c of asked) {
+					if (c.level?.(here, name, reads)) return [{ id: level, from: c.from }]
+				}
+			}
+			return out
+		}
+
+		// the names under here, every contributor's, each name once (from the first that gives it); when
+		// there are several, in the order canonical CBOR gives a map's keys (ermine/encoding)
+		function names(here: Here): Named[] {
+			const out: Named[] = []
+			const seen = new Set<string>()
+			for (const c of asked) {
+				for (const name of c.names(here, reads)) {
+					if (seen.has(name)) continue
+					seen.add(name)
+					out.push({ name, from: c.from })
+				}
+			}
+			return asked.length === 1 ? out : out.sort((a, b) => keyOrder(a.name, b.name))
+		}
+
+		return {
+			root,
+			contributors: given,
+			view,
+			onTableChange,
+			release,
+			describe,
+			commit,
+			eachEntryChange,
+			watchPath: (path, fn, options) => watchPath(me, path, fn, options),
+			readValue,
+			readKeys,
+			readChange,
+			walk,
+			answers,
+			names,
+			record,
+			hold,
+		}
 	}
 
-	return {
-		root,
-		contributors: given,
-		onTableChange,
-		release,
-		describe,
-		commit,
-		eachEntryChange,
-		watchPath,
-		readValue,
-		readKeys,
-		readChange,
-		walk,
-		answers,
-		names,
-		record,
-		hold,
-	}
+	return view(setup.root, setup.contributors)
 }
 
 export type Places = {
@@ -533,18 +619,22 @@ export type Places = {
 
 	// the contributors given; none: children alone
 	readonly contributors: readonly Contributor[] | undefined
+	// the same places from root, asked by contributors of its own (none: children alone): one set
+	// of spots, holds and watches, one commit and one table hook with this one. its watches find
+	// their path from its root
+	view: (root: Id, contributors?: readonly Contributor[]) => Places
 
 	// tracked reads
 	readValue: (part: Key, id: Id, path?: readonly Step[]) => unknown
 	readKeys: (part: Key, id: Id, path?: readonly Step[], ids?: boolean) => string[]
 	readChange: (part: Key, id: Id) => ChangeHeader | undefined
 	walk: (path: Path, from?: Id | Here) => Generator<Member>
-	// every contributor's answer at one step; every contributor's names under a place, each once
+	// every contributor's answer at one step (a level, with no id, as one answer with the id level, when none has an id); every contributor's names under a place, each once
 	answers: (here: Here, name: string) => Answer[]
 	names: (here: Here) => Named[]
 
 	// for a cache: f's reads put into reads, told to no one; a hold on a spot taken or given back
-	record: <T>(f: () => T, reads: Set<unknown>) => T
+	record: <T>(f: () => T, reads: Set<unknown>, fresh?: Set<unknown>) => T
 	hold: (key: unknown, n: number) => number
 }
 

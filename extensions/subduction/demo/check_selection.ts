@@ -1,6 +1,6 @@
 // remote selections are carried forward: A selects 40-52, B inserts 5 characters at 10, and A's
 // selection as drawn on B is 45-57 at once, and stays so when A's next presence arrives.
-//   deno run -A sync/demo/check_selection.ts [--server ws://localhost:8321 --service localhost:8321]
+//   deno run -A extensions/subduction/demo/check_selection.ts [--server ws://localhost:8321 --service localhost:8321]
 import { assertEquals } from "@std/assert"
 import { newSeed, start, type View } from "./node.ts"
 import { local } from "./server.ts"
@@ -31,7 +31,7 @@ async function until(what: string, f: () => boolean, ms = 20000) {
 const spawned = flag("server") ? undefined : await local(8321 + Math.floor(Math.random() * 500))
 const server = flag("server") ?? spawned!.url
 const service = flag("service") ?? spawned?.service
-const legacy = !/^wss?:\/\/(localhost|127\.)/.test(server)
+const zeros = !/^wss?:\/\/(localhost|127\.)/.test(server)
 let failed = false
 const views: Record<string, View | undefined> = {}
 try {
@@ -44,7 +44,7 @@ try {
 			folder,
 			server,
 			service,
-			legacy,
+			zeros,
 			render: (v) => views[name] = v,
 		})
 	const text = (n: string) => views[n]?.notes.find((x) => x.title === "n")?.versions[0]

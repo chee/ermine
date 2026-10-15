@@ -1,4 +1,4 @@
-// a cache per path (contributors.org; chee, per path: "we can just cache instead"): get, entries,
+// a cache per path (contributors.org; chee, per path: "we can just cache instead"): get, gets,
 // list and members as lib.ts gives them, each worked out once for a path and kept while someone
 // reads it. places without one is places as it always was: nothing here is made or told
 //
@@ -14,24 +14,36 @@
 //   - a key it read marked (the scheduler's onMark, inside the write): worked out again, there and
 //     then, so a read right after a write is fresh. its key is marked, by the writer's run, only
 //     when its answer changed (the equal cut); at has two keys, the first answer (get) and all of
-//     them (entries), so a change to what is shadowed reruns no get
+//     them (gets), so a change to what is shadowed reruns no get
 //   - kept while a run tracks one of its keys or another entry reads one (onTrackingStart,
 //     onTrackingEnd, and a count of the entries reading each key); then it goes, and what it read
 //     with it. one read outside any run (a host's, an effect's act, runWithScope) keeps nothing:
 //     the entry is worked out, answered, and goes
 //   - places' spots it reads are held (places' hold), so a run that stops reading a spot an entry
 //     reads lets nothing go; the cache lets a spot go once no entry reads it and no run tracks it
+//   - it lets go only what it took itself: a spot it made (places' record, fresh) is its own, one
+//     that was a places' spot already (a run tracked it before the cache was made) is not, and
+//     is never let go by it. once the runs tracking it end, while an entry reads it, it is the cache's to let go
+//   - a cached answer reflects a write once it is committed: commit right after update (between
+//     an update and its commit a cached answer is the old one; places' own reads are new)
 //
 // open:
-//   - every cache hears every mark and every first track and untrack of its scheduler (one shared
-//     cache per places, or per mark key, is not decided)
-//   - made after runs have tracked spots, it does not know those runs track them, and can let one
-//     go under them: make it with the places, before anything reads
-//   - between an update and its commit a cached answer is the old one (places' own reads are new)
+//   - every cache hears every first track and untrack of its scheduler (one shared cache per
+//     places is not decided). a mark it hears only for the keys it holds: one listener per
+//     scheduler (keyed, core/scheduler selector.ts) tells each cache the marks of its own keys
 //   - a reader whose path a write marks runs once before a due writer of a spot under the path, and
 //     again after (the key's writer is whoever marked it last)
 import type { Run, Scheduler } from "@ermine/scheduler"
-import type { Answer, Here, Id, Member, Path, Places } from "./places.ts"
+import { type Holder, keyed } from "@ermine/scheduler/selector"
+import {
+	type Answer,
+	type Here,
+	type Id,
+	level,
+	type Member,
+	type Path,
+	type Places,
+} from "./places.ts"
 
 type Kind = "at" | "list" | "members"
 
@@ -59,7 +71,7 @@ type Entry = {
 
 export type PathCache = {
 	get: (path: Path) => Id | undefined
-	entries: (path: Path) => readonly Answer[]
+	gets: (path: Path) => readonly Answer[]
 	list: (path: Path) => readonly string[]
 	members: (path: Path) => readonly Member[]
 	// what it keeps: entries, and the keys they read
@@ -68,7 +80,9 @@ export type PathCache = {
 
 const none: readonly never[] = []
 const whole = (a: unknown) => a
+// the first answer: an id, never a level
 const firstOf = (a: unknown) => (a as Answer[])[0]
+const idsOf = (a: readonly Answer[]) => a.filter((x) => x.id !== level)
 
 // two answers the same: lists of plain fields, or plain fields
 function same(a: unknown, b: unknown): boolean {
@@ -92,12 +106,15 @@ export function createPathCache(setup: {
 	scheduler: Pick<Scheduler, "track" | "mark" | "onMark" | "onTrackingEnd" | "onTrackingStart">
 }): PathCache {
 	const { places, scheduler: s } = setup
+	const index = keyed(s)
 	const me = {}
 	const entries = new Map<string, Entry>()
 	// each key read to the entries reading it
 	const readers = new Map<unknown, Set<Entry>>()
 	// the keys (but this cache's own) some run tracks now
 	const tracked = new Set<unknown>()
+	// the spots this cache took itself: only these it lets go
+	const took = new Set<unknown>()
 	// the latest tick heard
 	let now = 0
 
@@ -110,7 +127,7 @@ export function createPathCache(setup: {
 		return entries.get(nameOf(kind, path)) ?? make(kind, path)
 	}
 
-	// the id at a path, read through its entry's first key
+	// the id at a path (or level), read through its entry's first key
 	function idAt(path: Path, reads: Set<unknown>): Id | undefined {
 		if (path.length === 0) return places.root
 		const up = entryOf("at", path)
@@ -126,6 +143,7 @@ export function createPathCache(setup: {
 			const id = idAt(up, reads)
 			return id === undefined ? none : places.answers({ id, path: up }, path[path.length - 1])
 		}
+		// a level (no id) is a folder to list, as lib's list and members have it
 		const id = idAt(path, reads)
 		if (id === undefined) return none
 		const here: Here = { id, path }
@@ -139,15 +157,16 @@ export function createPathCache(setup: {
 
 	// worked out, its reads recorded. a throw: whatever it made on the way, unread, goes
 	function work(e: Entry): [unknown, Set<unknown>] {
-		const reads = new Set<unknown>()
+		const reads = new Set<unknown>(), fresh = new Set<unknown>()
 		try {
-			return [places.record(() => compute(e, reads), reads), reads]
+			const answer = places.record(() => compute(e, reads), reads, fresh)
+			for (const k of fresh) took.add(k)
+			return [answer, reads]
 		} catch (err) {
+			for (const k of fresh) took.add(k)
 			for (const k of reads) {
 				if (ours(k)) settle(k.entry)
-				else if (!readers.has(k) && !tracked.has(k) && places.hold(k, 0) === 0) {
-					places.release(k)
-				}
+				else if (!readers.has(k)) letgo(k)
 			}
 			throw err
 		}
@@ -175,10 +194,18 @@ export function createPathCache(setup: {
 		return e
 	}
 
+	// a spot no entry reads and no run tracks, if the cache took it: let go
+	function letgo(k: unknown) {
+		if (!took.has(k) || tracked.has(k) || places.hold(k, 0) !== 0) return
+		took.delete(k)
+		places.release(k)
+	}
+
 	function link(k: unknown, e: Entry) {
 		let set = readers.get(k)
 		if (set === undefined) {
 			readers.set(k, set = new Set())
+			index.hold(k, listener)
 			if (!ours(k)) places.hold(k, 1)
 		}
 		set.add(e)
@@ -190,8 +217,9 @@ export function createPathCache(setup: {
 		const set = readers.get(k)
 		if (set === undefined || !set.delete(e) || set.size) return
 		readers.delete(k)
+		index.drop(k, listener)
 		if (ours(k)) settle(k.entry)
-		else if (places.hold(k, -1) === 0 && !tracked.has(k)) places.release(k)
+		else if (places.hold(k, -1) === 0) letgo(k)
 	}
 
 	// an entry goes when no run tracks its keys and no entry reads them
@@ -226,18 +254,21 @@ export function createPathCache(setup: {
 		if (changed.length) s.mark(changed, run)
 	}
 
-	s.onMark((keys, run, _due, tick) => {
-		if (tick > now) now = tick
-		let hit: Entry[] | undefined
-		for (const k of keys) {
-			const set = readers.get(k)
-			if (set !== undefined) { for (const e of set) (hit ??= []).push(e) }
-		}
-		if (hit === undefined) return
-		if (hit.length > 1) hit.sort((a, b) => depth(a) - depth(b))
-		// worked as of this tick or later (by a mark made inside this one): already fresh
-		for (const e of hit) if (e.live && e.worked < tick) rework(e, tick, run)
-	})
+	// the marks of the keys this cache holds (every key an entry reads), through the scheduler's index
+	const listener: Holder = {
+		marked(keys, run, _due, tick) {
+			if (tick > now) now = tick
+			let hit: Entry[] | undefined
+			for (const k of keys) {
+				const set = readers.get(k)
+				if (set !== undefined) { for (const e of set) (hit ??= []).push(e) }
+			}
+			if (hit === undefined) return
+			if (hit.length > 1) hit.sort((a, b) => depth(a) - depth(b))
+			// worked as of this tick or later (by a mark made inside this one): already fresh
+			for (const e of hit) if (e.live && e.worked < tick) rework(e, tick, run)
+		},
+	}
 
 	s.onTrackingStart((k) => {
 		if (ours(k)) k.runs = true
@@ -245,7 +276,13 @@ export function createPathCache(setup: {
 	})
 
 	s.onTrackingEnd((k) => {
-		if (!ours(k)) return void tracked.delete(k)
+		if (!ours(k)) {
+			// no run tracks it now: if an entry reads it, its release was held back by us, so the
+			// spot is ours to let go
+			tracked.delete(k)
+			if (readers.has(k)) took.add(k)
+			return
+		}
 		k.runs = false
 		settle(k.entry)
 	})
@@ -262,11 +299,15 @@ export function createPathCache(setup: {
 	}
 
 	return {
-		get: (path) => path.length === 0 ? places.root : (read("at", path, 0) as Answer[])[0]?.id,
-		entries: (path) =>
+		get: (path) => {
+			if (path.length === 0) return places.root
+			const id = (read("at", path, 0) as Answer[])[0]?.id
+			return id === level ? undefined : id
+		},
+		gets: (path) =>
 			path.length === 0
 				? [{ id: places.root, from: "root" }]
-				: read("at", path, 1) as readonly Answer[],
+				: idsOf(read("at", path, 1) as readonly Answer[]),
 		list: (path) => read("list", path, 0) as readonly string[],
 		members: (path) => read("members", path, 0) as readonly Member[],
 		kept: () => ({ entries: entries.size, reads: readers.size }),

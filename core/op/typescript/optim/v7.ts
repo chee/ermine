@@ -162,8 +162,14 @@ const KINDS = new Set<unknown>([
 // what notify reads at an unranged place whose container is v, as it is now; nothing checked
 function factOf(v: unknown, k: Key): Fact {
 	// a list's: the index is in it
-	if (isList(v)) return { list: true, length: v.length, had: typeof k === "number" && k < v.length }
-	return { list: false, length: 0, had: v !== null && typeof v === "object" && Object.hasOwn(v, k) }
+	if (isList(v)) {
+		return { list: true, length: v.length, had: typeof k === "number" && k < v.length }
+	}
+	return {
+		list: false,
+		length: 0,
+		had: v !== null && typeof v === "object" && Object.hasOwn(v, k),
+	}
 }
 
 // one edit's content, changed patch by patch; list: a name's list, there only when not empty
@@ -294,7 +300,7 @@ class Work {
 			else {
 				const ws = w as unknown[]
 				// at the end: pushed, the list grows in place
-				if (a === l.length && !keep) for (let i = 0; i < ws.length; i++) l.push(ws[i])
+				if (a === l.length && !keep) { for (let i = 0; i < ws.length; i++) l.push(ws[i]) }
 				else if (ws.length === 1) taken = l.splice(a, b - a, ws[0])
 				else taken = l.splice(a, b - a, ...ws)
 			}
@@ -308,7 +314,9 @@ class Work {
 			if (keep) taken = t.slice(a, b)
 			const C = t.constructor as Kind, spare = this.spare
 			let n: Typed
-			if (spare !== undefined && spare.has(t) && m * t.BYTES_PER_ELEMENT <= t.buffer.byteLength) {
+			if (
+				spare !== undefined && spare.has(t) && m * t.BYTES_PER_ELEMENT <= t.buffer.byteLength
+			) {
 				// made here, with room: changed in its buffer, a new view of it
 				spare.delete(t)
 				if (m >= t.length) {
@@ -369,7 +377,11 @@ class Work {
 	// at [], unranged: had: the value there
 	rootFact(): Fact {
 		const r = this.root
-		return { list: false, length: 0, had: r !== ABSENT && !(this.list && isList(r) && r.length === 0) }
+		return {
+			list: false,
+			length: 0,
+			had: r !== ABSENT && !(this.list && isList(r) && r.length === 0),
+		}
 	}
 	// what is at path becomes w (undefined: removed, ABSENT at []); tell: the place's fact, before
 	set(path: readonly Key[], w: unknown, tell = false): Fact | undefined {

@@ -1,6 +1,8 @@
 // The path cache (cache.h), in C.
 #include "cache.h"
 
+#include "../../../core/scheduler/c/selector.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,10 +65,15 @@ struct rd {
 struct pc_cache {
 	pl *places;
 	sc_scheduler *s;
-	sc_listener *on_mark, *on_track, *on_untrack;
+	sc_listener *on_track, *on_untrack;
+	// the scheduler's index of keys held (selector.h): this cache is told the marks of the keys it holds
+	sx_index *index;
+	sx_holder holder;
 	// the entries by name; each key read to the entries reading it; the keys (but this cache's own)
 	// some run tracks now; this cache's marks by address
 	tb_table *entries, *readers, *tracked, *marks;
+	// the spots this cache took itself: only these it lets go
+	tb_table *took;
 	size_t nentries, nreaders;
 	// every entry live, and the ones gone but not yet freed (an operation in progress may refer to them)
 	entry *all, *dead;
@@ -76,7 +83,7 @@ struct pc_cache {
 	uint64_t now;
 };
 
-static const char entry_tag, readers_tag, tracked_tag, marks_tag;
+static const char entry_tag, readers_tag, tracked_tag, marks_tag, took_tag;
 
 // freeing -------------------------------------------------------------------------------------
 
@@ -126,10 +133,10 @@ static int text_same(const char *a, const char *b) {
 static int one_same(kind k, const answer *a, size_t i, const answer *b, size_t j) {
 	switch (k) {
 	case AT:
-		return strcmp(a->a[i].id, b->a[j].id) == 0 && text_same(a->a[i].from, b->a[j].from);
+		return text_same(a->a[i].id, b->a[j].id) && text_same(a->a[i].from, b->a[j].from);
 	case LIST: return strcmp(a->names[i], b->names[j]) == 0;
 	default:
-		return strcmp(a->m[i].name, b->m[j].name) == 0 && strcmp(a->m[i].id, b->m[j].id) == 0 &&
+		return strcmp(a->m[i].name, b->m[j].name) == 0 && text_same(a->m[i].id, b->m[j].id) &&
 			text_same(a->m[i].from, b->m[j].from);
 	}
 }
@@ -159,6 +166,20 @@ static mark *ours(pc_cache *c, const void *key) {
 
 static void settle(pc_cache *c, entry *e);
 
+static int took(pc_cache *c, const void *k) {
+	return tb_get(c->took, tb_symbol(&took_tag), tb_symbol(k)) != NULL;
+}
+
+// a spot no entry reads and no run tracks, if the cache took it: let go
+static void letgo(pc_cache *c, const void *k) {
+	if (!took(c, k) || tb_get(c->tracked, tb_symbol(&tracked_tag), tb_symbol(k)) != NULL ||
+		pl_keep(c->places, k, 0) != 0) {
+		return;
+	}
+	tb_del(c->took, tb_symbol(&took_tag), tb_symbol(k));
+	pl_forget(k, c->places);
+}
+
 // e reads k
 static void reads_add(pc_cache *c, const void *k, entry *e) {
 	rd *r = readers_of(c, k);
@@ -170,6 +191,7 @@ static void reads_add(pc_cache *c, const void *k, entry *e) {
 		c->readings = r;
 		tb_add(c->readers, tb_symbol(&readers_tag), tb_symbol(k), r);
 		c->nreaders++;
+		sx_hold(c->index, k, &c->holder);
 		if (!ours(c, k)) pl_keep(c->places, k, 1);
 	}
 	pl_set_add(&r->set, e);
@@ -187,12 +209,10 @@ static void reads_del(pc_cache *c, const void *k, entry *e) {
 	if (r->next != NULL) r->next->prev = r->prev;
 	pl_set_free(&r->set);
 	free(r);
+	sx_drop(c->index, k, &c->holder);
 	mark *m = ours(c, k);
 	if (m != NULL) settle(c, m->e);
-	else if (pl_keep(c->places, k, -1) == 0 &&
-		tb_get(c->tracked, tb_symbol(&tracked_tag), tb_symbol(k)) == NULL) {
-		pl_forget(k, c->places);
-	}
+	else if (pl_keep(c->places, k, -1) == 0) letgo(c, k);
 }
 
 // an entry goes when no run tracks its keys and no entry reads them
@@ -226,7 +246,8 @@ static int id_at(pc_cache *c, const char *const *path, size_t n, pl_set *reads, 
 	entry *up = entry_of(c, AT, path, n);
 	pl_set_add(reads, up->keys[0]);
 	if (up->answer.n == 0) return 0;
-	*id = tb_string(up->answer.a[0].id);
+	// no id: a level (places' pl_level)
+	*id = up->answer.a[0].id != NULL ? tb_string(up->answer.a[0].id) : pl_level();
 	return 1;
 }
 
@@ -244,13 +265,15 @@ static void compute(void *ctx) {
 	const char *const *path = (const char *const *)e->path;
 	size_t folder = e->kind == AT ? e->npath - 1 : e->npath;
 	tb_key id;
+	// a level (no id) is a folder to list, as pl_list and pl_members_at have it
 	if (!id_at(c, path, folder, j->reads, &id)) return;
 	pl_here here = {.id = id, .has_path = 1, .path = path, .length = folder};
 	if (e->kind == AT) {
 		pl_answers got = pl_answers_at(c->places, &here, path[e->npath - 1]);
 		j->out.a = xalloc((got.n + 1) * sizeof *j->out.a);
 		for (size_t i = 0; i < got.n; i++) {
-			j->out.a[i] = (pc_answer){xdup(got.items[i].id.string), got.items[i].from};
+			int level = got.items[i].id.symbol == pl_level().symbol;
+			j->out.a[i] = (pc_answer){level ? NULL : xdup(got.items[i].id.string), got.items[i].from};
 		}
 		j->out.n = got.n;
 		pl_answers_free(&got);
@@ -266,7 +289,9 @@ static void compute(void *ctx) {
 		for (size_t i = 0; i < names.n; i++) {
 			pl_member m;
 			if (pl_walk_at(c->places, &here, &names.items[i].name, 1, &m) != 1) continue;
-			j->out.m[j->out.n++] = (pc_member){xdup(m.name), xdup(m.id.string), m.from};
+			// a level: no id
+			char *id = m.id.symbol == pl_level().symbol ? NULL : xdup(m.id.string);
+			j->out.m[j->out.n++] = (pc_member){xdup(m.name), id, m.from};
 		}
 	}
 	pl_nameds_free(&names);
@@ -275,7 +300,12 @@ static void compute(void *ctx) {
 // e worked out, its reads recorded into *reads (empty), the answer into *out
 static void work(pc_cache *c, entry *e, answer *out, pl_set *reads) {
 	job j = {c, e, reads, {0}};
-	pl_record(c->places, compute, &j, reads);
+	pl_set fresh = {0};
+	pl_record(c->places, compute, &j, reads, &fresh);
+	for (size_t i = 0; i < fresh.n; i++) {
+		tb_add(c->took, tb_symbol(&took_tag), tb_symbol(fresh.items[i]), (void *)&took_tag);
+	}
+	pl_set_free(&fresh);
 	*out = j.out;
 }
 
@@ -365,9 +395,7 @@ static int by_depth(const void *a, const void *b) {
 	return x->at < y->at ? -1 : x->at > y->at;
 }
 
-static void heard_mark(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
-	size_t ndue, uint64_t tick, void *data) {
-	(void)due, (void)ndue;
+static void heard_mark(void *data, const void *const *keys, size_t nkeys, sc_run *run, uint64_t tick) {
 	pc_cache *c = data;
 	enter(c);
 	if (tick > c->now) c->now = tick;
@@ -400,14 +428,19 @@ static void heard_track(const void *key, sc_run *run, void *data) {
 	pc_cache *c = data;
 	mark *m = ours(c, key);
 	if (m != NULL) m->runs = 1;
-	else tb_sub(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key), (void *)&tracked_tag);
+	else tb_add(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key), (void *)&tracked_tag);
 }
 
 static void heard_untrack(const void *key, void *data) {
 	pc_cache *c = data;
 	mark *m = ours(c, key);
 	if (m == NULL) {
+		// no run tracks it now: if an entry reads it, its release was held back by us, so the spot
+		// is ours to let go
 		tb_del(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key));
+		if (readers_of(c, key) != NULL) {
+			tb_add(c->took, tb_symbol(&took_tag), tb_symbol(key), (void *)&took_tag);
+		}
 		return;
 	}
 	enter(c);
@@ -440,15 +473,16 @@ pc_cache *pc_new(pl *places, sc_scheduler *scheduler) {
 	c->readers = tb_new();
 	c->tracked = tb_new();
 	c->marks = tb_new();
-	c->on_mark = sc_on_mark(scheduler, heard_mark, c);
-	c->on_track = sc_on_track(scheduler, heard_track, c);
-	c->on_untrack = sc_on_untrack(scheduler, heard_untrack, c);
+	c->took = tb_new();
+	c->index = sx_index_get(scheduler);
+	c->holder = (sx_holder){.marked = heard_mark, .data = c};
+	c->on_track = sc_on_tracking_start(scheduler, heard_track, c);
+	c->on_untrack = sc_on_tracking_end(scheduler, heard_untrack, c);
 	return c;
 }
 
 void pc_free(pc_cache *c) {
 	if (c == NULL) return;
-	sc_remove_listener(c->on_mark);
 	sc_remove_listener(c->on_track);
 	sc_remove_listener(c->on_untrack);
 	free_dead(c);
@@ -460,6 +494,7 @@ void pc_free(pc_cache *c) {
 	while (c->readings != NULL) {
 		rd *r = c->readings;
 		c->readings = r->next;
+		sx_drop(c->index, r->key, &c->holder);
 		pl_set_free(&r->set);
 		free(r);
 	}
@@ -467,18 +502,20 @@ void pc_free(pc_cache *c) {
 	tb_free(c->readers);
 	tb_free(c->tracked);
 	tb_free(c->marks);
+	tb_free(c->took);
+	sx_index_put(c->index);
 	free(c);
 }
 
 char *pc_get(pc_cache *c, const char *const *path, size_t n) {
 	if (n == 0) return xdup(pl_root(c->places).string);
 	entry *e = ask(c, AT, path, n, 0);
-	char *id = e->answer.n ? xdup(e->answer.a[0].id) : NULL;
+	char *id = e->answer.n && e->answer.a[0].id != NULL ? xdup(e->answer.a[0].id) : NULL;
 	done(c, e);
 	return id;
 }
 
-pc_answers pc_entries(pc_cache *c, const char *const *path, size_t n) {
+pc_answers pc_gets(pc_cache *c, const char *const *path, size_t n) {
 	pc_answers out = {0};
 	if (n == 0) {
 		out.items = xalloc(sizeof *out.items);
@@ -488,6 +525,7 @@ pc_answers pc_entries(pc_cache *c, const char *const *path, size_t n) {
 	entry *e = ask(c, AT, path, n, 1);
 	out.items = xalloc((e->answer.n + 1) * sizeof *out.items);
 	for (size_t i = 0; i < e->answer.n; i++) {
+		if (e->answer.a[i].id == NULL) continue;
 		out.items[out.n++] = (pc_answer){xdup(e->answer.a[i].id), e->answer.a[i].from};
 	}
 	done(c, e);
@@ -521,7 +559,7 @@ pc_members pc_members_at(pc_cache *c, const char *const *path, size_t n) {
 	out.items = xalloc((e->answer.n + 1) * sizeof *out.items);
 	for (size_t i = 0; i < e->answer.n; i++) {
 		const pc_member *m = &e->answer.m[i];
-		out.items[out.n++] = (pc_member){xdup(m->name), xdup(m->id), m->from};
+		out.items[out.n++] = (pc_member){xdup(m->name), m->id != NULL ? xdup(m->id) : NULL, m->from};
 	}
 	done(c, e);
 	return out;

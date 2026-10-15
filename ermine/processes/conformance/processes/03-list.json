@@ -1,5 +1,5 @@
 {
-	"title": "list(/work) merges the rows' names with the saved ones, each name once, from the first contributor that gives it (processes before children), and reruns on start and stop; members gives each with its id and from; a level under a saved folder is no name of its own; lookup by a bare name from inside /work finds the process",
+	"title": "list(/work) merges the rows' names with the saved ones, each name once, from the first contributor that gives it (processes before children), and reruns on start and stop; members gives each with its id and from; a level where a saved folder of its name is (notes, a process under it) is that one name; lookup by a bare name from inside /work finds the process (merged names in canonical CBOR's key order)",
 	"steps": [
 		{
 			"op": "root",
@@ -106,9 +106,9 @@
 			"expect": {
 				"runs": 2,
 				"value": [
-					"timer",
 					"clock",
-					"notes"
+					"notes",
+					"timer"
 				]
 			}
 		},
@@ -129,11 +129,6 @@
 			"expect": {
 				"members": [
 					{
-						"name": "timer",
-						"id": "T",
-						"from": "process"
-					},
-					{
 						"name": "clock",
 						"id": "P",
 						"from": "process"
@@ -142,6 +137,11 @@
 						"name": "notes",
 						"id": "N",
 						"from": "children"
+					},
+					{
+						"name": "timer",
+						"id": "T",
+						"from": "process"
 					}
 				]
 			}

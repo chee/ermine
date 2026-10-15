@@ -257,12 +257,34 @@ static void putTyped(Out *o, const Json *value) {
 	}
 }
 
-/** a list or map being written: how many of its members are out, and (a map) the last key written */
+/** a list or map being written: how many of its members are out, and (a map) the last key written.
+ * a big map's members in key order, found once (n log n; nextKey is n each, n² in all) */
 typedef struct Writing {
 	const Json *container;
 	int next;
 	int last;
+	const JsonMember **order;
 } Writing;
+
+static int memberCompare(const void *a, const void *b) {
+	return keyCompare(*(const JsonMember *const *)a, *(const JsonMember *const *)b);
+}
+
+/** a map's members sorted by key, when it is big; NULL when small (nextKey does) or out of memory
+ * (nextKey does, slowly). *twice: two members with one key */
+static const JsonMember **sortedMembers(const Json *object, bool *twice) {
+	int n = object->object.count;
+	*twice = false;
+	if (n <= 16) return NULL;
+	const JsonMember **order = malloc((size_t)n * sizeof *order);
+	if (!order) return NULL;
+	for (int i = 0; i < n; i++) order[i] = &object->object.members[i];
+	qsort(order, (size_t)n, sizeof *order, memberCompare);
+	for (int i = 1; i < n; i++) {
+		if (keyCompare(order[i - 1], order[i]) == 0) *twice = true;
+	}
+	return order;
+}
 
 // No recursion: the lists and maps being written are kept on a stack of their own.
 bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *length, const char **why) {
@@ -287,14 +309,19 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 			case JSON_STAND:
 				putHead(&o, 6, STAND);
 				stack = growArray(stack, depth, &room, sizeof *stack);
-				stack[depth++] = (Writing){ value, 0, -1 };
+				stack[depth++] = (Writing){ value, 0, -1, NULL };
 				break;
 			case JSON_ARRAY:
 			case JSON_OBJECT: {
 				bool list = value->type == JSON_ARRAY;
 				putHead(&o, list ? 4 : 5, (uint64_t)(list ? value->array.count : value->object.count));
 				stack = growArray(stack, depth, &room, sizeof *stack);
-				stack[depth++] = (Writing){ value, 0, -1 };
+				stack[depth++] = (Writing){ value, 0, -1, NULL };
+				if (!list) {
+					bool twice;
+					stack[depth - 1].order = sortedMembers(value, &twice);
+					if (twice) fault = "a map holds a key twice";
+				}
 				break;
 			}
 		}
@@ -310,9 +337,11 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 				if (top->next == container->array.count) depth--;
 				else value = container->array.items[top->next++];
 			} else if (top->next == container->object.count) {
+				free(top->order);
 				depth--;
 			} else {
-				int at = nextKey(container, top->last);
+				int at = top->order ? (int)(top->order[top->next] - container->object.members)
+				                    : nextKey(container, top->last);
 				if (at < 0) {
 					fault = "a map holds a key twice";
 					break;
@@ -328,6 +357,7 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 			}
 		}
 	}
+	for (int i = 0; i < depth; i++) free(stack[i].order);
 	free(stack);
 	*length = o.length;
 	if (fault && why) *why = fault;

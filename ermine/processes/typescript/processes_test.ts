@@ -6,7 +6,7 @@ import { type Computer, createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { children, createPlaces, PlacesError, rename } from "@ermine/places"
-import { entries, get, list, lookup, members } from "@ermine/places/lib"
+import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { createPathCache } from "@ermine/places/cache"
 import { addProcess, PROCESS, processes, removeProcess } from "./processes.ts"
@@ -94,7 +94,7 @@ Deno.test("a process at /work/clock shadows the saved clock; at its stop the sav
 	w.s.pulse()
 	w.start(["work", "clock"], "P")
 	assertEquals(get(w.places, ["work", "clock"]), "P")
-	assertEquals(entries(w.places, ["work", "clock"]), [
+	assertEquals(gets(w.places, ["work", "clock"]), [
 		{ id: "P", from: "process" },
 		{ id: "C0", from: "children" },
 	])
@@ -104,7 +104,7 @@ Deno.test("a process at /work/clock shadows the saved clock; at its stop the sav
 	w.stop(["work", "clock"])
 	w.s.pulse()
 	assertEquals(top.values, ["C0", "P", "C0"])
-	assertEquals(entries(w.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
+	assertEquals(gets(w.places, ["work", "clock"]), [{ id: "C0", from: "children" }])
 })
 
 Deno.test("./on/reset under a process: the process's own children, inside its node", () => {
@@ -120,7 +120,7 @@ Deno.test("./on/reset under a process: the process's own children, inside its no
 	// a process where nothing is saved: its inside is all there is
 	w.start(["work", "timer"], "P")
 	assertEquals(get(w.places, ["work", "timer", "on", "reset"]), "PRS")
-	assertEquals(list(w.places, ["work", "timer"]), ["on"])
+	assertEquals([...list(w.places, ["work", "timer"])], ["on"])
 })
 
 Deno.test("a second start where one runs is refused; above or under one too; a stop where none runs", () => {
@@ -162,7 +162,7 @@ Deno.test("rows: a start puts one patch at its path, a stop takes the levels it 
 Deno.test("list(/work) merges the rows' names with the saved ones, each once, and reruns on start and stop", () => {
 	const w = world()
 	w.tree()
-	const names = w.watch(() => list(w.places, ["work"]).join())
+	const names = w.watch(() => [...list(w.places, ["work"])].join())
 	const level = w.watch(() => members(w.places, ["work"]).map((m) => `${m.name}:${m.from}`).join())
 	w.s.pulse()
 	w.start(["work", "timer"], "T")
@@ -171,23 +171,23 @@ Deno.test("list(/work) merges the rows' names with the saved ones, each once, an
 	w.start(["work", "clock"], "P")
 	w.s.pulse()
 	assertEquals(members(w.places, ["work"]), [
-		{ name: "timer", id: "T", from: "process" },
 		{ name: "clock", id: "P", from: "process" },
 		{ name: "notes", id: "N", from: "children" },
+		{ name: "timer", id: "T", from: "process" },
 	])
 	w.stop(["work", "timer"])
 	w.s.pulse()
-	assertEquals(names.values, ["clock,notes", "timer,clock,notes", "clock,notes"])
+	assertEquals(names.values, ["clock,notes", "clock,notes,timer", "clock,notes"])
 	assertEquals(level.values, [
 		"clock:children,notes:children",
-		"timer:process,clock:children,notes:children",
-		"timer:process,clock:process,notes:children",
+		"clock:children,notes:children,timer:process",
+		"clock:process,notes:children,timer:process",
 		"clock:process,notes:children",
 	])
 	// deeper, through a saved folder: the level is no name of its own
 	w.start(["work", "notes", "pad"], "Q")
 	w.s.pulse()
-	assertEquals([names.value, list(w.places, ["work", "notes"])], ["clock,notes", ["pad"]])
+	assertEquals([names.value, [...list(w.places, ["work", "notes"])]], ["clock,notes", ["pad"]])
 })
 
 Deno.test("lookup by a bare name from inside /work finds the process there", () => {
@@ -262,7 +262,7 @@ Deno.test("cache: the equal cut, a change under a shadowed name reruns an entrie
 	w.tree()
 	w.start(["work", "clock"], "P")
 	const at = w.watch(() => w.cache.get(["work", "clock"]))
-	const all = w.watch(() => w.cache.entries(["work", "clock"]).map((a) => a.id).join())
+	const all = w.watch(() => w.cache.gets(["work", "clock"]).map((a) => a.id).join())
 	const deep = w.watch(() => w.cache.get(["work", "clock", "on"]))
 	w.s.pulse()
 	w.rename("W", "clock", "clock2")
@@ -284,7 +284,7 @@ Deno.test("cache: teardown leaves nothing, no entry, no spot", () => {
 		w.watch(() => w.cache.get(["work", "clock", "on", "reset"])),
 		w.watch(() => w.cache.list(["work"])),
 		w.watch(() => w.cache.members(["work", "clock"])),
-		w.watch(() => w.cache.entries(["work", "clock"])),
+		w.watch(() => w.cache.gets(["work", "clock"])),
 	]
 	w.s.pulse()
 	assert(w.count().entries > 0)
@@ -352,4 +352,39 @@ Deno.test("cost: 300 paths and 300 processes, the cache against plain places", (
 	assertEquals([out.cache.entries, out.cache.startRuns, out.cache.shadowRuns], [2 * N, 0, N])
 	assertEquals([out.places.startRuns, out.places.shadowRuns], [0, N])
 	assertEquals([out.cache.afterEntries, out.cache.afterSpots], [0, 0])
+})
+
+Deno.test("a walk goes on through a level of the rows as if it were a folder, with no saved folder", () => {
+	const w = world()
+	w.tree()
+	w.start(["dev", "clock"], "P")
+	assertEquals(get(w.places, ["dev", "clock"]), "P")
+	assertEquals(get(w.places, ["dev", "clock", "on", "reset"]), "PRS")
+	// the level itself is no id
+	assertEquals(get(w.places, ["dev"]), undefined)
+	assertEquals(get(w.places, ["dev", "nothing"]), undefined)
+	assertEquals(w.cache.get(["dev", "clock"]), "P")
+	w.stop(["dev", "clock"])
+	assertEquals(get(w.places, ["dev", "clock"]), undefined)
+})
+
+Deno.test("watchPath finds its path through the contributors, and again as a process starts and stops", () => {
+	const w = world(false)
+	w.tree()
+	w.start(["work", "clock"], "P")
+	const told: string[] = []
+	const stop = w.places.watchPath(["work", "clock"], (f) => told.push(String(f.id)))
+	w.kids("P", { on: "PON", more: "X" })
+	w.kids("C0", { on: "ON0", other: "Y" })
+	w.stop(["work", "clock"])
+	w.kids("P", { on: "PON", again: "X" })
+	w.kids("C0", { on: "ON0", other: "Z" })
+	// a level with no saved folder
+	stop()
+	const deep: string[] = []
+	w.places.watchPath(["dev", "clock"], (f) => deep.push(String(f.id)))
+	w.start(["dev", "clock"], "P")
+	w.kids("P", { on: "PON", third: "X" })
+	assertEquals(told, ["P", "C0"])
+	assertEquals(deep, ["P"])
 })

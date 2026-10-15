@@ -38,14 +38,21 @@ const isMap = (v: unknown): v is Record<string, unknown> =>
 const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
-// alone, its path not known: nothing. names: the leaves directly under here's path (a level, with
-// processes deeper, is no name of its own: what is there is whatever else is)
-export function processes(root: Id): Contributor {
+// alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
+// level (processes deeper, no id: places' walk goes through it, list and members show it)
+export const processes = (root: Id): Contributor => trie(PROCESS, root, "process")
+
+// the walk of a trie of ids by path on root's part: processes' rows, and any other rows kept the
+// same way (ermine/boxes' boxed items). from: what its answers say
+export function trie(part: Key, root: Id, from: string): Contributor {
 	return {
-		from: "process",
+		from,
 		step: ({ path }, name, r) =>
-			path === undefined ? undefined : asId(r.read(PROCESS, root, [...path, name])),
-		names: ({ path }, r) => path === undefined ? [] : r.keys(PROCESS, root, path, true),
+			path === undefined ? undefined : asId(r.read(part, root, [...path, name])),
+		names: ({ path }, r) => path === undefined ? [] : r.keys(part, root, path),
+		// a level of the trie (leaves deeper, no id of its own): a walk goes on through it
+		level: ({ path }, name, r) =>
+			path !== undefined && isMap(r.read(part, root, [...path, name])),
 	}
 }
 
@@ -55,8 +62,18 @@ export function processes(root: Id): Contributor {
 // the first row under root makes the part's entry (a table event tells readers): nothing given
 // back. the entry is changed in place, as places' children are (a copy a start made 300 starts take
 // 0.4 s): a reader holding the trie whole sees it change under it, and is told by its spots
-export function addProcess(
+export const addProcess = (
 	table: Pick<Table, "get" | "add">,
+	root: Id,
+	path: Path,
+	id: Id,
+	header: ChangeHeader,
+): Entry<unknown>[] => addLeaf(table, PROCESS, root, path, id, header)
+
+// addProcess on any part: id at path in root's trie there, by the same rules
+export function addLeaf(
+	table: Pick<Table, "get" | "add">,
+	part: Key,
 	root: Id,
 	path: Path,
 	id: Id,
@@ -64,10 +81,10 @@ export function addProcess(
 ): Entry<unknown>[] {
 	if (path.length === 0) throw new PlacesError("not-a-name")
 	for (const name of path) if (bad(name)) throw new PlacesError("not-a-name", name)
-	const there = table.get(PROCESS, root)
+	const there = table.get(part, root)
 	if (there === undefined) {
 		const trie = path.reduceRight<unknown>((v, k) => ({ [k]: v }), id)
-		table.add(PROCESS, root, createEntry(trie, header, { cow: false }) as never)
+		table.add(part, root, createEntry(trie, header, { cow: false }) as never)
 		return []
 	}
 	let v: unknown = there.value
@@ -78,18 +95,27 @@ export function addProcess(
 	if (isMap(v) && Object.keys(v).length) {
 		throw new PlacesError("already-there", path[path.length - 1])
 	}
-	return upsert(table, PROCESS, root, path, id, header)
+	return upsert(table, part, root, path, id, header)
 }
 
 // the process at path under root taken out, and with it every level left empty: one patch, at the
 // highest of them. none there: nothing-there
-export function removeProcess(
+export const removeProcess = (
 	table: Pick<Table, "get">,
 	root: Id,
 	path: Path,
 	header: ChangeHeader,
+): Entry<unknown>[] => removeLeaf(table, PROCESS, root, path, header)
+
+// removeProcess on any part: the leaf at path in root's trie there, by the same rules
+export function removeLeaf(
+	table: Pick<Table, "get">,
+	part: Key,
+	root: Id,
+	path: Path,
+	header: ChangeHeader,
 ): Entry<unknown>[] {
-	const entry = table.get(PROCESS, root) as Entry<unknown> | undefined
+	const entry = table.get(part, root) as Entry<unknown> | undefined
 	const levels: Record<string, unknown>[] = []
 	let v: unknown = entry?.value
 	for (const name of path) {

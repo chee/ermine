@@ -5,6 +5,8 @@
 	"exports": {
 		"./blop": "./typescript/blop.ts",
 		"./cbor": "./typescript/cbor.ts",
-		"./pack": "./typescript/pack.ts"
+		"./pack": "./typescript/pack.ts",
+		"./hash": "./typescript/hash.ts",
+		"./commit": "./typescript/commit.ts"
 	}
 }

@@ -897,7 +897,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	if (sch == NULL) {
 		sch = sc_new((sc_options){.drop = drop});
 		sc_trace_start(sch, &trace, told_moment, NULL);
-		sc_on_untrack(sch, untrack, NULL);
+		sc_on_tracking_end(sch, untrack, NULL);
 		sc_on_mark(sch, marked, NULL);
 	}
 	PUSH(lines, nlines, caplines, hh_retain());

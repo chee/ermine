@@ -1,0 +1,239 @@
+{
+	"title": "a process started in a box (addProcess at the box's root, its folder) is at its path in the box, covering the folder's own there, and not outside it: the host sees the saved one; another box over the same folder sees it too; a process level lists; its stop brings the saved one back, and nothing is written to the folder",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clock": "C0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C0",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "work",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "start",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"clock",
+				"on"
+			],
+			"expect": {
+				"id": "PON"
+			}
+		},
+		{
+			"op": "entries",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "P",
+						"from": "process"
+					},
+					{
+						"id": "C0",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "C0"
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"box": "b",
+			"expect": {
+				"value": {
+					"clock": "P"
+				}
+			}
+		},
+		{
+			"op": "start",
+			"box": "b",
+			"path": [
+				"dev",
+				"timer"
+			],
+			"id": "T",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"box": "b",
+			"path": [
+				"dev",
+				"timer"
+			],
+			"expect": {
+				"id": "T"
+			}
+		},
+		{
+			"op": "list",
+			"box": "b",
+			"at": [],
+			"expect": {
+				"names": [
+					"dev",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "members",
+			"box": "b",
+			"at": [],
+			"expect": {
+				"members": [
+					{
+						"name": "dev",
+						"from": "process"
+					},
+					{
+						"name": "clock",
+						"id": "P",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "create",
+			"name": "b2",
+			"at": "work",
+			"expect": {
+				"root": "W"
+			}
+		},
+		{
+			"op": "get",
+			"box": "b2",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "stop",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "entries",
+			"box": "b",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "C0",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"box": "b2",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "C0"
+			}
+		},
+		{
+			"op": "saved",
+			"id": "W",
+			"expect": {
+				"value": {
+					"clock": "C0"
+				}
+			}
+		}
+	]
+}

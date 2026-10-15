@@ -115,7 +115,7 @@ struct sc_promise {
 	char *error;
 };
 
-typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_KINDS } listening;
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_AFTER, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
 
 struct sc_listener {
 	sc_scheduler *s;
@@ -127,7 +127,8 @@ struct sc_listener {
 		sc_run_end_fn end;
 		sc_effect_fn effect;
 		sc_settle_fn settle;
-		sc_untrack_fn untrack;
+		sc_after_pulse_fn after;
+		sc_tracking_end_fn untrack;
 	} f;
 	void *data;
 };
@@ -214,7 +215,13 @@ sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data) {
 sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data) {
 	return listen(s, ON_SETTLE, (sc_listener){.f.settle = f, .data = data});
 }
-sc_listener *sc_on_untrack(sc_scheduler *s, sc_untrack_fn f, void *data) {
+sc_listener *sc_on_after_pulse(sc_scheduler *s, sc_after_pulse_fn f, void *data) {
+	return listen(s, ON_AFTER, (sc_listener){.f.after = f, .data = data});
+}
+sc_listener *sc_on_tracking_start(sc_scheduler *s, sc_track_fn f, void *data) {
+	return listen(s, ON_FIRST, (sc_listener){.f.track = f, .data = data});
+}
+sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data) {
 	return listen(s, ON_UNTRACK, (sc_listener){.f.untrack = f, .data = data});
 }
 
@@ -603,6 +610,7 @@ static sc_track_status follow(sc_scheduler *s, sc_run *r, const void *key) {
 	sc_scope *c = r->c;
 	if (c->state != ALIVE) return SC_OK;
 	tg_node *node = pm_get(&s->nodes, key);
+	bool first = node == NULL;
 	if (node == NULL) {
 		node = tg_node_new((void *)key);
 		if (node == NULL) abort();
@@ -610,6 +618,7 @@ static sc_track_status follow(sc_scheduler *s, sc_run *r, const void *key) {
 	}
 	if (tg_track(c->node, node) != 0) abort();
 	if (s->nlisteners[ON_END]) VEC_PUSH(r->reads, r->nreads, r->capreads, key);
+	if (first) EACH(s, ON_FIRST, track, key, r);
 	EACH(s, ON_TRACK, track, key, r);
 	sc_scope *w = pm_get(&s->writers, key);
 	if (w == NULL || w == c) return SC_OK;
@@ -940,6 +949,8 @@ void sc_pulse(sc_scheduler *s) {
 	cs_end(s->causes);
 	s->pulses++;
 	sweep(s);
+	for (size_t i = 0; i < s->nlisteners[ON_AFTER]; i++)
+		s->listeners[ON_AFTER][i]->f.after(s->listeners[ON_AFTER][i]->data);
 }
 
 // computations
