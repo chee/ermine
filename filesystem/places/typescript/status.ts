@@ -1,13 +1,14 @@
-// a computation's status, on its own node: never saved, at one place. the attribute
+// a computer's status, on its own node: never saved, at one place. the attribute
 // ermine.computer.status holds PENDING while a run is pending, an Error when one failed (a loop:
 // an Error "looping"), and is gone when a run is done. a run stopped (a newer one follows) leaves
-// it. written from the scheduler's moments by the computation itself, so a computation reading its
-// own status is its own loop, as any write of its is
-import type { Id, Table, Tables } from "@ermine/graph/table"
+// it. written as each run ends (the scheduler's onRunEnd), with the computer's scope open and the
+// run open when the pulse began: from a pulse with none, from outside. a computer reading its own
+// status runs once more for each status written, then stops: the same status is not written again
+import type { Id, Table, Tables } from "@ermine/table"
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
-import type { Computation, Moment, Scheduler } from "@ermine/scheduler"
+import type { Computer, Ended, Scheduler } from "@ermine/scheduler"
 import { createChangeHeader } from "./header.ts"
 import type { Places } from "./places.ts"
 
@@ -16,28 +17,29 @@ export const STATUS = "ermine.computer.status"
 export const PENDING: unique symbol = Symbol.for("ermine.pending") as never
 
 export type Setup = {
-	places: Pick<Places, "markChanged">
+	places: Pick<Places, "commit">
 	table: Pick<Table, "get" | "add">
-	scheduler: Pick<Scheduler, "run" | "current">
+	scheduler: Pick<Scheduler, "runWithScope" | "getInfo" | "getRun" | "onRunEnd">
 }
 
+// listens to the scheduler's onRunEnd from here on
 export function createStatus(setup: Setup): {
-	// the node a computation's status is written on
-	give: (computation: Computation, id: Id) => void
-	// the scheduler's hook, or called from it: each run's end writes the status
-	moment: (moment: Moment) => void
+	// the node a computer's status is written on
+	give: (computer: Computer, id: Id) => void
+	// stop listening
+	stop: () => void
 } {
 	const { places, table, scheduler } = setup
-	const ids = new WeakMap<Computation, Id>()
+	const ids = new WeakMap<Computer, Id>()
 
 	// the status a run's end leaves; undefined: none; keep: as it was
 	const keep = Symbol("keep")
-	function of(m: Extract<Moment, { ends: unknown }>): unknown {
-		switch (m.ended) {
+	function of(ended: Ended, error: unknown): unknown {
+		switch (ended) {
 			case "pending":
 				return PENDING
 			case "failed":
-				return m.error instanceof Error ? m.error : new Error(String(m.error))
+				return error instanceof Error ? error : new Error(String(error))
 			case "looping":
 				return new Error("looping")
 			case "done":
@@ -47,9 +49,9 @@ export function createStatus(setup: Setup): {
 		}
 	}
 
-	// the status written, by the computation: nothing when it is already so
-	function write(c: Computation, id: Id, status: unknown) {
-		scheduler.run(c, () => {
+	// the status written, with c open: nothing when it is already so
+	function write(c: Computer, id: Id, status: unknown) {
+		scheduler.runWithScope(c, () => {
 			const header = createChangeHeader(scheduler)
 			const there = table.get("attributes", id) as Entry<unknown> | undefined
 			const v = there?.value as Record<string, unknown> | undefined
@@ -67,25 +69,24 @@ export function createStatus(setup: Setup): {
 			}
 			patches.push(status === undefined ? { path: [STATUS] } : { path: [STATUS], value: status })
 			update(there, patches, header)
-			places.markChanged([there])
+			places.commit([there])
 		})
 	}
 
-	function moment(m: Moment) {
-		if (!("ends" in m)) return
-		const id = ids.get(m.ends)
+	const stop = scheduler.onRunEnd((c, _n, ended, _reads, more) => {
+		const id = ids.get(c)
 		if (id === undefined) return
-		const status = of(m)
-		if (status !== keep) write(m.ends, id, status)
-	}
+		const status = of(ended, more.error)
+		if (status !== keep) write(c, id, status)
+	})
 
-	return { give: (c, id) => void ids.set(c, id), moment }
+	return { give: (c, id) => void ids.set(c, id), stop }
 }
 
-// a computation's status, by its node's id, the read told: PENDING, an Error, or undefined
+// a computer's status, by its node's id, the read told: PENDING, an Error, or undefined
 export const status = (places: Pick<Places, "readValue">, id: Id): unknown =>
 	places.readValue("attributes", id, [STATUS])
 
-// whether a computation's run is pending, by its node's id, the read told
+// whether a computer's run is pending, by its node's id, the read told
 export const isPending = (places: Pick<Places, "readValue">, id: Id): boolean =>
 	status(places, id) === PENDING

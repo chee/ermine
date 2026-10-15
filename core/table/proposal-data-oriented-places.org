@@ -1,0 +1,494 @@
+#+title: proposal: what is at a place, data first
+#+author: LLM generated working output
+#+date: 2026-10-14
+
+Through Mike Acton's lens: the data, its counts and rates, then the transforms, then the layout.
+Words: *decided*: chee's words, quoted. *lean*, *thought*: chee thinking it through, quoted. *mine*:
+this proposal, open to change. *open*: not answered. *measured*: scratch benches run 10-14 on this
+Mac with deno (scripts in /tmp/dop, not in the repo), or the repo's own benches where named.
+
+* The idea
+The anchor picks the seam. Three anchors, three seams, each one check on the hot path whose common
+answer is "nothing":
+- a path (a process, /dev): a trie of names on the root, part "process"; the walk reads it before
+  children, *one tracked read per walk*
+- a node, replacing what reads see (drag ghost, optimistic write, Basman override): patch nodes; an
+  overlay library in front of places' =table= (the seam places already has); *one Map check per read*
+- a node, asked for (cursors, who is here): part "presence" on the anchor; *no seam*, a plain read
+- saved content: =children=, as today
+- saving and sending: per side, per part, as data; never per kind of thing (*decided*: "something
+  might be permanent on their side and ephemeral on mine")
+
+Why the anchor decides: a path-anchored thing entered at the table read (by id) would show at every
+path the folder is mounted at, against "a process lives at a _path_" (*decided*). A node-anchored
+thing entered at the walk would vanish when the node is reached by another route. So path things
+enter at the walk; node things enter at the read.
+
+* 1. The data
+** What is at or about a place: who, how often, how many
+| #  | thing                                                     | writer, rate                                                | reader, rate                                       | count                                      | size               |
+|----+-----------------------------------------------------------+-------------------------------------------------------------+----------------------------------------------------+--------------------------------------------+--------------------|
+| 1  | saved child: name → id in a folder's =children=           | people, programs, sync: 0.01–10/s; imports 10^3–10^4 burst  | every walk step through it: 10^2–10^3/s            | 10^3–10^5 loaded, to 10^6 saved            | ~60 B a name       |
+| 2  | mount: a name on a root's =children=                      | the person: ~1/day                                          | every walk's first step                            | 5–50 a root                                | ~60 B              |
+| 3  | process row: device path → process node id               | the process library at start and stop: ≤1/s, 50–200 at boot | every walk from that root (1 spot); listings       | 10–300 a device                            | ~50 B a row        |
+| 4  | process node: attributes (program, box, status), inner    | the process: setup once; its state at its own rate          | the process, its callers, the inspector            | 1 a process; 1–20 inner nodes              | 0.1–10 KB          |
+|    | children (./on/reset, ./state, subprocesses)              | (a clock 1/s, a meter 60 Hz)                                |                                                    |                                            |                    |
+| 5  | in-memory device item: /dev/clock, /hw/kbd                | the host: placed once; values 1–120 Hz                      | 1–10 programs                                      | 5–50                                       | <100 B a value     |
+| 6  | another device's process rows, received                   | the ephemeral channel: on its starts and stops, plus a      | walks, if they count roots passed (put off); the   | 10–200 a device                            | ~50 B a row        |
+|    |                                                           | heartbeat each 10–30 s, one a device                        | inspector                                          |                                            |                    |
+| 7  | presence row: {value, until}, one a device, at an anchor  | each device its own row: 60 Hz while moving, 0 idle         | the anchor's views: each frame while it moves      | 1–10 rows an anchor (50 rare); 1–10 anchors | 50–200 B           |
+| 8  | drag ghost: a patch node                                  | the local UI: 60 Hz for 0.2–3 s                             | the views of that node: each frame                 | 0–1 (2 with two hands)                     | 0.1–1 KB           |
+| 9  | optimistic write: a patch node until its owner answers    | the writer, once; dropped at the answer                     | readers of the node                                | 0–10 online; 10–1000 offline               | 0.1–10 KB          |
+| 10 | override (Basman): a patch node, kept and shared          | a person: ~1/day                                            | every reader of the node, on devices that took it  | 0–100 a device                             | 0.1–1 KB           |
+| 11 | status: pending, an error, on a computation's node        | status.ts, at a run end that changes it                     | spinners, the inspector                            | 1 a computation                            | <100 B             |
+| 12 | conflicts: a part at an id                                | sync                                                        | a conflict view                                    | ~0                                         |                    |
+| 13 | refusal: why a read was refused                           | protect, per read                                           | the reader, the inspector                          | ~0                                         |                    |
+| 14 | box: a root id and a path, a process's "/"                | the starter, once                                           | every walk the process makes                       | 1 a boxed process                          | 2 fields           |
+| 15 | needs and provides on programs; plumbing rules            | program authors, people: rare                               | the plumber, at a plumb: <1/s                      | 10–500 programs                            | ~100 B a rule      |
+| 16 | path cache entry (derived)                                | places, at a read that misses                               | readers, every path read                           | = distinct paths read: 10^2–3×10^3         | ~150 B + its spots |
+| 17 | overlay index, overlaid entries (derived)                 | the overlay library, at a patch node's or its base's write  | every value read: one Map check                    | = active patch nodes                       | base + patches     |
+
+** Their fate and anchor
+| #  | lifetime                         | saved, on whose side                                                    | sent, to whom                                                           | about                                  |
+|----+----------------------------------+-------------------------------------------------------------------------+-------------------------------------------------------------------------+----------------------------------------|
+| 1  | until taken out                  | by each side that keeps the folder                                      | to every holder of the folder (sync)                                    | the folder (content)                   |
+| 2  | until unmounted                  | the root's side                                                         | to whoever mounts that root (*decided*: "most wouldn't")                | the root                               |
+| 3  | start → stop                     | never on its own side (*decided*: "it wouldn't be _saved_")             | ephemerally (*decided*); to whoever mounts that root; to a folder's     | a path                                 |
+|    |                                  |                                                                         | sharers: *open*                                                         |                                        |
+| 4  | start → stop                     | never; what it wants kept it writes into saved nodes                    | on request, *open*                                                      | the process ("inner stuff is inside")  |
+| 5  | the host's session               | never                                                                   | no                                                                      | a path                                 |
+| 6  | until its heartbeat lapses       | never on the receiving side                                             | —                                                                       | a path on another device's root        |
+| 7  | until =until=, renewed           | not on the writer's side; any side may keep it                          | ephemerally, to holders of the anchor                                   | a node, or a name in a folder          |
+| 8  | the drag                         | no                                                                      | no: others see a drag as presence (*decided*: "for cursors and          | a node, at a version                   |
+|    |                                  |                                                                         | dragging")                                                              |                                        |
+| 9  | until answered                   | *open*: an offline queue wants it                                       | the patches go to the owner, as the write                               | a node, at a version                   |
+| 10 | until removed                    | by choice, as content                                                   | as content, to whoever mounts its folder                                | a node, at a version                   |
+| 11 | the next run end                 | never (*decided*: "the process node is not-persisted")                  | no                                                                      | the computation's node                 |
+| 12 | until merged                     | rebuilt from history                                                    | no                                                                      | an id                                  |
+| 13 | one read                         | never                                                                   | never                                                                   | a reader and an id, *open*             |
+| 14 | the process                      | never                                                                   | no                                                                      | a process                              |
+| 15 | forever                          | yes                                                                     | as content                                                              | program nodes                          |
+| 16 | until a read it rests on changes | never: derived                                                          | no                                                                      | a root and a path                      |
+| 17 | while a patch node is active     | never: derived                                                          | no                                                                      | a part at an id                        |
+
+** Workloads
+| workload                                    | numbers                                                                    |
+|---------------------------------------------+----------------------------------------------------------------------------|
+| computers alive, busy UI                    | 20–300 (the OS ~100)                                                       |
+| walks a pulse, typing                       | 10–30 (reruns × paths each)                                                |
+| walks a pulse, boot or a big view opening   | 300–1000 (union-check: 300 paths)                                          |
+| path depth                                  | median 3–4 (/work/clock/on/reset: 4), p99 8, max ~15                       |
+| processes a device                          | 10–300; starts ≤1/s; boot 50–200 in one pulse                              |
+| folder fan-out                              | median ~10, p99 ~10^3, max ~10^5 (a maildir)                               |
+| saved tree                                  | 10^3–10^4 (a person); 10^5–10^6 (a source tree, photos, node_modules)      |
+| loaded tree                                 | what is reachable and read: 10^3–10^5                                      |
+| cursors in                                  | 60 Hz × collaborators: 5 → 300/s; 50 → 3000/s                              |
+| cursors out                                 | 60/s while moving                                                          |
+| drags                                       | 1 at a time, 60 Hz, 0.2–3 s                                                |
+| typing                                      | 5–15 writes/s into one value                                               |
+| path writes (place, rename, move, start)    | ≤1/s; imports 10^3–10^4 in a burst                                         |
+| listings live                               | 1–10 views, each rerun <1/s                                                |
+| watches (lenses, sync, a files store)       | 10–100, each told on every commit today                                    |
+
+Path reads to path writes: ~10^3 to 1.
+
+** Measured
+| what                                                                     | cost                          |
+|--------------------------------------------------------------------------+-------------------------------|
+| paths' mark, one patch (paths_bench)                                     | 0.09–0.20 µs                  |
+| a scheduler run (scheduler_bench)                                        | 0.5–1.9 µs                    |
+| make, run, tear down a computer (scheduler_bench)                        | 5.7–7.7 µs                    |
+| get, untracked: depth 3, 6, 10                                           | 0.28, 0.72, 1.6 µs            |
+| get, tracked, the rerun included: depth 3, 6, 10                         | 1.5, 2.4, 2.7 µs              |
+| 300 computers each getting depth 6, one pulse                            | 525 µs (1.75 µs each)         |
+| lookup a bare name from depth 5, found at /                              | 4.3 µs                        |
+| list(/work) as today (members walks each name): 20, 10^3, 10^4 names     | 15 µs, 1.29 ms, 5.5 ms        |
+| list(/work) reading keys only: 20, 10^3, 10^4 names                      | 3 µs, 28 µs, 0.41 ms          |
+| a cursor write (update, commit, pulse), 2, 10, 50 rows and readers       | 2.7, 3.5, 3.5 µs              |
+| produce, one cursor edit                                                 | 18.8 µs                       |
+| a Map hit on a joined path string (depth 6); on a key already made       | 0.25 µs; 0.008 µs             |
+
+What they say:
+- a walk is cheap: 1000 tracked walks ≈ 1.75 ms of a 16.7 ms frame. walking from the root (*thought*:
+  "lookup walking from the root feels insane") costs 4.3 µs from depth 5
+- per-path computers were union-check's cost (601 focuses, 1.1–1.3 s): a computer costs 6–8 µs to make,
+  a walk 1–2 µs
+- listings are today's cost: =members= tracks one spot a name; keys only is 13–45× less
+- received cursors: as plain patches 3.5 µs; through produce 5× that. 50 collaborators: 175 µs a frame
+  vs ~1 ms
+- the table is the latest-wins buffer: writes land as they come, marks gather, one pulse a frame. no
+  queue (*decided*: "okay so we do callbacks")
+
+** Hot questions
+| question                                 | asked                        | common answer                                 | so                                            |
+|------------------------------------------+------------------------------+-----------------------------------------------+-----------------------------------------------|
+| what id is at P, from R?                 | every path read: 10^2–10^3/s | the same as last time; no row on this route   | rows read once a walk, not each step; a cache |
+|                                          |                              |                                               | per path (*decided*)                          |
+| is (part, id) overlaid?                  | every value read: ~10^3/s    | no (0–3 active)                               | one size check, then one Map get              |
+| which names are in F?                    | a listing's rerun, <1/s each | the saved names, plus no rows                 | read keys, not each name                      |
+| who is on N?                             | each frame, a shared doc open | the same rows, one value moved               | a row a device: a patch at [device, …] marks  |
+|                                          |                              |                                               | only that row's readers                       |
+| which watches does a fact reach?         | every commit: 10^2–10^3/s    | none                                          | watches by id (today: each watch walks its    |
+|                                          |                              |                                               | path on each commit: W × depth)               |
+| is a process at P already?               | at a start: <1/s             | no                                            | one trie lookup                               |
+
+* 2. The transforms
+| read or write        | from                                                         | into                                      | work                                                   |
+|----------------------+--------------------------------------------------------------+-------------------------------------------+--------------------------------------------------------|
+| get(P)               | root id; names; =children= on the route; the root's rows     | an id, and from (=process= or =children=) | a step: the trie while it lasts, else =children=; one  |
+|                      |                                                              |                                           | spot a step, one for the rows                          |
+| entries(P)           | as get, not stopping at the front                            | [{id, from}], front first                 | one more step (*decided*: "a separate function like    |
+|                      |                                                              |                                           | `entries(path)`")                                      |
+| list(P)              | keys of =children= at P; leaf keys of the trie at P          | [{name, from}]                            | two keys reads                                         |
+| members(P)           | the same, with ids                                           | [{name, id, from}]                        | one read of each map (2 spots), not one a name         |
+| lookup(name, cwd)    | the route to cwd (one walk), then a step from each prefix    | the path found                            | d + d×names steps                                      |
+| read(part, id, path) | the overlay index; the overlaid entry or the table's         | the value; as a list [{value, from}]      | one Map check                                          |
+| presence(N)          | =presence= at N; now                                         | rows with =until= > now                   | one read; O(rows)                                      |
+| start(program, P)    | the trie; the folder at P's parent                           | a row, a scope, a node                    | one trie lookup; one patch; a scope ~7 µs              |
+| stop                 | the row's path                                               | a patch taking it (and empty levels)      | one patch; =table.del= a part                          |
+| cursor out           | my row                                                       | a patch at [me, …]; its bytes on topic N  | update + commit ~3 µs; encode                          |
+| cursor in            | bytes from device d                                          | the patches, each under [d], from outside | ~3 µs; never produce                                   |
+| overlay change       | the patch node's patches; the base entry                     | the overlaid entry; marks                 | apply; marks: patches added, or their undo, or the     |
+|                      |                                                              |                                           | base's patches plus the patch node's paths             |
+| commit (any write)   | the entries changed                                          | spots marked; cache entries walked again; | 0.1 µs a patch; walks again only on path writes        |
+|                      |                                                              | watches by id told                        |                                                        |
+
+* 3. Layout
+** In the table: data
+#+begin_src ts
+// content: saved, sent with the folder (as today)
+(children, W).value = { plan: "n:plan", notes: "n:notes", clock: "n:old-clock" }
+
+// path-anchored: one entry on the root, a trie of names, a leaf an id. never saved on its side
+(process, R).value = { work: { clock: "p:clock" }, dev: "p:dev" }
+
+// a process node: never saved; its inner stuff its own children
+(attributes, "p:clock").value = { program: "n:clock-prog", box: { root: R, at: [] } }
+(children, "p:clock").value = { on: "p:clock/on" }
+(children, "p:clock/on").value = { reset: "p:clock/on/reset" }
+
+// node-anchored, asked for: one entry at the anchor, a row a device
+(presence, "n:doc").value = { "juno-pad": { value: { cursor: [12, 40] }, until: 1792000030 } }
+// chee's shape on a folder: a name, then a row a device
+(presence, W).value = { plan: { "juno-pad": { value: { open: true }, until: 1792000030 } } }
+
+// node-anchored, replacing the read: a patch node, its own id, placed where its maker keeps it
+(value, "p:view/drag").value = {
+  on: "n:board", part: "value", at: { time: 1792000001, actor: "chee" },
+  patches: [{ path: ["lists", "B"], range: [2, 2], value: ["c7"] },
+            { path: ["lists", "A"], range: [3, 4] }],
+}
+#+end_src
+
+- rows: *decided* (plan.org): rows in a part on the anchor's node, nested by the path inside it, one
+  row per device; chee: "i think maybe it should be `table.get("process"`". *thought*: "maybe processes
+  should be a trie" (a level a map, a leaf an id). *mine*: the anchor is the device's root; one entry a root is the "one row per device"
+- rows can't nest: a leaf is a process node, and what is under it is that node's children
+  (*decided*: "a proccess's inner stuff is inside the process"). a subprocess is a plain child of its
+  parent's node, which is never saved, so it needs no row. *mine*
+- =until= only where a writer can vanish without a word: presence rows (chee's shape), and another
+  device's rows (one expiry a sender: its entry's change.time + a ttl). local rows end at stop. *mine*
+
+** Derived: thrown away, never in the table
+#+begin_src ts
+// places: the cache per path (decided: "yeah also we can just cache instead")
+resolved: Map<string, { id: Id; from: Key; key: object; rests: Spot[] }> // "R\x1cwork\x1cclock"
+resting: Map<Spot, Set<string>> // a spot → the paths resting on it
+byId: Map<Id, Watch[]> // watches, by the id their path finds now
+// the overlay library
+byOn: Map<Id, Id[]> // a target → its patch nodes, in order
+overlaid: Map<Id, Map<Key, Entry<unknown>>> // a target → a part → the patched entry
+#+end_src
+
+- a reader of a path tracks one key (=resolved=' =key=), not d spots. at a commit, places walks again
+  each cache entry resting on a marked spot (untracked, ~1 µs) and marks its key only when the answer
+  changed: the equal cut (chee's want: "a closer one with the same apple goes no further than the
+  run"). *mine*
+- the cache's own spots are held by it in paths, let go when its key is untracked (=onUntrack= →
+  =release=, as today). *mine*
+- watches find their id through the cache: a fact costs one Map get (=byId=), not W × depth. *mine*
+
+** How each stays in the graph
+| thing                | lives                                    | in the graph as                        | visualized                                    | designed                                       |
+|----------------------+------------------------------------------+----------------------------------------+-----------------------------------------------+------------------------------------------------|
+| rows                 | (process, R)                             | an entry: value + change (who started  | the inspector draws each leaf under its       | a row written by hand places a node at a path, |
+|                      |                                          | it, the site)                          | folder, from: process                         | ephemerally; who may: *open*                   |
+| process node         | its own id                               | nodes                                  | status, inner children                        | as any node                                    |
+| presence             | (presence, N)                            | an entry                               | a row a device                                | an upsert is a patch at [me]                   |
+| patch nodes          | their own ids                            | nodes                                  | a read lists patched and base                 | edit the patches as a value                    |
+| path cache           | places                                   | derived                                | describe(key) → {path, id, from, rests}       | —                                              |
+| overlay index        | the overlay library                      | derived                                | describe                                      | —                                              |
+| save and send flags  | (attributes, /system/tables/<part>), a   | nodes                                  | as any node                                   | edit                                           |
+|                      | side's (*thought*, "note that down")     |                                        |                                               |                                                |
+| the walk's order     | places' code                             | not yet: *later* "an in-graph          | —                                             | —                                              |
+|                      |                                          | contributor thing"                     |                                               |                                                |
+
+* 4. The cases
+Data for all: R the device root, =(children, R) = { work: W, dev?: … }=,
+=(children, W) = { plan, notes, clock: "n:old-clock" }= (a saved clock, to show shadowing).
+
+** A process at /work/clock, and ./on/reset
+#+begin_src ts
+start("n:clock-prog", ["work", "clock"]) // the process library, mine
+// refused: a row at, above or under [work, clock] (decided: "Refuse a running one"); no folder at [work] (mine)
+// (process, R) patches: [{ path: ["work"], value: {} }, { path: ["work", "clock"], value: "p:clock" }]
+get(places, ["work", "clock"]) // "p:clock", from: process
+// step work: trie { work: {…} } is a level → on; children(R).work = W. spot (children, R, [work])
+// step clock: trie leaf "p:clock" → the ephemeral wins (decided); n:old-clock is not read
+// spot (process, R, [work, clock]): the walk's one rows read
+#+end_src
+- the process's own walks, by plan(): "." = [work, clock]; "x" = [work, x]; "../x" = [x] (*decided*)
+- ./on/reset = [work, clock, on, reset]: the leaf, then =(children, p:clock)= and =(children, p:clock/on)=
+- /work's saved children: untouched (*decided*: "the folder's saved children wouldn't change, either")
+
+** list(/work)
+#+begin_src ts
+list(places, ["work"])
+// keys (children, W) → plan, notes, clock; leaf keys of (process, R) at [work] → clock
+// → [{ name: "plan", from: "children" }, { name: "notes", from: "children" },
+//    { name: "clock", from: "process" }]   one clock: the ephemeral wins
+entries(places, ["work", "clock"]) // [{ id: "p:clock", from: "process" }, { id: "n:old-clock", from: "children" }]
+#+end_src
+- reruns on start and stop: the keys spot at [work] in (process, R) is marked by a row put or taken
+  under it
+- 1000 names: 28 µs keys only, against 1.29 ms with =members= walking each name (measured)
+
+** Lookup by bare name
+#+begin_src ts
+lookup(places, ["clock"], ["work"]) // from inside /work → ["work", "clock"]
+#+end_src
+- lib.ts's lookup walks from each prefix; the walk starts its trie at that prefix:
+  =walk(names, { id, at })=, =at= the names from the root to id. *mine*: today's =walk(path, from)=
+  knows only an id
+
+** A cursor in a shared doc
+#+begin_src ts
+// mine, 60 Hz while moving: an upsert is one patch at [me]
+update(pres, [{ path: ["chee-laptop"], value: { value: { cursor: [14, 14] }, until: now + 30 } }], h)
+places.commit([pres]); channel.send("n:doc", encode(pres.change.op!.patches))
+// theirs: from outside, as patches; a sender writes only under its own name
+channel.on("n:doc", (from, bytes) => {
+  const ps = decode(bytes)
+  if (ps.every((p) => p.path[0] === from)) update(pres, ps, outside), places.commit([pres])
+})
+#+end_src
+- anchored on the doc's id: the cursor follows the doc wherever it is mounted
+- a reader of [juno-pad, value, cursor] is marked only by juno-pad's patches: 3.5 µs a write, 50 rows
+  (measured). one pulse a frame: the entry is the latest value, no queue
+- a sweep each second takes rows past =until=; a reader filters them too. *mine*
+
+** A drag ghost
+#+begin_src ts
+// the board view runs a drag at ./drag; its patch node is inside the view process: never saved
+const P = [{ path: ["lists", "B"], range: [2, 2], value: ["c7"] }, { path: ["lists", "A"], range: [3, 4] }]
+update(ghost, [{ path: ["patches"], value: P }], h); commit([ghost]) // each pointermove
+// overlay library: overlaid(n:board, value) = apply(base, P); marks: the old P's undo, then P
+read(places, "value", "n:board", ["lists", "B"]) // [{ value: [...with c7], from: "p:view/drag" }, { value: [...], from: "table" }]
+// drop: produce on n:board → commit; the drag ends → its patch node goes, in the same step
+// one pulse: readers see a value equal to the ghost's → cut
+#+end_src
+- others see my drag as presence: my row on n:board, ={ drag: { item: "c7", to: ["B", 2] } }= (*decided*:
+  "we must. for cursors and dragging")
+
+** An optimistic write
+#+begin_src ts
+// juno edits a doc whose owner must answer; the write is a patch node in her editor, ./pending/1
+(value, "p:ed/pending/1").value = { on: "n:doc", part: "value", at: { time: t, actor: "juno" }, patches: P }
+send(owner, { patches: P, metadata: [["answers", "p:ed/pending/1"]] })
+// the owner's change lands carrying ["answers", "p:ed/pending/1"]: the overlay goes in the same commit
+// refused: the overlay goes; readers see the base; a refusal for the inspector
+#+end_src
+- matching an answer by a metadata pair stands in for change identity (*open*: "it dosn't matter right
+  now"). *mine*
+- offline: 10–1000 queued, each carried through every incoming base patch: O(queued × incoming), the one
+  overlay cost that grows
+
+** /dev/clock
+#+begin_src ts
+// at boot, the host: one row for all of /dev
+(process, R).value.dev = "p:dev"
+(children, "p:dev").value = { clock: "p:dev/clock", kbd: "p:dev/kbd" }
+update(clock, [{ path: [], value: Date.now() }], h); commit([clock]) // 1–60 Hz
+get(places, ["dev", "clock"]) // leaf at [dev] → p:dev → children → "p:dev/clock"
+#+end_src
+- same reads (walk names), anchor (a path), lifetime (its placer's) and writer (its placer) as a
+  process: by the test for not overgeneralizing (chee: "probably unwise to overgeneralize"; process,
+  presence and overlay differ in those four), the same rows. *mine*. whether the host's scope counts as a process: *open* (programs may not be special; "process
+  0" was an analogy)
+
+** A boxed process
+#+begin_src ts
+// started with a root id and a cwd path (lean: "a root id node, and a cwd path from that node")
+box = { root: W, at: ["work"] }
+// box out of places (decided): a places made higher up, its rows read from the device root at box.at
+const inside = createPlaces({ root: W, rows: { part: "process", id: R, at: ["work"] }, table, paths, scheduler })
+get(inside, ["clock"]) // the trie at [work] → clock → "p:clock"
+// its start at "/x" puts the row at [work, x] on R (decided: "a process exists in one place and has 1 path")
+#+end_src
+- ".." at "/" is "/" (*lean*): it can't climb out
+- a root with no device path (any node as a root, *thought*): its rows on that node; seen by walks
+  starting there. *mine*
+
+** Saving
+- storage, on each side, keeps what it reaches through the parts that side flags kept: =children=,
+  =value=, =attributes= yes; =process=, =presence= no. *mine*, the flags *open* (chee: "note that down
+  to think about later")
+- a process node is reached only through =process=: never kept. a drag ghost sits inside a process:
+  never kept. a Basman patch node sits in a saved folder: kept
+- what a process wants kept, it writes into a saved node, not onto itself
+- no word "stored" (*decided*: "i don't want "stored" to become a real thing"): a flag on a part, a side's
+
+** A Cambria subprocess
+#+begin_src ts
+// inside p:clock, at ./lens: a child scope; its node a plain child of the process's node (no row)
+const lens = createScope([["process", "lens"]], clockScope)
+async function* rewrite(ps: readonly Patch[]) {
+  for (const p of ps) yield { ...p, value: (p.value as number) * 9 / 5 + 32 }
+}
+const stop = watchId("value", "n:temps-c", async (fact) => { // told at the write; patches pass through
+  const out: Patch[] = []
+  for await (const p of rewrite(fact.patches)) out.push(p)
+  runWithScope(lens, () => { update(f, out, createChangeHeader(scheduler)); commit([f]) }) // gone: throws
+})
+registerTeardown(lens, stop)
+#+end_src
+- nothing kept but the generator's own state (*decided*: "a slow rewrite might be an async generator
+  function that takes a patch and yields a patch")
+- after an await nothing is open: the write opens the lens's scope itself
+- a fact reaches its watches by id: one Map get. today's watchPath walks each watch's path on each
+  commit. =watchId= is *mine*
+
+** A process stopping
+#+begin_src ts
+teardown(clockScope)
+// 1. children first: ./lens's teardown stops its watch
+// 2. (process, R): [{ path: ["work", "clock"] }, { path: ["work"] }]   the empty level too
+//    → marks (process, R, [work, clock]) and the keys spot at [work]
+//    → the cache walks R/work/clock again: "n:old-clock", from children → changed → its key marked
+// 3. table.del of p:clock's parts and its inner nodes
+// 4. its presence rows in shared folders taken, and sent
+#+end_src
+- the row goes before the node: no walk reaches a half-gone node. *mine*
+
+** A second device
+chee's phone (B) and laptop (A) share an account and the workspace W (*decided*: "every device has its
+own root, but shares an account, maybe shares some workspaces"). clock runs on A.
+#+begin_src ts
+// on B: A's rows, received on topic rootA: (process, rootA).value = { work: { clock: "p:clock" } }
+// on B: the process library's row in the shared folder it sits in:
+(presence, W).value = { clock: { "chee-laptop": { value: { process: "p:clock", program: "n:clock-prog" }, until } } }
+get(placesB, ["work", "clock"]) // (process, rootB) has nothing → "n:old-clock", from children
+#+end_src
+- a walk reads only its own root's rows, until "whether a walk counts roots it passes through" is
+  answered (put off). with A's root mounted on B at /laptop and the walk counting roots, /laptop/work/clock
+  would find "p:clock". the data holds both: one flag in the walk (entering a node with a =process=
+  part starts a trie there)
+- B sees clock as presence, beside its listing; it doesn't walk into it
+- which device runs it: *decided*: "whichever device the closest valid loader is on"
+
+** A collaborator who has only /work
+juno mounts W at /chee-work. her side has no row of chee's: nothing is at /chee-work/clock for her
+walks. =(presence, W)= reaches her on topic W: her listing shows "clock, running on chee-laptop" as a
+mark beside the names. anchored on W, it follows the folder wherever she mounts it.
+- *thought*: "maybe it's only at root - the solution to being able to see someone else's process is
+  actually presence"
+- calling ./on/reset from her side needs a message to chee-laptop: *open*
+
+** Embark, ad hoc (someone's map, someone's text editor)
+chee: "which i think we get from mounts and a kind of plumber-like thing" (*thought*). programs declare
+needs and provides (*decided*).
+#+begin_src ts
+(attributes, "n:map-prog").value   = { needs: [{ kind: "places" }], provides: [{ kind: "view" }] }
+(attributes, "n:text-places").value = { needs: [{ kind: "text" }], provides: [{ kind: "places" }] }
+// juno drops chee's doc n:trip ("Day 1: Lisbon. Day 2: Porto.") onto her map at /work/trip-map
+plumb({ node: "n:trip", to: ["work", "trip-map"] })
+// the plumber: n:trip is text; the map needs places; text-places turns one into the other.
+// it starts text-places inside the map process: no row, plain children of an ephemeral node
+(children, "p:map").value = { src: "n:trip", pins: "p:map/pins" }
+(value, "p:map/pins").value = [{ name: "Lisbon", at: [7, 13], lat: 38.7, lng: -9.1 }, …]
+#+end_src
+- live: chee types (5–15/s, through sync) → text-places reruns: O(text) a keystroke, tens of µs at
+  10 KB; as a lens (patch → patch) only the sentence touched. the map reruns on ./pins' patches
+- chee's cursor, =(presence, n:trip)=, is read by the map too: the pin whose range holds it lights up.
+  this works because presence is anchored on the node, not on the editor
+- nothing saved: composed on the fly. kept only if juno saves ./src as content (a side's choice)
+- the plumber: a program reading program nodes (programs may not be special); its index, need kind →
+  programs, derived; rules for which program wins, a node of rows; several fit: it shows the list, the
+  person picks, the pick becomes a rule. <1/s, 10–500 programs: cold. *mine*
+- needs a kind on nodes ("something (a type) says which tables an id has": an idea so far). *open*
+
+** Basman: changing one part without changing the rest
+chee: "which i think we get from patch nodes attached to other nodes" (*thought*).
+#+begin_src ts
+// antranig overrides one colour in chee's shared app UI, without editing it; kept, in his folder
+(value, "n:skin").value = { on: "n:clock-ui", part: "value", at: { time: t, actor: "antranig" },
+  patches: [{ path: ["theme", "accent"], value: "cherry" }] }
+(children, "n:skins").value = { cherry: "n:skin" }
+// juno mounts his /work/skins and takes it as an override layer (which folders count: data on her root)
+(attributes, R).value["ermine.overrides"] = [["work", "skins"]]
+read(places, "value", "n:clock-ui", ["theme", "accent"]) // [{ value: "cherry", from: "n:skin" }, { value: "lemon", from: "table" }]
+#+end_src
+- a reader of ["theme", "font"] is never marked: the patch touches only ["theme", "accent"]
+- chee renames =theme= to =colors=: carried forward, it can't follow → stale: the read lists it with
+  =stale: true=, not applied (show, don't decide); antranig updates his patch
+- nothing is written on n:clock-ui (*decided*, of a node you mounted: "it shouldn't get my tables")
+- "attached": by =on= always; active where a device lists its folder. placed beside the target in its
+  folder instead (*thought*: mountable "on the file"): whoever has the folder sees it. *open*
+- 0–100 patch nodes; each read one Map check; the overlaid entry made again at a write to the patch node
+  or its base: rare
+
+* 5. Core and libraries
+| piece                                                  | where                    | new                                                                          | size       |
+|--------------------------------------------------------+--------------------------+------------------------------------------------------------------------------+------------|
+| table, scheduler, op, node                             | core/                    | nothing; =process= and =presence= declared by their libraries (=Tables=)     | 0          |
+| the walk reads a rows part, the ephemeral wins; from   | filesystem/places        | =Setup.rows: { part, id, at }=; =walk(path, { id, at })=; each step's from   | ~30 lines  |
+| entries; list and members with from, keys only         | filesystem/places lib.ts | entries; list on keys; members one read a map                               | ~30 lines  |
+| the cache per path (*decided*), watches by id          | filesystem/places        | =resolved=, =resting=, =byId=; walks again at commit; =watchId=              | ~80 lines  |
+| process                                                | library                  | start, stop, refuse, box, rows, presence rows in shared folders             |            |
+| presence                                               | library                  | rows, upsert, sweep, send and receive, the writer check                     |            |
+| overlay (patch nodes)                                  | library                  | the view in front of places' =table=; carry forward, stale; answers         |            |
+| ephemeral channel                                      | library                  | =send(topic, bytes)=, =on(topic, fn)= (*thought*: "subduction or iroh or     |            |
+|                                                        |                          | pigeons could plug")                                                         |            |
+| plumber                                                | a program                | needs → programs index; a rules node                                        |            |
+| lens                                                   | library                  | watch → rewrite → update                                                     |            |
+| save and send flags                                    | storage's, a side's      | /system/tables/<part>                                                        | *open*     |
+
+core/ gets nothing. places gets one seam (rows in the walk) and the cache chee decided. Overlays need no
+change in places: its =table= is already the seam.
+
+* 6. Where it strains
+- the walk's order (rows, then =children=; the ephemeral wins) is code in places, not data: "designable"
+  waits on the in-graph description (*later*). the walk could read it once a walk from the root's
+  attributes: one more spot
+- the other-device check ("on another device the same, while the ephemeral channel says it's there") is
+  not met by default: a walk reads only its own root's rows (put off). presence shows it; it doesn't
+  walk it
+- overlays apply to every reader on the device: no overlay for one process or one reader ("of a
+  reader": *open*). a boxed process sees another process's drag ghost
+- overlaid entries are made up in places' table seam: =who= must answer for them, and their commit
+  carries a header the overlay library makes. a patch node is data; its overlaid entry is kept while
+  it is active
+- =at= as {time, actor} in whole seconds is weak until change identity (*open*); two changes in one
+  second by one actor look alike
+- renaming /work while clock runs: the row stays at [work, clock], unreachable until there is a /work
+  again; the inspector shows it (by path, as a symlink breaks; plan.org's open item on overrides is the
+  same shape)
+- each start and stop rewrites one entry a root; its change shows only the latest (no log, *decided*)
+- a reader of get(/work) is marked at every start and stop under /work (a deep spot at [work] in the
+  rows); its equal result cuts it. ≤1/s
+- the cache adds a second way places marks (walks again at commit); walks alone cost 1–2 µs. what it
+  buys: one key a reader, the equal cut, watches by id
+- presence has two shapes in one part (a node's rows; a folder's name → rows); a reader knows which
+- a process in a folder that isn't there: refused at start (*mine*); a folder taken away later leaves an
+  orphan row
+- the plumber needs a kind on nodes and on needs and provides: an idea so far
+
+* Open
+- whether a walk counts roots it passes through (put off; one flag in the walk)
+- whether sharing a folder shows the processes in it, beyond presence
+- the save and send flags: where, whose, the defaults for =value=, =attributes=, =children=
+- change identity: a patch node's =at=, an optimistic write's answer
+- which folders a device takes as override layers; patch nodes beside their target
+- overlays for one process or one reader
+- who may write a row by hand; calling another device's ./on/reset
+- the host's scope as a process or not

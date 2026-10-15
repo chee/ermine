@@ -23,11 +23,13 @@
 					"header": {
 						"time": 1,
 						"actor": "me",
-						"site": {
-							"file": "https://example.org/x/a.ts",
-							"line": 9,
-							"column": 1
-						}
+						"external": [
+							{
+								"file": "https://example.org/x/a.ts",
+								"line": 9,
+								"column": 1
+							}
+						]
 					},
 					"signer": {
 						"/": {
@@ -89,11 +91,13 @@
 					"header": {
 						"time": 1,
 						"actor": "me",
-						"site": {
-							"file": "src/a.ts",
-							"line": 9,
-							"column": 1
-						}
+						"external": [
+							{
+								"file": "src/a.ts",
+								"line": 9,
+								"column": 1
+							}
+						]
 					},
 					"signer": {
 						"/": {

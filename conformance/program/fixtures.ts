@@ -10,7 +10,7 @@
 // id4 the two docs, in the order the host made them.
 import { run, type Scenario, type Step } from "./run.ts"
 
-const out = new URL("../../playground/files/conformance/program/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/program/", import.meta.url)
 const here = new URL(".", import.meta.url).pathname
 const reference = ["deno", "run", "--quiet", "--allow-all", `${here}harness.ts`]
 

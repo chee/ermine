@@ -408,7 +408,7 @@ def mid (s : State K V) (c rk : Nat) (seen : List (K × Option V)) (vals : List 
     (st : Option Nat) : State K V :=
   { s with
     due := put s.due c none, after := put s.after c none, runs := put s.runs c (s.runs c + 1),
-    went := put s.went c true, loop := put s.loop c none,
+    kept := put s.kept c [], went := put s.went c true, loop := put s.loop c none,
     ran := put s.ran c (some (begun s c vals st seen)),
     cause := put s.cause c (.mk (c, s.runs c + 1) (s.kept c)), when := put s.when c s.pulses,
     cut := put s.cut c false, acts := s.acts.filter (fun a => a.1 ≠ c),
@@ -610,7 +610,16 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     rw [← hM]; simp [edit, mid, put_put]
   have eX := hpre.eq
   have hrX : X.ran c = some { begun s c vals none seen with out := some o } := by rw [eX, eM]; simp
-  rw [finish_eq X c _ hrX]
+  obtain ⟨e', th', he', hfin⟩ := finish_any X c _ hrX e eq none th
+  rw [hfin]
+  have hne : e' ≠ .stopped := by rcases he' with ⟨rfl, _⟩ | ⟨_, rfl⟩ <;> simp [he]
+  have hset' : ∀ v, setv = some v → e' = .done ∧ o = .value v ∧ iseffect (cs c) = false := by
+    intro v hv
+    obtain ⟨a, b, c'⟩ := hset v hv
+    rcases he' with ⟨rfl, _⟩ | ⟨h, _⟩
+    · exact ⟨a, b, c'⟩
+    · rw [a] at h; cases h
+  clear he' hset he
   have hev : (eval s.store (cs c).f) = (o, seen) := eval_follow _ _ _ h3 h1
   obtain ⟨dues, hl, hdues⟩ := hpre.log
   refine { pulses := ?_, round := ?_, phase := ?_, made := ?_, ran := ?_, reads := ?_, values := ?_,
@@ -624,15 +633,17 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
   · intro d hd; simp only [put_ne _ _ hd]; rw [eX, eM]; simp [put_ne _ _ hd]
   · simp only; rw [eX, eM]; rfl
   · intro d hd
-    simp only [he, ne_eq, not_false_eq_true, ite_true, put_ne _ _ hd]
+    simp only [hne, ne_eq, not_false_eq_true, ite_true, put_ne _ _ hd]
     rw [eX, eM]; rfl
   · intro d hd; simp only; rw [eX, eM]; simp [mid, put_ne _ _ hd]
   · simp only; rw [eX, eM]; rfl
   · simp only; rw [eX, eM]; rfl
-  · refine ⟨{ { begun s c vals none seen with out := some o } with ended := some e }, e, by simp,
-      rfl, rfl, rfl, rfl, by simp [he], ?_, eq, none, th, dues, ?_, ?_⟩
+  · refine ⟨{ { begun s c vals none seen with out := some o } with
+      ended := some e', given := [], loop := if e' = .pending then s.loop c else none }, e',
+      by simp [begun],
+      rfl, rfl, rfl, rfl, by simp [hne], ?_, eq, none, th', dues, ?_, ?_⟩
     · intro v hv
-      obtain ⟨a, b, c'⟩ := hset v hv
+      obtain ⟨a, b, c'⟩ := hset' v hv
       exact ⟨rfl, a, by simp [b], c'⟩
     · have hpX : X.pulses = s.pulses := by rw [eX, eM]; rfl
       have hrX : X.round = s.round := by rw [eX, eM]; rfl
@@ -647,7 +658,7 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
   · intro _
     refine ⟨h5, ?_, ?_⟩
     · simp only; rw [eX, eM]; simp [mid]
-    · simp [he, begun]
+    · simp [hne, begun]
   · intro d m hd hdm
     simp only
     apply hpre.due d m
@@ -672,16 +683,22 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     simp only
     rw [hpre.named v hv k hk, eM]; rfl
   · intro x y hy
-    have hy' : y ∈ X.kept x := by
+    -- not done: c's given (its kept at the start) back in front
+    have hy' : y ∈ X.kept x ∨ y ∈ s.kept x := by
       simp only at hy
       split at hy
+      · exact Or.inl hy
       · by_cases hxc : x = c
-        · subst hxc; simp at hy; exact hy.1
-        · simpa [put_ne _ _ hxc] using hy
-      · exact hy
-    rcases hpre.kept x y hy' with h | ⟨hs, h⟩
-    · left; rw [eM] at h; exact h
-    · right; refine ⟨hs, ?_⟩; rw [h, eM]; simp [mid]
+        · subst hxc; simp [begun] at hy; exact hy.symm
+        · left; simpa [put_ne _ _ hxc] using hy
+    rcases hy' with hy' | hy'
+    · rcases hpre.kept x y hy' with h | ⟨hs, h⟩
+      · left; rw [eM] at h
+        by_cases hxc : x = c
+        · subst hxc; simp [mid] at h
+        · simpa [mid, put_ne _ _ hxc] using h
+      · right; refine ⟨hs, ?_⟩; rw [h, eM]; simp [mid]
+    · exact Or.inl hy'
 
 -- a run that stopped at w
 theorem stop_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
@@ -700,10 +717,12 @@ theorem stop_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
            values := fun _ _ => rfl, after := ?_, cause := rfl, when := rfl, run := ?_,
            store_seen := h1, eval_seen := h2, eval_all := (fun h => by cases h), known := h4,
            stop := ?_, go := (fun h => by cases h), due := ?_, fresh := ?_, writers := Or.inl rfl,
-           named := (fun _ h => by cases h), kept := fun _ _ h => Or.inl h }
+           named := (fun _ h => by cases h), kept := ?_ }
   · intro d hd; simp [mid, put_ne _ _ hd]
   · intro d hd; simp [mid, put_ne _ _ hd]
-  · refine ⟨{ begun s c vals (some w) seen with ended := some .stopped }, .stopped, by simp, rfl, rfl,
+  · refine ⟨{ begun s c vals (some w) seen with ended := some .stopped, given := [], loop := none },
+      .stopped,
+      by simp, rfl, rfl,
       rfl, rfl, by simp, by simp, none, some w, none, [], ?_, by simp⟩
     simp [mid, begun]
   · intro w' hw'
@@ -715,6 +734,12 @@ theorem stop_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     by_cases hdc : d = c
     · subst hdc; right; left; simp
     · left; simp [mid, put_ne _ _ hdc] at h; exact ⟨hdc, h⟩
+  · -- its given (c's kept at the start) back in c's kept
+    intro x y hy
+    left
+    by_cases hxc : x = c
+    · subst hxc; simpa [mid, begun] using hy
+    · simpa [mid, put_ne _ _ hxc] using hy
 
 -- every run, A2
 theorem first_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f) :
@@ -952,7 +977,7 @@ theorem ahead {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : St
       rcases hzx with rfl | hzx
       · exact Nat.le_refl _
       · exact rank_tg hr hzx
-    obtain ⟨q, hq, hqm, hqr⟩ := next_below hA h hr (p := x) (by simp [hd])
+    obtain ⟨q, hq, hqm, hqr⟩ := next_below hA h.wide hr (p := x) (by simp [hd])
     have := next_min hn q hq hqm
     omega
 
@@ -1393,7 +1418,7 @@ theorem idle_none {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
   cases hd : s.due d with
   | none => rfl
   | some m =>
-    have := next_total hA h (p := d) (by simp [hd])
+    have := next_total hA h.wide (p := d) (by simp [hd])
     rw [hn] at this; cases this
 
 -- Theorem 4, with Theorem 2: each set in the round is given the round's settled value: what its
@@ -1444,7 +1469,7 @@ theorem settles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : 
   have hrn : (trace cs rank s n).ran c = some rf := by
     have := hstay (n - (i + 1)); rwa [show i + 1 + (n - (i + 1)) = n by omega] at this
   have hRn := trace_reach hA h0 hph n
-  obtain ⟨o, ho, hev, _⟩ := quiescence hA hRn hrn (idle_none hA hRn hend c) (Or.inl hend')
+  obtain ⟨o, ho, hev, _⟩ := quiescence hA hRn.wide hrn (idle_none hA hRn hend c) (Or.inl hend')
   rw [hout] at ho; cases ho
   rw [hev]
 
@@ -1454,7 +1479,7 @@ theorem queued {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : S
     (hA : A2 cs) (h : Reach cs rank s) (hn : next rank s = none) {e : Nat} {v : V}
     (ha : (e, v) ∈ s.acts) : (eval s.store (cs e).f).1 = .value v := by
   obtain ⟨_, r, hr, _, hdone, ho⟩ := (h.good hA).acts e v ha
-  obtain ⟨o, ho', hev, _⟩ := quiescence hA h hr (idle_none hA h hn e) (Or.inl hdone)
+  obtain ⟨o, ho', hev, _⟩ := quiescence hA h.wide hr (idle_none hA h hn e) (Or.inl hdone)
   rw [ho] at ho'; cases ho'
   rw [hev]
 
@@ -1554,7 +1579,7 @@ theorem rest_end {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s :
   cases e : s.after x with
   | none => rfl
   | some w =>
-    have := ((lemma_n hA h).2 x w e)
+    have := ((lemma_n hA h.wide).2 x w e)
     rw [idle_none hA h hn x] at this; cases this
 
 -- and its kept: close clears every cause, and the host's make, write and changed (from outside)
@@ -1664,7 +1689,7 @@ theorem calm_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
           exact hD.acyclic c (TransGen.trans (.single (huses q hq w (hWS ▸ hqw))) h2)
         · simp only [came, Bool.and_eq_true, List.any_eq_true] at hw
           obtain ⟨_, y, hy, hyc⟩ := hw
-          have : y ∈ S.kept w := by simpa [start, say] using hy
+          have : y ∈ S.kept w := by simpa [start, say, put_ne _ _ hwc] using hy
           exact hnd (stcs w y this c hyc)
     have hc1 := h.completed
     have hs1 := h.started

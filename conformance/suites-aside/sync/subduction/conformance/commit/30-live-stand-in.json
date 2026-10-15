@@ -221,8 +221,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1096,
-						"node": "n"
+						"time": 1096
 					},
 					"because": {
 						"layer": "sync",

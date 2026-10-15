@@ -1,0 +1,218 @@
+{
+	"title": "a cause kept again during a run stays kept when the run ends done: c's run marks x naming w, though w's cause is already in what c was given; c's next run writes y, which w reads, and w's run is the one that loops (through w and c)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "a"
+					},
+					{
+						"read": "y"
+					}
+				]
+			},
+			"to": "x",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "x"
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"given": "previous"
+									},
+									1
+								]
+							},
+							{
+								"write": [
+									"x",
+									{
+										"read": "x"
+									},
+									"w"
+								]
+							},
+							null
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"given": "previous"
+									},
+									2
+								]
+							},
+							{
+								"write": [
+									"y",
+									1
+								]
+							},
+							null
+						]
+					},
+					{
+						"sum": [
+							{
+								"given": "previous"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "cv",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 1
+					},
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "w",
+						"tick": 5
+					},
+					{
+						"starts": "w",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 6,
+						"writer": "w"
+					},
+					{
+						"ends": "w",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"due": "c",
+						"tick": 7,
+						"writer": "w"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"due": "w",
+						"tick": 9,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "w",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 3,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"w",
+							"c"
+						]
+					}
+				]
+			}
+		}
+	]
+}

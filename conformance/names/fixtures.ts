@@ -6,7 +6,7 @@
 // languages badly: case folding and normalization, bytes against code points, UTF-16 against code
 // point order, percent-encoding, patterns.
 
-const out = new URL("../../playground/files/conformance/names/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/names/", import.meta.url)
 const here = new URL(".", import.meta.url).pathname
 
 type Req = Record<string, unknown> & { op: string }

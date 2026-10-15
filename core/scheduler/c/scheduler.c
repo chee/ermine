@@ -22,10 +22,10 @@
 typedef enum { ALIVE, DISPOSING, GONE } state_t;
 typedef enum { PLAIN, COMPUTE, EFFECT } kind_t;
 
-typedef struct cleanup {
+typedef struct teardown_fn {
 	char *(*f)(void *);
 	void *data;
-} cleanup;
+} teardown_fn;
 
 // an effect's value waiting for the round's acts
 typedef struct act {
@@ -33,22 +33,22 @@ typedef struct act {
 	void *value;
 } act;
 
-// a scope; a computation is one with a kind and the rest
+// a scope; a computer is one with a kind and the rest
 struct sc_scope {
 	sc_scheduler *s;
 	uint64_t n;
 	sc_scope *parent;
-	// its info, borrowed; a computation's: run_info, its latest run's
+	// its info, borrowed; a computer's: run_info, its latest run's
 	const sc_pair *info;
 	size_t ninfo;
 	sc_scope **children;
 	size_t nchildren, capchildren;
-	cleanup *cleanups;
-	size_t ncleanups, capcleanups;
+	teardown_fn *teardowns;
+	size_t nteardowns, capteardowns;
 	state_t state;
 	kind_t kind;
 	void *user;
-	// computations
+	// computers
 	od_item od;
 	cs_item cs;
 	sc_def def;
@@ -62,10 +62,10 @@ struct sc_scope {
 	// its latest run's info, and what its values point at
 	sc_pair run_info[2];
 	uint64_t run_number, run_mark;
-	// an effect's: at its last act, the scopes made up to then and its cleanups' count. what was
+	// an effect's: at its last act, the scopes made up to then and its teardowns' count. what was
 	// made under it since goes before each run
 	uint64_t acted_n;
-	size_t acted_cleanups;
+	size_t acted_teardowns;
 	// the keys it is the writer of
 	pm wrote;
 	sc_scope **loop;
@@ -82,18 +82,17 @@ struct sc_run {
 	uint64_t mark;
 	uint64_t pulse;
 	bool cut;
-	// the causes of the marks this run was given
+	// the causes of the marks this run was given, held till it ends
 	cs_cause **given;
 	size_t ngiven;
 	cs_cause *cause;
 	// the writers of the keys it read; once order has them, they are order's
 	pm *values;
 	bool adopted;
-	bool open;
 	sc_scope *stopped;
 	sc_scope **loop;
 	size_t nloop;
-	// the keys it read, in order, for the moment it ends (kept only for a hook)
+	// the keys it read, in order, for the moment it ends (kept only while someone listens to run ends)
 	const void **reads;
 	size_t nreads, capreads;
 	size_t refs;
@@ -116,11 +115,31 @@ struct sc_promise {
 	char *error;
 };
 
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_KINDS } listening;
+
+struct sc_listener {
+	sc_scheduler *s;
+	listening kind;
+	union {
+		sc_track_fn track;
+		sc_mark_fn mark;
+		sc_run_start_fn start;
+		sc_run_end_fn end;
+		sc_effect_fn effect;
+		sc_settle_fn settle;
+		sc_untrack_fn untrack;
+	} f;
+	void *data;
+};
+
 struct sc_scheduler {
 	sc_options opt;
+	// the listeners of each kind, told in the order added
+	sc_listener **listeners[ON_KINDS];
+	size_t nlisteners[ON_KINDS], caplisteners[ON_KINDS];
 	// a node per key read
 	pm nodes;
-	// each key's writer: the computation whose run or set last said it changed
+	// each key's writer: the computer whose run or set last said it changed
 	pm writers;
 	order *order;
 	causes *causes;
@@ -138,7 +157,7 @@ struct sc_scheduler {
 	// pulses ended: the one going on, or next
 	uint64_t pulses;
 	bool pulsing;
-	// the run whose reads are tracked; the run whose f, set, act or cleanups are going on (what
+	// the run whose reads are tracked; the run whose f, set, act or teardowns are going on (what
 	// is made then carries its cause)
 	sc_run *reading;
 	sc_run *running;
@@ -154,9 +173,54 @@ static void *xalloc(size_t n) {
 	return p;
 }
 
-static void tell(sc_scheduler *s, sc_moment m) {
-	if (s->opt.hook) s->opt.hook(&m, s->opt.data);
+// listeners: told in the order added; added, they give back a handle to remove. a listener is not
+// removed from inside a call of its own kind
+static sc_listener *listen(sc_scheduler *s, listening kind, sc_listener l) {
+	sc_listener *x = xalloc(sizeof *x);
+	*x = l;
+	x->s = s;
+	x->kind = kind;
+	VEC_PUSH(s->listeners[kind], s->nlisteners[kind], s->caplisteners[kind], x);
+	return x;
 }
+
+void sc_remove_listener(sc_listener *l) {
+	sc_scheduler *s = l->s;
+	sc_listener **v = s->listeners[l->kind];
+	for (size_t i = 0; i < s->nlisteners[l->kind]; i++) {
+		if (v[i] != l) continue;
+		memmove(&v[i], &v[i + 1], (s->nlisteners[l->kind] - i - 1) * sizeof *v);
+		s->nlisteners[l->kind]--;
+		free(l);
+		return;
+	}
+}
+
+sc_listener *sc_on_track(sc_scheduler *s, sc_track_fn f, void *data) {
+	return listen(s, ON_TRACK, (sc_listener){.f.track = f, .data = data});
+}
+sc_listener *sc_on_mark(sc_scheduler *s, sc_mark_fn f, void *data) {
+	return listen(s, ON_MARK, (sc_listener){.f.mark = f, .data = data});
+}
+sc_listener *sc_on_run_start(sc_scheduler *s, sc_run_start_fn f, void *data) {
+	return listen(s, ON_START, (sc_listener){.f.start = f, .data = data});
+}
+sc_listener *sc_on_run_end(sc_scheduler *s, sc_run_end_fn f, void *data) {
+	return listen(s, ON_END, (sc_listener){.f.end = f, .data = data});
+}
+sc_listener *sc_on_effect(sc_scheduler *s, sc_effect_fn f, void *data) {
+	return listen(s, ON_EFFECT, (sc_listener){.f.effect = f, .data = data});
+}
+sc_listener *sc_on_settle(sc_scheduler *s, sc_settle_fn f, void *data) {
+	return listen(s, ON_SETTLE, (sc_listener){.f.settle = f, .data = data});
+}
+sc_listener *sc_on_untrack(sc_scheduler *s, sc_untrack_fn f, void *data) {
+	return listen(s, ON_UNTRACK, (sc_listener){.f.untrack = f, .data = data});
+}
+
+#define EACH(s, K, member, ...) \
+	for (size_t i_ = 0; i_ < (s)->nlisteners[K]; i_++) \
+		(s)->listeners[K][i_]->f.member(__VA_ARGS__, (s)->listeners[K][i_]->data)
 
 static void drop_value(sc_scheduler *s, void *v) {
 	if (v != NULL && s->opt.drop) s->opt.drop(v, s->opt.data);
@@ -190,15 +254,16 @@ static void ran_release(sc_run *r) {
 sc_run *sc_run_ref(sc_run *run) { return ran_ref(run); }
 void sc_run_unref(sc_run *run) { ran_release(run); }
 sc_run *sc_latest(sc_scope *o) { return o->kind == PLAIN ? NULL : o->ran; }
-sc_computation *sc_run_of(const sc_run *run) { return run->c; }
+sc_computer *sc_run_computer(const sc_run *run) { return run->c; }
+unsigned sc_run_n(const sc_run *run) { return run->n; }
 
-// a key nobody reads now: forgotten
+// a key nobody tracks now: untracked, and told
 static void unread(sc_scheduler *s, const void *key) {
 	tg_node *node = pm_get(&s->nodes, key);
 	if (node == NULL || node->first != NULL) return;
 	tg_node_free(node);
 	pm_delete(&s->nodes, key);
-	if (s->opt.forget) s->opt.forget(key, s->opt.data);
+	EACH(s, ON_UNTRACK, untrack, key);
 }
 
 // the keys of the links from l on
@@ -212,8 +277,8 @@ static const void **keys_from(tg_link *l, size_t *n) {
 	return keys;
 }
 
-// a run's end: the tracker drops the links after its cursor, what the run did not read again;
-// the keys nobody reads now are forgotten
+// a run's end: the tracker drops the links after its cursor, what the run did not track again;
+// the keys nobody tracks now are untracked
 static void end_run(sc_scheduler *s, tg_node *f) {
 	size_t n;
 	const void **stale = keys_from(f->cursor != NULL ? f->cursor->next : f->reads, &n);
@@ -252,11 +317,11 @@ sc_scheduler *sc_new(sc_options options) {
 	return s;
 }
 
-sc_scope *sc_root(sc_scheduler *s, const sc_pair *info, size_t n) {
+sc_scope *sc_create_root_scope(sc_scheduler *s, const sc_pair *info, size_t n) {
 	return make_scope(s, PLAIN, NULL, info, n);
 }
 
-sc_scope *sc_scope_new(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent) {
+sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent) {
 	if (parent == NULL) parent = s->open;
 	if (parent == NULL || parent->state != ALIVE) return NULL;
 	return make_scope(s, PLAIN, parent, info, n);
@@ -271,10 +336,10 @@ const sc_pair *sc_scope_info(const sc_scope *o, size_t *n) {
 	return o->info;
 }
 
-sc_scope *sc_current(const sc_scheduler *s) { return s->open; }
-sc_run *sc_current_writer(const sc_scheduler *s) { return s->open_writer; }
+sc_scope *sc_get_current_scope(const sc_scheduler *s) { return s->open; }
+sc_run *sc_get_run(const sc_scheduler *s) { return s->open_writer; }
 
-size_t sc_pairs(const sc_scheduler *s, sc_pair *out, size_t cap) {
+size_t sc_get_info(const sc_scheduler *s, sc_pair *out, size_t cap) {
 	size_t total = 0;
 	for (const sc_scope *o = s->open; o != NULL; o = o->parent) total += o->ninfo;
 	// from the one open up, each scope's info into its place from the end
@@ -293,7 +358,7 @@ typedef struct {
 	sc_run *writer;
 } opened;
 
-// o open as a cleanup opens it: a computation's written by it, any other's by the writer open
+// o open as a teardown opens it: a computer's written by it, any other's by the run open
 static opened opens(sc_scope *o) {
 	sc_scheduler *s = o->s;
 	opened was = {s->open, s->open_writer};
@@ -307,26 +372,21 @@ static void reopen(sc_scheduler *s, opened was) {
 	s->open_writer = was.writer;
 }
 
-// a cleanup opens its scope
-static char *call_cleanup(sc_scope *o, cleanup k) {
+// a teardown opens its scope
+static char *call_teardown(sc_scope *o, teardown_fn k) {
 	opened was = opens(o);
 	char *e = k.f(k.data);
 	reopen(o->s, was);
 	return e;
 }
 
-char *sc_cleanup(sc_scheduler *s, char *(*f)(void *), void *data) {
-	sc_scope *o = s->open;
-	if (o == NULL) {
-		char *e = xalloc(sizeof SC_UNSCOPED);
-		memcpy(e, SC_UNSCOPED, sizeof SC_UNSCOPED);
-		return e;
-	}
+char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *), void *data) {
+	(void)s;
 	if (o->state == ALIVE) {
-		VEC_PUSH(o->cleanups, o->ncleanups, o->capcleanups, ((cleanup){f, data}));
+		VEC_PUSH(o->teardowns, o->nteardowns, o->capteardowns, ((teardown_fn){f, data}));
 		return NULL;
 	}
-	return call_cleanup(o, (cleanup){f, data});
+	return call_teardown(o, (teardown_fn){f, data});
 }
 
 static void unact(sc_scheduler *s, sc_scope *c) {
@@ -343,8 +403,8 @@ static void unact(sc_scheduler *s, sc_scope *c) {
 	free(a);
 }
 
-// a computation going: not due, untracked, the writer of nothing, its act undone. the keys
-// nobody reads now are forgotten
+// a computer going: not due, untracked, the writer of nothing, its act undone. the keys
+// nobody tracks now are untracked
 static void drop_computation(sc_scheduler *s, sc_scope *c) {
 	s->nlive--;
 	od_gone(s->order, &c->od);
@@ -362,7 +422,7 @@ static void drop_computation(sc_scheduler *s, sc_scope *c) {
 	cs_forget(&c->cs);
 }
 
-static char *dispose(sc_scope *o);
+static char *teardown(sc_scope *o);
 
 // the first error is kept, the rest freed
 static void first_error(char **failed, char *e) {
@@ -371,9 +431,9 @@ static void first_error(char **failed, char *e) {
 	else free(e);
 }
 
-// what is under o, newest first, then its cleanups, newest first; o stays. the first error.
-// after, from: only the scopes made after the after-th, and the cleanups from the from-th on.
-// what is under o goes with o open, as its cleanups do: under a computation, written by it
+// what is under o, newest first, then its teardowns, newest first; o stays. the first error.
+// after, from: only the scopes made after the after-th, and the teardowns from the from-th on.
+// what is under o goes with o open, as its teardowns do: under a computer, written by it
 static char *clean(sc_scope *o, uint64_t after, size_t from) {
 	char *failed = NULL;
 	size_t k = o->nchildren;
@@ -386,22 +446,22 @@ static char *clean(sc_scope *o, uint64_t after, size_t from) {
 	}
 	o->nchildren = k;
 	opened was = opens(o);
-	for (size_t i = nkids; i > 0; i--) first_error(&failed, dispose(kids[i - 1]));
+	for (size_t i = nkids; i > 0; i--) first_error(&failed, teardown(kids[i - 1]));
 	reopen(o->s, was);
 	free(kids);
-	size_t nfs = o->ncleanups > from ? o->ncleanups - from : 0;
-	cleanup *fs = NULL;
+	size_t nfs = o->nteardowns > from ? o->nteardowns - from : 0;
+	teardown_fn *fs = NULL;
 	if (nfs > 0) {
 		fs = xalloc(nfs * sizeof *fs);
-		memcpy(fs, o->cleanups + from, nfs * sizeof *fs);
+		memcpy(fs, o->teardowns + from, nfs * sizeof *fs);
 	}
-	if (o->ncleanups > from) o->ncleanups = from;
-	for (size_t i = nfs; i > 0; i--) first_error(&failed, call_cleanup(o, fs[i - 1]));
+	if (o->nteardowns > from) o->nteardowns = from;
+	for (size_t i = nfs; i > 0; i--) first_error(&failed, call_teardown(o, fs[i - 1]));
 	free(fs);
 	return failed;
 }
 
-static char *dispose(sc_scope *o) {
+static char *teardown(sc_scope *o) {
 	if (o->state != ALIVE) return NULL;
 	o->state = DISPOSING;
 	if (o->kind != PLAIN) {
@@ -427,9 +487,9 @@ static char *dispose(sc_scope *o) {
 	return failed;
 }
 
-char *sc_dispose(sc_scope *o) { return dispose(o); }
+char *sc_teardown(sc_scope *o) { return teardown(o); }
 
-const char *sc_setup(sc_scope *o, void (*f)(void *), void *data) {
+const char *sc_run_with_scope(sc_scope *o, void (*f)(void *), void *data) {
 	if (o->state != ALIVE) return SC_DISPOSED;
 	sc_scheduler *s = o->s;
 	sc_run *was = s->reading;
@@ -444,7 +504,7 @@ const char *sc_setup(sc_scope *o, void (*f)(void *), void *data) {
 
 // marks
 
-// a run's cause; one from an earlier pulse is cut to its computation alone, of this pulse:
+// a run's cause; one from an earlier pulse is cut to its computer alone, of this pulse:
 // nothing is kept past the pulse
 static cs_cause *cause_of(sc_scheduler *s, sc_run *r) {
 	if (r->pulse != s->pulses) {
@@ -455,10 +515,11 @@ static cs_cause *cause_of(sc_scheduler *s, sc_run *r) {
 	return r->cause;
 }
 
-// writer: the run that made the change
-static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
-	if (c->state != ALIVE) return;
-	cs_cause *cause = writer ? cause_of(s, writer) : NULL;
+// c due, by the run that made the change: true when it was not already
+static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
+	if (c->state != ALIVE) return false;
+	// a run since run again: no loop through its changes
+	cs_cause *cause = writer && writer == writer->c->ran ? cause_of(s, writer) : NULL;
 	if (cause) cs_keep(s->causes, &c->cs, cause);
 	size_t n = 0;
 	cs_item **items = cs_loop(s->causes, cause, &c->cs, &n);
@@ -472,19 +533,31 @@ static void mark(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
 	if (loop && writer->nloop > 0) {
 		writer->cut = true;
 		free(loop);
-		return;
+		return false;
 	}
 	free(c->loop);
 	c->loop = loop;
 	c->nloop = loop ? n : 0;
-	// a looping computation is due again only by a change from outside the loop
+	// a looping computer is due again only by a change from outside the loop
 	if (c->looping) {
-		if (loop) return;
+		if (loop) return false;
 		c->looping = false;
 	}
-	if (od_has(s->order, &c->od)) return;
+	if (od_has(s->order, &c->od)) return false;
 	od_set(s->order, &c->od, t);
-	tell(s, (sc_moment){.kind = SC_DUE, .c = c, .tick = t, .equal = -1, .writer = writer ? writer->c : NULL});
+	return true;
+}
+
+// the computers made due by one mark, for the listeners to it
+typedef struct {
+	sc_computer **v;
+	size_t n, cap;
+} dues;
+
+static void told_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run *run, dues *d,
+	uint64_t t) {
+	EACH(s, ON_MARK, mark, keys, count, run, d->v, d->n, t);
+	free(d->v);
 }
 
 static void write(sc_scheduler *s, sc_scope *c, const void *key) {
@@ -495,20 +568,26 @@ static void write(sc_scheduler *s, sc_scope *c, const void *key) {
 	pm_set(&c->wrote, key, NULL);
 }
 
-uint64_t sc_changed(sc_scheduler *s, const void *const *keys, size_t count, sc_run *writer) {
+uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run *writer) {
 	uint64_t t = ++s->tick;
+	dues now = {0};
+	bool told = s->nlisteners[ON_MARK] > 0;
 	sc_scope *w = writer && writer->c->kind == COMPUTE && writer->c->state == ALIVE ? writer->c : NULL;
 	for (size_t i = 0; i < count; i++) {
 		const void *key = keys[i];
 		if (w) write(s, w, key);
 		tg_node *node = pm_get(&s->nodes, key);
 		if (node == NULL) continue;
-		for (tg_link *l = node->first; l != NULL; l = l->after) mark(s, l->from->owner, t, writer);
+		for (tg_link *l = node->first; l != NULL; l = l->after) {
+			sc_scope *c = l->from->owner;
+			if (due(s, c, t, writer) && told) VEC_PUSH(now.v, now.n, now.cap, c);
+		}
 	}
+	if (told) told_mark(s, keys, count, writer, &now, t);
 	return t;
 }
 
-// reads
+// tracks
 
 static bool waits_after(sc_scheduler *s, od_item *w, sc_scope *c) {
 	size_t steps = 0;
@@ -517,9 +596,9 @@ static bool waits_after(sc_scheduler *s, od_item *w, sc_scope *c) {
 	return false;
 }
 
-// a key read in r: tracked. its writer due, the run stops: unless the writer waits after r's, or
-// is due by r's own doing (a loop, with no after in it)
-static sc_read_status track(sc_scheduler *s, sc_run *r, const void *key) {
+// a key tracked in r. its writer due, the run stops: unless the writer waits after r's, or is due
+// by r's own doing (a loop, with no after in it)
+static sc_track_status follow(sc_scheduler *s, sc_run *r, const void *key) {
 	if (r->stopped) return SC_STOP;
 	sc_scope *c = r->c;
 	if (c->state != ALIVE) return SC_OK;
@@ -530,7 +609,8 @@ static sc_read_status track(sc_scheduler *s, sc_run *r, const void *key) {
 		pm_set(&s->nodes, key, node);
 	}
 	if (tg_track(c->node, node) != 0) abort();
-	if (s->opt.hook) VEC_PUSH(r->reads, r->nreads, r->capreads, key);
+	if (s->nlisteners[ON_END]) VEC_PUSH(r->reads, r->nreads, r->capreads, key);
+	EACH(s, ON_TRACK, track, key, r);
 	sc_scope *w = pm_get(&s->writers, key);
 	if (w == NULL || w == c) return SC_OK;
 	if (r->values == NULL) r->values = xalloc(sizeof *r->values);
@@ -542,13 +622,8 @@ static sc_read_status track(sc_scheduler *s, sc_run *r, const void *key) {
 	return SC_OK;
 }
 
-sc_read_status sc_read(sc_scheduler *s, const void *key) {
-	return s->reading ? track(s, s->reading, key) : SC_OK;
-}
-
-sc_read_status sc_run_read(sc_run *r, const void *key) {
-	if (!r->open) return SC_CLOSED;
-	return track(r->s, r, key);
+sc_track_status sc_track(sc_scheduler *s, const void *key) {
+	return s->reading ? follow(s, s->reading, key) : SC_OK;
 }
 
 // runs
@@ -556,29 +631,35 @@ sc_read_status sc_run_read(sc_run *r, const void *key) {
 static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *error,
 	sc_scope *waits, sc_scope *const *through, size_t nthrough) {
 	sc_scope *c = r->c;
+	// flagged, and cut a loop: a failure ends looping too
+	if (ended == SC_FAIL && r->nloop > 0 && r->cut) {
+		finish(s, r, SC_LOOPING, equal, error, waits, r->loop, r->nloop);
+		return;
+	}
 	if (c->state == ALIVE) {
-		if (ended == SC_DONE) {
-			for (size_t i = 0; i < r->ngiven; i++)
-				if (pm_delete(&c->cs.kept, r->given[i])) cs_release(r->given[i]);
-		}
+		// not done: what it was given is kept again, beside what was kept since it began. then the
+		// run holds it no longer, so a later end (an awaited run landing) keeps nothing again
+		if (ended != SC_DONE)
+			for (size_t i = 0; i < r->ngiven; i++) cs_keep(s->causes, &c->cs, r->given[i]);
+		for (size_t i = 0; i < r->ngiven; i++) cs_release(r->given[i]);
+		free(r->given);
+		r->given = NULL;
+		r->ngiven = 0;
 		if (ended == SC_LOOPING) c->looping = true;
 		if (ended != SC_STOPPED_RUN) {
 			od_sees(s->order, &c->od, r->values);
 			r->adopted = true;
 		}
 	}
-	tell(s, (sc_moment){.kind = SC_ENDS,
-		.c = c,
-		.run = r->n,
-		.ended = ended,
-		.equal = equal,
-		.error = error,
-		.waits = waits,
-		.through = through,
-		.nthrough = nthrough,
-		.reads = r->reads,
-		.nreads = r->nreads});
+	sc_more more = {.equal = equal, .error = error, .waits = waits, .through = through, .nthrough = nthrough};
+	EACH(s, ON_END, end, c, r->n, ended, (const void *const *)r->reads, r->nreads, &more);
 	free(error);
+	// ended, unless awaited: no longer a run known to loop
+	if (ended != SC_PENDED) {
+		free(r->loop);
+		r->loop = NULL;
+		r->nloop = 0;
+	}
 }
 
 // a result: equal to the last, it stops there. a compute's goes to set; an effect's waits for
@@ -654,7 +735,8 @@ static void deliver(sc_promise *p) {
 	p->value = NULL;
 	p->error = NULL;
 	VEC_PUSH(s->landed, s->nlanded, s->caplanded, l);
-	if (s->opt.wake) s->opt.wake(s->opt.data);
+	for (size_t i = 0; i < s->nlisteners[ON_SETTLE]; i++)
+		s->listeners[ON_SETTLE][i]->f.settle(s->listeners[ON_SETTLE][i]->data);
 }
 
 static void awaiting(sc_scheduler *s, sc_run *r, sc_promise *p) {
@@ -696,7 +778,6 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	r->c = c;
 	r->n = n;
 	r->mark = mark;
-	r->open = true;
 	r->pulse = s->pulses;
 	if (ngiven > 0) {
 		r->given = xalloc(ngiven * sizeof *r->given);
@@ -704,6 +785,8 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 		for (size_t i = 0; i < c->cs.kept.cap; i++)
 			if (c->cs.kept.keys[i] != NULL) r->given[k++] = cs_ref((cs_cause *)c->cs.kept.keys[i]);
 		r->ngiven = k;
+		// taken out: kept holds only what is kept from here on
+		cs_forget(&c->cs);
 	}
 	r->cause = cs_run(s->causes, &c->cs, r->given, r->ngiven);
 	r->loop = c->loop;
@@ -714,12 +797,12 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	c->ran = ran_ref(r);
 	// an effect acts on its latest run's value only
 	if (c->acting) unact(s, c);
-	tell(s, (sc_moment){.kind = SC_STARTS, .c = c, .run = n, .rank = rank, .equal = -1});
+	EACH(s, ON_START, start, c, n, rank);
 	sc_run *was = s->reading, *wasRunning = s->running;
 	s->running = r;
 	// what is under it goes first: all of a compute's; of an effect's, what was made since its
-	// last act. disposed by a cleanup: nothing more
-	char *before = c->kind == COMPUTE ? clean(c, 0, 0) : clean(c, c->acted_n, c->acted_cleanups);
+	// last act. torn down by a teardown: nothing more
+	char *before = c->kind == COMPUTE ? clean(c, 0, 0) : clean(c, c->acted_n, c->acted_teardowns);
 	if (c->state != ALIVE) {
 		s->running = wasRunning;
 		free(before);
@@ -740,7 +823,6 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	s->open_writer = r;
 	tg_begin(c->node);
 	sc_out out = c->def.f(c->has_last ? c->last : NULL, c->def.data);
-	r->open = false;
 	s->reading = was;
 	s->running = wasRunning;
 	s->open = wasopen;
@@ -782,7 +864,7 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 
 // what is under the effect goes, then it acts, with the value it acted on last. due again (an
 // earlier act this round changed what it read): its value is old, so it does not act; its next
-// run does. disposed by a cleanup: nothing more
+// run does. torn down by a teardown: nothing more
 static void do_act(sc_scheduler *s, act *a) {
 	sc_scope *c = a->r->c;
 	c->acting = NULL;
@@ -808,7 +890,7 @@ static void do_act(sc_scheduler *s, act *a) {
 	sc_run *waswriter = s->open_writer;
 	s->open = c;
 	s->open_writer = c->ran;
-	char *error = c->def.act(a->value, c->has_last ? c->last : NULL, c->def.data);
+	char *error = c->def.effect(a->value, c->has_last ? c->last : NULL, c->def.data);
 	s->reading = was;
 	s->running = wasRunning;
 	s->open = wasopen;
@@ -818,8 +900,8 @@ static void do_act(sc_scheduler *s, act *a) {
 	c->last = a->value;
 	c->has_last = true;
 	c->acted_n = s->made;
-	c->acted_cleanups = c->ncleanups;
-	tell(s, (sc_moment){.kind = SC_ACTS, .c = c, .run = a->r->n, .error = failed, .equal = -1});
+	c->acted_teardowns = c->nteardowns;
+	EACH(s, ON_EFFECT, effect, c, a->r->n, failed);
 	free(failed);
 	ran_release(a->r);
 	free(a);
@@ -860,12 +942,10 @@ void sc_pulse(sc_scheduler *s) {
 	sweep(s);
 }
 
-uint64_t sc_tick(const sc_scheduler *s) { return s->tick; }
-
 // computations
 
 // under the scope open
-static sc_computation *make(sc_scheduler *s, kind_t kind, sc_def def) {
+static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	sc_scope *o = s->open;
 	if (o == NULL || o->state != ALIVE) return NULL;
 	sc_scope *c = make_scope(s, kind, o, NULL, 0);
@@ -877,16 +957,20 @@ static sc_computation *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	// the key its results land at, given: its writer from the start, not learned
 	if (def.key) write(s, c, def.key);
 	od_started(s->order, &c->od);
-	// made in a run, set, act or cleanup: it carries that run's cause, so a loop through what it
+	// made in a run, set, act or teardown: it carries that run's cause, so a loop through what it
 	// changes is seen. made in a run known to loop: the loop is cut there, as a dropped loop mark
 	// cuts it
 	if (s->running && s->running->nloop > 0) s->running->cut = true;
-	mark(s, c, ++s->tick, s->running);
+	uint64_t t = ++s->tick;
+	dues now = {0};
+	bool told = s->nlisteners[ON_MARK] > 0;
+	if (due(s, c, t, s->running) && told) VEC_PUSH(now.v, now.n, now.cap, c);
+	if (told) told_mark(s, NULL, 0, s->running, &now, t);
 	return c;
 }
 
-sc_computation *sc_compute(sc_scheduler *s, sc_def def) { return make(s, COMPUTE, def); }
-sc_computation *sc_effect(sc_scheduler *s, sc_def def) { return make(s, EFFECT, def); }
+sc_computer *sc_create_computer(sc_scheduler *s, sc_def def) { return make(s, COMPUTE, def); }
+sc_computer *sc_create_effect(sc_scheduler *s, sc_def def) { return make(s, EFFECT, def); }
 
 // promises
 
@@ -939,7 +1023,7 @@ void sc_free(sc_scheduler *s) {
 	for (size_t i = 0; i < s->nall; i++) {
 		sc_scope *o = s->all[i];
 		free(o->children);
-		free(o->cleanups);
+		free(o->teardowns);
 		if (o->kind != PLAIN) {
 			tg_node_free(o->node);
 			pm_clear(&o->wrote);
@@ -948,6 +1032,7 @@ void sc_free(sc_scheduler *s) {
 				pm_clear(o->od.values);
 				free(o->od.values);
 			}
+			pm_clear(&o->od.rev);
 			free(o->loop);
 			if (o->ran) ran_release(o->ran);
 			if (o->has_last) drop_value(s, o->last);
@@ -960,6 +1045,10 @@ void sc_free(sc_scheduler *s) {
 	pm_clear(&s->writers);
 	od_free(s->order);
 	cs_free(s->causes);
+	for (int k = 0; k < ON_KINDS; k++) {
+		for (size_t i = 0; i < s->nlisteners[k]; i++) free(s->listeners[k][i]);
+		free(s->listeners[k]);
+	}
 	free(s->all);
 	free(s->acts);
 	free(s->landed);

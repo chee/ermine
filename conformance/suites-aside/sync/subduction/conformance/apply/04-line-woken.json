@@ -114,8 +114,7 @@
 					"content": "axb",
 					"change": {
 						"actor": "a",
-						"time": 1006,
-						"node": "n"
+						"time": 1006
 					},
 					"because": {
 						"layer": "sync",

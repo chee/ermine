@@ -16,14 +16,13 @@
 //   {cmd:"quit"}
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
-import { createScheduler } from "@ermine/scheduler"
+import { versions as applied } from "../typescript/apply.ts"
 import { is } from "../typescript/id.ts"
 import { createDevice } from "../typescript/transport.ts"
-import { createWiring, fresh } from "../typescript/wiring.ts"
+import { createWorld } from "../typescript/world.ts"
 import { files } from "./files.ts"
 import { Storage } from "./storage.ts"
 import { hexOf, unhex } from "./blob.ts"
-import createNode from "@ermine/node"
 // deno-lint-ignore no-explicit-any
 type Any = any
 
@@ -43,19 +42,13 @@ const signer = { key, sign: (m: Uint8Array) => Promise.resolve(ed25519.sign(m, s
 const storage = await Storage.open(files(dir ?? await Deno.makeTempDir({ prefix: "ermine-live-" })))
 const device = createDevice({ signer, storage: storage as Any })
 const random = (n: number) => crypto.getRandomValues(new Uint8Array(n))
-const held: Any = {}
-const wiring = createWiring(device, {
-	versions: (...a: Any[]) => held.s.internal.versions(...a),
+const world = createWorld(device, {
+	root: DOC,
+	actor: hexOf(key).slice(0, 8),
 	signer,
 	random,
 })
-const s = held.s = createScheduler({
-	root: createNode(DOC, {}),
-	actor: hexOf(key).slice(0, 8),
-	site: () => undefined,
-	id: () => fresh(random),
-	changed: (r: Any) => wiring.changed(r),
-} as Any)
+const wiring = world.wiring
 
 // starting again: the device took in what the store held, as it was made (TRANSPORT.tex)
 await device.ready()
@@ -65,9 +58,13 @@ if (online) await device.connectDiscover(server, service)
 
 const summary = (c: unknown): unknown =>
 	typeof c === "string" && c.length > 100 ? `len:${c.length}:${hexOf(blake3(c)).slice(0, 8)}` : c
+// every head of the node's value, whichever layer holds it (the table shows only the first)
 const read = (doc: string) => {
-	const n = s.get(doc)
-	return n ? n.value.map((v: Any) => summary(v.content)).sort() : null
+	for (const layer of ["stored", "ephemeral"] as const) {
+		const list = applied(device.histories(doc, layer), "value", () => 0)
+		if (list.length) return list.map((v) => summary(v.content)).sort()
+	}
+	return world.table.get("value", doc) ? [] : null
 }
 
 async function handle(r: Any): Promise<unknown> {
@@ -75,25 +72,18 @@ async function handle(r: Any): Promise<unknown> {
 		case "commit": {
 			const n = r.n ?? 1
 			for (let i = 0; i < n; i++) {
-				s.write([], [{ path: [], value: n > 1 ? `${r.value}-${i}` : r.value }])
+				world.write("value", DOC, [{ path: [], value: n > 1 ? `${r.value}-${i}` : r.value }])
 			}
 			await wiring.idle()
 			await device.idle()
 			return { n }
 		}
 		case "view":
-			s.create(undefined, { id: r.doc })
+			// the node comes when its first version does
 			await device.follow(r.doc)
 			return {}
 		case "ephemeral":
-			s.start({
-				address: [],
-				id: "proc-" + hexOf(random(4)),
-				program: ({ api }: Any) => {
-					api.create(r.value, { id: r.doc, ephemeral: true })
-					return 0
-				},
-			})
+			world.write("value", r.doc, [{ path: [], value: r.value }], { ephemeral: true })
 			await device.follow(r.doc)
 			await wiring.idle()
 			await device.idle()

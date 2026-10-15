@@ -83,7 +83,7 @@ TypeScript done 10-12; C with an agent.
   subduction apply.c (callers later).
 
 ** 4. table
-Done 10-13, TypeScript and C (core/graph/c/table.{h,c}), suite in core/graph/conformance/table/.
+Done 10-13, TypeScript and C (core/table/c/table.{h,c}), suite in core/table/conformance/table/.
 Not wired into main yet.
 - chee's API: "add(type, id, node) / get(type, id) / get(type, node) / get(id) / del(type, node) /
   del(node) // drop em all / del(type, id)", plus `who(node)` and `sub()`: "if we add a

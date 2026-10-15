@@ -88,8 +88,7 @@
 					"content": 1,
 					"change": {
 						"actor": "a",
-						"time": 1060,
-						"node": "n"
+						"time": 1060
 					},
 					"because": {
 						"layer": "sync",

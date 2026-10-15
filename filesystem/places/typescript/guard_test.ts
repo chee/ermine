@@ -8,19 +8,20 @@ import type { Patch } from "@ermine/op/apply"
 import { all, grants, no, pending, type Policy, yes } from "@ermine/protect"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/graph/table"
+import { createTable, type Id, type Key } from "@ermine/table"
 import { createGuard, Refusal, REFUSED, type Setup, slot, target, type Thing } from "./guard.ts"
 import { createPlaces } from "./places.ts"
 import { get, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 
 function world() {
-	const s = createScheduler({ forget: (key) => l.release(key) })
+	const s = createScheduler()
+	s.onTrackingEnd((key) => l.release(key))
 	const table = createTable((part, id) => l.onTableChange(part as Key, id))
 	const l = createPlaces({ root: "R", table, paths: createPaths<unknown>(), scheduler: s })
 	const places = l
-	const host = s.root([["actor", "host"]])
-	const hosted = <T>(f: () => T) => s.run(host, f)
+	const host = s.createRootScope([["actor", "host"]])
+	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const guard = (more: Partial<Setup> = {}) =>
 		createGuard({ places: l, scheduler: s, table, ...more })
 	function edit(part: Key, id: Id, patches: Patch[]) {
@@ -32,7 +33,7 @@ function world() {
 			table.add(part, id, node)
 		} else {
 			update(there, patches, h)
-			l.markChanged([there])
+			l.commit([there])
 		}
 	}
 	const kids = (id: Id, v: Record<string, unknown>) =>
@@ -55,7 +56,7 @@ function world() {
 	function watch(process: Scope, f: () => unknown) {
 		const seen: unknown[] = []
 		let runs = 0
-		s.run(process, () => s.compute(() => (runs++, f()), (v) => void seen.push(v)))
+		s.runWithScope(process, () => s.createComputer(() => (runs++, f()), (v) => void seen.push(v)))
 		return { seen, runs: () => runs }
 	}
 	return { s, l, table, places, hosted, guard, kids, value, reset, read, write, watch }
@@ -85,9 +86,9 @@ Deno.test("guard: reads and writes are asked of the policy: who is the scope ope
 	w.value("T", "hello")
 	const { asks, policy } = recording(() => yes)
 	const g = w.guard({ may: policy, from: ["apps", "notes"] })
-	const notes = w.s.root([["actor", "notes"]])
+	const notes = w.s.createRootScope([["actor", "notes"]])
 	const path = ["notes", "today"]
-	w.s.run(notes, () => {
+	w.s.runWithScope(notes, () => {
 		const [m] = g.members(members(w.places, ["notes"]), ["notes"])
 		w.read(g, { id: m.id, path })
 		w.write(g, { id: m.id, path }, "bye")
@@ -103,7 +104,7 @@ Deno.test("guard: reads and writes are asked of the policy: who is the scope ope
 	assertEquals(asks[0].from?.path, ["apps", "notes"])
 	// an id alone: no path
 	asks.length = 0
-	w.s.run(notes, () => w.read(g, "T"))
+	w.s.runWithScope(notes, () => w.read(g, "T"))
 	assertEquals([asks[0].target.id, asks[0].target.path], ["T", undefined])
 })
 
@@ -112,12 +113,12 @@ Deno.test("guard: a write can't name another actor: it is asked as the scope's",
 	w.value("A", 1)
 	w.value("rules", [{ actor: "chee", op: "edit" }])
 	const g = w.guard({ may: rules })
-	const juno = w.s.root([["actor", "juno"]])
+	const juno = w.s.createRootScope([["actor", "juno"]])
 	// a scope under juno's naming chee only adds a pair
-	const forged = w.s.scope([["actor", "chee"]], juno)
-	assertEquals(tryout(() => w.s.run(forged, () => w.write(g, "A", 2))), "refused")
+	const forged = w.s.createScope([["actor", "chee"]], juno)
+	assertEquals(tryout(() => w.s.runWithScope(forged, () => w.write(g, "A", 2))), "refused")
 	assertEquals(w.table.get("value", "A")?.value, 1)
-	w.s.run(w.s.root([["actor", "chee"]]), () => w.write(g, "A", 2))
+	w.s.runWithScope(w.s.createRootScope([["actor", "chee"]]), () => w.write(g, "A", 2))
 	assertEquals(w.table.get("value", "A")?.value, 2)
 })
 
@@ -146,7 +147,7 @@ Deno.test("guard: pending throws PENDING: the rules not there, a run ends pendin
 	const w = world()
 	w.value("A", "x")
 	const g = w.guard({ may: rules })
-	const notes = w.s.root([["actor", "chee"]])
+	const notes = w.s.createRootScope([["actor", "chee"]])
 	const { seen } = w.watch(notes, () => w.read(g, "A"))
 	w.s.pulse()
 	assertEquals(seen, [])
@@ -154,7 +155,7 @@ Deno.test("guard: pending throws PENDING: the rules not there, a run ends pendin
 	w.s.pulse()
 	assertEquals(seen, ["x"])
 	const later = w.guard({ may: grants({ part: "value", id: "later" }) })
-	assertEquals(tryout(() => w.s.run(notes, () => w.write(later, "A", 2))), "pending")
+	assertEquals(tryout(() => w.s.runWithScope(notes, () => w.write(later, "A", 2))), "pending")
 	assertEquals(w.table.get("value", "A")?.value, "x")
 })
 
@@ -163,7 +164,7 @@ Deno.test("guard: a refused read is still tracked: a rule change reruns it", () 
 	w.value("A", "secret")
 	w.value("rules", [])
 	const g = w.guard({ may: rules })
-	const chee = w.s.root([["actor", "chee"]])
+	const chee = w.s.createRootScope([["actor", "chee"]])
 	const { seen, runs } = w.watch(chee, () => tryout(() => w.read(g, "A")))
 	w.s.pulse()
 	assertEquals(seen, ["refused"])
@@ -183,7 +184,7 @@ Deno.test("guard: policies are colourless: a policy reads an access node, pendin
 		const a = read("value", "access")
 		return a === undefined ? pending(["value", "access"]) : a === "allow" ? yes : no("closed")
 	}
-	const chee = w.s.root([["actor", "chee"]])
+	const chee = w.s.createRootScope([["actor", "chee"]])
 	const asking = w.watch(chee, () => w.read(w.guard({ may: all(access, rules) }), "A"))
 	const plain = w.watch(chee, () => w.read(w.guard(), "A"))
 	w.s.pulse()
@@ -204,11 +205,14 @@ Deno.test("guard: a write's check doesn't make an effect depend on the rules", (
 	w.value("A", 1)
 	const g = w.guard({ may: rules })
 	let acts = 0
-	w.s.run(w.s.root([["actor", "chee"]]), () =>
-		w.s.effect(() => 0, () => {
-			acts++
-			w.write(g, "A", acts)
-		}))
+	w.s.runWithScope(
+		w.s.createRootScope([["actor", "chee"]]),
+		() =>
+			w.s.createEffect(() => 0, () => {
+				acts++
+				w.write(g, "A", acts)
+			}),
+	)
 	w.s.pulse()
 	w.reset("rules", [{ actor: "chee" }, { actor: "juno" }])
 	w.s.pulse()
@@ -232,10 +236,10 @@ Deno.test("guard: the three: where the asker is, the path to the target, the id"
 		{ actor: "chee", op: "read", from: ["apps", "notes"], path: ["trash"], id: "S" },
 	])
 	const at = (name?: string) => w.guard({ may: rules, from: name ? ["apps", name] : undefined })
-	const chee = w.s.root([["actor", "chee"]])
+	const chee = w.s.createRootScope([["actor", "chee"]])
 	// the thing at a path, asked through the guard
 	const ids = (g: ReturnType<typeof at>, path: string[]) =>
-		w.s.run(
+		w.s.runWithScope(
 			chee,
 			() =>
 				g.members([{ name: path.at(-1)!, id: get(w.places, path)! }], path.slice(0, -1)).map((
@@ -250,5 +254,5 @@ Deno.test("guard: the three: where the asker is, the path to the target, the id"
 	// a host, at no place: from-grants do not match it
 	assertEquals(ids(at(), ["docs", "a"]), [REFUSED])
 	// by id alone, no path: the path grant does not match
-	assertEquals(tryout(() => w.s.run(chee, () => w.read(at("notes"), "D"))), "refused")
+	assertEquals(tryout(() => w.s.runWithScope(chee, () => w.read(at("notes"), "D"))), "refused")
 })

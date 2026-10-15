@@ -109,11 +109,6 @@
 						"path": null
 					},
 					{
-						"attached": [
-							"a"
-						]
-					},
-					{
 						"part": "children",
 						"id": "R",
 						"path": [
@@ -145,22 +140,6 @@
 						"part": "children",
 						"id": "R",
 						"path": []
-					},
-					{
-						"attached": [
-							"a"
-						]
-					},
-					{
-						"part": "children",
-						"id": "R",
-						"path": [
-							"a"
-						]
-					},
-					{
-						"attached": [],
-						"names": true
 					}
 				]
 			}

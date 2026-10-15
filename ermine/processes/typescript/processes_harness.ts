@@ -1,0 +1,157 @@
+// processes at paths (processes.ts) on the line protocol: one JSON request per line in, one answer
+// per line out, in order. its own world, lasting for the process: a scheduler, a table, paths, and
+// places (root "R") given [processes("R"), children]. ids are strings, a path a list of names. the
+// host writes with its scope open, its info [["actor","test"]]. a PlacesError answers { error: code }
+//
+// the world:
+// { op: "root", name }                     → {}   a scope with no parent
+// { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
+// { op: "place", at, name, id }            → {}   places' place, at the parent's id
+// { op: "rename", at, name, to }           → {}
+// { op: "start", path, id }                → {}   addProcess, said written
+// { op: "stop", path }                     → {}   removeProcess, said written
+// { op: "rows" }                           → { value? }   the root's process trie as the table has it
+//    (told to no one); none: {}
+// { op: "patches" }                        → { patches? }   the patches of the trie's latest change
+// reads, outside any run (lib.ts):
+// { op: "get", path }                      → { id? }
+// { op: "entries", path }                  → { entries }   each { id, from }
+// { op: "list", at }                       → { names }
+// { op: "members", at }                    → { members }   each { name, id, from }
+// { op: "lookup", names, from }            → { path? }
+// computes:
+// { op: "watch", name, scope, f }          → {}   a compute made with scope open, running the
+//    program f each run, its results compared as JSON. f: {"get":path} {"entries":path}
+//    {"names":path} {"members":path} {"lookup":[names,from]}, or a list of them
+// { op: "pulse" }                          → {}
+// { op: "state", name }                    → { runs, value }   how many times it ran; its last
+//    result given to set (null: none)
+import createEntry from "@ermine/node/entry"
+import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
+import { createPaths } from "@ermine/scheduler/paths"
+import { createTable, type Key } from "@ermine/table"
+import { children, createPlaces, place, PlacesError, rename } from "@ermine/places"
+import { entries, get, list, lookup, members } from "@ermine/places/lib"
+import { createChangeHeader } from "@ermine/places/header"
+import { type Request, serve } from "../../../conformance/typescript/harness.ts"
+import { addProcess, PROCESS, processes, removeProcess } from "./processes.ts"
+
+type Json = unknown
+
+const s = createScheduler()
+const table = createTable((part, id) => places.onTableChange(part as Key, id))
+const paths = createPaths<unknown>()
+const places = createPlaces({
+	root: "R",
+	table,
+	paths,
+	scheduler: s,
+	contributors: [processes("R"), children],
+})
+s.onTrackingEnd((key) => places.release(key))
+const host = s.createRootScope([["actor", "test"]])
+const hosted = <T>(f: () => T) => s.runWithScope(host, f)
+const header = () => createChangeHeader(s)
+
+const scopes = new Map<string, Scope>()
+const watched = new Map<string, { runs: number; value: Json }>()
+
+const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+const plain = (x: unknown): Json => JSON.parse(JSON.stringify(x ?? null))
+
+function kid(id: unknown) {
+	const n = table.get("children", String(id))
+	if (n === undefined) throw new PlacesError("nothing-there")
+	return n
+}
+
+function evaluate(e: Json): Json {
+	if (e === null || typeof e !== "object") return e
+	if (Array.isArray(e)) return e.map(evaluate)
+	const m = e as Request
+	if ("get" in m) return get(places, m.get) ?? null
+	if ("entries" in m) return plain(entries(places, m.entries))
+	if ("names" in m) return list(places, m.names)
+	if ("members" in m) return plain(members(places, m.members))
+	if ("lookup" in m) return lookup(places, m.lookup[0], m.lookup[1]) ?? null
+	throw new Error("unknown program")
+}
+
+function answer(r: Request): Json {
+	switch (r.op) {
+		case "root":
+			scopes.set(r.name, s.createRootScope(r.info))
+			return {}
+		case "kids":
+			hosted(() => table.sub("children", r.id, createEntry(r.value, header())))
+			return {}
+		case "place":
+			hosted(() => places.commit(place(kid(r.at), r.name, r.id, header())))
+			return {}
+		case "rename":
+			hosted(() => places.commit(rename(kid(r.at), r.name, r.to, header())))
+			return {}
+		case "start":
+			hosted(() => places.commit(addProcess(table, "R", r.path, r.id, header())))
+			return {}
+		case "stop":
+			hosted(() => places.commit(removeProcess(table, "R", r.path, header())))
+			return {}
+		case "rows": {
+			const v = table.get(PROCESS, "R")?.value
+			return v === undefined ? {} : { value: v }
+		}
+		case "patches": {
+			const p = table.get(PROCESS, "R")?.change.op?.patches
+			return p === undefined ? {} : { patches: p }
+		}
+		case "get": {
+			const id = get(places, r.path)
+			return id === undefined ? {} : { id }
+		}
+		case "entries":
+			return { entries: plain(entries(places, r.path)) }
+		case "list":
+			return { names: list(places, r.at) }
+		case "members":
+			return { members: plain(members(places, r.at)) }
+		case "lookup": {
+			const path = lookup(places, r.names, r.from)
+			return path === undefined ? {} : { path }
+		}
+		case "watch": {
+			const o = scopes.get(r.scope)
+			if (o === undefined) throw new Error(`no scope ${r.scope}`)
+			const w = { runs: 0, value: null as Json }
+			const c: Computer = s.runWithScope(o, () =>
+				s.createComputer(
+					() => (w.runs++, evaluate(r.f)),
+					(v) => void (w.value = v),
+					json,
+				))
+			scopes.set(r.name, c)
+			watched.set(r.name, w)
+			return {}
+		}
+		case "pulse":
+			s.pulse()
+			return {}
+		case "state": {
+			const w = watched.get(r.name)
+			if (w === undefined) throw new Error(`no compute ${r.name}`)
+			return { runs: w.runs, value: w.value }
+		}
+	}
+	throw new Error(`unknown op ${r.op}`)
+}
+
+if (import.meta.main) {
+	await serve((r) => {
+		try {
+			return answer(r) as Record<string, unknown>
+		} catch (e) {
+			if (e instanceof PlacesError) return { error: e.code }
+			throw e
+		}
+	})
+}

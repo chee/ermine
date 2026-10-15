@@ -254,8 +254,7 @@
 					"content": "u",
 					"change": {
 						"actor": "me",
-						"time": 1071,
-						"node": "n"
+						"time": 1071
 					},
 					"because": {
 						"layer": "sync",
@@ -285,8 +284,7 @@
 					"content": "v",
 					"change": {
 						"actor": "a",
-						"time": 1069,
-						"node": "n"
+						"time": 1069
 					},
 					"because": {
 						"layer": "sync",

@@ -159,8 +159,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1089,
-						"node": "n"
+						"time": 1089
 					},
 					"because": {
 						"layer": "sync",
@@ -372,8 +371,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1090,
-						"node": "n"
+						"time": 1090
 					},
 					"because": {
 						"layer": "sync",
@@ -393,8 +391,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1089,
-						"node": "n"
+						"time": 1089
 					},
 					"because": {
 						"layer": "sync",
@@ -542,8 +539,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1090,
-						"node": "n"
+						"time": 1090
 					},
 					"because": {
 						"layer": "sync",
@@ -563,8 +559,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1089,
-						"node": "n"
+						"time": 1089
 					},
 					"because": {
 						"layer": "sync",

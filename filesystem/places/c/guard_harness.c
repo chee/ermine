@@ -190,9 +190,8 @@ static bool allowed(ctx *c, gd_answer a, const gd_refusal *why) {
 }
 // whether the reads the program told let it go on
 static bool alive(ctx *c) {
-	sc_read_status status = pl_status(world_places);
+	sc_track_status status = pl_status(world_places);
 	if (status == SC_STOP) c->stopped = true;
-	if (status == SC_CLOSED) thrown_code(c, world_copy(SC_STOPPED));
 	return status == SC_OK;
 }
 
@@ -209,7 +208,7 @@ static bool guarded(ctx *c, const char *const *path, size_t n, pl_member *out) {
 	bool found = pl_get(world_places, path, n, &id);
 	if (!alive(c)) return false;
 	if (!found) return false;
-	pl_member one = {n ? path[n - 1] : "", id};
+	pl_member one = {n ? path[n - 1] : "", id, NULL};
 	pl_members list = {1, &one}, got;
 	if (!allowed(c, gd_members(c->g, &list, path, n ? n - 1 : 0, &got), NULL)) return false;
 	*out = got.items[0];
@@ -413,7 +412,7 @@ static void in_eval(void *d) {
 	evaluating *ev = d;
 	ctx c = start_ctx(ev->g, NULL);
 	op_value *v = eval(ev->e, &c);
-	if (c.stopped) ev->out = world_error(SC_STOPPED);
+	if (c.stopped) ev->out = world_error("stopped");
 	else if (c.ended == REFUSED) {
 		ev->out = world_error("refused");
 		op_set(ev->out, "reason", op_str(c.refusal.reason));
@@ -505,7 +504,7 @@ static op_value *answer(const op_value *r) {
 		else {
 			sc_scope *o = world_scope(scope);
 			if (o == NULL) return world_error("no such scope");
-			const char *bad = sc_setup(o, in_eval, &ev);
+			const char *bad = sc_run_with_scope(o, in_eval, &ev);
 			if (bad) return world_error(bad);
 		}
 		return ev.out;
@@ -519,7 +518,7 @@ static op_value *answer(const op_value *r) {
 		const op_value *effect = op_get(r, "effect");
 		bool is_effect = effect && effect->type == OP_BOOL && effect->bool_;
 		sc_def def = {.f = program_f, .equal = world_equal, .data = p};
-		if (is_effect) def.act = program_act;
+		if (is_effect) def.effect = program_act;
 		else def.set = program_set;
 		char *bad = world_make(&p->watch, world_text(op_get(r, "name")), world_text(op_get(r, "scope")), def,
 			is_effect);

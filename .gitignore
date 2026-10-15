@@ -13,11 +13,11 @@ core/zig/.zig-cache/
 demos/core-web/dist/
 
 # C build outputs and the agents' scratch runs (generated, hundreds of MB)
-core/graph/c/ermine
-core/graph/c/ermine-asan
-core/graph/c/json_test
+core/table/c/ermine
+core/table/c/ermine-asan
+core/table/c/json_test
 *.dSYM/
-core/graph/c/scratch/
+core/table/c/scratch/
 
 # compiled C test/bench binaries
 *_test
@@ -33,10 +33,10 @@ core/graph/c/scratch/
 **/c/*-test
 **/c/*-test-check
 **/c/*-bench
-# libFuzzer (core/graph/c/fuzz.sh)
-core/graph/c/fuzz
-core/graph/c/corpus/
-core/graph/c/crash-*
+# libFuzzer (core/table/c/fuzz.sh)
+core/table/c/fuzz
+core/table/c/corpus/
+core/table/c/crash-*
 # libFuzzer (core/*/c/*_fuzz.sh): binaries, corpora, finds
 **/c/*-fuzz
 **/c/*-corpus/
@@ -57,3 +57,4 @@ __pycache__/
 .graveyard/core/graph/c/ermine
 .graveyard/core/graph/c/ermine-asan
 **/benchmarks/results/
+.vite/

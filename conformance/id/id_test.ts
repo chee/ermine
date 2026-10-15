@@ -9,7 +9,7 @@ import { encode } from "@ermine/encoding/cbor"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`
 const subject = (Deno.env.get("ID_HARNESS") ?? reference).split(" ")
-const scenarios = `${here}../../extensions/subduction/conformance/id/`
+const scenarios = `${here}../suites-aside/sync/subduction/conformance/id/`
 
 type Request = Record<string, unknown> & { op: string }
 type Scenario = { title: string; ask: Request[]; expect: unknown[] }

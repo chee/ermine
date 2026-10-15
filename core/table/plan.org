@@ -134,6 +134,165 @@ chee 10-14: "i think this is the plan."
   mount it at your root and see what I bind as I bind it. *mine*, open (chee: "HOW is this going to
   be communicated")
 
+* Content and layout
+- *lean* 10-14, chee: "the tension comes from a node having children that are part of it, rather than
+  the filetree being a fact of its own somewhere maybe - like we're mixing content and layout"; on the
+  model below: "this does seem... right..."
+- the model (mine): content = what is inside a node (its children, its outline), shared with it;
+  layout = where things appear in your tree, rows {place: path, node, save?} kept per device (a
+  layout part on the device's node), some saved (mounts), some not (running processes). the walk:
+  layout rows for the path so far first, then the content children of the node it is in. sharing a
+  folder shares its content; mounting a device's / shares its layout too. a placement others should
+  see stays content (a name in a folder's children). Plan 9: file servers serve content, the
+  namespace (bind, mount, union) is per process and never stored in the files. this is chee's
+  "paths table" (processes, mounts, boxes contribute rows; places reads them)
+- open: what the root is (a content node, or only layout); how my layout reaches my other devices;
+  per-process layouts (boxes) over the device's
+- *thought* 10-14: "any node can theoretically become somebody's root i think, so every node needs to
+  be able to have a lyout" (a layout part on any node, paths relative to it)
+- 10-14 after layout (= path entries + outer wins again), a local children part, a don't-save flag, a
+  root program in charge of processes: chee "none of this is right. can you summarize all the needs
+  and requirements and the related ideas and hand it to fable to do some research and come back to
+  me with something erminesque". research + proposal: core/table/proposal-processes-at-paths.org
+  (Fable, running)
+- wants, 10-14 (chee): "wanting to be able to do things like Embark adhoc (someone's map, someone's text
+  editor), which i think we get from mounts and a kind of plumber-like thing, or Basman-style changing
+  1 part of something without changing other parts, which i think we get from patch nodes attached
+  to other nodes"
+- lazy providers, *wanted* 10-14 (the idea over the suggestion): "with stuff like /dev, it and its
+  content should be able to be _lazy_ perhaps sitting as pending until tracked? ... if you think of
+  OS stuff some is just too much and too frequent to be inserting data into the graph when it isn't
+  being read, some way for a thing providing a node to know if it's being tracked on exit from the
+  system too"
+- built 10-14: status in C (filesystem/places/c/status.c, cst_; pending/error stand-ins in C), upsert
+  and getOrSet (typescript/upsert.ts, C pl_upsert/pl_get_or_set), scenarios 28-status, 29-upsert
+- playground/demos/console: chee "Port host.ts now": a stand-in process layer in demos/lib (not the
+  process API), by agent
+- list shows every name in a children entry, one holding no id too (chosen 10-14: "Show it"); built:
+  list = keys (23 µs at 1k names), members = one read of the map (148 µs), watches by id
+- fix, *decided* 10-14 ("worth fixing"): list reads keys only (1.3 ms → 28 µs at 1000 names), members
+  reads the map once; watches found by the id their path gives now, not walked on every commit
+- three Mike Acton studies, 10-14 (core/table/proposal-data-oriented-{places,nodes,node-layout}.org).
+  measured: copy on write of a children map on every place (10k names in one folder 8.6 s, 30k 106 s;
+  cow false ~1 µs); the table's index ~1 KB per id, more than the data (one Map per part: ~0.67 µs a
+  walk step vs 3.3 µs at 1M ids); a write's site capture 23-53 µs; list 1.3 ms at 1000 names (keys
+  only 28 µs); listing order changes after save and load (CBOR sorts keys). the value/attributes/
+  children split holds up. places: the anchor decides the seam (a path: the walk; a node, replacing
+  reads: an overlay at the table read; a node, asked for: a presence part)
+- on the studies, 10-14, chee: a first-reader hook, *lean*: "maybe we can have a onFirstTrack or
+  onWhateverThisConceptIsCreate ... MobX's onBecomeObserved / onBecomeUnobserved ... or svelte'
+  readable". sites: "capturing the code site is expensive, sure, and we can probably do something
+  here like reusing stuff within a run because it'll all be the same"; "a scope should take its
+  outer scope's and add a couple more things?"; "why is site capture happening a lot? ... that should
+  only happen on outside writes? not on stuff being made by comutations?". cow children: "makes sense
+  for now though"; *thought*: "maybe `children` shouldn't actually be an opstream, like, maybe that
+  tables thing is foolish. maybe children and attributes should be on the node. idk". listing a huge
+  folder: "maybe should be an iterator instead, entries". table bookkeeping: "interesting, we'll see".
+  built (header.ts, chee "yes"): outside a run a write captures its site; in a run, the run's first
+  write captures one and the rest of the run reuses it (17 µs → 0.5 µs a header in a run). a
+  computer's creation site in its scope, each scope adding to its parent's: waits, another session is
+  editing core/scheduler (scheduler.ts, order.ts, causes.ts changed 22:18). children and attributes in place,
+  *decided* ("do cow false children! we can probably do cow-false attrs too?"): places sets cow false
+  as such an entry comes into the table (10k places into one folder: 8.6 s → 0.6 s); the update fuzz's
+  "old value as it was" holds only for copying entries now. onFirstTrack, *decided* ("add this
+  hook"): built in the scheduler (TS); name *thought*: "maybe `onTrackStart` and `onTrackEnd` or
+  something" (onUntrack → onTrackEnd too?). the process trie in the walk and the per-path cache, *decided*: "i'm happy
+  with #1 and #2, espcially if they can be done in their own file and imported without that being
+  complex" (cache.ts in places; contributors, children the default; processes in ermine/processes,
+  chee: "is it possible that `processes` is built in `ermine/` rather than `filesystem`?"). patch nodes, *thought*: "i
+  guess we'd need a way for a patch node to live in one place and target another" (a patch part
+  {on, part, at, patches}; where it lives = its placement; on = the target)
+- starting a program, 10-15 (chee): "start(lookup("clock"), ["work", pid("clock)])"; needs: "the need
+  provider in the case of the first programs we do will be like `javascript` `es2025` `dom` `fetch`
+  things of this nature i think"; "loader is not a provide, that doesn't make any sense, a program runs
+  on a platform. it'd me like `native arm64` or _something_ i'm actually not quite sure yet"; chains,
+  *decided*: "we need to be able to chain. like, the host says it needs `normal main thread
+  javascript` say (not that name, but) and there's a thing that says it is C code and then there is a
+  C-> wasm compiler and a wasm->javascript compiler" (forms flow program → host through compilers,
+  each a program with needs/provides; capabilities flow host → program); "this is also where build a
+  la carte comes in, and there are demos in the playground sketching this idea out" (prog-build,
+  prog-render, fancy-notebook in the slaygrounds; experimental_os layers/cache and newos/CLOADER.md).
+  *thought*: "maybe the capability and the code lang stuff needs to be split, not just needs/provides,
+  but, this is the best i have so far as an idea. maybe as well we could also use a uti filetype
+  attribute on a program". reviews 10-15 (core/table/review-programs-{fuchsia,pike}.org), both: capabilities
+  never by nearest-first lookup (a synced folder could shadow them): handed at start by the host or
+  starter (Fuchsia) or nodes bound into the box (Pike, Inferno NEWNS); forms of code by lookup
+  (Fuchsia's environments; Pike: a handler named for the form, bin/c, lookup repeated, no search, no
+  ties); the pin = a record written at start (Fuchsia adds content hashes). Pike: no UTIs, one short
+  name per form; the sketch's wasm-js output didn't match the host's form. *decided* 10-15: "capabilities aren't found by
+  looking up. that's boxes." boxes, 10-15 (chee): "you'd pick a folder, make a box from it, mount anything you
+  want the process to see in there (including something that can run its program), start the
+  process with the box"; *lean*: "would it also need to not be able to do `getCurrentScope()`?
+  actually maybe processes should just never be able to do that"; on Pike's catch (fetch and the DOM
+  are globals): "an iframe or worker loader is the fix here, like, a boxed process can't actually run
+  at all unless you first place the loader it's going to look for there". the sketch, *lean* 10-15 ("i like the
+  sketch you have so far though"): a program is a node {type, uses (shown, never a gate)}; a box
+  from a folder, mounts (bin/<form> handlers: compilers {takes, gives}, loaders {takes, runs}); start
+  = a chain by lookup inside the box (one way per box: the box picks the target, as GOOS/GOARCH; a
+  search over takes/gives only when one box has several ways, as Bazel's toolchains); each compile
+  step a computer, cached by (step, input hash) at /cache/<hash> (build systems a la carte); the pin
+  recorded at start; loaders run on loaders (loaders/wasm on loaders/browser); a missing need is a
+  read of what isn't there, its status the complaint, a mount the fix. fetch-as-a-file-in-the-box:
+  "i love the idea of that later"
+- programs, *decided* 10-14: "a process is an instance of a program. a program is a node that declares
+  what it needs and provides."
+- on Fable's proposal (core/table/proposal-processes-at-paths.org), 10-14: roots, *decided*: "most
+  wouldn't. sharing a root document would be mirroring a complete device. every device has its own
+  root, but shares an account, maybe shares some workspaces". box, *lean*: "i think each process
+  probably needs to get started with a root id node, and a cwd path from that node, and that's how a
+  box works". stop/move: "this isn't an important question, it can be implied by the correct
+  design". tracking, *thought*: one tracked read per path via a memo at every folder point, or table
+  events fed into a createSelector-style computation; "maybe lookup walking from the root is fine if
+  we have caching ... we're building an incremental programming system so we should be able to do
+  some incremental programming in it"
+- *decided* 10-14: "a process isn't in /work, it's at /work/clock" (after "a name is as saved as the
+  thing it names" put it in W's children); *thought*: "and this might also be true of (some?) ephemeral nodes maybe"; *thought*: "maybe we say
+  `list()` doesn't show processes in the folder"; "but also this is like... the filesystem is real
+  and hte children walk is only 1 contributor to it" (her earlier "paths table" wondering: "places
+  uses, contributes to, maybe provides and then other things can also contribute to it"). then
+  *thought*: "createPlaces takes middlewear or something... or takes more than one table... or ....
+  takes a bunch of generators.... maybe it's like a union of a places based on children and a places
+  based on the process list (which are simpler because they just have a path no walking)". per-path
+  computers, *decided* 10-14: "we want per path computers that focus a single path in, we can make
+  it when somebody first tracks that path and drop it when the last person stops". a node focus
+  (readNode(id): Object.fromEntries of the node, one key), *later*: "maybe let's not do the node
+  thing now, it's a pity" (needs an any-part-at-id spot, and passes every write: no equal cut). a
+  process started where one already runs: refused (chosen: "Refuse a running one"; a saved thing
+  there is shadowed while it runs). union places checked 10-14 by a prototype (playground/union-check, 20 tests):
+  the union works (shadowing, names, teardown, equal cut); per-path focuses as scheduled computers
+  break: reads stale between a write and the pulse; a first read gives undefined and ends looping;
+  focuses made in a run carry the reader's cause; every start reruns every focus (the process list
+  is one entry); 300 paths: 601 focuses, first pulse 1.1-1.3 s vs 4 ms, superlinear (ranks). per path,
+  *decided*: "yeah also we can just cache instead" (a cache worked out when read, dropped when what it
+  read changes; not scheduled computers). contributors, *thought* 10-14: every contributor answers one step
+  (step({path, id}, name), names(where)); children is just one, installed like the others. chee: "i
+  keep trying to find different ways to have more that one thing at the same path. that is obviously
+  necessary, but i keep moving around where that choice is made. ... sometimes something is a shared
+  node and you want to walk its children, and sometimes something is local. ... the truth depends on
+  from where you're asking" (written: filesystem/places/contributors.org). process rows: "maybe processes
+  should be a trie" (the nested map is one; a level a map, a leaf an id, no "" slot: a process's own
+  things are inside its node). in the graph: rows, processes yes; the cache no (derived); the
+  contributor list is code, *later*: "i think we can add a way of doing an in-graph contributor thing
+  l8r". the cache reviewed 10-14 (playground/union-check/cache.ts, 47 tests): fixes the
+  five computer problems, no scheduler change; one bug (spots let go under an entry), counting per
+  key needed, equal cut and names strain; folded into contributors.org; *thought*:
+  "it would be nice to be able to treat a node like it's a real thing most of the time"; *lean*: "i
+  think it would work like a solid store no? like, the whole-node isn't exactly tracked it's just the
+  bits on it". a deep Proxy was built by an agent from my sketch and moved to
+  .graveyard/node-proxy-2026-10-14: chee "i don't think the agent did a good job of the node proxy.
+  and also i didn't actually mean for it to be a proxy". produce → patches → commit for edits stays
+  liked ("kinda beautiful")
+- *decided* 10-14: "right what i mean is a process exists in one place and has 1 path" (clarifying
+  "keyed as path from the device the process is running on", which was my word "keyed"); then, *thinking, open*: "right but if i start a boxed process at /work
+  then it would be in /archive/work too", then "no?", "no", "yes"; then *thought*: "maybe it's only at root - the solution
+  to being able to see someone else's process is actually presence"; *thought*: "processes might get a globally unique id"; *thought*: "it being keyed a rootid is maybe valuable". whether a walk counts roots it passes
+  through: put off, chee: "is there a way to avoid answering this" … "even that is too much deciding,
+  i mean put it off". a walk reads only its own root's rows until then
+- three parts, *thought* 10-14: "why do we need 3 tables for a node? maybe that design is stupid. but
+  it's not. i know it's not because metadata is not the content of a file. either are thing things it
+  connects to. though WNFS did decide that metadata and content go together. it also decided that
+  folders are a different thing. i'm not so sure"
+
 * Ephemeral placement
 - places' job, *decided* 10-14: "ah yes, the in-memory items at a path... yes that does sound like
   places business!" (earlier, lean: "i believe that this is places's job, with a table that's the
@@ -172,13 +331,140 @@ chee 10-14: "i think this is the plan."
   the /dev /hw, but also for processes. processes will need to know where they are and when they
   call, say, `lookup` they get a tracked something they can read the value or a subvalue from right?
   so they'll need some kind of cwd too"
-- built 10-14 (TS; C by agent): places attach(path, id) / detach(path) / attachedAt(path), verbs
+- built then taken back out 10-14 (chee: "take attach back out of places"; it is in commit
+  79c6b62 "attch?"): places attach(path, id) / detach(path) / attachedAt(path), verbs
   chosen by chee ("attach / detach"). *mine*: keyed by the path's names; a walk knowing its path
   (from the root, or given above) asks what is attached at each step before the children; a walk
   reaches it only through folders that are there; attached with a scope open it is detached when
   the scope goes, with none it stays; members/list add attached names after the saved ones (a name
   in both: the attached id); describe names the reads {attached: path} and {attached, names: true}.
   scenario 27-attach
+- 10-14, chee, *thought*: "the problem might be trying to solve the general case before we have
+  specific cases. the first thing this'll be used for is the process tree, and maybe that should be
+  a separate thing. processes have a place, they exist at a place". on my sketch (a process = a
+  scheduler scope + its path; children = child scopes; kill = dispose; s.current() gives who asks):
+  "ok this is kinda crazy and interesting"
+- a process is a scheduler scope with a path, *decided* 10-14: "okay, so the process is a scheduler
+  scope with a path. this is good". the path can be an info pair (no new argument; it then goes
+  into every write's pairs)
+- scopes get table nodes, *decided* 10-14: "scopes should get table nodes like computations do"
+- where a process's node sits, *decided* 10-14: "the node sits wherever the process is started, at
+  its cwd"
+- the name it sits under: not saved, sent ephemerally, *decided* 10-14: "there's actually a difference
+  between saved and sent. if we were to imagine a subduction sync, it would be communicated over the
+  ephemeral channel. or if the user wanted to use iroh as their ephemeral channel, it'd be
+  communicated over that. the folder's saved children wouldn't change, either. it wouldn't be _saved_
+  but it would be communicated ephemerally. these things are local-to-their-device, so if i mount a
+  microcontroller DEVICE and i run a process on it, it would be running on that device. the
+  microcontroller in a box. if the microcontroller _isn't_ in a box, a process might fall over its
+  root and run locally on my machine". which device runs it, *decided* 10-14: "with
+  processes&loaders it'll be whichever device the closest valid loader is on"
+- how it feels, *decided* 10-14: ""is placed as a child of /work" might not be exactly correct, but
+  it needs to _feel_ like that". on keying it by folder id: "actually no, that doesn't work. because the
+  process is not running at a folder id it's running at a _path_ so something slightly different is
+  needed. what i wonder is if there's a missing piece like a paths table, that places uses,
+  contributes to, maybe provides and then other things can also contribute to it" (*thought*). the checks, *decided* ("right exactly"): get(/work/clock) finds it and
+  ./on/reset under it; list(/work) shows clock beside the saved names, rerunning when it starts or
+  stops; lookup from inside /work finds it by its bare name; the inspector draws it under /work; on
+  another device the same, while the ephemeral channel says it's there; /work's saved children never
+  change. (attach, built and taken out 10-14, passed all but the other device.) open: the mechanism,
+  and where it lives
+- names and entries, *thought* 10-14: "having a thing refered to as `source` and `part` and `table` in
+  different places is confusing probably btw"; "i wonder if change should actually be a table rather
+  than a property on the entry. and maybe there shouldn't be an entry type just a raw value, maybe"
+- naming layers, *thought* 10-14: "the `.value.value` is a real shame lol maybe the entry's .value
+  should be renamed to .current"; "maybe we should rename all the scheduler's functions to something
+  nicer, maybe a camelcase api is better. maybe all the lower layers should have a nice camelcase api
+  and we can save the cowboy api for what we pass to processes". on my merged table (shift + ours): "`within` is neat,
+  getScope, defer, createComputer yes let's go lol, createEffect, track, mark, pulse is so
+  evocative"; root stays apart: "we'll keep create root but we'll call it createRootScope or
+  something createOuterScope or something"; places' getWriter wants another name; Run/Iteration/
+  Writer "not great words for helping a user know it was one time a program ran"; hooks: "i wonder
+  about actually making the hook interface be like shift's, wrapping and taking next... that is cool
+  for an extensible scheduler but maybe not for readability speed or just getting told something is
+  happening". hooks: being told, not middleware (chee: "okay, being told"). getWriter → getWho, done
+  ("though i think "Who" is also wrong"). one time a computer ran: Run, *decided* ("let's call the
+  thing `Run` even though i feel weird"). the root scope's name open (createOuterScope?
+  createSystemScope? createInitialScope?, "i'd imagine once"); "`endScope` hmm. maybe we want a
+  relationship between `defer` and `dispose`"; then "createSystemScope or createRootScope are the
+  best. createScope/destroyScope?" (lean; "the process api doesnt exist yet", so it's no
+  constraint). root: createRootScope, *decided*. *thought*: "i feel like "ending" isnt the right
+  concept it's more like closing, shutting. like i feel like scopes are opened and closed". then
+  "maybe it's createScope, openScope (instead of within) and closeScope(?"; then "`withinScope` or
+  `within` are better. maybe `shutScope` or somethingggg" (thinking). then, after the table of languages'
+  scope words: "createScope, withinScope, afterScope, disposeScope". then: "createScope(info, parent),
+  createRootScope, within(scope, fn), registerTeardown(scope, fn), teardown(scope)"; then
+  "runWithScope(scope, fn) getCurrentScope yeah do the rename pass. the process api will provide a
+  nicer thing for it". DONE 10-14 (TS; C and slaygrounds by agents): createRootScope, createScope,
+  runWithScope, getCurrentScope, getInfo, getRun, registerTeardown, teardown, createComputer,
+  createEffect(f, effect), track, mark, pulse; onTrack, onMark, onRunStart, onRunEnd, onEffect
+  (chee: "make the second arg effect, and onEffect then"), onSettle,
+  onUntrack (being told, each gives back its remove); types Computer, Run {computer, n}, Ended,
+  More; Moment gone (trace.ts rebuilds the old list for harnesses, tests, inspectors); tick() gone
+  (onMark carries it); the wire is unchanged. not
+  renamed yet
+- slashes in names, *thought* 10-14: "names not being able to include slashes is so annoying, and not
+  being able to compare/treat/input a path as a string is _also_ annoying"; "if it's going to be a
+  separator nobody types it should not look like a slash"; on a raw form underneath (0x1C between
+  names) with "/" splitting on input: "the "out" part... idk, i think that's the wrong way to go..
+  but the rest is good, basically if the normal api was always a slash is a separator... or maybe
+  putting a slash in a name makes it automatically create subnodes, lol"
+- patch streams, *decided* 10-14 (a requirement): "we do need to be able to connect a node to another
+  node by a patch rewriting stream, this is a huge blocking requirement" ("okay maybe i'm wrong about
+  where they need to be"). today patches stop at places (markChanged → paths.mark → spots); the
+  scheduler sees keys only. they pass through the graph, nothing kept, *decided*: on a log per entry with
+  a version, "no, i don't think so. this is why they were passing through the graph"; readOps(part,
+  id, since): "no". a slow rewrite, *decided*-ish: "a slow rewrite might be an async generator
+  function that takes a patch and yields a patch". the process-API sketch (mine): open(path) handle;
+  pipe(x, transformer) and cambria(a, b, rewrite) as subprocesses (child scopes with nodes under the
+  process's); edit(handle, patch); watch(handle, fn)
+- places' write path, 10-14: markChanged "feels like a bad name"; "maybe it is `commit` or maybe it's
+  `processEntries` as a generator or something that the other thing would also use"; "maybe we do
+  `each`... i like the idea of a generator here for this"; *decided*: "i'd like to export the
+  generator as well, the one we hand on to processes can be a filtered version of it"; "it would be
+  nice to be able to for of and/or for await of on the thing you get from watch()". mine: hooks that
+  must act in the same tick stay callbacks; async iteration only at the edges (each consumer its own
+  buffer). then, worried about a buffer ("maybe we shouldnt for/of? ... im worried about
+  introducing this buffer"), and since iteration builds on callbacks but not the other way:
+  *decided* "okay so we do callbacks": watch(path, fn) called at the write; iteration, if ever, a
+  library with its own buffer. built 10-14 in places (TS): markChanged → commit (chee: "commit"),
+  eachEntryChange (chee: "`eachEntryChange` i guess, horrible but clear?"; exported, a generator),
+  watchPath(path, fn, {part?, at?}) (chee: "watchPath"), a table swap told as a root patch. mine:
+  watches told after the scheduler's mark; a watch finds its path untracked as each fact lands
+- a sent process name, *lean* 10-14: "a sent name, i think, is keyed as path from the device the
+  process is running on. like if i share "/work" with someone and i'm running a process in "work" idk
+  if they see it, you'd see it if you mounted my whole "/" on your computer though" (open: whether
+  sharing a folder shows the processes in it); on my "a second rule mapping a device's path to a shared folder": "not
+  necesarily, we may create other ways to share ephemeral information at a path. in fact, we must.
+  for cursors and dragging" (*decided*: ephemeral sharing at a path, for presence). the structure, *decided* 10-14: rows in a part on the anchor's node, nested by
+  the path inside it, one row per device; the part is "process", not a general "ephemeral": "i think
+  maybe it should be `table.get("process"` because we don't know that all ephemeral nodes are the
+  same, so probably unwise to overgeneralize and we can come back to it". mine: a row {node, until},
+  written as patches (so tracked, watched, drawn), swept past until, never saved, sent on the
+  ephemeral channel. and for presence, *lean*: "but, i really do like this: table.get("ephemeral",
+  workFolder).value = { plan: { "juno-pad": { value: { cursor: [12, 40] }, until: … } } }
+  especially with a get-or-set upsert type thing". one "ephemeral" part vs process/presence/overlay: they differ in what reads do
+  with them (walk names / nothing / replace the value), the anchor, the lifetime and who may write;
+  sending, expiry and upsert can be one library over any part. chee: "right and i guess the thing is
+  is that something might be permanent on their side and ephemeral on mine" (being saved is a
+  side's choice, not a kind of thing)
+- pack and parts, *thought, for later* 10-14: "should the pack code actually be running on a
+  places-style representation of the tree, and picking only the tables it knows it should? or should
+  it pack _all_ tables? should tables have a bit of metadata that tells you whether or not they
+  should be packed? should tables have ids and exist in the graph in some way?" facts: pack picks
+  nothing (the caller's triples); reachability alone fails once never-saved parts (process) sit on
+  saved nodes; a per-part save flag fits "saving is a side's choice"; parts as nodes
+  (/system/tables/<part>, attributes {save, send}) would hold it, plus protect rules and shapes; value,
+  attributes and children need built-in defaults. chee: "note that down to think about later"
+- starting, *thought* 10-14: on "whether placing starts a process": "it's possible this question is no
+  longer valid, processes would have their own `start` and `stop`/`exit`"
+- a generic ephemeral channel, *thought* 10-14: "i wonder if we need to build a generic
+  ephemeral-channel thing that subduction or iroh or pigeons could plug". mine: send(topic, bytes),
+  on(topic, (from, bytes)), "gone" from the rows themselves (an expiry the owner renews), since
+  transports differ in knowing a peer left. chee: ""gone" works with pigeons if the heartbeat is
+  long"
+- order, *decided* 10-14: "going through the host.ts files and NEEDS files should come before the
+  process APIs verbs"
 
 * Saving and syncing
 - what's kept, sent, and sent ephemerally, *decided*, how *open*: "something that's a coordination

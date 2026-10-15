@@ -6,8 +6,14 @@ export class Cause<T> {
 	constructor(readonly of: T, readonly parents: readonly Cause<T>[]) {}
 }
 
-// kept: the causes of the marks since its last run that ended done
-export type Caused<T> = { n: number; kept: Set<Cause<T>> }
+// kept: the causes of the marks since its last run that ended done. ranIn: the pulse it last ran
+// in; heldIn: the pulse it last kept a cause in (causes' own, by number)
+export type Caused<T> = {
+	n: number
+	kept: Cause<T>[]
+	ranIn: number
+	heldIn: number
+}
 
 export function createCauses<T extends Caused<T>>(): {
 	run: (t: T, given: readonly Cause<T>[]) => Cause<T>
@@ -16,29 +22,32 @@ export function createCauses<T extends Caused<T>>(): {
 	from: (t: T, c: T) => boolean
 	end: () => void
 } {
-	// the computations that ran in this pulse
-	const ran = new Set<T>()
+	// this pulse's number: a computation ran in it when its ranIn is this
+	let pulse = 1
 	// the computations holding causes, forgotten at the pulse's end
-	const holding = new Set<T>()
+	const holding: T[] = []
 
 	return {
 		// a run of t, caused by what caused each mark it was given
 		run(t: T, given: readonly Cause<T>[]): Cause<T> {
-			ran.add(t)
+			t.ranIn = pulse
 			return new Cause(t, given)
 		},
 
-		// a mark's causes, kept on t until the pulse's end
+		// a mark's causes, kept on t until the pulse's end. the same cause again at once: once
 		keep(t: T, c: Cause<T>) {
-			t.kept.add(c)
-			holding.add(t)
+			if (t.kept[t.kept.length - 1] === c) return
+			t.kept.push(c)
+			if (t.heldIn === pulse) return
+			t.heldIn = pulse
+			holding.push(t)
 		},
 
 		// a loop through t: c came out of a run of t in this pulse. answers the computations on the
 		// loop, in the order made: those of the causes on a path from c back to a run of t. or
 		// nothing
 		loop(c: Cause<T> | undefined, t: T): T[] | undefined {
-			if (!c || !ran.has(t)) return
+			if (!c || t.ranIn !== pulse) return
 			// each cause after its parents (causes only point back, so no cycle): on a path back
 			// to a run of t when it is of t, or a parent is
 			const on = new Set<Cause<T>>()
@@ -61,7 +70,7 @@ export function createCauses<T extends Caused<T>>(): {
 
 		// a mark kept on t came out of a run of c in this pulse
 		from(t: T, c: T): boolean {
-			if (!ran.has(c)) return false
+			if (c.ranIn !== pulse) return false
 			const seen = new Set<Cause<T>>()
 			const stack = [...t.kept]
 			while (stack.length) {
@@ -76,9 +85,9 @@ export function createCauses<T extends Caused<T>>(): {
 
 		// the pulse's end: causes and runs forgotten
 		end() {
-			for (const t of holding) t.kept.clear()
-			holding.clear()
-			ran.clear()
+			for (const t of holding) t.kept.length = 0
+			holding.length = 0
+			pulse++
 		},
 	}
 }

@@ -11,7 +11,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { assertEquals } from "@std/assert"
 import { type Answer, ask, type Commit, type Fragment, idOf, make, type Request } from "./oracle.ts"
 
-const out = new URL("../../extensions/subduction/conformance/fragment/", import.meta.url)
+const out = new URL("../suites-aside/sync/subduction/conformance/fragment/", import.meta.url)
 
 // a commit's id: BLAKE3 of its name, cut to its depth
 const ids = new Map<string, string>()

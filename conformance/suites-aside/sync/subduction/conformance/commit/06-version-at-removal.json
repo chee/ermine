@@ -130,8 +130,7 @@
 					},
 					"change": {
 						"actor": "a",
-						"time": 1020,
-						"node": "n"
+						"time": 1020
 					},
 					"because": {
 						"layer": "sync",
@@ -147,8 +146,7 @@
 				{
 					"change": {
 						"actor": "a",
-						"time": 1019,
-						"node": "n"
+						"time": 1019
 					},
 					"because": {
 						"layer": "sync",
@@ -283,8 +281,7 @@
 					},
 					"change": {
 						"actor": "me",
-						"time": 1021,
-						"node": "n"
+						"time": 1021
 					},
 					"because": {
 						"layer": "sync",
@@ -303,8 +300,7 @@
 					},
 					"change": {
 						"actor": "a",
-						"time": 1020,
-						"node": "n"
+						"time": 1020
 					},
 					"because": {
 						"layer": "sync",

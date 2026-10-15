@@ -7,7 +7,7 @@ import { run } from "../apply/run.ts"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env --allow-read ${here}harness.ts`
 await run(
-	`${here}../../extensions/subduction/conformance/commit`,
+	`${here}../suites-aside/sync/subduction/conformance/commit`,
 	(Deno.env.get("COMMIT_HARNESS") ?? reference).split(" "),
 	new Set((Deno.env.get("COMMIT_SKIP") ?? "").split(",").filter((x) => x)),
 )

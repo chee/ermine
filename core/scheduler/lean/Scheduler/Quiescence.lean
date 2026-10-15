@@ -2,8 +2,10 @@
 -- theorems on the model (Model.lean). proof.md is the guide; its §13 says what changed.
 --
 -- the states: Reach, what the host (make, write, changed from outside) and pulses (begin, step,
--- close) reach from empty. the invariant: Good (Core: order, runs, reads; then acts and lasts),
--- kept by every transition (Reach.good). proved, for every reachable state:
+-- close) reach from empty; Wide, Reach with the host's writes and changes also named by a
+-- computation whose latest run is unflagged (Reach.wide). the invariant: Good (Core: order, runs,
+-- reads, and no latest run holding a given: finish gives it back; then acts and lasts), kept by
+-- every transition (Wide.good). proved, for every state Wide reaches:
 -- - lemma_n: after-chains have no cycle; only a due computation waits after one
 -- - next_total: something due, next answers one; next_below: one of no greater rank (ranked)
 -- - fresh_reads (Lemma F): not due, its latest run done, failed or pending: every key it read still
@@ -22,9 +24,11 @@
 -- - A2 cs: no f writes in its run (nowrites). every theorem but act_skip and act_last; cutoff and
 --   acts_iff need it of the one computation only. Lemma N should not need it (writes in runs do not
 --   touch afters), but its proof goes through the same invariant
--- - the host's changes name no computation: Reach's write and changed are from outside. a change
---   named by a computation whose latest run was flagged is cut as that run's loop, and Theorem 2
---   fails (Model.Check, the last scenario; the TS does the same)
+-- - a change the host names is by a computation whose latest run is unflagged (Wide). a run's flag
+--   ends with it unless it ended pending (L1), so that is any but one whose latest run ended
+--   pending while flagged: naming such a one, its own mark is cut as that run's loop, and its
+--   pending run may hold stale reads, (c) failing (Model.Check, hostcut; the TS the same).
+--   Async.lean, whose invariant knows cuts, allows any between pulses, (c) asking the loop not cut
 -- - next_below: the rank is ranked over the current edges (Basic.lean; Rank.lean)
 -- - nothing of equal: near is "the same, or equal said so"; no A4
 -- - A8 (sync) and the rest of Model.lean's departures, by construction
@@ -635,6 +639,8 @@ structure Core (cs : Nat → Comp K V) (s : State K V) : Prop where
   looping : ∀ c, s.looping c = true → s.due c = none ∧ ∃ r, s.ran c = some r ∧
     r.ended = some .looping
   pending : ∀ c r, s.ran c = some r → r.ended = some .pending → r.out = some .pending
+  -- a run's end gives back what it was given (finish): no latest run holds a given
+  given : ∀ c r, s.ran c = some r → r.given = []
 
 -- and of the acts and lasts
 structure Good (cs : Nat → Comp K V) (s : State K V) : Prop extends Core cs s where
@@ -695,6 +701,7 @@ theorem Core.moves {cs : Nat → Comp K V} {s s' : State K V} (g : Core cs s) (m
     obtain ⟨h2, r, h3, h4⟩ := g.looping c h1
     exact ⟨e.trans h2, r, m.ran ▸ h3, h4⟩
   pending c r h := g.pending c r (m.ran ▸ h)
+  given c r h := g.given c r (m.ran ▸ h)
 
 theorem Good.moves {cs : Nat → Comp K V} {s s' : State K V} (g : Good cs s) (m : Moves s s') :
     Good cs s' where
@@ -738,6 +745,7 @@ theorem Good.empty (cs : Nat → Comp K V) : Good cs (empty : State K V) where
   fresh c r h := by simp [Model.empty] at h
   looping c h := by simp [Model.empty] at h
   pending c r h := by simp [Model.empty] at h
+  given c r h := by simp [Model.empty] at h
   acts e v h := by simp [Model.empty] at h
   computes c r _ h := by simp [Model.empty] at h
   effects e r _ h := by simp [Model.empty] at h
@@ -749,9 +757,11 @@ theorem Good.begin {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) : Goo
 theorem Good.close {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) : Good cs (close s) :=
   g.moves (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl)
 
-theorem Good.tell {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) (keys : List K) :
-    Good cs (changed cs s keys none) :=
-  g.moves (changed_moves cs s keys none (by simp)).1
+-- a change said by an unflagged run (or from outside)
+theorem Good.tell {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) (keys : List K)
+    (who : Option Nat) (hw : ∀ c, who = some c → ((s.ran c).bind (·.loop)) = none) :
+    Good cs (changed cs s keys who) :=
+  g.moves (changed_moves cs s keys who hw).1
 
 theorem stores_shape (s : State K V) :
     ∀ (kvs : List (K × V)), ∃ st, kvs.foldl (fun s kv => store s kv.1 kv.2) s = { s with store := st } ∧
@@ -768,18 +778,24 @@ theorem stores_shape (s : State K V) :
       · simp [store, put_ne _ _ hkv] at hk
     · exact List.mem_cons_of_mem _ (h2 k e)
 
-theorem Good.write {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) (kvs : List (K × V)) :
-    Good cs (write cs s kvs) := by
+-- the keys written, then said changed by an unflagged run (or from outside)
+theorem Good.told {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) (kvs : List (K × V))
+    (who : Option Nat) (hw : ∀ c, who = some c → ((s.ran c).bind (·.loop)) = none) :
+    Good cs (changed cs (kvs.foldl (fun s kv => store s kv.1 kv.2) s) (kvs.map (·.1)) who) := by
   obtain ⟨st, h1, h2⟩ := stores_shape s kvs
-  simp only [Model.write, h1]
-  obtain ⟨m, h⟩ := changed_moves cs { s with store := st } (kvs.map (·.1)) none (by simp)
+  rw [h1]
+  obtain ⟨m, h⟩ := changed_moves cs { s with store := st } (kvs.map (·.1)) who hw
   refine g.moves ⟨m.made, m.reads, m.ran, m.after, m.acts, m.last, m.due, m.fresh, m.looping,
     m.writers, ?_⟩
   intro k hk d hd hr
-  by_cases e : (changed cs { s with store := st } (kvs.map (·.1)) none).store k = st k
+  by_cases e : (changed cs { s with store := st } (kvs.map (·.1)) who).store k = st k
   · rw [e] at hk
     exact h k (h2 k hk) d hd hr
   · exact m.store k e d hd hr
+
+theorem Good.write {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) (kvs : List (K × V)) :
+    Good cs (write cs s kvs) :=
+  g.told kvs none (by simp)
 
 theorem Good.make {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) : Good cs (make cs s) := by
   simp only [Model.make]
@@ -812,6 +828,7 @@ theorem Good.make {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) : Good
           obtain ⟨h1, r, h2, h3⟩ := g.looping c (e7 ▸ h)
           exact ⟨e5 ▸ h1, r, e6 ▸ h2, h3⟩
         pending := fun c r h => g.pending c r (e6 ▸ h)
+        given := fun c r h => g.given c r (e6 ▸ h)
         acts := fun e v h => by
           obtain ⟨h1, r, h2⟩ := g.acts e v (e8 ▸ h)
           exact ⟨h1, r, e6 ▸ h2⟩
@@ -836,7 +853,7 @@ theorem Good.make {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) : Good
 -- the core does not read acts, lasts or the log
 theorem Core.with {cs : Nat → Comp K V} {s : State K V} (g : Core cs s) (a : List (Nat × V))
     (l : Nat → Option V) (lg : List (Entry V)) : Core cs { s with acts := a, last := l, log := lg } :=
-  ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9, g.10⟩
+  ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9, g.10, g.11⟩
 
 -- an act: its effect not due, it acts on its run's value; due, it is skipped
 theorem Good.act {cs : Nat → Comp K V} {s : State K V} (g : Good cs s) {e : Nat} {v : V}
@@ -975,6 +992,7 @@ structure Post (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (F : State K
   follows : rf.ended ≠ some .stopped → ∃ o, rf.out = some o ∧ follow (cs c).f rf.seen = some o
   fresh_c : F.due c = none → settled rf → ∀ q ∈ rf.seen, F.store q.1 = q.2
   pending : rf.ended = some .pending → rf.out = some .pending
+  given : rf.given = []
   acts : ∀ e v, (e, v) ∈ F.acts → (e ≠ c ∧ (e, v) ∈ s.acts) ∨
     (e = c ∧ iseffect (cs c) = true ∧ rf.loop = none ∧ rf.ended = some .done ∧
       rf.out = some (.value v))
@@ -1094,6 +1112,10 @@ theorem Good.post {cs : Nat → Comp K V} {s F : State K V} {c rk : Nat} {rf : R
       by_cases hd : d = c
       · subst hd; rw [p.ran_c] at h; cases h; exact p.pending hp
       · exact g.pending d r (p.ran d hd ▸ h) hp
+    given := fun d r h => by
+      by_cases hd : d = c
+      · subst hd; rw [p.ran_c] at h; cases h; exact p.given
+      · exact g.given d r (p.ran d hd ▸ h)
     acts := fun e v h => by
       rcases p.acts e v h with ⟨h1, h2⟩ | ⟨h1, h2, h3⟩
       · obtain ⟨h3, r, h4⟩ := g.acts e v h2
@@ -1119,26 +1141,54 @@ theorem Good.post {cs : Nat → Comp K V} {s F : State K V} {c rk : Nat} {rf : R
       · subst hd; rw [p.ran_c] at h; cases h; exact p.failed hf
       · exact (p.last d hd).symm ▸ g.failed d r (p.ran d hd ▸ h) hf }
 
+-- finish, but for a failure of a flagged run that cut a loop (fails): it ends as said, its flag
+-- gone unless pending
 theorem finish_eq (s : State K V) (c : Nat) (r : Run K V) (h : s.ran c = some r) (e : Ended)
-    (eq : Option Bool) (w : Option Nat) (th : Option (List Nat)) :
+    (eq : Option Bool) (w : Option Nat) (th : Option (List Nat))
+    (hf : fails s c r e = false := by simp [fails]) :
     finish s c e eq w th = { s with
-      kept := if e = .done then
-          put s.kept c ((s.kept c).filter fun k => !(r.given.any fun g => g.of == k.of))
-        else s.kept,
+      kept := if e = .done then s.kept else put s.kept c (r.given ++ s.kept c),
       looping := if e = .looping then put s.looping c true else s.looping,
       values := if e ≠ .stopped then put s.values c r.values else s.values,
-      ran := put s.ran c (some { r with ended := some e }),
+      ran := put s.ran c (some { r with
+        ended := some e, given := [], loop := if e = .pending then r.loop else none }),
       log := s.log ++ [⟨s.pulses, s.round, .ends c r.n e eq w th⟩] } := by
-  cases e <;> simp [finish, h, say]
+  cases e <;> simp [finish, h, say, hf]
+
+-- such a failure ends looping, through its loop
+theorem finish_fails (s : State K V) (c : Nat) (r : Run K V) (h : s.ran c = some r) (e : Ended)
+    (eq : Option Bool) (w : Option Nat) (th : Option (List Nat)) (hf : fails s c r e = true) :
+    finish s c e eq w th = finish s c .looping eq w r.loop := by
+  have h2 : fails s c r .looping = false := by simp [fails]
+  simp only [finish, h, hf, h2, ite_true]
+  rfl
+
+-- finish, either way: as said, or looping
+theorem finish_any (s : State K V) (c : Nat) (r : Run K V) (h : s.ran c = some r) (e : Ended)
+    (eq : Option Bool) (w : Option Nat) (th : Option (List Nat)) :
+    ∃ e' th', (e' = e ∧ fails s c r e = false ∨ e = .failed ∧ e' = .looping) ∧
+      finish s c e eq w th = { s with
+      kept := if e' = .done then s.kept else put s.kept c (r.given ++ s.kept c),
+      looping := if e' = .looping then put s.looping c true else s.looping,
+      values := if e' ≠ .stopped then put s.values c r.values else s.values,
+      ran := put s.ran c (some { r with
+        ended := some e', given := [], loop := if e' = .pending then r.loop else none }),
+      log := s.log ++ [⟨s.pulses, s.round, .ends c r.n e' eq w th'⟩] } := by
+  cases hf : fails s c r e
+  · exact ⟨e, th, Or.inl ⟨rfl, rfl⟩, finish_eq s c r h e eq w th hf⟩
+  · rw [finish_fails s c r h e eq w th hf]
+    have he : e = .failed := by cases e <;> simp_all [fails]
+    exact ⟨.looping, r.loop, Or.inr ⟨he, rfl⟩, finish_eq s c r h .looping eq w r.loop⟩
 
 theorem stop_eq (s : State K V) (c : Nat) (r : Run K V) (h : s.ran c = some r)
     (hd : s.due c = none) :
     stop s c =
       { s with
         loop := put s.loop c r.loop, after := put s.after c r.stopped,
-        due := put s.due c (some r.mark), ran := put s.ran c (some { r with ended := some .stopped }),
+        due := put s.due c (some r.mark), kept := put s.kept c (r.given ++ s.kept c),
+        ran := put s.ran c (some { r with ended := some .stopped, given := [], loop := none }),
         log := s.log ++ [⟨s.pulses, s.round, .ends c r.n .stopped none r.stopped none⟩] } := by
-  simp [stop, h, hd, finish, say]
+  simp [stop, h, hd, finish, say, fails]
 
 theorem say_moves (s : State K V) (e : Event V) : Moves s (say s e) :=
   Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl
@@ -1171,7 +1221,8 @@ theorem post_plain {cs : Nat → Comp K V} {s F : State K V} {c rk : Nat} {rf : 
       ∃ v, rf.out = some (.value v) ∧
         (near (cs c).equal v (F.last c) ∨ (c, v) ∈ F.acts ∨ (F.due c).isSome))
     (hfail : rf.ended = some .failed →
-      rf.out = some .error ∨ ∃ v, rf.out = some (.value v) ∧ same (cs c).equal v (F.last c) = none) :
+      rf.out = some .error ∨ ∃ v, rf.out = some (.value v) ∧ same (cs c).equal v (F.last c) = none)
+    (hgiven : rf.given = [] := by rfl) :
     Post cs s c rk F rf where
   made := hm
   ran_c := by rw [hr]; simp
@@ -1192,6 +1243,7 @@ theorem post_plain {cs : Nat → Comp K V} {s F : State K V} {c rk : Nat} {rf : 
   follows := hfol
   fresh_c _ _ q hq := by rw [hst]; exact hseen q hq
   pending := hpend
+  given := hgiven
   acts e v h := by
     rw [hacts] at h
     rcases List.mem_append.1 h with h | h
@@ -1232,7 +1284,8 @@ theorem Good.first {cs : Nat → Comp K V} {s : State K V} (g : Good cs s)
     simp only [begun, Option.isSome_some, ite_true]
     obtain ⟨h1, h2, h3, k, h4⟩ := hstop w rfl
     rw [stop_eq s3 c _ hr3 hd3]
-    exact g.post hc (rk := rk) (rf := { begun s c vals (some w) seen with ended := some .stopped }) {
+    exact g.post hc (rk := rk)
+      (rf := { begun s c vals (some w) seen with ended := some .stopped, given := [], loop := none }) {
       made := by simp [e_made, begun]
       ran_c := by simp
       ran := fun d hd => by simp [e_ran, put_ne _ _ hd, begun]
@@ -1253,6 +1306,7 @@ theorem Good.first {cs : Nat → Comp K V} {s : State K V} (g : Good cs s)
       follows := fun h => absurd rfl h
       fresh_c := fun h => by simp [begun] at h
       pending := fun h => by simp [begun] at h
+      given := rfl
       acts := fun e v h => by
         simp only [e_acts, List.mem_filter, decide_eq_true_eq] at h
         exact Or.inl ⟨h.2, h.1⟩
@@ -1280,10 +1334,11 @@ theorem Good.first {cs : Nat → Comp K V} {s : State K V} (g : Good cs s)
         Good cs F := by
       intro e eq th X F hF hne hpe hX hcomp heff hfail
       rw [finish_eq ({ (edit s3 c fun r => { r with out := some o }) with acts := s3.acts ++ X })
-        c _ (by simpa using hr4)] at hF
+        c _ (by simpa using hr4) e eq none th (by simp [fails, edit, e_cut])] at hF
       subst hF
       refine g.post hc (post_plain (rk := rk)
-          (rf := { begun s c vals none seen with out := some o, ended := some e })
+          (rf := { begun s c vals none seen with
+            out := some o, ended := some e, given := [], loop := if e = .pending then s.loop c else none })
           (by simp [e_made, edit, begun]) (by simp [edit, e_ran, put_put, begun])
         (by simp [e_reads, begun, edit]) (by simp [e_after, edit, begun]) (by simp [e_due, edit, begun]) (by simp [e_store, edit, begun])
         (by simp [e_writers, edit, begun]) ?_ ?_ (by simp [e_last, edit, begun]) X (by simp [e_acts, edit, begun]) ?_ ?_ ?_ ?_ ?_ ?_ ?_)
@@ -1411,11 +1466,12 @@ theorem Good.first {cs : Nat → Comp K V} {s : State K V} (g : Good cs s)
               generalize hs5 : set cs s4 c v = s5 at m
               have hr5 : s5.ran c = some { begun s c vals none seen with out := some (.value v) } := by
                 rw [m.ran, f_ran]; simp
-              rw [finish_eq ({ s5 with last := put s5.last c (some v) }) c _ hr5]
+              rw [finish_eq ({ s5 with last := put s5.last c (some v) }) c _ hr5 _ _ _ _
+                (by simp [fails])]
               exact g.post hc (rk := rk)
-                (rf := { begun s c vals none seen with out := some (.value v), ended := some .done }) {
+                (rf := { begun s c vals none seen with out := some (.value v), ended := some .done, given := [] }) {
                 made := by simp [m.made, f_made]
-                ran_c := by simp
+                ran_c := by simp [begun, hln]
                 ran := fun d hd => by simp [m.ran, f_ran, put_ne _ _ hd]
                 reads := by simp [m.reads, f_reads, begun]
                 after := Or.inl (by simp [m.after, f_after])
@@ -1459,6 +1515,7 @@ theorem Good.first {cs : Nat → Comp K V} {s : State K V} (g : Good cs s)
                     · rw [hdue'] at h; cases h
                     · rw [f_looping, hlc] at h; cases h
                 pending := fun h => by simp at h
+                given := rfl
                 acts := fun e w h => by
                   have h' : (e, w) ∈ s4.acts := by rw [← m.acts]; simpa using h
                   rw [f_acts] at h'
@@ -1555,7 +1612,45 @@ theorem Reach.good {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
   | empty => exact Good.empty cs
   | make _ ih => exact ih.make
   | write kvs _ ih => exact ih.write kvs
-  | tell keys _ ih => exact ih.tell keys
+  | tell keys _ ih => exact ih.tell keys none (by simp)
+  | begin _ ih => exact ih.begin
+  | step _ h ih => exact ih.step hA h
+  | close _ _ ih => exact ih.close
+
+-- Reach, and the host's writes and changes named by a computation (a write in run(c), or
+-- mark(keys, c)) whose latest run is unflagged: with L1, any but one whose latest run ended pending
+-- while flagged. naming such a one, its own mark is cut, and Theorem 2 fails for it (Model.Check,
+-- hostcut; the TS the same). Theorem 2 below is stated over these
+inductive Wide (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) : State K V → Prop
+  | empty : Wide cs rank empty
+  | make {s} : Wide cs rank s → Wide cs rank (make cs s)
+  | write {s} (kvs : List (K × V)) (who : Option Nat) : Wide cs rank s →
+      (∀ c, who = some c → ((s.ran c).bind (·.loop)) = none) →
+      Wide cs rank (changed cs (kvs.foldl (fun s kv => store s kv.1 kv.2) s) (kvs.map (·.1)) who)
+  | tell {s} (keys : List K) (who : Option Nat) : Wide cs rank s →
+      (∀ c, who = some c → ((s.ran c).bind (·.loop)) = none) → Wide cs rank (changed cs s keys who)
+  | begin {s} : Wide cs rank s → Wide cs rank (begin s)
+  | step {s s'} : Wide cs rank s → step cs rank s = some s' → Wide cs rank s'
+  | close {s} : Wide cs rank s → step cs rank s = none → Wide cs rank (close s)
+
+theorem Reach.wide {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (h : Reach cs rank s) : Wide cs rank s := by
+  induction h with
+  | empty => exact .empty
+  | make _ ih => exact .make ih
+  | write kvs _ ih => exact .write kvs none ih (by simp)
+  | tell keys _ ih => exact .tell keys none ih (by simp)
+  | begin _ ih => exact .begin ih
+  | step _ h ih => exact .step ih h
+  | close _ h ih => exact .close ih h
+
+theorem Wide.good {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (hA : A2 cs) (h : Wide cs rank s) : Good cs s := by
+  induction h with
+  | empty => exact Good.empty cs
+  | make _ ih => exact ih.make
+  | write kvs who _ hw ih => exact ih.told kvs who hw
+  | tell keys who _ hw ih => exact ih.tell keys who hw
   | begin _ ih => exact ih.begin
   | step _ h ih => exact ih.step hA h
   | close _ _ ih => exact ih.close
@@ -1583,7 +1678,7 @@ theorem pulse_reach {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {
 
 -- after-chains are acyclic, and only a due computation waits after one (track's waitsAfter)
 theorem lemma_n {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) :
+    (hA : A2 cs) (h : Wide cs rank s) :
     (∀ x, ¬TransGen (aft s) x x) ∧ (∀ x w, s.after x = some w → (s.due x).isSome) :=
   ⟨(h.good hA).acyclic, fun x w hx => ((h.good hA).after_due x w hx).1⟩
 
@@ -1618,7 +1713,7 @@ theorem walk_ready {cs : Nat → Comp K V} {s : State K V} (g : Core cs s) (P : 
 
 -- next is total: something due, something is ready, and next answers one
 theorem next_total {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {p : Nat} (hp : (s.due p).isSome) :
+    (hA : A2 cs) (h : Wide cs rank s) {p : Nat} (hp : (s.due p).isSome) :
     (next rank s).isSome := by
   have g := (h.good hA).toCore
   obtain ⟨y, hy, hym, _⟩ := walk_ready g (fun _ => True) (fun _ _ _ _ => trivial) _ p hp
@@ -1628,7 +1723,7 @@ theorem next_total {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
 
 -- and below any due one there is a ready one of no greater rank, the rank ranked (Rank.lean)
 theorem next_below {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) (hr : ranked (fun p q => q ∈ edges s p) (rank s))
+    (hA : A2 cs) (h : Wide cs rank s) (hr : ranked (fun p q => q ∈ edges s p) (rank s))
     {p : Nat} (hp : (s.due p).isSome) :
     ∃ q, ready s q = true ∧ q < s.made ∧ rank s q ≤ rank s p := by
   have g := (h.good hA).toCore
@@ -1646,14 +1741,14 @@ theorem next_below {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
 -- Lemma F: a computation not due, whose latest run ended done, failed or pending: every key it
 -- read still holds what it read
 theorem fresh_reads {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
+    (hA : A2 cs) (h : Wide cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
     (hd : s.due c = none) (hs : settled r) : ∀ q ∈ r.seen, s.store q.1 = q.2 :=
   (h.good hA).fresh c r hr hd hs
 
 -- Theorem 2: such a computation's latest run is its run from scratch on the store now: the same
 -- outcome, the same reads, and its tracked keys are those reads
 theorem quiescence {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
+    (hA : A2 cs) (h : Wide cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
     (hd : s.due c = none) (hs : settled r) :
     ∃ o, r.out = some o ∧ eval s.store (cs c).f = (o, r.seen) ∧
       s.reads c = (eval s.store (cs c).f).2.map (·.1) := by
@@ -1667,7 +1762,7 @@ theorem quiescence {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
 
 -- (a) done, a compute: its last is its value from scratch on the store, or equal to it
 theorem quiescence_done {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {c : Nat} {r : Run K V} (hc : iseffect (cs c) = false)
+    (hA : A2 cs) (h : Wide cs rank s) {c : Nat} {r : Run K V} (hc : iseffect (cs c) = false)
     (hr : s.ran c = some r) (hd : s.due c = none) (hdone : r.ended = some .done) :
     ∃ v, (eval s.store (cs c).f).1 = .value v ∧ near (cs c).equal v (s.last c) ∧
       s.reads c = (eval s.store (cs c).f).2.map (·.1) := by
@@ -1678,7 +1773,7 @@ theorem quiescence_done {cs : Nat → Comp K V} {rank : State K V → Nat → Na
 
 -- (c) pending: pending from scratch too
 theorem quiescence_pending {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
+    (hA : A2 cs) (h : Wide cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
     (hd : s.due c = none) (hp : r.ended = some .pending) :
     (eval s.store (cs c).f).1 = .pending := by
   obtain ⟨o, ho, he, _⟩ := quiescence hA h hr hd (Or.inr (Or.inr hp))
@@ -1687,7 +1782,7 @@ theorem quiescence_pending {cs : Nat → Comp K V} {rank : State K V → Nat →
 
 -- (b) failed: from scratch, f throws too, or gives a value whose equal throws against the last
 theorem quiescence_failed {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
+    (hA : A2 cs) (h : Wide cs rank s) {c : Nat} {r : Run K V} (hr : s.ran c = some r)
     (hd : s.due c = none) (hf : r.ended = some .failed) :
     (eval s.store (cs c).f).1 = .error ∨
       ∃ v, (eval s.store (cs c).f).1 = .value v ∧ same (cs c).equal v (s.last c) = none := by
@@ -1700,7 +1795,7 @@ theorem quiescence_failed {cs : Nat → Comp K V} {rank : State K V → Nat → 
 -- when nothing is due (a round's run phase over, or a pulse's end): every compute done holds its
 -- value from scratch on the store, up to equal
 theorem quiescent {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) (hq : ∀ d, s.due d = none) :
+    (hA : A2 cs) (h : Wide cs rank s) (hq : ∀ d, s.due d = none) :
     ∀ c r, iseffect (cs c) = false → s.ran c = some r → r.ended = some .done →
       ∃ v, (eval s.store (cs c).f).1 = .value v ∧ near (cs c).equal v (s.last c) ∧
         s.reads c = (eval s.store (cs c).f).2.map (·.1) :=
@@ -1709,7 +1804,7 @@ theorem quiescent {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
 -- and when no act is left either (a pulse's end): every effect done has acted on its value from
 -- scratch on the store, or it is equal to the one it acted on
 theorem quiescent_effects {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) (hq : ∀ d, s.due d = none) (ha : s.acts = []) :
+    (hA : A2 cs) (h : Wide cs rank s) (hq : ∀ d, s.due d = none) (ha : s.acts = []) :
     ∀ e r, iseffect (cs e) = true → s.ran e = some r → r.ended = some .done →
       ∃ v, (eval s.store (cs e).f).1 = .value v ∧ near (cs e).equal v (s.last e) := by
   intro e r he hr hdone
@@ -1724,7 +1819,7 @@ theorem quiescent_effects {cs : Nat → Comp K V} {rank : State K V → Nat → 
 
 -- Theorem 3: an act is called with the effect's value from scratch on the store at the act
 theorem act_fresh {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {e : Nat} {v : V} {rest : List (Nat × V)}
+    (hA : A2 cs) (h : Wide cs rank s) {e : Nat} {v : V} {rest : List (Nat × V)}
     (ha : s.acts = (e, v) :: rest) (hd : s.due e = none) :
     (eval s.store (cs e).f).1 = .value v := by
   have g := h.good hA
@@ -1736,7 +1831,7 @@ theorem act_fresh {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
 -- the act step: when step takes that act, it calls act with that value, the store unchanged
 -- since, and the last acted on
 theorem step_acts {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) {e : Nat} {v : V} {rest : List (Nat × V)}
+    (hA : A2 cs) (h : Wide cs rank s) {e : Nat} {v : V} {rest : List (Nat × V)}
     (hph : s.phase = .acts) (ha : s.acts = (e, v) :: rest) (hd : s.due e = none)
     (hs : step cs rank s = some s') :
     s' = act cs { s with acts := rest } e v ∧ (eval s.store (cs e).f).1 = .value v := by
@@ -1773,12 +1868,12 @@ theorem cutoff (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrit
     | error =>
       simp only [ending, hr3, begun, Option.bind_some, Option.isSome_none, Bool.false_eq_true,
         ite_false] at hout
-      rw [finish_eq _ c _ (by simp [edit, hr3]; rfl)] at hout
+      rw [finish_eq _ c _ (by simp [edit, hr3]; rfl) _ _ _ _ (by simp [fails, edit, e_cut])] at hout
       simp at hout
     | pending =>
       simp only [ending, hr3, begun, Option.bind_some, Option.isSome_none, Bool.false_eq_true,
         ite_false] at hout
-      rw [finish_eq _ c _ (by simp [edit, hr3]; rfl)] at hout
+      rw [finish_eq _ c _ (by simp [edit, hr3]; rfl) _ _ _ _ (by simp [fails])] at hout
       simp at hout
     | value v' =>
       rw [ending_value hr3 rfl] at hout ⊢
@@ -1792,7 +1887,8 @@ theorem cutoff (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrit
           t.store = s.store → t.last = s.last → (∃ r, t.ran c = some r) →
           (finish t c e eq none th).store = s.store ∧ (finish t c e eq none th).last = s.last := by
         intro t e eq th h1 h2 ⟨r, h3⟩
-        rw [finish_eq t c r h3]; exact ⟨h1, h2⟩
+        obtain ⟨_, _, -, hfin⟩ := finish_any t c r h3 e eq none th
+        rw [hfin]; exact ⟨h1, h2⟩
       simp only [result] at hout ⊢
       rw [hl4] at hout ⊢
       cases hsm : same (cs c).equal v' (s.last c) with
@@ -1824,7 +1920,7 @@ theorem cutoff (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrit
                 | some _ => exact absurd (by simp [hr4, begun, h]) hlp
               have m := set_moves cs s4 c v' hfl
               rw [finish_eq _ c _ (show ({ set cs s4 c v' with last := _ } : State K V).ran c = _
-                from by rw [m.ran]; exact hr4)] at hout
+                from by rw [m.ran]; exact hr4) _ _ _ _ (by simp [fails])] at hout
               simp at hout
               subst hout
               rw [heq] at hsm; cases hsm
@@ -1851,12 +1947,12 @@ theorem acts_iff (cs : Nat → Comp K V) (s : State K V) (e rk : Nat) (hp : nowr
     | error =>
       simp only [ending, hr3, begun, Option.bind_some, Option.isSome_none, Bool.false_eq_true,
         ite_false] at hout
-      rw [finish_eq _ e _ (by simp [edit, hr3]; rfl)] at hout
+      rw [finish_eq _ e _ (by simp [edit, hr3]; rfl) _ _ _ _ (by simp [fails, edit, e_cut])] at hout
       simp at hout
     | pending =>
       simp only [ending, hr3, begun, Option.bind_some, Option.isSome_none, Bool.false_eq_true,
         ite_false] at hout
-      rw [finish_eq _ e _ (by simp [edit, hr3]; rfl)] at hout
+      rw [finish_eq _ e _ (by simp [edit, hr3]; rfl) _ _ _ _ (by simp [fails])] at hout
       simp at hout
     | value v' =>
       rw [ending_value hr3 rfl] at hout ⊢
@@ -1875,7 +1971,8 @@ theorem acts_iff (cs : Nat → Comp K V) (s : State K V) (e rk : Nat) (hp : nowr
           t.ran e = s4.ran e → ((finish t e e' eq none th).ran e).bind (·.out) = some (.value v) →
           v' = v := by
         intro t e' eq th h1 h2
-        rw [finish_eq t e _ (h1.trans hr4)] at h2
+        obtain ⟨_, _, -, hfin⟩ := finish_any t e _ (h1.trans hr4) e' eq none th
+        rw [hfin] at h2
         simp at h2; exact h2
       simp only [result, hl4, hfl, hk] at hout ⊢
       cases hsm : same (cs e).equal v' (s.last e) with
@@ -1883,7 +1980,7 @@ theorem acts_iff (cs : Nat → Comp K V) (s : State K V) (e rk : Nat) (hp : nowr
         simp only [hsm] at hout ⊢
         have := hvv s4 _ _ _ rfl hout
         subst this
-        rw [finish_eq s4 e _ hr4]
+        rw [finish_eq s4 e _ hr4 _ _ _ _ (by simp [fails, hl, hr4, begun])]
         simp [ha4, hnot, hsm]
       | some b =>
         simp only [hsm, Option.isSome_none, Bool.false_and, Bool.false_eq_true, ite_false]
@@ -1893,14 +1990,14 @@ theorem acts_iff (cs : Nat → Comp K V) (s : State K V) (e rk : Nat) (hp : nowr
           simp only [ite_true] at hout ⊢
           have := hvv s4 _ _ _ rfl hout
           subst this
-          rw [finish_eq s4 e _ hr4]
+          rw [finish_eq s4 e _ hr4 _ _ _ _ (by simp [fails])]
           simp [ha4, hnot, hsm]
         | false =>
           simp only [Bool.false_eq_true, ite_false] at hout ⊢
           have := hvv _ _ _ _ (by rfl) hout
           subst this
           rw [finish_eq _ e _ (show ({ s4 with acts := s4.acts ++ [(e, v')], last := s.last } :
-            State K V).ran e = _ from hr4)]
+            State K V).ran e = _ from hr4) _ _ _ _ (by simp [fails])]
           simp [hsm]
 
 -- the act: due again, skipped; else act called with (v, the last acted on), and v is the last

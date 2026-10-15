@@ -1,7 +1,7 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert"
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import { createTable, type Key } from "@ermine/graph/table"
+import { createTable, type Key } from "@ermine/table"
 import * as cbor from "./cbor.ts"
 import { decode, encode, type Entry, pack, PackError, unpack } from "./pack.ts"
 

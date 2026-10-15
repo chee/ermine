@@ -1,8 +1,9 @@
 -- LLM generated working output
 -- the scheduler's synchronous core (core/scheduler/typescript/scheduler.ts) as a deterministic step
--- function on a state. the host makes computations (make), writes keys (write) and says changed
--- (changed) between pulses; a pulse (pulse, with fuel) is begin, then step until step says it
--- ended, then close. a step is one run (first = start, exec, ending), one act, or a phase change.
+-- function on a state. the host makes computations (make), writes keys (write) and marks them
+-- (changed: scheduler.ts mark) between pulses; a pulse (pulse, with fuel) is begin, then step
+-- until step says it ended, then close. a step is one run (first = start, exec, ending), one act,
+-- or a phase change.
 -- the trace: `log`, every moment and every call of set and act, tagged with pulse and round;
 -- `observations`, `moments`, `started`, `completed` read it. Model.Check, at the end, runs
 -- conformance scenarios on it.
@@ -12,12 +13,12 @@
 -- - computations: a fixed list, given as a function from n (the order made) to what each is. one
 --   is live from its make (the host's, between pulses, in order of n) on
 -- - f: a read program, a decision tree: read a key and branch on what is there (none: nothing),
---   write in the run (says changed([k], the run)), or end with a value, an error or PENDING. a run
---   is then a function of what it read, by construction
+--   write in the run (mark([k], the run)), or end with a value, an error or PENDING. a run is then
+--   a function of what it read, by construction
 -- - equal: V → V → Option Bool, none for an equal that throws; `same` is helpers.ts's
--- - a compute's set: writes v at its key `to` (if any) and says changed([to], the compute), as the
---   harness wires it. `key`: make's key, its writer from the start
--- - an effect's act: the writes it makes, from (value, previous); each is said changed([k], effect)
+-- - a compute's set: writes v at its key `to` (if any) and marks it, mark([to], the compute), as
+--   the harness wires it. `key`: make's key, its writer from the start
+-- - an effect's act: the writes it makes, from (value, previous); each marked, mark([k], effect)
 -- - the tracker: each computation's read keys as a list (`reads`), its latest run's, or during a
 --   run the last run's and this one's so far (the tracker drops the stale links at the run's end)
 -- - causes: Basic.lean's Cause, of runs named (computation, run number). causes.ts's loop and from
@@ -31,10 +32,10 @@
 -- departures from scheduler.ts:
 -- - no scopes, cleanups, dispose, clean, run(), current (Scopes.lean): nothing is under a
 --   computation, no computation goes, and a computation's state is always alive
--- - no async (A8): no promises, landed, land, awaiting; a run's own read is never used after it
+-- - no async (A8): no promises, landed, land, awaiting; a run's Run is never used after it
 -- - make only by the host, in order of n; never in a run, set or act. `running` and the cut in
 --   make are then never used
--- - a run's own read is the computation (its latest run): the same in a synchronous run
+-- - a change by a run names its computation (its latest run): the same in a synchronous run
 -- - the tracker's readers are listed in the order made (n), not the order the links were made: the
 --   due moments of one change can come in another order. nothing else depends on that order
 -- - no sweep, forget, nodes; no hook (nothing throws from it, no endless cap)
@@ -44,7 +45,8 @@
 -- - causes are equal when their runs are (computation, run number): a run's cause is one object
 --   in a pulse (causeOf cuts an old one once per pulse), so this is identity there
 -- - a run's cause, the pulse it is of, and cut are kept per computation for its latest run
---   (`cause`, `when`, `cut`), not on the run: by names only latest runs, so the same
+--   (`cause`, `when`, `cut`), not on the run: only a latest run's change carries its cause
+--   (scheduler.ts due), and a cut is read only while its run is flagged, so the same
 -- - waitsAfter walks at most made + 1 afters, not until a repeat: the same while after-chains are
 --   acyclic (Quiescence.lean, Lemma N)
 -- - next answers none when nothing is ready (the code's `best!` would throw); with something due
@@ -55,6 +57,18 @@
 --   `reads`) are not in Event.ends; a run's record has them, the keys of `seen`
 -- - `wrote` is not kept (it is writers inverted); `holding` is all: every kept is cleared at a
 --   pulse's end; `acting` is the effect's entry in `acts`; `open` is async only
+-- - kept: a list. keep skips a cause whose run is the last kept's (causes.ts: the same object at
+--   once), so a cause may come again later. start takes c's kept as the run's given (first: given =
+--   c.kept, c.kept = []); finish puts it back in front unless done, and the run gives it up
+--   (finish: c.kept = r.given.concat(c.kept), r.given = none). a cause of the given kept again in
+--   the run stays after a done end (it was dropped before: a mark naming another computation in a
+--   run); here a change in a run names that run, so that cannot happen
+-- - a run's values: ins, append if absent (scheduler.ts: w.seen === r.id, run ids unique)
+-- - ranIn, heldIn (causes.ts's pulse numbers) are went and all: went is cleared at close
+-- - not modelled: listeners (arrays, replaced on add and remove), reads listed only while someone
+--   listens, a Run's inside under a symbol, readers walked in place
+-- - names: Model's mark is scheduler.ts's due, changed its mark(keys, by), learn its write; Run is
+--   its Ran (a run, inside); a computation is its Computer
 import Scheduler.Basic
 
 namespace Model
@@ -82,14 +96,14 @@ inductive Prog (K V : Type) where
   | pending
   -- reads k (tracked; may stop the run), then goes on with what is there
   | read (k : K) (next : Option V → Prog K V)
-  -- writes v at k and says changed([k], the run's own read)
+  -- writes v at k and marks it: mark([k], the run)
   | write (k : K) (v : V) (next : Prog K V)
 
 -- what a computation does with its result (scheduler.ts, set and act)
 inductive Kind (K V : Type) where
-  -- set: writes the result at `to` and says changed([to], the compute) (the harness's wiring)
+  -- set: writes the result at `to` and marks it, mark([to], the compute) (the harness's wiring)
   | compute (to : Option K)
-  -- act: the writes it makes, given (value, previous); each said changed([k], the effect)
+  -- act: the writes it makes, given (value, previous); each marked, mark([k], the effect)
   | effect (act : V → Option V → List (K × V))
 
 -- a computation, as made (scheduler.ts, make)
@@ -178,7 +192,8 @@ structure State (K V : Type) where
   -- order.ts due: the tick each became due at (its mark)
   due : Nat → Option Nat
   tick : Nat
-  -- c.kept: the causes of the marks since its last run that ended done
+  -- c.kept: the causes of the marks since its last run that ended done; never a run's given (start
+  -- takes it out, finish puts it back unless done)
   kept : Nat → List Why
   -- causes.ts ran: ran this pulse (or had its cause cut in it)
   went : Nat → Bool
@@ -272,9 +287,10 @@ def loopof (s : State K V) (k : Why) (t : Nat) : Option (List Nat) :=
 def came (s : State K V) (t c : Nat) : Bool :=
   s.went c && (s.kept t).any (on c)
 
--- causes.ts keep: a mark's cause kept on t (a set: one per run)
+-- causes.ts keep: a mark's cause kept on t. the same cause again at once: once
 def keep (s : State K V) (t : Nat) (k : Why) : State K V :=
-  if (s.kept t).any (fun x => x.of == k.of) then s else { s with kept := put s.kept t (s.kept t ++ [k]) }
+  if (s.kept t).getLast?.map (·.of) = some k.of then s
+  else { s with kept := put s.kept t (s.kept t ++ [k]) }
 
 -- scheduler.ts causeOf: c's latest run's cause; one from an earlier pulse is cut to the run alone,
 -- of this pulse (causes.run: it ran this pulse)
@@ -304,7 +320,7 @@ def settle (s : State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat)
     if s.looping d && l.isSome then s
     else due { s with looping := put s.looping d false } d t who
 
--- scheduler.ts mark: d marked at t, by the latest run of who (which has one), or from outside
+-- scheduler.ts due: d marked at t, by the latest run of who (which has one), or from outside
 def mark (s : State K V) (d t : Nat) (who : Option Nat) : State K V :=
   match who with
   | none => settle s d t none none false
@@ -317,7 +333,7 @@ def mark (s : State K V) (d t : Nat) (who : Option Nat) : State K V :=
 def readers (s : State K V) (k : K) : List Nat :=
   (List.range s.made).filter fun d => decide (k ∈ s.reads d)
 
--- who, if it names a computation with a run (scheduler.ts changed's r)
+-- who, if it names a computation with a run (scheduler.ts mark's r)
 def runof (s : State K V) (who : Option Nat) : Option Nat :=
   who.filter fun c => (s.ran c).isSome
 
@@ -326,11 +342,11 @@ def learn (s : State K V) (k : K) : Option Nat → State K V
   | some c => { s with writers := put s.writers k (some c) }
   | none => s
 
--- scheduler.ts changed's loop: what read k is marked at t, by the run r
+-- scheduler.ts mark's loop: what read k is marked at t, by the run r
 def tell (s : State K V) (k : K) (t : Nat) (r : Option Nat) : State K V :=
   (readers s k).foldl (fun s d => mark s d t r) s
 
--- scheduler.ts changed: these keys changed, said by who (its latest run), or from outside. a
+-- scheduler.ts mark(keys, by): these keys changed, by who (its latest run), or from outside. a
 -- compute named so becomes their writer; what read them is marked at the next tick
 def changed (cs : Nat → Comp K V) (s : State K V) (keys : List K) (who : Option Nat) :
     State K V :=
@@ -376,18 +392,25 @@ def exec (cs : Nat → Comp K V) (c : Nat) : State K V → Prog K V → State K 
 
 -- runs
 
--- scheduler.ts finish
+-- a failure of a flagged run that cut a loop: finish ends it looping, through its loop (L3)
+def fails (s : State K V) (c : Nat) (r : Run K V) (ended : Ended) : Bool :=
+  ended == .failed && r.loop.isSome && s.cut c
+
+-- scheduler.ts finish. the run's flag ends with it, unless it ended pending (it may land: L1)
 def finish (s : State K V) (c : Nat) (ended : Ended) (equal : Option Bool) (waits : Option Nat)
     (through : Option (List Nat)) : State K V :=
   match s.ran c with
   | none => s
   | some r =>
-    let s := if ended = .done then
-        { s with kept := put s.kept c ((s.kept c).filter fun k => !(r.given.any fun g => g.of == k.of)) }
-      else s
+    let through := if fails s c r ended then r.loop else through
+    let ended := if fails s c r ended then .looping else ended
+    -- not done: what it was given goes back in front of c's kept, and the run gives it up
+    let s := if ended ≠ .done then { s with kept := put s.kept c (r.given ++ s.kept c) } else s
     let s := if ended = .looping then { s with looping := put s.looping c true } else s
     let s := if ended ≠ .stopped then { s with values := put s.values c r.values } else s
-    let s := { s with ran := put s.ran c (some { r with ended := some ended }) }
+    let r' := { r with
+      ended := some ended, given := [], loop := if ended = .pending then r.loop else none }
+    let s := { s with ran := put s.ran c (some r') }
     say s (.ends c r.n ended equal waits through)
 
 -- scheduler.ts stop: due again at its old mark, waiting after its writer
@@ -431,13 +454,15 @@ def result (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V) : State K V
           let s := { s with last := put s.last c (some v) }
           finish s c .done (some e) none none
 
--- scheduler.ts first, up to f: not due, after nothing, a new run of c with the causes kept
+-- scheduler.ts first, up to f: not due, after nothing, a new run of c given the causes kept,
+-- taken out of c's kept
 def start (s : State K V) (c rank : Nat) : State K V :=
   let n := s.runs c + 1
   let g := s.kept c
   let r : Run K V := { n, mark := (s.due c).getD 0, given := g, loop := s.loop c }
   let s := { s with
     due := put s.due c none, after := put s.after c none, runs := put s.runs c n,
+    kept := put s.kept c [],
     went := put s.went c true, loop := put s.loop c none, ran := put s.ran c (some r),
     cause := put s.cause c (.mk (c, n) g), when := put s.when c s.pulses, cut := put s.cut c false,
     -- an effect acts on its latest run's value only
@@ -547,7 +572,7 @@ def make (cs : Nat → Comp K V) (s : State K V) : State K V :=
   let t := s.tick + 1
   mark { s with tick := t } c t none
 
--- the harness's write: each kept at its key, then changed(keys), from outside
+-- the harness's write: each kept at its key, then mark(keys), from outside
 def write (cs : Nat → Comp K V) (s : State K V) (kvs : List (K × V)) : State K V :=
   changed cs (kvs.foldl (fun s kv => store s kv.1 kv.2) s) (kvs.map (·.1)) none
 
@@ -715,16 +740,40 @@ def r3 := go inruns (go inruns r1)
 #guard (r1.store "kx", r1.store "ky") == (some (.num 3), some (.num 4))
 #guard moments r3 1 == [] && moments r3 2 == []
 
--- a change named by a computation whose latest run was flagged, from outside a pulse, is cut as
--- that run's loop: the computation is not due, and its last is not what it reads now. the same
--- in the TS (harness: run(c) writing c := 7). so Theorem 2 assumes the host's changes name none
+-- 53-loop-flag-ends: a run's flag ends with it (L1). a change the host names by c, after c's
+-- flagged run ended done, makes c due as a loop through it; its run, flagged, ends looping
 def flagged : Nat → Comp String J
-  | _ => cmp (.read "c" fun x => .value (x.getD (.num 1))) "c"
+  | _ => cmp (.read "c" fun x => if x = none then .value (.num 1)
+      else .read "c" fun y => .value (y.getD .null)) "c"
 def f1 := go flagged (make flagged empty)
 def f2 := changed flagged (store f1 "c" (.num 7)) ["c"] (some 0)
 def f3 := go flagged f2
-#guard ((f1.ran 0).bind (·.ended)) == some .done && ((f1.ran 0).bind (·.loop)).isSome
-#guard (f3.store "c", f3.last 0, f3.due 0) == (some (.num 7), some (.num 1), none)
-#guard moments f3 1 == []
+#guard moments f1 0 == [.due 0 1 none, .starts 0 1 0, .due 0 2 (some 0),
+  .ends 0 1 .done (some false) none none, .starts 0 2 0, .ends 0 2 .done (some true) none none]
+#guard ((f1.ran 0).bind (·.loop)) == none
+#guard moments f3 1 == [.due 0 3 (some 0), .starts 0 3 0,
+  .ends 0 3 .looping (some false) none (some [0])]
+#guard (f3.store "c", f3.due 0) == (some (.num 7), none)
+#guard moments (go flagged f3) 2 == []
+
+-- a change the host names by c while c's latest run is flagged and pending (a run ending pending
+-- keeps its flag): a loop mark, cut. c is not due, its pending run read c = 1, and f from scratch
+-- now gives 7. so Theorem 2 (Quiescence.lean, Wide) asks the computation the host names to have
+-- an unflagged latest run. the same in the TS (harness: f = if c = null then 1 else if c = 1 then
+-- pending else c; pulse; run(c) writing c := 7; pulse: no moment, c holds 7, run 2 pending)
+def hostcut : Nat → Comp String J
+  | _ => cmp (.read "c" fun x => if x = none then .value (.num 1)
+      else .read "c" fun y => if y = some (.num 1) then .pending
+      else .read "c" fun z => .value (z.getD .null)) "c"
+def u1 := go hostcut (make hostcut empty)
+def u2 := changed hostcut (store u1 "c" (.num 7)) ["c"] (some 0)
+def u3 := go hostcut u2
+#guard moments u1 0 == [.due 0 1 none, .starts 0 1 0, .due 0 2 (some 0),
+  .ends 0 1 .done (some false) none none, .starts 0 2 0, .ends 0 2 .pending none none none]
+#guard ((u1.ran 0).bind (·.loop)).isSome
+#guard moments u3 1 == [] && u3.due 0 == none && u3.cut 0
+#guard ((u3.ran 0).bind (·.ended), (u3.ran 0).map (·.seen), u3.store "c") ==
+  (some .pending, some [("c", some (.num 1)), ("c", some (.num 1))], some (.num 7))
+#guard (eval u3.store (hostcut 0).f).1 == .value (.num 7)
 
 end Model.Check

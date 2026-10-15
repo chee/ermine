@@ -13,14 +13,8 @@
 //     both lists of every link agree; a disposed computation holds no links
 // a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
-import {
-	type Computation,
-	createScheduler,
-	type Moment,
-	type Read,
-	type Scope,
-	type Writer,
-} from "./scheduler.ts"
+import { type Computer, createScheduler, type Run, type Scope } from "./scheduler.ts"
+import { type Told, trace } from "./trace.ts"
 import type { Link, Node } from "./tracker.ts"
 import { rand } from "../../fuzz/gen.ts"
 
@@ -71,7 +65,7 @@ type Made = {
 	name: string
 	kind: "compute" | "effect"
 	e: Expr
-	c: Computation
+	c: Computer
 	// its runs: the one going on or last, and the one before
 	run?: { tick: number; reads: Set<string>; ended?: string }
 	// an effect's: the value acted on last
@@ -117,22 +111,26 @@ function seeded(seed: number, reach: Reach) {
 	const r = rand(seed)
 	const label = (s: string) => `seed ${seed}, ${s}`
 	// each moment kept, and told to what the pulse checks
-	const moments: Moment[] = []
-	let told = (_: Moment) => {}
-	const s = createScheduler({ hook: (m) => (moments.push(m), told(m)) })
+	const moments: Told[] = []
+	let told = (_: Told) => {}
+	const s = createScheduler()
+	trace(s, (m) => (moments.push(m), told(m)))
+	// the tick of the latest mark
+	let tick = 0
+	s.onMark((_keys, _run, _due, t) => void (tick = t))
 	const store = new Map<string, number>()
 	// the tick each key was last said changed at
 	const changedAt = new Map<string, number>()
-	const changed = (keys: string[], by?: Computation) => {
-		const t = s.changed(keys, by)
+	const changed = (keys: string[], by?: Computer) => {
+		const t = s.mark(keys, by)
 		for (const k of keys) changedAt.set(k, t)
 	}
 	const problems: string[] = []
-	const root = s.root()
+	const root = s.createRootScope()
 	const scopes: Scope[] = [root]
-	for (let i = 0; i < 3; i++) scopes.push(s.scope([], r.one(scopes)))
+	for (let i = 0; i < 3; i++) scopes.push(s.createScope([], r.one(scopes)))
 	const made: Made[] = []
-	const byComputation = new Map<Computation, Made>()
+	const byComputation = new Map<Computer, Made>()
 	const alive = (m: Made) => m.c.state === "alive"
 
 	// what every compute and effect should come to: from scratch over the host's values; a
@@ -191,12 +189,12 @@ function seeded(seed: number, reach: Reach) {
 		const f = () =>
 			evaluate(e, (key) => {
 				m.run!.reads.add(key)
-				s.read(key)
+				s.track(key)
 				return store.get(key)
 			})
 		if (kind === "compute") {
-			m.c = s.run(o, () =>
-				s.compute(f, (v: number) => {
+			m.c = s.runWithScope(o, () =>
+				s.createComputer(f, (v: number) => {
 					if (store.has(name) && Object.is(store.get(name), v)) {
 						problems.push(`${name}: set the value it had, ${v}`)
 					}
@@ -204,16 +202,19 @@ function seeded(seed: number, reach: Reach) {
 					changed([name], m.c)
 				}))
 		} else {
-			m.c = s.run(o, () =>
-				s.effect(f, (v: number, previous: number | undefined) => {
-					const at = `pulse ${pulses}: ${name} acts on ${v}`
-					if (previous !== m.acted?.value) {
-						problems.push(`${at}: previous ${previous}, not ${m.acted?.value}`)
-					}
-					if (v !== expected.get(name)) problems.push(`${at}, not ${expected.get(name)}`)
-					settled(at)
-					m.acted = { value: v }
-				}))
+			m.c = s.runWithScope(
+				o,
+				() =>
+					s.createEffect(f, (v: number, previous: number | undefined) => {
+						const at = `pulse ${pulses}: ${name} acts on ${v}`
+						if (previous !== m.acted?.value) {
+							problems.push(`${at}: previous ${previous}, not ${m.acted?.value}`)
+						}
+						if (v !== expected.get(name)) problems.push(`${at}, not ${expected.get(name)}`)
+						settled(at)
+						m.acted = { value: v }
+					}),
+			)
 		}
 		made.push(m)
 		byComputation.set(m.c, m)
@@ -231,7 +232,7 @@ function seeded(seed: number, reach: Reach) {
 		const actedBefore = new Map(made.map((m) => [m, m.acted]))
 		moments.length = 0
 		// each start against the run before it
-		told = (m: Moment) => {
+		told = (m: Told) => {
 			if ("starts" in m) {
 				const x = byComputation.get(m.starts)!
 				const last = x.run
@@ -239,7 +240,7 @@ function seeded(seed: number, reach: Reach) {
 					const why = [...last.reads].some((k) => (changedAt.get(k) ?? 0) > last.tick)
 					if (!why) problems.push(`${at}: ${x.name} ran for no reason`)
 				}
-				x.run = { tick: s.tick(), reads: new Set() }
+				x.run = { tick, reads: new Set() }
 				reach.runs++
 			} else if ("ends" in m) {
 				const x = byComputation.get(m.ends)!
@@ -258,7 +259,7 @@ function seeded(seed: number, reach: Reach) {
 			assertEquals(store.get(m.name), expected.get(m.name), `${at}: ${m.name}`)
 		}
 		// acts: once at most, exactly when the value differs from the one acted on last
-		const acting = new Map<Computation, number>()
+		const acting = new Map<Computer, number>()
 		for (const m of moments) {
 			if ("acts" in m) acting.set(m.acts, (acting.get(m.acts) ?? 0) + 1)
 		}
@@ -303,7 +304,7 @@ function seeded(seed: number, reach: Reach) {
 			for (const node of seen) {
 				const of = readersOf(node, `${at}: ${key}`)
 				if (of.length) read++
-				for (const l of of) readers.push(byComputation.get(l.from.owner as Computation)!)
+				for (const l of of) readers.push(byComputation.get(l.from.owner as Computer)!)
 			}
 			assert(read <= 1, `${at}: ${key} read through ${read} nodes`)
 			for (const x of readers) assert(alive(x), `${at}: ${key} read by ${x.name}, disposed`)
@@ -330,13 +331,13 @@ function seeded(seed: number, reach: Reach) {
 			const living = made.filter(alive)
 			if (living.length) {
 				const m = r.one(living)
-				s.dispose(m.c)
+				s.teardown(m.c)
 				pulse(`disposed ${m.name}`)
 			}
 		} else if (k < 10) {
 			const o = r.one(scopes.slice(1))
 			if (o.state === "alive") {
-				s.dispose(o)
+				s.teardown(o)
 				pulse(`disposed scope ${o.n}`)
 			}
 		} else if (scopes.some((o) => o.state === "alive")) {
@@ -374,32 +375,33 @@ async function loops(seed: number, reach: Loops) {
 	const r = rand(seed)
 	const at = (s: string) => `loops seed ${seed}, ${s}`
 	let runs = 0
-	const s = createScheduler({
-		hook: (m) => {
-			if ("starts" in m && ++runs > BOUND) throw new Error(at(`a pulse past ${BOUND} runs`))
-			if ("starts" in m) reach.runs++
-			if ("ends" in m && m.ended === "looping") reach.looping++
-			if ("ends" in m && m.ended === "stopped") reach.stops++
-		},
+	const s = createScheduler()
+	s.onRunStart(() => {
+		if (++runs > BOUND) throw new Error(at(`a pulse past ${BOUND} runs`))
+		reach.runs++
+	})
+	s.onRunEnd((_c, _n, ended) => {
+		if (ended === "looping") reach.looping++
+		if (ended === "stopped") reach.stops++
 	})
 	const store = new Map<string, number>()
-	const write = (key: string, v: number, by?: Writer) => {
+	const write = (key: string, v: number, by?: Run | Computer) => {
 		store.set(key, v)
-		s.changed([key], by)
+		s.mark([key], by)
 	}
 	const problems: string[] = []
 	// told it is called: f, set or act of c
-	const called = (c: Computation, what: string) => {
+	const called = (c: Computer, what: string) => {
 		if (c.state !== "alive") problems.push(`${what} of ${c.n}, gone`)
 	}
-	const effects: Computation[] = []
-	const scopes: Scope[] = [s.root()]
-	const living: Computation[] = []
+	const effects: Computer[] = []
+	const scopes: Scope[] = [s.createRootScope()]
+	const living: Computer[] = []
 	// the settling of each pending promise
 	const pending: (() => void)[] = []
 
 	// a sum of a few keys' values, read through read, kept small so loops come round
-	const sum = (read: Read, keys: string[]) => {
+	const sum = (read: (key: unknown) => void, keys: string[]) => {
 		let n = 0
 		for (const k of keys) {
 			read(k)
@@ -438,38 +440,38 @@ async function loops(seed: number, reach: Loops) {
 		return p
 	}
 
-	function make(o: Scope, p: Plan): Computation | undefined {
+	function make(o: Scope, p: Plan): Computer | undefined {
 		if (o.state !== "alive") return
-		return s.run(o, () => build(p))
+		return s.runWithScope(o, () => build(p))
 	}
 	// p, made under the scope open
-	function build(p: Plan): Computation | undefined {
+	function build(p: Plan): Computer | undefined {
 		const { ins, out, other } = p
-		let c!: Computation
+		let c!: Computer
 		if (p.kind === 0) {
 			// a compute whose set writes its key
-			c = s.compute(() => (called(c, "f"), sum(s.read, ins)), (v) => {
+			c = s.createComputer(() => (called(c, "f"), sum(s.track, ins)), (v) => {
 				called(c, "set")
 				write(out, v, c)
 			})
 		} else if (p.kind === 1) {
 			// a compute writing in its run
-			c = s.compute(() => {
-				const writer = s.current()?.writer
+			c = s.createComputer(() => {
+				const writer = s.getRun()
 				called(c, "f")
-				const v = sum(s.read, ins)
+				const v = sum(s.track, ins)
 				write(other, (v + 1) % 5, writer)
 				return v % 2
 			}, () => called(c, "set"))
 		} else if (p.kind === 2) {
 			// a compute whose cleanup writes, and now and then disposes it
-			c = s.compute(() => {
-				const writer = s.current()?.writer
+			c = s.createComputer(() => {
+				const writer = s.getRun()
 				called(c, "f")
-				const v = sum(s.read, ins)
-				s.cleanup(() => {
+				const v = sum(s.track, ins)
+				s.registerTeardown(s.getCurrentScope()!, () => {
 					write(other, (v + 1) % 5, c)
-					if (p.dies && (store.get(other) ?? 0) > 2) s.dispose(c)
+					if (p.dies && (store.get(other) ?? 0) > 2) s.teardown(c)
 				})
 				return v
 			}, (v) => {
@@ -478,11 +480,11 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 3) {
 			// an effect: each run makes a scope under it; its act writes, and may make a compute
-			c = s.effect(() => {
-				const writer = s.current()?.writer
+			c = s.createEffect(() => {
+				const writer = s.getRun()
 				called(c, "f")
-				s.scope()
-				return sum(s.read, ins)
+				s.createScope()
+				return sum(s.track, ins)
 			}, (v) => {
 				called(c, "act")
 				write(other, (v + 1) % 5, c)
@@ -491,10 +493,10 @@ async function loops(seed: number, reach: Loops) {
 			effects.push(c)
 		} else if (p.kind === 4) {
 			// an async compute: after its await it writes, with by or from outside
-			c = s.compute(() => {
-				const writer = s.current()?.writer
+			c = s.createComputer(() => {
+				const writer = s.getRun()
 				called(c, "f")
-				const v = sum(s.read, ins)
+				const v = sum(s.track, ins)
 				return new Promise<number>((done) => pending.push(() => done(v))).then((v) => {
 					write(other, (v + 1) % 5, p.named ? writer : undefined)
 					return v
@@ -506,18 +508,18 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else if (p.kind === 5) {
 			// a compute making a compute under itself in each run
-			c = s.compute(() => {
-				const writer = s.current()?.writer
+			c = s.createComputer(() => {
+				const writer = s.getRun()
 				called(c, "f")
 				if (make(c, p.makes!)) reach.made++
-				return sum(s.read, ins)
+				return sum(s.track, ins)
 			}, (v) => {
 				called(c, "set")
 				write(out, v, c)
 			})
 		} else {
 			// a scope, with one under it
-			const under = s.scope()
+			const under = s.createScope()
 			scopes.push(under)
 			return make(under, p.makes!)
 		}
@@ -547,7 +549,7 @@ async function loops(seed: number, reach: Loops) {
 		if (k < 4) {
 			const ks = keys()
 			for (const key of ks) store.set(key, r.pick(5))
-			s.changed(ks)
+			s.mark(ks)
 			pulse(`wrote ${ks}`)
 		} else if (k < 6) {
 			// some promises settle; their writes after the await reach the scheduler
@@ -557,11 +559,11 @@ async function loops(seed: number, reach: Loops) {
 			pulse(`settled ${now.length}`)
 		} else if (k < 7) {
 			const alive = living.filter((c) => c.state === "alive")
-			if (alive.length) s.dispose(r.one(alive))
+			if (alive.length) s.teardown(r.one(alive))
 			pulse("disposed")
 		} else if (k < 8) {
 			const o = r.one(scopes.slice(1).concat(scopes[0]))
-			if (o !== scopes[0] && o.state === "alive") s.dispose(o)
+			if (o !== scopes[0] && o.state === "alive") s.teardown(o)
 			pulse("disposed a scope")
 		} else {
 			make(r.one(scopes.filter((o) => o.state === "alive")), plan())

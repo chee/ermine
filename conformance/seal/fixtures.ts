@@ -15,7 +15,7 @@ import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { decode, encode, type Value } from "@ermine/encoding/cbor"
 
 const here = new URL(".", import.meta.url).pathname
-const out = `${here}../../extensions/subduction/conformance/seal/`
+const out = `${here}../suites-aside/sync/subduction/conformance/seal/`
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))

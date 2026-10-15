@@ -16,7 +16,7 @@ import * as names from "@ermine/files/names"
 import type { Step as Plan, Value } from "@ermine/files/types"
 import { answer, NULL } from "./harness.ts"
 
-const out = new URL("../../playground/files/conformance/layout/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/layout/", import.meta.url)
 assertEquals(manifest.NULL, NULL, "the harness's NULL is null's hash")
 
 type J = Record<string, unknown>

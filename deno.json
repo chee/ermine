@@ -4,16 +4,20 @@
 		"./core/node",
 		"./filesystem/places",
 		"./core/util",
-		"./core/graph",
+		"./core/table",
 		"./core/scheduler",
 		"./filesystem/protect",
 		"./ermine/encoding",
+		"./ermine/processes",
 		"./extensions/subduction",
 		"./playground/files",
 		"./playground/solid",
+		"./playground/demos",
 		"./playground/demos/console",
 		"./playground/places-fresh",
-		"./playground/pack-indexeddb"
+		"./playground/pack-indexeddb",
+		"./playground/presence",
+		"./playground/patch-nodes"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",

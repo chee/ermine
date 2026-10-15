@@ -1,5 +1,6 @@
 #include "order.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 
 #include "rank.h"
@@ -14,13 +15,22 @@ struct order {
 	od_item **live;
 	size_t nlive, caplive;
 	size_t ndue;
-	// ranks made at this epoch are good while ranks_ok
+	// ranks made at this epoch are good while ranks_ok; an item is ranked when its rank_epoch is
+	// the epoch, and nranked count them
 	uint64_t epoch;
 	bool ranks_ok;
-	// the due as a heap, by rank, then mark, then the order made; made at heap_epoch
+	size_t nranked;
+	// some component of the ranks made whole has more than one member
+	bool cyclic;
+	// the items to mend
+	od_item **work;
+	size_t nwork, capwork;
+	// the due as a heap, by rank, then mark, then the order made; made at heap_epoch, and again
+	// when a due one's rank was mended
 	entry *heap;
 	size_t nheap, capheap;
 	uint64_t heap_epoch;
+	bool heap_stale;
 };
 
 order *od_new(void) {
@@ -32,14 +42,75 @@ order *od_new(void) {
 void od_free(order *o) {
 	free(o->live);
 	free(o->heap);
+	free(o->work);
 	free(o);
 }
 
-static void name(od_item *p, int d) {
-	if (d > 0) p->named++;
-	else if (p->named > 0) p->named--;
-}
 static bool edge(const od_item *p, const od_item *q) { return q != NULL && q != p && q->alive; }
+
+// p is after q by one more edge, or one less
+static void link(od_item *p, od_item *q) {
+	uintptr_t n = (uintptr_t)pm_get(&q->rev, p);
+	pm_set(&q->rev, p, (void *)(n + 1));
+}
+static void unlink(od_item *p, od_item *q) {
+	uintptr_t n = (uintptr_t)pm_get(&q->rev, p);
+	if (n > 1) pm_set(&q->rev, p, (void *)(n - 1));
+	else if (n == 1) {
+		pm_delete(&q->rev, p);
+		if (q->rev.count == 0) pm_clear(&q->rev);
+	}
+}
+
+static void work(order *o, od_item *x) {
+	if (o->nwork == o->capwork) {
+		o->capwork = o->capwork ? o->capwork * 2 : 16;
+		o->work = realloc(o->work, o->capwork * sizeof *o->work);
+		if (o->work == NULL) abort();
+	}
+	o->work[o->nwork++] = x;
+}
+
+static int rank_at(const order *o, const od_item *p, uint64_t epoch) {
+	(void)o;
+	return p->rank_epoch == epoch ? p->rank : 0;
+}
+
+// the edges of what is in work changed: each takes its rank again from its edges, and what is
+// after it too, as far as a rank changes. a cycle, or a rank past the count (a cycle made now),
+// or mending longer than a whole making would take: made whole at the next
+static void mend(order *o) {
+	if (!o->ranks_ok || o->cyclic) {
+		o->nwork = 0;
+		o->ranks_ok = false;
+		return;
+	}
+	size_t limit = 4 * o->nranked + 64;
+	for (size_t steps = 0; o->nwork; steps++) {
+		if (steps > limit) goto whole;
+		od_item *x = o->work[--o->nwork];
+		if (!x->alive) continue;
+		int k = 0;
+		if (x->values)
+			for (size_t i = 0; i < x->values->cap; i++) {
+				const od_item *q = x->values->keys[i];
+				if (q != NULL && edge(x, q) && rank_at(o, q, o->epoch) + 1 > k) k = rank_at(o, q, o->epoch) + 1;
+			}
+		if (edge(x, x->after) && rank_at(o, x->after, o->epoch) + 1 > k) k = rank_at(o, x->after, o->epoch) + 1;
+		if (rank_at(o, x, o->epoch) == k) continue;
+		if ((size_t)k > o->nranked) goto whole;
+		if (x->rank_epoch != o->epoch) o->nranked++;
+		x->rank = k;
+		x->rank_epoch = o->epoch;
+		if (x->due) o->heap_stale = true;
+		for (size_t i = 0; i < x->rev.cap; i++)
+			if (x->rev.keys[i] != NULL) work(o, (od_item *)x->rev.keys[i]);
+	}
+	return;
+whole:
+	o->nwork = 0;
+	o->ranks_ok = false;
+}
 
 // the ranks of everything alive
 static void ranks(order *o) {
@@ -76,6 +147,11 @@ static void ranks(order *o) {
 	}
 	off[n] = count;
 	rk_rank(n, off, adj, out);
+	o->cyclic = false;
+	for (size_t i = 0; i < n; i++)
+		for (size_t j = off[i]; j < off[i + 1]; j++)
+			if (out[adj[j]] == out[i]) o->cyclic = true;
+	o->nranked = n;
 	o->epoch++;
 	for (size_t i = 0; i < n; i++) {
 		at[i]->rank = out[i];
@@ -126,11 +202,6 @@ static entry pop(order *o) {
 	return top;
 }
 
-static int rank_at(const order *o, const od_item *p, uint64_t epoch) {
-	(void)o;
-	return p->rank_epoch == epoch ? p->rank : 0;
-}
-
 bool od_has(const order *o, const od_item *p) {
 	(void)o;
 	return p->due;
@@ -154,8 +225,9 @@ size_t od_size(const order *o) { return o->ndue; }
 od_item *od_next(order *o, int *rank) {
 	ranks(o);
 	// the heap is remade when the ranks are; a popped entry no longer due at its mark is stale
-	if (o->heap_epoch != o->epoch || o->nheap > 4 * o->ndue + 64) {
+	if (o->heap_epoch != o->epoch || o->heap_stale || o->nheap > 4 * o->ndue + 64) {
 		o->heap_epoch = o->epoch;
+		o->heap_stale = false;
 		o->nheap = 0;
 		for (size_t i = 0; i < o->nlive; i++) {
 			od_item *p = o->live[i];
@@ -197,60 +269,74 @@ void od_started(order *o, od_item *p) {
 	}
 	p->slot = o->nlive;
 	o->live[o->nlive++] = p;
-	if (o->ranks_ok) {
-		p->rank = 0;
-		p->rank_epoch = o->epoch;
-	}
 }
 
 void od_sees(order *o, od_item *p, pm *next) {
 	if (p->values == next) return;
+	bool changed = false;
 	if (p->values)
 		for (size_t i = 0; i < p->values->cap; i++) {
 			od_item *q = (od_item *)p->values->keys[i];
 			if (q == NULL || (next && pm_has(next, q))) continue;
-			name(q, -1);
-			if (edge(p, q)) o->ranks_ok = false;
+			unlink(p, q);
+			if (edge(p, q)) changed = true;
 		}
 	if (next)
 		for (size_t i = 0; i < next->cap; i++) {
 			od_item *q = (od_item *)next->keys[i];
 			if (q == NULL || pm_has(p->values, q)) continue;
-			name(q, 1);
-			if (edge(p, q)) o->ranks_ok = false;
+			link(p, q);
+			if (edge(p, q)) changed = true;
 		}
 	if (p->values) {
 		pm_clear(p->values);
 		free(p->values);
 	}
 	p->values = next;
+	if (changed) {
+		work(o, p);
+		mend(o);
+	}
 }
 
 void od_waits(order *o, od_item *p, od_item *q) {
 	if (p->after == q) return;
+	bool changed = false;
 	if (p->after) {
-		name(p->after, -1);
-		if (edge(p, p->after)) o->ranks_ok = false;
+		unlink(p, p->after);
+		if (edge(p, p->after)) changed = true;
 	}
 	p->after = q;
 	if (q) {
-		name(q, 1);
-		if (edge(p, q)) o->ranks_ok = false;
+		link(p, q);
+		if (edge(p, q)) changed = true;
+	}
+	if (changed) {
+		work(o, p);
+		mend(o);
 	}
 }
 
 void od_gone(order *o, od_item *p) {
-	if (p->named > 0) o->ranks_ok = false;
 	od_delete(o, p);
 	if (p->values) {
 		for (size_t i = 0; i < p->values->cap; i++)
-			if (p->values->keys[i] != NULL) name((od_item *)p->values->keys[i], -1);
+			if (p->values->keys[i] != NULL) unlink(p, (od_item *)p->values->keys[i]);
 		pm_clear(p->values);
 		free(p->values);
 		p->values = NULL;
 	}
-	if (p->after) name(p->after, -1);
+	if (p->after) unlink(p, p->after);
 	p->after = NULL;
+	if (o->ranks_ok && p->rank_epoch == o->epoch) {
+		p->rank_epoch = 0;
+		o->nranked--;
+	}
+	// what was after it is mended
+	for (size_t i = 0; i < p->rev.cap; i++)
+		if (p->rev.keys[i] != NULL) work(o, (od_item *)p->rev.keys[i]);
+	pm_clear(&p->rev);
+	mend(o);
 	// out of the live list
 	if (p->slot < o->nlive && o->live[p->slot] == p) {
 		od_item *last = o->live[--o->nlive];

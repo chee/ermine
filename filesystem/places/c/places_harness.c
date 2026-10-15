@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "world.h"
+#include "status.h"
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -23,6 +24,7 @@
 // end), or an error
 typedef struct {
 	bool stopped;
+	bool waited;
 	char *error;
 } ctx;
 
@@ -36,9 +38,8 @@ static op_value *thrown(ctx *c, char *error) {
 }
 // whether the reads told since the last check let the program go on
 static bool alive(ctx *c) {
-	sc_read_status status = pl_status(world_places);
+	sc_track_status status = pl_status(world_places);
 	if (status == SC_STOP) c->stopped = true;
-	if (status == SC_CLOSED) thrown(c, world_copy(SC_STOPPED));
 	return status == SC_OK;
 }
 
@@ -140,6 +141,56 @@ static op_value *eval(const op_value *e, ctx *c) {
 		if (!alive(c)) return op_free(a), NULL;
 		return a;
 	}
+	if ((x = op_get(e, "cached"))) {
+		size_t n;
+		const char **names = world_address(x, &n);
+		char *id = pc_get(world_cached(), names, n);
+		free(names);
+		op_value *out = id ? op_str(id) : op_null();
+		free(id);
+		return alive(c) ? out : (op_free(out), NULL);
+	}
+	if ((x = op_get(e, "cachedNames"))) {
+		size_t n;
+		const char **path = world_address(x, &n);
+		pc_names list = pc_list(world_cached(), path, n);
+		free(path);
+		op_value *a = op_list();
+		for (size_t i = 0; i < list.n; i++) op_push(a, op_str(list.items[i]));
+		pc_names_free(&list);
+		return alive(c) ? a : (op_free(a), NULL);
+	}
+	if ((x = op_get(e, "cachedEntries"))) {
+		size_t n;
+		const char **path = world_address(x, &n);
+		pc_answers list = pc_entries(world_cached(), path, n);
+		free(path);
+		op_value *a = op_list();
+		for (size_t i = 0; i < list.n; i++) {
+			op_value *m = op_map();
+			op_set(m, "id", op_str(list.items[i].id));
+			op_set(m, "from", op_str(list.items[i].from));
+			op_push(a, m);
+		}
+		pc_answers_free(&list);
+		return alive(c) ? a : (op_free(a), NULL);
+	}
+	if ((x = op_get(e, "cachedMembers"))) {
+		size_t n;
+		const char **path = world_address(x, &n);
+		pc_members list = pc_members_at(world_cached(), path, n);
+		free(path);
+		op_value *a = op_list();
+		for (size_t i = 0; i < list.n; i++) {
+			op_value *m = op_map();
+			op_set(m, "name", op_str(list.items[i].name));
+			op_set(m, "id", op_str(list.items[i].id));
+			if (list.items[i].from) op_set(m, "from", op_str(list.items[i].from));
+			op_push(a, m);
+		}
+		pc_members_free(&list);
+		return alive(c) ? a : (op_free(a), NULL);
+	}
 	if ((x = op_get(e, "lookup"))) {
 		size_t n, nfrom;
 		const char **names = world_address(x->items[0], &n), **from = world_address(x->items[1], &nfrom);
@@ -147,6 +198,17 @@ static op_value *eval(const op_value *e, ctx *c) {
 		op_value *out = lookup_json(names, n, from, nfrom, all && all->type == OP_BOOL && all->bool_);
 		free(names), free(from);
 		return alive(c) ? out : (op_free(out), NULL);
+	}
+	if ((x = op_get(e, "status"))) {
+		const char *id = world_text(x);
+		if (id == NULL) return thrown(c, world_copy("id: not a string"));
+		op_value *out = world_status_json(cst_status(world_places, tb_string(id)));
+		return alive(c) ? out : (op_free(out), NULL);
+	}
+	if (op_get(e, "wait")) return c->waited = true, op_null();
+	if ((x = op_get(e, "throw"))) {
+		const char *message = world_text(x);
+		return thrown(c, world_copy(message ? message : "error"));
 	}
 	if ((x = op_get(e, "write"))) {
 		op_value *r = world_fill(x, eval_for_fill, c);
@@ -187,6 +249,10 @@ static sc_out program_f(void *previous, void *data) {
 	if (c.stopped) {
 		op_free(v);
 		return (sc_out){.kind = SC_VALUE};
+	}
+	if (c.waited) {
+		op_free(v);
+		return (sc_out){.kind = SC_PENDING};
 	}
 	return (sc_out){.kind = SC_VALUE, .value = v};
 }
@@ -252,6 +318,30 @@ static op_value *answer(const op_value *r) {
 		op_value *a = op_list();
 		for (size_t i = 0; i < list.n; i++) op_push(a, op_str(list.items[i].name));
 		pl_members_free(&list);
+		op_value *o = op_map();
+		op_set(o, "names", a);
+		return o;
+	}
+	if (strcmp(op, "cached") == 0) {
+		size_t n;
+		const char **path = world_address(op_get(r, "path"), &n);
+		char *id = pc_get(world_cached(), path, n);
+		free(path);
+		pl_status(world_places);
+		op_value *o = op_map();
+		if (id) op_set(o, "id", op_str(id));
+		free(id);
+		return o;
+	}
+	if (strcmp(op, "cachedList") == 0) {
+		size_t n;
+		const char **path = world_address(op_get(r, "at"), &n);
+		pc_names list = pc_list(world_cached(), path, n);
+		free(path);
+		pl_status(world_places);
+		op_value *a = op_list();
+		for (size_t i = 0; i < list.n; i++) op_push(a, op_str(list.items[i]));
+		pc_names_free(&list);
 		op_value *o = op_map();
 		op_set(o, "names", a);
 		return o;

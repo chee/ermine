@@ -85,9 +85,13 @@
 					"content": "y",
 					"change": {
 						"actor": "a",
-						"wallclock": 0,
-						"time": 1067,
-						"node": "n"
+						"metadata": [
+							[
+								"wallclock",
+								0
+							]
+						],
+						"time": 1067
 					},
 					"because": {
 						"layer": "sync",
@@ -104,10 +108,17 @@
 					"content": "x",
 					"change": {
 						"actor": "a",
-						"wallclock": 1760000000,
-						"message": "tidy up",
-						"time": 1066,
-						"node": "n"
+						"metadata": [
+							[
+								"wallclock",
+								1760000000
+							],
+							[
+								"message",
+								"tidy up"
+							]
+						],
+						"time": 1066
 					},
 					"because": {
 						"layer": "sync",

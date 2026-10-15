@@ -1,0 +1,141 @@
+{
+	"title": "a run's flag ends with it: a change later named by its computation makes it due, a loop through it (proof L1)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "c"
+							},
+							null
+						]
+					},
+					1,
+					{
+						"read": "c"
+					}
+				]
+			},
+			"to": "c"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 2,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "run",
+			"scope": "c",
+			"do": {
+				"write": [
+					"c",
+					7
+				]
+			},
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 3,
+						"writer": "c"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

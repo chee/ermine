@@ -1,0 +1,313 @@
+#+title: proposal: attributes and children as data
+#+author: LLM generated working output
+#+date: 2026-10-14
+
+Words: *decided*: chee's words, quoted. *thought*: chee thinking it through, quoted. *mine*: my
+proposal, open to change. *open*: not answered. *est.*: an estimate. *measured*: scratch scripts
+outside the repo (deno 2.9.7, V8 15.0, aarch64 mac), medians, today's code (apply, update,
+createTable, paths, cbor) imported as is.
+
+Lens (Acton): the job is transforming data; know counts, sizes and access first; the common case;
+where there's one there's many; hot and cold apart; no abstraction before the data.
+
+* The data
+
+** Attributes (est.)
+| attribute              | who has it                    | CBOR size | written            | read                             | read with          | across many         |
+|------------------------+-------------------------------+-----------+--------------------+----------------------------------+--------------------+---------------------|
+| is (type)              | most nodes                    | 4-15 B    | once, at making    | every listing row; every open    | size, date         | yes: listing        |
+| size                   | nodes with a big value        | 2-9 B     | each value write   | listing rows; sort               | is, date           | yes: sort           |
+| title (name-like)      | some documents                | 10-60 B   | rarely, by hand    | listing, search                  | is                 | yes: search         |
+| tags                   | 10-30% of nodes               | 10-40 B   | rarely, by hand    | filter, search                   | alone              | yes: filter         |
+| needs, provides        | programs only (dozens)        | 10-40 B   | at install         | program lookup                   | each other         | yes: /apps, dozens  |
+| ermine.computer.status | computations only; never saved | live      | 2 per async run    | inspector, isPending             | alone              | no                  |
+| who, when              | not attributes: each part's change header (time, actor, site) | 168 B heap | every write | listing (date = value's change.time) | - | yes: sort by date |
+| created                | nothing keeps it today        | -         | -                  | -                                | -                  | -                   |
+
+- per node: 0-6 attributes (est.); 4 typical ones *measured*: 51 B CBOR, 120 B heap
+- reads ≫ writes: is and size read on every listing render, written once (est. ≥ 100:1)
+- 22 of the 51 B are the names (is, size, tags, provides), repeated in every node
+
+** Children (est.)
+| folder kind                                 | share of folders | children  | places                    | listings           |
+|---------------------------------------------+------------------+-----------+---------------------------+--------------------|
+| small: a project, settings, a doc's parts   | ~90%             | 0-30      | rare                      | on open            |
+| medium: a code dir, an album, an app's data | ~9%              | 30-1,000  | occasional                | on open            |
+| big: mailbox, log, photos, downloads        | ~1%              | 1k-1M     | mail 100/day, log 1-100/s, photos 1k-10k in a burst | windows of ~50 |
+
+- shape: most folders small, a long tail (as desktop file-system studies find, e.g. Agrawal et
+  al., FAST '07)
+- names: median 10-16 chars, p99 ~60 (est.); ids: =ermine://= + 64 hex = 73 chars, 75 B CBOR,
+  136 B as a JS string (*measured*); an id is ~5x a name
+- lookups ≫ listings: every get, lookup and walk is one lookup per step, depth 4-6 (est.
+  10-100 lookups per listing)
+- order: accidental today (below); a manual order is a value of its own (plan.org, with the plain
+  map)
+- renames, moves: < 1% of children writes (est.)
+- a file browser row needs name, is, size, date: 3 reads per row besides the name
+
+** Workloads, today (*measured*)
+| workload                                  | what it touches                             | cost today                                                        |
+|-------------------------------------------+---------------------------------------------+-------------------------------------------------------------------|
+| walk /a/b/c/d/e                           | 5 lookups, 5 spots                          | 20-40 ns a lookup; a spot ~320 B, shared by readers of that step  |
+| list 1,000 names                          | 1 keys read                                 | Object.keys 33 µs                                                 |
+| file browser, 1,000 rows                  | keys + 1,000 × (name, is, size, date)       | 4,001 spots, 1.29 MB in paths alone                               |
+| UI, 10,000 rows × 4 reads                 | 40,001 spots                                | 12.7 MB in paths alone (+ a node and a link each in the scheduler) |
+| filter 10k children by tag                | 10k attribute reads                         | 2.3 ms; 10k spots                                                 |
+| sort 10k children by size                 | 10k attribute reads + sort                  | 9.5 ms                                                            |
+| place in a folder of 8 / 1k / 100k        | update (cow: true, the default)             | 2.1 µs / 390 µs / 74 ms: the whole map copied                     |
+| ... then relist 100k                      | Object.keys                                 | 35 ms                                                             |
+| import 1k / 3k photos, one place each     | n updates                                   | 177 ms / 1.6 s (quadratic; 10k est. ~18 s)                        |
+| the same 10k as one update                | 1 update, 10k patches                       | 4.9 ms: cow copies once per update, not per patch                 |
+| save / load a 100k-name folder            | cbor encode / decode                        | 335 ms, 9.4 MB / 157 ms                                           |
+| any write's header                        | createChangeHeader's site                   | 23 µs (shallow stack), 53 µs (depth 20)                           |
+
+Order of one map, *measured*:
+| names given                          | zebra b aa 10 2 apple   |
+| Object.keys in memory                | 2 10 zebra b aa apple   |
+| after canonical CBOR, save then load | 2 10 b aa apple zebra   |
+Integer-like names first (V8), then insertion order; after a load, length then bytes (canonical
+CBOR). Three orders for one folder.
+
+* Measured, side by side
+
+** Children: per child, at 8 / 1,000 / 100,000 names
+| layout                        | heap B/child (container) | lookup ns       | list names        | place one             | allocs per place          | CBOR B/child |
+|-------------------------------+--------------------------+-----------------+-------------------+-----------------------+---------------------------+--------------|
+| plain map, cow (today)        | 15 / 49 / 63             | 20 / 42 / 318   | 0.05 / 33 / 35,000 µs | 2.1 / 390 / 74,000 µs | n-key copy, undo, header | 94           |
+| plain map, in place           | same                     | same            | same              | 0.6 / 0.5 / 1.2 µs    | undo, header              | 94           |
+| JS Map (not a value)          | 37 at 100k               | 23 / 41 / 111   | 0.13 / 5 / 440 µs | (no apply)            | -                         | none: live   |
+| parallel sorted arrays        | 16 at 100k               | 58 / 218 / 436  | free (sorted)     | 0.13 / 0.3 / 0.4 µs   | none (splice)             | 94           |
+| interned names (Uint32 pairs) | 8 (+ ~45 per name, table) | as arrays      | free              | as arrays             | none                      | ≥ 94: each name still saved once, in a table |
+| map, ids as 32 bytes          | same                     | same            | same              | same                  | same                      | 53           |
+Strings per child, any layout: the id 136 B, the name 40-80 B. The id is the biggest thing a
+child holds, in memory and on disk.
+
+** Children: patches and tracking
+| layout                 | patch path for one child | path stable under other places? | a place reruns                                  | sync merge                         |
+|------------------------+--------------------------+---------------------------------+-------------------------------------------------+------------------------------------|
+| map (today)            | [name]                   | yes                             | keys readers; [name] readers of that name only (*measured*: 1 mark; rename 2) | per key; same name: a key conflict |
+| sorted arrays          | [names, i], [ids, i]     | no: every insert shifts         | readers at positions ≥ i: N/2 on average        | needs element ids again (RGA)      |
+| interned ints in value | [7]                      | no meaning outside one process  | as map                                          | ints are not the same on two devices |
+
+** Attributes: per node vs across a folder (10k children)
+| layout                              | bytes                   | sort by size | filter by tag | spots held                  | a child's size changes            |
+|-------------------------------------+-------------------------+--------------+---------------+-----------------------------+-----------------------------------|
+| per node map (today)                | 120 B heap, 51 B CBOR   | 9.5 ms       | 2.3 ms        | per reader: N per attribute | readers of that node's [size]     |
+| columns, saved on the folder        | size f64 8 B, u32 4 B   | 4.7 ms       | -             | -                           | a write to the folder's document  |
+| columns, derived (a cache)          | 8 B a row + the cache   | 4.7 ms       | -             | N per attribute, held once  | the cache, then its readers       |
+| index tag → ids, derived            | 41 B a node             | -            | 36 µs         | 1 per tag read              | readers of the tags that changed  |
+| status in attributes (today)        | -                       | -            | -             | -                           | 2 writes per async run; keys and whole readers of attributes rerun 2x a run |
+| status as its own part              | one more part           | -            | -             | -                           | only status readers               |
+*measured*: a size write marks only [size] readers; a tags write with no tags reader marks none.
+
+** The table: bookkeeping per id, 3 parts (entries excluded)
+| layout                                              | B/id  |
+|-----------------------------------------------------+-------|
+| id → part → entry, plus entry → part → Set of ids (today) | 1,332 |
+| id → part → entry, no reverse                       | 230   |
+| part → id → entry                                   | 138   |
+| part → id → entry, plus entry → its one key         | ~425  |
+| three entries, one header each / one shared header  | 464 / 200 |
+The reverse index (=who=) is ~1,100 of today's 1,332 B, and almost every entry is under one key.
+C (table.c): one idrec per id (the id kept once), and an entry, group and noderec per entry: the
+same reverse weight, by the structs (not measured).
+
+* What the data says
+- the common folder is small: at 8 names every layout costs ≤ 2 µs a write and 20-60 ns a lookup.
+  there, a write's cost is its header's site capture (23-53 µs), not its layout
+- the cliffs are the big folders and the many rows: a copy per write (cow), Object.keys on a
+  dictionary object, and one spot per row per reader
+- the id string, not the container, is the biggest thing per child
+- the table's bookkeeping, not attributes or children, is the biggest thing per node: 1.3 KB
+  (1.1 KB of it the reverse index) of ~2 KB (est.: 100k messages ≈ 200 MB before any content)
+- saved form: map, pairs and columns are the same size (94 B a child); only the id's form moves it
+- columns win sorting (2x) and memory; an index wins filtering (64x). saved as columns, a child's
+  attributes would sit in every folder holding it, and a node shared alone would go without them
+
+* Proposal, per part
+
+** Value
+Unchanged.
+
+** Children
+- saved and sent: a plain map name → id, canonical CBOR. *decided* 10-14: children a plain map
+  (chosen: "Plain map")
+- in memory: the same plain object, changed in place: the entry made with ={cow: false}=, an
+  option entries already have. a place: 390 µs → 0.5 µs at 1k names, 74 ms → 1.2 µs at 100k;
+  importing 1k: 177 ms → 2 ms. *mine*
+- list in code point order: one order before and after a save, on every device, after any merge.
+  the same unit as 10-12's code points everywhere (walk.ts); playground/files/typescript/names.ts
+  has a byCodePoint. *mine*
+- big folders: the names kept sorted beside the entry, in memory only, made on first list, a splice
+  or two per fact. a window of 50 from 100k: a slice, not a 35 ms Object.keys and a 58 ms sort.
+  places' lib, *mine*
+- arrays, interned names, a Map as the value: left out here. facts above: positions shift;
+  interned ints differ per process; a Map is no value to apply or cbor
+
+#+begin_src typescript
+// whoever makes a folder: in place from then on
+table.add("children", folder, createEntry<Record<string, Id>>({}, header, { cow: false }))
+// a place: one key set, no copy of the other names (unchanged API)
+places.commit(place(table.get("children", folder)!, name, id, header))
+
+// lib.ts: names in code point order
+export function list(places: Reads, path: Path): string[] {
+	const id = get(places, path)
+	return id === undefined ? [] : places.readKeys("children", id).sort(byCodePoint)
+}
+
+// names.ts: a children entry's names, sorted, never saved. made on first read; each fact one or
+// two splices (binary search by code point, 0.4 µs at 100k); a whole-value fact drops it
+const kept = new WeakMap<Entry<unknown>, string[]>()
+export function sorted(children: Entry<unknown>): string[] {
+	let s = kept.get(children)
+	if (s === undefined) kept.set(children, s = Object.keys(children.value ?? {}).sort(byCodePoint))
+	return s
+}
+export function onFact({ part, entry, patches }: Fact): void {
+	const s = part === "children" && entry ? kept.get(entry) : undefined
+	if (s === undefined) return
+	for (const p of patches) {
+		if (p.path.length === 0) return void kept.delete(entry!)
+		if (p.move) drop(s, p.move.path[0] as string)
+		if ("value" in p || p.move) add(s, p.path[0] as string) // add: nothing if there
+		else drop(s, p.path[0] as string)
+	}
+}
+// a window: one keys spot (any place here reruns it), then a slice
+export function window(places: Reads, children: Entry<unknown>, id: Id, from: number, n: number) {
+	places.readKeys("children", id)
+	return sorted(children).slice(from, from + n)
+}
+#+end_src
+
+** Attributes
+- a plain map name → value per node, its own part. *thought* 10-14, chee: "metadata is not the
+  content of a file. either are thing things it connects to"
+- what a listing needs (is, size) lives in attributes, so a listing never loads a value: hot and
+  small apart from big and cold. size then has a writer: the value's writer, or a computation
+  over the value (runs are writes). *mine*, *open* which
+- who and when stay on each part's change header; date = the value entry's change.time. created:
+  kept nowhere (*open*)
+- status: as *decided* (=ermine.computer.status= on the computation's own node, never saved); the
+  costs of mixing it in are in the table above
+- names repeated in every node (22 of 51 B): left plain; a store compresses them
+
+** Rows and indexes: derived, never saved
+- rows: a folder's children as columns (names, ids, is, size, time), one cache shared by every
+  reader: the 4N spots held once, sort 2x faster, a typed array a numeric column. a cache as
+  *decided* 10-14 for paths, "yeah also we can just cache instead" (plan.org: worked out when
+  read, dropped when what it read changes). a library, *mine*
+- index: ids by an attribute's values (tags: each element), fed by facts of part attributes; a
+  filter 36 µs not 2.3 ms; 41 B a node. a library, *mine*. it covers only what is loaded (only
+  reachable exists). its readers are tracked by keys of its own (the scheduler's track and mark,
+  one per value), or by places' spots if it is a node
+- both need every fact of a part: places' commit and onTableChange make them; watchPath gives
+  them by path only
+- rows serve sorting and filtering; a row drawn on screen still reads its own node (one row reruns,
+  not the list)
+
+#+begin_src typescript
+// rows.ts: a folder's rows as columns; reads: its names, then per row its id, is, size, date
+export type Rows = { names: string[]; ids: Id[]; is: unknown[]; size: Float64Array; time: Float64Array }
+export function rows(places: Places, id: Id): Rows {
+	const names = places.readKeys("children", id).sort(byCodePoint), n = names.length
+	const r: Rows = { names, ids: [], is: [], size: new Float64Array(n), time: new Float64Array(n) }
+	for (let i = 0; i < n; i++) {
+		const kid = r.ids[i] = places.readValue("children", id, [names[i]]) as Id
+		r.is[i] = places.readValue("attributes", kid, ["is"])
+		r.size[i] = Number(places.readValue("attributes", kid, ["size"]) ?? NaN)
+		r.time[i] = places.readChange("value", kid)?.time ?? NaN
+	}
+	return r
+}
+// sorted by size: an order, the columns untouched
+export const bySize = (r: Rows) => Uint32Array.from(r.size.keys()).sort((a, b) => r.size[a] - r.size[b])
+
+// index.ts: ids by one attribute's values, from facts; a whole write or one at [name] reindexes
+export function createIndex(name: string) {
+	const by = new Map<unknown, Set<Id>>(), had = new Map<Id, unknown[]>()
+	function put(id: Id, attributes: unknown) {
+		for (const v of had.get(id) ?? []) by.get(v)?.delete(id)
+		const now = [(attributes as Record<string, unknown> | undefined)?.[name] ?? []].flat()
+		for (const v of now) (by.get(v) ?? by.set(v, new Set()).get(v)!).add(id)
+		had.set(id, now)
+	}
+	const onFact = (f: Fact) => {
+		if (f.part === "attributes" && f.patches.some((p) => !p.path.length || p.path[0] === name)) {
+			put(f.id, f.entry?.value)
+		}
+	}
+	return { onFact, ids: (v: unknown): ReadonlySet<Id> => by.get(v) ?? new Set() }
+}
+#+end_src
+
+** The table
+- part → id → entry, and each entry's one key (a list only when an entry is under several):
+  1,332 → ~425 B per id with 3 parts; 100k nodes: 133 → 43 MB. API unchanged (add, sub, get,
+  who, del). paths already keys its tries part first. *mine*
+
+#+begin_src typescript
+const parts = new Map<Key, Map<Id, Entry<unknown>>>()
+const keys = new Map<Entry<unknown>, [Key, Id] | [Key, Id][]>() // one key: the common case
+const get = (part: Key, id: Id) => parts.get(part)?.get(id)
+// every part at an id: one lookup per part (3-6 parts)
+const at = (id: Id) => [...parts].flatMap(([p, m]) => (m.has(id) ? [[p, m.get(id)!] as const] : []))
+#+end_src
+
+** Saving and loading
+- pack: nothing about layout changes; a node's record stays its tables' plain values
+- loading: one string per id. after a decode the id in a parent's children and the id in pack's
+  keys are two strings (136 B each); a decode that keeps one copy of a repeated long string saves
+  136 B a copy (13.6 MB per 100k). cbor.ts, *mine*
+- ids as bytes: 94 → 53 B a child on disk (-44%). goes with references in values ("values are not
+  just JSON"); symbol and non-=ermine://= ids stay strings. *open*
+- the node as the unit of saving (plan.org, *mine* there): a listing of 1,000 photos must load
+  their attributes without their values; with values inline that is every photo. values by
+  reference (as FILES.tex had: values by hash), or parts loadable apart. *open*
+- a 100k folder re-encoded per change: 335 ms each. the latest snapshot plus the patches since,
+  compacted now and then, is plain data too. *open*, the store's
+
+** Outside the question
+- a write's site: 23-53 µs: the raw capture ~1 µs, formatting the stack string ~14 µs, parsing
+  it the rest. sites stay (sites are core); capture the frames now, format and parse them when
+  read. stacktrace.ts, *mine*
+
+* What changes where
+| where                      | change                                                                 | words  |
+|----------------------------+------------------------------------------------------------------------+--------|
+| core/table (TS)            | part → id → entry; one key per entry, a list when several              | *mine* |
+| core/table (C)             | the same question for its entry, group, noderec records                | *open* |
+| core/node                  | nothing: children entries made with ={cow: false}= by their makers     | *mine* |
+| core/op                    | nothing                                                                | -      |
+| filesystem/places          | list in code point order; sorted names for big folders; facts of a part for indexes (commit already makes them) | *mine* |
+| ermine/encoding            | one string per repeated id on decode; ids as bytes later               | *mine*, *open* |
+| libraries                  | rows (columns cache), index, size kept from the value                  | *mine* |
+
+* Where it strains
+- in place and the equal cut: the scheduler compares results with Object.is. a computation
+  returning =readValue("children", id)= (the whole map) gets the same object after a place, so its
+  readers stop there. walk (an id) and readKeys (a new list) are unaffected. choices: the whole
+  read gives the live map (fast; the cut misses), or a copy (O(n), rare reads; a defensive copy,
+  against "share, don't copy" 10-12), or cow stays and big folders pay per write. *open*
+- code point order is an order chosen; today's three orders are accidental. a manual order stays a
+  value
+- rows and index are derived: per plan.org a cache is not in the graph, so they are library state,
+  not nodes. visible only through what reads them (describe), not in the inspector as nodes.
+  whether an index is a node: *open*
+- the index is fed by facts and kept, not dropped and worked out again: a second kind of cache
+  beside the decided one
+- size in attributes copies a fact of the value: two writers or a computation
+- part-major table: get(id) gives parts in the parts' order, not the order added
+- status in attributes: a computation's attributes entry changes twice per async run, so its
+  change header says "status" and keys readers of its attributes rerun; decided as is
+
+* Open
+- the whole children read on an in-place entry: live or copied
+- created time: an attribute written once, or nothing
+- size: kept by the value's writer, or by a computation
+- index and rows: nodes in the graph, or library state
+- ids as bytes in the encoding
+- the node as the unit of saving vs listing without values
+- incremental save for big folders

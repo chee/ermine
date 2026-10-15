@@ -32,7 +32,7 @@ async function ask(command: string[], requests: Record<string, unknown>[]): Prom
 	return answers
 }
 
-const dir = `${here}../../playground/files/conformance/names`
+const dir = `${here}../suites-aside/playground/files/conformance/names`
 const files: { name: string; s: Scenario }[] = []
 for await (const f of Deno.readDir(dir)) {
 	if (!f.name.endsWith(".json")) continue

@@ -35,7 +35,7 @@ Deno.test("versions: the heads with a side, the caller's time, sync's because", 
 	histories.add(r, n)
 	assertEquals(versions(histories, "value", () => 12), [{
 		content: { a: 1 },
-		change: { time: 12, actor: "a", node: "n" },
+		change: { time: 12, actor: "a" },
 		because: {
 			layer: "sync",
 			place: { lamport: 1, name: hex(n) },
@@ -75,7 +75,7 @@ Deno.test("commit: a site made shareable", () => {
 	const at = (file: string, roots: string[]) =>
 		commit(
 			histories,
-			change({ header: { time: 1, actor: "me", site: { file, line: 1 } } }),
+			change({ header: { time: 1, actor: "me", external: [{ file, line: 1 }] } }),
 			0,
 			roots,
 			random,
@@ -97,7 +97,7 @@ Deno.test("commit: live values in patches, actor and cause are stand-ins over th
 	const kind = (x: unknown) => x instanceof Canvas ? x.url : typeof x
 	const c = change({
 		patches: [{ path: [], value: { c: canvas, f: () => 1, list: [live, new Map()], n: 1 } }],
-		header: { time: 5, actor: canvas, cause: { by: live } },
+		header: { time: 5, actor: canvas, metadata: [["cause", { by: live }]] },
 	})
 	const b = commit(histories, c, 0, [], random, kind)
 	assertEquals(b.patches, [{

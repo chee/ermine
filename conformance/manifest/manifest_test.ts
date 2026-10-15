@@ -10,7 +10,7 @@ import { line } from "../pack/form.ts"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env --allow-read --allow-write ${here}harness.ts`
 const subject = (Deno.env.get("MANIFEST_HARNESS") ?? reference).split(" ")
-const scenarios = `${here}../../playground/files/conformance/manifest/`
+const scenarios = `${here}../suites-aside/playground/files/conformance/manifest/`
 const writes = Deno.permissions.querySync({ name: "write" }).state === "granted"
 
 type Request = Record<string, unknown> & { op: string }

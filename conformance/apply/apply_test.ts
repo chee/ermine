@@ -6,6 +6,6 @@ import { run } from "./run.ts"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env --allow-read ${here}harness.ts`
 await run(
-	`${here}../../extensions/subduction/conformance/apply`,
+	`${here}../suites-aside/sync/subduction/conformance/apply`,
 	(Deno.env.get("APPLY_HARNESS") ?? reference).split(" "),
 )

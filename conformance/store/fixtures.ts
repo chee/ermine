@@ -9,7 +9,7 @@
 // values it kept are caught as it appends; the scenario then gives them back as edits, with a
 // folder's file id in the plan written as the path that holds it, and lays out by hand, as
 // edits, whatever part of the plan the crash is to have done.
-import createEntry, { type Entry } from "@ermine/node/entry"
+import createNode, { type Node } from "../../playground/files/typescript/saved.ts"
 import * as cbor from "@ermine/encoding/cbor"
 import * as manifest from "@ermine/files/manifest"
 import { mirror, type Saving, store } from "@ermine/files/store"
@@ -17,7 +17,7 @@ import { fake, type Sys, system } from "@ermine/files/sys"
 import { toJson } from "../pack/form.ts"
 import { planOf, run, type Scenario, type Step } from "./run.ts"
 
-const out = new URL("../../playground/files/conformance/store/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/store/", import.meta.url)
 const here = new URL(".", import.meta.url).pathname
 const reference = ["deno", "run", "--quiet", "--allow-all", `${here}harness.ts`]
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -100,13 +100,13 @@ class Model {
 	}
 	/** The same, as store.ts takes it: new node objects. */
 	saving(ephemeral: string[] = []): Saving {
-		const table = new Map<string, Entry<unknown, unknown>>()
+		const table = new Map<string, Node<unknown, unknown>>()
 		for (const [id, n] of this.nodes) {
 			table.set(
 				id,
-				createEntry(id, {
+				createNode(id, {
 					value: n.value.map((v) => ({ ...v })),
-					info: [...n.info].map(([k, x]) => [k, x.map((v) => ({ ...v }))] as const),
+					attributes: [...n.info].map(([k, x]) => [k, x.map((v) => ({ ...v }))] as const),
 					children: [...n.children].map((
 						[k, x],
 					) => [k, x.map((v) => ({ ...v, content: [...(v.content as string[])] }))] as const),

@@ -276,23 +276,23 @@ const LIST: Which = ["children", "kids"]
 	)
 }
 
-// ---- a list emptied
+// ---- a list emptied (to [], a value like any)
 {
 	const A = mk({ object: LIST, patches: put(["x", "y"]) })
 	const B = mk({ object: LIST, parents: [A], patches: [{ path: [], range: [0, 2] }] })
-	const C = mk({ object: LIST, patches: [{ path: [], range: [0, 0], value: ["z"] }] })
-	scenario("list", "children: a list starts as []; a list left with nothing has no side", [
+	const C = mk({ object: LIST, patches: put(["z"]) })
+	scenario("list", "children: a list is a value like any; a range taken out of it leaves []", [
 		create(),
 		add(A),
 		add(C),
 		side(A, ["x", "y"]),
 		side(C, ["z"]),
 		add(B),
-		side(B, none),
+		side(B, []),
 		versions(
 			[A, B, C],
 			LIST,
-			desc(B, C).map((h): [typeof h, unknown] => [h, h === B ? none : ["z"]]),
+			desc(B, C).map((h): [typeof h, unknown] => [h, h === B ? [] : ["z"]]),
 		),
 	])
 }
@@ -481,4 +481,4 @@ const LIST: Which = ["children", "kids"]
 	)
 }
 
-await write(new URL("../../extensions/subduction/conformance/apply/", import.meta.url))
+await write(new URL("../suites-aside/sync/subduction/conformance/apply/", import.meta.url))

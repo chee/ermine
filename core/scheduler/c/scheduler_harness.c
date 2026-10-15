@@ -7,12 +7,12 @@
 // first (the read is the global one: after the await it counts for nothing), then settles the promise with its value or
 // error, as a then does. the rest (the result lands at the next pulse) is the scheduler's.
 //
-// writer, as the reference's: a computation's program takes sc_current_writer at its start and keeps
+// the run, as the reference's: a computer's program takes sc_get_run at its start and keeps
 // it in its context, so a write in a run (after an await too) names the run; in a set, act,
-// cleanup or run(), the computation's latest run (sc_latest); else none; "open": the writer open
-// (sc_current_writer). a scope's info is the
+// teardown or run(), the computer's latest run (sc_latest); else none; "open": the run open
+// (sc_get_run); a computation's name: its latest run (sc_latest). a scope's info is the
 // request's own pairs; every line is retained to the end, so what points into one stays good. a pulse past ENDLESS
-// moments is left by a longjmp out of the hook: it answers {"error":"endless"}, and the
+// moments is left by a longjmp out of a listener: it answers {"error":"endless"}, and the
 // scheduler is not used again reliably (it leaks)
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
@@ -24,6 +24,7 @@
 #include <string.h>
 
 #include "scheduler.h"
+#include "trace.h"
 #include "../../../conformance/c/harness.h"
 
 static void *allocate(size_t size) {
@@ -107,11 +108,11 @@ static char *name_it(sc_scope *o, const char *name) {
 static op_value **logged;
 static size_t nlogged, caplogged;
 
-// moments, as told (named when asked: a new computation is due before it has a name)
+// moments, as told (named when asked: a new computer is due before it has a name)
 typedef struct moment {
-	sc_moment m;
+	sc_told m;
 	char *error;
-	sc_computation **through;
+	sc_computer **through;
 	const void **reads;
 } moment;
 static moment *moments;
@@ -123,7 +124,7 @@ static size_t told;
 static bool pulsing;
 static jmp_buf endless;
 
-static void hook(const sc_moment *m, void *data) {
+static void told_moment(const sc_told *m, void *data) {
 	(void)data;
 	if (pulsing && ++told > ENDLESS) longjmp(endless, 1);
 	moment x = {.m = *m};
@@ -142,13 +143,23 @@ static void hook(const sc_moment *m, void *data) {
 	PUSH(moments, nmoments, capmoments, x);
 }
 
-// the keys forgotten since last asked
+// the keys untracked since last asked
 static op_value **forgotten;
 static size_t nforgotten, capforgotten;
 
-static void forget(const void *key, void *data) {
+static void untrack(const void *key, void *data) {
 	(void)data;
 	PUSH(forgotten, nforgotten, capforgotten, op_str(key));
+}
+
+// the tick of the latest mark (each mark and each new computer takes the next)
+static uint64_t latest_tick;
+static sc_trace trace;
+
+static void marked(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
+	size_t ndue, uint64_t tick, void *data) {
+	(void)keys, (void)nkeys, (void)run, (void)due, (void)ndue, (void)data;
+	latest_tick = tick;
 }
 
 static void drop(void *v, void *data) {
@@ -187,9 +198,9 @@ static bool json_equal(const void *a, const void *b, void *data) {
 
 // programs --------------------------------------------------------------------------------------
 
-// what an expression is evaluated in: the run's writer (sc_current_writer at its start), the computation, an act's values
+// what an expression is evaluated in: the run (sc_get_run at its start), the computer, an act's values
 typedef struct ctx {
-	sc_run *run; // the writer kept
+	sc_run *run; // the run kept
 	sc_scope *self;
 	const op_value *value;
 	const op_value *previous;
@@ -268,10 +279,10 @@ static const sc_pair *info_of(const op_value *list, size_t *n) {
 	return out;
 }
 
-// what is open: {scope, pairs, writer?}, by the computation of the writer; nothing: null. a
-// computation's info is the scheduler's, its values numbers; any other's is a request's
+// what is open: {scope, pairs, writer?}, by the computer of the run; nothing: null. a
+// computer's info is the scheduler's, its values numbers; any other's is a request's
 static op_value *current(void) {
-	sc_scope *open = sc_current(sch);
+	sc_scope *open = sc_get_current_scope(sch);
 	if (open == NULL) return op_null();
 	size_t depth = 0;
 	for (sc_scope *o = open; o; o = sc_scope_parent(o)) depth++;
@@ -295,21 +306,21 @@ static op_value *current(void) {
 	free(chain);
 	// the scheduler's own list agrees
 	sc_pair *flat = allocate((total + 1) * sizeof *flat);
-	if (sc_pairs(sch, flat, total) != total) abort();
+	if (sc_get_info(sch, flat, total) != total) abort();
 	free(flat);
 	op_value *out = op_map();
 	const char *name = sc_scope_user(open);
 	op_set(out, "scope", name ? op_str(name) : op_null());
 	op_set(out, "pairs", pairs);
-	sc_run *writer = sc_current_writer(sch);
-	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_of(writer))));
+	sc_run *writer = sc_get_run(sch);
+	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_computer(writer))));
 	return out;
 }
 
 // why nothing could be made in the scope open: none open, or it is gone
-static char *unmade(void) { return copyString(sc_current(sch) ? SC_DISPOSED : SC_UNSCOPED); }
+static char *unmade(void) { return copyString(sc_get_current_scope(sch) ? SC_DISPOSED : SC_UNSCOPED); }
 
-// who a change in this code is by: the run, else the computation's latest
+// who a change in this code is by: the run, else the computer's latest
 static sc_run *writer_of(const ctx *c) {
 	if (c->run) return c->run;
 	return c->self ? sc_latest(c->self) : NULL;
@@ -338,15 +349,16 @@ struct inrun {
 	const ctx *c;
 	val v;
 };
-// a cleanup made with a scope open
+// a teardown registered on a scope, with it open
 struct incleanup {
+	sc_scope *o;
 	char *(*f)(void *);
 	void *data;
 	char *bad;
 };
 static void in_cleanup(void *data) {
 	struct incleanup *k = data;
-	k->bad = sc_cleanup(sch, k->f, k->data);
+	k->bad = sc_register_teardown(sch, k->o, k->f, k->data);
 }
 static void in_run(void *data) {
 	struct inrun *r = data;
@@ -408,7 +420,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		if (k == NULL) return thrown(copyString("read of a non-string"));
 		entry *en = entry_of(k);
 		free(k);
-		sc_read_status st = sc_read(sch, en->key);
+		sc_track_status st = sc_track(sch, en->key);
 		if (st == SC_STOP) return (val){V_STOP, NULL, NULL, NULL};
 		return ok(en->value ? op_ref(en->value) : op_null());
 	}
@@ -472,8 +484,19 @@ static val evaluate(const op_value *e, const ctx *c) {
 		const void *key = entry_of(k)->key;
 		free(k);
 		const char *said = text(a2);
-		sc_run *writer = a2 == NULL ? writer_of(c) : said && strcmp(said, "open") == 0 ? sc_current_writer(sch) : NULL;
-		sc_changed(sch, &key, 1, writer);
+		sc_run *writer = NULL;
+		if (a2 == NULL) writer = writer_of(c);
+		else if (said && strcmp(said, "open") == 0) writer = sc_get_run(sch);
+		else if (said) {
+			// a computation by name: its latest run (none yet: from outside)
+			sc_scope *o = scope_named(said);
+			if (o == NULL) {
+				release(v);
+				return thrown(formatString("no scope %s", said));
+			}
+			writer = sc_latest(o);
+		}
+		sc_mark(sch, &key, 1, writer);
 		return v;
 	}
 	if (strcmp(form, "throw") == 0) {
@@ -510,7 +533,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 	if (strcmp(form, "run") == 0) {
 		if (c->self == NULL) return thrown(copyString("run outside a computation"));
 		struct inrun r = {arg, c, ok(NULL)};
-		const char *bad = sc_setup(c->self, in_run, &r);
+		const char *bad = sc_run_with_scope(c->self, in_run, &r);
 		if (bad) return thrown(copyString(bad));
 		return r.v;
 	}
@@ -519,7 +542,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		sc_scope *o = name ? scope_named(name) : NULL;
 		if (o == NULL) return thrown(formatString("no scope %s", name ? name : "null"));
 		struct inrun r = {a1, c, ok(NULL)};
-		const char *bad = sc_setup(o, in_run, &r);
+		const char *bad = sc_run_with_scope(o, in_run, &r);
 		if (bad) return thrown(copyString(bad));
 		return r.v;
 	}
@@ -530,7 +553,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		if (up && parent == NULL) return thrown(formatString("no scope %s", up));
 		size_t n;
 		const sc_pair *info = info_of(a1, &n);
-		sc_scope *o = sc_scope_new(sch, info, n, parent);
+		sc_scope *o = sc_create_scope(sch, info, n, parent);
 		if (o == NULL) return thrown(parent ? copyString(SC_DISPOSED) : unmade());
 		char *bad = name_it(o, name ? name : "");
 		if (bad) return thrown(bad);
@@ -539,10 +562,10 @@ static val evaluate(const op_value *e, const ctx *c) {
 	if (strcmp(form, "within") == 0) {
 		size_t n;
 		const sc_pair *info = info_of(a0, &n);
-		sc_scope *o = sc_scope_new(sch, info, n, NULL);
+		sc_scope *o = sc_create_scope(sch, info, n, NULL);
 		if (o == NULL) return thrown(unmade());
 		struct inrun r = {a1, c, ok(NULL)};
-		const char *bad = sc_setup(o, in_run, &r);
+		const char *bad = sc_run_with_scope(o, in_run, &r);
 		if (bad) return thrown(copyString(bad));
 		return r.v;
 	}
@@ -552,10 +575,12 @@ static val evaluate(const op_value *e, const ctx *c) {
 		const char *name = text(a0);
 		sc_scope *o = name ? scope_named(name) : NULL;
 		if (o == NULL && !is(a0, OP_NULL)) return thrown(formatString("no scope %s", name ? name : "null"));
-		struct incleanup k = {cleanup_run, closure_of(a1, c), NULL};
-		if (o == NULL || sc_current(sch) == o) in_cleanup(&k);
+		if (o == NULL) o = sc_get_current_scope(sch);
+		if (o == NULL) return thrown(copyString(SC_UNSCOPED));
+		struct incleanup k = {o, cleanup_run, closure_of(a1, c), NULL};
+		if (sc_get_current_scope(sch) == o) in_cleanup(&k);
 		else {
-			const char *why = sc_setup(o, in_cleanup, &k);
+			const char *why = sc_run_with_scope(o, in_cleanup, &k);
 			if (why) return thrown(copyString(why));
 		}
 		if (k.bad) return thrown(k.bad);
@@ -565,7 +590,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		const char *name = text(arg);
 		sc_scope *o = name ? scope_named(name) : NULL;
 		if (o == NULL) return thrown(formatString("no scope %s", name ? name : "null"));
-		char *bad = sc_dispose(o);
+		char *bad = sc_teardown(o);
 		if (bad) return thrown(bad);
 		return ok(op_null());
 	}
@@ -573,20 +598,20 @@ static val evaluate(const op_value *e, const ctx *c) {
 	return thrown(formatString("unknown form %s", form));
 }
 
-// a computation's program
+// a computer's program
 
 typedef struct prog {
 	const op_value *f;
 	const op_value *act;
 	const char *to;
-	sc_computation *self;
+	sc_computer *self;
 } prog;
 static prog **progs;
 static size_t nprogs, capprogs;
 
 static sc_out program_f(void *previous, void *data) {
 	prog *p = data;
-	ctx c = {sc_current_writer(sch), p->self, NULL, previous};
+	ctx c = {sc_get_run(sch), p->self, NULL, previous};
 	val v = evaluate(p->f, &c);
 	switch (v.k) {
 	case V_OK: return (sc_out){.kind = SC_VALUE, .value = v.j};
@@ -600,11 +625,11 @@ static char *program_set(void *value, void *data) {
 	prog *p = data;
 	if (p->to == NULL) return NULL;
 	keep(p->to, value);
-	sc_changed(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
+	sc_mark(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
 	return NULL;
 }
 
-static char *program_act(void *value, void *previous, void *data) {
+static char *program_effect(void *value, void *previous, void *data) {
 	prog *p = data;
 	ctx c = {NULL, p->self, value, previous};
 	return error_of(evaluate(p->act, &c));
@@ -637,29 +662,29 @@ static const char *ended_name(sc_ended e) {
 	default: return "looping";
 	}
 }
-static op_value *name_json(const sc_computation *c) { return op_str((const char *)sc_scope_user(c)); }
+static op_value *name_json(const sc_computer *c) { return op_str((const char *)sc_scope_user(c)); }
 
 // reads: an ends moment with its reads, the keys (the store's strings)
 static op_value *moment_json(const moment *x, bool reads) {
-	const sc_moment *m = &x->m;
+	const sc_told *m = &x->m;
 	op_value *o = op_map();
 	switch (m->kind) {
-	case SC_DUE:
+	case SC_T_DUE:
 		op_set(o, "due", name_json(m->c));
 		op_set(o, "tick", integer((int64_t)m->tick));
-		if (m->writer) op_set(o, "writer", name_json(m->writer));
+		if (m->by) op_set(o, "writer", name_json(m->by));
 		break;
-	case SC_STARTS:
+	case SC_T_STARTS:
 		op_set(o, "starts", name_json(m->c));
 		op_set(o, "run", integer(m->run));
 		op_set(o, "rank", integer(m->rank));
 		break;
-	case SC_ACTS:
+	case SC_T_ACTS:
 		op_set(o, "acts", name_json(m->c));
 		op_set(o, "run", integer(m->run));
 		if (m->error) op_set(o, "error", op_str(m->error));
 		break;
-	case SC_ENDS:
+	case SC_T_ENDS:
 		op_set(o, "ends", name_json(m->c));
 		op_set(o, "run", integer(m->run));
 		op_set(o, "ended", op_str(ended_name(m->ended)));
@@ -688,18 +713,18 @@ static sc_scope *need_scope(const op_value *name, char **bad) {
 	return o;
 }
 
-// a computation made with a scope open
+// a computer made with a scope open
 struct making {
 	sc_def def;
 	bool effect;
-	sc_computation *c;
+	sc_computer *c;
 };
 static void in_making(void *data) {
 	struct making *m = data;
-	m->c = m->effect ? sc_effect(sch, m->def) : sc_compute(sch, m->def);
+	m->c = m->effect ? sc_create_effect(sch, m->def) : sc_create_computer(sch, m->def);
 }
 
-static op_value *make_computation(const op_value *r, bool effect) {
+static op_value *make_computer(const op_value *r, bool effect) {
 	char *bad = NULL;
 	sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 	if (!o) return answer_error(bad);
@@ -715,12 +740,12 @@ static op_value *make_computation(const op_value *r, bool effect) {
 		.equal = eq && strcmp(eq, "json") == 0 ? json_equal : object_is,
 		.key = !effect && p->to && declared && declared->type == OP_BOOL && declared->bool_ ? p->to : NULL,
 		.data = p};
-	if (effect) def.act = program_act;
+	if (effect) def.effect = program_effect;
 	else def.set = program_set;
 	struct making m = {def, effect, NULL};
-	const char *why = sc_setup(o, in_making, &m);
+	const char *why = sc_run_with_scope(o, in_making, &m);
 	if (why) return answer_error(copyString(why));
-	sc_computation *c = m.c;
+	sc_computer *c = m.c;
 	if (c == NULL) return answer_error(copyString(SC_DISPOSED));
 	p->self = c;
 	bad = name_it(c, text(op_get(r, "name")));
@@ -759,7 +784,7 @@ static op_value *answer(const op_value *r) {
 		if (parent && parent->type != OP_NULL && !(p = need_scope(parent, &bad))) return answer_error(bad);
 		size_t n;
 		const sc_pair *info = info_of(op_get(r, "info"), &n);
-		sc_scope *o = op[0] == 'r' ? sc_root(sch, info, n) : sc_scope_new(sch, info, n, p);
+		sc_scope *o = op[0] == 'r' ? sc_create_root_scope(sch, info, n) : sc_create_scope(sch, info, n, p);
 		if (o == NULL) return answer_error(p ? copyString(SC_DISPOSED) : unmade());
 		bad = name_it(o, text(op_get(r, "name")));
 		return bad ? answer_error(bad) : op_map();
@@ -769,20 +794,20 @@ static op_value *answer(const op_value *r) {
 		op_set(out, "value", current());
 		return out;
 	}
-	if (strcmp(op, "compute") == 0) return make_computation(r, false);
-	if (strcmp(op, "effect") == 0) return make_computation(r, true);
+	if (strcmp(op, "compute") == 0) return make_computer(r, false);
+	if (strcmp(op, "effect") == 0) return make_computer(r, true);
 	if (strcmp(op, "cleanup") == 0 || strcmp(op, "run") == 0) {
 		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 		if (!o) return answer_error(bad);
 		ctx c = {NULL, o, NULL, NULL};
 		if (op[0] == 'c') {
-			struct incleanup k = {cleanup_run, closure_of(op_get(r, "do"), &c), NULL};
-			const char *why = sc_setup(o, in_cleanup, &k);
+			struct incleanup k = {o, cleanup_run, closure_of(op_get(r, "do"), &c), NULL};
+			const char *why = sc_run_with_scope(o, in_cleanup, &k);
 			if (why) return answer_error(copyString(why));
 			return k.bad ? answer_error(k.bad) : op_map();
 		}
 		struct inrun in = {op_get(r, "do"), &c, ok(NULL)};
-		const char *why = sc_setup(o, in_run, &in);
+		const char *why = sc_run_with_scope(o, in_run, &in);
 		if (why) return answer_error(copyString(why));
 		if (in.v.k == V_THROW) return answer_error(in.v.err);
 		op_value *out = op_map();
@@ -792,7 +817,7 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "dispose") == 0) {
 		sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 		if (!o) return answer_error(bad);
-		bad = sc_dispose(o);
+		bad = sc_teardown(o);
 		return bad ? answer_error(bad) : op_map();
 	}
 	if (strcmp(op, "write") == 0 || strcmp(op, "changed") == 0) {
@@ -810,7 +835,7 @@ static op_value *answer(const op_value *r) {
 			if (write) keep(k, list->items[i]);
 			keys[i] = entry_of(k)->key;
 		}
-		uint64_t t = sc_changed(sch, keys, n, NULL);
+		uint64_t t = sc_mark(sch, keys, n, NULL);
 		free(keys);
 		return answer_tick(t);
 	}
@@ -864,12 +889,17 @@ static op_value *answer(const op_value *r) {
 		op_set(out, "keys", list);
 		return out;
 	}
-	if (strcmp(op, "tick") == 0) return answer_tick(sc_tick(sch));
+	if (strcmp(op, "tick") == 0) return answer_tick(latest_tick);
 	return answer_error(formatString("unknown op %s", op));
 }
 
 void hh_answer(const op_value *r, FILE *out) {
-	if (sch == NULL) sch = sc_new((sc_options){.hook = hook, .drop = drop, .forget = forget});
+	if (sch == NULL) {
+		sch = sc_new((sc_options){.drop = drop});
+		sc_trace_start(sch, &trace, told_moment, NULL);
+		sc_on_untrack(sch, untrack, NULL);
+		sc_on_mark(sch, marked, NULL);
+	}
 	PUSH(lines, nlines, caplines, hh_retain());
 	op_value *a = answer(r);
 	op_json_write(out, a);

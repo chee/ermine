@@ -14,7 +14,7 @@ import { toJson } from "../pack/form.ts"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`
 const subject = (Deno.env.get("HISTORY_HARNESS") ?? reference).split(" ")
-const scenarios = `${here}../../extensions/subduction/conformance/history/`
+const scenarios = `${here}../suites-aside/sync/subduction/conformance/history/`
 
 type Request = Record<string, unknown> & { op: string }
 type Step = { request: Request; expect: unknown }

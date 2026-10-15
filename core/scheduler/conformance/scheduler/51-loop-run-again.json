@@ -1,0 +1,176 @@
+{
+	"title": "a change after an await, by a run since run again: no loop through it; what read it runs, as for any change (proof L2)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "m"
+							},
+							1
+						]
+					},
+					{
+						"sum": [
+							{
+								"read": "k"
+							},
+							1
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "c"
+									},
+									null
+								]
+							},
+							1,
+							{
+								"wait": [
+									"p",
+									{
+										"write": [
+											"k",
+											5
+										]
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			"to": "c"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 2,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"m": 1
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 4,
+						"writer": "c"
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 6
+			}
+		}
+	]
+}

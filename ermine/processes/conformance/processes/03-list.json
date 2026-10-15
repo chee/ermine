@@ -1,0 +1,259 @@
+{
+	"title": "list(/work) merges the rows' names with the saved ones, each name once, from the first contributor that gives it (processes before children), and reruns on start and stop; members gives each with its id and from; a level under a saved folder is no name of its own; lookup by a bare name from inside /work finds the process",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clock": "C0",
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C0",
+			"value": {
+				"on": "ON0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ON0",
+			"value": {
+				"reset": "RS0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PON",
+			"value": {
+				"reset": "PRS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "names",
+			"scope": "o",
+			"f": {
+				"names": [
+					"work"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 1,
+				"value": [
+					"clock",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"timer"
+			],
+			"id": "T",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 2,
+				"value": [
+					"timer",
+					"clock",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "members",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "timer",
+						"id": "T",
+						"from": "process"
+					},
+					{
+						"name": "clock",
+						"id": "P",
+						"from": "process"
+					},
+					{
+						"name": "notes",
+						"id": "N",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"timer"
+			],
+			"from": [
+				"work"
+			],
+			"expect": {
+				"path": [
+					"work",
+					"timer"
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"timer"
+			],
+			"from": [
+				"work",
+				"notes"
+			],
+			"expect": {
+				"path": [
+					"work",
+					"timer"
+				]
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"timer",
+				"on"
+			],
+			"from": [
+				"work",
+				"notes"
+			],
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"timer"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "names",
+			"expect": {
+				"runs": 3,
+				"value": [
+					"clock",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"notes",
+				"pad"
+			],
+			"id": "Q",
+			"expect": {}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work",
+				"notes"
+			],
+			"expect": {
+				"names": [
+					"pad"
+				]
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"names": [
+					"clock",
+					"notes"
+				]
+			}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"work"
+				]
+			}
+		}
+	]
+}

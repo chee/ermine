@@ -1,0 +1,140 @@
+{
+	"title": "teardown leaves nothing: an entry per step of a path is kept while a run tracks it (and the spots it reads), and when the runs go, no entry, no key read and no spot is left",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clock": "C0",
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C0",
+			"value": {
+				"on": "ON0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ON0",
+			"value": {
+				"reset": "RS0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "cache",
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"cached": [
+					"work",
+					"clock",
+					"on",
+					"reset"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "l",
+			"scope": "o",
+			"f": {
+				"count": {
+					"cachedMembers": [
+						"work"
+					]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"runs": 1,
+				"value": "RS0"
+			}
+		},
+		{
+			"op": "state",
+			"name": "l",
+			"expect": {
+				"runs": 1,
+				"value": 2
+			}
+		},
+		{
+			"op": "cacheKept",
+			"expect": {
+				"entries": 5,
+				"reads": 9
+			}
+		},
+		{
+			"op": "kept",
+			"expect": {
+				"keys": 4,
+				"spots": 6,
+				"steps": 9
+			}
+		},
+		{
+			"op": "dispose",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"name": "l",
+			"expect": {}
+		},
+		{
+			"op": "cacheKept",
+			"expect": {
+				"entries": 0,
+				"reads": 0
+			}
+		},
+		{
+			"op": "kept",
+			"expect": {
+				"keys": 0,
+				"spots": 0,
+				"steps": 0
+			}
+		}
+	]
+}

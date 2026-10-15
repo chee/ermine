@@ -10,7 +10,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { encode, Stand, type Value } from "@ermine/encoding/cbor"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../playground/files/conformance/manifest/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/manifest/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 const utf8 = new TextEncoder()

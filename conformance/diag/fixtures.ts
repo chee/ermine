@@ -7,7 +7,7 @@
 import { Stand } from "@ermine/encoding/cbor"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../playground/files/conformance/diag/", import.meta.url)
+const out = new URL("../suites-aside/playground/files/conformance/diag/", import.meta.url)
 
 type Fixture = { name: string; scenario: unknown }
 const all: Fixture[] = []

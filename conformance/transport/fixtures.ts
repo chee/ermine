@@ -16,7 +16,7 @@ import { seal, stored } from "@ermine/subduction/seal"
 import { id } from "@ermine/subduction/id"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../extensions/subduction/conformance/transport/", import.meta.url)
+const out = new URL("../suites-aside/sync/subduction/conformance/transport/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const fill = (n: number, len = 32) => new Uint8Array(len).fill(n)
 const range = (from: number) => Uint8Array.from({ length: 32 }, (_, i) => from + i)

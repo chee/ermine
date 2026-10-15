@@ -6,7 +6,7 @@ import type { Entry } from "@ermine/node/entry"
 
 // the tables, each a name and the shape of the value under it. open: a package adds its own by
 // declaration merging, as jsx's IntrinsicElements are added to:
-//   declare module "@ermine/graph/table" { interface Tables { run: Run } }
+//   declare module "@ermine/table" { interface Tables { run: Run } }
 // the table checks no name and no shape
 export interface Tables {
 	value: unknown

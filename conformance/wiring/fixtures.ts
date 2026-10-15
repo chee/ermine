@@ -23,7 +23,7 @@ import { type Blop, encode, name as blopName } from "@ermine/encoding/blop"
 import { id } from "@ermine/subduction/id"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../extensions/subduction/conformance/wiring/", import.meta.url)
+const out = new URL("../suites-aside/sync/subduction/conformance/wiring/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 const fill = (n: number, len = 32) => new Uint8Array(len).fill(n)

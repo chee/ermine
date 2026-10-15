@@ -1,4 +1,4 @@
-// The C apply on the line protocol (newcore/conformance/apply/session.ts): one JSON request per
+// The C apply on the line protocol (conformance/apply/session.ts): one JSON request per
 // line in, one answer per line out. A blop is in its JSON form (ENCODING.tex: "/" for bytes);
 // names are lowercase hex.
 //   {op: "create", node}            -> {}; the histories of the node, apply.h's check
@@ -55,36 +55,14 @@ static void print_text(const char *text) {
 	jsonFree(j);
 }
 
-// a side as a json.h value, fresh
-static Json *json_of(const nt_value *v) {
-	Json *j;
-	switch (v->type) {
-	case NT_NULL: return jsonNull();
-	case NT_BOOL: return jsonBoolean(v->bool_);
-	case NT_NUM: return jsonNumber(v->num);
-	case NT_STR: return jsonStringOfLength(v->str, v->bytes);
-	case NT_BYTES: return jsonBytes(v->data, v->bytes);
-	case NT_TYPED: return jsonTyped((JsonKind)v->kind, v->data, nt_length(v));
-	case NT_STAND: return jsonStand(json_of(v->items[0]));
-	case NT_LIST:
-		j = jsonArray();
-		for (size_t i = 0; i < v->count; i++) jsonPush(j, json_of(v->items[i]));
-		return j;
-	default:
-		j = jsonObject();
-		for (size_t i = 0; i < v->count; i++) jsonAdd(j, v->keys[i], json_of(v->items[i]));
-		return j;
-	}
-}
-
-static void print_value(const nt_value *v) {
-	Json *j = json_of(v);
+static void print_value(const op_value *v) {
+	Json *j = apply_json(v);
 	print_json(j);
 	jsonFree(j);
 }
 
 static void print_version(const apply_version *v) {
-	const ch_header *h = &v->change.header;
+	const ch_header *h = &v->change;
 	fputs("{", stdout);
 	// no content: a removal among other heads
 	if (v->content) fputs("\"content\":", stdout), print_value(v->content), fputs(",", stdout);
@@ -94,24 +72,39 @@ static void print_version(const apply_version *v) {
 	fputs("\"actor\":", stdout);
 	print_json(h->actor);
 	if (h->reader) fputs(",\"reader\":", stdout), print_text(h->reader);
-	if (h->has_site) {
-		fputs(",\"site\":{\"file\":", stdout);
-		print_text(h->site.file);
-		printf(",\"line\":%ld", h->site.line);
-		if (h->site.has_column) printf(",\"column\":%ld", h->site.column);
-		if (h->site.function) fputs(",\"function\":", stdout), print_text(h->site.function);
-		putchar('}');
+	if (h->external_length) {
+		fputs(",\"external\":[", stdout);
+		for (size_t i = 0; i < h->external_length; i++) {
+			const ch_site *site = &h->external[i];
+			if (i) putchar(',');
+			fputs("{\"file\":", stdout);
+			print_text(site->file);
+			printf(",\"line\":%ld", site->line);
+			if (site->has_column) printf(",\"column\":%ld", site->column);
+			if (site->function) fputs(",\"function\":", stdout), print_text(site->function);
+			putchar('}');
+		}
+		putchar(']');
 	}
-	if (h->cause) fputs(",\"cause\":", stdout), print_json(h->cause);
-	if (h->has_wallclock) printf(",\"wallclock\":%lld", (long long)h->wallclock);
-	if (h->message) fputs(",\"message\":", stdout), print_text(h->message);
-	fputs(",\"node\":", stdout);
-	print_text(v->change.node);
+	// the entries: a cause is a Json, a wallclock an int64, a message text
+	if (h->metadata_length) {
+		fputs(",\"metadata\":[", stdout);
+		for (size_t i = 0; i < h->metadata_length; i++) {
+			const ch_entry *e = &h->metadata[i];
+			if (i) putchar(',');
+			fputs("[", stdout);
+			print_text(e->key);
+			putchar(',');
+			if (strcmp(e->key, "cause") == 0) print_json(e->value);
+			else if (strcmp(e->key, "wallclock") == 0) printf("%lld", (long long)*(const int64_t *)e->value);
+			else print_text(e->value);
+			putchar(']');
+		}
+		putchar(']');
+	}
 	fputs("},\"because\":{\"layer\":", stdout);
-	print_text(v->because.layer);
-	const apply_place *p = v->because.place;
-	const apply_why *w = v->because.why;
-	printf(",\"place\":{\"lamport\":%lld,\"name\":\"%s\"},\"why\":{\"signer\":\"%s\"}}}", (long long)p->lamport, p->name, w->signer);
+	print_text(v->layer);
+	printf(",\"place\":{\"lamport\":%lld,\"name\":\"%s\"},\"why\":{\"signer\":\"%s\"}}}", (long long)v->lamport, v->name, v->signer);
 }
 
 static void row(const history_row *r) {
@@ -192,7 +185,7 @@ int main(void) {
 			history_row_free(&r);
 			free_request = false;
 		} else if (strcmp(op, "side") == 0 && text && unhex(text, name, 32)) {
-			const nt_value *side = apply_side(current, name);
+			const op_value *side = apply_side(current, name);
 			if (side == NULL) puts("{\"none\":true}");
 			else {
 				fputs("{\"side\":", stdout);

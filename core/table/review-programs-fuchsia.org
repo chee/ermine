@@ -1,0 +1,302 @@
+#+title: Programs, chains, capabilities: a Fuchsia review
+#+author: LLM generated working output (a Fuchsia lens)
+#+date: 2026-10-15
+
+This reviews the 10-14/10-15 program sketch (needs, chains, UTIs, the host) the way a Fuchsia
+component-framework engineer would see it. It is grounded in core/table/plan.org and
+playground/ermine-slaygrounds/examples/prog-build/host.ts. Numbers like [3] point to the
+sources at the end.
+
+* The short of it
+1. *Split them, and route them differently.* Fuchsia has the same two things on two channels.
+   Capabilities go by explicit routing: offer, use and expose, with every hop declared.
+   Runners and resolvers go by environments, which are inherited down the tree, and the
+   nearest one wins. Fuchsia's own principles call environments "a compromise between security
+   and ergonomics that create a sort of ambient authority" [1]. A lookup up from a place,
+   nearest first, is the environment model. It suits forms of code. It is the wrong model for
+   capabilities. prog-build's single walk (collect) carries both.
+2. *The runner gets every capability, so it never comes from lookup.* A Fuchsia runner receives
+   the component's whole namespace [3]. Whoever places the nearest runner gets the capabilities
+   of everything started below it. In ermine, "nearer" can be a synced folder that someone else
+   writes. So the runner comes from the host's node or from the starter's own node.
+3. *Pin by content, and record the plan at start.* A Fuchsia package hash is a merkle root over
+   everything in the package. A URL without ~?hash=~ means "newest", and so it drifts [11].
+   Subpackages fix this by pinning child hashes at build time [12]. In ermine, a lock holds the
+   program hash, each compiler's built hash and the runner. It is written on the process node
+   at start. Lookup proposes; the lock decides; any difference is shown.
+
+* 1. The split
+| ermine                                   | Fuchsia                                                        |
+|------------------------------------------+----------------------------------------------------------------|
+| ~needs~                                  | ~use~                                                          |
+| ~provides~ (a program's ./on handlers)   | ~expose~                                                       |
+| what the host holds (fetch, dom)         | what the root offers; ~from: "framework"~ for the runtime's own |
+| ~type~ (the form of the code)            | the binary format that ~program.runner~ implies                |
+| ~runs~ (on the host)                     | runners in the root environment; ELF is built in [4]           |
+| compiler (~from~ → ~to~)                 | none at runtime: build time (GN, Bazel), output is blobs       |
+| ~lookup("clock")~                        | resolver: URL → manifest + package dir [5]                     |
+| ~start(program, path)~                   | create a child in a collection, then bind                      |
+| process (a scope with a path)            | component instance (moniker) [6]                               |
+| box (the "/" a process is handed)        | namespace                                                      |
+
+- *Words:* chee's decided sentence is "declares what it needs and provides". In Fuchsia terms
+  that is use and expose, so keep ~needs~ and ~provides~ for capabilities. Forms get their own
+  words: ~type~, ~from~, ~to~ and ~runs~. That is the split chee asked about, and the names
+  are already there.
+- *A form in a capability list:* the sketch's host has ~gives: ["fetch", "dom", "es2025"]~.
+  ~es2025~ is a form, a language level. It belongs in ~runs~.
+- *Hops:* in Fuchsia every hop says where the capability comes from (~"parent"~, ~"#child"~,
+  ~"self"~, ~"framework"~), and a component knows only its children [1]. Routing happens when
+  a capability is opened. It walks up through offers and down through exposes. If the route
+  fails, the channel is closed and an error is logged [7].
+- *Any ancestor counts:* in the ermine walk, no hop declares anything. Any member of any
+  ancestor counts, the nearest wins, and the walk never goes down. That is Components v1. A
+  .cmx file could "declare any list of services … but it will only be able to access services
+  present in its environment" [2]. Components v2 took capabilities off that model and kept it
+  only for runners and resolvers [8].
+- *Going down:* Fuchsia also refuses to look down. It goes down only through a child's own
+  ~expose~. Chee's "absolutely not" is right. A program's ~provides~ is the one sanctioned way
+  down.
+- *Woken only when wanted:* this is ~startup: lazy~. A provider starts the first time someone
+  opens a capability it exposes [7]. Fuchsia decides this once, when the capability is opened.
+  ermine's tracked plan keeps deciding.
+
+* 2. Who grants
+What Fuchsia does:
+- *A use grants nothing:* the parent must offer. An author can't widen a component's authority
+  by editing its manifest.
+- *Privileged fields are allowlisted:* they sit behind an allowlist on top of routing [4].
+  ~ffx scrutiny verify route-sources~ checks that routes to chosen components come from chosen
+  sources [9].
+- *Environments carry little:* only runners, resolvers and debug capabilities ride the ambient
+  channel. Even that much is called ambient authority [1].
+
+What goes wrong with "the program declares, the host gives":
+- *Self-granting:* the program's author writes the needs list. If the host gives every need it
+  holds, the author decides. That was v1: the ~sys~ environment held nearly every service.
+- *Shadowing:* a ~fetch~ placed nearer is the one clock gets. It could be a test stub, or a
+  collaborator's synced /work. In Fuchsia, only the product and the parents write the tree.
+  In ermine, others can write your ancestry.
+- *Moves change authority:* move clock.c, or start it elsewhere, and it gets something else.
+  Fuchsia hit the storage form of this: state keyed by moniker broke when a component moved,
+  hence the component ID index [10].
+- *No audit:* answering "who can reach fetch?" means checking every walk from every place, live.
+- *Upgrades widen:* the next version adds ~needs: ["fs"]~ and gets it.
+- *Dead ends:* chee's 10-09 worry about dead ends has an answer. Fuchsia checks routes before
+  anything runs (scrutiny on CQ, ~ffx component doctor~) [9]. ermine's plan is a read, so it
+  can show "complete" or "missing" before start.
+
+The Fuchsia-shaped answer, in ermine words:
+- *Capabilities are local:* they are nodes the host made, never saved and never sent. prog-build
+  already says this: "they hold real power, so the host makes them". A synced node can claim
+  ~provides: ["fetch"]~, but it is never a capability.
+- *The starter hands them:* ~give~ at start. The starter can hand only what it holds itself, so
+  a process starting a process can only narrow.
+- *A person decides:* the host shows needs against what is given, and the person chooses (show,
+  don't decide). Routes are one hop deep (host → program) unless processes nest, so giving
+  explicitly costs little. That depth is what made Fuchsia verbose: CML include shards, and
+  dictionaries [13].
+
+* 3. Runners, resolvers, compilers
+- *Resolver = lookup:* a resolver turns a URL into (decl, package dir) [5]. In Fuchsia the
+  parent names the child's URL; the child never names its parent [1].
+  ~start(lookup("clock"), path)~ is that: the starter looks the program up from its own place.
+- *Runner = the platform:* the runner gets the resolved program and its namespace in
+  ~ComponentStartInfo~ [3]. The program names a runner (~program.runner: "elf"~), and the
+  environment binds that name to a provider. ELF is "a built-in runner … available to all
+  components" [4], which is the base case. The Dart, Flutter and Starnix runners are themselves
+  components run by ELF. "A program runs on a platform" means its platform is its runner. "The
+  host might want to place a loader right at the top of the root that represents itself" is
+  component_manager's built-in ELF.
+- *Processes are the host's:* a Fuchsia component instance is not a process. The ELF runner
+  makes one; the Dart runner put many components in one. An ermine process is an instance (a
+  scope with a path). Workers are the runner's choice ("a loader can pass out a JS function
+  that runs everything in a worker").
+- *A process writing its own loader:* any Fuchsia component can be a runner and offer it to its
+  children (test runners, Starnix). Authority never grows: the runner gets only what was given.
+  In ermine, a runner inside the process's node is on the walk only of things started under
+  the process. Walking up gives you this for free.
+- *Compilers:* Fuchsia has no runtime equivalent; compiling happens at build time. The
+  exception is JITs, and making memory executable is gated (~ambient_mark_vmo_exec~ is
+  allowlisted [4]). The lesson: *compilers make data, and only the runner turns data into
+  running code.* A compiler's output is bytes with a hash.
+- *Loader:* chee said "loader is not a provide", and Fuchsia agrees. A runner is routed to an
+  environment, but the program never holds it. Use "runner" (or "platform") for the last step
+  and "compiler" for the steps before it, and let "loader" go.
+
+* 4. Chains, caching, pins
+In Fuchsia:
+- *Package hash:* ~meta/contents~ maps names to merkle roots, and the package hash is the merkle
+  root of ~meta.far~. One hash covers everything. blobfs stores blobs by root, deduped across
+  packages [14].
+- *Pinning:* ~?hash=~ pins a version; without it you get the newest revision [11]. Subpackages
+  write the child's hash into the parent's metadata at build time, to stop version skew [12].
+- *Config:* config values ship with the component. A parent overrides only the fields the child
+  opened to it [15].
+
+Mapped to ermine:
+- *Step key:* each step is keyed by the compiler's /built/ hash plus the input hash.
+  prog-build keys by the loader's /source/ hash. That works while loaders are plain JS. Once a
+  compiler has its own chain, its key must be its own lock hash, merkle-style. Otherwise a
+  change to what built cc goes unseen.
+- *A compiler's capabilities are inputs:* cc needs ~compile~, a server. A new clang changes the
+  output but not the key. So either the capability's version goes in the key, or the step
+  always reruns (Build Systems à la Carte would call it volatile). Fuchsia's answer is hermetic
+  builds.
+- *The lock:* the plan, written on the process node at start:
+  #+begin_src js
+  lock: { program: [id, hash], steps: [[id, hash, out], ...], runner: [id, hash] }
+  #+end_src
+  Started with a lock, the process gets exactly that or is refused, like a ~?hash=~ the repo
+  doesn't have. Started without one, it gets the newest, and the lock is written. The id says
+  where to look (histories); the hash says what must be there. A content hash also lets two
+  devices share a cache entry, like blobfs dedup.
+- *Pinned vs live:* prog-build's ~pinned~ (keep the run; ~stale~ says what differs) is already
+  ~?hash=~ against none. Keep it.
+
+* 5. UTIs as program types
+Good:
+- *Anyone can mint one:* reverse-DNS names need no registry (~party.chee.ermine.js-main~).
+- *Conformance:* ~public.c-source~ → ~public.source-code~ → ~public.plain-text~, so a text viewer
+  shows C. That is right for /viewing/ (prog-render's renderers).
+- *The Mac host already has them:* the Mac host speaks UTType, as the Finder does.
+
+Bad:
+- *Conformance is wrong for compiling:* a compiler ~from: "public.source-code"~ matches C by
+  conformance and then fails. Match ~from~ exactly, as Fuchsia matches runner names exactly.
+  Use conformance only for viewers.
+- *Several parents:* conformance is a DAG with several parents. With two compilers matched by
+  conformance at one level, "more specific" has no definition.
+- *No versions:* there is nothing for es2020 against es2025. Put the level in the name
+  (~party.chee.ermine.js.es2025~), and say "es2024 conforms to es2025" as data.
+- *Mac only:* Apple's UTI database isn't on other hosts. Keep the hierarchy in the graph:
+  ~/types/public.c-source {conforms: [...]}~, visible and editable.
+- *~type~ against ~from~/~to~:* in the sketch, cc-wasm's ~type~ is what cc's own bytes are (the
+  chain that runs cc). ~from~ and ~to~ say what cc changes (the chain cc is a step of). Two
+  chains: keep both attributes.
+
+The platform name is fine as a type. ~party.chee.ermine.js-main~ is a form: "a JS module whose
+default export takes the scheduler context". Fuchsia uses plain names (~"elf"~), which also
+work. Other options: MIME (no hierarchy beyond ~+json~); plain names with conformance as data;
+Nix-style system strings (~aarch64-darwin~) for native code.
+
+* 6. What breaks first
+1. *Two compilers for one step, at one level:* prog-build picks by directory order, and
+   plan.org notes that "listing order changes after save and load (CBOR sorts keys)". The pick
+   flips after a reload. Fuchsia's CML validation refuses two offers of one name to one target,
+   and an environment holds one runner per name. Fix: a tie is an error; the plan shows both;
+   a lock or a nearer one settles it.
+2. *A nearer capability shadows:* a stub or synced ~fetch~ wins (section 2). Fix: capabilities
+   are local only. Forms may shadow; that is the override feature. The plan shows what was
+   shadowed, and a locked process doesn't move.
+3. *A far shortcut beats a near override:* prog-build tries fewest steps first, then nearest
+   per step. A one-step c→js at / beats your fixed wasm-js at /work in a two-step chain. Fix:
+   let nearness win over step count, so an override overrides, or show both.
+4. *A compiler needs what the host lacks:* cc needs ~compile~ (only on the local server).
+   prog-build's ~tried~ says why. The deeper problem: a compiler's needs are filled from the
+   /program's/ walk. A compiler that says it needs ~fetch~ gets the program's. Fix: compilers
+   get a small builder grant from the host, never the program's ~give~.
+5. *A recursive chain:* cc is C, so building cc needs cc. In Fuchsia everything bottoms out at
+   the built-in ELF runner. Fix: keep a seen set over ~[id, hash]~; the base case is a form in
+   ~runs~; "cc needs itself" is shown. Pin the bootstrap too: a compiler built by a found
+   compiler can carry anything (trusting trust).
+6. *Drift:* two devices synced at different times find different compilers, and build different
+   artifacts from one program. Fuchsia: an unpinned URL means newest; subpackages fix skew.
+   Fix: the lock.
+7. *Live re-routing:* the plan is tracked, so a new loader on the walk replans and restarts the
+   process (prog-build's runner). For forms that is a feature. For capabilities, a running
+   process's ~fetch~ silently changes provider. Fuchsia routes when a capability is opened, and
+   a connection never re-routes. Fix: ~give~ is fixed at start; replanning only rebuilds.
+8. *Names lost in the chain:* clock.c's ~fetch~ is a wasm import, and wasm-js links it by name.
+   A compiler that renames or drops imports breaks this silently. In Fuchsia, ~/svc/<protocol>~
+   is the ABI in every language. Fix: ~needs~ names are the ABI, and each ~to~ form says how
+   they arrive (wasm: env imports; js: a context field).
+9. *"From the program's place" is not one place:* a node by id can sit in two folders, or be
+   mounted from someone's document. In Fuchsia the environment belongs to the instance, not the
+   package. Fix: walk up from the process's path. There is only one.
+10. *Required is too strict:* Fuchsia added ~optional~ and ~transitional~ [16]. Later for ermine;
+    not now.
+
+* 7. A small shape
+Attributes:
+#+begin_src js
+// a program: what it is, what it uses, what it offers
+clock.c   { type: "public.c-source", needs: ["fetch"], provides: ["time"] }
+
+// a compiler is a program too: its own type, plus what it turns into what
+cc        { type: "org.webassembly.wasm", from: "public.c-source",
+            to: "org.webassembly.wasm", needs: ["compile"] }
+wasm-js   { type: "com.netscape.javascript-source",
+            from: "org.webassembly.wasm", to: "party.chee.ermine.js-main" }
+
+// the host's node, at the top: what it runs. its capabilities are local nodes it made
+/         { runs: ["party.chee.ermine.js-main"] }
+#+end_src
+
+Start:
+#+begin_src
+start(program, path, { give, lock })
+  program  an id; the starter looked it up from its own place
+  path     the process's one path; refused if one runs there
+  give     { fetch: node }: local nodes the starter holds itself; none by default
+  lock     an earlier plan: exactly these hashes, or refuse
+
+plan(program, path)       a read, tracked; every candidate kept with its from
+  want     the nearest runs up from path: the host's, or a process's own
+  steps    program.type to want, through compilers up from path:
+           nearest first, then fewer steps; a tie at one level means no plan, both shown
+  each compiler planned the same way (seen set over [id, hash]; base: its type is in want)
+  missing  needs not in give: shown, never guessed
+
+build(plan)               writes cache nodes, nothing else
+  key      [compiler's built hash, input hash], under the compiler's node
+  compilers draw on the host's builder grant, never give
+
+run                       the scheduler's
+  the runner gets the runnable and give; the lock goes on the process node
+#+end_src
+
+How it fits the principles:
+- *The graph is data:* the plan is a read, the build writes, and the run is the scheduler's.
+- *Reads are lists:* every candidate, with its from.
+- *Show, don't decide:* ties and missing needs are shown, and a person gives.
+- *Programs are unspecial:* compilers and runners are programs too.
+- *One path per process.*
+
+Left for later:
+- optional needs
+- bundles: a node whose children are capabilities, like Fuchsia's dictionaries [13]
+- which device runs a process ("the closest valid loader")
+
+* Where Fuchsia doesn't apply
+- *Who writes the tree:* in Fuchsia, only the product and the parents write it. Synced folders
+  let others write between you and the root, so every "nearest" rule is riskier in ermine.
+- *Compiling:* Fuchsia compiles at build time. For a live, incremental cache, Build Systems à
+  la Carte and Nix are better guides. Fuchsia helps only with addressing (merkle roots) and
+  pinning.
+- *Live replanning:* Fuchsia has nothing like replanning running programs. It updates by OTA
+  and restart.
+- *Devices:* Fuchsia is one device; "whichever device the closest valid loader is on" has no
+  counterpart.
+
+* Sources
+1. Original principles (environments as ambient authority; encapsulation; the parent knows the
+   child's URL): https://fuchsia.dev/fuchsia-src/contribute/contributing-to-cf/original_principles
+2. Components v1 manifests (sandbox services, features, runner):
+   https://fuchsia.googlesource.com/fuchsia/+/be0a0c3f97b29231c9207a934063b3ce9e562dd1/docs/concepts/components/v1/component_manifests.md
+3. Runner capability: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/runner
+4. ELF runner (built in; allowlisted fields): https://fuchsia.dev/fuchsia-src/concepts/components/v2/elf_runner
+5. Resolver capability: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/resolver
+6. Topology and monikers: https://fuchsia.dev/fuchsia-src/concepts/components/v2/topology
+7. Life of a protocol open: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/life_of_a_protocol_open
+8. Environments: https://fuchsia.dev/fuchsia-src/concepts/components/v2/environments
+9. ffx (scrutiny verify routes and route-sources; component doctor and route): https://fuchsia.dev/reference/tools/sdk/ffx
+10. Component ID index: https://fuchsia.dev/fuchsia-src/development/components/component_id_index
+    and storage: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/storage
+11. Package URLs: https://fuchsia.dev/fuchsia-src/concepts/packages/package_url
+12. Subpackaging: https://fuchsia.dev/fuchsia-src/concepts/components/v2/subpackaging
+13. Dictionaries: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/dictionary
+14. Packages and merkle roots: https://fuchsia.dev/fuchsia-src/concepts/packages/package
+15. Structured configuration: https://fuchsia.dev/fuchsia-src/development/components/configuration/structured_config
+16. Availability: https://fuchsia.dev/fuchsia-src/concepts/components/v2/capabilities/availability
+17. CML reference: https://fuchsia.dev/reference/cml

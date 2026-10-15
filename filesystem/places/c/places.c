@@ -20,35 +20,7 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 // a pair: a part, a string copied; and the next of the pairs made (to free them)
 typedef struct {
 	tb_key part;
-	// 0: a table part's; 1: the source of the attached spots; 2: of the names attached
-	int kind;
 } pl_pair;
-
-// a path that has been asked about or attached at, and the names attached directly under it
-typedef struct apath apath;
-struct apath {
-	char *key;
-	char **names;
-	size_t n;
-	// what is attached here (a string kept till the places is freed); NULL: nothing
-	const char *id;
-	apath **kids;
-	size_t nkids;
-	apath *next;
-};
-// a cleanup of an attach: kept in a list, to free
-typedef struct cleaning cleaning;
-struct cleaning {
-	pl *l;
-	apath *rec;
-	const char *id;
-	cleaning *next;
-};
-typedef struct idstr idstr;
-struct idstr {
-	char *s;
-	idstr *next;
-};
 typedef struct pair pair;
 struct pair {
 	pl_pair pair;
@@ -65,6 +37,29 @@ struct hold {
 	hold *chain;
 };
 
+struct pl_watch {
+	pl *l;
+	char **path;
+	size_t n;
+	int has_part;
+	tb_key part;
+	int has_at;
+	op_key *at;
+	size_t at_length;
+	pl_watch_fn fn;
+	void *ctx;
+	int stopped;
+	pl_watch *prev, *next;
+	// the order made; the node its path finds now (has_id), and the ids of the folders on its
+	// route, their strings the watch's own; the telling that last marked it
+	size_t seq;
+	int has_id;
+	tb_key id;
+	tb_key *route;
+	size_t nroute;
+	size_t epoch;
+};
+
 struct pl {
 	tb_key root;
 	tb_table *table;
@@ -78,18 +73,31 @@ struct pl {
 	// a typed array's element read by pl_read: the one number, remade by each
 	op_value scratch;
 	// the first answer that was not SC_OK to the reads told
-	sc_read_status status;
+	sc_track_status status;
 	// what writes asked to be kept, by node, and in a list
 	tb_table *holds;
 	hold *held;
-	// the sources of the attached spots, and what is attached
-	pl_pair attached_pair, names_pair;
-	apath *apaths;
-	cleaning *cleanings;
-	idstr *idstrs;
+	// the watches, in the order made; the ones stopped while being told, till the telling ends
+	pl_watch *watches, *watches_end, *dead;
+	int telling;
+	// the watches by the id they are at, and by each id on their route: buckets, by (a tag, the id)
+	tb_table *by_id, *on_route;
+	size_t seqs, epochs;
+	// the entries pl_upsert made: the places', let go of at pl_free
+	nd_entry **owned;
+	size_t nowned, capowned;
+	// what answers each step: the setup's, or children alone. given: whether any were given
+	const pl_contributor *const *asked;
+	size_t nasked;
+	int given;
+	// where reads go while pl_record runs; none: the scheduler
+	pl_set *into;
+	// the keeps on spots, by (the one part, the spot): a count
+	tb_table *kept;
 };
 
 // the part of the key every spot of this places is under in `mine`
+static const char *children_part = "children";
 static const char spots;
 static tb_key spot_part(void) { return tb_symbol(&spots); }
 
@@ -115,11 +123,12 @@ static pt_key pair_key(pl *l, tb_key part) { return pt_symbol(pair_of(l, part));
 
 pl *pl_new(void) {
 	pl *l = xalloc(sizeof *l);
-	l->attached_pair.kind = 1;
-	l->names_pair.kind = 2;
 	l->pairs = tb_new();
 	l->mine = tb_new();
 	l->holds = tb_new();
+	l->by_id = tb_new();
+	l->on_route = tb_new();
+	l->kept = tb_new();
 	return l;
 }
 
@@ -128,7 +137,13 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->table = setup->table;
 	l->paths = setup->paths;
 	l->scheduler = setup->scheduler;
+	static const pl_contributor *const alone[] = {&pl_children};
+	l->given = setup->ncontributors > 0;
+	l->asked = l->given ? setup->contributors : alone;
+	l->nasked = l->given ? setup->ncontributors : 1;
 }
+
+tb_key pl_root(const pl *l) { return l->root; }
 
 static void unhold(pl *l, hold *h) {
 	if (h->prev != NULL) h->prev->next = h->next;
@@ -138,26 +153,19 @@ static void unhold(pl *l, hold *h) {
 	free(h);
 }
 
+static void free_dead(pl *l);
+
 void pl_free(pl *l) {
 	if (l == NULL) return;
 	while (l->held != NULL) unhold(l, l->held);
-	while (l->apaths != NULL) {
-		apath *a = l->apaths;
-		l->apaths = a->next;
-		for (size_t i = 0; i < a->n; i++) free(a->names[i]);
-		free(a->names), free(a->kids), free(a->key), free(a);
-	}
-	while (l->cleanings != NULL) {
-		cleaning *k = l->cleanings;
-		l->cleanings = k->next;
-		free(k);
-	}
-	while (l->idstrs != NULL) {
-		idstr *s = l->idstrs;
-		l->idstrs = s->next;
-		free(s->s), free(s);
-	}
+	while (l->watches != NULL) pl_stop(l->watches);
+	free_dead(l);
+	for (size_t i = 0; i < l->nowned; i++) nd_free_entry(l->owned[i]);
+	free(l->owned);
 	tb_free(l->holds);
+	tb_free(l->kept);
+	tb_free(l->by_id);
+	tb_free(l->on_route);
 	tb_free(l->mine);
 	tb_free(l->pairs);
 	while (l->all != NULL) {
@@ -204,8 +212,8 @@ void pl_hold_also(pl *l, const nd_entry *node, void *block, void (*release)(void
 
 // reads -----------------------------------------------------------------------------------------
 
-sc_read_status pl_status(pl *l) {
-	sc_read_status status = l->status;
+sc_track_status pl_status(pl *l) {
+	sc_track_status status = l->status;
 	l->status = SC_OK;
 	return status;
 }
@@ -213,7 +221,11 @@ sc_read_status pl_status(pl *l) {
 // a spot of this places's, told to the scheduler (a read outside a run counts for nothing)
 static void tell(pl *l, pt_spot *s) {
 	if (tb_get(l->mine, spot_part(), tb_symbol(s)) == NULL) tb_add(l->mine, spot_part(), tb_symbol(s), s);
-	sc_read_status status = sc_read(l->scheduler, s);
+	if (l->into != NULL) {
+		pl_set_add(l->into, s);
+		return;
+	}
+	sc_track_status status = sc_track(l->scheduler, s);
 	if (status != SC_OK && l->status == SC_OK) l->status = status;
 }
 
@@ -221,25 +233,156 @@ int pl_spot(const pl *l, const void *key, pl_where *out) {
 	const pt_spot *s = key != NULL ? tb_get(l->mine, spot_part(), tb_symbol(key)) : NULL;
 	if (s == NULL) return 0;
 	const pl_pair *p = s->source.symbol;
-	if (p->kind != 0) {
-		for (const apath *a = l->apaths; a != NULL; a = a->next) {
-			if (strcmp(a->key, s->id.string) != 0) continue;
-			*out = (pl_where){.attached = p->kind, .names = (const char *const *)a->names, .nnames = a->n};
-			return 1;
-		}
-		return 0;
-	}
 	tb_key id = {.string = s->id.string, .symbol = s->id.symbol};
-	*out = (pl_where){.part = p->part, .id = id, .path = s->path, .length = s->length, .change = s->change};
+	*out = (pl_where){p->part, id, s->path, s->length, s->change};
 	return 1;
 }
 
 void pl_forget(const void *key, void *ctx) {
 	pl *l = ctx;
 	pt_spot *s = tb_get(l->mine, spot_part(), tb_symbol(key));
-	if (s == NULL) return;
+	if (s == NULL || tb_get(l->kept, tb_symbol(&spots), tb_symbol(key)) != NULL) return;
 	tb_del(l->mine, spot_part(), tb_symbol(key));
 	pt_release(l->paths, s);
+}
+
+// sets, records and keeps ----------------------------------------------------------------------
+
+#define SET_SMALL 8
+#define EMPTY ((size_t)0)
+#define TOMB ((size_t)-1)
+
+static size_t hash_of(const void *p) {
+	uint64_t x = (uint64_t)(uintptr_t)p;
+	x ^= x >> 33, x *= 0xff51afd7ed558ccdULL, x ^= x >> 33;
+	return (size_t)x;
+}
+
+// the slot holding item (its position + 1), or the slot to put it in (EMPTY there)
+static size_t slot_of(const pl_set *s, const void *item, int *found) {
+	size_t mask = s->nindex - 1, i = hash_of(item) & mask, first = TOMB;
+	for (;; i = (i + 1) & mask) {
+		size_t at = s->index[i];
+		if (at == EMPTY) {
+			*found = 0;
+			return first != TOMB ? first : i;
+		}
+		if (at == TOMB) {
+			if (first == TOMB) first = i;
+		} else if (s->items[at - 1] == item) {
+			*found = 1;
+			return i;
+		}
+	}
+}
+
+static void reindex(pl_set *s) {
+	size_t want = 32;
+	while (want < s->n * 4) want *= 2;
+	free(s->index);
+	s->index = xalloc(want * sizeof *s->index);
+	s->nindex = want;
+	s->used = 0;
+	for (size_t k = 0; k < s->n; k++) {
+		int found;
+		s->index[slot_of(s, s->items[k], &found)] = k + 1;
+		s->used++;
+	}
+}
+
+int pl_set_has(const pl_set *s, const void *item) {
+	if (s->index == NULL) {
+		for (size_t i = 0; i < s->n; i++) if (s->items[i] == item) return 1;
+		return 0;
+	}
+	int found;
+	slot_of(s, item, &found);
+	return found;
+}
+
+int pl_set_add(pl_set *s, const void *item) {
+	if (pl_set_has(s, item)) return 0;
+	if (s->n == s->cap) {
+		s->cap = s->cap ? s->cap * 2 : 4;
+		s->items = realloc(s->items, s->cap * sizeof *s->items);
+		if (s->items == NULL) abort();
+	}
+	s->items[s->n++] = item;
+	if (s->index == NULL) {
+		if (s->n > SET_SMALL) reindex(s);
+		return 1;
+	}
+	if (s->used * 2 >= s->nindex) {
+		reindex(s);
+		return 1;
+	}
+	int found;
+	size_t at = slot_of(s, item, &found);
+	if (s->index[at] == EMPTY) s->used++;
+	s->index[at] = s->n;
+	return 1;
+}
+
+int pl_set_del(pl_set *s, const void *item) {
+	size_t pos = s->n;
+	if (s->index == NULL) {
+		for (size_t i = 0; i < s->n; i++) {
+			if (s->items[i] == item) {
+				pos = i;
+				break;
+			}
+		}
+		if (pos == s->n) return 0;
+		s->items[pos] = s->items[--s->n];
+		return 1;
+	}
+	int found;
+	size_t at = slot_of(s, item, &found);
+	if (!found) return 0;
+	pos = s->index[at] - 1;
+	s->index[at] = TOMB;
+	size_t last = --s->n;
+	if (pos != last) {
+		const void *moved = s->items[last];
+		size_t m = slot_of(s, moved, &found);
+		s->index[m] = pos + 1;
+		s->items[pos] = moved;
+	}
+	return 1;
+}
+
+void pl_set_free(pl_set *s) {
+	free(s->items);
+	free(s->index);
+	*s = (pl_set){0};
+}
+
+void pl_record(pl *l, void (*f)(void *ctx), void *ctx, pl_set *reads) {
+	pl_set *was = l->into;
+	l->into = reads;
+	f(ctx);
+	l->into = was;
+}
+
+void pl_track(pl *l, const void *key) {
+	if (l->into != NULL) {
+		pl_set_add(l->into, key);
+		return;
+	}
+	sc_track_status status = sc_track(l->scheduler, key);
+	if (status != SC_OK && l->status == SC_OK) l->status = status;
+}
+
+size_t pl_keep(pl *l, const void *key, int n) {
+	if (tb_get(l->mine, spot_part(), tb_symbol(key)) == NULL) return 0;
+	tb_key part = tb_symbol(&spots), where = tb_symbol(key);
+	intptr_t now = (intptr_t)tb_get(l->kept, part, where) + n;
+	if (now > 0) tb_sub(l->kept, part, where, (void *)now);
+	else {
+		tb_del(l->kept, part, where);
+		now = 0;
+	}
+	return (size_t)now;
 }
 
 // element i of a typed array, as a number
@@ -315,10 +458,19 @@ static void add_spots(spots_vec *out, pt_spot *const *spots, size_t n) {
 	for (size_t i = 0; i < n; i++) out->v[out->n++] = spots[i];
 }
 
-// spots said changed, in one call, by the writer open; none: nothing said
+// spots said changed, in one call, by the run open; none: nothing said
 static void say(pl *l, const spots_vec *spots) {
-	if (spots->n > 0) sc_changed(l->scheduler, spots->v, spots->n, sc_current_writer(l->scheduler));
+	if (spots->n > 0) sc_mark(l->scheduler, spots->v, spots->n, sc_get_run(l->scheduler));
 }
+
+static int same_key(tb_key a, tb_key b) {
+	if (a.symbol != NULL || b.symbol != NULL) return a.symbol == b.symbol;
+	return a.string != NULL && b.string != NULL && strcmp(a.string, b.string) == 0;
+}
+
+static int child_of(const nd_entry *children, const char *name, tb_key *out);
+
+static void tell_watches(pl *l, const pl_fact *facts, size_t n);
 
 void pl_event(void *ctx, tb_key part, tb_key id) {
 	pl *l = ctx;
@@ -328,31 +480,310 @@ void pl_event(void *ctx, tb_key part, tb_key id) {
 	add_spots(&out, spots, n);
 	say(l, &out);
 	free(out.v);
+	if (l->watches == NULL) return;
+	const nd_entry *entry = tb_get(l->table, part, id);
+	op_patch patch = {0};
+	if (entry != NULL && entry->value != NULL) {
+		patch.has_value = 1;
+		patch.value = entry->value;
+	}
+	pl_fact fact = {part, id, &patch, 1, entry != NULL ? &entry->change : NULL, entry};
+	tell_watches(l, &fact, 1);
 }
 
-// the spots a node's latest patches mark, at every key it is under in the table
-static void marked(pl *l, const nd_entry *node, spots_vec *out) {
-	if (!node->change.has_op) return;
-	size_t keys;
-	const tb_where *where = tb_who(l->table, node, &keys);
-	for (size_t i = 0; i < keys; i++) {
+void pl_facts_free(pl_facts *facts) {
+	free(facts->items);
+	*facts = (pl_facts){0};
+}
+
+pl_facts pl_each_entry_change(pl *l, const pl_changed *changed) {
+	pl_facts out = {0};
+	size_t capacity = 0;
+	for (size_t i = 0; i < changed->n; i++) {
+		const nd_entry *node = changed->entries[i];
+		if (!node->change.has_op) continue;
+		size_t keys;
+		const tb_where *where = tb_who(l->table, node, &keys);
+		for (size_t k = 0; k < keys; k++) {
+			if (out.n == capacity) {
+				capacity = capacity ? capacity * 2 : 4;
+				out.items = realloc(out.items, capacity * sizeof *out.items);
+				if (out.items == NULL) abort();
+			}
+			out.items[out.n++] = (pl_fact){where[k].part, where[k].id, node->change.patches,
+				node->change.patches_length, &node->change, node};
+		}
+	}
+	return out;
+}
+
+void pl_commit(pl *l, const pl_changed *changed) {
+	pl_facts facts = pl_each_entry_change(l, changed);
+	spots_vec out = {0};
+	for (size_t i = 0; i < facts.n; i++) {
 		size_t n;
-		pt_spot *const *spots = pt_mark(l->paths, pair_key(l, where[i].part),
-			paths_key(where[i].id), node->change.patches, node->change.patches_length, &n);
-		add_spots(out, spots, n);
+		pt_spot *const *spots = pt_mark(l->paths, pair_key(l, facts.items[i].part),
+			paths_key(facts.items[i].id), facts.items[i].patches, facts.items[i].patches_length, &n);
+		add_spots(&out, spots, n);
+	}
+	say(l, &out);
+	free(out.v);
+	tell_watches(l, facts.items, facts.n);
+	pl_facts_free(&facts);
+}
+
+// watches ---------------------------------------------------------------------------------------
+
+static int key_same(const op_key *a, const op_key *b) {
+	if (a->type != b->type) return 0;
+	switch (a->type) {
+	case OP_NUM_KEY: return a->n == b->n;
+	case OP_STR_KEY: return strcmp(a->s, b->s) == 0;
+	default: return a->a == b->a && a->b == b->b;
 	}
 }
 
-void pl_wrote(pl *l, const pl_changed *changed) {
-	spots_vec out = {0};
-	for (size_t i = 0; i < changed->n; i++) marked(l, changed->entries[i], &out);
-	say(l, &out);
-	free(out.v);
+// whether two paths in a value touch: one is the other or above it
+static int touch(const op_key *a, size_t an, const op_key *b, size_t bn) {
+	for (size_t i = 0; i < an && i < bn; i++) {
+		if (!key_same(&a[i], &b[i])) return 0;
+	}
+	return 1;
+}
+
+static int touches(const op_patch *p, const op_key *at, size_t n) {
+	return touch(p->place.path, p->place.length, at, n) ||
+		(p->has_move && touch(p->move.path, p->move.length, at, n));
+}
+
+// the watches at a key, in a table of buckets
+typedef struct {
+	pl_watch **v;
+	size_t n, cap;
+} bucket;
+static const char bucket_tag;
+
+static void bucket_add(tb_table *t, tb_key id, pl_watch *w) {
+	bucket *b = tb_get(t, tb_symbol(&bucket_tag), id);
+	if (b == NULL) {
+		b = xalloc(sizeof *b);
+		tb_add(t, tb_symbol(&bucket_tag), id, b);
+	}
+	if (b->n == b->cap) {
+		b->cap = b->cap ? b->cap * 2 : 2;
+		b->v = realloc(b->v, b->cap * sizeof *b->v);
+		if (b->v == NULL) abort();
+	}
+	b->v[b->n++] = w;
+}
+
+static void bucket_del(tb_table *t, tb_key id, pl_watch *w) {
+	bucket *b = tb_get(t, tb_symbol(&bucket_tag), id);
+	if (b == NULL) return;
+	for (size_t i = 0; i < b->n; i++) {
+		if (b->v[i] != w) continue;
+		b->v[i] = b->v[--b->n];
+		break;
+	}
+	if (b->n == 0) {
+		tb_del(t, tb_symbol(&bucket_tag), id);
+		free(b->v);
+		free(b);
+	}
+}
+
+static tb_key key_own(tb_key k) { return k.symbol ? k : tb_string(xdup(k.string)); }
+static void key_disown(tb_key k) {
+	if (k.symbol == NULL) free((char *)k.string);
+}
+
+// the watch out of the indexes, its id and route let go
+static void unindex(pl *l, pl_watch *w) {
+	if (w->has_id) bucket_del(l->by_id, w->id, w);
+	for (size_t i = 0; i < w->nroute; i++) bucket_del(l->on_route, w->route[i], w);
+	if (w->has_id) key_disown(w->id);
+	for (size_t i = 0; i < w->nroute; i++) key_disown(w->route[i]);
+	free(w->route);
+	w->route = NULL;
+	w->nroute = 0;
+	w->has_id = 0;
+}
+
+// the watch finds its path again, from the table, untold; moves in the indexes
+static void refind(pl *l, pl_watch *w) {
+	unindex(l, w);
+	w->route = xalloc((w->n + 1) * sizeof *w->route);
+	tb_key at = l->root;
+	int found = 1;
+	for (size_t i = 0; i < w->n; i++) {
+		w->route[w->nroute++] = key_own(at);
+		if (!child_of(tb_get(l->table, tb_string(children_part), at), w->path[i], &at)) {
+			found = 0;
+			break;
+		}
+	}
+	if (found) {
+		w->id = key_own(at);
+		w->has_id = 1;
+		bucket_add(l->by_id, w->id, w);
+	}
+	for (size_t i = 0; i < w->nroute; i++) bucket_add(l->on_route, w->route[i], w);
+}
+
+pl_watch *pl_watch_path(pl *l, const char *const *path, size_t n, pl_watch_fn fn, void *ctx,
+	const pl_watching *options) {
+	pl_watch *w = xalloc(sizeof *w);
+	w->l = l;
+	w->path = xalloc(n * sizeof *w->path);
+	for (size_t i = 0; i < n; i++) w->path[i] = xdup(path[i]);
+	w->n = n;
+	w->fn = fn;
+	w->ctx = ctx;
+	if (options != NULL) {
+		if (options->has_part) {
+			w->has_part = 1;
+			// a part is a name: copied
+			w->part = options->part.symbol ? options->part : tb_string(xdup(options->part.string));
+		}
+		if (options->has_at) {
+			w->has_at = 1;
+			w->at_length = options->at_length;
+			w->at = xalloc(options->at_length * sizeof *w->at);
+			for (size_t i = 0; i < options->at_length; i++) {
+				w->at[i] = options->at[i];
+				if (w->at[i].type == OP_STR_KEY) w->at[i].s = xdup(options->at[i].s);
+			}
+		}
+	}
+	w->prev = l->watches_end;
+	if (w->prev != NULL) w->prev->next = w;
+	else l->watches = w;
+	l->watches_end = w;
+	w->seq = l->seqs++;
+	refind(l, w);
+	return w;
+}
+
+static void free_watch(pl_watch *w) {
+	for (size_t i = 0; i < w->n; i++) free(w->path[i]);
+	free(w->path);
+	if (w->has_part && w->part.symbol == NULL) free((char *)w->part.string);
+	for (size_t i = 0; i < w->at_length; i++) {
+		if (w->at[i].type == OP_STR_KEY) free((char *)w->at[i].s);
+	}
+	free(w->at);
+	free(w);
+}
+
+static void free_dead(pl *l) {
+	while (l->dead != NULL) {
+		pl_watch *w = l->dead;
+		l->dead = w->next;
+		free_watch(w);
+	}
+}
+
+void pl_stop(pl_watch *w) {
+	if (w == NULL || w->stopped) return;
+	pl *l = w->l;
+	w->stopped = 1;
+	unindex(l, w);
+	if (w->prev != NULL) w->prev->next = w->next;
+	else l->watches = w->next;
+	if (w->next != NULL) w->next->prev = w->prev;
+	else l->watches_end = w->prev;
+	// a telling in progress may hold it: freed when the telling ends
+	w->prev = NULL;
+	w->next = l->dead;
+	l->dead = w;
+	if (l->telling == 0) free_dead(l);
+}
+
+// a watch and the index of the fact it is to be told
+typedef struct {
+	pl_watch *w;
+	size_t fact;
+} hit;
+
+static int by_seq(const void *a, const void *b) {
+	const hit *x = a, *y = b;
+	if (x->w->seq != y->w->seq) return x->w->seq < y->w->seq ? -1 : 1;
+	return x->fact < y->fact ? -1 : x->fact > y->fact;
+}
+
+// each watch told the facts at its node, in the order the watches were made; a fact costs one get
+// in by_id. a watch stopped on the way is not told. then each watch with a changed children entry
+// on its route finds its path again
+static void tell_watches(pl *l, const pl_fact *facts, size_t n) {
+	if (l->watches == NULL || n == 0) return;
+	hit *hits = NULL;
+	size_t nh = 0, caph = 0;
+	for (size_t f = 0; f < n; f++) {
+		bucket *b = tb_get(l->by_id, tb_symbol(&bucket_tag), facts[f].id);
+		if (b == NULL) continue;
+		for (size_t i = 0; i < b->n; i++) {
+			pl_watch *w = b->v[i];
+			if (w->has_part && !same_key(facts[f].part, w->part)) continue;
+			if (nh == caph) {
+				caph = caph ? caph * 2 : 8;
+				hits = realloc(hits, caph * sizeof *hits);
+				if (hits == NULL) abort();
+			}
+			hits[nh++] = (hit){w, f};
+		}
+	}
+	qsort(hits, nh, sizeof *hits, by_seq);
+	l->telling++;
+	for (size_t i = 0; i < nh; i++) {
+		pl_watch *w = hits[i].w;
+		if (w->stopped) continue;
+		const pl_fact *fact = &facts[hits[i].fact];
+		if (!w->has_at) {
+			w->fn(fact, w->ctx);
+			continue;
+		}
+		op_patch *kept = xalloc((fact->patches_length + 1) * sizeof *kept);
+		size_t m = 0;
+		for (size_t j = 0; j < fact->patches_length; j++) {
+			if (touches(&fact->patches[j], w->at, w->at_length)) kept[m++] = fact->patches[j];
+		}
+		if (m > 0) {
+			pl_fact told = *fact;
+			told.patches = kept;
+			told.patches_length = m;
+			w->fn(&told, w->ctx);
+		}
+		free(kept);
+	}
+	free(hits);
+	// the watches with a changed children entry on their route, each once
+	size_t epoch = ++l->epochs, nm = 0, capm = 0;
+	pl_watch **moved = NULL;
+	for (size_t f = 0; f < n; f++) {
+		if (!same_key(facts[f].part, tb_string(children_part))) continue;
+		bucket *b = tb_get(l->on_route, tb_symbol(&bucket_tag), facts[f].id);
+		if (b == NULL) continue;
+		for (size_t i = 0; i < b->n; i++) {
+			pl_watch *w = b->v[i];
+			if (w->epoch == epoch) continue;
+			w->epoch = epoch;
+			if (nm == capm) {
+				capm = capm ? capm * 2 : 8;
+				moved = realloc(moved, capm * sizeof *moved);
+				if (moved == NULL) abort();
+			}
+			moved[nm++] = w;
+		}
+	}
+	for (size_t i = 0; i < nm; i++) {
+		if (!moved[i]->stopped) refind(l, moved[i]);
+	}
+	free(moved);
+	l->telling--;
+	if (l->telling == 0) free_dead(l);
 }
 
 // the filesystem, every read told ---------------------------------------------------------------
-
-static const char *children_part = "children";
 
 static int is_map(const op_value *v) { return v != NULL && v->type == OP_MAP; }
 
@@ -373,84 +804,190 @@ static int step(pl *l, tb_key id, const char *name, tb_key *out) {
 	return child_of(tb_get(l->table, tb_string(children_part), id), name, out);
 }
 
-static int same_key(tb_key a, tb_key b) {
-	if (a.symbol != NULL || b.symbol != NULL) return a.symbol == b.symbol;
-	return a.string != NULL && b.string != NULL && strcmp(a.string, b.string) == 0;
+void pl_namelist_add(pl_namelist *list, const char *name) {
+	if (list->n == list->cap) {
+		list->cap = list->cap ? list->cap * 2 : 8;
+		list->items = realloc(list->items, list->cap * sizeof *list->items);
+		if (list->items == NULL) abort();
+	}
+	list->items[list->n++] = name;
 }
 
-// the record of the path names (a path of above then path[..upto]), made if none
-static apath *apath_of(pl *l, const char *const *above, size_t nabove, const char *const *path,
-	size_t upto) {
-	size_t n = nabove + upto, len = 1;
-	for (size_t i = 0; i < n; i++) len += 24 + strlen(i < nabove ? above[i] : path[i - nabove]);
-	char *key = xalloc(len), *w = key;
-	for (size_t i = 0; i < n; i++) {
-		const char *name = i < nabove ? above[i] : path[i - nabove];
-		w += snprintf(w, len - (size_t)(w - key), "%zu:%s,", strlen(name), name);
-	}
-	for (apath *a = l->apaths; a != NULL; a = a->next) {
-		if (strcmp(a->key, key) == 0) return free(key), a;
-	}
-	apath *a = xalloc(sizeof *a);
-	a->key = key;
-	a->n = n;
-	a->names = xalloc(n * sizeof *a->names);
-	for (size_t i = 0; i < n; i++) a->names[i] = xdup(i < nabove ? above[i] : path[i - nabove]);
-	a->next = l->apaths;
-	l->apaths = a;
-	return a;
+void pl_namelist_free(pl_namelist *list) {
+	free(list->items);
+	*list = (pl_namelist){0};
 }
 
-// what is attached at above + path[..upto], the read told; 1 and *out, or 0
-static int attached_to(pl *l, const char *const *above, size_t nabove, const char *const *path,
-	size_t upto, tb_key *out) {
-	apath *a = apath_of(l, above, nabove, path, upto);
-	tell(l, pt_spot_of(l->paths, pt_symbol(&l->attached_pair), pt_string(a->key), NULL, 0, 0));
-	if (a->id == NULL) return 0;
-	*out = tb_string(a->id);
+void pl_keys(pl *l, tb_key part, tb_key id, const op_key *path, size_t n, int ids,
+	pl_namelist *out) {
+	tell(l, pt_spot_of(l->paths, pair_key(l, part), paths_key(id), path, n, 1));
+	const nd_entry *node = tb_get(l->table, part, id);
+	const op_value *v = node != NULL ? pl_at(node->value, path, n, &l->scratch) : NULL;
+	if (!is_map(v)) return;
+	for (size_t i = 0; i < v->count; i++) {
+		if (!ids || v->items[i]->type == OP_STR) pl_namelist_add(out, v->keys[i]);
+	}
+}
+
+static int children_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
+	(void)ctx;
+	op_key key = {.type = OP_STR_KEY, .s = name};
+	const op_value *v = pl_read(l, tb_string(children_part), here->id, &key, 1);
+	if (v == NULL || v->type != OP_STR) return 0;
+	*out = tb_string(v->str);
 	return 1;
 }
 
-size_t pl_walk_above(pl *l, tb_key from, const char *const *path, size_t n, pl_member *out,
-	const char *const *above, size_t nabove, int known) {
-	tb_key at = from;
+static void children_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
+	(void)ctx;
+	pl_keys(l, tb_string(children_part), here->id, NULL, 0, 0, out);
+}
+
+const pl_contributor pl_children = {"children", children_step, children_names, NULL};
+
+// the first answer at here + name, each contributor asked in order; 1 and *out, *by
+static int go(pl *l, const pl_here *here, const char *name, tb_key *out, const char **by) {
+	for (size_t i = 0; i < l->nasked; i++) {
+		const pl_contributor *c = l->asked[i];
+		if (c->step(c->ctx, here, name, l, out)) {
+			*by = c->from;
+			return 1;
+		}
+	}
+	return 0;
+}
+
+size_t pl_walk_at(pl *l, const pl_here *from, const char *const *path, size_t n, pl_member *out) {
 	size_t i = 0;
+	if (!l->given) {
+		tb_key at = from->id;
+		for (; i < n; i++) {
+			tb_key id;
+			if (!step(l, at, path[i], &id)) break;
+			out[i] = (pl_member){path[i], id, NULL};
+			at = id;
+		}
+		return i;
+	}
+	pl_here here = *from;
+	const char **trail = NULL;
+	if (from->has_path) {
+		trail = xalloc((from->length + n + 1) * sizeof *trail);
+		if (from->length > 0) memcpy(trail, from->path, from->length * sizeof *trail);
+		here.path = trail;
+	}
 	for (; i < n; i++) {
 		tb_key id;
-		if (!(known && attached_to(l, above, nabove, path, i + 1, &id)) && !step(l, at, path[i], &id)) break;
-		out[i] = (pl_member){path[i], id};
-		at = id;
+		const char *by;
+		if (!go(l, &here, path[i], &id, &by)) break;
+		out[i] = (pl_member){path[i], id, by};
+		if (here.has_path) trail[here.length++] = path[i];
+		here.id = id;
 	}
+	free(trail);
 	return i;
 }
 
 size_t pl_walk(pl *l, tb_key from, const char *const *path, size_t n, pl_member *out) {
-	return pl_walk_above(l, from, path, n, out, NULL, 0, same_key(from, l->root));
+	pl_here here = {.id = from, .has_path = same_key(from, l->root)};
+	return pl_walk_at(l, &here, path, n, out);
 }
 
 int pl_get(pl *l, const char *const *path, size_t n, tb_key *out) {
+	tb_key at = l->root;
+	if (!l->given) {
+		for (size_t i = 0; i < n; i++) {
+			if (!step(l, at, path[i], &at)) return 0;
+		}
+		*out = at;
+		return 1;
+	}
 	pl_member *steps = xalloc((n + 1) * sizeof *steps);
-	size_t walked = pl_walk(l, l->root, path, n, steps);
-	if (walked == n) *out = n > 0 ? steps[n - 1].id : l->root;
+	size_t got = pl_walk(l, l->root, path, n, steps);
+	if (got == n && n > 0) at = steps[n - 1].id;
 	free(steps);
-	return walked == n;
+	if (got < n) return 0;
+	*out = at;
+	return 1;
 }
 
 size_t pl_lookup(pl *l, const char *const *names, size_t nnames, const char *const *from,
 	size_t nfrom, int all, size_t *depths) {
 	tb_key *ids = xalloc((nfrom + 1) * sizeof *ids);
-	pl_member *steps = xalloc((nfrom + nnames + 1) * sizeof *steps);
+	pl_member *steps = xalloc((nfrom + 1) * sizeof *steps);
+	pl_member *taken = xalloc((nnames + 1) * sizeof *taken);
 	ids[0] = l->root;
 	size_t walked = pl_walk(l, l->root, from, nfrom, steps);
 	for (size_t i = 0; i < walked; i++) ids[i + 1] = steps[i].id;
 	size_t found = 0;
 	for (size_t k = walked + 1; k-- > 0;) {
-		if (pl_walk_above(l, ids[k], names, nnames, steps, from, k, 1) < nnames) continue;
+		pl_here here = {.id = ids[k], .has_path = 1, .path = from, .length = k};
+		if (pl_walk_at(l, &here, names, nnames, taken) < nnames) continue;
 		depths[found++] = k;
 		if (!all) break;
 	}
-	free(ids), free(steps);
+	free(ids), free(steps), free(taken);
 	return found;
+}
+
+void pl_answers_free(pl_answers *list) {
+	free(list->items);
+	*list = (pl_answers){0};
+}
+
+pl_answers pl_answers_at(pl *l, const pl_here *here, const char *name) {
+	pl_answers out = {0};
+	out.items = xalloc(l->nasked * sizeof *out.items);
+	for (size_t i = 0; i < l->nasked; i++) {
+		const pl_contributor *c = l->asked[i];
+		tb_key id;
+		if (c->step(c->ctx, here, name, l, &id)) out.items[out.n++] = (pl_answer){id, c->from};
+	}
+	return out;
+}
+
+pl_answers pl_entries(pl *l, const char *const *path, size_t n) {
+	if (n == 0) {
+		pl_answers out = {0};
+		out.items = xalloc(sizeof *out.items);
+		out.items[out.n++] = (pl_answer){l->root, "root"};
+		return out;
+	}
+	tb_key id;
+	if (!pl_get(l, path, n - 1, &id)) return (pl_answers){0};
+	pl_here here = {.id = id, .has_path = 1, .path = path, .length = n - 1};
+	return pl_answers_at(l, &here, path[n - 1]);
+}
+
+void pl_nameds_free(pl_nameds *list) {
+	free(list->items);
+	*list = (pl_nameds){0};
+}
+
+static const char seen_tag;
+
+pl_nameds pl_names(pl *l, const pl_here *here) {
+	pl_nameds out = {0};
+	size_t cap = 0;
+	tb_table *seen = tb_new();
+	for (size_t i = 0; i < l->nasked; i++) {
+		const pl_contributor *c = l->asked[i];
+		pl_namelist names = {0};
+		c->names(c->ctx, here, l, &names);
+		for (size_t j = 0; j < names.n; j++) {
+			if (tb_get(seen, tb_symbol(&seen_tag), tb_string(names.items[j])) != NULL) continue;
+			tb_add(seen, tb_symbol(&seen_tag), tb_string(names.items[j]), (void *)&seen_tag);
+			if (out.n == cap) {
+				cap = cap ? cap * 2 : 8;
+				out.items = realloc(out.items, cap * sizeof *out.items);
+				if (out.items == NULL) abort();
+			}
+			out.items[out.n++] = (pl_named){names.items[j], c->from};
+		}
+		pl_namelist_free(&names);
+	}
+	tb_free(seen);
+	return out;
 }
 
 void pl_members_free(pl_members *list) {
@@ -458,112 +995,65 @@ void pl_members_free(pl_members *list) {
 	*list = (pl_members){0};
 }
 
-// the members at a path, as list and members read them: which names there are, then each name,
-// whatever it holds (a step of a walk is read before what is there is looked at), then the names
-// only attached there
-pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
-	tb_key id;
-	if (!pl_get(l, path, n, &id)) return (pl_members){0};
-	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
-	const nd_entry *children = tb_get(l->table, tb_string(children_part), id);
-	const op_value *v = children != NULL && is_map(children->value) ? children->value : NULL;
-	apath *here = apath_of(l, NULL, 0, path, n);
+// the names in a children entry that hold an id, and their ids, in their order there
+static pl_members members_of(const nd_entry *children) {
 	pl_members out = {0};
-	out.items = xalloc(((v != NULL ? v->count : 0) + here->nkids + 1) * sizeof *out.items);
-	for (size_t i = 0; v != NULL && i < v->count; i++) {
-		pl_member m;
-		if (pl_walk_above(l, id, (const char *const *)&v->keys[i], 1, &m, path, n, 1) == 1) out.items[out.n++] = m;
-	}
-	tell(l, pt_spot_of(l->paths, pt_symbol(&l->names_pair), pt_string(here->key), NULL, 0, 1));
-	for (size_t i = 0; i < here->nkids; i++) {
-		const char *name = here->kids[i]->names[here->kids[i]->n - 1];
-		if (v != NULL && op_get(v, name) != NULL) continue;
-		out.items[out.n++] = (pl_member){name, tb_string(here->kids[i]->id)};
+	const op_value *v = children != NULL ? children->value : NULL;
+	if (!is_map(v)) return out;
+	out.items = xalloc(v->count * sizeof *out.items);
+	for (size_t i = 0; i < v->count; i++) {
+		if (v->items[i]->type == OP_STR) {
+			out.items[out.n++] = (pl_member){v->keys[i], tb_string(v->items[i]->str), NULL};
+		}
 	}
 	return out;
 }
 
-pl_members pl_list(pl *l, const char *const *path, size_t n) { return pl_members_at(l, path, n); }
-
-// items attached at a path -----------------------------------------------------------------------
-
-static const char *keep_id(pl *l, const char *id) {
-	idstr *s = xalloc(sizeof *s);
-	s->s = xdup(id);
-	s->next = l->idstrs;
-	l->idstrs = s;
-	return s->s;
-}
-
-// the spots of the attached item at a record and of the names under its parent, said changed
-static void say_attached(pl *l, apath *rec, apath *parent) {
-	spots_vec out = {0};
-	size_t n;
-	pt_spot *const *spots = pt_event(l->paths, pt_symbol(&l->attached_pair), pt_string(rec->key), &n);
-	add_spots(&out, spots, n);
-	spots = pt_event(l->paths, pt_symbol(&l->names_pair), pt_string(parent->key), &n);
-	add_spots(&out, spots, n);
-	say(l, &out);
-	free(out.v);
-}
-
-static void detach_rec(pl *l, apath *rec, apath *parent) {
-	if (rec->id == NULL) return;
-	rec->id = NULL;
-	for (size_t i = 0; i < parent->nkids; i++) {
-		if (parent->kids[i] != rec) continue;
-		memmove(&parent->kids[i], &parent->kids[i + 1], (parent->nkids - i - 1) * sizeof *parent->kids);
-		parent->nkids--;
-		break;
+// the members at a path: one read of the children map whole (any change to it reruns the reader),
+// each name holding an id with its id. contributors given: every contributor's names, each name's
+// step as pl_get takes it
+pl_members pl_members_at(pl *l, const char *const *path, size_t n) {
+	tb_key id;
+	if (!pl_get(l, path, n, &id)) return (pl_members){0};
+	if (l->given) {
+		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n};
+		pl_nameds names = pl_names(l, &here);
+		pl_members out = {0};
+		out.items = xalloc((names.n + 1) * sizeof *out.items);
+		for (size_t i = 0; i < names.n; i++) {
+			pl_member m;
+			if (pl_walk_at(l, &here, &names.items[i].name, 1, &m) == 1) out.items[out.n++] = m;
+		}
+		pl_nameds_free(&names);
+		return out;
 	}
-	say_attached(l, rec, parent);
+	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 0));
+	return members_of(tb_get(l->table, tb_string(children_part), id));
 }
 
-static char *cleanup_detach(void *data) {
-	cleaning *c = data;
-	if (c->rec->id != NULL && strcmp(c->rec->id, c->id) == 0) {
-		apath *parent = apath_of(c->l, (const char *const *)c->rec->names, c->rec->n - 1, NULL, 0);
-		detach_rec(c->l, c->rec, parent);
-	}
-	return NULL;
-}
-
-int pl_attach(pl *l, const char *const *path, size_t n, tb_key id) {
-	if (n == 0 || !pl_is_name(path[n - 1])) return PL_NOT_A_NAME;
-	apath *rec = apath_of(l, NULL, 0, path, n), *parent = apath_of(l, NULL, 0, path, n - 1);
-	int was = rec->id != NULL;
-	rec->id = keep_id(l, id.string);
-	if (!was) {
-		parent->kids = realloc(parent->kids, (parent->nkids + 1) * sizeof *parent->kids);
-		if (parent->kids == NULL) abort();
-		parent->kids[parent->nkids++] = rec;
-	}
-	say_attached(l, rec, parent);
-	if (sc_current(l->scheduler) != NULL) {
-		cleaning *c = xalloc(sizeof *c);
-		*c = (cleaning){l, rec, rec->id, l->cleanings};
-		l->cleanings = c;
-		char *bad = sc_cleanup(l->scheduler, cleanup_detach, c);
-		free(bad);
-	}
-	return 0;
-}
-
-void pl_detach(pl *l, const char *const *path, size_t n) {
-	if (n == 0) return;
-	apath *rec = apath_of(l, NULL, 0, path, n), *parent = apath_of(l, NULL, 0, path, n - 1);
-	detach_rec(l, rec, parent);
-}
-
-pl_members pl_attached_at(pl *l, const char *const *path, size_t n) {
-	apath *here = apath_of(l, NULL, 0, path, n);
-	tell(l, pt_spot_of(l->paths, pt_symbol(&l->names_pair), pt_string(here->key), NULL, 0, 1));
+// the names at a path, every one the map holds, in their order there: one read of which names
+// there are (a name added or taken out reruns the reader); ids not told (left empty). contributors
+// given: every contributor's, each name once
+pl_members pl_list(pl *l, const char *const *path, size_t n) {
+	tb_key id;
+	if (!pl_get(l, path, n, &id)) return (pl_members){0};
 	pl_members out = {0};
-	out.items = xalloc((here->nkids + 1) * sizeof *out.items);
-	for (size_t i = 0; i < here->nkids; i++) {
-		apath *k = here->kids[i];
-		out.items[out.n++] = (pl_member){k->names[k->n - 1], tb_string(k->id)};
+	if (l->given) {
+		pl_here here = {.id = id, .has_path = 1, .path = path, .length = n};
+		pl_nameds names = pl_names(l, &here);
+		out.items = xalloc((names.n + 1) * sizeof *out.items);
+		for (size_t i = 0; i < names.n; i++) {
+			out.items[out.n++] = (pl_member){names.items[i].name, {0}, names.items[i].from};
+		}
+		pl_nameds_free(&names);
+		return out;
 	}
+	tell(l, pt_spot_of(l->paths, pair_key(l, tb_string(children_part)), paths_key(id), NULL, 0, 1));
+	const nd_entry *children = tb_get(l->table, tb_string(children_part), id);
+	const op_value *v = children != NULL ? children->value : NULL;
+	if (!is_map(v)) return out;
+	out.items = xalloc(v->count * sizeof *out.items);
+	for (size_t i = 0; i < v->count; i++) out.items[out.n++] = (pl_member){v->keys[i], {0}, NULL};
 	return out;
 }
 
@@ -705,15 +1195,166 @@ int pl_move(pl *l, nd_entry *from, const char *name, nd_entry *into, const char 
 	return do_unplace(l, from, name, header, changed);
 }
 
+// upsert ----------------------------------------------------------------------------------------
+
+// whether two values are the same: maps by their keys (in any order), lists, bytes and typed arrays
+// by their elements, a stand-in by its kind
+static int same(const op_value *a, const op_value *b) {
+	if (a == b) return 1;
+	if (a == NULL || b == NULL || a->type != b->type) return 0;
+	switch (a->type) {
+	case OP_NULL: return 1;
+	case OP_BOOL: return !a->bool_ == !b->bool_;
+	case OP_NUM: return a->num == b->num;
+	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
+	case OP_BYTES: return a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
+	case OP_TYPED:
+		return a->kind == b->kind && a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
+	case OP_LIST:
+	case OP_STAND:
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++) {
+			if (!same(a->items[i], b->items[i])) return 0;
+		}
+		return 1;
+	case OP_MAP:
+		if (a->count != b->count) return 0;
+		for (size_t i = 0; i < a->count; i++) {
+			if (!same(a->items[i], op_get(b, a->keys[i]))) return 0;
+		}
+		return 1;
+	}
+	return 0;
+}
+
+// the value nested under names: {a: {b: value}}; a new hold, the caller's
+static op_value *nest(const char *const *names, size_t n, const op_value *value) {
+	op_value *v = op_ref((op_value *)value);
+	for (size_t i = n; i-- > 0;) {
+		op_value *m = op_map();
+		op_set(m, names[i], v);
+		v = m;
+	}
+	return v;
+}
+
+// what the patch of an upsert refers to: kept by the node till its next update
+typedef struct {
+	op_patch patch;
+	op_key *keys;
+	char **names;
+	size_t n;
+	op_value *value;
+} ublock;
+
+static void ublock_free(void *b) {
+	ublock *k = b;
+	for (size_t i = 0; i < k->n; i++) free(k->names[i]);
+	free(k->names);
+	free(k->keys);
+	op_free(k->value);
+	free(k);
+}
+
+// the value at names in a map; NULL: nothing there
+static const op_value *value_at(const op_value *v, const char *const *names, size_t n) {
+	for (size_t i = 0; i < n; i++) {
+		if (!is_map(v)) return NULL;
+		v = op_get(v, names[i]);
+		if (v == NULL) return NULL;
+	}
+	return v;
+}
+
+// the one patch of an upsert applied to the entry and held by it
+static void write_one(pl *l, nd_entry *entry, ublock *b, ch_header header, pl_changed *changed) {
+	size_t failed;
+	int code = nd_update(entry, &b->patch, 1, header, &failed);
+	if (code != OP_OK) {
+		fprintf(stderr, "places: upsert: %s\n", op_code_name(code));
+		abort();
+	}
+	pl_hold(l, entry, b, ublock_free);
+	changed->entries[changed->n++] = entry;
+}
+
+void pl_own(pl *l, nd_entry *node) {
+	if (l->nowned == l->capowned) {
+		l->capowned = l->capowned ? l->capowned * 2 : 8;
+		l->owned = realloc(l->owned, l->capowned * sizeof *l->owned);
+		if (l->owned == NULL) abort();
+	}
+	l->owned[l->nowned++] = node;
+}
+
+int pl_upsert(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
+	const op_value *value, ch_header header, pl_changed *changed, nd_entry **made) {
+	*changed = (pl_changed){0};
+	if (made != NULL) *made = NULL;
+	nd_entry *there = tb_get(l->table, part, id);
+	if (there == NULL) {
+		op_value *nested = nest(path, n, value);
+		nd_entry *node = nd_make_entry(nested, &header, NULL);
+		op_free(nested);
+		pl_own(l, node);
+		if (made != NULL) *made = node;
+		tb_add(l->table, part, id, node);
+		return 0;
+	}
+	// the first level the entry has no map for, or no key at: the nested remainder goes there
+	size_t at = n;
+	const op_value *v = there->value;
+	int missing = 0;
+	for (size_t i = 0; i < n; i++) {
+		if (!is_map(v)) {
+			at = i, missing = 1;
+			break;
+		}
+		const op_value *next = op_get(v, path[i]);
+		if (next == NULL) {
+			at = i + 1, missing = 1;
+			break;
+		}
+		v = next;
+	}
+	if (!missing && same(v, value)) return 0;
+	ublock *b = xalloc(sizeof *b);
+	b->n = at;
+	b->names = xalloc(at * sizeof *b->names);
+	b->keys = xalloc(at * sizeof *b->keys);
+	for (size_t i = 0; i < at; i++) {
+		b->names[i] = xdup(path[i]);
+		b->keys[i] = (op_key){.type = OP_STR_KEY, .s = b->names[i]};
+	}
+	b->value = nest(path + at, n - at, value);
+	b->patch = (op_patch){.place = {.path = b->keys, .length = at}, .has_value = 1, .value = b->value};
+	write_one(l, there, b, header, changed);
+	return 0;
+}
+
+const op_value *pl_get_or_set(pl *l, tb_key part, tb_key id, const char *const *path, size_t n,
+	op_value *(*make)(void *ctx), void *ctx, ch_header header, pl_changed *changed,
+	nd_entry **made) {
+	*changed = (pl_changed){0};
+	if (made != NULL) *made = NULL;
+	const nd_entry *there = tb_get(l->table, part, id);
+	const op_value *v = there != NULL ? value_at(there->value, path, n) : NULL;
+	if (v != NULL) return v;
+	op_value *fresh = make(ctx);
+	pl_upsert(l, part, id, path, n, fresh, header, changed, made);
+	op_free(fresh);
+	return value_at(((nd_entry *)tb_get(l->table, part, id))->value, path, n);
+}
+
 // who ------------------------------------------------------------------------------------------
 
 // the pairs of a write made now: the scopes' from the root down, then extra. malloc'd, *total of
 // them; NULL: no scope open
 static sc_pair *pairs_of(pl *l, const sc_pair *extra, size_t n, size_t *total) {
-	if (sc_current(l->scheduler) == NULL) return NULL;
-	size_t scoped = sc_pairs(l->scheduler, NULL, 0);
+	if (sc_get_current_scope(l->scheduler) == NULL) return NULL;
+	size_t scoped = sc_get_info(l->scheduler, NULL, 0);
 	sc_pair *all = xalloc((scoped + n) * sizeof *all);
-	sc_pairs(l->scheduler, all, scoped);
+	sc_get_info(l->scheduler, all, scoped);
 	for (size_t i = 0; i < n; i++) all[scoped + i] = extra[i];
 	*total = scoped + n;
 	return all;

@@ -27,15 +27,22 @@
 							"trust": 2
 						},
 						"reader": "r",
-						"site": {
-							"file": "https://example.org/a.ts",
-							"line": 4,
-							"column": 2,
-							"function": "go"
-						},
-						"cause": {
-							"why": "save"
-						}
+						"external": [
+							{
+								"file": "https://example.org/a.ts",
+								"line": 4,
+								"column": 2,
+								"function": "go"
+							}
+						],
+						"metadata": [
+							[
+								"cause",
+								{
+									"why": "save"
+								}
+							]
+						]
 					},
 					"signer": {
 						"/": {
@@ -148,17 +155,23 @@
 							"trust": 2
 						},
 						"reader": "r",
-						"site": {
-							"file": "https://example.org/a.ts",
-							"line": 4,
-							"column": 2,
-							"function": "go"
-						},
-						"cause": {
-							"why": "save"
-						},
-						"time": 555,
-						"node": "n"
+						"external": [
+							{
+								"file": "https://example.org/a.ts",
+								"line": 4,
+								"column": 2,
+								"function": "go"
+							}
+						],
+						"metadata": [
+							[
+								"cause",
+								{
+									"why": "save"
+								}
+							]
+						],
+						"time": 555
 					},
 					"because": {
 						"layer": "sync",

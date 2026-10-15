@@ -2,7 +2,7 @@
 // header leaves the device (COMMIT.tex). Not sealed, not taken in: the blop only
 import type { Blop, Patch } from "@ermine/encoding/blop"
 import { Stand } from "@ermine/encoding/cbor"
-import type { ChangeHeader } from "@ermine/change"
+import type { ChangeHeader } from "@ermine/node/entry"
 import type { FileLocation } from "@ermine/util/stacktrace"
 import { side } from "./apply.ts"
 import type { Head, Histories } from "./history.ts"
@@ -153,10 +153,15 @@ export function commit(
 		patches: standIns(patches, kind) as Patch[],
 	}
 	if (change.header.reader !== undefined) blop.reader = change.header.reader
-	if (change.header.external !== undefined) blop.site = share(change.header.external, roots)
-	if (change.header.cause !== undefined) blop.cause = standIns(change.header.cause, kind)
-	if (change.header.wallclock !== undefined) blop.wallclock = change.header.wallclock
-	if (change.header.message !== undefined) blop.message = change.header.message
+	// the oldest site is the one that goes (a header holds a list of them, oldest first)
+	const site = change.header.external?.[0]
+	if (site !== undefined) blop.site = share(site, roots)
+	// cause, wallclock and message are metadata entries of those names (the first of each)
+	const meta = (key: string) => change.header.metadata?.find(([k]) => k === key)?.[1]
+	const cause = meta("cause"), wallclock = meta("wallclock"), message = meta("message")
+	if (cause !== undefined) blop.cause = standIns(cause, kind)
+	if (typeof wallclock === "number") blop.wallclock = wallclock
+	if (typeof message === "string") blop.message = message
 	if (base !== undefined) blop.base = base.name
 	if (combine) blop.combine = true
 	return blop

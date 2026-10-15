@@ -8,7 +8,10 @@
 --     Rank.lean's rank_ranked; the rest is tight, carried through visit as Rank.lean's wf is
 --   rank_same: so rank.ts's ranks depend on the edges alone: not on all's order, its duplicates,
 --     or the order of edges(p)
---   rk_reach: Order.reach (rk univ), for any univ (world univ is not needed)
+--   rk_reach: Order.reach (rk univ), for any univ
+--   rk_tall: Order.tall (rk univ) on alive ones univ holds: with no link between equal ranks each
+--     rank is one past the most of what it is after (mend's k); ranks that are so are rk's
+--   Check: order.ts's ranks made whole, mended as they fall and rise, given up on a cycle
 --
 -- model, and where it departs from order.ts:
 --   - rk univ A L p: Rank.rank with all = univ.filter A, edges p = univ.filter (L p), getD 0 for
@@ -418,5 +421,98 @@ theorem rk_reach (univ : List α) : Order.reach (rk univ) where
     have eq := height_unique (rk_height (univ := univ) hc') hr
     rw [congrFun eq q]
     simp [r, hqp]
+
+-- a path's first step, and the rest
+theorem head {e : α → α → Prop} {a b : α} (h : Relation.TransGen e a b) :
+    ∃ c, e a c ∧ (c = b ∨ Relation.TransGen e c b) := by
+  induction h with
+  | single h => exact ⟨_, h, .inl rfl⟩
+  | tail _ h2 ih =>
+    obtain ⟨c, h1, h3⟩ := ih
+    refine ⟨c, h1, .inr ?_⟩
+    rcases h3 with rfl | h3
+    · exact .single h2
+    · exact .tail h3 h2
+
+-- what Order.lean's mend needs of rk, on alive ones univ holds: with no link between equal ranks,
+-- each is one past the most of what it is after; and ranks that are so are rk's (height_unique)
+theorem rk_tall (univ : List α) {A : α → Bool} (hu : ∀ x, A x = true → x ∈ univ) :
+    Order.tall (rk univ) A where
+  fix := by
+    intro L hc hne x hx
+    have H := rk_height (univ := univ) hc
+    have e_of : ∀ y z, A y = true → L y z = true →
+        y ∈ univ.filter A ∧ z ∈ univ.filter (L y) := by
+      intro y z hy hz
+      exact ⟨List.mem_filter.2 ⟨hu y hy, hy⟩, List.mem_filter.2 ⟨hu z (hc y z hz), hz⟩⟩
+    have lt : ∀ y, L x y = true → rk univ A L y < rk univ A L x := by
+      intro y hy
+      have := (H.1 x y (e_of x y hx hy)).1
+      have := hne x y hx hy
+      omega
+    refine ⟨lt, ?_⟩
+    rcases H.2 x with h0 | ⟨y, hxy, e⟩
+    · exact .inl h0
+    · obtain ⟨c, hc1, hc2⟩ := head hxy
+      have hLc : L x c = true := (List.mem_filter.1 hc1.2).2
+      have h1 := lt c hLc
+      have h2 : rk univ A L y ≤ rk univ A L c := by
+        rcases hc2 with rfl | hc2
+        · exact Nat.le_refl _
+        · exact path_le H.1 hc2
+      exact .inr ⟨c, hLc, by omega⟩
+  unique := by
+    intro L r hc ht x hx
+    let r' := fun y => if A y = true then r y else 0
+    have hr : height (fun p q => p ∈ univ.filter A ∧ q ∈ univ.filter (L p)) r' := by
+      refine ⟨?_, ?_⟩
+      · intro p q ⟨hp, hq⟩
+        have hpa : A p = true := (List.mem_filter.1 hp).2
+        have hLq : L p q = true := (List.mem_filter.1 hq).2
+        have hqa : A q = true := hc p q hLq
+        have := (ht p hpa).1 q hLq
+        simp only [r', hpa, hqa, ↓reduceIte]
+        exact ⟨Nat.le_of_lt this, fun _ => this⟩
+      · intro y
+        by_cases hy : A y = true
+        · rcases (ht y hy).2 with h0 | ⟨z, hz, e⟩
+          · exact .inl (by simp [r', hy, h0])
+          · have hza : A z = true := hc y z hz
+            refine .inr ⟨z, .single ⟨List.mem_filter.2 ⟨hu y hy, hy⟩,
+              List.mem_filter.2 ⟨hu z hza, hz⟩⟩, ?_⟩
+            simp [r', hy, hza, e]
+        · exact .inl (by simp [r', hy])
+    have eq := height_unique (rk_height (univ := univ) hc) hr
+    rw [congrFun eq x]
+    simp [r', hx]
+
+/-! ## Check: order.ts's ranks mended, run on three computations -/
+
+namespace Check
+
+open Order
+
+-- 2 after 1 after 0
+def rk3 := rk (List.range 3)
+def s0 : State Nat := started (started (started init 0) 1) 2
+def s1 := sees id (sees id s0 1 [0]) 2 [1]
+-- made whole at the first next
+def s2 := (next id rk3 (List.range 3) (set id s1 0 1)).2
+#guard (s2.making, rankOf s2 0, rankOf s2 1, rankOf s2 2) == (1, 0, 1, 2)
+-- 1 after nothing: 1 and 2 fall, mended to rank.ts's (54-rank-falls's shape)
+def s3 := sees id s2 1 []
+#guard (s3.making, rankOf s3 1, rankOf s3 2) == (1, 0, 1)
+#guard (List.range 3).all fun p => rankOf s3 p == rk3 s3.alive (link s3) p
+-- 0 after 2: 0 rises
+def s4 := sees id s3 0 [2]
+#guard (s4.making, rankOf s4 0) == (1, 2)
+#guard (List.range 3).all fun p => rankOf s4 p == rk3 s4.alive (link s4) p
+-- 1 after 0: a cycle; mending gives up, the next makes the ranks whole and sees the cycle
+def s5 := sees id s4 1 [0]
+#guard s5.making == 0
+def s6 := (next id rk3 (List.range 3) (set id s5 1 2)).2
+#guard s6.cyclic && (List.range 3).all fun p => rankOf s6 p == rk3 s6.alive (link s6) p
+
+end Check
 
 end RankOrder

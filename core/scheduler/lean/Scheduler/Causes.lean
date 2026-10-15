@@ -1,17 +1,21 @@
 -- LLM generated working output
 -- causes.ts in Lean: run, keep, loop, from and end over a heap of cause objects, with
--- loop's and from's while loops as written (a stack, seen, on). proved, for any state with ok:
--- loop_some (1), loop_list and loop_exact (2), from_iff (3), end_ran, end_held and end_kept (4);
--- with fresh too, loop_chain (5, Theorem 7). reachable_ok: ok and fresh hold of every state
--- reached by steps whose arguments keep the callers' promises below.
+-- loop's and from's while loops as written (a stack, seen, on), and the scheduler's own writes of
+-- t.kept (take, restore, clear). proved, for any state with ok: loop_some (1), loop_list and
+-- loop_exact (2), from_iff (3), end_ran, end_held and end_kept (4); with fresh too, loop_chain (5,
+-- Theorem 7). reachable_ok: ok and fresh hold of every state reached by steps whose arguments keep
+-- the callers' promises below. keep_frame, keep_kept: what keep leaves and keeps.
+-- ran and holding are pulse numbers (ranIn, heldIn: ran or held when equal to pulse); ok says one
+-- holding a cause is held this pulse, so end, clearing the held, empties every kept
 --
 -- abstractions, and where this departs from causes.ts:
 -- - identity: a Cause object is its id, its index in heap, given by run in the order made. js's
 --   seen and on are sets of objects by identity; here sets of ids. tree unfolds an id to Basic's
 --   Cause, the value back reads; shared objects unfold to equal subtrees. the answers are stated
 --   of tree, so they do not depend on sharing
--- - sets (ran, holding, t.kept, seen, on) are lists; add puts at the end if absent (Set.add)
--- - t.kept, a field on each computation, is kept : α → List Nat; t.n is n : α → Nat
+-- - fields on each computation (t.kept, t.ranIn, t.heldIn, t.n) are functions: kept : α → List Nat,
+--   ranIn, heldIn : α → Nat, n : α → Nat. holding is a list (js: an array, pushed once a pulse)
+-- - kept may repeat a cause, not at once (keep's skip looks at the last only)
 -- - a stack is a list, its top first (js: an array, its top last)
 -- - a walk skips an id off the heap; under ok there is none (every parent is made first)
 -- - loop maps on to computations by filterMap ofs: ofs is none only off the heap, never
@@ -19,11 +23,13 @@
 --   stable; with distinct n there is one sorted order (sorted_unique)
 -- - loop's c is Option Nat: none is undefined
 -- - since: a ghost, heap.size at the last end, so "made this pulse" is "id ≥ since"; not in the code
--- - drop: the scheduler's own deletes from t.kept (scheduler.ts: a disposal's clear, a done run's
---   given). not causes.ts; here so ok holds across them
--- - what callers promise, not checked by causes.ts (reachable's hypotheses): run's given and
---   keep's c are causes made (id < heap.size, for ok) and made this pulse (id ≥ since, for fresh:
---   scheduler.ts, first gives c.kept and mark keeps causeOf(by))
+-- - take, restore, clear: the scheduler's own writes of t.kept (scheduler.ts: first's given = c.kept,
+--   c.kept = []; finish's c.kept = r.given.concat(c.kept); a disposal's c.kept.length = 0). not
+--   causes.ts; here so ok holds across them
+-- - what callers promise, not checked by causes.ts (reachable's hypotheses): run's given, keep's c
+--   and restore's given are causes made (id < heap.size, for ok) and made this pulse (id ≥ since, for
+--   fresh: scheduler.ts, first gives c.kept and mark keeps causeOf(by)); restore puts given back in
+--   the pulse it was taken in (t held then, for ok: so end clears it)
 import Scheduler.Basic
 
 set_option linter.unusedSectionVars false
@@ -33,20 +39,28 @@ structure Made (α : Type) where
   of : α
   parents : List Nat
 
--- createCauses's closure, with each computation's kept field (causes.ts, createCauses)
+-- createCauses's closure, with each computation's fields kept, ranIn and heldIn (causes.ts,
+-- createCauses)
 structure Causes (α : Type) where
   heap : Array (Made α)  -- every cause made, its id its index
-  ran : List α
+  pulse : Nat
   holding : List α
   kept : α → List Nat
+  ranIn : α → Nat
+  heldIn : α → Nat
   since : Nat  -- ghost: heap.size at the last end
 
 namespace Causes
 
 variable {α : Type} [DecidableEq α]
 
--- Set.add: at the end, if absent
-def add {β : Type} [DecidableEq β] (a : β) (l : List β) : List β := if a ∈ l then l else l ++ [a]
+-- a field set on one computation
+def upd {β : Type} (f : α → β) (a : α) (b : β) : α → β := fun x => if x = a then b else f x
+
+@[simp] theorem upd_same {β : Type} (f : α → β) (a : α) (b : β) : upd f a b a = b := by simp [upd]
+
+theorem upd_ne {β : Type} (f : α → β) {a x : α} (b : β) (h : x ≠ a) : upd f a b x = f x := by
+  simp [upd, h]
 
 -- x.parents
 def ps (h : Array (Made α)) (x : Nat) : List Nat :=
@@ -125,25 +139,30 @@ decreasing_by
     | (apply Prod.Lex.right; omega)
     | (apply Prod.Lex.left; apply unseen_lt <;> assumption)
 
--- createCauses: nothing made, nothing ran, nothing kept
-def create : Causes α := ⟨#[], [], [], fun _ => [], 0⟩
+
+-- createCauses: nothing made, nothing ran or held, nothing kept; the first pulse is 1
+def create : Causes α := ⟨#[], 1, [], fun _ => [], fun _ => 0, fun _ => 0, 0⟩
 
 -- causes.ts, run: a run of t, caused by what caused each mark it was given (`given`, a keyword
 -- here, so parents); answers its id
 def run (s : Causes α) (t : α) (parents : List Nat) : Causes α × Nat :=
-  ({ s with heap := s.heap.push ⟨t, parents⟩, ran := add t s.ran }, s.heap.size)
+  ({ s with heap := s.heap.push ⟨t, parents⟩, ranIn := upd s.ranIn t s.pulse }, s.heap.size)
 
--- causes.ts, keep: a mark's cause, kept on t until the pulse's end
+-- causes.ts, keep: a mark's cause, kept on t until the pulse's end. the same cause again at once:
+-- once
 def keep (s : Causes α) (t : α) (c : Nat) : Causes α :=
-  { s with kept := fun u => if u = t then add c (s.kept u) else s.kept u,
-           holding := add t s.holding }
+  if (s.kept t).getLast? = some c then s
+  else
+    let s := { s with kept := upd s.kept t (s.kept t ++ [c]) }
+    if s.heldIn t = s.pulse then s
+    else { s with heldIn := upd s.heldIn t s.pulse, holding := s.holding ++ [t] }
 
 -- causes.ts, loop: a loop through t, c came out of a run of t in this pulse; its computations
 def loop (n : α → Nat) (s : Causes α) (c : Option Nat) (t : α) : Option (List α) :=
   match c with
   | none => none
   | some c =>
-    if t ∉ s.ran then none
+    if s.ranIn t ≠ s.pulse then none
     else
       let on := walk s.heap t [(c, 0)] [c] []
       if c ∉ on then none
@@ -151,16 +170,25 @@ def loop (n : α → Nat) (s : Causes α) (c : Option Nat) (t : α) : Option (Li
 
 -- causes.ts, from: a mark kept on t came out of a run of c in this pulse
 def «from» (s : Causes α) (t c : α) : Bool :=
-  if c ∉ s.ran then false else search s.heap c (s.kept t).reverse []
+  if s.ranIn c ≠ s.pulse then false else search s.heap c (s.kept t).reverse []
 
 -- causes.ts, end: the pulse's end, causes and runs forgotten
 def «end» (s : Causes α) : Causes α :=
   { s with kept := fun u => if u ∈ s.holding then [] else s.kept u,
-           holding := [], ran := [], since := s.heap.size }
+           holding := [], pulse := s.pulse + 1, since := s.heap.size }
 
--- scheduler.ts's own deletes from t.kept (a disposal's clear, a done run's given)
-def drop (s : Causes α) (t : α) (gone : List Nat) : Causes α :=
-  { s with kept := fun u => if u = t then (s.kept u).filter (· ∉ gone) else s.kept u }
+-- scheduler.ts first: given = c.kept, c.kept = [] (the state, and given)
+def take (s : Causes α) (t : α) : Causes α × List Nat :=
+  ({ s with kept := upd s.kept t [] }, s.kept t)
+
+-- scheduler.ts finish, a run not done: c.kept = r.given.concat(c.kept)
+def restore (s : Causes α) (t : α) (gs : List Nat) : Causes α :=
+  { s with kept := upd s.kept t (gs ++ s.kept t) }
+
+-- scheduler.ts drop (a disposal): c.kept.length = 0
+def clear (s : Causes α) (t : α) : Causes α :=
+  { s with kept := upd s.kept t [] }
+
 
 /-! the heap, and Basic's Cause -/
 
@@ -197,21 +225,24 @@ inductive chain (h : Array (Made α)) (P : Nat → Prop) : Nat → Nat → Prop
 
 /-! invariants of a state -/
 
--- what every reachable state keeps: objects point back, kept causes are made, and a computation
--- holding causes is in holding
+-- what every reachable state keeps: objects point back, kept causes are made, a computation
+-- holding causes is held this pulse, one held this pulse is in holding, no pulse ahead
 structure ok (s : Causes α) : Prop where
   wf : wf s.heap
   kept : ∀ u, ∀ k ∈ s.kept u, k < s.heap.size
-  holding : ∀ u, s.kept u ≠ [] → u ∈ s.holding
+  holding : ∀ u, s.kept u ≠ [] → s.heldIn u = s.pulse
+  held : ∀ u, s.heldIn u = s.pulse → u ∈ s.holding
+  ranIn : ∀ u, s.ranIn u ≤ s.pulse
+  heldIn : ∀ u, s.heldIn u ≤ s.pulse
 
 -- what callers giving only this pulse's causes keep (scheduler.ts, causeOf): a cause made this
--- pulse has parents made this pulse and its computation in ran; kept causes are this pulse's
+-- pulse has parents made this pulse and its computation ran this pulse; kept causes are this
+-- pulse's
 structure fresh (s : Causes α) : Prop where
   since : s.since ≤ s.heap.size
   back : ∀ x, s.since ≤ x → ∀ q ∈ ps s.heap x, s.since ≤ q
-  ran : ∀ x a, s.since ≤ x → ofs s.heap x = some a → a ∈ s.ran
+  ran : ∀ x a, s.since ≤ x → ofs s.heap x = some a → s.ranIn a = s.pulse
   kept : ∀ u, ∀ k ∈ s.kept u, s.since ≤ k
-
 /-! lemmas on the heap -/
 
 theorem reach_tail {h : Array (Made α)} {c x q : Nat} (hr : reach h c x) (hq : q ∈ ps h x) :
@@ -263,15 +294,6 @@ theorem ofs_push {h : Array (Made α)} {m : Made α} {x : Nat} :
     ofs (h.push m) x = if x = h.size then some m.of else ofs h x := by
   by_cases hx : x = h.size <;> simp [ofs, Array.getElem?_push, hx]
 
-theorem mem_add {β : Type} [DecidableEq β] {a b : β} {l : List β} : b ∈ add a l ↔ b = a ∨ b ∈ l := by
-  unfold add
-  split
-  · constructor
-    · exact .inr
-    · rintro (rfl | h)
-      · assumption
-      · exact h
-  · simp [or_comm]
 
 theorem mem_uniq {β : Type} [DecidableEq β] {a : β} : ∀ {l : List β}, a ∈ uniq l ↔ a ∈ l
   | [] => by simp [uniq]
@@ -631,12 +653,16 @@ theorem tree_of {h : Array (Made α)} {x : Nat} (hx : x < h.size) :
     ofs h x = some (tree h x hx).of := by
   rw [ofs_get hx, tree_eq]; rfl
 
+
 /-! invariants kept by each step -/
 
 theorem ok_create : ok (create : Causes α) where
   wf := by intro x q hq; simp [create, ps] at hq
   kept := by simp [create]
   holding := by simp [create]
+  held := by simp [create]
+  ranIn := by simp [create]
+  heldIn := by simp [create]
 
 theorem ok_run {s : Causes α} {t : α} {parents : List Nat} (ho : ok s)
     (hp : ∀ g ∈ parents, g < s.heap.size) : ok (s.run t parents).1 where
@@ -651,25 +677,62 @@ theorem ok_run {s : Causes α} {t : α} {parents : List Nat} (ho : ok s)
     simp only [run, Array.size_push] at hk ⊢
     have := ho.kept u k hk; omega
   holding := ho.holding
+  held := ho.held
+  ranIn := by
+    intro u
+    simp only [run, upd]
+    split
+    · exact Nat.le_refl _
+    · exact ho.ranIn u
+  heldIn := ho.heldIn
 
 theorem ok_keep {s : Causes α} {t : α} {c : Nat} (ho : ok s) (hc : c < s.heap.size) :
-    ok (s.keep t c) where
-  wf := ho.wf
-  kept := by
-    intro u k hk
-    simp only [keep] at hk
-    split at hk
-    · rcases mem_add.mp hk with rfl | hk
-      · exact hc
-      · exact ho.kept u k hk
-    · exact ho.kept u k hk
-  holding := by
-    intro u hu
-    simp only [keep] at hu ⊢
-    rw [mem_add]
-    split at hu
-    · exact .inl ‹_›
-    · exact .inr (ho.holding u hu)
+    ok (s.keep t c) := by
+  unfold keep
+  split
+  · exact ho
+  · dsimp only
+    have hk : ∀ u, ∀ k ∈ upd s.kept t (s.kept t ++ [c]) u, k < s.heap.size := by
+      intro u k hk
+      by_cases hu : u = t
+      · subst hu
+        simp only [upd_same, List.mem_append, List.mem_singleton] at hk
+        rcases hk with hk | rfl
+        · exact ho.kept u k hk
+        · exact hc
+      · rw [upd_ne _ _ hu] at hk; exact ho.kept u k hk
+    split
+    · rename_i hh
+      exact {
+        wf := ho.wf
+        kept := hk
+        holding := by
+          intro u hu
+          by_cases e : u = t
+          · subst e; exact hh
+          · dsimp only at hu ⊢; rw [upd_ne _ _ e] at hu; exact ho.holding u hu
+        held := ho.held
+        ranIn := ho.ranIn
+        heldIn := ho.heldIn }
+    · exact {
+        wf := ho.wf
+        kept := hk
+        holding := by
+          intro u hu
+          by_cases e : u = t
+          · subst e; simp
+          · dsimp only at hu ⊢; rw [upd_ne _ _ e] at hu ⊢; exact ho.holding u hu
+        held := by
+          intro u hu
+          by_cases e : u = t
+          · subst e; simp
+          · dsimp only at hu ⊢; rw [upd_ne _ _ e] at hu; exact List.mem_append_left _ (ho.held u hu)
+        ranIn := ho.ranIn
+        heldIn := by
+          intro u
+          by_cases e : u = t
+          · subst e; simp
+          · dsimp only; rw [upd_ne _ _ e]; exact ho.heldIn u }
 
 -- 4, all of it: under ok, end empties every kept
 theorem end_kept {s : Causes α} (ho : ok s) (u : α) : («end» s).kept u = [] := by
@@ -679,27 +742,64 @@ theorem end_kept {s : Causes α} (ho : ok s) (u : α) : («end» s).kept u = [] 
   · rename_i hu
     by_cases hk : s.kept u = []
     · exact hk
-    · exact absurd (ho.holding u hk) hu
+    · exact absurd (ho.held u (ho.holding u hk)) hu
 
 theorem ok_end {s : Causes α} (ho : ok s) : ok («end» s) where
   wf := ho.wf
   kept := by intro u k hk; rw [end_kept ho] at hk; simp at hk
   holding := by intro u hu; exact absurd (end_kept ho u) hu
+  held := by
+    intro u hu
+    have := ho.heldIn u
+    simp only [«end»] at hu; omega
+  ranIn := by intro u; have := ho.ranIn u; simp only [«end»]; omega
+  heldIn := by intro u; have := ho.heldIn u; simp only [«end»]; omega
 
-theorem ok_drop {s : Causes α} {t : α} {gone : List Nat} (ho : ok s) : ok (s.drop t gone) where
+theorem ok_take {s : Causes α} {t : α} (ho : ok s) : ok (s.take t).1 where
   wf := ho.wf
   kept := by
     intro u k hk
-    simp only [drop] at hk
+    simp only [take, upd] at hk
     split at hk
-    · exact ho.kept u k (List.mem_filter.mp hk).1
+    · simp at hk
     · exact ho.kept u k hk
   holding := by
     intro u hu
-    simp only [drop] at hu
+    simp only [take, upd] at hu
     split at hu
-    · exact ho.holding u (fun e => hu (by simp [e]))
+    · exact absurd rfl hu
     · exact ho.holding u hu
+  held := ho.held
+  ranIn := ho.ranIn
+  heldIn := ho.heldIn
+
+theorem ok_restore {s : Causes α} {t : α} {gs : List Nat} (ho : ok s)
+    (hg : ∀ g ∈ gs, g < s.heap.size) (hh : gs ≠ [] → s.heldIn t = s.pulse) :
+    ok (s.restore t gs) where
+  wf := ho.wf
+  kept := by
+    intro u k hk
+    simp only [restore, upd] at hk
+    split at hk
+    · rename_i e; subst e
+      rcases List.mem_append.mp hk with hk | hk
+      · exact hg k hk
+      · exact ho.kept u k hk
+    · exact ho.kept u k hk
+  holding := by
+    intro u hu
+    simp only [restore, upd] at hu
+    split at hu
+    · rename_i e; subst e
+      by_cases hn : gs = []
+      · subst hn; exact ho.holding u (by simpa using hu)
+      · exact hh hn
+    · exact ho.holding u hu
+  held := ho.held
+  ranIn := ho.ranIn
+  heldIn := ho.heldIn
+
+theorem ok_clear {s : Causes α} {t : α} (ho : ok s) : ok (s.clear t) := ok_take (t := t) ho
 
 theorem fresh_create : fresh (create : Causes α) where
   since := by simp [create]
@@ -718,26 +818,32 @@ theorem fresh_run {s : Causes α} {t : α} {parents : List Nat} (hf : fresh s)
     · exact hf.back x hx q hq
   ran := by
     intro x a hx ha
-    simp only [run, ofs_push] at ha ⊢
-    rw [mem_add]
+    simp only [run, ofs_push, upd] at ha ⊢
     split at ha
-    · exact .inl (Option.some.inj ha).symm
-    · exact .inr (hf.ran x a hx ha)
+    · cases ha; simp
+    · split
+      · rfl
+      · exact hf.ran x a hx ha
   kept := hf.kept
 
 theorem fresh_keep {s : Causes α} {t : α} {c : Nat} (hf : fresh s) (hc : s.since ≤ c) :
-    fresh (s.keep t c) where
-  since := hf.since
-  back := hf.back
-  ran := hf.ran
-  kept := by
+    fresh (s.keep t c) := by
+  have hk : ∀ u, ∀ k ∈ upd s.kept t (s.kept t ++ [c]) u, s.since ≤ k := by
     intro u k hk
-    simp only [keep] at hk
-    split at hk
-    · rcases mem_add.mp hk with rfl | hk
-      · exact hc
+    by_cases hu : u = t
+    · subst hu
+      simp only [upd_same, List.mem_append, List.mem_singleton] at hk
+      rcases hk with hk | rfl
       · exact hf.kept u k hk
-    · exact hf.kept u k hk
+      · exact hc
+    · rw [upd_ne _ _ hu] at hk; exact hf.kept u k hk
+  unfold keep
+  split
+  · exact hf
+  · dsimp only
+    split
+    · exact ⟨hf.since, hf.back, hf.ran, hk⟩
+    · exact ⟨hf.since, hf.back, hf.ran, hk⟩
 
 theorem fresh_end {s : Causes α} (ho : ok s) : fresh («end» s) where
   since := Nat.le_refl _
@@ -751,20 +857,39 @@ theorem fresh_end {s : Causes α} (ho : ok s) : fresh («end» s) where
     simp [ofs, Array.getElem?_eq_none hx] at ha
   kept := by intro u k hk; rw [end_kept ho] at hk; simp at hk
 
-theorem fresh_drop {s : Causes α} {t : α} {gone : List Nat} (hf : fresh s) :
-    fresh (s.drop t gone) where
+theorem fresh_take {s : Causes α} {t : α} (hf : fresh s) : fresh (s.take t).1 where
   since := hf.since
   back := hf.back
   ran := hf.ran
   kept := by
     intro u k hk
-    simp only [drop] at hk
+    simp only [take, upd] at hk
     split at hk
-    · exact hf.kept u k (List.mem_filter.mp hk).1
+    · simp at hk
     · exact hf.kept u k hk
 
--- the states the scheduler drives causes.ts through: what it gives run and keep is made this
--- pulse (scheduler.ts: first gives c.kept; mark keeps causeOf(by), cut to this pulse)
+theorem fresh_restore {s : Causes α} {t : α} {gs : List Nat} (hf : fresh s)
+    (hg : ∀ g ∈ gs, s.since ≤ g) : fresh (s.restore t gs) where
+  since := hf.since
+  back := hf.back
+  ran := hf.ran
+  kept := by
+    intro u k hk
+    simp only [restore, upd] at hk
+    split at hk
+    · rename_i e; subst e
+      rcases List.mem_append.mp hk with hk | hk
+      · exact hg k hk
+      · exact hf.kept u k hk
+    · exact hf.kept u k hk
+
+theorem fresh_clear {s : Causes α} {t : α} (hf : fresh s) : fresh (s.clear t) :=
+  fresh_take (t := t) hf
+
+-- the states the scheduler drives causes.ts through: what it gives run, keep and restore is made
+-- this pulse (scheduler.ts: first gives c.kept; mark keeps causeOf(by), cut to this pulse), and
+-- restore gives back in the pulse the given was taken in (finish, in first's pulse or at once
+-- after an await: c held then, if it gave anything)
 inductive reachable : Causes α → Prop
   | create : reachable create
   | run {s : Causes α} {t : α} {parents : List Nat} : reachable s →
@@ -772,7 +897,11 @@ inductive reachable : Causes α → Prop
   | keep {s : Causes α} {t : α} {c : Nat} : reachable s → s.since ≤ c → c < s.heap.size →
       reachable (s.keep t c)
   | «end» {s : Causes α} : reachable s → reachable («end» s)
-  | drop {s : Causes α} {t : α} {gone : List Nat} : reachable s → reachable (s.drop t gone)
+  | take {s : Causes α} {t : α} : reachable s → reachable (s.take t).1
+  | restore {s : Causes α} {t : α} {gs : List Nat} : reachable s →
+      (∀ g ∈ gs, s.since ≤ g ∧ g < s.heap.size) → (gs ≠ [] → s.heldIn t = s.pulse) →
+      reachable (s.restore t gs)
+  | clear {s : Causes α} {t : α} : reachable s → reachable (s.clear t)
 
 theorem reachable_ok {s : Causes α} (hr : reachable s) : ok s ∧ fresh s := by
   induction hr with
@@ -781,8 +910,10 @@ theorem reachable_ok {s : Causes α} (hr : reachable s) : ok s ∧ fresh s := by
     exact ⟨ok_run ih.1 fun g hg => (hp g hg).2, fresh_run ih.2 fun g hg => (hp g hg).1⟩
   | keep _ h1 h2 ih => exact ⟨ok_keep ih.1 h2, fresh_keep ih.2 h1⟩
   | «end» _ ih => exact ⟨ok_end ih.1, fresh_end ih.1⟩
-  | drop _ ih => exact ⟨ok_drop ih.1, fresh_drop ih.2⟩
-
+  | take _ ih => exact ⟨ok_take ih.1, fresh_take ih.2⟩
+  | restore _ hg hh ih =>
+    exact ⟨ok_restore ih.1 (fun g h => (hg g h).2) hh, fresh_restore ih.2 (fun g h => (hg g h).1)⟩
+  | clear _ ih => exact ⟨ok_clear ih.1, fresh_clear ih.2⟩
 /-! what loop, from and end answer -/
 
 theorem loop_none (n : α → Nat) (s : Causes α) (t : α) : loop n s none t = none := rfl
@@ -795,10 +926,10 @@ theorem loop_on {s : Causes α} {t : α} {c : Nat} (ho : ok s) (hc : c < s.heap.
 -- 1. loop answers iff t ran this pulse and c is back to a run of t
 theorem loop_some {n : α → Nat} {s : Causes α} {t : α} {c : Nat} (ho : ok s)
     (hc : c < s.heap.size) :
-    loop n s (some c) t ≠ none ↔ t ∈ s.ran ∧ Cause.back t (tree s.heap c hc) = true := by
+    loop n s (some c) t ≠ none ↔ s.ranIn t = s.pulse ∧ Cause.back t (tree s.heap c hc) = true := by
   rw [back_tree ho.wf, ← (loop_on ho hc c).trans (and_iff_right (.refl c))]
   simp only [loop]
-  by_cases ht : t ∈ s.ran <;> by_cases hon : c ∈ walk s.heap t [(c, 0)] [c] [] <;> simp [ht, hon]
+  by_cases ht : s.ranIn t = s.pulse <;> by_cases hon : c ∈ walk s.heap t [(c, 0)] [c] [] <;> simp [ht, hon]
 
 -- 2, on the heap: loop's list is the computations of the causes c reaches that are back to a
 -- run of t, each once, sorted by n
@@ -890,14 +1021,14 @@ theorem loop_exact {n : α → Nat} {s : Causes α} {t : α} {c : Nat} {l : List
 -- 3. from: c ran this pulse, and a cause kept on t is back to a run of c
 theorem from_iff {s : Causes α} {t c : α} (ho : ok s) :
     «from» s t c = true ↔
-      c ∈ s.ran ∧ ∃ k ∈ s.kept t, ∃ hk : k < s.heap.size, Cause.back c (tree s.heap k hk) = true := by
+      s.ranIn c = s.pulse ∧ ∃ k ∈ s.kept t, ∃ hk : k < s.heap.size, Cause.back c (tree s.heap k hk) = true := by
   have hi : sinv s.heap c (s.kept t) (s.kept t).reverse [] :=
     ⟨by simp, fun x hx => ⟨x, List.mem_reverse.mp hx, .refl x⟩,
       fun x hx => ho.kept t x (List.mem_reverse.mp hx), fun k hk => .inr (List.mem_reverse.mpr hk),
       by simp, by simp⟩
   unfold «from»
-  by_cases hc : c ∈ s.ran
-  · simp only [hc, not_true_eq_false, ↓reduceIte, true_and]
+  by_cases hc : s.ranIn c = s.pulse
+  · simp only [hc, ne_eq, not_true_eq_false, ↓reduceIte, true_and]
     rw [search_spec ho.wf _ _ hi]
     constructor
     · rintro ⟨k, hk, hb⟩
@@ -907,16 +1038,56 @@ theorem from_iff {s : Causes α} {t c : α} (ho : ok s) :
       exact ⟨k, hk, (back_tree ho.wf k hks).mp hb⟩
   · simp [hc]
 
--- 4. end: ran and holding empty
-theorem end_ran (s : Causes α) : («end» s).ran = [] ∧ («end» s).holding = [] := ⟨rfl, rfl⟩
+-- 4. end: nothing ran in the next pulse, holding empty
+theorem end_ran {s : Causes α} (ho : ok s) :
+    (∀ u, («end» s).ranIn u ≠ («end» s).pulse) ∧ («end» s).holding = [] := by
+  refine ⟨fun u => ?_, rfl⟩
+  have := ho.ranIn u
+  simp only [«end»]; omega
 
 -- 4. end empties the kept of every computation keep touched since the last end
 theorem end_held (s : Causes α) : ∀ u ∈ s.holding, («end» s).kept u = [] := by
   intro u hu; simp [«end», hu]
 
 -- keep touches t: it is held till the end
-theorem keep_holds (s : Causes α) (t : α) (c : Nat) : t ∈ (s.keep t c).holding := by
-  simp [keep, mem_add]
+theorem keep_holds {s : Causes α} (ho : ok s) (t : α) (c : Nat) :
+    (s.keep t c).heldIn t = (s.keep t c).pulse ∧ t ∈ (s.keep t c).holding := by
+  unfold keep
+  split
+  · rename_i hl
+    have hne : s.kept t ≠ [] := by intro e; rw [e] at hl; simp at hl
+    exact ⟨ho.holding t hne, ho.held t (ho.holding t hne)⟩
+  · dsimp only
+    split
+    · rename_i hh; exact ⟨hh, ho.held t hh⟩
+    · simp
+
+-- what keep leaves: the heap, since, the pulse and ranIn; one held this pulse stays held
+theorem keep_frame (s : Causes α) (t : α) (c : Nat) :
+    (s.keep t c).heap = s.heap ∧ (s.keep t c).since = s.since ∧ (s.keep t c).pulse = s.pulse ∧
+    (s.keep t c).ranIn = s.ranIn ∧
+    (∀ u, s.heldIn u = s.pulse → (s.keep t c).heldIn u = (s.keep t c).pulse) := by
+  unfold keep
+  split
+  · exact ⟨rfl, rfl, rfl, rfl, fun _ h => h⟩
+  · dsimp only
+    split
+    · exact ⟨rfl, rfl, rfl, rfl, fun _ h => h⟩
+    · refine ⟨rfl, rfl, rfl, rfl, fun u h => ?_⟩
+      by_cases e : u = t
+      · subst e; simp
+      · simp only [upd_ne _ _ e]; exact h
+
+-- what keep keeps: c at the end of t's kept, unless it is there last already
+theorem keep_kept (s : Causes α) (t : α) (c : Nat) (u : α) :
+    (s.keep t c).kept u =
+      if u = t ∧ (s.kept t).getLast? ≠ some c then s.kept t ++ [c] else s.kept u := by
+  unfold keep
+  split
+  · rename_i h; simp [h]
+  · rename_i h
+    dsimp only
+    split <;> (by_cases e : u = t <;> simp [e, h, upd_ne])
 
 /-! Theorem 7: a loop is a causal cycle in this pulse -/
 
@@ -942,7 +1113,7 @@ theorem chain_last {h : Array (Made α)} {P : Nat → Prop} {x y : Nat} (hc : ch
 
 -- for a cause made this pulse, loop's ran check is implied: back to a run of t means t ran
 theorem back_ran {s : Causes α} {t : α} {c : Nat} (hf : fresh s) (hs : s.since ≤ c)
-    (hb : back s.heap t c) : t ∈ s.ran := by
+    (hb : back s.heap t c) : s.ranIn t = s.pulse := by
   obtain ⟨j, hr, hj⟩ := hb
   exact hf.ran j t (reach_since hf hs hr) hj
 
@@ -952,7 +1123,7 @@ theorem back_ran {s : Causes α} {t : α} {c : Nat} (hf : fresh s) (hs : s.since
 theorem loop_chain {n : α → Nat} {s : Causes α} {t : α} {c : Nat} {l : List α} (ho : ok s)
     (hf : fresh s) (hc : c < s.heap.size) (hs : s.since ≤ c)
     (hl : loop n s (some c) t = some l) :
-    t ∈ s.ran ∧ ∃ x, ofs s.heap x = some t ∧ s.since ≤ x ∧
+    s.ranIn t = s.pulse ∧ ∃ x, ofs s.heap x = some t ∧ s.since ≤ x ∧
       chain s.heap (fun y => s.since ≤ y ∧ ∃ a ∈ l, ofs s.heap y = some a) c x := by
   have hsome : loop n s (some c) t ≠ none := by simp [hl]
   obtain ⟨ht, hb⟩ := (loop_some ho hc).mp hsome

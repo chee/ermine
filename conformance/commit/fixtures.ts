@@ -3,7 +3,7 @@
 // Each scenario one or more sessions (../apply/session.ts has the protocol). Each committed blop
 // is written by hand from COMMIT.tex: parents, base, combine, lamport, patches, header. Where the
 // blop is then added, the versions after are written by hand too, and checked twice: against the
-// model (../apply/model.ts) and against the local change, mutate.ts on the versions before,
+// model (../apply/model.ts) and against the local change, op's apply on the versions before,
 // reordered as COMMIT.tex's After says. commit.ts and apply.ts are never imported.
 import { assertEquals } from "@std/assert"
 import { Stand } from "@ermine/encoding/cbor"
@@ -42,6 +42,17 @@ type Header = {
 	cause?: unknown
 	wallclock?: number
 	message?: string
+}
+
+// the header as a change carries it: the site as external, the cause, wallclock and message as
+// metadata pairs in that order; the rest as it is
+function carried(h: Header): Record<string, unknown> {
+	const { site, cause, wallclock, message, ...rest } = h
+	const out: Record<string, unknown> = { ...rest }
+	if (site !== undefined) out.external = [site]
+	const metadata = Object.entries({ cause, wallclock, message }).filter(([, v]) => v !== undefined)
+	if (metadata.length) out.metadata = metadata
+	return out
 }
 
 let seed = 0
@@ -93,7 +104,7 @@ function commit(c: Commit, want: Want): [Step, B] {
 	const step: Step = {
 		request: {
 			op: "commit",
-			change: toJson({ node: "n", object, patches, header, signer }) as never,
+			change: toJson({ node: "n", object, patches, header: carried(header), signer }) as never,
 			at: c.at,
 			roots: c.roots ?? [],
 			random: hex(nonce),
@@ -109,7 +120,7 @@ const refuses = (c: Commit, code: string): Step => ({
 			node: "n",
 			object: c.object ?? "value",
 			patches: c.patches ?? [],
-			header: { time: 77, actor: "me" },
+			header: carried({ time: 77, actor: "me" }),
 			signer: DEV1,
 		}) as never,
 		at: c.at,
@@ -869,4 +880,4 @@ scenario(
 	}
 }
 
-await write(new URL("../../extensions/subduction/conformance/commit/", import.meta.url))
+await write(new URL("../suites-aside/sync/subduction/conformance/commit/", import.meta.url))

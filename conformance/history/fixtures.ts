@@ -8,7 +8,7 @@
 import { encode, name } from "@ermine/encoding/blop"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../extensions/subduction/conformance/history/", import.meta.url)
+const out = new URL("../suites-aside/sync/subduction/conformance/history/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
 type Object = "value" | ["info", string] | ["children", string]

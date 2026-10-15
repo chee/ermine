@@ -99,17 +99,23 @@
 							"trust": 2
 						},
 						"reader": "r",
-						"site": {
-							"file": "src/a.ts",
-							"line": 3,
-							"column": 7,
-							"function": "f"
-						},
-						"cause": {
-							"why": "because"
-						},
-						"time": 1057,
-						"node": "n"
+						"external": [
+							{
+								"file": "src/a.ts",
+								"line": 3,
+								"column": 7,
+								"function": "f"
+							}
+						],
+						"metadata": [
+							[
+								"cause",
+								{
+									"why": "because"
+								}
+							]
+						],
+						"time": 1057
 					},
 					"because": {
 						"layer": "sync",
@@ -126,8 +132,7 @@
 					"content": "bare",
 					"change": {
 						"actor": null,
-						"time": 1058,
-						"node": "n"
+						"time": 1058
 					},
 					"because": {
 						"layer": "sync",

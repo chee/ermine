@@ -1,20 +1,29 @@
 // what an object holds after a blop, worked out from its history (APPLY.tex)
 // sides: the patches applied, as mutate applies them to a first version, to the base's side
 import type { Blop } from "@ermine/encoding/blop"
-import createBecause, { type Because } from "@ermine/change/because"
-import createChange, { type Change } from "@ermine/change"
-import createNode from "@ermine/node"
-import mutate, { MutateError } from "@ermine/op/mutate"
+import createEntry, { type ChangeHeader } from "@ermine/node/entry"
+import update from "@ermine/node/update"
+import { ApplyError } from "@ermine/op/apply"
 import type { Histories } from "./history.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
-// one of an object's versions: its head's side, change and because
+// sync's mark on a version: where it sits in the history (its Lamport number and name) and who
+// signed it. There is no Because in core today, so this is sync's own
+export type Because = {
+	layer: "sync"
+	place: { lamport: number; name: string }
+	why: { signer: string }
+}
+
+// one of an object's versions: its head's side, change header and because. The change header holds
+// the blop's reader and site (as external); its cause, wallclock and message are metadata entries
+// of those names. The node is not in a header today: it is the blop's
 export type Version = {
 	// absent: a removal among other heads
 	content?: unknown
-	change: Change
-	because: Because<{ lamport: number; name: string }, { signer: string }>
+	change: ChangeHeader
+	because: Because
 }
 
 // sides kept: heads' only, by their blop (APPLY.tex); a side never changes
@@ -26,18 +35,11 @@ const sides = (histories: Histories) => {
 
 const base = (blop: Blop) => blop.base ?? blop.parents[0]
 
-// the side after the blop's patches on before; MutateError when they do not apply
+// the side after the blop's patches on before; ApplyError when they do not apply
 function after(blop: Blop, before: unknown): unknown {
-	const change = createChange(blop.node, { time: 0, actor: blop.actor })
-	const versions = before === undefined ? [] : [{ content: before, change }]
-	const o = blop.object
-	const n = createNode<unknown, typeof change>(blop.node)
-	if (o === "value") n.value = versions
-	else if (o[0] === "info") n.info.set(o[1], versions)
-	else n.children.set(o[1], versions as never)
-	mutate(n, o, blop.patches, { time: 0, actor: blop.actor })
-	const left = o === "value" ? n.value : (o[0] === "info" ? n.info : n.children).get(o[1])
-	return left?.[0]?.content
+	const entry = createEntry(before, { time: 0, actor: blop.actor })
+	update(entry, blop.patches as never, { time: 0, actor: blop.actor })
+	return entry.value
 }
 
 // a blop's side, or undefined: not taken in, or emptied. a stand-in in it stays as it is (APPLY.tex)
@@ -71,7 +73,7 @@ export function check(histories: Histories, blop: Blop): boolean {
 	try {
 		made = after(blop, n === undefined ? undefined : side(histories, n))
 	} catch (e) {
-		if (e instanceof MutateError) return false
+		if (e instanceof ApplyError) return false
 		throw e
 	}
 	const k = sides(histories)
@@ -97,17 +99,21 @@ export function versions(
 		const content = side(histories, head.name)
 		const { blop } = head
 		const name = hex(head.name)
-		const header: Parameters<typeof createChange>[1] = { time: time(name), actor: blop.actor }
+		const header: ChangeHeader = { time: time(name), actor: blop.actor }
 		if (blop.reader !== undefined) header.reader = blop.reader
-		if (blop.site !== undefined) header.site = blop.site
-		if (blop.cause !== undefined) header.cause = blop.cause
-		if (blop.wallclock !== undefined) header.wallclock = blop.wallclock
-		if (blop.message !== undefined) header.message = blop.message
+		if (blop.site !== undefined) header.external = [blop.site]
+		const metadata: [string, unknown][] = []
+		if (blop.cause !== undefined) metadata.push(["cause", blop.cause])
+		if (blop.wallclock !== undefined) metadata.push(["wallclock", blop.wallclock])
+		if (blop.message !== undefined) metadata.push(["message", blop.message])
+		if (metadata.length) header.metadata = metadata
 		const version: Version = {
-			change: createChange(blop.node, header),
-			because: createBecause("sync", { lamport: blop.lamport, name }, {
-				signer: hex(blop.signer),
-			}),
+			change: header,
+			because: {
+				layer: "sync",
+				place: { lamport: blop.lamport, name },
+				why: { signer: hex(blop.signer) },
+			},
 		}
 		if (content !== undefined) version.content = content
 		out.push(version)

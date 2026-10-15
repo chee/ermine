@@ -1,6 +1,8 @@
 // A device of the notes demo, no DOM: runs in a browser tab and in Deno (peer.ts). Everything here
-// is the host's side, built from newcore's parts: a device (sync/ts/transport.ts), the wiring
-// (sync/ts/wiring.ts), a scheduler, and programs.
+// is the host's side, built from today's parts: a device (typescript/transport.ts), the world around
+// the wiring (typescript/world.ts: table, places, scheduler), and a view that is a compute and an
+// effect. Left out of the old demo: several heads of a note shown from the table (a note's versions
+// are read from its histories), and a presence node's own value.
 //
 // The picture: Subduction is a networked filesystem; the graph in memory is this device's open view
 // of it. This device's graph has a local root, "me" (not an ermine:// id, so nothing placed in it
@@ -20,14 +22,13 @@
 // is the first blop of its own history. Readers read the last few slots.
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
-import { createScheduler } from "@ermine/scheduler"
 import { versions as applied } from "../typescript/apply.ts"
 import { id as idOf, is } from "../typescript/id.ts"
 import { createDevice, type Device } from "../typescript/transport.ts"
-import { createWiring, fresh } from "../typescript/wiring.ts"
+import { fresh } from "../typescript/wiring.ts"
+import { createWorld } from "../typescript/world.ts"
 import { hexOf } from "../live/blob.ts"
 import { type Backend, Storage } from "../live/storage.ts"
-import createNode from "@ermine/node"
 // deno-lint-ignore no-explicit-any
 type Any = any
 
@@ -148,193 +149,199 @@ export async function start(o: Options) {
 
 	// ---- the graph, wired to sync
 
-	// every object a blop arrived for, by document: kept for `bring` (what the graph lacks is
-	// that nothing tells which objects a document's histories hold)
+	// every object a blop arrived for, by document: kept for `reapply`
 	const seen = new Map<string, Map<string, unknown>>()
 	device.arrived((a) => {
 		let m = seen.get(a.doc)
 		if (!m) seen.set(a.doc, m = new Map())
 		m.set(JSON.stringify(a.blop.object), a.blop.object)
 	})
-	const held: Any = {}
-	const wiring = createWiring(device, {
-		versions: (...a: Any[]) => held.s.internal.versions(...a),
+	const world = createWorld(device, {
+		root: "me",
+		actor: me.slice(0, 8),
 		signer,
 		random,
+		// the table shows one head of several: the view is due on any blop taken in
+		arrived: () => bump(),
 	})
-	const s: Any = held.s = createScheduler({
-		root: createNode("me", {}),
-		actor: me.slice(0, 8),
-		site: () => undefined,
-		id: () => newId(),
-		changed: (r: Any) => wiring.changed(r),
-	} as Any)
+	const { scheduler: sch, table, places } = world
+	const bump = () => world.write("value", "tick", [{ path: [], value: Date.now() }])
+	const isMap = (x: unknown): x is Record<string, unknown> =>
+		x !== null && typeof x === "object" && !Array.isArray(x)
+	const put = (value: unknown) => [{ path: [], value }]
 
 	// starting again: the device takes in what the storage holds before it connects (TRANSPORT.tex,
-	// A device); what it takes in for a node not in memory is brought below
+	// A device); what it takes in is written to the table as it arrives
 
 	// ---- bringing a node into memory
 	//
-	// What was missing: a document that arrived (from storage, or the network) for an id the graph
-	// does not hold is dropped by `versions` ("a node not in memory: nothing"), and nothing makes it
-	// come back when the node is made. WIRING.tex: how a node gets into memory is the host's. So:
-	// make the node empty (the graph loads it), follow it, then give it, object by object, what its
-	// histories say, as sync does for an arrival.
+	// A node in the folder that this device has no version of is followed (the sync that does it
+	// asks once), and what its histories say is given to the table, object by object, as sync does
+	// for an arrival. For an ephemeral node the layer is its own.
 	const followed = new Set<string>()
 	function follow(id: string) {
 		if (followed.has(id)) return
 		followed.add(id)
 		device.follow(id).catch((e) => log(`follow ${id.slice(9, 17)}: ${e}`))
 	}
-	function bring(api: Any, id: string, ephemeral: boolean) {
-		if (!s.get(id)) api.create(undefined, { id, ephemeral })
+	function bring(id: string, ephemeral: boolean) {
 		reapply(id, ephemeral)
 		follow(id)
 	}
 	function reapply(id: string, ephemeral: boolean) {
 		const histories = device.histories(id, ephemeral ? "ephemeral" : "stored")
 		for (const object of seen.get(id)?.values() ?? []) {
-			s.internal.versions(id, object, applied(histories, object as Any, () => 0))
+			world.versions(id, object as Any, applied(histories, object as Any, () => 0), {
+				actor: me,
+				signer: me,
+				name: "",
+			})
 		}
 	}
 
-	// the shared folder, mounted: the host's own root holds it (a local placement, never committed)
-	s.create("tick", { id: "tick" })
-	s.insert("me", "tick", "tick")
-	// the folder, and one made new gets its first change when a note is made in it
-	s.batch(() => {
-		s.create(undefined, { id: F })
-		s.insert("me", "folder", F)
-		reapply(F, false)
-	})
+	// this device's root is local, never committed: the shared folder is mounted in it at "folder"
+	world.write("value", "tick", put(Date.now()))
+	world.write("children", "me", put({ tick: "tick", folder: F }))
+	reapply(F, false)
 	follow(F)
 
-	// ---- the programs
+	// ---- the view
 
-	// the view: reads the mounted folder, tracked; its value is what is on show. Its effect draws,
-	// and does what the folder says to be done: node placed here and not loaded are brought in, and
-	// this device's own presence is placed
+	// reads the mounted folder, tracked; its value is what is on show. Its effect draws, and does
+	// what the folder says to be done: nodes placed here and not loaded are brought in, and this
+	// device's own presence is placed
 	const asked = new Map<string, number>()
 	// per sender and note, the last selection that could be placed
 	const placeable = new Map<string, Spot>()
-	const view = {
-		compute: (
-			{ api }: Any,
-		): Omit<View, "mounted"> & { wanted: Any[]; empty: string[]; placed: boolean } => {
-			const now = Date.now()
-			api.content(["tick"]) // tracked: the compute is due again each tick
-			const names = api.children(["folder"]) as string[]
-			const notes: Note[] = []
-			const peers: Peer[] = []
-			const wanted: { id: string; ephemeral: boolean }[] = []
-			const empty: string[] = []
-			const noteIds = new Map<string, string>()
-			const k = Math.floor(now / SLOT)
-			if (!names.length) empty.push(F)
-			for (const name of names) {
-				if (!name.startsWith(PRESENCE)) {
-					for (const it of api.content(["folder", name])) {
-						if (!it.node) wanted.push({ id: it.id, ephemeral: false })
-						else if (!it.versions?.length) empty.push(it.id)
-						noteIds.set(name, it.id)
-						notes.push({
-							id: it.id,
-							title: name,
-							loaded: !!it.node,
-							versions: (it.versions ?? []).map((v: Any) => String(v.content ?? "")),
-						})
-					}
-					continue
-				}
-				for (const it of api.look(["folder", name])) {
-					if (!it.node) {
-						wanted.push({ id: it.id, ephemeral: true })
-						peers.push({
-							key: name.slice(PRESENCE.length),
-							name: "?",
-							colour: "#999",
-							age: Infinity,
-							live: false,
-							self: name === mine,
-							loaded: false,
-						})
-						continue
-					}
-					// the newest beat in the window, of this carrier
-					let beat: Any, at = 0
-					for (let j = 0; j < WINDOW && !beat; j++) {
-						const got = api.info(["folder", name], "b" + (k - j)).find((x: Any) =>
-							x.id === it.id
-						)
-						const v = got?.versions?.[0]?.content
-						if (v) beat = v, at = (k - j) * SLOT
-					}
-					// the selection, carried forward to the text this device has; one that cannot be
-					// placed yet (its `at` not here) is the sender's last one that could be
-					let spot: Spot | undefined
-					const nid = beat?.note !== undefined ? noteIds.get(beat.note) : undefined
-					if (beat && nid && beat.from !== undefined) {
-						const histories = device.histories(nid, "stored")
-						const head = histories.heads("value")[0]
-						const h = head ? hexOf(head.name) : undefined
-						const pk = name + "\0" + beat.note
-						const raw: Spot = { at: beat.at, from: beat.from, to: beat.to }
-						let got = carried(histories, h, raw)
-						if (got) placeable.set(pk, raw)
-						else if (placeable.has(pk)) got = carried(histories, h, placeable.get(pk)!)
-						if (got) spot = { from: got[0], to: got[1] }
-					}
-					peers.push({
-						key: name.slice(PRESENCE.length),
-						name: beat?.name ?? "?",
-						colour: beat?.colour ?? "#999",
-						note: beat?.note,
-						from: spot?.from,
-						to: spot?.to,
-						age: beat ? now - at : Infinity,
-						live: !!beat && now - at < AWAY,
-						self: name === mine,
-						loaded: true,
-					})
-				}
+	const compute = (): Omit<View, "mounted"> & {
+		wanted: Any[]
+		empty: string[]
+		placed: boolean
+	} => {
+		const now = Date.now()
+		places.readValue("value", "tick") // tracked: the compute is due again each tick
+		// notes before presences: a beat names the note it is in
+		const names = places.readKeys("children", F).sort((a, b) =>
+			Number(a.startsWith(PRESENCE)) - Number(b.startsWith(PRESENCE))
+		)
+		const notes: Note[] = []
+		const peers: Peer[] = []
+		const wanted: { id: string; ephemeral: boolean }[] = []
+		const empty: string[] = []
+		const noteIds = new Map<string, string>()
+		const k = Math.floor(now / SLOT)
+		if (!names.length) empty.push(F)
+		for (const name of names) {
+			const id = places.readValue("children", F, [name])
+			if (typeof id !== "string") continue
+			if (!name.startsWith(PRESENCE)) {
+				const value = places.readValue("value", id)
+				const loaded = table.get("value", id) !== undefined
+				const versions = applied(device.histories(id, "stored"), "value", () => 0)
+					.map((v) => String(v.content ?? ""))
+				if (!loaded) wanted.push({ id, ephemeral: false })
+				else if (!versions.length && value === undefined) empty.push(id)
+				noteIds.set(name, id)
+				notes.push({ id, title: name, loaded, versions })
+				continue
 			}
-			return { folder: F, notes, peers, wanted, empty, placed: names.includes(mine) }
-		},
-		effect: ({ api, value }: Any) => {
-			if (!value.placed) {
-				// this device's presence: an ephemeral node of this process's, placed in the folder
-				if (!s.get(qid)) api.create(undefined, { id: qid, ephemeral: true })
-				follow(qid)
-				api.insert(F, mine, qid)
+			const loaded = table.get("attributes", id) !== undefined
+			places.readKeys("attributes", id) // tracked: due when a beat is added
+			if (!loaded) {
+				wanted.push({ id, ephemeral: true })
+				peers.push({
+					key: name.slice(PRESENCE.length),
+					name: "?",
+					colour: "#999",
+					age: Infinity,
+					live: false,
+					self: name === mine,
+					loaded: false,
+				})
+				continue
 			}
-			for (const w of value.wanted) bring(api, w.id, w.ephemeral)
-			// placed, loaded, and still nothing in it: the sync that follow did may have come before
-			// the server had it (follow asks once; nothing says "I am waiting for this"), so ask again
-			const now = Date.now()
-			for (const id of value.empty) {
-				if (now - (asked.get(id) ?? 0) < 2000) continue
-				asked.set(id, now)
-				device.follow(id).catch(() => {})
+			// the newest beat in the window, of this carrier
+			let beat: Any, at = 0
+			for (let j = 0; j < WINDOW && !beat; j++) {
+				const v = places.readValue("attributes", id, ["b" + (k - j)])
+				if (v) beat = v, at = (k - j) * SLOT
 			}
-			const { wanted: _w, empty: _e, placed: _p, ...shown } = value
-			o.render?.({ ...shown, mounted: true })
-		},
+			// the selection, carried forward to the text this device has; one that cannot be
+			// placed yet (its `at` not here) is the sender's last one that could be
+			let spot: Spot | undefined
+			const nid = beat?.note !== undefined ? noteIds.get(beat.note) : undefined
+			if (beat && nid && beat.from !== undefined) {
+				const histories = device.histories(nid, "stored")
+				const head = histories.heads("value")[0]
+				const h = head ? hexOf(head.name) : undefined
+				const pk = name + "\0" + beat.note
+				const raw: Spot = { at: beat.at, from: beat.from, to: beat.to }
+				let got = carried(histories, h, raw)
+				if (got) placeable.set(pk, raw)
+				else if (placeable.has(pk)) got = carried(histories, h, placeable.get(pk)!)
+				if (got) spot = { from: got[0], to: got[1] }
+			}
+			peers.push({
+				key: name.slice(PRESENCE.length),
+				name: beat?.name ?? "?",
+				colour: beat?.colour ?? "#999",
+				note: beat?.note,
+				from: spot?.from,
+				to: spot?.to,
+				age: beat ? now - at : Infinity,
+				live: !!beat && now - at < AWAY,
+				self: name === mine,
+				loaded: true,
+			})
+		}
+		return { folder: F, notes, peers, wanted, empty, placed: names.includes(mine) }
 	}
-	s.start({ address: [], name: "view", program: view })
+	const effect = (value: ReturnType<typeof compute>) => {
+		if (!value.placed) {
+			// this device's presence: an ephemeral node of this process's, placed in the folder
+			follow(qid)
+			insert(F, mine, qid)
+		}
+		for (const w of value.wanted) bring(w.id, w.ephemeral)
+		// placed, loaded, and still nothing in it: the sync that follow did may have come before
+		// the server had it (follow asks once; nothing says "I am waiting for this"), so ask again
+		const now = Date.now()
+		for (const id of value.empty) {
+			if (now - (asked.get(id) ?? 0) < 2000) continue
+			asked.set(id, now)
+			device.follow(id).catch(() => {})
+		}
+		const { wanted: _w, empty: _e, placed: _p, ...shown } = value
+		o.render?.({ ...shown, mounted: true })
+	}
+	sch.runWithScope(world.host, () => sch.createEffect(compute, effect))
+
+	// a name in a node's children, holding an id
+	const insert = (parent: string, name: string, id: string) =>
+		world.write("children", parent, [
+			...isMap(table.get("children", parent)?.value) ? [] : put({}),
+			{ path: [name], value: id },
+		])
 
 	// ---- the host's side: actions
 
-	const addr = (title: string) => ["folder", title]
+	// the id of the note under a title in the folder
+	const noteId = (title: string) => {
+		const kids = table.get("children", F)?.value
+		const id = isMap(kids) ? kids[title] : undefined
+		return typeof id === "string" ? id : undefined
+	}
 	const api = {
 		// a new note in the folder; its id. The note is made and sent to the server first, and only
 		// then placed in the folder: whoever hears the placement finds the note there to fetch
 		async make(title: string, text = ""): Promise<string> {
-			const id = s.create(text)
-			await wiring.idle()
+			const id = newId()
+			world.write("value", id, put(text))
+			await world.wiring.idle()
 			await device.idle()
 			followed.add(id)
 			await device.follow(id)
-			s.insert(F, title, id)
+			insert(F, title, id)
 			return id
 		},
 		// the note's text from `old` to `text`: one splice (code points), at the version shown first
@@ -346,20 +353,26 @@ export async function start(o: Options) {
 			while (
 				q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]
 			) q++
-			s.write(addr(title), [{
+			const id = noteId(title)
+			if (id === undefined) return
+			world.write("value", id, [{
 				path: [],
 				range: [p, a.length - q],
 				value: b.slice(p, b.length - q).join(""),
-			}], version)
+			}], { at: version })
 		},
 		// of several versions, keep this one: the rest are replaced by it
 		keep(title: string, version: number, count: number) {
 			const text = view_(title)?.versions[version] ?? ""
-			s.write(addr(title), [{ path: [], value: text }], version, [0, count])
+			const id = noteId(title)
+			if (id === undefined) return
+			world.write("value", id, put(text), { at: [0, count] })
 		},
 		// the note leaves the folder; the node is not deleted
 		remove(title: string, index = 0) {
-			s.remove(F, title, index)
+			// one name holds one id now, so there is only the first
+			void index
+			if (noteId(title) !== undefined) world.write("children", F, [{ path: [title] }])
 		},
 		// where this device's cursor is: sent with the next beat
 		at(note?: string, from?: number, to?: number) {
@@ -386,14 +399,14 @@ export async function start(o: Options) {
 	// written once per slot, to the slot's own name, so it begins a history of its own
 	const timer = setInterval(() => {
 		const now = Date.now(), k = Math.floor(now / SLOT)
-		s.write(["tick"], [{ path: [], value: now }])
-		if (!s.get(qid) || k === lastSlot || (!dirty && now - last < 2000)) return
+		bump()
+		if (noteId(mine) === undefined || k === lastSlot || (!dirty && now - last < 2000)) return
 		try {
-			s.set(
-				["folder", mine],
-				"b" + k,
-				[{ path: [], value: { name: o.name, colour: o.colour, ...here_ } }],
-			)
+			const beat = { name: o.name, colour: o.colour, ...here_ }
+			world.write("attributes", qid, [
+				...isMap(table.get("attributes", qid)?.value) ? [] : put({}),
+				{ path: ["b" + k], value: beat },
+			], { ephemeral: true })
 			lastSlot = k, last = now, dirty = false
 		} catch (e) {
 			log(`beat: ${e}`)
@@ -422,21 +435,21 @@ export async function start(o: Options) {
 	connect()
 
 	return {
-		s,
+		world,
 		device,
 		folder: F,
 		key: me,
 		name: o.name,
 		...api,
 		async idle() {
-			await wiring.idle()
+			await world.wiring.idle()
 			await device.idle()
 			await storage.flush()
 		},
 		async close() {
 			stop = true
 			clearInterval(timer)
-			await wiring.idle().catch(() => {})
+			await world.wiring.idle().catch(() => {})
 			await storage.flush()
 			await device.close().catch(() => {})
 		},

@@ -4,7 +4,7 @@
 
 Words: *decided*: chee's words, quoted. *lean*: chee thinking it through, quoted. *mine*: my
 proposal, open to change. *open*: not answered. From the sync talks of 10-13 and 10-14. The graph
-it syncs: core/graph/plan.org (nodes as tables, paths in children).
+it syncs: core/table/plan.org (nodes as tables, paths in children).
 
 * What it is
 - a rewrite, *decided*: "sync will be totally rewriten because of the new cleaner api"
@@ -19,7 +19,7 @@ it syncs: core/graph/plan.org (nodes as tables, paths in children).
 
 * The unit
 - one sedimentree per node, *decided*: "one sedimentree per node yes"; a node is everything at an
-  id, all its tables (core/graph/plan.org)
+  id, all its tables (core/table/plan.org)
 - inside it, each table's history apart: a commit names the table it changes. *mine*
 - the sync object and the unit of conflict differ (as in Automerge: the doc syncs, a key conflicts),
   *lean*: "right but the sync object is still the doc"
@@ -51,7 +51,7 @@ it syncs: core/graph/plan.org (nodes as tables, paths in children).
 
 * Versions
 - a versioned id, ermine://b/commit/<hash>, read-only; a write from it is a branch
-  (core/graph/plan.org)
+  (core/table/plan.org)
 - several heads at once, *open*, "we will figure that out later. /b/commit/hasha+hashb or
   something"
 
@@ -64,7 +64,7 @@ it syncs: core/graph/plan.org (nodes as tables, paths in children).
 * What leaves the device
 - kept, sent, sent ephemerally, *decided*, how *open*: "something that's a coordination between the
   user and the storage process and the sync process, somehow"
-- ephemeral placement is places' (core/graph/plan.org): someone's persisted node can be received over
+- ephemeral placement is places' (core/table/plan.org): someone's persisted node can be received over
   the ephemeral channel and placed ephemerally, *lean*: "choose to transmit, choose to receive,
   someone else's persisted node over ephemeral channel and then you place it ephemerally"
 - *lean*: "the use of subduction might be making me conflate ephemeral and not saved and local."

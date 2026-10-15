@@ -56,13 +56,14 @@
 					"content": "x",
 					"change": {
 						"actor": "a",
-						"site": {
-							"file": "src/a.ts",
-							"line": 1,
-							"column": 0
-						},
-						"time": 1065,
-						"node": "n"
+						"external": [
+							{
+								"file": "src/a.ts",
+								"line": 1,
+								"column": 0
+							}
+						],
+						"time": 1065
 					},
 					"because": {
 						"layer": "sync",

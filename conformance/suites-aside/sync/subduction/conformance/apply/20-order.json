@@ -113,8 +113,7 @@
 					"content": 3,
 					"change": {
 						"actor": "a",
-						"time": 1054,
-						"node": "n"
+						"time": 1054
 					},
 					"because": {
 						"layer": "sync",
@@ -131,8 +130,7 @@
 					"content": 1,
 					"change": {
 						"actor": "a",
-						"time": 1052,
-						"node": "n"
+						"time": 1052
 					},
 					"because": {
 						"layer": "sync",
@@ -149,8 +147,7 @@
 					"content": 2,
 					"change": {
 						"actor": "a",
-						"time": 1053,
-						"node": "n"
+						"time": 1053
 					},
 					"because": {
 						"layer": "sync",
@@ -217,8 +214,7 @@
 					"content": 4,
 					"change": {
 						"actor": "a",
-						"time": 1055,
-						"node": "n"
+						"time": 1055
 					},
 					"because": {
 						"layer": "sync",
@@ -235,8 +231,7 @@
 					"content": 3,
 					"change": {
 						"actor": "a",
-						"time": 1054,
-						"node": "n"
+						"time": 1054
 					},
 					"because": {
 						"layer": "sync",
@@ -253,8 +248,7 @@
 					"content": 2,
 					"change": {
 						"actor": "a",
-						"time": 1053,
-						"node": "n"
+						"time": 1053
 					},
 					"because": {
 						"layer": "sync",
@@ -322,8 +316,7 @@
 					"content": 5,
 					"change": {
 						"actor": "a",
-						"time": 1056,
-						"node": "n"
+						"time": 1056
 					},
 					"because": {
 						"layer": "sync",
@@ -340,8 +333,7 @@
 					"content": 3,
 					"change": {
 						"actor": "a",
-						"time": 1054,
-						"node": "n"
+						"time": 1054
 					},
 					"because": {
 						"layer": "sync",
@@ -358,8 +350,7 @@
 					"content": 2,
 					"change": {
 						"actor": "a",
-						"time": 1053,
-						"node": "n"
+						"time": 1053
 					},
 					"because": {
 						"layer": "sync",

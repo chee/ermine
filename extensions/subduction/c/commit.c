@@ -57,6 +57,17 @@ static bool same(part a, part b) {
 	return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
 }
 
+// the value of the first metadata entry of that name, NULL when the header has none
+static const Json *meta(const Json *header, const char *key) {
+	const Json *list = jsonGet(header, "metadata");
+	for (int i = 0; list && list->type == JSON_ARRAY && i < list->array.count; i++) {
+		const Json *pair = list->array.items[i];
+		if (pair->type == JSON_ARRAY && pair->array.count == 2 && pair->array.items[0]->type == JSON_STRING &&
+				strcmp(pair->array.items[0]->string, key) == 0) return pair->array.items[1];
+	}
+	return NULL;
+}
+
 // the site shareable: a local path relative to the nearest root, else its last part; others kept.
 // One hold of it the caller's
 static Json *share(const Json *site, const char *const *roots, size_t count) {
@@ -153,9 +164,14 @@ Json *commit_make(histories *c, const Json *change, commit_at at, const char *co
 	Json *blop = jsonObject();
 	jsonAdd(blop, "node", jsonRef(jsonGet(change, "node")));
 	jsonAdd(blop, "object", jsonRef((Json *)object));
+	// the oldest site goes (a header holds a list of them, oldest first); cause, wallclock and message are
+	// metadata entries of those names, the first of each
 	const Json *actor = jsonGet(header, "actor"), *reader = jsonGet(header, "reader"),
-		*site = jsonGet(header, "site"), *cause = jsonGet(header, "cause"),
-		*wallclock = jsonGet(header, "wallclock"), *message = jsonGet(header, "message");
+		*external = jsonGet(header, "external"),
+		*site = external && external->type == JSON_ARRAY && external->array.count ? external->array.items[0] : NULL,
+		*cause = meta(header, "cause"), *wallclock = meta(header, "wallclock"), *message = meta(header, "message");
+	if (wallclock && wallclock->type != JSON_NUMBER) wallclock = NULL;
+	if (message && message->type != JSON_STRING) message = NULL;
 	jsonAdd(blop, "actor", actor ? jsonRef((Json *)actor) : jsonNull());
 	if (reader) jsonAdd(blop, "reader", jsonRef((Json *)reader));
 	if (site) jsonAdd(blop, "site", share(site, roots, count));

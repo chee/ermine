@@ -1,4 +1,4 @@
-// the C table (table.h) on the line protocol of core/graph/typescript/table_harness.ts, which
+// the C table (table.h) on the line protocol of core/table/typescript/table_harness.ts, which
 // documents it. State lasts for the process: one table, one object per node name and one per symbol
 // name, their addresses the nodes and the tokens.
 #define _POSIX_C_SOURCE 200809L

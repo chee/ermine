@@ -1,7 +1,9 @@
 // The harnesses' shared world (world.h).
 #define _POSIX_C_SOURCE 200809L
 #include "world.h"
+#include "status.h"
 #include "../../../conformance/c/protocol.h"
+#include "../../../core/scheduler/c/trace.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -14,7 +16,21 @@ sc_scheduler *world_scheduler;
 tb_table *world_table;
 pt_paths *world_paths;
 pl *world_places;
+static cst *world_status;
 sc_scope *world_host;
+static pc_cache *cache;
+static const pl_contributor *const *contributors;
+static size_t ncontributors;
+
+void world_contribute(const pl_contributor *const *list, size_t n) {
+	contributors = list;
+	ncontributors = n;
+}
+
+pc_cache *world_cached(void) {
+	if (cache == NULL) cache = pc_new(world_places, world_scheduler);
+	return cache;
+}
 
 #define PUSH(v, n, cap, x) \
 	do { \
@@ -101,7 +117,7 @@ char *world_name(sc_scope *o, const char *name) {
 }
 
 const char *world_hosted(void (*f)(void *data), void *data) {
-	return sc_setup(world_host, f, data);
+	return sc_run_with_scope(world_host, f, data);
 }
 
 const sc_pair *world_info(const op_value *list, size_t *n) {
@@ -115,18 +131,18 @@ const sc_pair *world_info(const op_value *list, size_t *n) {
 	return out;
 }
 
-// moments, as told (named when asked: a new computation is due before it has a name)
+// moments, as told (named when asked: a new computer is due before it has a name)
 typedef struct {
-	sc_moment m;
+	sc_told m;
 	char *error;
-	sc_computation **through;
+	sc_computer **through;
 } moment;
 static moment *moments;
 static size_t nmoments, capmoments;
 
 // each computation's latest ended run's reads, in order, as pl_spot named each as the run ended
 typedef struct {
-	sc_computation *c;
+	sc_computer *c;
 	op_value *reads;
 } spotted;
 static spotted *spotteds;
@@ -134,13 +150,6 @@ static size_t nspotted, capspotted;
 
 op_value *world_where(const pl_where *w) {
 	op_value *o = op_map();
-	if (w->attached) {
-		op_value *names = op_list();
-		for (size_t i = 0; i < w->nnames; i++) op_push(names, op_str(w->names[i]));
-		op_set(o, "attached", names);
-		if (w->attached == 2) op_set(o, "names", op_bool(1));
-		return o;
-	}
 	op_set(o, "part", op_str(w->part.string));
 	op_set(o, "id", op_str(w->id.string));
 	if (w->change) {
@@ -156,7 +165,7 @@ op_value *world_where(const pl_where *w) {
 	return o;
 }
 
-static void name_reads(const sc_moment *m) {
+static void name_reads(const sc_told *m) {
 	op_value *reads = op_list();
 	for (size_t i = 0; i < m->nreads; i++) {
 		pl_where w;
@@ -171,15 +180,17 @@ static void name_reads(const sc_moment *m) {
 	PUSH(spotteds, nspotted, capspotted, ((spotted){m->c, reads}));
 }
 
-const op_value *world_reads(const sc_computation *c) {
+const op_value *world_reads(const sc_computer *c) {
 	for (size_t i = 0; i < nspotted; i++)
 		if (spotteds[i].c == c) return spotteds[i].reads;
 	return NULL;
 }
 
-static void hook(const sc_moment *m, void *data) {
+static sc_trace trace;
+
+static void told_moment(const sc_told *m, void *data) {
 	(void)data;
-	if (m->kind == SC_ENDS) name_reads(m);
+	if (m->kind == SC_T_ENDS) name_reads(m);
 	// the reads are good for the call only
 	moment x = {.m = *m};
 	x.m.reads = NULL;
@@ -203,28 +214,28 @@ static const char *ended_name(sc_ended e) {
 	default: return "looping";
 	}
 }
-static op_value *name_json(const sc_computation *c) { return op_str((const char *)sc_scope_user(c)); }
+static op_value *name_json(const sc_computer *c) { return op_str((const char *)sc_scope_user(c)); }
 
 static op_value *moment_json(const moment *x) {
-	const sc_moment *m = &x->m;
+	const sc_told *m = &x->m;
 	op_value *o = op_map();
 	switch (m->kind) {
-	case SC_DUE:
+	case SC_T_DUE:
 		op_set(o, "due", name_json(m->c));
 		op_set(o, "tick", op_num((double)((int64_t)m->tick)));
-		if (m->writer) op_set(o, "writer", name_json(m->writer));
+		if (m->by) op_set(o, "writer", name_json(m->by));
 		break;
-	case SC_STARTS:
+	case SC_T_STARTS:
 		op_set(o, "starts", name_json(m->c));
 		op_set(o, "run", op_num((double)(m->run)));
 		op_set(o, "rank", op_num((double)(m->rank)));
 		break;
-	case SC_ACTS:
+	case SC_T_ACTS:
 		op_set(o, "acts", name_json(m->c));
 		op_set(o, "run", op_num((double)(m->run)));
 		if (m->error) op_set(o, "error", op_str(m->error));
 		break;
-	case SC_ENDS:
+	case SC_T_ENDS:
 		op_set(o, "ends", name_json(m->c));
 		op_set(o, "run", op_num((double)(m->run)));
 		op_set(o, "ended", op_str(ended_name(m->ended)));
@@ -270,11 +281,11 @@ void world_drop(void *value, void *data) {
 typedef struct {
 	sc_def def;
 	bool effect;
-	sc_computation *made;
+	sc_computer *made;
 } making;
 static void make_in_scope(void *data) {
 	making *m = data;
-	m->made = m->effect ? sc_effect(world_scheduler, m->def) : sc_compute(world_scheduler, m->def);
+	m->made = m->effect ? sc_create_effect(world_scheduler, m->def) : sc_create_computer(world_scheduler, m->def);
 }
 
 char *world_make(world_watch *w, const char *name, const char *scope, sc_def def, bool effect) {
@@ -283,7 +294,7 @@ char *world_make(world_watch *w, const char *name, const char *scope, sc_def def
 	w->name = world_copy(name);
 	PUSH(watches, nwatches, capwatches, w);
 	making m = {.def = def, .effect = effect};
-	const char *bad = sc_setup(o, make_in_scope, &m);
+	const char *bad = sc_run_with_scope(o, make_in_scope, &m);
 	if (bad) return world_copy(bad);
 	if (m.made == NULL) return world_copy(SC_DISPOSED);
 	return world_name(m.made, name);
@@ -351,6 +362,15 @@ static void hold_header(const pl_changed *changed, pl_made *made) {
 	}
 }
 
+op_value *world_status_json(const op_value *status) {
+	if (cst_is_pending(status)) return op_str("pending");
+	const char *message = cst_error(status);
+	if (message == NULL) return op_null();
+	op_value *o = op_map();
+	op_set(o, "error", op_str(message));
+	return o;
+}
+
 op_value *world_summary(const ch_header *h) {
 	op_value *o = op_map();
 	if (h->actor != NULL) op_set(o, "actor", world_snap(h->actor));
@@ -395,7 +415,7 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 		code = nd_update(node, list, count, h, failed);
 		if (code == OP_OK) {
 			pl_changed changed = {1, {node}};
-			pl_wrote(world_places, &changed);
+			pl_commit(world_places, &changed);
 		}
 	}
 	if (code != OP_OK) {
@@ -408,9 +428,35 @@ int world_edit(const char *part, tb_key id, const op_value *patches, nd_entry **
 	return OP_OK;
 }
 
+// upsert (typescript/upsert.ts), by a request's part, id, path (names) and value
+static int world_upsert(const op_value *r, const char **why) {
+	const op_value *id = op_get(r, "id"), *value = op_get(r, "value");
+	if (!world_is(id, OP_STR)) return *why = "id: not a string", -1;
+	if (value == NULL) return *why = "no value", -1;
+	ch_header h;
+	pl_made *made;
+	if (header_now(&h, &made, why)) return -1;
+	size_t n;
+	const char **path = world_address(op_get(r, "path"), &n);
+	for (size_t i = 0; i < n; i++) {
+		if (path[i] == NULL) path[i] = "";
+	}
+	pl_changed changed;
+	nd_entry *node;
+	pl_upsert(world_places, tb_string(world_part(op_get(r, "part"))), world_key(id), path, n, value, h,
+		&changed, &node);
+	free(path);
+	pl_commit(world_places, &changed);
+	hold_header(&changed, made);
+	if (node != NULL) pl_hold(world_places, node, made, pl_made_free);
+	else pl_made_free(made);
+	return 0;
+}
+
 int world_write(const op_value *r, const char **why, size_t *failed) {
 	const char *op = world_text(op_get(r, "op"));
 	*why = NULL;
+	if (strcmp(op, "upsert") == 0) return world_upsert(r, why);
 	if (strcmp(op, "edit") == 0) {
 		return world_edit(world_part(op_get(r, "part")), world_key(op_get(r, "id")),
 			op_get(r, "patches"), NULL, why, failed);
@@ -445,7 +491,7 @@ int world_write(const op_value *r, const char **why, size_t *failed) {
 	} else {
 		code = pl_move(world_places, parent, name, into, world_text(op_get(to, "name")), h, &changed);
 	}
-	pl_wrote(world_places, &changed);
+	pl_commit(world_places, &changed);
 	hold_header(&changed, made);
 	pl_made_free(made);
 	if (code) *why = pl_code_name(code);
@@ -557,13 +603,13 @@ op_value *world_basic(const op_value *e, op_value *(*eval)(const op_value *e, vo
 	if ((x = op_get(e, "within"))) {
 		size_t n;
 		const sc_pair *info = world_info(x->items[0], &n);
-		sc_scope *o = sc_scope_new(world_scheduler, info, n, NULL);
+		sc_scope *o = sc_create_scope(world_scheduler, info, n, NULL);
 		if (o == NULL) {
-			*error = world_copy(sc_current(world_scheduler) ? SC_DISPOSED : SC_UNSCOPED);
+			*error = world_copy(sc_get_current_scope(world_scheduler) ? SC_DISPOSED : SC_UNSCOPED);
 			return NULL;
 		}
 		inside in = {eval, ctx, x->items[1], NULL};
-		const char *bad = sc_setup(o, eval_inside, &in);
+		const char *bad = sc_run_with_scope(o, eval_inside, &in);
 		if (bad) *error = world_copy(bad);
 		return in.out;
 	}
@@ -600,6 +646,18 @@ static nd_entry *made_node(const op_value *value, op_value **out) {
 	return node;
 }
 
+// the value a getOrSet is to make
+static const op_value *made_value;
+static op_value *make_value(void *ctx) {
+	(void)ctx;
+	return op_ref((op_value *)made_value);
+}
+static op_value *world_snap_into(const op_value *got) {
+	op_value *o = op_map();
+	if (got != NULL) op_set(o, "value", world_snap(got));
+	return o;
+}
+
 // the world's requests that write or change the table, made in the host's scope
 typedef struct {
 	const op_value *r;
@@ -632,6 +690,35 @@ static void in_host(void *data) {
 			}
 		}
 		c->out = op_map();
+	} else if (strcmp(op, "getOrSet") == 0) {
+		const op_value *id = op_get(r, "id"), *value = op_get(r, "value");
+		const char *why;
+		ch_header h;
+		pl_made *made;
+		if (!world_is(id, OP_STR) || value == NULL) {
+			c->out = world_error("id: not a string");
+			return;
+		}
+		if (header_now(&h, &made, &why)) {
+			c->out = world_error(why);
+			return;
+		}
+		size_t n;
+		const char **path = world_address(op_get(r, "path"), &n);
+		for (size_t i = 0; i < n; i++) {
+			if (path[i] == NULL) path[i] = "";
+		}
+		pl_changed changed;
+		nd_entry *node;
+		made_value = value;
+		const op_value *got = pl_get_or_set(world_places, tb_string(world_part(op_get(r, "part"))),
+			world_key(id), path, n, make_value, NULL, h, &changed, &node);
+		free(path);
+		pl_commit(world_places, &changed);
+		hold_header(&changed, made);
+		if (node != NULL) pl_hold(world_places, node, made, pl_made_free);
+		else pl_made_free(made);
+		c->out = world_snap_into(got);
 	} else if (strcmp(op, "del") == 0) {
 		int code = tb_del(world_table, tb_string(world_part(op_get(r, "part"))),
 			world_key(op_get(r, "id")));
@@ -668,28 +755,73 @@ static void in_header(void *data) {
 	pl_made_free(made);
 }
 
-// an attach or a detach, made in a scope
+// the requests' watchPath watches: what each is told, kept by name -------------------------------
+
 typedef struct {
-	const op_value *r;
-	const char **path;
-	size_t n;
-	int code;
-} attaching;
-static void in_attach(void *data) {
-	attaching *c = data;
-	c->code = pl_attach(world_places, c->path, c->n, world_key(op_get(c->r, "id")));
+	char *name;
+	pl_watch *watch;
+	// the facts told since last asked: a list of {part, id, patches, actor?}
+	op_value *told;
+} told_watch;
+static told_watch **told_watches;
+static size_t ntold, captold;
+
+static told_watch *told_named(const char *name) {
+	for (size_t i = 0; i < ntold; i++) {
+		if (strcmp(told_watches[i]->name, name) == 0) return told_watches[i];
+	}
+	return NULL;
 }
-static void in_detach(void *data) {
-	attaching *c = data;
-	pl_detach(world_places, c->path, c->n);
+
+static void told_fact(const pl_fact *f, void *ctx) {
+	told_watch *w = ctx;
+	op_value *o = op_map();
+	op_set(o, "part", op_str(f->part.string));
+	op_set(o, "id", op_str(f->id.string));
+	op_set(o, "patches", world_patches(f->patches, f->patches_length));
+	if (f->change != NULL && f->change->actor != NULL) op_set(o, "actor", world_snap(f->change->actor));
+	op_push(w->told, o);
+}
+
+static op_value *watch_path(const op_value *r) {
+	const char *name = world_text(op_get(r, "name"));
+	if (name == NULL) return world_error("no name");
+	told_watch *old = told_named(name);
+	if (old != NULL) {
+		pl_stop(old->watch);
+		old->watch = NULL;
+	}
+	size_t n, at_n = 0;
+	const char **path = world_address(op_get(r, "path"), &n);
+	for (size_t i = 0; i < n; i++) {
+		if (path[i] == NULL) path[i] = "";
+	}
+	pl_watching options = {0};
+	const op_value *part = op_get(r, "part"), *at = op_get(r, "at");
+	if (world_is(part, OP_STR)) options.has_part = 1, options.part = tb_string(part->str);
+	op_key *at_keys = NULL;
+	if (world_is(at, OP_LIST)) {
+		at_keys = world_path(at, &at_n);
+		options.has_at = 1, options.at = at_keys, options.at_length = at_n;
+	}
+	if (old == NULL) {
+		old = world_alloc(sizeof *old);
+		old->name = world_copy(name);
+		old->told = op_list();
+		PUSH(told_watches, ntold, captold, old);
+	}
+	old->watch = pl_watch_path(world_places, path, n, told_fact, old, &options);
+	free(path);
+	free(at_keys);
+	return op_map();
 }
 
 // the world's request; NULL: not one of them
 static op_value *world_answer(const op_value *r) {
 	const char *op = world_text(op_get(r, "op"));
 	if (op == NULL) return world_error("no op");
-	const char *hosted[] = {"kids", "value", "share", "del", "edit", "place", "unplace",
-		"rename", "move"};
+	const char *hosted[] = {"kids", "value", "share", "del", "edit", "upsert",
+		"getOrSet", "place", "unplace", "rename", "move"};
 	for (size_t i = 0; i < sizeof hosted / sizeof *hosted; i++) {
 		if (strcmp(op, hosted[i]) != 0) continue;
 		hosting c = {.r = r};
@@ -701,6 +833,63 @@ static op_value *world_answer(const op_value *r) {
 			world_key(op_get(r, "id")));
 		return with_value(n ? n->value : NULL);
 	}
+	if (strcmp(op, "status") == 0) {
+		if (world_status == NULL) {
+			world_status = cst_new(&(cst_setup){world_places, world_table, world_scheduler});
+		}
+		return op_map();
+	}
+	if (strcmp(op, "give") == 0) {
+		sc_scope *c = world_scope(world_text(op_get(r, "name")));
+		const op_value *id = op_get(r, "id");
+		if (world_status == NULL) return world_error("no status");
+		if (c == NULL) return world_error("no such scope");
+		if (!world_is(id, OP_STR)) return world_error("id: not a string");
+		cst_give(world_status, c, world_key(id));
+		return op_map();
+	}
+	if (strcmp(op, "statusOf") == 0) {
+		const op_value *id = op_get(r, "id");
+		if (!world_is(id, OP_STR)) return world_error("id: not a string");
+		const op_value *v = cst_status(world_places, world_key(id));
+		pl_status(world_places);
+		op_value *o = op_map();
+		op_set(o, "status", world_status_json(v));
+		return o;
+	}
+	if (strcmp(op, "watchPath") == 0) return watch_path(r);
+	if (strcmp(op, "watched") == 0) {
+		told_watch *t = told_named(world_text(op_get(r, "name")) ? world_text(op_get(r, "name")) : "");
+		if (t == NULL) return world_error("no watch");
+		op_value *o = op_map();
+		op_set(o, "facts", t->told);
+		t->told = op_list();
+		return o;
+	}
+	if (strcmp(op, "unwatch") == 0) {
+		told_watch *t = told_named(world_text(op_get(r, "name")) ? world_text(op_get(r, "name")) : "");
+		if (t != NULL) {
+			pl_stop(t->watch);
+			op_free(t->told);
+			free(t->name);
+			for (size_t i = 0; i < ntold; i++) {
+				if (told_watches[i] == t) told_watches[i] = told_watches[--ntold], i = ntold;
+			}
+			free(t);
+		}
+		return op_map();
+	}
+	if (strcmp(op, "cache") == 0) {
+		world_cached();
+		return op_map();
+	}
+	if (strcmp(op, "cacheKept") == 0) {
+		pc_kept k = cache != NULL ? pc_kept_of(cache) : (pc_kept){0};
+		op_value *o = op_map();
+		op_set(o, "entries", op_num((double)k.entries));
+		op_set(o, "reads", op_num((double)k.reads));
+		return o;
+	}
 	if (strcmp(op, "kept") == 0) {
 		pt_kept k = pt_kept_of(world_paths);
 		op_value *o = op_map();
@@ -709,28 +898,15 @@ static op_value *world_answer(const op_value *r) {
 		op_set(o, "steps", op_num((double)((int64_t)k.steps)));
 		return o;
 	}
-	// attached in a named scope, gone with it; none named: the host's, which stays
-	if (strcmp(op, "attach") == 0 || strcmp(op, "detach") == 0) {
-		bool on = op[0] == 'a';
-		attaching c = {.r = r};
-		c.path = world_address(op_get(r, "path"), &c.n);
-		const char *scope = world_text(op_get(r, "scope"));
-		sc_scope *o = on && scope != NULL ? world_scope(scope) : world_host;
-		const char *bad = o == NULL ? "no such scope" : sc_setup(o, on ? in_attach : in_detach, &c);
-		free(c.path);
-		if (bad) return world_error(bad);
-		if (c.code) return world_error(pl_code_name(c.code));
-		return op_map();
-	}
 	if (strcmp(op, "root") == 0 || strcmp(op, "scope") == 0) {
 		size_t n;
 		const sc_pair *info = world_info(op_get(r, "info"), &n);
 		sc_scope *o;
-		if (op[0] == 'r') o = sc_root(world_scheduler, info, n);
+		if (op[0] == 'r') o = sc_create_root_scope(world_scheduler, info, n);
 		else {
 			sc_scope *parent = world_scope(world_text(op_get(r, "parent")));
 			if (parent == NULL) return world_error("no such scope");
-			o = sc_scope_new(world_scheduler, info, n, parent);
+			o = sc_create_scope(world_scheduler, info, n, parent);
 			if (o == NULL) return world_error(SC_DISPOSED);
 		}
 		char *bad = world_name(o, world_text(op_get(r, "name")));
@@ -740,7 +916,7 @@ static op_value *world_answer(const op_value *r) {
 	if (strcmp(op, "dispose") == 0) {
 		sc_scope *o = world_scope(world_text(op_get(r, "name")));
 		if (o == NULL) return world_error("no such scope");
-		char *why = sc_dispose(o);
+		char *why = sc_teardown(o);
 		if (why) return world_error_take(why);
 		return op_map();
 	}
@@ -756,7 +932,7 @@ static op_value *world_answer(const op_value *r) {
 		else {
 			sc_scope *o = world_scope(scope);
 			if (o == NULL) return world_error("no such scope");
-			const char *bad = sc_setup(o, in_header, &c);
+			const char *bad = sc_run_with_scope(o, in_header, &c);
 			if (bad) return world_error(bad);
 		}
 		return c.out;
@@ -791,13 +967,16 @@ static sc_pair host_info;
 
 static void world_start(void) {
 	world_places = pl_new();
-	world_scheduler = sc_new((sc_options){.hook = hook, .drop = world_drop, .forget = pl_forget,
-		.data = world_places});
+	world_scheduler = sc_new((sc_options){.drop = world_drop});
+	sc_trace_start(world_scheduler, &trace, told_moment, NULL);
+	sc_on_untrack(world_scheduler, pl_forget, world_places);
 	world_table = tb_make(pl_event, world_places);
 	world_paths = pt_new();
-	pl_connect(world_places, &(pl_setup){tb_string("R"), world_table, world_paths, world_scheduler});
+	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
+		.scheduler = world_scheduler, .contributors = contributors,
+		.ncontributors = ncontributors});
 	host_info = (sc_pair){"actor", op_str("test")};
-	world_host = sc_root(world_scheduler, &host_info, 1);
+	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
 
 void world_line(const op_value *r, FILE *out, op_value *(*answer)(const op_value *request)) {
@@ -817,16 +996,29 @@ void world_line(const op_value *r, FILE *out, op_value *(*answer)(const op_value
 
 void world_finish(void) {
 	if (world_places == NULL) return;
+	cst_stop(world_status);
+	pc_free(cache);
+	cache = NULL;
 	for (size_t i = 0; i < nnamed; i++) free(sc_scope_user(named[i]));
 	sc_free(world_scheduler);
 	tb_free(world_table);
 	pt_free(world_paths);
 	pl_free(world_places);
+	cst_free(world_status);
+	world_status = NULL;
 	op_free((op_value *)host_info.value);
 	for (size_t i = 0; i < nmoments; i++) {
 		free(moments[i].error);
 		free(moments[i].through);
 	}
+	for (size_t i = 0; i < ntold; i++) {
+		op_free(told_watches[i]->told);
+		free(told_watches[i]->name);
+		free(told_watches[i]);
+	}
+	free(told_watches);
+	told_watches = NULL;
+	ntold = captold = 0;
 	for (size_t i = 0; i < nwatches; i++) {
 		op_free(watches[i]->value);
 		free(watches[i]->name);

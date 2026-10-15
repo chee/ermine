@@ -9,7 +9,7 @@
 // table, told no one: a write makes no run depend on the rules. No policy: everything is allowed.
 //
 // ANSWERS. GD_OK; GD_REFUSED (a no: gd_refusal says what and why); GD_PENDING (a policy waits for
-// what it could not read); GD_FAILED (a read the policy told came back SC_STOP or SC_CLOSED: the
+// what it could not read); GD_FAILED (a read the policy told came back SC_STOP: the
 // run must end, as pl_status says, and nothing the guard gave is to be used). A list keeps a
 // refused member in its place: its id is gd_refused.
 //

@@ -1,0 +1,236 @@
+{
+	"title": "a process at /work/clock shadows the saved clock while it runs (the ephemeral wins): get and ./on/reset go into the process's node, entries gives both answers with their from; at its stop the saved one is back, and the readers of both paths rerun each time",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clock": "C0",
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C0",
+			"value": {
+				"on": "ON0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ON0",
+			"value": {
+				"reset": "RS0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PON",
+			"value": {
+				"reset": "PRS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "top",
+			"scope": "o",
+			"f": {
+				"get": [
+					"work",
+					"clock"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "deep",
+			"scope": "o",
+			"f": {
+				"get": [
+					"work",
+					"clock",
+					"on",
+					"reset"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 1,
+				"value": "C0"
+			}
+		},
+		{
+			"op": "state",
+			"name": "deep",
+			"expect": {
+				"runs": 1,
+				"value": "RS0"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "P",
+						"from": "process"
+					},
+					{
+						"id": "C0",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "entries",
+			"path": [],
+			"expect": {
+				"entries": [
+					{
+						"id": "R",
+						"from": "root"
+					}
+				]
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"names": [
+					"on"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 2,
+				"value": "P"
+			}
+		},
+		{
+			"op": "state",
+			"name": "deep",
+			"expect": {
+				"runs": 2,
+				"value": "PRS"
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "top",
+			"expect": {
+				"runs": 3,
+				"value": "C0"
+			}
+		},
+		{
+			"op": "state",
+			"name": "deep",
+			"expect": {
+				"runs": 3,
+				"value": "RS0"
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "C0",
+						"from": "children"
+					}
+				]
+			}
+		}
+	]
+}

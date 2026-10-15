@@ -38,7 +38,7 @@ import { PENDING } from "@ermine/scheduler"
 import { all, any, grants, no, only, pending, type Policy, yes } from "@ermine/protect"
 import type { Member, Path } from "./places.ts"
 import type { Patch } from "@ermine/op/apply"
-import type { Key } from "@ermine/graph/table"
+import type { Key } from "@ermine/table"
 import { createGuard, Refusal, REFUSED, slot, target, type Thing } from "./guard.ts"
 import {
 	answered,
@@ -204,7 +204,7 @@ function answer(r: Request): Json | undefined {
 			const c: Ctx = { g: guards.get(r.guard)! }
 			const run = () => evaluate(r.e, c)
 			try {
-				return { value: r.scope === undefined ? run() : s.run(scope(r.scope), run) }
+				return { value: r.scope === undefined ? run() : s.runWithScope(scope(r.scope), run) }
 			} catch (e) {
 				if (e instanceof Refusal) {
 					return { error: "refused", reason: e.answer.reason, op: e.ask.op }
@@ -219,12 +219,12 @@ function answer(r: Request): Json | undefined {
 			const f = () => (w.runs++, evaluate(r.f, c))
 			const then = (v: unknown) =>
 				void (r.then !== undefined && evaluate(r.then, { ...c, given: v }))
-			const made = s.run(
+			const made = s.runWithScope(
 				scope(r.scope),
 				() =>
 					r.effect === true
-						? s.effect(f, then)
-						: s.compute(f, (v) => (w.value = v, then(v)), json),
+						? s.createEffect(f, then)
+						: s.createComputer(f, (v) => (w.value = v, then(v)), json),
 			)
 			enroll(r.name, made, w)
 			return {}

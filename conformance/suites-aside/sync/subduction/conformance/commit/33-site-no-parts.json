@@ -23,11 +23,13 @@
 					"header": {
 						"time": 1,
 						"actor": "me",
-						"site": {
-							"file": "/",
-							"line": 9,
-							"column": 1
-						}
+						"external": [
+							{
+								"file": "/",
+								"line": 9,
+								"column": 1
+							}
+						]
 					},
 					"signer": {
 						"/": {
@@ -89,11 +91,13 @@
 					"header": {
 						"time": 1,
 						"actor": "me",
-						"site": {
-							"file": "/",
-							"line": 9,
-							"column": 1
-						}
+						"external": [
+							{
+								"file": "/",
+								"line": 9,
+								"column": 1
+							}
+						]
 					},
 					"signer": {
 						"/": {
@@ -155,11 +159,13 @@
 					"header": {
 						"time": 1,
 						"actor": "me",
-						"site": {
-							"file": "file://",
-							"line": 9,
-							"column": 1
-						}
+						"external": [
+							{
+								"file": "file://",
+								"line": 9,
+								"column": 1
+							}
+						]
 					},
 					"signer": {
 						"/": {

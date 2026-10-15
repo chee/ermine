@@ -16,6 +16,10 @@
 // { op: "node", part, id }                   → { value? }   the entry's value as the table has it
 //    (not a read: told to no one); none there, or no value: {}
 // { op: "kept" }                             → { keys, spots, steps }   what paths keeps
+// { op: "cache" }                            → {}   the path cache (cache.ts) made, once (a second:
+//    nothing); a program asking for it before makes it. made before anything reads, as cache.ts says
+// { op: "cacheKept" }                        → { entries, reads }   what the cache keeps: entries,
+//    and the keys they read (none made: both 0)
 // writes. a PlacesError or an ApplyError answers { error: code } and an ApplyError also
 // { patch: index }
 // { op: "edit", part, id, patches }                                   → {}
@@ -25,6 +29,17 @@
 // { op: "rename", at, name, to }                                      → {}
 // { op: "move", at, name, to: { at, name } }                          → {}
 //    at: the parent's id
+// { op: "upsert", part, id, path, value }                              → {}
+//    upsert.ts: the value made or patched at path (names) in the entry there, said written; none
+//    there: an entry made holding it nested, added. the same value there: nothing written
+// { op: "getOrSet", part, id, path, value }                           → { value }
+//    the value there at path, else the value given put there (as upsert), and told
+// status (status.ts):
+// { op: "status" }                           → {}   a status listener, made once (a second: nothing)
+// { op: "give", name, id }                   → {}   the compute named (a harness's watch) is given
+//    the node id its status is written on
+// { op: "statusOf", id }                     → { status }   the node's status, read outside any run:
+//    "pending", { error: message }, or null (none)
 // the scheduler:
 // { op: "root", name, info? }                → {}   a scope with no parent
 // { op: "scope", name, parent, info? }       → {}
@@ -42,23 +57,22 @@
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"
-import {
-	type Computation,
-	createScheduler,
-	type Moment,
-	type Pair,
-	type Scope,
-} from "@ermine/scheduler"
+import { type Computer, createScheduler, type Pair, type Scope } from "@ermine/scheduler"
+import { type Told, trace } from "@ermine/scheduler/trace"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/graph/table"
+import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces, move, place, PlacesError, rename, unplace, type Where } from "./places.ts"
 
 import type { Answer, Request } from "../../../conformance/typescript/harness.ts"
 import { createChangeHeader } from "./header.ts"
+import { getOrSet, upsert } from "./upsert.ts"
+import { createStatus, PENDING, status } from "./status.ts"
+import { createPathCache, type PathCache } from "./cache.ts"
 type Json = unknown
 
-let moments: Moment[] = []
+let moments: Told[] = []
 export const scopes = new Map<string, Scope>()
+const watches = new Map<string, { told: Json[]; stop: () => void }>()
 export const names = new Map<Scope, string>()
 const nameOf = (c: Scope) => names.get(c)!
 
@@ -66,29 +80,24 @@ const nameOf = (c: Scope) => names.get(c)!
 // ended: where it reads, null: not one of places' spots
 export const spotted = new Map<Scope, Json[]>()
 export const where = (w: Where | undefined): Json =>
-	w === undefined
-		? null
-		: "attached" in w
-		? { attached: w.attached, ...w.names ? { names: true } : {} }
-		: { part: w.part, id: w.id, path: w.path }
+	w === undefined ? null : { part: w.part, id: w.id, path: w.path }
 
-export const s = createScheduler({
-	hook: (m) => {
-		moments.push(m)
-		if ("ends" in m) spotted.set(m.ends, m.reads.map((k) => where(places.describe(k))))
-	},
-	forget: (key) => places.release(key),
+export const s = createScheduler()
+trace(s, (m) => {
+	moments.push(m)
+	if ("ends" in m) spotted.set(m.ends, m.reads.map((k) => where(places.describe(k))))
 })
+s.onTrackingEnd((key) => places.release(key))
 export const table = createTable((part, id) => places.onTableChange(part as Key, id))
 export const paths = createPaths<unknown>()
 export const places = createPlaces({ root: "R", table, paths, scheduler: s })
-export const host = s.root([["actor", "test"]])
+export const host = s.createRootScope([["actor", "test"]])
 
 // the moments, computations by name
-function moment(m: Moment): Json {
+function moment(m: Told): Json {
 	if ("due" in m) {
-		return m.writer
-			? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.writer) }
+		return m.by
+			? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.by) }
 			: { due: nameOf(m.due), tick: m.tick }
 	}
 	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run, rank: m.rank }
@@ -115,7 +124,7 @@ const errorOf = (e: unknown): string =>
 // the computes made by a harness's watch, by name
 export const watched = new Map<string, { runs: number; value: Json }>()
 // a compute made by a harness's watch: named, and its state kept
-export function enroll(name: string, c: Computation, w: { runs: number; value: Json }) {
+export function enroll(name: string, c: Computer, w: { runs: number; value: Json }) {
 	watched.set(name, w)
 	scopes.set(name, c)
 	names.set(c, name)
@@ -155,9 +164,20 @@ export function edit(part: Key, id: Id, patches: Patch[]) {
 		return node
 	}
 	update(there, patches, h)
-	places.markChanged([there])
+	places.commit([there])
 	return there
 }
+
+// the path cache, once it is asked for
+let cache: PathCache | undefined
+export const cached = () => cache ??= createPathCache({ places, scheduler: s })
+
+// the status listener, once it is asked for
+let statuses: ReturnType<typeof createStatus> | undefined
+
+// a status, as the requests tell it: "pending", { error: message }, or null
+export const statusJson = (v: unknown): Json =>
+	v === PENDING ? "pending" : v instanceof Error ? { error: v.message } : null
 
 // a write request, with the scope open as it is
 export function write(r: Request): void {
@@ -172,17 +192,22 @@ export function write(r: Request): void {
 		case "edit":
 			edit(r.part, r.id, r.patches as Patch[])
 			return
+		case "upsert":
+			places.commit(
+				upsert(table, r.part, id(r.id), r.path as string[], r.value, h()),
+			)
+			return
 		case "place":
-			places.markChanged(place(at(r.at), r.name, id(r.id), h()))
+			places.commit(place(at(r.at), r.name, id(r.id), h()))
 			return
 		case "unplace":
-			places.markChanged(unplace(at(r.at), r.name, h()))
+			places.commit(unplace(at(r.at), r.name, h()))
 			return
 		case "rename":
-			places.markChanged(rename(at(r.at), r.name, r.to, h()))
+			places.commit(rename(at(r.at), r.name, r.to, h()))
 			return
 		case "move":
-			places.markChanged(move([at(r.at), r.name], [at(r.to.at), r.to.name], h()))
+			places.commit(move([at(r.at), r.name], [at(r.to.at), r.to.name], h()))
 			return
 	}
 	throw new Error(`unknown write ${r.op}`)
@@ -213,13 +238,15 @@ export function basic(m: Request, ev: (e: Json) => Json): Json | undefined {
 	if ("if" in m) return ev(m.if[0]) ? ev(m.if[1]) : ev(m.if[2])
 	if ("do" in m) return (m.do as Json[]).reduce<Json>((_, x) => ev(x), null)
 	if ("quote" in m) return m.quote
-	if ("within" in m) return s.run(s.scope(m.within[0] as Pair[]), () => ev(m.within[1]))
+	if ("within" in m) {
+		return s.runWithScope(s.createScope(m.within[0] as Pair[]), () => ev(m.within[1]))
+	}
 	if ("header" in m) return summary(createChangeHeader(s))
 }
 
 // the world's requests; undefined: not one of them
 export function worldAnswer(r: Request): Json | undefined {
-	const hosted = <T>(f: () => T) => s.run(host, f)
+	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	switch (r.op) {
 		case "kids":
 			hosted(() => table.sub("children", r.id, createEntry(r.value, createChangeHeader(s))))
@@ -245,29 +272,74 @@ export function worldAnswer(r: Request): Json | undefined {
 		}
 		case "kept":
 			return paths.kept()
-		// attached in a named scope, gone with it; none named: the host's, which stays
-		case "attach":
-			s.run(r.scope === undefined ? host : scope(r.scope), () => places.attach(r.path, id(r.id)))
+		case "cache":
+			cached()
 			return {}
-		case "detach":
-			hosted(() => places.detach(r.path))
+		case "cacheKept":
+			return cache?.kept() ?? { entries: 0, reads: 0 }
+		case "watchPath": {
+			const told: Json[] = []
+			const stop = places.watchPath(r.path, (f) => {
+				const fact: Record<string, Json> = { part: f.part, id: f.id, patches: f.patches }
+				if (f.change !== undefined) fact.actor = f.change.actor
+				told.push(fact)
+			}, { part: r.part, at: r.at })
+			watches.set(r.name, { told, stop })
+			return {}
+		}
+		case "watched": {
+			const w = watches.get(r.name)
+			if (!w) throw new Error(`no watch ${r.name}`)
+			const facts = w.told.splice(0)
+			return { facts }
+		}
+		case "unwatch":
+			watches.get(r.name)?.stop()
+			watches.delete(r.name)
 			return {}
 		case "edit":
+		case "upsert":
 		case "place":
 		case "unplace":
 		case "rename":
 		case "move":
 			hosted(() => write(r))
 			return {}
+		case "getOrSet":
+			return {
+				value: hosted(() => {
+					const got = getOrSet(
+						table,
+						r.part,
+						id(r.id),
+						r.path as string[],
+						() => r.value,
+						createChangeHeader(s),
+					)
+					places.commit(got.changed)
+					return got.value
+				}),
+			}
+		case "status":
+			statuses ??= createStatus({ places, table, scheduler: s })
+			return {}
+		case "give":
+			if (statuses === undefined) throw new Error("no status")
+			statuses.give(scope(r.name) as Computer, id(r.id))
+			return {}
+		case "statusOf":
+			return { status: statusJson(status(places, id(r.id))) }
 		case "root":
 		case "scope": {
-			const o = r.op === "root" ? s.root(r.info) : s.scope(r.info, scope(r.parent))
+			const o = r.op === "root"
+				? s.createRootScope(r.info)
+				: s.createScope(r.info, scope(r.parent))
 			scopes.set(r.name, o)
 			names.set(o, r.name)
 			return {}
 		}
 		case "dispose":
-			s.dispose(scope(r.name))
+			s.teardown(scope(r.name))
 			return {}
 		case "pulse":
 			s.pulse()
@@ -283,7 +355,7 @@ export function worldAnswer(r: Request): Json | undefined {
 		}
 		case "header": {
 			const made = () => summary(createChangeHeader(s, r.extra))
-			return r.scope === undefined ? made() : s.run(scope(r.scope), made)
+			return r.scope === undefined ? made() : s.runWithScope(scope(r.scope), made)
 		}
 	}
 }

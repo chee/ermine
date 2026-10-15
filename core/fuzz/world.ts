@@ -3,7 +3,7 @@
 // entry put in place of another, taken out, put back). places tells its reads and what changed to
 // the scheduler; here that is two hooks: told, each spot read; marked, each spot said changed
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
-import { createTable, type Id, type Tables } from "@ermine/graph/table"
+import { createTable, type Id, type Tables } from "@ermine/table"
 import {
 	createPlaces,
 	move,
@@ -36,9 +36,9 @@ export function createWorld(
 	const one = <T>(xs: readonly T[]): T => xs[pick(xs.length)]
 	const paths = createPaths<unknown>()
 	const scheduler = {
-		read: (key: unknown) => told?.(key as Spot<unknown>),
-		changed: (keys: readonly unknown[]) => marked?.(keys),
-		current: () => undefined,
+		track: (key: unknown) => told?.(key as Spot<unknown>),
+		mark: (keys: readonly unknown[]) => marked?.(keys),
+		getRun: () => undefined,
 	} as unknown as Parameters<typeof createPlaces>[0]["scheduler"]
 	const table = createTable((part, id) => p.onTableChange(part, id))
 	const p: Places = createPlaces({ root: "R", table, paths, scheduler })
@@ -109,7 +109,7 @@ export function createWorld(
 		const k = pick(events ? 13 : 12)
 		const h = header()
 		const said = (what: string, changed: Entry<unknown>[]): Wrote => {
-			p.markChanged(changed)
+			p.commit(changed)
 			return { what, changed, events: [] }
 		}
 		if (k < 4) {

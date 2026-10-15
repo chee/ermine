@@ -1,5 +1,5 @@
 {
-	"title": "children: a list starts as []; a list left with nothing has no side",
+	"title": "children: a list is a value like any; a range taken out of it leaves []",
 	"steps": [
 		{
 			"request": {
@@ -69,17 +69,13 @@
 					"patches": [
 						{
 							"path": [],
-							"range": [
-								0,
-								0
-							],
 							"value": [
 								"z"
 							]
 						}
 					]
 				},
-				"name": "a3ba8017d949d9b3a68a1d58b0f0c0b69655b6deccadf0bf998a9197c2a02e63"
+				"name": "7cbd5e89fbff5d7567c8c51f0f805ff445684846150af2adc4fc55915dfa68ea"
 			},
 			"expect": "taken"
 		},
@@ -98,7 +94,7 @@
 		{
 			"request": {
 				"op": "side",
-				"name": "a3ba8017d949d9b3a68a1d58b0f0c0b69655b6deccadf0bf998a9197c2a02e63"
+				"name": "7cbd5e89fbff5d7567c8c51f0f805ff445684846150af2adc4fc55915dfa68ea"
 			},
 			"expect": {
 				"side": [
@@ -154,7 +150,7 @@
 				"name": "de3d1045ae23694e79acc22220f7a080670f82a22f1317458826d474c829bc29"
 			},
 			"expect": {
-				"none": true
+				"side": []
 			}
 		},
 		{
@@ -167,15 +163,15 @@
 				"times": {
 					"daade87628ba6c8945b2d27875cb88e95f0b11d65fb7de0b3e644943d07bc749": 1043,
 					"de3d1045ae23694e79acc22220f7a080670f82a22f1317458826d474c829bc29": 1044,
-					"a3ba8017d949d9b3a68a1d58b0f0c0b69655b6deccadf0bf998a9197c2a02e63": 1045
+					"7cbd5e89fbff5d7567c8c51f0f805ff445684846150af2adc4fc55915dfa68ea": 1045
 				}
 			},
 			"expect": [
 				{
+					"content": [],
 					"change": {
 						"actor": "a",
-						"time": 1044,
-						"node": "n"
+						"time": 1044
 					},
 					"because": {
 						"layer": "sync",
@@ -194,14 +190,13 @@
 					],
 					"change": {
 						"actor": "a",
-						"time": 1045,
-						"node": "n"
+						"time": 1045
 					},
 					"because": {
 						"layer": "sync",
 						"place": {
 							"lamport": 1,
-							"name": "a3ba8017d949d9b3a68a1d58b0f0c0b69655b6deccadf0bf998a9197c2a02e63"
+							"name": "7cbd5e89fbff5d7567c8c51f0f805ff445684846150af2adc4fc55915dfa68ea"
 						},
 						"why": {
 							"signer": "0101010101010101010101010101010101010101010101010101010101010101"

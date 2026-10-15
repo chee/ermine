@@ -14,18 +14,21 @@
 --   set or act is called is unflagged, its free marks land one level down: the budget falls. every
 --   other step leaves it and lowers quiet (dues, with a credit per computation not waiting after
 --   each; the phase). gauge = budget * big + quiet
--- - Causal (Reach.causal): kept causes are this pulse's, the latest run's is its computation's
---   cause: so keep's test by run (.of) never drops a different cause
+-- - Causal (Reach.causal): kept causes, and the given of a run going on (taken from its kept),
+--   are this pulse's, the latest run's is its computation's cause: so keep's test by run (.of)
+--   against the last kept never skips a different cause. at a close no run holds a given
+--   (Core.given)
 --
 -- assumed (hypotheses where used): Theorem 1: H acyclic among the made (among s.made (feeds cs));
 -- Theorem 1′: A2 (no f writes in its run). both: the host's changes name no computation (Reach),
 -- and Model.lean's departures (no make in a pulse: A6; sync: A8; f, set, act return: A1)
 --
 -- §7.2's step 1 against the code now: under A2 every mark comes from a set or an act, each inside
--- a step of its own, so a cause marked on y is still kept at y's next run (only y's done runs
--- filter y's kept). F4 drops marks of flagged runs: none under A2. N2 (came) only keeps runs from
--- stopping; stops are paid by quiet whichever stop. so step 1 holds in the model; the proof here
--- does not go through it
+-- a step of its own, so a cause marked on y is still kept at y's next run (which takes it as its
+-- given; a run not done puts it back). F4 drops marks of flagged runs: none under A2. N2 (came) only
+-- keeps runs from stopping; stops are paid by quiet whichever stop. so step 1 holds in the model;
+-- the proof here does not go through it. finish_keeps: a run not done, its given back, leaves the
+-- budget no higher (more kept, less room)
 --
 -- writes in runs (no A2) for cycles: not proved. where the budget breaks: a flagged run's writes
 -- mark free; a run that writes, then stops, gets its own term back, its writes' marks already
@@ -756,7 +759,9 @@ theorem finish_fix (s : State K V) (c : Nat) (e : Ended) (eq : Option Bool) (w :
   | none =>
     have e : finish s c e eq w th = s := by simp [finish, h]
     rw [e]; exact ⟨Fixed.refl s, rfl, rfl, rfl⟩
-  | some r => rw [finish_eq s c r h]; exact ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl⟩
+  | some r =>
+    obtain ⟨_, _, -, hfin⟩ := finish_any s c r h e eq w th
+    rw [hfin]; exact ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl⟩
 
 theorem set_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V)
     (ht : ∀ d k, k ∈ s.reads d → (cs d).f.reads k) :
@@ -1761,29 +1766,47 @@ theorem level_mono {n : Nat} {s s' : State K V} {z : Nat} (hw : ∀ y, s.went y 
   · simp only [h, ite_false]; split <;> omega
 
 -- the invariant on causes: whens not past the pulse; a run's number its count; this pulse's cause
--- of c is of its latest run; a kept cause is this pulse's, and the latest run's is c's cause
+-- of c is of its latest run; a kept cause, and one a run was given (taken from c's kept till its
+-- end), is this pulse's, and the latest run's is c's cause
 structure Causal (s : State K V) : Prop where
   when_le : ∀ c, s.when c ≤ s.pulses
   runs : ∀ c, ((s.ran c).map (·.n)).getD 0 = s.runs c
   cause : ∀ c, s.when c = s.pulses → (s.cause c).of = (c, s.runs c)
   kept : ∀ d x, x ∈ s.kept d → s.when x.of.1 = s.pulses ∧ x.of.2 ≤ s.runs x.of.1 ∧
     (x.of.2 = s.runs x.of.1 → x = s.cause x.of.1)
+  given : ∀ d r, s.ran d = some r → ∀ x ∈ r.given, s.when x.of.1 = s.pulses ∧
+    x.of.2 ≤ s.runs x.of.1 ∧ (x.of.2 = s.runs x.of.1 → x = s.cause x.of.1)
 
 theorem Causal.of {s s' : State K V} (h : Causal s) (e1 : s'.when = s.when) (e2 : s'.pulses = s.pulses)
     (e3 : ∀ c, (s'.ran c).map (·.n) = (s.ran c).map (·.n)) (e4 : s'.runs = s.runs)
     (e5 : s'.cause = s.cause)
-    (e6 : ∀ d, ∀ x ∈ s'.kept d, x ∈ s.kept d ∨ (s.when x.of.1 = s.pulses ∧ x = s.cause x.of.1)) :
+    (e6 : ∀ d, ∀ x ∈ s'.kept d, x ∈ s.kept d ∨ (s.when x.of.1 = s.pulses ∧ x = s.cause x.of.1) ∨
+      ∃ r, s.ran d = some r ∧ x ∈ r.given)
+    (e7 : ∀ d r', s'.ran d = some r' → ∀ x ∈ r'.given, ∃ r, s.ran d = some r ∧ x ∈ r.given) :
     Causal s' where
   when_le c := by rw [e1, e2]; exact h.when_le c
   runs c := by rw [e3, e4]; exact h.runs c
   cause c hc := by rw [e1, e2] at hc; rw [e5, e4]; exact h.cause c hc
   kept d x hx := by
     rw [e1, e2, e4, e5]
-    rcases e6 d x hx with hx | ⟨h1, h2⟩
+    rcases e6 d x hx with hx | ⟨h1, h2⟩ | ⟨r, h1, h2⟩
     · exact h.kept d x hx
     · have := h.cause _ h1
       refine ⟨h1, ?_, fun _ => h2⟩
       rw [h2, this]; exact Nat.le_refl _
+    · exact h.given d r h1 x h2
+  given d r' hr x hx := by
+    rw [e1, e2, e4, e5]
+    obtain ⟨r, h1, h2⟩ := e7 d r' hr x hx
+    exact h.given d r h1 x h2
+
+-- the same, the ran as it was
+theorem Causal.ofr {s s' : State K V} (h : Causal s) (e1 : s'.when = s.when) (e2 : s'.pulses = s.pulses)
+    (e3 : s'.ran = s.ran) (e4 : s'.runs = s.runs) (e5 : s'.cause = s.cause)
+    (e6 : ∀ d, ∀ x ∈ s'.kept d, x ∈ s.kept d ∨ (s.when x.of.1 = s.pulses ∧ x = s.cause x.of.1)) :
+    Causal s' :=
+  h.of e1 e2 (fun c => by rw [e3]) e4 e5 (fun d x hx => (e6 d x hx).imp_right Or.inl)
+    (fun d r hr x hx => ⟨r, e3 ▸ hr, hx⟩)
 
 -- causeOf: c's cause, this pulse's; a cut one is the latest run alone
 theorem causeof_causal {s : State K V} (h : Causal s) (c : Nat) :
@@ -1801,7 +1824,7 @@ theorem causeof_causal {s : State K V} (h : Causal s) (c : Nat) :
     simpa using this
   · rename_i hw
     refine ⟨?_, by simp, by simp, rfl, fun x hx d hd => ?_, rfl, rfl⟩
-    · refine ⟨fun d => ?_, fun d => h.runs d, fun d hd => ?_, fun d x hx => ?_⟩
+    · refine ⟨fun d => ?_, fun d => h.runs d, fun d hd => ?_, fun d x hx => ?_, fun d r hr x hx => ?_⟩
       · by_cases e : d = c
         · subst e; simp
         · simp [put_ne _ _ e]; exact h.when_le d
@@ -1809,6 +1832,10 @@ theorem causeof_causal {s : State K V} (h : Causal s) (c : Nat) :
         · subst e; simp [Cause.of, h.runs]
         · simp [put_ne _ _ e] at hd ⊢; exact h.cause d hd
       · obtain ⟨h1, h2, h3⟩ := h.kept d x hx
+        by_cases e : x.of.1 = c
+        · rw [e] at h1; exact absurd h1 hw
+        · simp only [put_ne _ _ e]; exact ⟨h1, h2, h3⟩
+      · obtain ⟨h1, h2, h3⟩ := h.given d r hr x hx
         by_cases e : x.of.1 = c
         · rw [e] at h1; exact absurd h1 hw
         · simp only [put_ne _ _ e]; exact ⟨h1, h2, h3⟩
@@ -1837,9 +1864,9 @@ theorem keep_kept (s : State K V) (d : Nat) (k : Why) (hd : ∀ x ∈ s.kept d, 
   unfold keep
   split
   · rename_i h
-    simp only [List.any_eq_true, beq_iff_eq] at h
-    obtain ⟨x, hx, he⟩ := h
-    exact ⟨hd x hx he ▸ hx, fun _ _ h => h, fun _ _ h => Or.inl h, _, rfl⟩
+    obtain ⟨x, hx, he⟩ := Option.map_eq_some_iff.1 h
+    have hx' := List.mem_of_getLast? hx
+    exact ⟨hd x hx' he ▸ hx', fun _ _ h => h, fun _ _ h => Or.inl h, _, rfl⟩
   · refine ⟨by simp, fun z x hx => ?_, fun z x hx => ?_, _, rfl⟩
     · by_cases e : z = d
       · subst e; simp [hx]
@@ -1940,7 +1967,7 @@ theorem mark_budget {s : State K V} (h : Causal s) (c d t n : Nat) (hd : d < n) 
   have hother : ∀ z, z ≠ d → s'.due z = s.due z ∧ s'.loop z = s.loop z := by
     intro z hz; obtain ⟨a, b⟩ := e5 z hz; exact ⟨a.trans (by rw [w3]), b.trans (by rw [w4])⟩
   have hcaus : Causal s' := by
-    refine c1.of (s' := s') (by rw [e3]) (by rw [sa.pulses]) (fun x => by rw [sa.ran]) (by rw [sa.runs])
+    refine c1.ofr (s' := s') (by rw [e3]) (by rw [sa.pulses]) sa.ran (by rw [sa.runs])
       (by rw [e4]) (fun z x hx => ?_)
     rw [e1] at hx
     rcases k3 z x hx with hx | hx
@@ -2058,7 +2085,7 @@ theorem Spent.trans {n B c : Nat} {s s' s'' : State K V} (a : Spent n B c s s') 
 theorem Spent.plain {n B c : Nat} {s s' : State K V} (h : Causal s) (a : Same s s')
     (e1 : s'.due = s.due) (e2 : s'.loop = s.loop) (e3 : s'.kept = s.kept) (e4 : s'.went = s.went)
     (e5 : s'.when = s.when) (e6 : s'.cause = s.cause) : Spent n B c s s' where
-  causal := h.of e5 a.pulses (fun x => by rw [a.ran]) a.runs e6 (fun d x hx => Or.inl (e3 ▸ hx))
+  causal := h.ofr e5 a.pulses a.ran a.runs e6 (fun d x hx => Or.inl (e3 ▸ hx))
   same := a
   terms z := by
     have : Model.term n s' z = Model.term n s z := by unfold Model.term level; rw [e1, e2, e3, e4]
@@ -2146,7 +2173,7 @@ theorem first_a2 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowr
     ∃ (rr : Run K V) (R : Nat → List K) (o : Out V),
       first cs s c rk = ending cs { start s c rk with ran := put s.ran c (some rr), reads := R } c o ∧
       rr.n = s.runs c + 1 ∧ rr.mark = (s.due c).getD 0 ∧ rr.loop = s.loop c ∧
-      (∀ w, rr.stopped = some w → (s.due w).isSome ∧ w ≠ c) := by
+      rr.given = s.kept c ∧ (∀ w, rr.stopped = some w → (s.due w).isSome ∧ w ≠ c) := by
   have h0 : (start s c rk).ran c = some (begun s c [] none []) := by simp [start, say, begun]
   obtain ⟨seen, vals, st, heq, _, hfo, hstop⟩ := exec_spec cs c (cs c).f hp (start s c rk) _ h0 rfl
   clear hfo
@@ -2156,7 +2183,7 @@ theorem first_a2 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowr
   simp only at heq
   subst heq
   refine ⟨{ begun s c [] none [] with seen := seen, values := vals, stopped := st },
-    put s.reads c (seen.map (·.1)), o, ?_, rfl, rfl, rfl, ?_⟩
+    put s.reads c (seen.map (·.1)), o, ?_, rfl, rfl, rfl, rfl, ?_⟩
   · simp [start, say, put_put, begun]
   · intro w hw
     obtain ⟨h1, _, h3, _⟩ := hstop w hw
@@ -2190,7 +2217,7 @@ theorem start_budget (n : Nat) (s : State K V) (c rk : Nat) (R : Nat → List K)
   generalize hs3 : ({ start s c rk with ran := put s.ran c (some rr), reads := R } : State K V) = s3
   have f1 : s3.due = put s.due c none := by rw [← hs3]; rfl
   have f2 : s3.loop = put s.loop c none := by rw [← hs3]; rfl
-  have f3 : s3.kept = s.kept := by rw [← hs3]; rfl
+  have f3 : s3.kept = put s.kept c [] := by rw [← hs3]; rfl
   have f4 : s3.went = put s.went c true := by rw [← hs3]; rfl
   have f5 : s3.acts = s.acts.filter (fun a => a.1 ≠ c) := by rw [← hs3]; rfl
   have f6 : ∀ e, e ≠ c → s3.when e = s.when e ∧ s3.cause e = s.cause e ∧ s3.ran e = s.ran e := by
@@ -2210,7 +2237,7 @@ theorem start_budget (n : Nat) (s : State K V) (c rk : Nat) (R : Nat → List K)
         rw [f1, f2, put_ne _ _ hz, put_ne _ _ hz]
         by_cases hc' : ((s.due z).isSome && (s.loop z).isNone) = true
         · simp only [hc', ite_true]
-          exact worth_mono n (level_mono hw (fun x hx => by rw [f3]; exact hx))
+          exact worth_mono n (level_mono hw (fun x hx => by rw [f3, put_ne _ _ hz]; exact hx))
         · simp only [hc']; exact Nat.le_refl _
     have := tot_le key
     rw [tot_add, tot_one _ hcn] at this
@@ -2276,62 +2303,75 @@ theorem gauge_lt_calm {n : Nat} {s s' : State K V} (h1 : budget n s' ≤ budget 
   have : budget n s' * big n ≤ budget n s * big n := Nat.mul_le_mul_right _ h1
   unfold gauge; omega
 
--- finish: the budget, φ and the causes as they were (c not due unflagged, when done)
+-- finish: φ and the causes' invariant as they were, the budget no more (a run not done gives its
+-- given back to c's kept: more kept, less room)
 theorem finish_keeps {n : Nat} (X : State K V) (c : Nat) (e : Ended) (eq : Option Bool)
-    (w : Option Nat) (th : Option (List Nat)) (hX : e ≠ .done ∨ X.due c = none ∨ (X.loop c).isSome)
-    (hc : Causal X) :
-    budget n (finish X c e eq w th) = budget n X ∧ quiet n (finish X c e eq w th) = quiet n X ∧
+    (w : Option Nat) (th : Option (List Nat)) (hc : Causal X) :
+    budget n (finish X c e eq w th) ≤ budget n X ∧ quiet n (finish X c e eq w th) = quiet n X ∧
     Causal (finish X c e eq w th) ∧ (finish X c e eq w th).made = X.made := by
   cases hr : X.ran c with
   | none =>
     have : finish X c e eq w th = X := by simp [finish, hr]
-    rw [this]; exact ⟨rfl, rfl, hc, rfl⟩
+    rw [this]; exact ⟨Nat.le_refl _, rfl, hc, rfl⟩
   | some r =>
-    rw [finish_eq X c r hr]
-    have e9 : ∀ d, ((put X.ran c (some { r with ended := some e })) d).map (·.n) = (X.ran d).map (·.n) := by
+    obtain ⟨e, th, -, hfin⟩ := finish_any X c r hr e eq w th
+    rw [hfin]
+    have e9 : ∀ d, ((put X.ran c (some { r with
+        ended := some e, given := [], loop := if e = .pending then r.loop else none })) d).map (·.n) =
+        (X.ran d).map (·.n) := by
       intro d; by_cases hd : d = c
       · subst hd; simp [hr]
       · simp [put_ne _ _ hd]
     refine ⟨?_, rfl, ?_, rfl⟩
     · by_cases hd : e = .done
-      · subst hd
-        simp only [ne_eq, not_true_eq_false, false_or] at hX
-        have ht : term n { X with
-            kept := if Ended.done = .done then
-              put X.kept c ((X.kept c).filter fun k => !(r.given.any fun g => g.of == k.of)) else X.kept,
-            looping := if Ended.done = .looping then put X.looping c true else X.looping,
-            values := if Ended.done ≠ .stopped then put X.values c r.values else X.values,
-            ran := put X.ran c (some { r with ended := some .done }),
-            log := X.log ++ [⟨X.pulses, X.round, .ends c r.n .done eq w th⟩] } = term n X := by
-          funext z
-          by_cases hz : z = c
-          · subst hz
-            unfold term
-            rcases hX with h | h
-            · simp [h]
-            · have : (X.loop z).isNone = false := by cases e : X.loop z <;> simp_all
-              simp [this]
-          · unfold term level; simp [put_ne _ _ hz]
-        have hl : later n { X with
-            kept := if Ended.done = .done then
-              put X.kept c ((X.kept c).filter fun k => !(r.given.any fun g => g.of == k.of)) else X.kept,
-            looping := if Ended.done = .looping then put X.looping c true else X.looping,
-            values := if Ended.done ≠ .stopped then put X.values c r.values else X.values,
-            ran := put X.ran c (some { r with ended := some .done }),
-            log := X.log ++ [⟨X.pulses, X.round, .ends c r.n .done eq w th⟩] } = later n X := by
-          funext d; unfold later; simp only [e9]
-        unfold budget; rw [ht, hl]
-      · exact budget_congr rfl rfl (by simp [hd]) rfl rfl rfl rfl rfl e9
-    · refine hc.of rfl rfl e9 rfl rfl (fun d x hx => Or.inl ?_)
-      by_cases hd : e = .done
-      · subst hd
-        by_cases hdc : d = c
-        · subst hdc; simp at hx; exact hx.1
-        · simpa [put_ne _ _ hdc] using hx
-      · simpa [hd] using hx
+      · exact Nat.le_of_eq (budget_congr rfl rfl (by simp [hd]) rfl rfl rfl rfl rfl e9)
+      · have hl : ∀ d, later n { X with
+            kept := if e = .done then X.kept else put X.kept c (r.given ++ X.kept c),
+            looping := if e = .looping then put X.looping c true else X.looping,
+            values := if e ≠ .stopped then put X.values c r.values else X.values,
+            ran := put X.ran c (some { r with
+              ended := some e, given := [], loop := if e = .pending then r.loop else none }),
+            log := X.log ++ [⟨X.pulses, X.round, .ends c r.n e eq w th⟩] } d = later n X d := by
+          intro d; unfold later; simp only [e9]
+        have ht : ∀ z, z < n → term n { X with
+            kept := if e = .done then X.kept else put X.kept c (r.given ++ X.kept c),
+            looping := if e = .looping then put X.looping c true else X.looping,
+            values := if e ≠ .stopped then put X.values c r.values else X.values,
+            ran := put X.ran c (some { r with
+              ended := some e, given := [], loop := if e = .pending then r.loop else none }),
+            log := X.log ++ [⟨X.pulses, X.round, .ends c r.n e eq w th⟩] } z ≤ term n X z := by
+          intro z _
+          unfold term
+          simp only
+          split
+          · refine worth_mono n (level_mono (fun y h => h) (fun x hx => ?_))
+            by_cases hzc : z = c
+            · subst hzc; simp [hd, hx]
+            · simp [hd, put_ne _ _ hzc, hx]
+          · exact Nat.zero_le _
+        unfold budget
+        simp only [hl]
+        have := tot_le ht
+        omega
+    · refine ⟨hc.when_le, fun d => by rw [e9]; exact hc.runs d, hc.cause, fun d x hx => ?_,
+        fun d r' hr' x hx => ?_⟩
+      · by_cases hd : e = .done
+        · simp only [hd, ite_true] at hx; exact hc.kept d x hx
+        · simp only [hd, ite_false] at hx
+          by_cases hdc : d = c
+          · subst hdc
+            simp only [put_same, List.mem_append] at hx
+            rcases hx with hx | hx
+            · exact hc.given d r hr x hx
+            · exact hc.kept d x hx
+          · rw [put_ne _ _ hdc] at hx; exact hc.kept d x hx
+      · by_cases hdc : d = c
+        · subst hdc; simp at hr'; rw [← hr'] at hx; cases hx
+        · simp only [put_ne _ _ hdc] at hr'; exact hc.given d r' hr' x hx
 
+-- start: c's kept taken, the run given it
 theorem start_causal (s : State K V) (c rk : Nat) (R : Nat → List K) (rr : Run K V)
-    (hn : rr.n = s.runs c + 1) (h : Causal s) :
+    (hn : rr.n = s.runs c + 1) (hg : rr.given = s.kept c) (h : Causal s) :
     Causal { start s c rk with ran := put s.ran c (some rr), reads := R } where
   when_le d := by
     show put s.when c s.pulses d ≤ s.pulses
@@ -2351,8 +2391,30 @@ theorem start_causal (s : State K V) (c rk : Nat) (R : Nat → List K) (rr : Run
       have : s.when d = s.pulses := by simpa [start, say, put_ne _ _ e] using hd
       exact h.cause d this
   kept d x hx := by
-    have hx' : x ∈ s.kept d := hx
+    have hx' : x ∈ s.kept d := by
+      have : x ∈ put s.kept c [] d := hx
+      by_cases e : d = c
+      · subst e; simp at this
+      · rwa [put_ne _ _ e] at this
     obtain ⟨h1, h2, h3⟩ := h.kept d x hx'
+    show put s.when c s.pulses x.of.1 = s.pulses ∧ x.of.2 ≤ put s.runs c (s.runs c + 1) x.of.1 ∧
+      (x.of.2 = put s.runs c (s.runs c + 1) x.of.1 →
+        x = put s.cause c (.mk (c, s.runs c + 1) (s.kept c)) x.of.1)
+    by_cases e : x.of.1 = c
+    · rw [e] at h2 ⊢; simp
+      refine ⟨by omega, fun h4 => by omega⟩
+    · simp [put_ne _ _ e]; exact ⟨h1, h2, h3⟩
+  given d r hr x hx := by
+    have hx' : x ∈ s.kept d ∨ ∃ r0, s.ran d = some r0 ∧ x ∈ r0.given := by
+      have : put s.ran c (some rr) d = some r := hr
+      by_cases e : d = c
+      · subst e; simp at this; subst this; rw [hg] at hx; exact Or.inl hx
+      · rw [put_ne _ _ e] at this; exact Or.inr ⟨r, this, hx⟩
+    obtain ⟨h1, h2, h3⟩ : s.when x.of.1 = s.pulses ∧ x.of.2 ≤ s.runs x.of.1 ∧
+        (x.of.2 = s.runs x.of.1 → x = s.cause x.of.1) := by
+      rcases hx' with hx' | ⟨r0, h0, hx'⟩
+      · exact h.kept d x hx'
+      · exact h.given d r0 h0 x hx'
     show put s.when c s.pulses x.of.1 = s.pulses ∧ x.of.2 ≤ put s.runs c (s.runs c + 1) x.of.1 ∧
       (x.of.2 = put s.runs c (s.runs c + 1) x.of.1 →
         x = put s.cause c (.mk (c, s.runs c + 1) (s.kept c)) x.of.1)
@@ -2397,10 +2459,10 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
     Causal (first cs s c rk) ∧ (first cs s c rk).made = s.made ∧
     gauge s.made (first cs s c rk) < gauge s.made s := by
   generalize hn : s.made = n at hcn
-  obtain ⟨rr, R, o, hfirst, hrn, hrm, hrl, hrs⟩ := first_a2 cs s c rk (hA c)
+  obtain ⟨rr, R, o, hfirst, hrn, hrm, hrl, hrg, hrs⟩ := first_a2 cs s c rk (hA c)
   rw [hfirst]
   have hb3 := start_budget n s c rk R rr hcn hc
-  have hc3 := start_causal s c rk R rr hrn hca
+  have hc3 := start_causal s c rk R rr hrn hrg hca
   generalize hs3 : ({ start s c rk with ran := put s.ran c (some rr), reads := R } : State K V) = s3
     at hb3 hc3 ⊢
   have f_due : s3.due = put s.due c none := by subst hs3; rfl
@@ -2413,7 +2475,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
   have f_when : s3.when = put s.when c s.pulses := by subst hs3; rfl
   have f_pulses : s3.pulses = s.pulses := by subst hs3; rfl
   have f_cause : s3.cause = put s.cause c (.mk (c, s.runs c + 1) (s.kept c)) := by subst hs3; rfl
-  have f_kept : s3.kept = s.kept := by subst hs3; rfl
+  have f_kept : s3.kept = put s.kept c [] := by subst hs3; rfl
   have f_cut : s3.cut c = false := by rw [← hs3]; simp [start, say]
   have hlat : later n s3 c ≤ level n s c := by
     unfold later
@@ -2428,9 +2490,8 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
       ∀ e eq w th, Causal (finish X c e eq w th) ∧ (finish X c e eq w th).made = s.made ∧
         gauge n (finish X c e eq w th) < gauge n s := by
     intro X hX e1 e2 e3 e4 e5 e eq w th
-    obtain ⟨k1, k2, k3, k4⟩ := finish_keeps (n := n) X c e eq w th
-      (Or.inr (Or.inl (by rw [e1]; simp))) hX
-    refine ⟨k3, k4.trans e3, gauge_lt_calm (by rw [k1]; exact e5) ?_⟩
+    obtain ⟨k1, k2, k3, k4⟩ := finish_keeps (n := n) X c e eq w th hX
+    refine ⟨k3, k4.trans e3, gauge_lt_calm (Nat.le_trans k1 e5) ?_⟩
     rw [k2]
     have hd := dues_go (n := n) (a := fun _ => 2) (b := fun _ => 1) (s := s) (s' := X) hcn hc hr e2
       (fun d h => by
@@ -2452,19 +2513,29 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
     intro hl; simp [term, hc, hl]
   have hworth : ∀ j, 2 ≤ worth n j := by intro j; cases j <;> simp [worth] <;> omega
   -- the run's record changed, nothing else: as s3
-  have edits : ∀ g : Run K V → Run K V, (∀ r, (g r).n = r.n) →
+  have edits : ∀ g : Run K V → Run K V, (∀ r, (g r).n = r.n) → (∀ r, (g r).given = r.given) →
       Causal (edit s3 c g) ∧ budget n (edit s3 c g) = budget n s3 ∧
       (edit s3 c g).due = s3.due ∧ (edit s3 c g).after = s3.after ∧ (edit s3 c g).made = s3.made ∧
       (edit s3 c g).phase = s3.phase ∧ (edit s3 c g).loop = s3.loop ∧ (edit s3 c g).went = s3.went ∧
       (edit s3 c g).acts = s3.acts ∧ (edit s3 c g).cut = s3.cut ∧
       ((edit s3 c g).ran c).bind (·.loop) = ((s3.ran c).map g).bind (·.loop) ∧
       (∀ e, later n (edit s3 c g) e = later n s3 e) ∧ ((edit s3 c g).ran c).isSome := by
-    intro g hg
+    intro g hg hgg
     have e9 : ∀ d, ((edit s3 c g).ran d).map (·.n) = (s3.ran d).map (·.n) := by
       intro d; by_cases hd : d = c
       · subst hd; simp only [edit, put_same]; cases s3.ran d <;> simp [hg]
       · simp [edit, put_ne _ _ hd]
-    refine ⟨hc3.of rfl rfl e9 rfl rfl (fun d x hx => Or.inl hx), budget_congr rfl rfl rfl rfl rfl rfl rfl rfl e9,
+    have e7 : ∀ d r', (edit s3 c g).ran d = some r' → ∀ x ∈ r'.given,
+        ∃ r, s3.ran d = some r ∧ x ∈ r.given := by
+      intro d r' hr' x hx
+      by_cases hd : d = c
+      · subst hd
+        simp only [edit, put_same, Option.map_eq_some_iff] at hr'
+        obtain ⟨r0, h0, rfl⟩ := hr'
+        exact ⟨r0, h0, by rw [hgg] at hx; exact hx⟩
+      · simp only [edit, put_ne _ _ hd] at hr'; exact ⟨r', hr', hx⟩
+    refine ⟨hc3.of rfl rfl e9 rfl rfl (fun d x hx => Or.inl hx) e7,
+      budget_congr rfl rfl rfl rfl rfl rfl rfl rfl e9,
       rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, by simp [edit], fun e => ?_, by simp [edit, f_ran]⟩
     unfold later; rw [show (edit s3 c g).when = s3.when from rfl, show (edit s3 c g).cause = s3.cause from rfl,
       show (edit s3 c g).went = s3.went from rfl, show (edit s3 c g).pulses = s3.pulses from rfl, e9]
@@ -2481,14 +2552,19 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
     rw [stop_eq s3 c rr hrr hd3]
     generalize hs' : ({ s3 with loop := put s3.loop c rr.loop, after := put s3.after c rr.stopped,
                                 due := put s3.due c (some rr.mark),
-                                ran := put s3.ran c (some { rr with ended := some .stopped }),
+                                kept := put s3.kept c (rr.given ++ s3.kept c),
+                                ran := put s3.ran c
+                                  (some { rr with ended := some .stopped, given := [], loop := none }),
                                 log := s3.log ++ [⟨s3.pulses, s3.round,
                                   .ends c rr.n .stopped none rr.stopped none⟩] } : State K V) = s'
     have g_loop : s'.loop = put s3.loop c rr.loop := by subst hs'; rfl
     have g_after : s'.after = put s3.after c rr.stopped := by subst hs'; rfl
     have g_due : s'.due = put s3.due c (some rr.mark) := by subst hs'; rfl
-    have g_ran : s'.ran = put s3.ran c (some { rr with ended := some .stopped }) := by subst hs'; rfl
-    have g_rest : s'.kept = s3.kept ∧ s'.went = s3.went ∧ s'.when = s3.when ∧ s'.cause = s3.cause ∧
+    have g_ran : s'.ran =
+        put s3.ran c (some { rr with ended := some .stopped, given := [], loop := none }) := by
+      subst hs'; rfl
+    have g_rest : s'.kept = put s3.kept c (rr.given ++ s3.kept c) ∧ s'.went = s3.went ∧
+        s'.when = s3.when ∧ s'.cause = s3.cause ∧
         s'.pulses = s3.pulses ∧ s'.runs = s3.runs ∧ s'.acts = s3.acts ∧ s'.made = s3.made ∧
         s'.phase = s3.phase := by subst hs'; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     obtain ⟨g1, g2, g3, g4, g5, g6, g7, g8, g9⟩ := g_rest
@@ -2496,7 +2572,23 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
       intro d; rw [g_ran]; by_cases hd : d = c
       · subst hd; simp [hrr]
       · simp [put_ne _ _ hd]
-    refine ⟨hc3.of g3 g5 e9 g6 g4 (fun d x hx => Or.inl (g1 ▸ hx)), by rw [g8, ← hn, f_made], ?_⟩
+    -- the given back in c's kept: s's kept of c, as it was before the run
+    have g1c : s'.kept c = s.kept c := by rw [g1, f_kept]; simp [hrg]
+    have g1z : ∀ z, z ≠ c → s'.kept z = s3.kept z := fun z hz => by rw [g1, put_ne _ _ hz]
+    have hcs' : Causal s' := hc3.of g3 g5 e9 g6 g4
+      (fun d x hx => by
+        by_cases hd : d = c
+        · subst hd; rw [g1] at hx; simp only [put_same, List.mem_append] at hx
+          rcases hx with hx | hx
+          · exact Or.inr (Or.inr ⟨rr, hrr, hx⟩)
+          · exact Or.inl hx
+        · exact Or.inl (by rw [g1z d hd] at hx; exact hx))
+      (fun d r' hr' x hx => by
+        rw [g_ran] at hr'
+        by_cases hd : d = c
+        · subst hd; simp at hr'; rw [← hr'] at hx; cases hx
+        · rw [put_ne _ _ hd] at hr'; exact ⟨r', hr', hx⟩)
+    refine ⟨hcs', by rw [g8, ← hn, f_made], ?_⟩
     apply gauge_lt_calm
     · -- c's term as it was before the run, the rest as at s3
       have ht : ∀ z, z < n → term n s' z ≤ term n s3 z + (if z = c then term n s c else 0) := by
@@ -2508,7 +2600,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
           rw [g_due, g_loop]
           simp only [put_same, Option.isSome_some, Bool.true_and, hrl]
           have hl : level n s' z ≤ level n s z := by
-            refine level_mono (fun y hy => ?_) (fun x hx => by rw [g1, f_kept]; exact hx)
+            refine level_mono (fun y hy => ?_) (fun x hx => by rw [g1c]; exact hx)
             rw [g2, f_went]; by_cases e : y = z
             · subst e; simp
             · simp [put_ne _ _ e, hy]
@@ -2520,7 +2612,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
           · omega
         · simp only [hz, ite_false, Nat.add_zero]
           unfold term level
-          rw [g_due, g_loop, put_ne _ _ hz, put_ne _ _ hz, g1, g2]
+          rw [g_due, g_loop, put_ne _ _ hz, put_ne _ _ hz, g1z z hz, g2]
           exact Nat.le_refl _
       have := tot_le ht
       rw [tot_add, tot_one _ hcn] at this
@@ -2546,14 +2638,13 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
       omega
   · rename_i hst
     obtain ⟨x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13⟩ :=
-      edits (fun r => { r with out := some o }) (fun r => rfl)
+      edits (fun r => { r with out := some o }) (fun r => rfl) (fun r => rfl)
     generalize hX : edit s3 c (fun r => { r with out := some o }) = X
       at x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 ⊢
     dsimp only
     have pl := plain X x1 (x3.trans f_due) (x4.trans f_after) (x5.trans f_made) (x6.trans f_phase)
       (x2 ▸ hb3')
     have fl : (X.ran c).bind (·.loop) = s.loop c := by rw [x11, f_ran]; simp [hrl]
-    have hXd : X.due c = none := by rw [x3]; exact hd3
     have hXm : X.made = n := by rw [x5, f_made, hn]
     split
     · obtain ⟨a, b, c'⟩ := pl .failed none none none; exact ⟨a, b.trans hn, c'⟩
@@ -2581,11 +2672,11 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
             · rename_i he
               have he' : e = false := by simpa using he
               have hX' : Causal { X with acts := X.acts ++ [(c, v)] } :=
-                x1.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+                x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
               obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n) { X with acts := X.acts ++ [(c, v)] } c .done
-                (some e) none none (Or.inr (Or.inl hXd)) hX'
+                (some e) none none hX'
               refine ⟨k3, k4.trans hXm, gauge_lt_budget ?_⟩
-              rw [k1]
+              refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
               have hb : budget n { X with acts := X.acts ++ [(c, v)] } =
                   budget n X + deed n (later n X c) := by
                 unfold budget
@@ -2611,24 +2702,21 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
               · rename_i k heq
                 generalize hY : store (say X (.set c v)) k v = Y
                 have y1 : Causal Y := by
-                  rw [← hY]; exact x1.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+                  rw [← hY]; exact x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
                 have y2 : Y.made = n := by rw [← hY]; exact hXm
                 have y3 : (Y.ran c).isSome := by rw [← hY]; exact x13
                 have y4 : ∀ d, later n Y d = later n X d := by intro d; rw [← hY]; rfl
                 have y5 : budget n Y = budget n X := by rw [← hY]; rfl
-                have y6 : Y.went c = true := by rw [← hY]; show X.went c = true; rw [x8, f_went]; simp
-                have y7 : Y.due c = none := by rw [← hY]; exact hXd
                 have sp := changed_budget cs Y [k] c (top n (later n s3 c)) y1 y3 (by
                   rw [y2, y4 c, x12 c]; intro j hj; exact top_le hj)
                 rw [y2] at sp
                 generalize hZ : changed cs Y [k] (some c) = Z at sp
-                have z1 := sp.self y6 (Or.inl y7)
                 have hZ' : Causal { Z with last := put Z.last c (some v) } :=
-                  sp.causal.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+                  sp.causal.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
                 obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n) { Z with last := put Z.last c (some v) } c .done
-                  (some e) none none (Or.inr z1) hZ'
+                  (some e) none none hZ'
                 refine ⟨k3, k4.trans (sp.same.made.trans y2), gauge_lt_budget ?_⟩
-                rw [k1]
+                refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
                 have hb : budget n { Z with last := put Z.last c (some v) } = budget n Z := rfl
                 rw [hb]
                 have h1 := spent_budget sp
@@ -2638,12 +2726,12 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
                 omega
               · rename_i hk
                 have hS : Causal { say X (.set c v) with last := put (say X (.set c v)).last c (some v) } :=
-                  x1.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+                  x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
                 obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n)
                   { say X (.set c v) with last := put (say X (.set c v)).last c (some v) } c .done
-                  (some e) none none (Or.inr (Or.inl hXd)) hS
+                  (some e) none none hS
                 refine ⟨k3, k4.trans hXm, gauge_lt_budget ?_⟩
-                rw [k1]
+                refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
                 have hb : budget n { say X (.set c v) with last := put (say X (.set c v)).last c (some v) } =
                     budget n X := rfl
                 rw [hb, x2]
@@ -2663,7 +2751,7 @@ theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (res
     have : later n { s with acts := rest } = later n s := rfl
     have ht : term n { s with acts := rest } = term n s := rfl
     rw [this, ht]; omega
-  have hc0 : Causal { s with acts := rest } := hca.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+  have hc0 : Causal { s with acts := rest } := hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
   have hdd := deed_top n (later n s e)
   unfold act
   split
@@ -2674,7 +2762,7 @@ theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (res
       dsimp only
       generalize hS : say { s with acts := rest } (.act e v (s.last e)) = S0
       have s1 : Causal S0 := by
-        rw [← hS]; exact hc0.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+        rw [← hS]; exact hc0.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
       have s2 : S0.made = n := by rw [← hS]; exact hn
       have s3 : budget n S0 = budget n { s with acts := rest } := by rw [← hS]; rfl
       have s4 : later n S0 e = later n s e := by rw [← hS]; rfl
@@ -2685,7 +2773,7 @@ theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (res
       generalize hZ : (g v (s.last e)).foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) S0 = Z
         at sp
       have h1 := spent_budget sp
-      refine ⟨sp.causal.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx),
+      refine ⟨sp.causal.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx),
         sp.same.made.trans s2, gauge_lt_budget ?_⟩
       have : budget n (say { Z with last := put Z.last e (some v) } (.acts e (((Z.ran e).map (·.n)).getD 0))) =
           budget n Z := rfl
@@ -2727,7 +2815,7 @@ theorem Causal.told {cs : Nat → Comp K V} {s : State K V} (h : Causal s) (keys
   have hr : runof { s with tick := s.tick + 1 } none = none := rfl
   obtain ⟨k1, k2, k3⟩ := key2 (s.tick + 1) keys { s with tick := s.tick + 1 }
   simp only [changed, hr] at a ⊢
-  exact h.of k2 a.pulses (fun c => by rw [a.ran]) a.runs k3 (fun d x hx => Or.inl (k1 ▸ hx))
+  exact h.ofr k2 a.pulses a.ran a.runs k3 (fun d x hx => Or.inl (k1 ▸ hx))
 
 theorem Causal.make {cs : Nat → Comp K V} {s : State K V} (h : Causal s) : Causal (make cs s) := by
   have key : ∀ M : State K V, Causal M → Causal (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none) := by
@@ -2737,29 +2825,33 @@ theorem Causal.make {cs : Nat → Comp K V} {s : State K V} (h : Causal s) : Cau
     have e1' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).kept = M.kept := e1
     have e3' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).when = M.when := e3
     have e4' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).cause = M.cause := e4
-    exact hM.of e3' a.pulses (fun c => by rw [a.ran]) a.runs e4' (fun d x hx => Or.inl (e1' ▸ hx))
+    exact hM.ofr e3' a.pulses a.ran a.runs e4' (fun d x hx => Or.inl (e1' ▸ hx))
   cases hk : (cs s.made).key with
   | none =>
     simp only [Model.make, hk]
-    exact key { s with made := s.made + 1 } (h.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx))
+    exact key { s with made := s.made + 1 } (h.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx))
   | some k =>
     simp only [Model.make, hk]
     exact key { s with made := s.made + 1, writers := put s.writers k (some s.made) }
-      (h.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx))
+      (h.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx))
 
 theorem Causal.empty : Causal (empty : State K V) where
   when_le c := by simp [Model.empty]
   runs c := by simp [Model.empty]
   cause c _ := by simp [Model.empty, Cause.of]
   kept d x hx := by simp [Model.empty] at hx
+  given d r hr := by simp [Model.empty] at hr
 
-theorem Causal.close {s : State K V} (h : Causal s) : Causal (close s) where
+-- at a pulse's end no latest run holds a given (Core.given): none is cut
+theorem Causal.close {s : State K V} (h : Causal s) (hg : ∀ c r, s.ran c = some r → r.given = []) :
+    Causal (close s) where
   when_le c := Nat.le_trans (h.when_le c) (Nat.le_succ _)
   runs c := h.runs c
   cause c hc := by
     have := h.when_le c
     simp only [Model.close] at hc; omega
   kept d x hx := by simp [Model.close] at hx
+  given d r hr x hx := by rw [hg d r hr] at hx; cases hx
 
 -- Theorem 1′, a step (A2): the causes' invariant kept, the gauge falls
 theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
@@ -2780,7 +2872,7 @@ theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
       exact run_gauge cs s c (rank s c) hA hca hph hrd.1 hr hcn b.due_made
     · rename_i hnx
       cases hs
-      refine ⟨hca.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
+      refine ⟨hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
       have hnd : ((List.range s.made).any fun p => (s.due p).isSome) = false := by
         rw [List.any_eq_false]
         intro p _ hp
@@ -2802,7 +2894,7 @@ theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
     · split at hs
       · rename_i hany
         cases hs
-        refine ⟨hca.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
+        refine ⟨hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
         refine gauge_lt_calm ?_ ?_
         · exact Nat.le_refl _
         show dues s.made (fun _ => 2) (fun _ => 1) s + stage { s with phase := .runs, round := s.round + 1 } <
@@ -2821,12 +2913,12 @@ theorem Reach.causal {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
   | @write s kvs _ ih =>
     obtain ⟨st, h1, _⟩ := stores_shape s kvs
     simp only [Model.write, h1]
-    exact (ih.of (s' := { s with store := st }) rfl rfl (fun _ => rfl) rfl rfl
+    exact (ih.ofr (s' := { s with store := st }) rfl rfl rfl rfl rfl
       (fun d x hx => Or.inl hx)).told _
   | tell keys _ ih => exact ih.told keys
-  | begin _ ih => exact ih.of rfl rfl (fun _ => rfl) rfl rfl (fun d x hx => Or.inl hx)
+  | begin _ ih => exact ih.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
   | step h1 h2 ih => exact (gauge_step hA h1 ih h2).1
-  | close _ _ ih => exact ih.close
+  | close h1 _ ih => exact ih.close (h1.good hA).given
 
 -- Theorem 1′ (proof.md §7.2): with cycles, under A2 and with the host's changes from outside,
 -- every pulse from a reachable state ends, within its gauge's steps

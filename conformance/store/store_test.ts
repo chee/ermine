@@ -8,7 +8,7 @@ import { assertEquals } from "@std/assert"
 import { run, type Scenario } from "./run.ts"
 
 const here = new URL(".", import.meta.url).pathname
-const dir = `${here}../../playground/files/conformance/store`
+const dir = `${here}../suites-aside/playground/files/conformance/store`
 const reference = `deno run --quiet --allow-all ${here}harness.ts`
 const subject = (Deno.env.get("STORE_HARNESS") ?? reference).split(" ")
 const granted = (["write", "ffi", "run"] as const).every((name) =>

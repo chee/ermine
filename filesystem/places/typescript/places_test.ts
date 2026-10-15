@@ -5,16 +5,19 @@ import { assert, assertEquals, assertThrows } from "@std/assert"
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
-import { createScheduler, type Moment, SchedulerError } from "@ermine/scheduler"
+import { type Computer, createScheduler, SchedulerError } from "@ermine/scheduler"
+import { type Told, trace } from "@ermine/scheduler/trace"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key } from "@ermine/graph/table"
+import { createTable, type Id, type Key } from "@ermine/table"
 import { at, createPlaces, move, place, rename, unplace } from "./places.ts"
 import { get, list, lookup, members } from "./lib.ts"
-import { createChangeHeader, getWriter } from "./header.ts"
+import { createChangeHeader, getWho } from "./header.ts"
 
 function world() {
-	const moments: Moment[] = []
-	const s = createScheduler({ forget: (key) => l.release(key), hook: (m) => void moments.push(m) })
+	const moments: Told[] = []
+	const s = createScheduler()
+	s.onTrackingEnd((key) => l.release(key))
+	trace(s, (m) => void moments.push(m))
 	const table = createTable((part, id) => l.onTableChange(part as Key, id))
 	const paths = createPaths<unknown>()
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
@@ -22,9 +25,9 @@ function world() {
 	// a children entry, to write in
 	const kid = (id: Id) => table.get("children", id)!
 	// the host's scope, and a program's
-	const host = s.root([["actor", "host"]])
-	const notes = s.root([["actor", "notes"]])
-	const hosted = <T>(f: () => T) => s.run(host, f)
+	const host = s.createRootScope([["actor", "host"]])
+	const notes = s.createRootScope([["actor", "notes"]])
+	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	// a value write: the patches to the entry there, reported; none there: one made with them, added
 	function edit(part: Key, id: Id, patches: Patch[]) {
 		const h = createChangeHeader(s)
@@ -36,7 +39,7 @@ function world() {
 			return node
 		}
 		update(there, patches, h)
-		l.markChanged([there])
+		l.commit([there])
 		return there
 	}
 	// an entry at id, the host's, as a table event
@@ -47,7 +50,10 @@ function world() {
 	// a compute of notes's: its runs counted, its last value kept
 	function watch<T>(f: () => T) {
 		const w = { runs: 0, value: undefined as T | undefined }
-		s.run(notes, () => s.compute(() => (w.runs++, f()), (v) => void (w.value = v)))
+		s.runWithScope(
+			notes,
+			() => s.createComputer(() => (w.runs++, f()), (v) => void (w.value = v)),
+		)
 		return w
 	}
 	// the id at a path, or ""
@@ -97,7 +103,7 @@ Deno.test("places: a read of what isn't there, then something placed there: it r
 	hosted(() => edit("value", "T", [{ path: [], value: "hello" }]))
 	s.pulse()
 	assertEquals(w.runs, 1)
-	hosted(() => l.markChanged(place(kid("N"), "today", "T", createChangeHeader(s))))
+	hosted(() => l.commit(place(kid("N"), "today", "T", createChangeHeader(s))))
 	s.pulse()
 	assertEquals([w.runs, w.value], [2, ["hello"]])
 })
@@ -108,7 +114,7 @@ Deno.test("places: a sibling renamed in a folder: a walker of another name doesn
 	const a = watch(() => walk(["a"]))
 	const c = watch(() => walk(["c"]))
 	s.pulse()
-	hosted(() => l.markChanged(rename(kid("R"), "b", "c", createChangeHeader(s))))
+	hosted(() => l.commit(rename(kid("R"), "b", "c", createChangeHeader(s))))
 	s.pulse()
 	assertEquals([a.runs, a.value], [1, "A"])
 	assertEquals([c.runs, c.value], [2, "B"])
@@ -150,7 +156,7 @@ Deno.test("places: one children node under two keys, written through one: both r
 	const p = watch(() => walk(["p", "n"]))
 	const q = watch(() => walk(["q", "n"]))
 	s.pulse()
-	hosted(() => l.markChanged(place(kid("P"), "n", "X", createChangeHeader(s))))
+	hosted(() => l.commit(place(kid("P"), "n", "X", createChangeHeader(s))))
 	s.pulse()
 	assertEquals([p.runs, p.value], [2, "X"])
 	assertEquals([q.runs, q.value], [2, "X"])
@@ -166,7 +172,7 @@ Deno.test("places: a lookup reruns when what it found goes, or a closer one come
 		const found = lookup(places, ["dog", "fish"], ["a", "b"])
 		return found === undefined ? "" : String(get(places, found))
 	})
-	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.markChanged(f()))
+	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.commit(f()))
 	s.pulse()
 	assertEquals([w.runs, w.value], [1, "F0"])
 	// unrelated: a name beside the walk, a fish in another folder
@@ -204,8 +210,8 @@ Deno.test("places: a lookup then a read: a closer one with the same apple reruns
 	kids("D", { fish: "F0" })
 	value("F0", { apple: "red" })
 	let runs = 0, sets = 0, last: unknown
-	s.run(notes, () =>
-		s.compute(() => {
+	s.runWithScope(notes, () =>
+		s.createComputer(() => {
 			runs++
 			const found = lookup(places, ["dog", "fish"], ["a"])
 			const fish = found && get(places, found)
@@ -216,7 +222,7 @@ Deno.test("places: a lookup then a read: a closer one with the same apple reruns
 	// a closer dog/fish, at /a, with the same apple
 	value("F1", { apple: "red", pear: 1 })
 	kids("D1", { fish: "F1" })
-	hosted(() => l.markChanged(place(kid("A"), "dog", "D1", createChangeHeader(s))))
+	hosted(() => l.commit(place(kid("A"), "dog", "D1", createChangeHeader(s))))
 	s.pulse()
 	assertEquals([runs, sets, last], [2, 1, "red"])
 	// another apple: it goes on
@@ -237,7 +243,7 @@ Deno.test("places: a move between two folders reports both nodes", () => {
 	const from = watch(() => walk(["a", "x"]))
 	const to = watch(() => walk(["b", "y"]))
 	s.pulse()
-	hosted(() => l.markChanged(move([kid("A"), "x"], [kid("B"), "y"], createChangeHeader(s))))
+	hosted(() => l.commit(move([kid("A"), "x"], [kid("B"), "y"], createChangeHeader(s))))
 	s.pulse()
 	assertEquals([from.runs, from.value], [2, ""])
 	assertEquals([to.runs, to.value], [2, "X"])
@@ -250,12 +256,12 @@ Deno.test("places: a path read reruns only on what it rests on", () => {
 	const w = watch(() => String(get(places, ["a", "x"]) ?? ""))
 	s.pulse()
 	assertEquals(w.value, "X")
-	hosted(() => l.markChanged(place(kid("R"), "c", "C", createChangeHeader(s))))
+	hosted(() => l.commit(place(kid("R"), "c", "C", createChangeHeader(s))))
 	s.pulse()
 	assertEquals(w.runs, 1)
 	hosted(() => {
-		l.markChanged(unplace(kid("A"), "x", createChangeHeader(s)))
-		l.markChanged(place(kid("A"), "x", "Y", createChangeHeader(s)))
+		l.commit(unplace(kid("A"), "x", createChangeHeader(s)))
+		l.commit(place(kid("A"), "x", "Y", createChangeHeader(s)))
 	})
 	s.pulse()
 	assertEquals([w.runs, w.value], [2, "Y"])
@@ -265,14 +271,14 @@ Deno.test("places: a spot nobody reads is let go: when its reader goes, or a run
 	const { s, l, paths, notes, hosted, edit, kids, value, watch } = world()
 	kids("R", { a: "A" })
 	value("doc", { t: 1 })
-	const c = s.run(notes, () =>
-		s.compute(
+	const c = s.runWithScope(notes, () =>
+		s.createComputer(
 			() => [l.readValue("children", "R", ["a"]), l.readValue("value", "doc", ["t"])],
 			() => {},
 		))
 	s.pulse()
 	assertEquals(paths.kept().spots, 2)
-	s.dispose(c)
+	s.teardown(c)
 	assertEquals(paths.kept(), { keys: 0, spots: 0, steps: 0 })
 	// each run reads the next path, after what it read changed: the old spot goes
 	let i = 0
@@ -297,8 +303,8 @@ Deno.test("places: spot names a run's reads, in order, as the run ends; anything
 	let named: unknown[] = []
 	let keys: readonly unknown[] = []
 	let n = 0
-	const c = s.run(notes, () =>
-		s.compute(() => {
+	const c = s.runWithScope(notes, () =>
+		s.createComputer(() => {
 			l.readValue("value", "A", ["t"])
 			l.readChange("value", "A")
 			get(places, ["a"])
@@ -307,7 +313,7 @@ Deno.test("places: spot names a run's reads, in order, as the run ends; anything
 		}, () => {}))
 	const ends = () => {
 		const m = moments.findLast((m) => "ends" in m && m.ends === c) as Extract<
-			Moment,
+			Told,
 			{ ends: unknown }
 		>
 		keys = m.reads
@@ -318,14 +324,13 @@ Deno.test("places: spot names a run's reads, in order, as the run ends; anything
 	assertEquals(named, [
 		{ part: "value", id: "A", path: ["t"] },
 		{ part: "value", id: "A", path: null },
-		{ attached: ["a"] },
 		{ part: "children", id: "R", path: ["a"] },
 		{ part: "attributes", id: "A", path: ["t"] },
 	])
 	for (const k of ["A", { part: "value" }, undefined]) assertEquals(l.describe(k), undefined)
 	// read no more: the attributes' ["t"] spot is let go
-	const gone = keys[4]
-	s.changed([keys[0]])
+	const gone = keys[3]
+	s.mark([keys[0]])
 	s.pulse()
 	ends()
 	assertEquals(named.at(-1), { part: "attributes", id: "A", path: [] })
@@ -336,8 +341,8 @@ Deno.test("places: a write in a run is the run's own: reading what it wrote is a
 	for (const opened of [false, true]) {
 		const { s, l, notes, hosted, edit, value, moments } = world()
 		value("X", 0)
-		const c = s.run(notes, () =>
-			s.compute(() => {
+		const c = s.runWithScope(notes, () =>
+			s.createComputer(() => {
 				const v = l.readValue("value", "X") as number
 				const write = () => edit("value", "X", [{ path: [], value: v + 1 }])
 				if (v < 5) opened ? hosted(write) : write()
@@ -345,7 +350,7 @@ Deno.test("places: a write in a run is the run's own: reading what it wrote is a
 			}, () => {}))
 		s.pulse()
 		s.pulse()
-		const by = moments.some((m) => "due" in m && m.due === c && m.writer === c)
+		const by = moments.some((m) => "due" in m && m.due === c && m.by === c)
 		const looping = moments.some((m) => "ends" in m && m.ends === c && m.ended === "looping")
 		assertEquals([by, looping], [true, true])
 	}
@@ -364,14 +369,14 @@ Deno.test("places: a write of the host's, outside any run, is from outside: no w
 Deno.test("places: a place write, and a table event, in a run are the run's own too", () => {
 	const { s, l, table, places, notes, kids, moments, kid } = world()
 	kids("R", {})
-	const c = s.run(notes, () =>
-		s.compute(() => {
+	const c = s.runWithScope(notes, () =>
+		s.createComputer(() => {
 			const n = get(places, ["x"]) === undefined ? 0 : 1
-			if (n < 1) l.markChanged(place(kid("R"), "x", "X", createChangeHeader(s)))
+			if (n < 1) l.commit(place(kid("R"), "x", "X", createChangeHeader(s)))
 			return n
 		}, () => {}))
-	const d = s.run(notes, () =>
-		s.compute(() => {
+	const d = s.runWithScope(notes, () =>
+		s.createComputer(() => {
 			const v = l.readValue("value", "Y")
 			if (v === undefined) {
 				table.add("value", "Y", createEntry<unknown>(1, createChangeHeader(s)))
@@ -379,7 +384,7 @@ Deno.test("places: a place write, and a table event, in a run are the run's own 
 			return v
 		}, () => {}))
 	s.pulse()
-	for (const x of [c, d]) assert(moments.some((m) => "due" in m && m.due === x && m.writer === x))
+	for (const x of [c, d]) assert(moments.some((m) => "due" in m && m.due === x && m.by === x))
 })
 
 Deno.test("places: change is tracked at the change spot: any write to the node reruns it", () => {
@@ -408,7 +413,7 @@ Deno.test("places: a reader of names doesn't rerun on a place inside one of its 
 	kids("R", { a: "A" })
 	kids("A", {})
 	const w = watch(() => list(places, []).join())
-	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.markChanged(f()))
+	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.commit(f()))
 	s.pulse()
 	assertEquals([w.runs, w.value], [1, "a"])
 	write(() => place(kid("A"), "z", "Z", createChangeHeader(s)))
@@ -426,7 +431,7 @@ Deno.test("places: members at a path rerun on a new name there; the level above 
 	const { s, l, places, hosted, kids, watch, kid } = world()
 	kids("R", { a: "A" })
 	kids("A", { x: "X" })
-	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.markChanged(f()))
+	const write = (f: () => ReturnType<typeof place>) => hosted(() => l.commit(f()))
 	const level = watch(() => members(places, []).map((i) => String(i.id)).join())
 	const kept = watch(() => members(places, ["a"]).map((i) => String(i.id)).join())
 	s.pulse()
@@ -446,9 +451,9 @@ Deno.test("places: members at a path rerun on a new name there; the level above 
 
 Deno.test("places: a header is the pairs of the scope open, from the root down, then the write's own; the time now, its site", () => {
 	const { s, l } = world()
-	const chee = s.root([["actor", "chee"], ["reader", "juno"], ["why", "test"]])
-	const save = s.scope([["cause", "x"], ["why", "again"]], chee)
-	const h = s.run(save, () => createChangeHeader(s, [["then", "y"]]))
+	const chee = s.createRootScope([["actor", "chee"], ["reader", "juno"], ["why", "test"]])
+	const save = s.createScope([["cause", "x"], ["why", "again"]], chee)
+	const h = s.runWithScope(save, () => createChangeHeader(s, [["then", "y"]]))
 	assertEquals([h.actor, h.reader], ["chee", "juno"])
 	assertEquals(h.metadata, [["why", "test"], ["cause", "x"], ["why", "again"], ["then", "y"]])
 	assertEquals(Number.isInteger(h.time), true)
@@ -457,18 +462,24 @@ Deno.test("places: a header is the pairs of the scope open, from the root down, 
 	assertEquals(h.external?.length, 1)
 	assertEquals(h.external![0].file.endsWith("places_test.ts"), true)
 	// the extra was for that write alone
-	assertEquals(s.run(save, () => createChangeHeader(s)).metadata?.at(-1), ["why", "again"])
+	assertEquals(s.runWithScope(save, () => createChangeHeader(s)).metadata?.at(-1), [
+		"why",
+		"again",
+	])
 })
 
 Deno.test("places: a write can't name another actor: the scope decides who; one under it only adds pairs", () => {
 	const { s, l, notes } = world()
-	const forged = s.run(
+	const forged = s.runWithScope(
 		notes,
-		() => s.run(s.scope([["actor", "chee"]]), () => createChangeHeader(s)),
+		() => s.runWithScope(s.createScope([["actor", "chee"]]), () => createChangeHeader(s)),
 	)
 	assertEquals(forged.actor, "notes")
 	assertEquals(forged.metadata, [["actor", "chee"]])
-	assertEquals(s.run(notes, () => createChangeHeader(s, [["actor", "chee"]])).actor, "notes")
+	assertEquals(
+		s.runWithScope(notes, () => createChangeHeader(s, [["actor", "chee"]])).actor,
+		"notes",
+	)
 })
 
 Deno.test("places: nothing open: a write is unscoped and nothing changes; a read counts for nothing", () => {
@@ -477,7 +488,7 @@ Deno.test("places: nothing open: a write is unscoped and nothing changes; a read
 	value("A", "one")
 	const w = watch(() => 0)
 	s.pulse()
-	assertEquals(getWriter(s), undefined)
+	assertEquals(getWho(s), undefined)
 	const e = assertThrows(() => place(kid("R"), "x", "X", createChangeHeader(s)))
 	assertEquals((e as SchedulerError).code, "unscoped")
 	assertEquals(table.get("children", "R")?.value, {})
@@ -495,12 +506,12 @@ Deno.test("places: after an await in a run nothing is open: a write throws unsco
 	value("A", "one")
 	let runs = 0
 	const seen: unknown[] = []
-	s.run(notes, () =>
-		s.compute(async () => {
+	s.runWithScope(notes, () =>
+		s.createComputer(async () => {
 			runs++
 			seen.push(l.readValue("value", "A"))
 			await settle()
-			seen.push(getWriter(s))
+			seen.push(getWho(s))
 			try {
 				edit("value", "B", [{ path: [], value: 1 }])
 			} catch (e) {
@@ -526,12 +537,12 @@ Deno.test("places: after an await in a run nothing is open: a write throws unsco
 Deno.test("places: a click dispatched in a run is the process's: its scope is under the run's, its write by the run", () => {
 	const { s, l, notes, edit, moments } = world()
 	let made: ChangeHeader | undefined
-	const c = s.run(notes, () =>
-		s.compute(() => {
+	const c = s.runWithScope(notes, () =>
+		s.createComputer(() => {
 			const v = l.readValue("value", "clicked")
 			// dispatchEvent, sync: the click's scope, made under the one open
 			if (v === undefined) {
-				s.run(s.scope([["event", "click"]]), () => {
+				s.runWithScope(s.createScope([["event", "click"]]), () => {
 					made = edit("value", "clicked", [{ path: [], value: true }]).change
 				})
 			}
@@ -540,61 +551,138 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 	s.pulse()
 	assertEquals(made?.actor, "notes")
 	assertEquals(made?.metadata, [["run", 1], ["mark", 1], ["event", "click"]])
-	assert(moments.some((m) => "due" in m && m.due === c && m.writer === c))
+	assert(moments.some((m) => "due" in m && m.due === c && m.by === c))
 })
 
-Deno.test("places: an attached item wins over what is saved at its path, and goes back when detached; readers rerun", () => {
-	const { s, l, kids, watch, walk } = world()
-	kids("R", { dev: "D", x: "X" })
-	kids("D", {})
-	const x = watch(() => walk(["x"]))
-	const clock = watch(() => walk(["dev", "clock"]))
-	const names = watch(() => list(l, ["dev"]).join())
+Deno.test("places: watchPath is told each write's patches at the node at its path, with the change, as it lands", () => {
+	const { l, kids, value, edit, hosted } = world()
+	kids("R", { notes: "N" })
+	value("N", { title: "a", body: "b" })
+	const told: unknown[] = []
+	const stop = l.watchPath(["notes"], (f) => told.push([f.part, f.id, f.patches, f.change?.actor]))
+	hosted(() => edit("value", "N", [{ path: ["title"], value: "z" }]))
+	hosted(() => edit("value", "X", [{ path: [], value: 1 }]))
+	assertEquals(told, [["value", "N", [{ path: ["title"], value: "z" }], "host"]])
+	stop()
+	hosted(() => edit("value", "N", [{ path: ["body"], value: "y" }]))
+	assertEquals(told.length, 1)
+})
+
+Deno.test("places: watchPath is told a table swap as one patch at the root, and a removal as one with no value", () => {
+	const { l, table, kids, value, hosted } = world()
+	kids("R", { notes: "N" })
+	const told: unknown[] = []
+	l.watchPath(["notes"], (f) => told.push(f.patches))
+	value("N", { title: "a" })
+	hosted(() => table.del("value", "N"))
+	assertEquals(told, [[{ path: [], value: { title: "a" } }], [{ path: [] }]])
+})
+
+Deno.test("places: watchPath only part, only the patches touching at; it follows its path as the tree changes", () => {
+	const { l, kids, value, edit, hosted } = world()
+	kids("R", { notes: "N", other: "O" })
+	value("N", { title: "a", body: "b" })
+	value("O", { title: "o" })
+	const told: unknown[] = []
+	l.watchPath(["notes"], (f) => told.push([f.id, f.patches]), { part: "value", at: ["title"] })
+	hosted(() =>
+		edit("value", "N", [{ path: ["body"], value: "y" }, { path: ["title"], value: "z" }])
+	)
+	hosted(() => edit("value", "N", [{ path: [], value: { title: "w" } }]))
+	hosted(() => edit("attributes", "N", [{ path: [], value: { title: "no" } }]))
+	// /notes now holds O: the watch is told O's writes, not N's
+	hosted(() => edit("children", "R", [{ path: ["notes"], value: "O" }]))
+	hosted(() => edit("value", "N", [{ path: ["title"], value: "gone" }]))
+	hosted(() => edit("value", "O", [{ path: ["title"], value: "here" }]))
+	assertEquals(told, [
+		["N", [{ path: ["title"], value: "z" }]],
+		["N", [{ path: [], value: { title: "w" } }]],
+		["O", [{ path: ["title"], value: "here" }]],
+	])
+})
+
+Deno.test("places: eachEntryChange gives a fact at every key a written entry is under", () => {
+	const { s, l, table, hosted } = world()
+	const shared = createEntry<unknown>({ a: 1 }, { time: 0, actor: "host" })
+	table.add("value", "A", shared)
+	table.add("value", "B", shared)
+	hosted(() => update(shared, [{ path: ["a"], value: 2 }], createChangeHeader(s)))
+	const facts = [...l.eachEntryChange([shared])]
+	assertEquals(facts.map((f) => [f.part, f.id, f.patches]), [
+		["value", "A", [{ path: ["a"], value: 2 }]],
+		["value", "B", [{ path: ["a"], value: 2 }]],
+	])
+})
+
+Deno.test("places: a watch that writes lands in the writer's run: a pipe's readers are due by it", () => {
+	const { s, l, kids, value, edit, hosted, notes, moments } = world()
+	kids("R", { a: "A", b: "B" })
+	value("A", 1)
+	value("B", 2)
+	const pipe = s.createScope([["pipe", "a→b"]], notes)
+	l.watchPath(
+		["a"],
+		(f) =>
+			s.runWithScope(
+				pipe,
+				() => edit("value", "B", [{ path: [], value: (f.entry!.value as number) * 2 }]),
+			),
+	)
+	let w!: Computer
+	const seen: unknown[] = []
+	// a reader of b, run once
+	s.runWithScope(
+		notes,
+		() => s.createComputer(() => l.readValue("value", "B"), (v) => void seen.push(v)),
+	)
 	s.pulse()
-	assertEquals([x.value, clock.value, names.value], ["X", "", ""])
-	s.run(s.root(), () => {
-		l.attach(["x"], "mem:x")
-		l.attach(["dev", "clock"], "mem:clock")
+	// then a computer writing a from its set: a run is open, so the pipe's write is by it
+	s.runWithScope(notes, () => {
+		w = s.createComputer(() => 5, (v) => void edit("value", "A", [{ path: [], value: v }]))
 	})
 	s.pulse()
-	assertEquals([x.value, clock.value, names.value], ["mem:x", "mem:clock", "clock"])
-	l.detach(["x"])
-	s.pulse()
-	assertEquals([x.value, clock.value], ["X", "mem:clock"])
+	assertEquals(seen, [2, 10])
+	assert(moments.some((m) => "due" in m && m.by === w))
+	// the pipe's write carries its scope's info
+	assertEquals(l.readChange("value", "B")?.metadata?.some(([k]) => k === "pipe"), true)
 })
 
-Deno.test("places: attached in a scope, detached when the scope goes; with none open, it stays", () => {
-	const { s, l, walk } = world()
-	const p = s.root()
-	s.run(p, () => l.attach(["here"], "mine"))
-	l.attach(["host"], "hosts")
-	assertEquals([walk(["here"]), walk(["host"])], ["mine", "hosts"])
-	s.dispose(p)
-	assertEquals([walk(["here"]), walk(["host"])], ["", "hosts"])
-})
-
-Deno.test("places: an attached item is seen by path, through folders that are there; lookup and members find it", () => {
-	const { s, l, kids, walk } = world()
-	kids("R", { work: "W", other: "W" })
-	kids("W", { apps: "A" })
-	kids("A", {})
-	l.attach(["work", "apps", "p1"], "P1")
-	assertEquals(walk(["work", "apps", "p1"]), "P1")
-	// the same folder through another path: not there
-	assertEquals(walk(["other", "apps", "p1"]), "")
-	// a folder not there: not reached
-	l.attach(["nope", "p2"], "P2")
-	assertEquals(walk(["nope", "p2"]), "")
-	assertEquals(members(l, ["work", "apps"]), [{ name: "p1", id: "P1" }])
-	assertEquals(lookup(l, ["p1"], ["work", "apps"]), ["work", "apps", "p1"])
-	assertEquals(lookup(l, ["apps", "p1"], ["work", "apps"]), ["work", "apps", "p1"])
-	assertEquals(lookup(l, ["p1"], ["other", "apps"]), undefined)
-	s.pulse()
-})
-
-Deno.test("places: attaching a name that is not one is refused", () => {
-	const { l } = world()
-	for (const bad of [[], [""], ["a", "."], [".."], ["/"]]) {
-		assertThrows(() => l.attach(bad, "x"))
+Deno.test("places: many watches, many commits: each is told only its own node's facts, and no path is walked to tell them", () => {
+	const { l, table, kids, value, edit, hosted } = world()
+	const N = 200
+	const names: Record<string, string> = {}
+	for (let i = 0; i < N; i++) names[`n${i}`] = `N${i}`
+	kids("R", { dir: "D" })
+	kids("D", names)
+	const counts = new Array<number>(N).fill(0)
+	for (let i = 0; i < N; i++) {
+		value(`N${i}`, 0)
+		l.watchPath(["dir", `n${i}`], () => void counts[i]++)
 	}
+	// a second watch on a node, and one on a path not there yet
+	let twin = 0, later = 0
+	l.watchPath(["dir", "n7"], () => void twin++)
+	l.watchPath(["dir", "late"], () => void later++)
+	// the walks the table is asked for from here on
+	const get = table.get.bind(table)
+	let walked = 0
+	table.get =
+		((part: Key, id: Id) => (part === "children" && walked++, get(part, id))) as typeof table.get
+	const COMMITS = 1000
+	hosted(() => {
+		for (let c = 0; c < COMMITS; c++) edit("value", `N${c % 50}`, [{ path: [], value: c }])
+	})
+	assertEquals(walked, 0)
+	for (let i = 0; i < N; i++) assertEquals(counts[i], i < 50 ? COMMITS / 50 : 0, `n${i}`)
+	assertEquals([twin, later], [COMMITS / 50, 0])
+	// a name placed: the watch at it finds its node and is told from then on
+	hosted(() => edit("children", "D", [{ path: ["late"], value: "N3" }]))
+	hosted(() => edit("value", "N3", [{ path: [], value: "x" }]))
+	assertEquals(later, 1)
+	assertEquals(counts[3], COMMITS / 50 + 1)
+	// a name pointed at another node: its watch follows, and N9, no longer reached by n9, tells it nothing
+	hosted(() => edit("children", "D", [{ path: ["n9"], value: "N10" }]))
+	hosted(() => edit("value", "N9", [{ path: [], value: "y" }]))
+	hosted(() => edit("value", "N10", [{ path: [], value: "y" }]))
+	assertEquals([counts[9], counts[10]], [COMMITS / 50 + 1, COMMITS / 50 + 1])
 })

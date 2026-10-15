@@ -157,7 +157,7 @@ gd_answer gd_members(gd *g, const pl_members *list, const char *const *at, size_
 		gd_answer a = asked(g, 1, "read", &t, &reason);
 		if (a == GD_FAILED) return free(items), free(path), a;
 		if (a == GD_PENDING) waiting = 1;
-		items[i] = a == GD_OK ? list->items[i] : (pl_member){list->items[i].name, gd_refused()};
+		items[i] = a == GD_OK ? list->items[i] : (pl_member){list->items[i].name, gd_refused(), list->items[i].from};
 	}
 	free(path);
 	if (waiting) return free(items), GD_PENDING;

@@ -14,9 +14,9 @@ export type ChangeHeader = {
 	op?: { patches: readonly Patch[]; undo: readonly Patch[] }
 }
 
-// a value and its latest change; none: nothing there. cow: false (only ever that, and only when
-// given at creation): update changes the value in place, not a copy of it. where it is kept is a
-// layer above's
+// a value and its latest change; none: nothing there. cow: false (only ever that: given at
+// creation, or set by the layer keeping it as it comes in, before anything reads it): update changes
+// the value in place, not a copy of it. where it is kept is a layer above's
 export type Entry<V> = {
 	value?: V
 	change: ChangeHeader

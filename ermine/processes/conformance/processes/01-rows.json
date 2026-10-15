@@ -1,0 +1,276 @@
+{
+	"title": "process rows: a trie on the root's process part, a level a map, a leaf a process's id. a start puts one patch at its path (the levels missing made at the first missing one), a stop takes its leaf and every level left empty; a start at, above or under a running process is refused, and a stop where none runs",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clock": "C0",
+				"notes": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C0",
+			"value": {
+				"on": "ON0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "ON0",
+			"value": {
+				"reset": "RS0"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "N",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"on": "PON"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PON",
+			"value": {
+				"reset": "PRS"
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {
+					"work": {
+						"clock": "P"
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"timer"
+			],
+			"id": "T",
+			"expect": {}
+		},
+		{
+			"op": "patches",
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"work",
+							"timer"
+						],
+						"value": "T"
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"dev",
+				"hw",
+				"clock"
+			],
+			"id": "D",
+			"expect": {}
+		},
+		{
+			"op": "patches",
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"dev"
+						],
+						"value": {
+							"hw": {
+								"clock": "D"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"clock",
+				"x"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work"
+			],
+			"id": "Q",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "start",
+			"path": [],
+			"id": "Q",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				".."
+			],
+			"id": "Q",
+			"expect": {
+				"error": "not-a-name"
+			}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {
+					"work": {
+						"clock": "P",
+						"timer": "T"
+					},
+					"dev": {
+						"hw": {
+							"clock": "D"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "patches",
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"work",
+							"clock"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"dev",
+				"hw",
+				"clock"
+			],
+			"expect": {}
+		},
+		{
+			"op": "patches",
+			"expect": {
+				"patches": [
+					{
+						"path": [
+							"dev"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"clock"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work"
+			],
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"timer"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {}
+			}
+		}
+	]
+}

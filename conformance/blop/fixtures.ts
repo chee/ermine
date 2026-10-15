@@ -8,7 +8,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { encode } from "@ermine/encoding/cbor"
 import { toJson } from "../pack/form.ts"
 
-const out = new URL("../../ermine/encoding/conformance/blop/", import.meta.url)
+const out = new URL("../suites-aside/ermine/encoding/conformance/blop/", import.meta.url)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16))
 // n bytes, each `first` then counting up

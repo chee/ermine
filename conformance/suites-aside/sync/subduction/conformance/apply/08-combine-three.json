@@ -258,8 +258,7 @@
 					],
 					"change": {
 						"actor": "a",
-						"time": 1020,
-						"node": "n"
+						"time": 1020
 					},
 					"because": {
 						"layer": "sync",

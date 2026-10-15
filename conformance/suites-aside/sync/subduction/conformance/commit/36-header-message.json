@@ -23,7 +23,12 @@
 					"header": {
 						"time": 5,
 						"actor": "me",
-						"message": ""
+						"metadata": [
+							[
+								"message",
+								""
+							]
+						]
 					},
 					"signer": {
 						"/": {

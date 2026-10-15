@@ -3,7 +3,7 @@
 // the requests about them (typescript/world.ts documents the protocol). A harness adds its own
 // requests and programs, and answers its lines with world_line.
 //
-// Every write below is made in a scope: the host's (sc_setup) for a request, the run's own for a
+// Every write below is made in a scope: the host's (sc_run_with_scope) for a request, the run's own for a
 // program's. The world's own scope pairs have op_values as values, as places.h says.
 #ifndef PLACES_WORLD_H
 #define PLACES_WORLD_H
@@ -12,6 +12,7 @@
 #include <stddef.h>
 
 #include "../../../conformance/c/harness.h"
+#include "cache.h"
 #include "places.h"
 
 extern sc_scheduler *world_scheduler;
@@ -20,6 +21,12 @@ extern pt_paths *world_paths;
 extern pl *world_places;
 // the host's scope: its info is [["actor","test"]]
 extern sc_scope *world_host;
+// the path cache (cache.h), made at the first ask (or the cache request), once; NULL until then
+pc_cache *world_cached(void);
+
+// the contributors the world's places is given (places.h; none: children alone), set before the first
+// line, the caller's own and kept alive
+void world_contribute(const pl_contributor *const *list, size_t n);
 
 // a line answered: the world is made at the first, and every line is kept (retained) until
 // world_finish, for the programs, patches and scope info that refer into it. answer gives a
@@ -51,7 +58,7 @@ op_value *world_patches(const op_patch *patches, size_t n);
 char *world_name(sc_scope *o, const char *name);
 sc_scope *world_scope(const char *name);
 
-// f once in the host's scope, as sc_setup
+// f once in the host's scope, as sc_run_with_scope
 const char *world_hosted(void (*f)(void *data), void *data);
 
 // pairs of scope info, from a request's [[key, value]..]: the key's text, the value the line's own
@@ -89,13 +96,15 @@ op_key *world_path(const op_value *list, size_t *n);
 op_value *world_ids(const pl_members *list);
 
 // a header, summed up: { actor?, reader?, metadata?, timely, sites }
+// a status (status.h) as the requests tell it: "pending", { error: message }, or null
+op_value *world_status_json(const op_value *status);
 op_value *world_summary(const ch_header *header);
 
 // where a spot reads, as JSON: { part, id, path } (path null: the change spot). New
 op_value *world_where(const pl_where *where);
 // the reads of the computation's latest ended run, in order, as pl_spot named each as the run
 // ended: where, or null for a key not one of places' spots. NULL: no run of it ended. Borrowed
-const op_value *world_reads(const sc_computation *c);
+const op_value *world_reads(const sc_computer *c);
 
 // a value write, with a scope open: the patches to the node there, then said written; none there:
 // a node made with them, then added (a table event). 0, or op's code with *failed the patch; -1

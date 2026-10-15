@@ -1,0 +1,300 @@
+{
+	"title": "a computer's status is on its own node: pending while a run is pending (also a computer returning PENDING), gone when done, an error with its message when it failed; an unchanged status is not written again, a reader of it reruns only when it is; a computer given no node writes none",
+	"steps": [
+		{
+			"op": "status",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "k",
+			"value": {
+				"go": false,
+				"bad": false,
+				"tick": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": [
+							"value",
+							"k",
+							[
+								"tick"
+							]
+						]
+					},
+					{
+						"if": [
+							{
+								"read": [
+									"value",
+									"k",
+									[
+										"go"
+									]
+								]
+							},
+							"ok",
+							{
+								"wait": null
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "f",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": [
+							"value",
+							"k",
+							[
+								"bad"
+							]
+						]
+					},
+					{
+						"throw": "boom"
+					},
+					1
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"wait": null
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "n",
+			"scope": "o",
+			"f": {
+				"wait": null
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"status": "P"
+			},
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "p",
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "f",
+			"id": "F",
+			"expect": {}
+		},
+		{
+			"op": "give",
+			"name": "w",
+			"id": "W",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "statusOf",
+			"id": "P",
+			"expect": {
+				"status": "pending"
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "F",
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "W",
+			"expect": {
+				"status": "pending"
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "N",
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "node",
+			"part": "attributes",
+			"id": "N",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"runs": 1,
+				"value": "pending"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"tick"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "p",
+			"expect": {
+				"runs": 2,
+				"value": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"runs": 1,
+				"value": "pending"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"go"
+					],
+					"value": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "statusOf",
+			"id": "P",
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "state",
+			"name": "r",
+			"expect": {
+				"runs": 2,
+				"value": null
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"bad"
+					],
+					"value": true
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "statusOf",
+			"id": "F",
+			"expect": {
+				"status": {
+					"error": "boom"
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "k",
+			"patches": [
+				{
+					"path": [
+						"bad"
+					],
+					"value": false
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "statusOf",
+			"id": "F",
+			"expect": {
+				"status": null
+			}
+		},
+		{
+			"op": "statusOf",
+			"id": "W",
+			"expect": {
+				"status": "pending"
+			}
+		}
+	]
+}

@@ -78,9 +78,9 @@ Scopes form a forest (the code's tree of owners and change info; the old `owner(
 | $\mathrm{aft}(c)$                            | the computation $c$ waits after                                                                          | `c.after`; `order.waits`      |
 | $G$                                          | the _learned graph_: $p \to q$ iff $q \in \mathrm{val}(p) \cup \{\mathrm{aft}(p)\}$, $q \ne p$, $q$ live | `order.ts` 24–31              |
 | $\mathrm{rank}$                              | §1.4                                                                                                     | `rank.ts`                     |
-| $\mathrm{due} : C \rightharpoonup \mathbb N$ | the due computations, each with its _mark_ (the tick it became due)                                      | `order` `due`                 |
-| $\mathrm{kept}(c)$                           | causes of the marks on $c$ since its last run that ended done                                            | `c.kept`, 236, 402            |
-| $\mathrm{ran}$                               | computations that ran in this pulse                                                                      | `causes.ts` 13                |
+| $\mathrm{due} : C \rightharpoonup \mathbb N$ | the due computations, each with its _mark_ (the tick it became due)                                      | `p.due` (0: not due)          |
+| $\mathrm{kept}(c)$                           | causes of the marks on $c$ since its last run that ended done; a run's given are its cause's             | `c.kept`                      |
+| $\mathrm{ran}$                               | computations that ran in this pulse                                                                      | `c.ranIn` is the pulse        |
 | $\mathrm{flag}(c)$                           | the loop value of the latest mark on $c$                                                                 | `c.loop`, 240, 324            |
 | $\mathrm{looping} \subseteq C$               | computations whose latest run ended looping                                                              | `c.looping`, 403, 242         |
 | $\mathrm{acts}$                              | a queue of pending acts $(e, v)$                                                                         | `acts`, 117                   |
@@ -104,8 +104,13 @@ _Proof._ By induction along the path. The rank of a component is at least $1 +$ 
 component one edge away. ∎
 
 This is the structure that does the ordering work: a strictly monotone map from the condensation
-into the well-order $(\mathbb N, <)$. The heap (`order.ts` 36–67, 84–106) is rebuilt whenever the
-rank map is remade (87–91). So every choice uses the current $G$.
+into the well-order $(\mathbb N, <)$. `order.ts` makes the ranks whole once (`rank.ts`), then mends
+them where an edge of $G$ changed: the computation takes its rank again from its edges, one past the
+most of what it is after (0 after nothing), and what is after it does the same, as far as a rank
+changes. A cycle at the last whole making, a rank past the count, or mending longer than a whole
+making makes them whole again at the next pick. A heap entry no longer at its computation's mark and
+rank is stale, and skipped. So every choice uses the current $G$, and its ranks are `rank.ts`'s
+(Lean, §13.6).
 
 ### 1.5 Steps, rounds, pulses, observations
 
@@ -116,7 +121,7 @@ $(\mathrm{rank}(p), \mathrm{due}(p), n(p))$.
 **run** $c$ (`first`, 308–356):
 
 1. Remove $c$ from due and clear $\mathrm{aft}(c)$.
-2. Snapshot $\mathrm{given} := \mathrm{kept}(c)$, make the run's cause
+2. Take $\mathrm{given} := \mathrm{kept}(c)$ out ($\mathrm{kept}(c) := []$), make the run's cause
    $\mathrm{Cause}(c, \mathrm{given})$ and add $c$ to $\mathrm{ran}$.
 3. Take the run's flag $r.\mathrm{loop} := \mathrm{flag}(c)$, then clear $\mathrm{flag}(c)$.
 4. Drop a pending act of $c$.
@@ -131,13 +136,15 @@ $(\mathrm{rank}(p), \mathrm{due}(p), n(p))$.
    - a compute, unequal: call $\mathrm{set}_c(v)$, then $\mathrm{last}(c) := v$;
    - a throw: _failed_; $\mathsf{pending}$: _pending_.
 
-Every outcome except _stopped_ sets $\mathrm{val}(c)$ to the run's writers (404).
+Every outcome except _stopped_ sets $\mathrm{val}(c)$ to the run's writers (404). Every outcome
+except _done_ puts the given back first: $\mathrm{kept}(c) := \mathrm{given} \mathbin{+\!\!+}
+\mathrm{kept}(c)$.
 
 **report** $K'$ (`changed`, 253–263): for each $k \in K'$, first the writer clause of §1.3, then for
 every reader $c$ of $k$, **mark** $c$ with the cause of the run in progress (or none).
 
-**mark** (234–249): keep the cause; compute $\ell :=$ `causes.loop` (is $c$ in $\mathrm{ran}$, and
-does the cause's ancestry contain a run of $c$?).
+**mark** (234–249): keep the cause (the same cause again at once: once); compute $\ell :=$
+`causes.loop` (is $c$ in $\mathrm{ran}$, and does the cause's ancestry contain a run of $c$?).
 
 - If $\ell$ is defined and the run in progress is $c$'s own flagged run, return (239).
 - Otherwise set $\mathrm{flag}(c) := \ell$.
@@ -777,3 +784,59 @@ N1 and N2 were found by the loops fuzz, not in §§1–12.
 - **`forget(key)`**: told each key no longer read, at once when its last reader's run reads it no
   more (the links the tracker's end drops) or its reader is disposed; the sweep catches the rest.
   Link passes it on to `paths.release`. Scenario 41; link's tests.
+
+### 13.5 Found by the Lean model (2026-10-14)
+
+`core/scheduler/lean/` models the code above. Three more departures, each a scenario that failed
+before and passes now, in TypeScript and C:
+
+| id | test | before                                                                                                                     | fix                                                                                               |
+| -- | ---- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| L1 | 53   | a flagged run kept its flag once ended: a change later named by its computation was cut as a loop; it never ran again      | a run's flag ends with it, unless it ended pending (an awaited run's own change is still cut: 39) |
+| L2 | 51   | a flagged run, awaiting, run again since: its change after the await was cut as a loop, though the latest run read the key | a change by a run since run again carries no cause: no loop through it                            |
+| L3 | 52   | a flagged run that cut a loop, then failed (thrown in its run, or its promise rejected): ended failed                      | it ends looping, its error told: C3 for failures                                                  |
+
+- **L1:** before, Theorem 2 needed "no change from outside names a computation". Now (Lean,
+  `Quiescence.Wide`): none names a computation whose latest run is flagged, which after L1 is one
+  that ended pending.
+- **L2:** before, Theorem 2 with promises needed: a change named by a run is from its computation's
+  latest run, or an unflagged one (`tame`, now dropped). Such a change comes only when a promise
+  settles, between pulses, so it cannot make a pulse endless; a loop through such changes is not
+  reported.
+- **Not covered:** a flagged run that cut a loop, whose promise then lands PENDING, stays pending.
+- **Not covered:** a change named by a computation whose latest run is pending and flagged, made by
+  other code (the host's `run(c)`, another's act): cut as that run's loop. What read the key is not
+  due, though its done run read it (Lean `Model.Check.hostcut`, `Async.Check.mid`).
+
+### 13.6 Ranks mended, causes by numbers (Lean, 2026-10-14)
+
+`order.ts` now mends the ranks rather than remaking them (§1.4); `causes.ts` keeps `ran` and
+`holding` as pulse numbers on the computation; a run takes its given out of `kept` and puts them
+back unless it ends done.
+
+- **Ranks:** whenever ranks are there, each alive computation's is `rank.ts`'s over the current
+  edges (Lean `Order.inv`, its `right`), from `createOrder` through every call: `set`, `delete`,
+  `next` with first's delete, `started`, `sees`, `waits`, `gone`. Through mend: a mend that ends
+  leaves each alive rank one past the most of what it is after (`Order.mend_fix`), and ranks that
+  are so are `rank.ts`'s (`Order.tall`, proved of `rank.ts` in `RankOrder.rk_tall`: a height is
+  unique). With a cycle, mending never ends normally: it falls back to a whole making. No case was
+  found where mend and `rank.ts` disagree. The heap keeps an entry at its mark and rank for every
+  due computation; stale ones are skipped (`Order.inv_next`, `Order.next_least`). Wired to the model
+  on every reachable state (`Wiring.next_reach`).
+- **Causes:** `Causes.lean` models the pulse numbers (`ranIn`, `heldIn`), `kept` as a list with the
+  skip of the same cause at once, and the scheduler's take, give back and clear of `kept`. `loop`,
+  `from` and `end` keep their theorems (`loop_some`, `loop_exact`, `from_iff`, `end_kept`,
+  `loop_chain`); every kept cause is cleared at the pulse's end because a given is put back in the
+  pulse it was taken in. Termination (1′) still holds; a run not done, its given back, leaves the
+  budget no higher (`finish_keeps`, was an equality).
+- **Not the same as before:** a cause kept again on $c$ during $c$'s own run, when it is already in
+  that run's given. Before, a done run deleted its given from $\mathrm{kept}(c)$ (a Set), so it
+  went; now it stays and $c$'s next run carries it. It needs a mark inside $c$'s run naming another
+  computation $w$ whose latest run's cause $c$ was given. Scratch, old against new: $w$ reads $a$
+  and $y$, its set marks $x$ by $w$; $c$ reads $x$; in pulse 2 $c$'s second run calls
+  `mark(["x"], w)`, and its third run's set writes $y$ by $c$. Pulse 2, before: w#2 done, c#2 done,
+  c#3 done, w#3 done, c#4 looping through $w, c$. Now: w#2, c#2, c#3 done, w#3 looping through
+  $w, c$. The loop is real ($c$#3 came out of $w$#2), and is now found one run sooner. The Lean
+  model cannot reach it: there a change in a run names that run. Kept (chee, 2026-10-15: "Keep
+  new"); scenario 55-kept-during-run pins it, TypeScript and C (the C takes given out of kept too),
+  through the harness's `{"write":[k,e,c]}`, a change named by computation $c$.

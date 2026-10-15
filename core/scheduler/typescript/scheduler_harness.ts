@@ -55,6 +55,7 @@
 //                       computation; else none
 //   {"write":[k,e,null]}  the same, said with no writer: from outside
 //   {"write":[k,e,"open"]}  the same, by the writer open (current().writer)
+//   {"write":[k,e,c]}   the same, by computation c (its latest run; none yet: from outside)
 //   {"throw":e}         e evaluated: PENDING (below) is thrown as itself, anything else as an
 //                       error of message e
 //   {"pending":null}    PENDING: returned by f, the compute's run ends pending; thrown, the same
@@ -70,16 +71,15 @@
 //   {"dispose":s}       s disposed; null
 //   {"quote":x}         x as it is
 import {
-	type Computation,
+	type Computer,
 	createScheduler,
-	type Moment,
 	type Pair,
 	PENDING,
-	type Read,
+	type Run,
 	SchedulerError,
 	type Scope,
-	type Writer,
 } from "@ermine/scheduler"
+import { type Told, trace } from "./trace.ts"
 import { serve } from "../../../conformance/typescript/harness.ts"
 
 type Json = unknown
@@ -87,13 +87,11 @@ type Request = { op: string; [k: string]: Json }
 
 const store = new Map<string, Json>()
 let logged: Json[] = []
-// as told; named when asked (a new computation is due before it has a name)
-let moments: Moment[] = []
+// as told; named when asked (a new computer is due before it has a name)
+let moments: Told[] = []
 let forgotten: unknown[] = []
 const named = new Map<string, Scope>()
 const names = new Map<Scope, string>()
-// each run's handle (its current().writer), to its computation's name
-const readers = new WeakMap<Read, string>()
 const promises = new Map<string, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>()
 
 const errorOf = (e: unknown): string =>
@@ -104,11 +102,11 @@ const errorOf = (e: unknown): string =>
 		: e instanceof Error
 		? e.message
 		: String(e)
-const nameOf = (c: Computation) => names.get(c)!
+const nameOf = (c: Computer) => names.get(c)!
 
-function moment(m: Moment, reads: boolean): Json {
+function moment(m: Told, reads: boolean): Json {
 	if ("due" in m) {
-		return m.writer ? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.writer) } : {
+		return m.by ? { due: nameOf(m.due), tick: m.tick, writer: nameOf(m.by) } : {
 			due: nameOf(m.due),
 			tick: m.tick,
 		}
@@ -131,13 +129,15 @@ function moment(m: Moment, reads: boolean): Json {
 // a pulse past this many moments is endless: every moment after throws, so the pulse is left
 const ENDLESS = 10000
 let told = 0
-const s = createScheduler({
-	hook: (m) => {
-		moments.push(m)
-		if (++told > ENDLESS) throw new Error("endless")
-	},
-	forget: (key) => void forgotten.push(key),
+const s = createScheduler()
+trace(s, (m) => {
+	moments.push(m)
+	if (++told > ENDLESS) throw new Error("endless")
 })
+s.onTrackingEnd((key) => void forgotten.push(key))
+// the tick of the latest mark (each mark and each new computer takes the next)
+let tick = 0
+s.onMark((_keys, _run, _due, t) => void (tick = t))
 
 function name(o: Scope, n: string) {
 	if (named.has(n)) throw new Error(`name taken: ${n}`)
@@ -149,17 +149,19 @@ function scope(n: Json): Scope {
 	if (!o) throw new Error(`no scope ${n}`)
 	return o
 }
+function computation(n: Json): Computer {
+	const o = scope(n)
+	if (!("kind" in o)) throw new Error(`not a computation: ${n}`)
+	return o as Computer
+}
 
-// what is open, by name; nothing: null
+// what is open, by name: the scope, its pairs, and the computer of the run; nothing: null
 function current(): Json {
-	const open = s.current()
-	if (open === undefined) return null
-	const out: Record<string, Json> = { scope: names.get(open.scope) ?? null, pairs: open.pairs }
-	const writer = open.writer === undefined
-		? undefined
-		: typeof open.writer === "function"
-		? readers.get(open.writer)
-		: names.get(open.writer)
+	const o = s.getCurrentScope()
+	if (o === undefined) return null
+	const out: Record<string, Json> = { scope: names.get(o) ?? null, pairs: s.getInfo()! }
+	const run = s.getRun()
+	const writer = run && names.get(run.computer)
 	if (writer !== undefined) out.writer = writer
 	return out
 }
@@ -169,15 +171,15 @@ function keep(key: string, v: Json) {
 	else store.set(key, v)
 }
 
-// what an expression is evaluated in: the run's writer (current().writer at its start), the
-// computation, an act's values
-type Ctx = { writer?: Writer; self?: Scope; value?: Json; previous?: Json }
+// what an expression is evaluated in: the run (getRun() at its start), the computer, an act's
+// values
+type Ctx = { run?: Run; self?: Scope; value?: Json; previous?: Json }
 
 const num = (v: Json) => (v === null || v === undefined ? 0 : v as number)
 
-// who a change in this code is by, its writer: the run, else the computation
-const writerOf = (ctx: Ctx): Writer | undefined =>
-	ctx.writer ?? (ctx.self && "kind" in ctx.self ? ctx.self as Computation : undefined)
+// who a change in this code is by: the run, else the computer
+const runOf = (ctx: Ctx): Run | Computer | undefined =>
+	ctx.run ?? (ctx.self && "kind" in ctx.self ? ctx.self as Computer : undefined)
 
 function evaluate(e: Json, ctx: Ctx): unknown {
 	if (e === null || typeof e !== "object") return e
@@ -187,7 +189,7 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 	switch (form) {
 		case "read": {
 			const k = evaluate(arg, ctx) as string
-			s.read(k)
+			s.track(k)
 			return store.get(k) ?? null
 		}
 		case "sum":
@@ -214,9 +216,15 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			const k = evaluate(a[0], ctx) as string
 			const v = evaluate(a[1], ctx)
 			keep(k, v)
-			s.changed(
+			s.mark(
 				[k],
-				a.length < 3 ? writerOf(ctx) : a[2] === "open" ? s.current()?.writer : undefined,
+				a.length < 3
+					? runOf(ctx)
+					: a[2] === "open"
+					? s.getRun()
+					: a[2] === null
+					? undefined
+					: computation(a[2]),
 			)
 			return v
 		}
@@ -233,30 +241,38 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			return a.length > 1 ? promise.then(() => evaluate(a[1], ctx)) : promise
 		}
 		case "run":
-			return s.run(ctx.self!, () => evaluate(arg, { ...ctx, writer: undefined }))
+			return s.runWithScope(ctx.self!, () => evaluate(arg, { ...ctx, run: undefined }))
 		case "in":
-			return s.run(scope(a[0]), () => evaluate(a[1], { ...ctx, writer: undefined }))
+			return s.runWithScope(scope(a[0]), () => evaluate(a[1], { ...ctx, run: undefined }))
 		case "scope":
-			name(s.scope(a[1] as Pair[], a[2] === undefined ? undefined : scope(a[2])), a[0] as string)
+			name(
+				s.createScope(a[1] as Pair[], a[2] === undefined ? undefined : scope(a[2])),
+				a[0] as string,
+			)
 			return null
 		case "within":
-			return s.run(s.scope(a[0] as Pair[]), () => evaluate(a[1], { ...ctx, writer: undefined }))
+			return s.runWithScope(
+				s.createScope(a[0] as Pair[]),
+				() => evaluate(a[1], { ...ctx, run: undefined }),
+			)
 		case "current":
 			return current()
 		case "cleanup": {
 			// on the scope open when it is the one named (or none is), else with that one open
-			const f = () => evaluate(a[1], { ...ctx, writer: undefined })
+			const f = () => evaluate(a[1], { ...ctx, run: undefined })
 			if (a[0] === null) {
-				s.cleanup(f)
+				const open = s.getCurrentScope()
+				if (open === undefined) throw new SchedulerError("unscoped", "no scope is open")
+				s.registerTeardown(open, f)
 				return null
 			}
 			const o = scope(a[0])
-			if (s.current()?.scope === o) s.cleanup(f)
-			else s.run(o, () => s.cleanup(f))
+			if (s.getCurrentScope() === o) s.registerTeardown(o, f)
+			else s.runWithScope(o, () => s.registerTeardown(o, f))
 			return null
 		}
 		case "dispose":
-			s.dispose(scope(arg))
+			s.teardown(scope(arg))
 			return null
 		case "quote":
 			return arg
@@ -267,35 +283,35 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 
 const json = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
-// a computation's f, as the program: evaluated with its last result, and the run's writer kept
-// from its start (current().writer), so a write after an await is still the run's
+// a computer's f, as the program: evaluated with its last result, and the run kept from its start
+// (getRun()), so a write after an await is still the run's
 function program(r: Request, self: () => Scope) {
-	return (previous: unknown) => {
-		const writer = s.current()?.writer
-		if (typeof writer === "function") readers.set(writer, r.name as string)
-		return evaluate(r.f, { writer, self: self(), previous: previous as Json })
-	}
+	return (previous: unknown) =>
+		evaluate(r.f, { run: s.getRun(), self: self(), previous: previous as Json })
 }
 
 async function run(r: Request): Promise<Json> {
 	switch (r.op) {
 		case "root":
-			name(s.root(r.info as Pair[] | undefined), r.name as string)
+			name(s.createRootScope(r.info as Pair[] | undefined), r.name as string)
 			return {}
 		case "scope": {
 			const info = r.info as Pair[] | undefined
-			name(s.scope(info, r.parent === undefined ? undefined : scope(r.parent)), r.name as string)
+			name(
+				s.createScope(info, r.parent === undefined ? undefined : scope(r.parent)),
+				r.name as string,
+			)
 			return {}
 		}
 		case "compute": {
 			const to = r.to as string | undefined
-			const c: Computation = s.run(scope(r.scope), () =>
-				s.compute(
+			const c: Computer = s.runWithScope(scope(r.scope), () =>
+				s.createComputer(
 					program(r, () => c),
 					(v) => {
 						if (to === undefined) return
 						keep(to, v)
-						s.changed([to], c)
+						s.mark([to], c)
 					},
 					r.equal === "json" ? json : undefined,
 					r.declared === true ? to : undefined,
@@ -304,8 +320,8 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "effect": {
-			const c: Computation = s.run(scope(r.scope), () =>
-				s.effect(
+			const c: Computer = s.runWithScope(scope(r.scope), () =>
+				s.createEffect(
 					program(r, () => c),
 					(value, previous) => void evaluate(r.act, { self: c, value, previous }),
 					r.equal === "json" ? json : undefined,
@@ -315,25 +331,25 @@ async function run(r: Request): Promise<Json> {
 		}
 		case "cleanup": {
 			const o = scope(r.scope)
-			s.run(o, () => s.cleanup(() => evaluate(r.do, { self: o })))
+			s.runWithScope(o, () => s.registerTeardown(o, () => evaluate(r.do, { self: o })))
 			return {}
 		}
 		case "dispose":
-			s.dispose(scope(r.scope))
+			s.teardown(scope(r.scope))
 			return {}
 		case "run": {
 			const o = scope(r.scope)
-			return { value: s.run(o, () => evaluate(r.do, { self: o })) ?? null }
+			return { value: s.runWithScope(o, () => evaluate(r.do, { self: o })) ?? null }
 		}
 		case "current":
 			return { value: current() }
 		case "write": {
 			const values = r.values as Record<string, Json>
 			for (const [k, v] of Object.entries(values)) keep(k, v)
-			return { tick: s.changed(Object.keys(values)) }
+			return { tick: s.mark(Object.keys(values)) }
 		}
 		case "changed":
-			return { tick: s.changed(r.keys as string[]) }
+			return { tick: s.mark(r.keys as string[]) }
 		case "pulse":
 			told = 0
 			s.pulse()
@@ -367,7 +383,7 @@ async function run(r: Request): Promise<Json> {
 			return { keys }
 		}
 		case "tick":
-			return { tick: s.tick() }
+			return { tick }
 		default:
 			throw new Error(`unknown op ${r.op}`)
 	}

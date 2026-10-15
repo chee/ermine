@@ -4,25 +4,30 @@
 --
 -- 1. ranks. rank: rank.ts (Rank.lean) over the made, along the model's edges. ranked_reach:
 --    Basic.lean's ranked holds; below: so next_below's hypothesis is discharged
--- 2. order. view: order.ts's state seen from the model (due with marks, after, values, alive: the
---    made). next_same: on any view with Order.lean's good and its cache right, order.ts's next
---    answers the model's next, with its rank (both least by (rank, mark, n)). acyclic_view,
---    total_view: Lemma N gives Order.lean's acyclicity. calls: the order states the scheduler's
---    calls reach, each call with its precondition (set on alive, started on fresh, sees nodup).
---    reach_order, next_reach: every reachable state has one it drives (Drives: the view, good,
---    right, heap alive), and there order.ts's next is the model's
+-- 2. order. view: order.ts's state seen from the model (each one's mark, 0 for none; after,
+--    values, alive: the made). next_same: on any view keeping Order.lean's inv, its ranks rank.ts's
+--    over the made (rk_tall gives mend what it needs), order.ts's next answers the model's next,
+--    with its rank (both least by (rank, mark, n)). acyclic_view, total_view: Lemma N gives
+--    Order.lean's acyclicity. calls: the order states the scheduler's calls reach, each call with
+--    its precondition (set on alive at a tick, started on fresh, sees without repeats).
+--    reach_order, next_reach: every reachable state has one it drives (Drives: the view, inv, the
+--    model's marks ticks, afters counting every edge), and there order.ts's next is the model's:
+--    the ranks mended by sees and waits stay rank.ts's all the way
 -- 3. causes. Mirror: the model's causes on a heap of causes.ts's (Causes.lean), objects in the
---    order made, each labelled (computation, run). reach_heap: every reachable state has one,
---    reached by run, keep, drop and end with the callers' promises kept (Causes.reachable;
---    given_promise, keep_promise). came_eq, loopof_eq: came is from, loopof is loop; at each mark
---    (mark_loop), at each read of a run (first_from), on every reachable state (causes_reach)
+--    order made, each labelled (computation, run); went is ranIn at the pulse, and a run holding a
+--    given is of one held this pulse. reach_heap: every reachable state has one, reached by take,
+--    run, keep, restore and end with the callers' promises kept (Causes.reachable; given_promise,
+--    keep_promise; restore's given back in the pulse it was taken in). came_eq, loopof_eq: came is
+--    from, loopof is loop; at each mark (mark_loop), at each read of a run (first_from), on every
+--    reachable state (causes_reach). keep_heap: the model's skip by run is causes.ts's by object
 --
 -- assumed: A2 (no writes in runs), as Quiescence.lean, wherever Reach is used. next_same alone
--- takes good and right of its order state; reach_order discharges them
+-- takes inv of its order state; reach_order discharges it
 --
 -- where this departs: computations are their n (Nat), order.ts's n is id; all() is range made,
 -- and rank.ts is blind to which univ holds the alive (rk_univ); alive is made (no dispose, so no
--- gone); a cause object is told by its label, one per run among this pulse's objects (Mirror.inj)
+-- gone, and afters counts every edge, not only to the alive); a cause object is told by its
+-- label, one per run among this pulse's objects (Mirror.inj)
 import Scheduler.Quiescence
 import Scheduler.RankOrder
 import Scheduler.Causes
@@ -242,7 +247,8 @@ theorem Vals.finish {s : State K V} (v : Vals s) {c : Nat} (hc : c < s.made) (e 
   cases hr : s.ran c with
   | none => simp only [Model.finish, hr]; exact v
   | some r =>
-    rw [finish_eq s c r hr]
+    obtain ⟨_, _, -, hfin⟩ := finish_any s c r hr e eq w th
+    rw [hfin]
     refine v.of rfl ?_ ?_
     · intro p
       by_cases hp : p = c
@@ -442,7 +448,7 @@ theorem ranked_reach {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s
 -- ready one of no greater rank
 theorem below {cs : Nat → Comp K V} {s : State K V} (hA : A2 cs) (h : Reach cs rank s) {p : Nat}
     (hp : (s.due p).isSome) : ∃ q, ready s q = true ∧ q < s.made ∧ rank s q ≤ rank s p :=
-  next_below hA h (ranked_reach hA h) hp
+  next_below hA h.wide (ranked_reach hA h) hp
 
 /-! ## 2. the order: Order.lean's state, viewed from the model -/
 
@@ -558,21 +564,36 @@ theorem next_none {rk : State K V → Nat → Nat} {s : State K V} (h : next rk 
       exact pick_some _ _ none (Or.inr (List.ne_nil_of_mem (a := q) (by simp [hq, e])))
     rw [h] at this; cases this
 
--- order.ts's view of a model state: the due with their marks (a Map's get), what each waits
--- after, the writers each last read (p.after, p.values), and the alive: the made
+-- order.ts's view of a model state: each one's mark (p.due; 0, not due), what each waits after,
+-- the writers each last read (p.after, p.values), and the alive: the made
 structure view (s : State K V) (o : Order.State Nat) : Prop where
-  due : ∀ p, Order.get o.due p = s.due p
+  due : ∀ p, o.due p = (s.due p).getD 0
   after : o.after = s.after
   values : o.values = s.values
   alive : ∀ p, o.alive p = decide (p < s.made)
 
+-- the model's marks are ticks: never 0 (scheduler.ts: ++tick)
+def ticks (s : State K V) : Prop := ∀ p t, s.due p = some t → t ≠ 0
+
+theorem due_iff {s : State K V} {o : Order.State Nat} (v : view s o) (ht : ticks s) (p : Nat) :
+    (s.due p).isSome ↔ o.due p ≠ 0 := by
+  rw [v.due]
+  cases h : s.due p with
+  | none => simp
+  | some t => simp [ht p t h]
+
 -- ready is order.ts's: due, and not waiting after a due one
-theorem ready_iff {s : State K V} {o : Order.State Nat} (v : view s o) (p : Nat) :
-    ready s p = true ↔ (Order.get o.due p).isSome ∧ Order.waiting o.due o.after p = false := by
-  simp only [ready, Order.waiting, v.due, v.after, Bool.and_eq_true]
+theorem ready_iff {s : State K V} {o : Order.State Nat} (v : view s o) (ht : ticks s) (p : Nat) :
+    ready s p = true ↔ o.due p ≠ 0 ∧ Order.waiting o p = false := by
+  rw [← due_iff v ht]
+  simp only [ready, Order.waiting, v.after, Bool.and_eq_true]
   cases s.after p with
   | none => simp
-  | some q => cases s.due q <;> simp
+  | some q =>
+    simp only [v.due]
+    cases h : s.due q with
+    | none => simp
+    | some t => simp [ht q t h]
 
 -- the order's ranks are the model's: rank.ts over the same edges, made from any univ holding the
 -- made (order.ts: all(), the live)
@@ -594,199 +615,97 @@ theorem rank_view {s : State K V} {o : Order.State Nat} (v : view s o) {univ : L
     · exact Or.inl h
     · exact Or.inr (by simp_all)
 
--- 2: order.ts's next, on any order state the model's view with its promise (good) and its cache
--- right, answers what the model's next does, with the same rank. both are the least ready one by
--- (rank, mark, n), and n is unique
-theorem next_same {s : State K V} {o : Order.State Nat} (v : view s o) (hg : Order.good id o)
-    {univ : List Nat} (hr : Order.right (RankOrder.rk univ) o) (hu : ∀ p, p < s.made → p ∈ univ) :
-    (Order.next id (RankOrder.rk univ) o).1 = (next rank s).map fun p => (p, rank s p) := by
-  have hrk : ∀ q m, Order.get o.due q = some m →
-      ((Order.ready id (RankOrder.rk univ) o).2 q).getD 0 = rank s q := by
-    intro q m hq
-    rw [Order.ready_made id _ hr]
-    simp only [Order.made, hg.2.1 q m hq, ite_true, Option.getD_some]
-    exact rank_view v hu q
-  have hmade : ∀ q m, Order.get o.due q = some m → q < s.made := by
-    intro q m hq
-    have := hg.2.1 q m hq
-    rw [v.alive] at this
-    simpa using this
-  have hmark : ∀ q m, Order.get o.due q = some m → stamp s q = m := by
-    intro q m hq
-    simp [stamp, ← v.due q, hq]
-  cases hb : (Order.next id (RankOrder.rk univ) o).1 with
+-- what mend needs of the ranks holds on the view: rank.ts's over the made (RankOrder.lean)
+theorem tall_view {s : State K V} {o : Order.State Nat} (v : view s o) {univ : List Nat}
+    (hu : ∀ p, p < s.made → p ∈ univ) : Order.tall (RankOrder.rk univ) o.alive :=
+  RankOrder.rk_tall univ fun x hx => hu x (by rw [v.alive] at hx; simpa using hx)
+
+-- 2: order.ts's next, on any order state the model's view keeping what order keeps (Order.inv,
+-- the ranks rank.ts's over the made), answers what the model's next does, with the same rank.
+-- both are the least ready one by (rank, mark, n), and n is unique
+theorem next_same {s : State K V} {o : Order.State Nat} (v : view s o) (ht : ticks s)
+    {univ : List Nat} (hi : Order.inv id (RankOrder.rk univ) o) (hu : ∀ p, p < s.made → p ∈ univ)
+    {all : List Nat} (hall : ∀ p, p < s.made → p ∈ all) :
+    (Order.next id (RankOrder.rk univ) all o).1 = (next rank s).map fun p => (p, rank s p) := by
+  have hk := tall_view v hu
+  have hall' : ∀ p, o.alive p = true → p ∈ all :=
+    fun p hp => hall p (by rw [v.alive] at hp; simpa using hp)
+  have hmade : ∀ q, o.due q ≠ 0 → q < s.made := by
+    intro q hq; have := hi.good.2.2.1 q hq; rw [v.alive] at this; simpa using this
+  have hmark : ∀ q, stamp s q = o.due q := by intro q; simp [stamp, v.due]
+  cases hb : (Order.next id (RankOrder.rk univ) all o).1 with
   | none =>
     cases hn : next rank s with
     | none => rfl
     | some c =>
       obtain ⟨h1, -, -⟩ := next_least hn
-      obtain ⟨h2, h3⟩ := (ready_iff v c).1 h1
-      obtain ⟨m, hm⟩ := Option.isSome_iff_exists.1 h2
-      have := Order.next_none id _ hg hb c m hm
+      obtain ⟨h2, h3⟩ := (ready_iff v ht c).1 h1
+      have := Order.next_none id hi hk hall' hb c h2
       rw [h3] at this; cases this
   | some pk =>
     obtain ⟨p, k⟩ := pk
-    obtain ⟨m, hm, hw, hk, hl⟩ := Order.next_best id _ hg hb
-    have hpr : ready s p = true := (ready_iff v p).2 ⟨by simp [hm], hw⟩
-    have hpm := hmade p m hm
+    obtain ⟨hd, hw, hk', hl⟩ := Order.next_least id hi hk hall' hb
+    have hpr : ready s p = true := (ready_iff v ht p).2 ⟨hd, hw⟩
+    have hpm := hmade p hd
     cases hn : next rank s with
     | none => have := next_none hn p hpm; rw [hpr] at this; cases this
     | some c =>
       obtain ⟨hc1, hc2, hc3⟩ := next_least hn
-      obtain ⟨hcd, hcw⟩ := (ready_iff v c).1 hc1
-      obtain ⟨mc, hmc⟩ := Option.isSome_iff_exists.1 hcd
+      obtain ⟨hcd, hcw⟩ := (ready_iff v ht c).1 hc1
       have a := hc3 p hpr hpm
-      have b := hl c mc hmc hcw
-      rw [hrk c mc hmc] at b
-      rw [hk, hrk p m hm] at b ⊢
-      rw [hmark p m hm] at a
-      rw [hmark c mc hmc] at a
+      have b := hl c hcd hcw
+      simp only [id] at b
+      rw [rank_view v hu c, hk', rank_view v hu p] at b
+      rw [hmark p, hmark c] at a
       have e := before_total b a
-      simp only [id, Prod.mk.injEq] at e
+      simp only [Prod.mk.injEq] at e
       obtain ⟨-, -, rfl⟩ := e
-      rfl
+      simp [hk', rank_view v hu]
 
 -- 2: order.ts's next is total on the model's view: after-chains acyclic (Lemma N), so with
 -- anything due it gives a computation (Order.lean's next_total, its hypothesis discharged)
 theorem acyclic_view {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s : State K V}
     {o : Order.State Nat} (hA : A2 cs) (h : Reach cs rk s) (v : view s o) :
-    ∀ p, ¬ TransGen (Order.step o.due o.after) p p := by
+    ∀ p, ¬ TransGen (Order.step o) p p := by
   intro p hp
-  refine (lemma_n hA h).1 p (tg_mono ?_ hp)
+  refine (lemma_n hA h.wide).1 p (tg_mono ?_ hp)
   intro a b hab
   simp only [aft]; rw [← v.after]; exact hab.2.1
 
 theorem total_view {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s : State K V}
-    {o : Order.State Nat} (hA : A2 cs) (h : Reach cs rk s) (v : view s o) (hg : Order.good id o)
-    (rk' : (Nat → Bool) → (Nat → Nat → Bool) → Nat → Nat) {p : Nat} (hp : (s.due p).isSome) :
-    ∃ q k, (Order.next id rk' o).1 = some (q, k) := by
-  refine Order.next_total id rk' hg ?_ (acyclic_view hA h v)
-  intro e
-  have := v.due p
-  rw [e] at this
-  simp [Order.get] at this
-  rw [← this] at hp; cases hp
+    {o : Order.State Nat} (hA : A2 cs) (h : Reach cs rk s) (v : view s o) (ht : ticks s)
+    {rk' : (Nat → Bool) → (Nat → Nat → Bool) → Nat → Nat} (hi : Order.inv id rk' o)
+    (hk : Order.tall rk' o.alive) {all : List Nat} (hall : ∀ p, o.alive p = true → p ∈ all)
+    {p : Nat} (hp : (s.due p).isSome) : ∃ q k, (Order.next id rk' all o).1 = some (q, k) :=
+  Order.next_total id hi hk hall ⟨p, (due_iff v ht p).1 hp⟩ (acyclic_view hA h v)
 
-/-! ### the heap's entries alive, and started on a fresh one -/
-
-section live
-
-variable {α : Type} [DecidableEq α]
-
--- every heap entry is of an alive computation: kept by every order call but gone, which the model
--- never makes (no dispose)
-def live (o : Order.State α) : Prop := ∀ e ∈ o.heap, o.alive e.p = true
-
-theorem get_some {d : List (α × Nat)} {x : α × Nat} (h : x ∈ d) : (Order.get d x.1).isSome := by
-  induction d with
-  | nil => simp at h
-  | cons y d ih =>
-    obtain ⟨q, m⟩ := y
-    simp only [Order.get]
-    split
-    · rfl
-    · rcases List.mem_cons.1 h with rfl | h
-      · rename_i hq; exact absurd rfl hq
-      · exact ih h
-
-theorem live_set (n : α → Nat) {o : Order.State α} (hl : live o) {p : α} (ha : o.alive p = true)
-    (m : Nat) : live (Order.set n o p m) := by
-  unfold Order.set
-  split
-  · exact hl
-  · intro e he
-    simp only at he ⊢
-    rw [Order.push_perm.mem_iff] at he
-    rcases List.mem_append.1 he with he | he
-    · exact hl e he
-    · simp at he; subst he; exact ha
-
-theorem live_delete {o : Order.State α} (hl : live o) (p : α) : live (Order.delete o p) := hl
-
-theorem live_started {o : Order.State α} (hl : live o) (p : α) : live (Order.started o p) := by
-  intro e he
-  simp only [Order.started, Order.update]
-  split
-  · rfl
-  · exact hl e he
-
-theorem live_sees (n : α → Nat) {o : Order.State α} (hl : live o) (p : α) (l : List α) :
-    live (Order.sees o p l) := by
-  obtain ⟨a, -, -, -, h, -⟩ := Order.sees_fields n o p l
-  intro e he; rw [a]; rw [h] at he; exact hl e he
-
-theorem live_waits (n : α → Nat) {o : Order.State α} (hl : live o) (p : α) (q : Option α) :
-    live (Order.waits o p q) := by
-  obtain ⟨a, -, -, -, h, -⟩ := Order.waits_fields n o p q
-  intro e he; rw [a]; rw [h] at he; exact hl e he
-
-theorem ready_entries (n : α → Nat) (rk : (α → Bool) → (α → α → Bool) → α → Nat) (o : Order.State α) :
-    ∀ e ∈ (Order.ready n rk o).1.heap, e ∈ o.heap ∨ ∃ x ∈ o.due, e.p = x.1 := by
-  have h1 : (Order.ranks rk o).1.heap = o.heap ∧ (Order.ranks rk o).1.due = o.due := by
-    unfold Order.ranks; split <;> exact ⟨rfl, rfl⟩
-  intro e he
-  unfold Order.ready at he
-  simp only at he
-  split at he
-  · right
-    obtain ⟨x, hx, rfl⟩ := (Order.remake_mem n).1 he
-    exact ⟨x, h1.2 ▸ hx, rfl⟩
-  · left; exact h1.1 ▸ he
-
-theorem live_next (n : α → Nat) (rk : (α → Bool) → (α → α → Bool) → α → Nat) {o : Order.State α}
-    (hg : Order.good n o) (hl : live o) : live (Order.next n rk o).2 := by
-  obtain ⟨-, -, rh, -, -, -, ralive, -, -, -⟩ := Order.ready_spec n rk hg
-  unfold Order.next
-  simp only
-  generalize hs : Order.scan n (Order.ready n rk o).1.due (Order.ready n rk o).1.after
-    (Order.ready n rk o).1.heap [] = l
-  obtain ⟨b, h', w'⟩ := l
-  obtain ⟨-, -, -, i4, i5, -, -⟩ := Order.scan_spec n _ _ _ _ _ hs rh
-  intro e he
-  simp only at he ⊢
-  rw [(Order.pushall_perm w' h').mem_iff] at he
-  rw [ralive]
-  have hr : e ∈ (Order.ready n rk o).1.heap := by
-    rcases List.mem_append.1 he with he | he
-    · exact i4 e he
-    · rcases i5 e he with he | he
-      · exact he
-      · simp at he
-  rcases ready_entries n rk o e hr with h | ⟨x, hx, hp⟩
-  · exact hl e h
-  · rw [hp]
-    obtain ⟨m, hm⟩ := Option.isSome_iff_exists.1 (get_some hx)
-    exact hg.2.1 _ m hm
-
-end live
+-- afters counts every edge, to any computation: in Wiring nothing goes (no gone), so not only
+-- to the alive (Order.counted)
+def counts (o : Order.State Nat) : Prop :=
+  ∀ q y, Order.cnt o q y = (if q ∈ o.values y then 1 else 0) + (if o.after y = some q then 1 else 0)
 
 -- started only on fresh (scheduler.ts, make: order.started(c), c a new object): on a reachable
--- state, the one make makes next is fresh in the view: not alive, after nothing, named by none,
--- not due, and (the heap's entries alive) in no entry
+-- state, the one make makes next is fresh in the view: not alive, after nothing, nothing after
+-- it, so counted by none
 theorem started_fresh {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s : State K V}
-    {o : Order.State Nat} (hA : A2 cs) (h : Reach cs rk s) (v : view s o) (hl : live o) :
+    {o : Order.State Nat} (hA : A2 cs) (h : Reach cs rk s) (v : view s o) (hc : counts o) :
     Order.fresh o s.made := by
   have g := (h.good hA).toCore
   have vs := vals_reach hA h
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+  have nob : ∀ x, s.made ∉ s.values x ∧ s.after x ≠ some s.made := by
+    intro x
+    constructor
+    · intro hm; have := (vs.vals x).2 _ hm; omega
+    · intro e; have := (g.after_due x _ e).2; omega
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · simp [v.alive]
   · rw [v.values]; exact vs.out _ (Nat.le_refl _)
   · rw [v.after]
     cases e : s.after s.made with
     | none => rfl
     | some w => have := g.due_made _ (g.after_due _ _ e).1; omega
-  · intro x
-    constructor
-    · rw [v.values]; intro hm; have := (vs.vals x).2 _ hm; omega
-    · rw [v.after]; intro e; have := (g.after_due x _ e).2; omega
-  · rw [v.due]
-    cases e : s.due s.made with
-    | none => rfl
-    | some _ => have := g.due_made s.made (by simp [e]); omega
-  · intro e he hp
-    have := hl e he
-    rw [v.alive, hp] at this
-    simp at this
+  · intro x; rw [v.values, v.after]; exact nob x
+  · intro y; rw [hc, v.values, v.after]; simp [(nob y).1, (nob y).2]
 
 -- a mark makes due only the one it marks; changed marks only readers, which are made
 theorem settle_due (s : State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat))
@@ -836,75 +755,76 @@ theorem rk_univ {u1 u2 : List Nat} {A : Nat → Bool} {L : Nat → Nat → Bool}
   · rintro ⟨⟨-, ha⟩, -, hb⟩; exact ⟨⟨h2 a ha, ha⟩, h2 b (hL a b hb), hb⟩
   · rintro ⟨⟨-, ha⟩, -, hb⟩; exact ⟨⟨h1 a ha, ha⟩, h1 b (hL a b hb), hb⟩
 
-theorem right_univ {o : Order.State Nat} {u1 u2 : List Nat} (hr : Order.right (RankOrder.rk u1) o)
-    (h1 : ∀ p, o.alive p = true → p ∈ u1) (h2 : ∀ p, o.alive p = true → p ∈ u2) :
-    Order.right (RankOrder.rk u2) o := by
-  intro r hc
-  rw [hr r hc]
-  unfold Order.made
-  rw [rk_univ (Order.link_alive o) h1 h2]
+theorem inv_univ {o : Order.State Nat} {u1 u2 : List Nat}
+    (hi : Order.inv id (RankOrder.rk u1) o) (h1 : ∀ p, o.alive p = true → p ∈ u1)
+    (h2 : ∀ p, o.alive p = true → p ∈ u2) : Order.inv id (RankOrder.rk u2) o := by
+  refine ⟨hi.good, ?_, hi.fixed, hi.counted, hi.nodup, hi.stamped⟩
+  intro hm x hx
+  rw [hi.right hm x hx, rk_univ (Order.link_alive o) h1 h2]
 
 -- the order states the scheduler's calls reach from createOrder, each call with Order.lean's
--- precondition: set on an alive one, started on a fresh one, sees with no duplicates. next is
--- followed by first's delete of what it gave (pulse: first(order.next()))
+-- precondition: set on an alive one at a tick, started on a fresh one, sees with no repeats.
+-- next is followed by first's delete of what it gave (pulse: first(order.next()))
 inductive calls : Order.State Nat → Prop
   | init : calls Order.init
-  | set {o : Order.State Nat} {p m : Nat} : calls o → o.alive p = true → calls (Order.set id o p m)
-  | next {o : Order.State Nat} {p k : Nat} (u : List Nat) : calls o →
-      (Order.next id (RankOrder.rk u) o).1 = some (p, k) →
-      calls (Order.delete (Order.next id (RankOrder.rk u) o).2 p)
+  | set {o : Order.State Nat} {p m : Nat} : calls o → o.alive p = true → m ≠ 0 →
+      calls (Order.set id o p m)
+  | next {o : Order.State Nat} {p k : Nat} (u all : List Nat) : calls o →
+      (Order.next id (RankOrder.rk u) all o).1 = some (p, k) →
+      calls (Order.delete (Order.next id (RankOrder.rk u) all o).2 p)
   | started {o : Order.State Nat} {p : Nat} : calls o → Order.fresh o p → calls (Order.started o p)
   | sees {o : Order.State Nat} {p : Nat} {l : List Nat} : calls o → l.Nodup →
-      calls (Order.sees o p l)
-  | waits {o : Order.State Nat} {p : Nat} {q : Option Nat} : calls o → calls (Order.waits o p q)
+      calls (Order.sees id o p l)
+  | waits {o : Order.State Nat} {p : Nat} {q : Option Nat} : calls o →
+      calls (Order.waits id o p q)
 
--- an order state driven by the model: its view, its promise (good), its cache right for rank.ts
--- over the made, its heap's entries alive
+-- an order state driven by the model: its view, what order keeps with the ranks rank.ts's over
+-- the made, the model's marks ticks, and afters counting every edge
 structure Drives (s : State K V) (o : Order.State Nat) : Prop where
   view : view s o
-  good : Order.good id o
-  right : Order.right (RankOrder.rk (List.range s.made)) o
-  live : live o
+  inv : Order.inv id (RankOrder.rk (List.range s.made)) o
+  ticks : ticks s
+  counts : counts o
 
 theorem Drives.of_eq {s s' : State K V} {o : Order.State Nat} (D : Drives s o)
     (e1 : s'.made = s.made) (e2 : s'.due = s.due) (e3 : s'.after = s.after)
     (e4 : s'.values = s.values) : Drives s' o where
   view := ⟨fun p => by rw [e2]; exact D.view.due p, by rw [e3]; exact D.view.after,
     by rw [e4]; exact D.view.values, fun p => by rw [e1]; exact D.view.alive p⟩
-  good := D.good
-  right := by rw [e1]; exact D.right
-  live := D.live
-
-theorem set_due (o : Order.State Nat) (p m : Nat) :
-    (Order.set id o p m).due = Order.put o.due p m := by
-  unfold Order.set; split <;> rfl
+  inv := by rw [e1]; exact D.inv
+  ticks := by intro p t h; rw [e2] at h; exact D.ticks p t h
+  counts := D.counts
 
 theorem set_fields (o : Order.State Nat) (p m : Nat) :
     (Order.set id o p m).alive = o.alive ∧ (Order.set id o p m).after = o.after ∧
-      (Order.set id o p m).values = o.values ∧ (Order.set id o p m).cache = o.cache := by
-  unfold Order.set; split <;> exact ⟨rfl, rfl, rfl, rfl⟩
-
-theorem set_right {o : Order.State Nat} {rk : (Nat → Bool) → (Nat → Nat → Bool) → Nat → Nat}
-    (hr : Order.right rk o) (p m : Nat) : Order.right rk (Order.set id o p m) := by
-  unfold Order.set; split <;> exact hr
+      (Order.set id o p m).values = o.values ∧ (Order.set id o p m).afters = o.afters ∧
+      (Order.set id o p m).due = Order.update o.due p m := by
+  unfold Order.set; dsimp only; split <;> exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
 -- order.set(p, m), from a driven state, as the model's due puts p at m
 theorem set_drives {s s' : State K V} {o : Order.State Nat} (D : Drives s o) (hc : calls o)
-    {p m : Nat} (hp : p < s.made) (e1 : s'.made = s.made)
+    {p m : Nat} (hp : p < s.made) (hm : m ≠ 0) (e1 : s'.made = s.made)
     (e2 : ∀ x, s'.due x = if x = p then some m else s.due x) (e3 : s'.after = s.after)
     (e4 : s'.values = s.values) : calls (Order.set id o p m) ∧ Drives s' (Order.set id o p m) := by
   have ha : o.alive p = true := by rw [D.view.alive]; simpa using hp
-  obtain ⟨f1, f2, f3, -⟩ := set_fields o p m
-  refine ⟨.set hc ha, ⟨?_, ?_, ?_, ?_⟩, Order.set_good id D.good ha, ?_, live_set id D.live ha m⟩
+  obtain ⟨f1, f2, f3, f4, f5⟩ := set_fields o p m
+  refine ⟨.set hc ha hm, ⟨?_, ?_, ?_, ?_⟩, by rw [e1]; exact Order.inv_set id D.inv ha hm, ?_, ?_⟩
   · intro x
-    rw [set_due, Order.get_put, e2, D.view.due x]
+    rw [f5, e2]
     by_cases hx : x = p
     · subst hx; simp
-    · simp [hx, Ne.symm hx]
+    · simp [hx, Order.update, D.view.due x]
   · rw [f2, e3]; exact D.view.after
   · rw [f3, e4]; exact D.view.values
   · intro x; rw [f1, e1]; exact D.view.alive x
-  · rw [e1]; exact set_right D.right p m
+  · intro x t h
+    rw [e2] at h
+    by_cases hx : x = p
+    · subst hx; simp at h; rw [← h]; exact hm
+    · simp [hx] at h; exact D.ticks x t h
+  · intro q y
+    rw [show Order.cnt (Order.set id o p m) q y = Order.cnt o q y by simp [Order.cnt, f4], f2, f3]
+    exact D.counts q y
 
 theorem settle_due_d (s : State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat))
     (fl : Bool) : (settle s d t who l fl).due d = s.due d ∨
@@ -938,9 +858,9 @@ theorem mark_due_d (s : State K V) (d t : Nat) (who : Option Nat) :
     rw [hk]
     exact settle_due_d _ _ _ _ _ _
 
--- a mark: order.set(d, t) when d was not due and is now, else no call
+-- a mark at a tick: order.set(d, t) when d was not due and is now, else no call
 theorem mark_order {s : State K V} {o : Order.State Nat} (D : Drives s o) (hc : calls o) {d : Nat}
-    (hd : d < s.made) (t : Nat) (who : Option Nat) :
+    (hd : d < s.made) (t : Nat) (ht : t ≠ 0) (who : Option Nat) :
     ∃ o', calls o' ∧ Drives (mark s d t who) o' := by
   have f := mark_frame s d t who
   rcases mark_due_d s d t who with e | ⟨-, e⟩
@@ -949,26 +869,27 @@ theorem mark_order {s : State K V} {o : Order.State Nat} (D : Drives s o) (hc : 
     by_cases hx : x = d
     · subst hx; exact e
     · exact mark_due s d t who x hx
-  · refine ⟨Order.set id o d t, set_drives (m := t) D hc hd f.made ?_ f.after f.values⟩
+  · refine ⟨Order.set id o d t, set_drives (m := t) D hc hd ht f.made ?_ f.after f.values⟩
     intro x
     by_cases hx : x = d
     · subst hx; simp [e]
     · simp [hx, mark_due s d t who x hx]
 
-theorem marks_order (t : Nat) (r : Option Nat) :
+theorem marks_order (t : Nat) (ht : t ≠ 0) (r : Option Nat) :
     ∀ (ds : List Nat) (s : State K V) (o : Order.State Nat), Drives s o → calls o →
       (∀ d ∈ ds, d < s.made) → ∃ o', calls o' ∧ Drives (ds.foldl (fun s d => mark s d t r) s) o'
   | [], s, o, D, hc, _ => ⟨o, hc, D⟩
   | d :: ds, s, o, D, hc, hd => by
-    obtain ⟨o1, hc1, D1⟩ := mark_order D hc (hd d (by simp)) t r
-    exact marks_order t r ds _ o1 D1 hc1
+    obtain ⟨o1, hc1, D1⟩ := mark_order D hc (hd d (by simp)) t ht r
+    exact marks_order t ht r ds _ o1 D1 hc1
       (by rw [(mark_frame s d t r).made]; exact fun x hx => hd x (by simp [hx]))
 
 theorem changed_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Nat} (D : Drives s o)
     (hc : calls o) (keys : List K) (who : Option Nat) :
     ∃ o', calls o' ∧ Drives (changed cs s keys who) o' := by
   simp only [changed]
-  generalize ht : s.tick + 1 = t
+  have ht0 : s.tick + 1 ≠ 0 := Nat.succ_ne_zero _
+  generalize ht : s.tick + 1 = t at ht0
   have D0 : Drives { s with tick := t } o := D.of_eq rfl rfl rfl rfl
   generalize runof { s with tick := t } who = r
   generalize (r.filter fun c => match (cs c).kind with
@@ -982,7 +903,7 @@ theorem changed_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State N
       intro s1 o1 D1 hc1
       simp only [List.foldl_cons]
       have Dl : Drives (learn s1 k w) o1 := by cases w <;> exact D1.of_eq rfl rfl rfl rfl
-      obtain ⟨o2, hc2, D2⟩ := marks_order t r (readers (learn s1 k w) k) _ o1 Dl hc1
+      obtain ⟨o2, hc2, D2⟩ := marks_order t ht0 r (readers (learn s1 k w) k) _ o1 Dl hc1
         (fun d hd => readers_made hd)
       exact ih _ o2 D2 hc2
   exact fold keys _ o D0 hc
@@ -990,29 +911,68 @@ theorem changed_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State N
 -- make: order.started(c) on the new c (fresh), then its mark
 theorem make_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Nat} (D : Drives s o)
     (hc : calls o) (hf : Order.fresh o s.made) : ∃ o', calls o' ∧ Drives (make cs s) o' := by
+  have sa : (Order.started o s.made).alive = Order.update o.alive s.made true ∧
+      (Order.started o s.made).values = o.values ∧ (Order.started o s.made).after = o.after ∧
+      (Order.started o s.made).due = o.due ∧ (Order.started o s.made).afters = o.afters := by
+    unfold Order.started; dsimp only; split <;> exact ⟨rfl, rfl, rfl, rfl, rfl⟩
   have D1 : ∀ s1 : State K V, s1.made = s.made + 1 → s1.due = s.due → s1.after = s.after →
       s1.values = s.values → Drives s1 (Order.started o s.made) := by
     intro s1 e1 e2 e3 e4
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, Order.started_good id D.good hf, ?_, live_started D.live _⟩
-    · intro p; rw [e2]; exact D.view.due p
-    · rw [e3]; exact D.view.after
-    · rw [e4]; exact D.view.values
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
+    · intro p; rw [sa.2.2.2.1, e2]; exact D.view.due p
+    · rw [sa.2.2.1, e3]; exact D.view.after
+    · rw [sa.2.1, e4]; exact D.view.values
     · intro p
-      simp only [Order.started, Order.update, e1]
+      rw [sa.1, e1]
+      simp only [Order.update]
       split
       · rename_i h; subst h; simp
       · rename_i h; rw [D.view.alive]; simp only [decide_eq_decide]; omega
     · rw [e1]
-      refine Order.started_right _ (RankOrder.rk_reach _) hf (right_univ D.right ?_ ?_)
+      refine Order.inv_started id (RankOrder.rk_reach _) (inv_univ D.inv ?_ ?_) hf
       · intro p hp; rw [D.view.alive] at hp; simpa using hp
       · intro p hp; rw [D.view.alive] at hp; simp at hp ⊢; omega
+    · intro p t hp; rw [e2] at hp; exact D.ticks p t hp
+    · intro q y
+      rw [show Order.cnt (Order.started o s.made) q y = Order.cnt o q y by
+        simp [Order.cnt, sa.2.2.2.2], sa.2.1, sa.2.2.1]
+      exact D.counts q y
   unfold Model.make
   dsimp only
   split
-  · refine mark_order ?_ (.started hc hf) (by simp) _ _
+  · refine mark_order ?_ (.started hc hf) (by simp) _ (Nat.succ_ne_zero _) _
     exact D1 _ rfl rfl rfl rfl
-  · refine mark_order ?_ (.started hc hf) (by simp) _ _
+  · refine mark_order ?_ (.started hc hf) (by simp) _ (Nat.succ_ne_zero _) _
     exact D1 _ rfl rfl rfl rfl
+
+-- sees keeps afters counting every edge
+theorem counts_sees {o : Order.State Nat} (hi : Order.inv id (RankOrder.rk u) o) (hc : counts o)
+    (p : Nat) {l : List Nat} (hn : l.Nodup) : counts (Order.sees id o p l) := by
+  obtain ⟨a, vf, f, -, cn⟩ := Order.sees_eq id o p l hn (hi.nodup p) hi.stamped
+  intro q y
+  rw [cn, vf, f]
+  have h0 := hc q
+  by_cases hy : y = p
+  · subst hy
+    simp only [Order.update_same, true_and]
+    have := h0 y
+    by_cases h1 : q ∈ l <;> by_cases h2 : q ∈ o.values y <;> simp [h1, h2] at this ⊢ <;> omega
+  · simp only [hy, false_and, ↓reduceIte, Order.update_ne _ _ hy]; exact h0 y
+
+-- waits keeps afters counting every edge
+theorem counts_waits {o : Order.State Nat} (hc : counts o) (p : Nat) (w : Option Nat) :
+    counts (Order.waits id o p w) := by
+  obtain ⟨a, vf, f, -, cn⟩ := Order.waits_eq id o p w
+  intro q y
+  rw [cn, vf, f]
+  have h0 := hc q
+  by_cases hy : y = p
+  · subst hy
+    simp only [Order.update_same, true_and]
+    have := h0 y
+    by_cases h1 : w = some q <;> by_cases h2 : o.after y = some q <;> simp [h1, h2] at this ⊢ <;>
+      omega
+  · simp only [hy, false_and, ↓reduceIte, Order.update_ne _ _ hy]; exact h0 y
 
 -- finish: order.sees(c, r.values) unless stopped
 theorem finish_order {s : State K V} {o : Order.State Nat} (D : Drives s o) (hc : calls o)
@@ -1022,17 +982,21 @@ theorem finish_order {s : State K V} {o : Order.State Nat} (D : Drives s o) (hc 
   cases hrc : s.ran c with
   | none => simp only [Model.finish, hrc]; exact ⟨o, hc, D⟩
   | some r =>
-    rw [finish_eq s c r hrc]
+    obtain ⟨e, _, -, hfin⟩ := finish_any s c r hrc e eq w th
+    rw [hfin]
     by_cases hs : e = .stopped
     · subst hs; exact ⟨o, hc, D.of_eq rfl rfl rfl (by simp)⟩
-    · obtain ⟨a, vf, f, du, -, -, gd⟩ := Order.sees_fields id o c r.values
-      refine ⟨Order.sees o c r.values, .sees hc (hv r hrc), ⟨⟨?_, ?_, ?_, ?_⟩, gd D.good, ?_,
-        live_sees id D.live c r.values⟩⟩
+    · obtain ⟨a, vf, f, du, -⟩ := Order.sees_eq id o c r.values (hv r hrc) (D.inv.nodup c)
+        D.inv.stamped
+      refine ⟨Order.sees id o c r.values, .sees hc (hv r hrc), ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_,
+        counts_sees D.inv D.counts c (hv r hrc)⟩⟩
       · intro p; rw [du]; exact D.view.due p
       · rw [f]; exact D.view.after
       · rw [vf]; simp only [hs, ne_eq, not_false_eq_true, ite_true]; rw [D.view.values]; rfl
       · intro p; rw [a]; exact D.view.alive p
-      · exact Order.sees_right _ o c r.values D.right
+      · exact Order.inv_sees id D.inv (tall_view D.view (fun p hp => List.mem_range.2 hp)) c
+          (hv r hrc)
+      · exact D.ticks
 
 theorem result_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Nat} (D : Drives s o)
     (hc : calls o) {c : Nat} (hv : ∀ r, s.ran c = some r → r.values.Nodup) (x : V) :
@@ -1060,7 +1024,8 @@ theorem result_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Na
 -- a run's end: stop is order.waits(c, w) then order.set(c, mark); else finish
 theorem ending_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Nat} (D : Drives s o)
     (hc : calls o) {c : Nat} (hcm : c < s.made) (hv : ∀ r, s.ran c = some r → r.values.Nodup)
-    (out : Out V) : ∃ o', calls o' ∧ Drives (ending cs s c out) o' := by
+    (hmk : ∀ r, s.ran c = some r → r.mark ≠ 0) (out : Out V) :
+    ∃ o', calls o' ∧ Drives (ending cs s c out) o' := by
   unfold Model.ending
   split
   · unfold Model.stop
@@ -1068,17 +1033,19 @@ theorem ending_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Na
     · exact ⟨o, hc, D⟩
     · rename_i r hr
       dsimp only
-      obtain ⟨a, vf, f, du, -, -, gd⟩ := Order.waits_fields id o c r.stopped
-      have Dw : Drives { s with after := put s.after c r.stopped } (Order.waits o c r.stopped) :=
+      obtain ⟨a, vf, f, du, -⟩ := Order.waits_eq id o c r.stopped
+      have Dw : Drives { s with after := put s.after c r.stopped } (Order.waits id o c r.stopped) :=
         ⟨⟨fun p => by rw [du]; exact D.view.due p, by rw [f, D.view.after]; rfl,
           by rw [vf]; exact D.view.values, fun p => by rw [a]; exact D.view.alive p⟩,
-          gd D.good, Order.waits_right _ o c r.stopped D.right, live_waits id D.live c r.stopped⟩
+          Order.inv_waits id D.inv (tall_view D.view (fun p hp => List.mem_range.2 hp)) c
+            r.stopped,
+          D.ticks, counts_waits D.counts c r.stopped⟩
       have key : ∀ X : State K V, X.made = s.made → X.due = put s.due c (some r.mark) →
           X.after = put s.after c r.stopped → X.values = s.values →
           (∀ r', X.ran c = some r' → r'.values.Nodup) →
           ∃ o', calls o' ∧ Drives (finish X c .stopped none r.stopped none) o' := by
         intro X e1 e2 e3 e4 hX
-        obtain ⟨hc2, D2⟩ := set_drives (m := r.mark) (s' := X) Dw (.waits hc) hcm e1
+        obtain ⟨hc2, D2⟩ := set_drives (m := r.mark) (s' := X) Dw (.waits hc) hcm (hmk r hr) e1
           (fun x => by rw [e2]; rfl) e3 e4
         exact finish_order D2 hc2 hX _ _ _ _
       split
@@ -1100,50 +1067,77 @@ theorem ending_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Na
 theorem first_order (cs : Nat → Comp K V) (hA : A2 cs) {s : State K V} {o : Order.State Nat}
     (D : Drives s o) (hc : calls o) (hw : ∀ k w, s.writers k = some w → w < s.made) {c : Nat}
     (hn : next rank s = some c) :
-    (Order.next id (RankOrder.rk (List.range s.made)) o).1 = some (c, rank s c) ∧
+    (Order.next id (RankOrder.rk (List.range s.made)) (List.range s.made) o).1 =
+        some (c, rank s c) ∧
       ∃ o', calls o' ∧ Drives (first cs s c (rank s c)) o' := by
-  have hns := next_same D.view D.good D.right (fun p hp => List.mem_range.2 hp)
+  have hu : ∀ p, p < s.made → p ∈ List.range s.made := fun p hp => List.mem_range.2 hp
+  have hns := next_same D.view D.ticks D.inv hu hu
   rw [hn] at hns
   simp only [Option.map_some] at hns
   refine ⟨hns, ?_⟩
-  have hc2 : calls (Order.delete (Order.next id (RankOrder.rk (List.range s.made)) o).2 c) :=
-    .next _ hc hns
-  generalize hrk : RankOrder.rk (List.range s.made) = rk at hns hc2
-  have r0 : Order.right rk o := by rw [← hrk]; exact D.right
-  have g2 : Order.good id (Order.delete (Order.next id rk o).2 c) := by
-    have := Order.next_good id rk D.good
-    rw [hns] at this
-    exact this
-  have r1 := Order.next_right id rk D.good r0
-  obtain ⟨k1, k2, k3, k4, -⟩ := Order.next_keeps id rk D.good
-  generalize ho1 : (Order.next id rk o).2 = o1 at g2 r1 k1 k2 k3 k4 hc2
-  obtain ⟨a, vf, f, du, -, -, gd⟩ := Order.waits_fields id (Order.delete o1 c) c none
-  have hc3 : calls (Order.waits (Order.delete o1 c) c none) := .waits hc2
-  have D3 : Drives (start s c (rank s c)) (Order.waits (Order.delete o1 c) c none) := by
-    refine ⟨⟨?_, ?_, ?_, ?_⟩, gd g2, ?_, ?_⟩
+  have hall : ∀ p, o.alive p = true → p ∈ List.range s.made :=
+    fun p hp => hu p (by rw [D.view.alive] at hp; simpa using hp)
+  have hk := tall_view D.view hu
+  have hc2 := calls.next (List.range s.made) (List.range s.made) hc hns
+  obtain ⟨k1, k2, k3, k4, k5, g2⟩ := Order.inv_next id D.inv hk hall
+  simp only [hns] at g2
+  generalize ho1 : (Order.next id (RankOrder.rk (List.range s.made)) (List.range s.made) o).2 = o1
+    at k1 k2 k3 k4 k5 g2 hc2
+  -- delete: c not due, the rest kept
+  have dd : (Order.delete o1 c).due = Order.update o1.due c 0 := by
+    unfold Order.delete; split
+    · rename_i h; funext x; simp only [Order.update]; split
+      · subst_vars; exact h
+      · rfl
+    · rfl
+  have df : (Order.delete o1 c).alive = o1.alive ∧ (Order.delete o1 c).values = o1.values ∧
+      (Order.delete o1 c).after = o1.after ∧ (Order.delete o1 c).afters = o1.afters := by
+    unfold Order.delete; split <;> exact ⟨rfl, rfl, rfl, rfl⟩
+  have hk2 : Order.tall (RankOrder.rk (List.range s.made)) (Order.delete o1 c).alive := by
+    rw [df.1, k1]; exact hk
+  obtain ⟨a, vf, f, du, -⟩ := Order.waits_eq id (Order.delete o1 c) c none
+  have hc3 : calls (Order.waits id (Order.delete o1 c) c none) := .waits hc2
+  have hcnt2 : counts (Order.delete o1 c) := by
+    intro q y
+    rw [show Order.cnt (Order.delete o1 c) q y = Order.cnt o q y by
+      simp [Order.cnt, df.2.2.2, k5], df.2.1, df.2.2.1, k2, k3]
+    exact D.counts q y
+  have hd : (s.due c).isSome := (next_ready hn).1 |> fun h => by
+    simp only [ready, Bool.and_eq_true] at h; exact h.1
+  have D3 : Drives (start s c (rank s c)) (Order.waits id (Order.delete o1 c) c none) := by
+    refine ⟨⟨?_, ?_, ?_, ?_⟩, ?_, ?_, counts_waits hcnt2 c none⟩
     · intro x
-      rw [du]
-      simp only [Order.delete, Order.get_del, start, say]
-      rw [k1, D.view.due x]
+      rw [du, dd]
+      simp only [start, say, Order.update]
+      rw [k4, D.view.due x]
       by_cases hx : x = c
       · subst hx; simp
-      · simp [hx, Ne.symm hx]
-    · rw [f]
-      simp only [Order.delete, start, say]
+      · simp [hx]
+    · rw [f, df.2.2.1]
+      simp only [start, say]
       rw [k3, D.view.after]; rfl
-    · rw [vf]; simp only [Order.delete, start, say]; rw [k4]; exact D.view.values
-    · intro x; rw [a]; simp only [Order.delete, start, say]; rw [k2]; exact D.view.alive x
-    · simp only [start, say]; rw [hrk]
-      exact Order.waits_right _ _ c none r1
-    · exact live_waits id (live_delete (ho1 ▸ live_next id rk D.good D.live) c) c none
+    · rw [vf, df.2.1]; simp only [start, say]; rw [k2]; exact D.view.values
+    · intro x; rw [a, df.1]; simp only [start, say]; rw [k1]; exact D.view.alive x
+    · simp only [start, say]
+      exact Order.inv_waits id g2 hk2 c none
+    · intro x t hx
+      simp only [start, say] at hx
+      by_cases hxc : x = c
+      · subst hxc; simp at hx
+      · rw [put_ne _ _ hxc] at hx; exact D.ticks x t hx
   obtain ⟨out, seen, vals, st, hf, hv⟩ := first_eq cs s c (rank s c) (hA c) hw
   rw [hf]
-  refine ending_order cs ?_ hc3 (by simpa [start, say] using (next_ready hn).2) ?_ out
+  refine ending_order cs ?_ hc3 (by simpa [start, say] using (next_ready hn).2) ?_ ?_ out
   · exact D3.of_eq rfl rfl rfl rfl
   · intro r hr
     simp only [put_same, Option.some.injEq] at hr
     subst hr
     exact hv.1
+  · intro r hr
+    simp only [put_same, Option.some.injEq] at hr
+    subst hr
+    obtain ⟨t, ht⟩ := Option.isSome_iff_exists.1 hd
+    simp [begun, ht, D.ticks c t ht]
 
 -- an act: its writes' marks
 theorem act_order (cs : Nat → Comp K V) {s : State K V} {o : Order.State Nat} (D : Drives s o)
@@ -1192,22 +1186,22 @@ theorem step_order (cs : Nat → Comp K V) (hA : A2 cs) {s s' : State K V} {o : 
       · cases hs
 
 theorem drives_init : Drives (empty : State K V) (Order.init : Order.State Nat) where
-  view := ⟨fun p => by simp [Order.init, Order.get, Model.empty], by rfl, by rfl,
+  view := ⟨fun p => by simp [Order.init, Model.empty], by rfl, by rfl,
     fun p => by simp [Order.init, Model.empty]⟩
-  good := (Order.inv_init id (RankOrder.rk []) []).1
-  right := fun r h => by simp [Order.init] at h
-  live := fun e h => by simp [Order.init] at h
+  inv := Order.inv_init id _
+  ticks := fun p t h => by simp [Model.empty] at h
+  counts := fun q y => by simp [Order.cnt, Order.init]
 
 -- 2, all the way: on every reachable state (A2, rank.ts's ranks), order.ts's state, reached from
 -- createOrder by the scheduler's calls (each meeting Order.lean's precondition), is the model's
--- view, keeps its promise and its cache right; so its next is the model's next (next_same)
+-- view and keeps what order keeps; so its next is the model's next (next_same)
 theorem reach_order {cs : Nat → Comp K V} {s : State K V} (hA : A2 cs) (h : Reach cs rank s) :
     ∃ o, calls o ∧ Drives s o := by
   induction h with
   | empty => exact ⟨_, .init, drives_init⟩
   | @make s hs ih =>
     obtain ⟨o, hc, D⟩ := ih
-    exact make_order cs D hc (started_fresh hA hs D.view D.live)
+    exact make_order cs D hc (started_fresh hA hs D.view D.counts)
   | write kvs _ ih =>
     obtain ⟨o, hc, D⟩ := ih
     obtain ⟨st, e, -⟩ := stores_shape _ kvs
@@ -1232,9 +1226,11 @@ theorem reach_order {cs : Nat → Comp K V} {s : State K V} (hA : A2 cs) (h : Re
 -- answers the model's next, with its rank
 theorem next_reach {cs : Nat → Comp K V} {s : State K V} (hA : A2 cs) (h : Reach cs rank s) :
     ∃ o, calls o ∧ Drives s o ∧
-      (Order.next id (RankOrder.rk (List.range s.made)) o).1 = (next rank s).map fun p => (p, rank s p) := by
+      (Order.next id (RankOrder.rk (List.range s.made)) (List.range s.made) o).1 =
+        (next rank s).map fun p => (p, rank s p) := by
   obtain ⟨o, hc, D⟩ := reach_order hA h
-  exact ⟨o, hc, D, next_same D.view D.good D.right (fun p hp => List.mem_range.2 hp)⟩
+  have hu : ∀ p, p < s.made → p ∈ List.range s.made := fun p hp => List.mem_range.2 hp
+  exact ⟨o, hc, D, next_same D.view D.ticks D.inv hu hu⟩
 
 /-! ## 3. causes: the model's cause values on Causes.lean's heap -/
 
@@ -1350,6 +1346,33 @@ theorem pairs.exists {α β : Type} {R : α → β → Prop} {P : α → Prop} {
     simp only [List.mem_cons, exists_eq_or_imp]
     exact or_congr (hpq _ _ h) (pairs.exists hpq t)
 
+-- the last of each: both none, or related
+theorem pairs.last {α β : Type} {R : α → β → Prop} :
+    ∀ {l1 : List α} {l2 : List β}, pairs R l1 l2 →
+      (l1.getLast? = none ∧ l2.getLast? = none) ∨
+        ∃ a b, l1.getLast? = some a ∧ l2.getLast? = some b ∧ R a b
+  | _, _, .nil => .inl ⟨rfl, rfl⟩
+  | _, _, .cons (a := a) (b := b) h t => by
+    right
+    rcases pairs.last t with ⟨e1, e2⟩ | ⟨a', b', e1, e2, h'⟩
+    · exact ⟨a, b, by simp [List.getLast?_cons, e1], by simp [List.getLast?_cons, e2], h⟩
+    · exact ⟨a', b', by simp [List.getLast?_cons, e1], by simp [List.getLast?_cons, e2], h'⟩
+
+-- each of the second is related to one of the first
+theorem pairs.right {α β : Type} {R : α → β → Prop} :
+    ∀ {l1 : List α} {l2 : List β}, pairs R l1 l2 → ∀ b ∈ l2, ∃ a ∈ l1, R a b
+  | _, _, .nil => by simp
+  | _, _, .cons (a := a) h t => by
+    intro b hb
+    rcases List.mem_cons.1 hb with rfl | hb
+    · exact ⟨a, List.mem_cons_self, h⟩
+    · obtain ⟨a', ha', h'⟩ := pairs.right t b hb
+      exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
+
+theorem pairs.empty {α β : Type} {R : α → β → Prop} {l1 : List α} {l2 : List β} (h : pairs R l1 l2) :
+    l1 = [] ↔ l2 = [] := by
+  cases h <;> simp
+
 -- object i of the heap stands for the model's cause k: made this pulse, unfolding to k's plain
 -- one (Basic.lean's Cause, by computation), labelled with k's run (computation, run number)
 def names (h : Causes Nat) (lab : Nat → Nat × Nat) (k : Why) (i : Nat) : Prop :=
@@ -1383,8 +1406,11 @@ theorem pairs_grows {h h' : Causes Nat} {lab lab' : Nat → Nat × Nat} (g : gro
 
 -- the model's causes (cause, when, went, kept) against a heap h of causes.ts's, labelled by lab
 structure Mirror (s : State K V) (h : Causes Nat) (lab : Nat → Nat × Nat) : Prop where
-  -- causes.ts ran: the computations that ran this pulse
-  ran : ∀ c, s.went c = true ↔ c ∈ h.ran
+  -- causes.ts ranIn: the computations that ran this pulse
+  ran : ∀ c, s.went c = true ↔ h.ranIn c = h.pulse
+  -- a run given causes (first: taken from c.kept) is of one held this pulse: finish gives them
+  -- back in the pulse they were taken in
+  given : ∀ c r, s.ran c = some r → r.given ≠ [] → h.heldIn c = h.pulse
   -- every object is of a made computation
   made : ∀ i a, Causes.ofs h.heap i = some a → a < s.made
   -- a computation's cause, when of this pulse, is an object made this pulse
@@ -1459,13 +1485,20 @@ theorem loopof_eq {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R
 
 -- a state with the same causes, runs and pulses (made may grow)
 theorem Mirror.of_eq {s s' : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
-    (e1 : s.made ≤ s'.made) (e2 : ∀ c, (s'.ran c).map (·.n) = (s.ran c).map (·.n))
+    (e1 : s.made ≤ s'.made) (e2 : ∀ c, (s'.ran c).map (fun r => (r.n, r.given)) =
+      (s.ran c).map (fun r => (r.n, r.given)))
     (e3 : s'.runs = s.runs) (e4 : s'.pulses = s.pulses) (e5 : s'.cause = s.cause)
     (e6 : s'.when = s.when) (e7 : s'.went = s.went) (e8 : s'.kept = s.kept) : Mirror s' h lab := by
   have hs : ∀ c, (s'.ran c).isSome = (s.ran c).isSome := by
     intro c; have := congrArg Option.isSome (e2 c); simpa using this
   exact {
     ran := fun c => by rw [e7]; exact R.ran c
+    given := fun c r hr hg => by
+      have := e2 c
+      rw [hr] at this
+      obtain ⟨r0, h0, e⟩ := Option.map_eq_some_iff.1 this.symm
+      have e' : r0.given = r.given := congrArg Prod.snd e
+      exact R.given c r0 h0 (e' ▸ hg)
     made := fun i a h => Nat.lt_of_lt_of_le (R.made i a h) e1
     cause := fun c h1 h2 => by rw [e5]; rw [hs] at h1; rw [e6, e4] at h2; exact R.cause c h1 h2
     kept := fun t => by rw [e8]; exact R.kept t
@@ -1477,7 +1510,7 @@ theorem Mirror.of_eq {s s' : State K V} {h : Causes Nat} {lab : Nat → Nat × N
       have := e2 c
       rw [h] at this
       obtain ⟨r0, h0, e⟩ := Option.map_eq_some_iff.1 this.symm
-      have e' : r0.n = r.n := e
+      have e' : r0.n = r.n := congrArg Prod.fst e
       rw [e3, ← e']; exact R.run c r0 h0
     ranmade := fun c h => Nat.lt_of_lt_of_le (R.ranmade c (hs c ▸ h)) e1 }
 
@@ -1526,10 +1559,11 @@ theorem causeof_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat}
     refine ⟨h', lab', h.heap.size, .run hr (by simp), g, ?_, hnew⟩
     exact {
       ran := fun x => by
-        simp only [h', Causes.run, Causes.mem_add]
+        show put s.went c true x = true ↔ Causes.upd h.ranIn c h.pulse x = h.pulse
         by_cases hx : x = c
         · subst hx; simp
-        · simp [put_ne _ _ hx, R.ran x, hx]
+        · rw [put_ne _ _ hx, Causes.upd_ne _ _ hx]; exact R.ran x
+      given := R.given
       made := fun i a ha => by
         simp only [h', Causes.run, Causes.ofs_push] at ha
         split at ha
@@ -1579,65 +1613,64 @@ theorem causeof_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat}
       run := R.run
       ranmade := R.ranmade }
 
--- keep: a mark's cause kept on d (causes.keep(d, cause)): the model's keep, by run, is keep's add,
--- by object, as the labels of this pulse's objects are one per run
+-- keep: a mark's cause kept on d (causes.keep(d, cause)). the model skips one whose run is the
+-- last kept's, causes.ts one whose object is: the same, as this pulse's labels are one per run
 theorem keep_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
     (hr : Causes.reachable h) {k : Why} {i : Nat} (hn : names h lab k i) (d : Nat) :
     Causes.reachable (Causes.keep h d i) ∧ grows h lab (Causes.keep h d i) lab ∧
       Mirror (keep s d k) (Causes.keep h d i) lab := by
   obtain ⟨hs, hi, ht, hl⟩ := hn
-  refine ⟨.keep hr hs hi, ⟨ext_refl _, rfl, fun _ _ => rfl⟩, ?_⟩
-  have hiff : ((s.kept d).any fun x => x.of == k.of) = true ↔ i ∈ h.kept d := by
-    rw [List.any_eq_true]
-    have := pairs.exists (P := fun x : Why => x.of = k.of) (Q := fun j => j = i) ?_ (R.kept d)
-    · simp only [beq_iff_eq]
-      rw [this]
-      simp
-    · rintro x j ⟨hj1, hj2, -, hj3⟩
+  obtain ⟨f1, f2, f3, f4, f5⟩ := Causes.keep_frame h d i
+  have g : grows h lab (Causes.keep h d i) lab := ⟨by rw [f1]; exact ext_refl _, f2, fun _ _ => rfl⟩
+  refine ⟨.keep hr hs hi, g, ?_⟩
+  -- the last kept on d: of k's run iff it is k's object
+  have hiff : (s.kept d).getLast?.map (·.of) = some k.of ↔ (h.kept d).getLast? = some i := by
+    rcases (R.kept d).last with ⟨e1, e2⟩ | ⟨x, j, e1, e2, hj1, hj2, -, hj3⟩
+    · simp [e1, e2]
+    · rw [e1, e2]
+      simp only [Option.map_some, Option.some.injEq]
       constructor
-      · intro e
-        exact R.inj j i hj1 hs hj2 hi (by rw [hj3, hl, e])
+      · intro e; exact R.inj j i hj1 hs hj2 hi (by rw [hj3, hl, e])
       · intro e; subst e; rw [← hj3, hl]
-  unfold Model.keep
-  split
-  · rename_i hany
-    have hin := hiff.1 hany
-    exact {
-      ran := R.ran
-      made := R.made
-      cause := R.cause
-      inj := R.inj
-      runs := R.runs
-      now := R.now
-      when := R.when
-      run := R.run
-      ranmade := R.ranmade
-      kept := fun t => by
-        simp only [Causes.keep]
-        split
-        · rename_i e; subst e; simp only [Causes.add, hin, ite_true]; exact R.kept t
-        · exact R.kept t }
-  · rename_i hany
-    have hin : i ∉ h.kept d := fun h' => hany (hiff.2 h')
-    exact {
-      ran := R.ran
-      made := R.made
-      cause := R.cause
-      inj := R.inj
-      runs := R.runs
-      now := R.now
-      when := R.when
-      run := R.run
-      ranmade := R.ranmade
-      kept := fun t => by
-        simp only [Causes.keep]
-        split
-        · rename_i e; subst e
-          simp only [Causes.add, hin, ite_false, put_same]
-          exact (R.kept t).append (.cons ⟨hs, hi, ht, hl⟩ .nil)
-        · rename_i e
-          simp only [put_ne _ _ e]
-          exact R.kept t }
+  have hk : ∀ t, pairs (names (Causes.keep h d i) lab) ((keep s d k).kept t)
+      ((Causes.keep h d i).kept t) := by
+    intro t
+    rw [Causes.keep_kept]
+    unfold Model.keep
+    split
+    · rename_i hany
+      have : ¬(t = d ∧ (h.kept d).getLast? ≠ some i) := fun ⟨_, e⟩ => e (hiff.1 hany)
+      rw [ite_eq_right this]; exact pairs_grows g (R.kept t)
+    · rename_i hany
+      have hne : (h.kept d).getLast? ≠ some i := fun e => hany (hiff.2 e)
+      by_cases e : t = d
+      · subst e
+        rw [ite_eq_left ⟨rfl, hne⟩]
+        simp only [put_same]
+        exact pairs_grows g ((R.kept t).append (.cons ⟨hs, hi, ht, hl⟩ .nil))
+      · rw [ite_eq_right (fun h' => e h'.1)]
+        simp only [put_ne _ _ e]
+        exact pairs_grows g (R.kept t)
+  have hk' : ∀ t, (keep s d k).kept t = (keep s d k).kept t := fun _ => rfl
+  have hframe : ∃ kp, keep s d k = { s with kept := kp } := keep_shape s d k
+  obtain ⟨kp, hkp⟩ := hframe
+  have hk2 := hk
+  rw [hkp] at hk2
+  rw [hkp]
+  exact {
+    ran := fun c => by rw [f4, f3]; exact R.ran c
+    given := fun c r hr' hg => f5 c (R.given c r hr' hg)
+    made := fun j a ha => R.made j a (by rw [f1] at ha; exact ha)
+    cause := fun c h1 h2 => by
+      obtain ⟨j, hj⟩ := R.cause c h1 h2
+      exact ⟨j, names_grows g hj⟩
+    kept := hk2
+    inj := fun a b h1 h2 h3 h4 e => R.inj a b (f2 ▸ h1) (f2 ▸ h2) (f1 ▸ h3) (f1 ▸ h4) e
+    runs := fun a h1 h2 => R.runs a (f2 ▸ h1) (f1 ▸ h2)
+    now := fun a h1 h2 => R.now a (f2 ▸ h1) (f1 ▸ h2)
+    when := R.when
+    run := R.run
+    ranmade := R.ranmade }
 
 -- a mark (scheduler.ts mark): by a run, its cause (causeOf) kept on d; from outside, nothing
 theorem mark_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
@@ -1663,11 +1696,12 @@ theorem mark_loop {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R
       loopof (keep (causeof s c).1 d (causeof s c).2) (causeof s c).2 d =
         Causes.loop id h' (some i) d := by
   obtain ⟨h1, lab1, i, hr1, -, R1, hn1⟩ := causeof_heap R hr hc
-  obtain ⟨hr2, -, R2⟩ := keep_heap R1 hr1 hn1 d
-  exact ⟨_, lab1, i, hr2, R2, hn1, loopof_eq R2 (Causes.reachable_ok hr2).1 hn1 d⟩
+  obtain ⟨hr2, g2, R2⟩ := keep_heap R1 hr1 hn1 d
+  exact ⟨_, lab1, i, hr2, R2, names_grows g2 hn1,
+    loopof_eq R2 (Causes.reachable_ok hr2).1 (names_grows g2 hn1) d⟩
 
--- the promise run's callers keep (scheduler.ts first: causes.run(c, [...c.kept])): the given are
--- the objects c's kept causes stand for, each made, made this pulse
+-- the promise run's callers keep (scheduler.ts first: causes.run(c, given), given taken from
+-- c.kept): the given are the objects c's kept causes stand for, each made, made this pulse
 theorem given_promise {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
     (hr : Causes.reachable h) (c : Nat) :
     pairs (names h lab) (s.kept c) (h.kept c) ∧ ∀ g ∈ h.kept c, h.since ≤ g ∧ g < h.heap.size :=
@@ -1741,22 +1775,25 @@ theorem kids_map {n : Nat} (F : (j : Nat) → j < n → Cause Nat) :
     simp only [List.filterMap_cons, hj, dite_true, List.map_cons, e]
     rw [kids_map F g js t]
 
--- start: a new run of c, given the causes kept (causes.run(c, given))
+-- start: c's kept taken (first: given = c.kept, c.kept = []), a new run of c given it
+-- (causes.run(c, given))
 theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
     (hr : Causes.reachable h) {c : Nat} (hc : c < s.made) (rk : Nat) :
-    Causes.reachable (Causes.run h c (h.kept c)).1 ∧
-      grows h lab (Causes.run h c (h.kept c)).1 (put lab h.heap.size (c, s.runs c + 1)) ∧
-      Mirror (start s c rk) (Causes.run h c (h.kept c)).1 (put lab h.heap.size (c, s.runs c + 1)) ∧
-      pairs (names (Causes.run h c (h.kept c)).1 (put lab h.heap.size (c, s.runs c + 1)))
-        (s.kept c) (h.kept c) := by
+    Causes.reachable (Causes.run (Causes.take h c).1 c (h.kept c)).1 ∧
+      grows h lab (Causes.run (Causes.take h c).1 c (h.kept c)).1
+        (put lab h.heap.size (c, s.runs c + 1)) ∧
+      Mirror (start s c rk) (Causes.run (Causes.take h c).1 c (h.kept c)).1
+        (put lab h.heap.size (c, s.runs c + 1)) ∧
+      pairs (names (Causes.run (Causes.take h c).1 c (h.kept c)).1
+        (put lab h.heap.size (c, s.runs c + 1))) (s.kept c) (h.kept c) := by
   obtain ⟨ho, hf⟩ := Causes.reachable_ok hr
   generalize hn : s.runs c + 1 = n
-  let h' := (Causes.run h c (h.kept c)).1
+  let h' := (Causes.run (Causes.take h c).1 c (h.kept c)).1
   let lab' := put lab h.heap.size (c, n)
-  have hsz : h'.heap.size = h.heap.size + 1 := by simp [h', Causes.run]
+  have hsz : h'.heap.size = h.heap.size + 1 := by simp [h', Causes.run, Causes.take]
   have g : grows h lab h' lab' :=
     ⟨ext_push _ _, rfl, fun i hi => put_ne _ _ (Nat.ne_of_lt hi)⟩
-  have hgiven : ∀ x ∈ h.kept c, h.since ≤ x ∧ x < h.heap.size :=
+  have hgiven : ∀ x ∈ h.kept c, (Causes.take h c).1.since ≤ x ∧ x < (Causes.take h c).1.heap.size :=
     fun x hx => ⟨hf.kept c x hx, ho.kept c x hx⟩
   have hold : ∀ j, h.since ≤ j → j < h.heap.size → lab j ≠ (c, n) := by
     intro j h1 h2 e
@@ -1768,24 +1805,35 @@ theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (
   have hnew : names h' lab' (.mk (c, n) (s.kept c)) h.heap.size := by
     refine ⟨hf.since, by omega, ?_, by simp [lab']; rfl⟩
     rw [Causes.tree_eq, plain_mk]
-    have e1 : (h'.heap[h.heap.size]'(by omega)) = ⟨c, h.kept c⟩ := by simp [h', Causes.run]
+    have e1 : (h'.heap[h.heap.size]'(by omega)) = ⟨c, h.kept c⟩ := by
+      simp [h', Causes.run, Causes.take]
     have e2 : Causes.ps h'.heap h.heap.size = h.kept c := by
-      simp [h', Causes.run, Causes.ps_push]
+      simp [h', Causes.run, Causes.take, Causes.ps_push]
     simp only [e1, Causes.kids, e2]
     congr 1
     refine kids_map (n := h.heap.size) (fun j hj => Causes.tree h'.heap j (by omega)) _ _ ?_
     refine (R.kept c).imp ?_
     intro k j ⟨_, hj, e⟩
     exact ⟨hj, by rw [tree_ext g.heap j hj]; exact e.1⟩
-  refine ⟨.run hr hgiven, g, ?_, hk⟩
+  refine ⟨.run (.take hr) hgiven, g, ?_, hk⟩
   exact {
     ran := fun x => by
-      simp only [start, say, Causes.run, Causes.mem_add]
+      show put s.went c true x = true ↔
+        Causes.upd h.ranIn c h.pulse x = h.pulse
       by_cases hx : x = c
       · subst hx; simp
-      · simp [put_ne _ _ hx, R.ran x, hx]
+      · rw [put_ne _ _ hx, Causes.upd_ne _ _ hx]; exact R.ran x
+    given := fun x r h1 h2 => by
+      show h.heldIn x = h.pulse
+      simp only [start, say] at h1
+      by_cases hx : x = c
+      · subst hx
+        simp only [put_same, Option.some.injEq] at h1
+        subst h1
+        exact ho.holding x (fun e => h2 ((R.kept x).empty.2 e))
+      · rw [put_ne _ _ hx] at h1; exact R.given x r h1 h2
     made := fun i a ha => by
-      simp only [Causes.run, Causes.ofs_push] at ha
+      simp only [h', Causes.run, Causes.take, Causes.ofs_push] at ha
       simp only [start, say]
       split at ha
       · cases ha; exact hc
@@ -1797,9 +1845,13 @@ theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (
       · simp only [put_ne _ _ hx] at h1 h2 ⊢
         obtain ⟨i, hi⟩ := R.cause x h1 h2
         exact ⟨i, names_grows g hi⟩
-    kept := fun t => pairs_grows g (R.kept t)
+    kept := fun t => by
+      show pairs (names h' lab') (put s.kept c [] t) (Causes.upd h.kept c [] t)
+      by_cases ht : t = c
+      · subst ht; simp only [put_same, Causes.upd_same]; exact .nil
+      · rw [put_ne _ _ ht, Causes.upd_ne _ _ ht]; exact pairs_grows g (R.kept t)
     inj := fun i j h1 h2 h3 h4 e => by
-      simp only [Causes.run] at h1 h2 h3 h4
+      simp only [h', Causes.run, Causes.take] at h1 h2 h3 h4
       simp only [Array.size_push] at h3 h4
       by_cases hi : i = h.heap.size <;> by_cases hj : j = h.heap.size
       · rw [hi, hj]
@@ -1812,7 +1864,7 @@ theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (
       · simp only [lab', put_ne _ _ hi, put_ne _ _ hj] at e
         exact R.inj i j h1 h2 (by omega) (by omega) e
     runs := fun i h1 h2 => by
-      simp only [Causes.run] at h1 h2
+      simp only [h', Causes.run, Causes.take] at h1 h2
       simp only [Array.size_push] at h2
       simp only [start, say]
       by_cases hi : i = h.heap.size
@@ -1823,7 +1875,7 @@ theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (
         · rw [e] at this ⊢; simp; omega
         · rw [put_ne _ _ e]; exact this
     now := fun i h1 h2 => by
-      simp only [Causes.run] at h1 h2
+      simp only [h', Causes.run, Causes.take] at h1 h2
       simp only [Array.size_push] at h2
       simp only [start, say]
       by_cases hi : i = h.heap.size
@@ -1848,75 +1900,86 @@ theorem start_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (
       · subst hx; exact hc
       · simp only [put_ne _ _ hx] at h; exact R.ranmade x h }
 
--- finish: done, the causes the run was given dropped from c's kept (scheduler.ts finish: for k of
--- r.given c.kept.delete(k)): causes.drop of their objects
+-- finish: not done, what the run was given goes back in front of c's kept (scheduler.ts finish:
+-- c.kept = r.given.concat(c.kept)): causes' restore of their objects, in the pulse they were
+-- taken in; done, nothing. either way the run gives its given up
 theorem finish_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
-    (hr : Causes.reachable h) {c : Nat} {gone : List Nat}
-    (hg : ∀ r, s.ran c = some r → pairs (names h lab) r.given gone) (e : Ended)
+    (hr : Causes.reachable h) {c : Nat} {gs : List Nat}
+    (hg : ∀ r, s.ran c = some r → pairs (names h lab) r.given gs) (e : Ended)
     (eq : Option Bool) (w : Option Nat) (th : Option (List Nat)) :
     ∃ h', Causes.reachable h' ∧ grows h lab h' lab ∧ Mirror (finish s c e eq w th) h' lab := by
   cases hrc : s.ran c with
   | none => simp only [Model.finish, hrc]; exact ⟨h, hr, grows_refl h lab, R⟩
   | some r =>
-    rw [finish_eq s c r hrc]
-    have e2 : ∀ x, ((put s.ran c (some { r with ended := some e })) x).map (·.n) =
-        (s.ran x).map (·.n) := by
+    obtain ⟨e, th', -, hfin⟩ := finish_any s c r hrc e eq w th
+    rw [hfin]
+    have hgr := hg r hrc
+    have e2 : ∀ x,
+        ((put s.ran c (some { r with
+          ended := some e, given := [], loop := if e = .pending then r.loop else none })) x).map (·.n) = (s.ran x).map (·.n) := by
       intro x
       by_cases hx : x = c
       · subst hx; simp [hrc]
       · simp [put_ne _ _ hx]
-    by_cases hd : e = .done
-    · subst hd
-      refine ⟨Causes.drop h c gone, .drop hr, ⟨ext_refl _, rfl, fun _ _ => rfl⟩, ?_⟩
-      have hgr := hg r hrc
-      have hf : pairs (names h lab)
-          ((s.kept c).filter fun k => !(r.given.any fun g => g.of == k.of))
-          ((h.kept c).filter (· ∉ gone)) := by
-        refine pairs.filter ?_ (R.kept c)
-        rintro k j ⟨hj1, hj2, -, hj3⟩
-        have := pairs.exists (P := fun g : Why => g.of = k.of) (Q := fun j' => j' = j) ?_ hgr
-        · apply Bool.eq_iff_iff.2
-          simp only [Bool.not_eq_true', List.any_eq_false, beq_iff_eq, decide_eq_true_eq]
-          constructor
-          · intro hn hj
-            obtain ⟨g', hg', e'⟩ := this.2 ⟨j, hj, rfl⟩
-            exact hn g' hg' e'
-          · intro hn g' hg' e'
-            obtain ⟨j', hj', rfl⟩ := this.1 ⟨g', hg', e'⟩
-            exact hn hj'
-        · rintro g' j' ⟨hj1', hj2', -, hj3'⟩
-          constructor
-          · intro e'; exact R.inj j' j hj1' hj1 hj2' hj2 (by rw [hj3', hj3, e'])
-          · intro e'; subst e'; rw [← hj3', hj3]
+    have hs : ∀ x, ((put s.ran c (some { r with
+          ended := some e, given := [], loop := if e = .pending then r.loop else none })) x).isSome = (s.ran x).isSome := by
+      intro x; have := congrArg Option.isSome (e2 x); simpa using this
+    -- a heap with the same objects, pulse, runs and holds as h, the kept as given
+    have mk : ∀ (h' : Causes Nat), h'.heap = h.heap → h'.since = h.since → h'.ranIn = h.ranIn →
+        h'.pulse = h.pulse → h'.heldIn = h.heldIn →
+        (∀ t, pairs (names h' lab)
+          ((if e = .done then s.kept else put s.kept c (r.given ++ s.kept c)) t) (h'.kept t)) →
+        Mirror { s with
+          kept := if e = .done then s.kept else put s.kept c (r.given ++ s.kept c),
+          looping := if e = .looping then put s.looping c true else s.looping,
+          values := if e ≠ .stopped then put s.values c r.values else s.values,
+          ran := put s.ran c (some { r with
+            ended := some e, given := [], loop := if e = .pending then r.loop else none }),
+          log := s.log ++ [⟨s.pulses, s.round, .ends c r.n e eq w th'⟩] } h' lab := by
+      intro h' f1 f2 f3 f4 f5 hk
       exact {
-        ran := R.ran
-        made := R.made
+        ran := fun x => by rw [f3, f4]; exact R.ran x
+        given := fun x r' h1 h2 => by
+          rw [f5, f4]
+          by_cases hx : x = c
+          · subst hx; simp at h1; rw [← h1] at h2; exact absurd rfl h2
+          · simp only [put_ne _ _ hx] at h1; exact R.given x r' h1 h2
+        made := fun i a ha => R.made i a (by rw [f1] at ha; exact ha)
         cause := fun x h1 h2 => by
-          have h1' : (s.ran x).isSome := by
-            have := congrArg Option.isSome (e2 x); simp at this; rw [← this]; exact h1
-          exact R.cause x h1' h2
-        inj := R.inj
-        runs := R.runs
-        now := R.now
+          obtain ⟨i, hi⟩ := R.cause x ((hs x).symm ▸ h1) h2
+          obtain ⟨a, b, c', d'⟩ := hi
+          exact ⟨i, f2 ▸ a, f1 ▸ b, by simp only [f1]; exact c', d'⟩
+        kept := hk
+        inj := fun a b h1 h2 h3 h4 e' => R.inj a b (f2 ▸ h1) (f2 ▸ h2) (f1 ▸ h3) (f1 ▸ h4) e'
+        runs := fun a h1 h2 => R.runs a (f2 ▸ h1) (f1 ▸ h2)
+        now := fun a h1 h2 => R.now a (f2 ▸ h1) (f1 ▸ h2)
         when := R.when
         run := fun x r' h => by
           have := e2 x
-          have h' : (put s.ran c (some { r with ended := some .done })) x = some r' := h
-          rw [h', Option.map_some] at this
-          obtain ⟨r0, h0, e⟩ := Option.map_eq_some_iff.1 this.symm
-          have e' : r0.n = r'.n := e
-          rw [← e']; exact R.run x r0 h0
-        ranmade := fun x h => by
-          have h1' : (s.ran x).isSome := by
-            have := congrArg Option.isSome (e2 x); simp at this; rw [← this]; exact h
-          exact R.ranmade x h1'
-        kept := fun t => by
-          simp only [Causes.drop, ite_true]
-          by_cases ht : t = c
-          · subst ht; simp only [put_same, ite_true]; exact hf
-          · simp only [put_ne _ _ ht, ht, ite_false]; exact R.kept t }
-    · refine ⟨h, hr, grows_refl h lab, ?_⟩
-      exact R.of_eq (Nat.le_refl _) e2 rfl rfl rfl rfl rfl (by simp [hd])
+          rw [show (put s.ran c (some { r with
+              ended := some e, given := [], loop := if e = .pending then r.loop else none })) x = some r' from h,
+            Option.map_some] at this
+          obtain ⟨r0, h0, e'⟩ := Option.map_eq_some_iff.1 this.symm
+          have e'' : r0.n = r'.n := e'
+          rw [← e'']; exact R.run x r0 h0
+        ranmade := fun x h => R.ranmade x ((hs x).symm ▸ h) }
+    by_cases hd : e = .done
+    · refine ⟨h, hr, grows_refl h lab, mk h rfl rfl rfl rfl rfl fun t => ?_⟩
+      simp only [hd, ite_true]; exact R.kept t
+    · have hgs : ∀ g ∈ gs, h.since ≤ g ∧ g < h.heap.size := by
+        intro g hg'
+        obtain ⟨x, -, hx1, hx2, -⟩ := hgr.right g hg'
+        exact ⟨hx1, hx2⟩
+      have hheld : gs ≠ [] → h.heldIn c = h.pulse := fun hne =>
+        R.given c r hrc (fun e' => hne (hgr.empty.1 e'))
+      refine ⟨Causes.restore h c gs, .restore hr hgs hheld, ⟨ext_refl _, rfl, fun _ _ => rfl⟩,
+        mk _ rfl rfl rfl rfl rfl fun t => ?_⟩
+      simp only [hd, ite_false]
+      show pairs (names h lab) (put s.kept c (r.given ++ s.kept c) t)
+        (Causes.upd h.kept c (gs ++ h.kept c) t)
+      by_cases ht : t = c
+      · subst ht; simp only [put_same, Causes.upd_same]; exact hgr.append (R.kept t)
+      · rw [put_ne _ _ ht, Causes.upd_ne _ _ ht]; exact R.kept t
 
 -- set (the harness's): its write said changed by c
 theorem set_heap (cs : Nat → Comp K V) {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat}
@@ -1937,7 +2000,7 @@ theorem finish_after {s X : State K V} {h h1 : Causes Nat} {lab lab1 : Nat → N
     (e1 : X.ran = s.ran) (e : Ended) (eq : Option Bool) (w : Option Nat)
     (th : Option (List Nat)) :
     ∃ h' lab', Causes.reachable h' ∧ grows h lab h' lab' ∧ Mirror (finish X c e eq w th) h' lab' := by
-  obtain ⟨h2, hr2, g2, R2⟩ := finish_heap R1 hr1 (gone := gone)
+  obtain ⟨h2, hr2, g2, R2⟩ := finish_heap R1 hr1 (gs := gone)
     (fun r hr => pairs_grows g1 (hg r (e1 ▸ hr))) e eq w th
   exact ⟨h2, lab1, hr2, grows_trans g1 g2, R2⟩
 
@@ -1973,8 +2036,8 @@ theorem ending_heap (cs : Nat → Comp K V) {s : State K V} {h : Causes Nat}
       · refine finish_after hg ?_ hr (grows_refl h lab) ?_ _ _ _ _
         · exact R.of_eq (Nat.le_refl _) (fun _ => rfl) rfl rfl rfl rfl rfl rfl
         · rfl
-  · have e2 : ∀ x, ((edit s c fun r => { r with out := some o }).ran x).map (·.n) =
-        (s.ran x).map (·.n) := by
+  · have e2 : ∀ x, ((edit s c fun r => { r with out := some o }).ran x).map
+        (fun r => (r.n, r.given)) = (s.ran x).map (fun r => (r.n, r.given)) := by
       intro x
       simp only [edit]
       by_cases hx : x = c
@@ -1993,7 +2056,7 @@ theorem ending_heap (cs : Nat → Comp K V) {s : State K V} {h : Causes Nat}
     · exact finish_after hg1 R1 hr (grows_refl h lab) rfl _ _ _ _
     · exact result_heap cs R1 hr hg1 _
 
--- a run (A2): causes.run(c, c.kept), then its end
+-- a run (A2): c's kept taken, causes.run(c, given), then its end
 theorem first_heap (cs : Nat → Comp K V) (hA : A2 cs) {s : State K V} {h : Causes Nat}
     {lab : Nat → Nat × Nat} (R : Mirror s h lab) (hr : Causes.reachable h)
     (hw : ∀ k w, s.writers k = some w → w < s.made) {c : Nat} (hc : c < s.made) (rk : Nat) :
@@ -2003,7 +2066,7 @@ theorem first_heap (cs : Nat → Comp K V) (hA : A2 cs) {s : State K V} {h : Cau
   obtain ⟨hr1, g1, R1, hk⟩ := start_heap R hr hc rk
   have R3 : Mirror { start s c rk with
       ran := put s.ran c (some (begun s c vals st seen)),
-      reads := put s.reads c (seen.map (·.1)) } (Causes.run h c (h.kept c)).1
+      reads := put s.reads c (seen.map (·.1)) } (Causes.run (Causes.take h c).1 c (h.kept c)).1
       (put lab h.heap.size (c, s.runs c + 1)) := by
     refine R1.of_eq (Nat.le_refl _) ?_ rfl rfl rfl rfl rfl rfl
     intro x
@@ -2014,8 +2077,8 @@ theorem first_heap (cs : Nat → Comp K V) (hA : A2 cs) {s : State K V} {h : Cau
   have hg : ∀ r, ({ start s c rk with
       ran := put s.ran c (some (begun s c vals st seen)),
       reads := put s.reads c (seen.map (·.1)) } : State K V).ran c = some r →
-      pairs (names (Causes.run h c (h.kept c)).1 (put lab h.heap.size (c, s.runs c + 1))) r.given
-        (h.kept c) := by
+      pairs (names (Causes.run (Causes.take h c).1 c (h.kept c)).1
+        (put lab h.heap.size (c, s.runs c + 1))) r.given (h.kept c) := by
     intro r hr'
     simp only [put_same, Option.some.injEq] at hr'
     subst hr'
@@ -2052,13 +2115,18 @@ theorem act_heap (cs : Nat → Comp K V) {s : State K V} {h : Causes Nat} {lab :
         (R.of_eq (Nat.le_refl _) (fun _ => rfl) rfl rfl rfl rfl rfl rfl) hr
       exact ⟨h1, lab1, hr1, g1, R1.of_eq (Nat.le_refl _) (fun _ => rfl) rfl rfl rfl rfl rfl rfl⟩
 
--- a pulse's end: causes.end, every kept cleared, ran forgotten; this pulse's objects old
+-- a pulse's end: causes.end, every kept cleared, the pulse bumped; this pulse's objects old. no
+-- run holds a given then (Core.given)
 theorem close_heap {s : State K V} {h : Causes Nat} {lab : Nat → Nat × Nat} (R : Mirror s h lab)
-    (hr : Causes.reachable h) : Causes.reachable (Causes.end h) ∧ Mirror (close s) (Causes.end h) lab := by
+    (hr : Causes.reachable h) (hg : ∀ c r, s.ran c = some r → r.given = []) :
+    Causes.reachable (Causes.end h) ∧ Mirror (close s) (Causes.end h) lab := by
   have ho := (Causes.reachable_ok hr).1
   refine ⟨.end hr, ?_⟩
   exact {
-    ran := fun c => by simp [close, Causes.end]
+    ran := fun c => by
+      have := ho.ranIn c
+      simp only [close, Causes.end, Bool.false_eq_true, false_iff]; omega
+    given := fun c r h1 h2 => absurd (hg c r h1) h2
     made := R.made
     cause := fun c _ h2 => by
       have := R.when c
@@ -2110,6 +2178,7 @@ theorem reach_heap {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s :
     refine ⟨Causes.create, fun _ => (0, 0), .create, ?_⟩
     exact {
       ran := fun c => by simp [Model.empty, Causes.create]
+      given := fun c r h => by simp [Model.empty] at h
       made := fun i a h => by simp [Causes.create, Causes.ofs] at h
       cause := fun c h1 _ => by simp [Model.empty] at h1
       kept := fun t => by simp only [Model.empty, Causes.create]; exact .nil
@@ -2144,9 +2213,9 @@ theorem reach_heap {cs : Nat → Comp K V} {rk : State K V → Nat → Nat} {s :
     obtain ⟨hc, lab, hr, R⟩ := ih
     obtain ⟨h', lab', hr', -, R'⟩ := step_heap cs hA (hs.good hA).toCore R hr h
     exact ⟨h', lab', hr', R'⟩
-  | close _ _ ih =>
+  | close hs _ ih =>
     obtain ⟨hc, lab, hr, R⟩ := ih
-    obtain ⟨hr', R'⟩ := close_heap R hr
+    obtain ⟨hr', R'⟩ := close_heap R hr (hs.good hA).given
     exact ⟨_, lab, hr', R'⟩
 
 -- 3: on every reachable state (A2), on the heap the scheduler's calls built: the model's came is

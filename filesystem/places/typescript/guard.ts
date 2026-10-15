@@ -1,5 +1,5 @@
 // guard: a policy's answers (protect's), made into what a run does with them. who asks: the scope
-// open (header.ts' getWriter); from: where the asker is placed, a path, given; the policy, given. it asks,
+// open (header.ts' getWho); from: where the asker is placed, a path, given; the policy, given. it asks,
 // and wraps nothing: whoever calls places asks first, or after for a list.
 //
 // a read is asked through places, told: a run asking tracks what the policy read, so a change to
@@ -18,8 +18,8 @@ import {
 	yes,
 } from "@ermine/protect"
 import { PENDING, type Scheduler } from "@ermine/scheduler"
-import type { Key, Table } from "@ermine/graph/table"
-import { getWriter } from "./header.ts"
+import type { Key, Table } from "@ermine/table"
+import { getWho } from "./header.ts"
 import { at, type Id, type Member, type Path, type Places } from "./places.ts"
 
 // what a refused member's id is, in a list: a stand-in, refused if asked
@@ -34,7 +34,7 @@ export class Refusal extends Error {
 
 export type Setup = {
 	places: Pick<Places, "readValue">
-	scheduler: Pick<Scheduler, "current">
+	scheduler: Pick<Scheduler, "getInfo">
 	table: Pick<Table, "get">
 	// none: everything is allowed
 	may?: Policy
@@ -70,7 +70,7 @@ export function createGuard(setup: Setup): {
 	)
 
 	function asked(ask: (a: Ask) => Answer, op: string, t: Target): [Ask, Answer] {
-		const a: Ask = { who: getWriter(scheduler), op, target: t, from }
+		const a: Ask = { who: getWho(scheduler), op, target: t, from }
 		// a stand-in is refused, never asked
 		if (t.id === REFUSED) return [a, no("refused")]
 		return [a, ask(a)]

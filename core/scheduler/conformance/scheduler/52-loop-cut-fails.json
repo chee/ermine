@@ -1,0 +1,223 @@
+{
+	"title": "a flagged run that cut a loop and then failed, in its run or after an await, ends looping, its error told (proof L3)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "k"
+					},
+					{
+						"write": [
+							"k",
+							{
+								"sum": [
+									{
+										"run": {
+											"read": "k"
+										}
+									},
+									1
+								]
+							}
+						]
+					},
+					{
+						"throw": "x"
+					}
+				]
+			},
+			"to": "a"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 1
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 2,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "failed",
+						"error": "x"
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "looping",
+						"error": "x",
+						"through": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "j"
+					},
+					{
+						"wait": [
+							"q",
+							{
+								"do": [
+									{
+										"write": [
+											"j",
+											{
+												"sum": [
+													{
+														"run": {
+															"read": "j"
+														}
+													},
+													1
+												]
+											}
+										]
+									},
+									{
+										"throw": "y"
+									}
+								]
+							}
+						]
+					}
+				]
+			},
+			"to": "b"
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 4
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "q",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 5,
+						"writer": "b"
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "q",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "looping",
+						"error": "y",
+						"through": [
+							"b"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "j",
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

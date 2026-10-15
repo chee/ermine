@@ -1,12 +1,10 @@
 // What the apply and commit fixtures share: blops made and named, their JSON form, the steps of a
 // session (session.ts has the protocol), and a small model of APPLY.tex used only to check the
-// expectations written by hand. Patch semantics: mutate.ts; changes and becauses: nodes/ts. The
-// names: blop.ts (BLOP.tex), as the history fixtures. apply.ts and commit.ts are never imported.
+// expectations written by hand. Patch semantics: op's apply.ts; a change and a because are plain
+// data here (what history gives). The names: blop.ts (BLOP.tex), as the history fixtures. the
+// subduction apply.ts and commit.ts are never imported.
 import { encode, name } from "@ermine/encoding/blop"
-import mutate from "@ermine/op/mutate"
-import createEntry, { type Entry } from "@ermine/node/entry"
-import createChange from "@ermine/change"
-import createBecause from "@ermine/change/because"
+import apply from "@ermine/op/apply"
 import { toJson } from "../pack/form.ts"
 import { assertEquals } from "@std/assert"
 
@@ -85,24 +83,12 @@ export const first = (a: B, b: B) =>
 // ---- the model: APPLY.tex walked through by hand, small enough to read whole
 const NONE = Symbol("none")
 type Side = unknown
-function scratch(object: Which, content: Side): Entry<unknown, unknown> {
-	const vs = content === NONE ? [] : [{ content, change: {} }]
-	if (object === "value") return createEntry("n", { value: vs })
-	if (object[0] === "info") return createEntry("n", { info: [[object[1], vs]] })
-	return createEntry("n", { children: [[object[1], vs as never]] })
-}
-function firstOf(node: Entry<unknown, unknown>, object: Which): Side {
-	const vs = object === "value"
-		? node.value
-		: (object[0] === "info" ? node.info : node.children).get(object[1]) ?? []
-	return vs.length ? vs[0].content : NONE
-}
-// mutate's patches on content (NONE: an object with no versions); NONE when emptied; throws
-// MutateError when refused
-export function patch(object: Which, content: Side, patches: unknown[]): Side {
-	const node = scratch(object, content)
-	mutate(node as never, object, patches as never, { time: 0, actor: null })
-	return firstOf(node, object)
+// op's patches on content (NONE: an object with no versions); NONE when emptied; throws
+// ApplyError when refused. a children list is a value like any: it does not start as [], and left
+// with nothing it is [] (the old node's lists did both; the node's lists no longer exist)
+export function patch(_object: Which, content: Side, patches: unknown[]): Side {
+	const after = apply(content === NONE ? undefined : content, patches as never)
+	return after === undefined ? NONE : after
 }
 // a blop's side among those given (all taken in)
 export function side(all: B[], b: B): Side {
@@ -120,17 +106,23 @@ export function heads(all: B[], object: Which): B[] {
 
 // ---- versions, in JSON form
 export function version(b: B, content: Side): unknown {
+	// a change header as history makes one: the reader; the site as external; the cause, wallclock
+	// and message as metadata pairs, in that order
 	const header: Record<string, unknown> = { actor: b.blop.actor }
-	for (const k of ["reader", "site", "cause", "wallclock", "message"]) {
-		if (k in b.blop) header[k] = b.blop[k]
-	}
+	if ("reader" in b.blop) header.reader = b.blop.reader
+	if ("site" in b.blop) header.external = [b.blop.site]
+	const metadata = ["cause", "wallclock", "message"].filter((k) => k in b.blop)
+		.map((k) => [k, b.blop[k]])
+	if (metadata.length) header.metadata = metadata
 	header.time = b.time
 	return toJson({
 		...(content === NONE ? {} : { content }),
-		change: createChange("n", header as never),
-		because: createBecause("sync", { lamport: b.lamport, name: b.name }, {
-			signer: hex(b.blop.signer as Uint8Array),
-		}),
+		change: header,
+		because: {
+			layer: "sync",
+			place: { lamport: b.lamport, name: b.name },
+			why: { signer: hex(b.blop.signer as Uint8Array) },
+		},
 	})
 }
 // the versions written by hand, [head, content] in order, checked against the model

@@ -92,8 +92,7 @@
 					"content": "abc",
 					"change": {
 						"actor": "a",
-						"time": 1026,
-						"node": "n"
+						"time": 1026
 					},
 					"because": {
 						"layer": "sync",

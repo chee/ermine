@@ -16,7 +16,7 @@
 #define PACK_H
 
 #include "json.h"
-#include "../../../core/graph/c/table.h"
+#include "../../../core/table/c/table.h"
 #include "../../../core/node/c/node.h"
 
 #include <stdint.h>

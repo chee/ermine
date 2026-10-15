@@ -1,9 +1,14 @@
-// order: what runs next. the due, each at the tick it became due; and the ranks (rank.h), kept,
-// made again only where what some computation is after changed.
+// order: what runs next. the due, each at the tick it became due; and the ranks, kept as rank.h
+// would make them: made whole once (rank.h), then mended where an edge changed.
 //
 // a computation is after: the writers of the keys its last run read (values), and the one it
 // waits after (after). the scheduler says when those change (sees, waits), and when one is made
 // and goes; order changes nothing else of a computation.
+//
+// mending: a computation whose edges changed takes its rank again from its edges (one past the
+// most of what it is after; after nothing, 0), and what is after it does the same, as far as a
+// rank changes. that is rank.h's rank while there is no cycle. a cycle (a component of more than
+// one) is rank.h's alone: while there is one, any change makes the ranks whole again
 #ifndef ORDER_H
 #define ORDER_H
 
@@ -28,7 +33,8 @@ struct od_item {
 	uint64_t mark;
 	int rank;
 	uint64_t rank_epoch;
-	size_t named;
+	// what is after it, by how many edges (a count in the value): the edges turned round
+	pm rev;
 	size_t slot;
 	size_t index;
 };

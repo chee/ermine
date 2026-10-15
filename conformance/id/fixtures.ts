@@ -5,7 +5,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import { encode } from "@ermine/encoding/cbor"
 
 const here = new URL(".", import.meta.url).pathname
-const out = `${here}../../extensions/subduction/conformance/id/`
+const out = `${here}../suites-aside/sync/subduction/conformance/id/`
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const utf8 = (s: string) => new TextEncoder().encode(s)

@@ -1,14 +1,14 @@
 // the slice fuzzed: random places writes, value edits, children edits and table events, the
 // host's, a pulse after each. then every compute's value is the graph read again from scratch:
 // paths walked straight through the table, values straight from it. at the end, every compute disposed:
-// no spot is kept (the scheduler's forget). a few dozen seeds (fuzz runs small)
+// no spot is kept (the scheduler's onTrackingEnd). a few dozen seeds (fuzz runs small)
 import { assert, assertEquals } from "@std/assert"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
-import { createTable, type Id, type Key, TableError } from "@ermine/graph/table"
+import { createTable, type Id, type Key, TableError } from "@ermine/table"
 import { at, createPlaces, move, type Path, place, PlacesError, rename, unplace } from "./places.ts"
 import { get, list } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
@@ -44,17 +44,16 @@ type Reach = { landed: number; refused: number; runs: number; events: number }
 
 function seeded(seed: number, reach: Reach) {
 	const { pick, one } = rand(seed)
-	const s = createScheduler({
-		hook: (m) => void ("starts" in m && reach.runs++),
-		forget: (key) => l.release(key),
-	})
+	const s = createScheduler()
+	s.onRunStart(() => void reach.runs++)
+	s.onTrackingEnd((key) => l.release(key))
 	const table = createTable((part, id) => l.onTableChange(part as Key, id))
 	const paths = createPaths<unknown>()
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
 	const places = l
-	const o = s.root()
+	const o = s.createRootScope()
 	// the host's writes, in its scope
-	const host = s.root([["actor", "fuzz"]])
+	const host = s.createRootScope([["actor", "fuzz"]])
 	const h = () => createChangeHeader(s)
 	// the patches to the entry there, reported; none there: one made with them, added
 	function edit(part: Key, id: Id, patches: Patch[]) {
@@ -65,7 +64,7 @@ function seeded(seed: number, reach: Reach) {
 			table.add(part, id, node)
 		} else {
 			update(there, patches, h())
-			l.markChanged([there])
+			l.commit([there])
 		}
 	}
 
@@ -82,7 +81,7 @@ function seeded(seed: number, reach: Reach) {
 		pick(5)
 			? { t: pick(10), u: "abc".slice(pick(4)), l: [pick(9), pick(9)].slice(pick(3)) }
 			: "plain"
-	s.run(host, () => {
+	s.runWithScope(host, () => {
 		for (const id of IDS) {
 			if (pick(5)) table.add("children", id, createEntry(kids(), h()))
 			if (pick(4)) table.add("value", id, createEntry<unknown>(value(), h()))
@@ -114,7 +113,7 @@ function seeded(seed: number, reach: Reach) {
 			const id = scratch(p)
 			const v = id === undefined ? undefined : table.get("children", id)?.value
 			if (!v || typeof v !== "object" || Array.isArray(v)) return []
-			return Object.keys(v).filter((k) => isId((v as Record<string, unknown>)[k]))
+			return Object.keys(v)
 		},
 		read: (id, path) => at(table.get("value", id)?.value, path),
 	}
@@ -136,8 +135,8 @@ function seeded(seed: number, reach: Reach) {
 			value: undefined as string | undefined,
 			scratch: () => show(fresh, fresh.get(where)),
 		}
-		s.run(o, () =>
-			s.compute(() => show(live, live.get(where)), (v) => {
+		s.runWithScope(o, () =>
+			s.createComputer(() => show(live, live.get(where)), (v) => {
 				c.value = v
 			}))
 		return c
@@ -184,22 +183,22 @@ function seeded(seed: number, reach: Reach) {
 		const id = one(IDS)
 		if (k === 0 || k === 2) {
 			const at = slot(), e = entry()
-			l.markChanged(place(kid(at[0]), at[1], e, h()))
+			l.commit(place(kid(at[0]), at[1], e, h()))
 			return `place ${at} ${String(e)}`
 		}
 		if (k === 1) {
 			const at = slot()
-			l.markChanged(unplace(kid(at[0]), at[1], h()))
+			l.commit(unplace(kid(at[0]), at[1], h()))
 			return `unplace ${at}`
 		}
 		if (k === 3) {
 			const at = slot(), to = one(NAMES)
-			l.markChanged(rename(kid(at[0]), at[1], to, h()))
+			l.commit(rename(kid(at[0]), at[1], to, h()))
 			return `rename ${at} ${to}`
 		}
 		if (k === 4) {
 			const a = slot(), b = slot()
-			l.markChanged(move([kid(a[0]), a[1]], [kid(b[0]), b[1]], h()))
+			l.commit(move([kid(a[0]), a[1]], [kid(b[0]), b[1]], h()))
 			return `move ${a} ${b}`
 		}
 		if (k < 9) {
@@ -235,7 +234,7 @@ function seeded(seed: number, reach: Reach) {
 	for (let step = 0; step < STEPS; step++) {
 		let what: string
 		try {
-			what = s.run(host, write)
+			what = s.runWithScope(host, write)
 			reach.landed++
 		} catch (e) {
 			if (!(e instanceof PlacesError || e instanceof ApplyError || e instanceof TableError)) {
@@ -249,7 +248,7 @@ function seeded(seed: number, reach: Reach) {
 			assertEquals(c.value, c.scratch(), `seed ${seed} step ${step} (${what}): ${c.what}`)
 		}
 	}
-	s.dispose(o)
+	s.teardown(o)
 	assertEquals(paths.kept(), { keys: 0, spots: 0, steps: 0 }, `seed ${seed}: spots kept`)
 }
 

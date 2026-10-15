@@ -1,0 +1,294 @@
+#+title: proposal: nodes and paths, by their data
+#+author: LLM generated working output
+#+date: 2026-10-14
+
+Words: *decided*: chee's words, quoted. *lean*: chee thinking it through. *mine*: my proposal, open
+to change. *open*: not answered. *fact*: measured or counted on 10-14. The lens is Mike Acton's: the
+data first, design for the common case, keep hot apart from cold, and where there's one there are
+many. The measurements were throwaway scripts in /tmp. Nothing was built in the repo.
+
+* Findings
+1. The split by part matches how the data is accessed. A walk reads only children, one name per
+   step, 3–11 steps per get. About 85% of content reads use the value alone, and the bytes are in
+   the value. *fact*
+2. What costs is the table's layout, not the split. Today's index costs about 1 KB per id, more
+   than the data itself (773 B). A walk step takes 3.3 µs at 1M ids. With one Map per part it is
+   958–1,053 B per id and 0.67 µs, with the same key (part, id) and the same API. *mine*
+3. Placing a name copies the whole children map, because update copies on write by default. 10k
+   names in one folder take 8.6 s and 30k take 106 s. With cow false a place takes 1.2 µs. Real
+   folders reach 24k–77k names. *fact*
+4. "The children of /work" are three facts, each with its own key. The names in the shared folder
+   live in the node. My overrides are a patch node that I place. A thing at a path on my device
+   lives in my root's rows. Nothing that belongs to one asker goes inside a shared node. *mine*
+5. Attributes are used by 5 of 79 demos. Metadata and per-viewer state mostly sit as child nodes.
+   *fact*
+
+* 1. The data
+** Trees (*fact*: walked on this Mac; files counted for depth)
+| tree               | folders |   files | files/folder | fan-out med/p90/p99/max | depth med/p90/max | file size median | ≤ 4 KB | bytes in files > 1 MB | name chars med/p99 |
+|--------------------+---------+---------+--------------+-------------------------+-------------------+------------------+--------+-----------------------+--------------------|
+| ermine core/       |      88 |     514 |          5.8 | 2 / 20 / 60 / 60        | 4 / 8 / 8         | 2.0 KB           | 64%    | 85%                   | 15 / 27            |
+| playground/demos   |      94 |     411 |          4.4 | 3 / 12 / 36 / 36        | 3 / 4 / 5         | 5.9 KB           | 38%    | 70%                   | 9 / 15             |
+| one node_modules   |     358 |   1,627 |          4.5 | 3 / 11 / 62 / 113       | 7 / 9 / 11        | 2.1 KB           | 62%    | 94%                   | 12 / 30            |
+| ~/Desktop          |   7,541 |  30,020 |          4.0 | 2 / 4 / 27 / 2,412      | 7 / 11 / 14       | 2.1 KB           | 55%    | 96%                   | 22 / 56            |
+| ~/Documents        |  29,096 | 700,362 |         24.1 | 3 / 39 / 236 / 24,027   | 9 / 13 / 17       | 13.6 KB          | 33%    | 94%                   | 15 / 66            |
+| ~/soft             | 145,397 | 884,622 |          6.1 | 3 / 10 / 72 / 77,716    | 11 / 13 / 17      | 2.0 KB           | 62%    | 73%                   | 18 / 83            |
+- Folders are 4–20% of the nodes. Most nodes are leaves.
+- A children pair (name plus id) is 40–60 B. A folder's children are about 150 B at the median,
+  3–14 KB at p99 and up to about 4 MB at the max.
+- Bytes are mostly in large content. Counts are mostly small things.
+
+** The demos (*fact*: a survey of 79 demos in playground/, counting call sites, rough)
+| part       | read sites | write sites | demos using it |
+|------------+------------+-------------+----------------|
+| value      |       ~757 |        ~679 | nearly all     |
+| attributes |        ~13 |          ~7 | 5 of 79        |
+| children   |       ~388 |        ~886 | nearly all     |
+| change     |   33 files |           – | value's only   |
+
+| read together, in one function                  | sites | e.g.                                           |
+|-------------------------------------------------+-------+------------------------------------------------|
+| value alone                                     |  ~85% | counter, todos, lab-life, clock                |
+| children names alone                            |   ~20 | big-shell, dungeon, react                      |
+| children + each child's value                   |   ~30 | d2, fancy-synth, fancy-sequencer, workspace    |
+| children + each child's attributes (ls -l)      |    ~6 | fancy-desktop, desk                            |
+| value + attributes of one node                  |    ~3 | fancy-desktop, desk                            |
+- There are 18 attribute keys in all, 1–3 per node. Metadata is more often a child node: type,
+  pos, accent, colour, shape and speed are read by name (desk, fancy-scene, fancy-desktop).
+- Per-viewer state is stored as child nodes of shared things in 10 or more demos: selected, window
+  pos and z, caret, hover, focus, camera, open, mode, pointer.
+- Values are small: strings, small JSON, lists. Typed arrays stay at or under 4 KB, and source text
+  is a few KB. Fan-out is 2–10, with a max of 3,168 in life. Depth is 3–5.
+- In the examples, t.make places a node and writes its value in one action (377 sites). That is two
+  entries on two ids: the parent's children and the child's value.
+
+** What a node holds (*mine*: estimates from the two tables above)
+| part       | holds                                   | size                           | ids having it | read                                 | written                                  | read with                            |
+|------------+-----------------------------------------+--------------------------------+---------------+--------------------------------------+------------------------------------------+--------------------------------------|
+| value      | text, JSON, bytes, a function           | 50 B–10 KB; bytes up to MBs    | most leaves   | most reads                           | typing 5–10/s, a drag 60/s               | rarely its change or a type          |
+| attributes | type, title, needs/provides, status     | 1–3 keys, 50–300 B             | few           | listings, type dispatch, status      | rare; status about 2 per async run       | the parent's listing                 |
+| children   | name → id                               | ~50 B per name; median 3 names | 4–20%         | every walk step: 3–11 per get        | up to ~1/s; imports in bursts            | each child's value or attributes     |
+| change     | time, actor, metadata, site, latest op  | ~350 B, plus the op            | 1 per entry   | inspector, why, rewind, sheet's "by" | every write                              | –                                    |
+
+** Hot questions and their common answers
+| #  | question                    | how often               | reads                                              | common answer (*mine*)                                    |
+|----+-----------------------------+-------------------------+----------------------------------------------------+-----------------------------------------------------------|
+| Q1 | what id is at this path?    | every get, lookup, open | 3–11 children entries, one name each               | a plain name, with no process row or override (> 99%)     |
+| Q2 | what's in this folder?      | every listing           | its names, then each child's value or attributes   | 2–10 names; p99 72–236                                    |
+| Q3 | what's in this node?        | most reads              | the value alone                                    | small                                                     |
+| Q4 | is it pending or failed?    | every run               | attributes[ermine.computer.status] on its own node | absent (done)                                             |
+| Q5 | who changed it, and when?   | rare                    | the value's change                                 | no code found reading attributes' or children's change    |
+| Q6 | what changed since I read?  | every write             | spots (part, id, path)                             | one spot or none                                          |
+
+** History, sync and saving per part
+| part         | merges           | history is used for                               | saved            | sent                                |
+|--------------+------------------+---------------------------------------------------+------------------+-------------------------------------|
+| value        | by op, text/JSON | undo (latest op), rewind, blame, sync             | yes              | in history                          |
+| attributes   | per key          | rarely                                            | yes, status never | in history; status never           |
+| children     | per name         | who placed it, restore from Trash, same-name conflicts | yes         | in history                          |
+| process rows | –                | none                                              | never (*decided*) | ephemerally (*decided*)            |
+- One sedimentree per node, with each table's history inside it, *decided*: "21 one sedimentree
+  per node yes".
+
+** The table in memory (*fact*)
+The test set was 100k ids. One id in six was a folder of six names. Every id had attributes {title,
+type}, every non-folder had a 45-char value, and every header held a time, an actor, two metadata
+pairs and one site. Walk step means one read of a folder's children entry plus one name. Timings
+are from Deno on this Mac, one or two runs each.
+| layout                                            | B per id | of which index | walk step, 100k | 1M ids                |
+|---------------------------------------------------+----------+----------------+-----------------+-----------------------|
+| the values alone, no headers, no table            |      421 | –              | –               | –                     |
+| the values and headers, no table                  |      773 | –              | –               | –                     |
+| today: id → Map of parts, entry → Map of Sets     |    1,794 | ~1,020         | 255–340 ns      | 1,756 B/id, 3.3 µs    |
+| a Map per part, entry → its key in one flat Map   |    1,053 | ~280           | 39 ns           | –                     |
+| a Map per part, the key kept on the entry         |      990 | ~217           | 49–82 ns        | 958 B/id, 0.67 µs     |
+| one record per id                                 |      840 | ~67            | 103–166 ns      | –                     |
+- A header costs about 350 B, which is as much as a small value. It is cold: only the value's
+  header is read, and only in about 33 files.
+- Capturing the site costs about 12 µs per write, so an import of 100k placements spends about
+  1.2 s capturing. Sites are core, so this is reported as a fact and nothing changes.
+
+* 2. The parts split, judged on the data
+** What it buys and what it costs
+| what            | the split buys                                                                                | it costs                                                                                                                      |
+|-----------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------|
+| walks           | a step reads one name in one entry and never touches the value's bytes                        | in memory it is one pointer either way; in sync a whole node travels together, but folders seldom hold big values              |
+| tracking        | a change spot and a table event per part                                                      | none, but paths.ts already tracks by path inside a value, so the part is one more step at the top and adds no granularity paths lacks |
+| attribution     | the latest change per part, as unix keeps mtime (data) and ctime (inode) apart                | one change covers a whole map: who placed each name comes only from sync's history                                            |
+| patch nodes     | `at` is that part's version, so a title override isn't made stale by typing (10–60 ops/s)     | a patch over two parts takes two patch nodes                                                                                  |
+| fate            | save and send can be chosen per part (process is never saved): 3–6 choices, not a mark per entry | –                                                                                                                          |
+| merge           | each commit names its table, so sync can leave a part out                                     | none for conflicts: a CRDT doc would merge per key anyway                                                                     |
+| memory          | –                                                                                             | today's index is ~1 KB per id, more than the data; each write's header is ~350 B                                               |
+| the whole node  | –                                                                                             | get(id) reads one Map per id today, or 3–6 gets with a Map per part                                                           |
+
+** Against other systems (*fact*)
+| system      | content                       | metadata                                                          | names                                              | per-asker names                                  | history                            | shared as             |
+|-------------+-------------------------------+-------------------------------------------------------------------+----------------------------------------------------+--------------------------------------------------+------------------------------------+-----------------------|
+| unix        | data blocks, the inode points | inode: mode, uid, size, mtime, ctime                              | dirent in the parent's data: name → inode, d_type  | mounts per namespace, never in files             | none                               | –                     |
+| Plan 9      | file data                     | stat: qid (path, vers, type), mode, times, length, uid, muid, name | a directory read returns the children's stats      | bind/mount per process, unions; never stored     | qid.vers; QTTMP = not backed up    | –                     |
+| git         | blob, bytes only              | mode in the parent's tree; who and when on the commit             | tree entries (mode, name, hash)                    | none                                             | per repo                           | repo                  |
+| WNFS public | a CID to UnixFS blocks        | a CBOR map inline in the node                                     | entries name → CID; dir and file are two types     | none                                             | previous, per node                 | subtree (a private key opens everything below) |
+| Automerge   | anything in the doc           | anything in the doc                                               | patchwork's folder doc lists {name, type, url}     | none                                             | per doc                            | doc                   |
+| ermine      | value                         | attributes                                                        | children                                           | open                                             | per part, in one sedimentree per node | node               |
+- Every system keeps the big bytes apart from a small record. When WNFS keeps "metadata with
+  content", the metadata sits with a pointer to the content; the bytes are stored elsewhere.
+- Every system keeps names in the parent, as ermine's children do.
+- Listing with metadata is hot everywhere. Unix dirents gained d_type, macOS added
+  getattrlistbulk, Plan 9 returns stats from a directory read, git keeps mode in the tree, and patchwork keeps type in
+  the folder doc. In ermine a listing is N+1 reads. In memory that is under 0.3 ms for 1,000
+  children. Over sync, all N nodes must have arrived first.
+- Unix and Plan 9 never store per-asker names in the files: the namespace belongs to the process.
+- In WNFS private, a folder's key opens everything below it, so "shared with fewer people, deeper
+  down" can't be said. Keyhive can say it per doc, but the id stays visible in the parent,
+  *decided*: "this isss true".
+
+** Judgement (*mine*)
+- Value and children belong apart. Size, readers, write rate and merge all agree.
+- Attributes and value are apart by meaning, *decided*: "metadata is not the content of a file". Unix
+  splits mtime and ctime the same way. Use of attributes is small so far (5 of 79 demos): demos put
+  type and pos in child nodes, which can be tracked, placed and overridden by name. I give no
+  verdict on this.
+- The cost is in the layout, not the split. The key (part, id) stays and only the storage changes:
+#+begin_src ts
+// a Map per part, as a structure of arrays: a walk touches only the children Map. same API
+const parts = new Map<Key, Map<Id, Entry<unknown>>>()
+// an entry's key; a list only when one entry sits under several keys (allowed, *decided*; rare)
+const where = new Map<Entry<unknown>, Packed | Packed[]>()
+const get = (part: Key, id: Id) => parts.get(part)?.get(id)
+// the whole node: 3–6 gets
+const node = (id: Id) => [...parts].flatMap(([p, m]) => m.has(id) ? [[p, m.get(id)!]] : [])
+#+end_src
+
+** Children writes (*fact*, then *mine*)
+| names placed one by one into one entry | cow on (the default) | cow false |
+|----------------------------------------+----------------------+-----------|
+| 1,000                                  | 81 µs per place      | 1.9 µs    |
+| 10,000                                 | 860 µs (8.6 s total) | 1.3 µs    |
+| 30,000                                 | 3.5 ms (106 s total) | 1.2 µs    |
+- With cow on, each place copies the whole map. Median folders (3 names) don't notice. Folders at
+  p99 (72–236) pay about 10–40 µs per place, at roughly 0.16 µs per key copied. Importing the
+  largest real folders (24k–77k) takes 1–12 minutes.
+- *mine*: children entries are made with cow false, which *decided* 10-13 allows: "yeah let's add
+  `cow: false`". The alternative is a map whose write copies one key.
+
+* 3. Children and paths when a folder is shared
+** Setup
+#+begin_src text
+R  my device root       R.children = {work: W, archive: A}
+A  my /archive          A.children = {work: W}            (W mounted twice)
+M  Juno's root          M.children = {projects: P}
+P  her /projects        P.children = {ermine: W}
+W  the shared folder    W.children = {plan: n1, notes: n2}
+#+end_src
+
+** The cases
+| #  | case                                         | what is written                                                                              | where it lives                       | how a read finds it                                                       | who sees it                                                                  |
+|----+----------------------------------------------+----------------------------------------------------------------------------------------------+--------------------------------------+---------------------------------------------------------------------------+------------------------------------------------------------------------------|
+| 1  | mine at /work, Juno's at /projects/ermine    | nothing new                                                                                  | each name in its parent: R, P        | /work/plan is R → W → n1: two children reads                              | each of us by our own name; one W                                            |
+| 2  | Juno adds a name                             | place(W.children, "todo", n3): one ~50 B patch                                               | W.children, with W                   | marks (children, W, [todo]) and W's keys spot                             | everyone with W, at both of my mounts                                        |
+| 3a | a name only I want, where I place it         | o1, a patch node: {on: W, part: children, patches: [{path: [scratch], value: s1}], at}; then R.children.work goes from W to o1 | o1 in my tree | the names of W, with o1's patches over them                                  | me at /work; /archive/work only if A.children.work → o1 too                  |
+| 3b | a name only I want, at one path              | a row: R.process = {work: {scratch: s1}}                                                     | my root's rows                       | the row comes before the names                                            | me, at /work only                                                            |
+| 4  | a process at /work/clock                     | a row {work: {clock: c1}}, with an until                                                     | my root's rows; never saved          | at W, "clock": the row first (*decided*: "the ephemeral wins")            | me at /work/clock, not at /archive/work; Juno *open*                         |
+| 5  | a folder mounted twice                       | nothing                                                                                      | one W.children entry under one key   | both walks read the same spot (children, W, [name])                       | the same names at both; a row only at its path; o1 only where placed         |
+| 6  | I rename /work to /job                       | rename(R.children, work, job): one patch                                                     | R.children                           | W and o1 are untouched; the same write moves the [work] row to [job]      | –                                                                            |
+| 6b | Juno renames W/plan to W/spec                | one patch in W.children                                                                      | W                                    | o1's patches name other keys, so nothing needs redoing; a row under /work/plan/… is off the route | *open*                                                 |
+| 7a | W/secret shared with fewer (not Ana)         | S placed in W.children                                                                       | W                                    | Ana's walk is refused at S                                                | Ana sees the name and the id                                                 |
+| 7b | the same, hidden                             | o_s over W.children adds secret; o_s is shared with me and Juno; each of our mounts → o_s     | o_s, plus one write per member       | Ana's walk never meets it                                                 | Ana sees nothing                                                             |
+| 8  | children saved on her side, ephemeral on mine | no write; each side keeps its own setting for (children, D)                                 | each side                            | reads are the same on both sides                                          | *decided*: "something might be permanent on their side and ephemeral on mine" |
+
+** Where "the children of /work" live (*mine*)
+| the fact                                 | key                                          | lives                                 | read cost per step                      | saved and sent              |
+|------------------------------------------+----------------------------------------------+---------------------------------------+-----------------------------------------+-----------------------------|
+| a name in the shared folder              | (W, name)                                    | W.children, in the node               | 1 get                                   | with W                      |
+| my override, wherever I place it         | (my parent, name) → a patch node over W      | beside W, in my tree                  | +1 get on the "patch" part, usually a miss | with my tree             |
+| a thing at a path on my device           | (my root, path)                              | my root's process rows                | +1 get while the trie cursor lives      | never saved; sent ephemerally (*decided*) |
+| whether a side keeps it                  | (side, part), with exceptions by id          | the side                              | none on reads                           | –                           |
+- Nothing that belongs to one asker sits inside W, *lean*: "this information should actually sit
+  outside of the nodes themselves".
+- The common step is one get. The other two checks cost only where they hold something.
+
+** Patch nodes, for Basman's open authorship
+- chee 10-14: "Basman-style changing 1 part of something without changing other parts, which i
+  think we get from patch nodes attached to other nodes".
+- A patch node is {patches, on, at}, *decided*. *mine*: `on` names a part as well as an id, and `at`
+  is that part's version.
+
+| part patched | patch shape                  | work to keep it current as the target changes                    |
+|--------------+------------------------------+------------------------------------------------------------------|
+| children     | {path: [name], value: id}    | none unless the same name changes: other names commute           |
+| attributes   | {path: [key], value}         | the same, per key                                                |
+| value (text) | ranged patches               | every op on that part after `at` (the anchors library)           |
+- Who sees a patch node depends only on where it is placed, *mine*:
+  - Only me: my mount points at it (3a). This covers a patch node over a shared folder that only I
+    see.
+  - Others too: place it as a name inside a folder they walk through. That can be W itself,
+    W.children.config → o_c over c (others see the override and c stays untouched), or a shared
+    parent.
+  - Some of us: share o1 with them, and each of them points their mount at it (7b).
+- An override deep inside a folder I don't own copies the path: d patch nodes, where d is its depth
+  under my mount (estimated 1–2). Each is about 150 B, and over children maps they cost nothing to
+  keep current.
+- Reads are lists: entries() gives the row, then each patch node outermost first, then the target.
+
+** The step (*mine*)
+#+begin_src ts
+// one step for one asker. rows: the asker root's process rows at the path so far (usually none)
+function step(at: Id, name: string, rows?: Level): { id?: Id; rows?: Level } {
+	const row = rows?.[name]
+	const next = isLevel(row) ? row : undefined
+	if (isId(row)) return { id: row, rows: next } // the ephemeral wins, *decided*
+	return { id: child(at, name), rows: next }
+}
+// a name in a folder, through a patch node when the id is one
+function child(id: Id, name: string): Id | undefined {
+	const p = table.get("patch", id)?.value // {on, part, at, patches}: usually nothing there
+	if (p?.part !== "children") return table.get("children", id)?.value?.[name]
+	const over = last(p.patches, [name]) // the latest patch at [name]
+	return over ? over.value : child(p.on, name) // a removal: undefined
+}
+// every thing at a name, the front one first: [{id, from}] (reads are lists)
+function entries(at: Id, name: string, rows?: Level): { id: Id; from: Id | "process" }[]
+#+end_src
+
+* 4. Core and library
+| piece                                         | where                     | today                                    | change (*mine*)                                                          |
+|-----------------------------------------------+---------------------------+------------------------------------------+---------------------------------------------------------------------------|
+| entry, update, createNode                     | core/node                 | built                                    | children entries made with cow false                                     |
+| table (part, id) → entry                      | core/table                | Maps per id, Sets per entry              | a Map per part and a flat key per entry; same API                        |
+| parts                                         | core/table Tables         | value, attributes, children, plus declared ones | "patch" and "process" declared by their libraries                 |
+| walk, get, lookup, list on children           | filesystem/places         | built                                    | none: places stays on children                                           |
+| rows and patch nodes in the step; entries()   | a library over places     | not built                                | two checks per step, each a get, where chee's union of contributors goes  |
+| process rows                                  | the process library       | structure *decided*                      | which node anchors them is *open*                                         |
+| patch nodes: reading through, carrying forward | a library (anchors)      | not built                                | `on` names a part; `at` is that part's version                            |
+| keep and send per side                        | storage and sync          | *open*                                   | a side's setting per part, never a mark on the node                       |
+| listing summaries (child types for ls)        | a derived library cache   | –                                        | only if listings over sync turn out slow                                  |
+- The core changes in two places only: the table's layout and cow on children. Neither touches the
+  API.
+
+** Where this strains chee's decisions and principles
+- Outer wins was set aside, *decided*: "let's forget outer wins for now". Nothing here walks path
+  entries. Rows are read from the walk's own root only, as plan.org already has it: "a walk reads
+  only its own root's rows until then".
+- 3a needs the path copied for deep overrides (d patch nodes). A table at the root keyed by target
+  id would avoid the copying for one get per step. It is close to "a local children part", which was
+  in the 10-14 bundle chee called "none of this is right".
+- "A name only I want there" gets two keys, 3a (follows where I place it) and 3b (stays at a path).
+  chee: "i keep moving around where that choice is made". The data says the key is the choice.
+- "a process exists in one place and has 1 path", *decided*: rows by path give this. Whether Juno
+  sees it depends on the anchor (W or my root), which is left open: "is there a way to avoid
+  answering this".
+- Keep per side: "a don't-save flag" was also in that rejected bundle. Here it is a setting each
+  side holds, never something on the node. How storage and sync coordinate is *open*.
+- Attributes: the usage data is thin. Whether they fit is chee's call.
+- "it would be nice to be able to treat a node like it's a real thing", *thought*: with a Map per
+  part, a whole node is 3–6 gets.
+- Undo keeps the old value, *decided*: "it's not going to be much ram". That holds for the demos
+  (values of 4 KB or less). A whole-value set of an N MB image holds 2N MB until the next write.
+- 7a leaks the name and the id (Keyhive's own rule). 7b costs one write per member.
+
+** Open
+- A rename arriving by sync across a row's route: show the row off its route, or move it.
+- Whether sharing a folder shows the processes in it (anchoring the rows at W or at my root).
+- What a patch node's `at` is: change identity is still *open*: "it dosn't matter right now".
+- Whether listings over sync need summaries of the children.
+- Keep and send: how the person, storage and sync coordinate.

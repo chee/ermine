@@ -291,8 +291,7 @@
 					"content": "bcdx",
 					"change": {
 						"actor": "a",
-						"time": 1073,
-						"node": "n"
+						"time": 1073
 					},
 					"because": {
 						"layer": "sync",
@@ -309,8 +308,7 @@
 					"content": "abcde",
 					"change": {
 						"actor": "a",
-						"time": 1070,
-						"node": "n"
+						"time": 1070
 					},
 					"because": {
 						"layer": "sync",

@@ -62,9 +62,9 @@
 		{
 			"op": "kept",
 			"expect": {
-				"keys": 3,
-				"spots": 3,
-				"steps": 5
+				"keys": 2,
+				"spots": 2,
+				"steps": 4
 			}
 		},
 		{

@@ -15,6 +15,7 @@
 		"./server": "./demo/server.ts",
 		"./storage": "./live/storage.ts",
 		"./transport": "./typescript/transport.ts",
-		"./wiring": "./typescript/wiring.ts"
+		"./wiring": "./typescript/wiring.ts",
+		"./world": "./typescript/world.ts"
 	}
 }

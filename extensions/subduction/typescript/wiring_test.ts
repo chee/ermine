@@ -1,11 +1,9 @@
 import { assertEquals, assertRejects } from "@std/assert"
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
-import type { Changed } from "@ermine/graph"
-import { createScheduler } from "@ermine/scheduler"
 import { id } from "./id.ts"
 import { createDevice } from "./transport.ts"
-import { createWiring, fresh } from "./wiring.ts"
-import createNode from "@ermine/node"
+import { type Changed, fromFact } from "./wiring.ts"
+import { createWorld } from "./world.ts"
 
 const ROOT = id("unlocked", Uint8Array.from({ length: 32 }, (_, i) => 0x20 + i))
 
@@ -19,90 +17,97 @@ function party() {
 		new DataView(b.buffer).setUint32(0, ++calls)
 		return b
 	}
-	const records: Changed[] = []
-	// deno-lint-ignore no-explicit-any
-	const held: { s?: any } = {}
-	const wiring = createWiring(device, {
-		versions: (...a) => held.s.internal.versions(...a),
-		signer,
-		random,
-	})
-	const s = held.s = createScheduler({
-		root: createNode(ROOT, {}),
-		actor: "a",
-		site: () => undefined,
-		id: () => fresh(random),
-		changed: (r) => (records.push(r), wiring.changed(r)),
-	})
-	return { s, device, wiring, records }
+	const w = createWorld(device, { root: ROOT, actor: "a", signer, random })
+	return { w, device, wiring: w.wiring }
 }
 
 const put = (value: unknown) => [{ path: [], value }]
+const heads = (device: ReturnType<typeof party>["device"], object: Changed["object"]) =>
+	device.histories(ROOT).heads(object).map((h) => h.blop.lamport)
 
 Deno.test("a change is taken in to its histories at once, before the next operation", () => {
-	const { s, device } = party()
-	s.write([], put(1))
-	assertEquals(device.histories(ROOT).heads("value").map((h) => h.blop.lamport), [1])
-	s.write([], put(2))
+	const { w, device } = party()
+	w.write("value", ROOT, put(1))
+	assertEquals(heads(device, "value"), [1])
+	w.write("value", ROOT, put(2))
 	// one history: the second names the first
-	assertEquals(device.histories(ROOT).heads("value").map((h) => h.blop.lamport), [2])
-	const v = s.get(ROOT)!.value
-	assertEquals(v.map((x: { content: unknown }) => x.content), [2])
-	assertEquals((v[0].because as { layer: string }).layer, "sync")
+	assertEquals(heads(device, "value"), [2])
+	assertEquals(w.table.get("value", ROOT)!.value, 2)
 })
 
 Deno.test("sealing, storing and sending come after: idle waits for them", async () => {
-	const { s, device, wiring } = party()
-	s.write([], put(1))
+	const { w, device, wiring } = party()
+	w.write("value", ROOT, put(1))
 	assertEquals((await device.stored(ROOT)).length, 0)
 	await wiring.idle()
 	await device.idle()
 	assertEquals((await device.stored(ROOT)).length, 1)
 })
 
-Deno.test("records: one per object changed, none for a refused operation", () => {
-	const { s, records } = party()
-	s.insert(ROOT, "old", "x")
-	s.rename(ROOT, "old", "new")
-	assertEquals(records.map((r) => [r.object, r.at]), [
-		[["children", "old"], 0],
-		[["children", "old"], 0],
-		[["children", "new"], 0],
-	])
-	const before = records.length
-	try {
-		s.pop(ROOT, "none", 0)
-	} catch { /* range */ }
-	try {
-		s.write(["nowhere"], put(1))
-	} catch { /* nothing-there */ }
-	assertEquals(records.length, before)
-	s.pop(ROOT, "new", 0)
-	assertEquals(records.at(-1)!.at, { pop: 0 })
-	assertEquals(records.at(-1)!.patches, [])
+Deno.test("children: one object a name, a rename taking the old name out", () => {
+	const { w, device } = party()
+	w.write("children", ROOT, [{ path: [], value: {} }, { path: ["old"], value: "x" }])
+	assertEquals(heads(device, ["children", "old"]), [1])
+	w.write("children", ROOT, [{ path: ["new"], move: { path: ["old"] } }])
+	assertEquals(heads(device, ["children", "old"]), [2])
+	assertEquals(heads(device, ["children", "new"]), [1])
+	assertEquals(w.table.get("children", ROOT)!.value, { new: "x" })
+	// the sides: the old name is emptied
+	assertEquals(device.histories(ROOT).heads(["children", "old"]).length, 1)
 })
 
-Deno.test("a node whose id is not ermine:// is not committed; versions makes no record", () => {
-	const { s, device, records } = party()
-	const plain = s.create("p", { id: "plain" })
-	assertEquals(records.map((r) => [r.node, r.ephemeral]), [["plain", false]])
+Deno.test("fromFact: the value as it is; the table itself and a table taken out make none", () => {
+	const header = { time: 1, actor: "a" }
+	const fact = (part: string, patches: unknown[], change: unknown = header) =>
+		({ part, id: ROOT, patches, change, entry: undefined }) as never
+	const gone = { part: "value", id: ROOT, patches: put(1), change: undefined } as never
+	assertEquals(fromFact(fact("value", put(1)), 0).map((r) => [r.object, r.at]), [["value", 0]])
+	assertEquals(fromFact(fact("children", put({}))), [])
+	assertEquals(fromFact(gone), [])
+	assertEquals(fromFact(fact("other", put(1))), [])
+	assertEquals(
+		fromFact(fact("attributes", [{ path: ["k", "j"], value: 1 }])).map((
+			r,
+		) => [r.object, r.patches]),
+		[[["info", "k"], [{ path: ["j"], value: 1 }]]],
+	)
+})
+
+Deno.test("a node whose id is not ermine:// is not committed", () => {
+	const { w, device } = party()
+	w.write("value", "plain", put(1))
 	assertEquals(device.histories(ROOT).heads("value").length, 0)
-	s.internal.versions(plain, "value", [])
-	assertEquals(records.length, 1)
-	assertEquals(s.get(plain)!.value, [])
+	assertEquals(w.table.get("value", "plain")!.value, 1)
 })
 
-Deno.test("the scheduler's interface does not hold versions", () => {
-	const { s } = party()
-	assertEquals("versions" in s, false)
-	assertEquals(typeof s.internal.versions, "function")
+Deno.test("versions taken in are written to the table and not sent out", () => {
+	const { w, device } = party()
+	const because = {
+		layer: "sync" as const,
+		place: { lamport: 1, name: "n" },
+		why: { signer: "s" },
+	}
+	const from = { actor: "b", signer: "s", name: "n" }
+	w.versions(ROOT, "value", [{ content: 5, change: { time: 3, actor: "b" }, because }], from)
+	assertEquals(w.table.get("value", ROOT)!.value, 5)
+	assertEquals(w.table.get("value", ROOT)!.change.actor, "b")
+	w.versions(ROOT, ["info", "k"], [{ content: 1, change: { time: 3, actor: "b" }, because }], from)
+	assertEquals(w.table.get("attributes", ROOT)!.value, { k: 1 })
+	w.versions(ROOT, ["info", "k"], [], from)
+	assertEquals(w.table.get("attributes", ROOT)!.value, {})
+	assertEquals(device.histories(ROOT).heads("value").length, 0)
 })
 
 Deno.test("a commit that cannot be made is reported by idle, not thrown at the operation", async () => {
-	const { s, wiring } = party()
-	// the graph holds two versions the histories do not: a write at the second has no head to follow
-	const change = { node: ROOT, time: 0, actor: "x" }
-	s.internal.versions(ROOT, "value", [{ content: 1, change }, { content: 2, change }] as never)
-	s.write([], put(3), undefined, 1)
+	const { wiring } = party()
+	// a version the histories do not have: a write at it has no head to follow
+	wiring.changed({
+		node: ROOT,
+		object: "value",
+		patches: put(3),
+		header: { time: 0, actor: "x" },
+		at: 1,
+		ephemeral: false,
+	})
 	await assertRejects(() => wiring.idle())
 })

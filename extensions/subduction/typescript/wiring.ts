@@ -1,18 +1,74 @@
 // sync's side of the graph (WIRING.tex): each record a change made goes out (COMMIT.tex), taken in
 // to its histories at once and sealed, stored and sent after; each blop taken in from elsewhere comes
-// in (APPLY.tex) as its object's versions. The graph's `changed` is this one's `changed`; the
-// scheduler's internal `versions` is given to it
+// in (APPLY.tex) as its object's versions. The graph no longer calls a `changed` of ours, and has
+// no internal `versions`: a record is what `fromFact` makes of a fact a places watch is told, and
+// `versions` is whatever the host gives (it was the old scheduler's)
 import { type Blop, encode, name as blopName } from "@ermine/encoding/blop"
-import type { Changed } from "@ermine/graph"
+import type { ChangeHeader } from "@ermine/node/entry"
+import type { Patch } from "@ermine/op/apply"
+import type { Fact } from "@ermine/places"
 import { versions as applied } from "./apply.ts"
-import { commit } from "./commit.ts"
+import { type At, commit } from "./commit.ts"
 import { id as idOf, is } from "./id.ts"
 import { seal, type Signer, stored } from "./seal.ts"
 import type { Device, Layer } from "./transport.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 
-// the scheduler's internal versions, given its blop just taken in (its header, signer and name)
+// a change made, as a record: the node, the object of it, its patches and header, which version
+// it is made at (COMMIT.tex), and whether it is ephemeral. This was the graph's `Changed`; nothing
+// in core has it now, so it is sync's own
+export type Changed = {
+	node: string
+	object: Blop["object"]
+	patches: readonly Blop["patches"][number][]
+	header: ChangeHeader
+	at: At
+	ephemeral: boolean
+}
+
+// a fact places told a watch (or eachEntryChange gave), as records. The value table is the object
+// "value". The attributes and children tables are an object each name: ["info", name] and
+// ["children", name], the patches' first step the name taken off. What cannot be put in one name is
+// left out: a patch at the table itself, and a move that is not a rename (both paths one name). The
+// fact's change is the header; a fact taken out (no change) makes none
+export function fromFact(fact: Fact, at: At = 0, ephemeral = false): Changed[] {
+	const { change, entry } = fact
+	if (typeof fact.id !== "string" || change === undefined) return []
+	const node = fact.id, header = change
+	const make = (object: Blop["object"], patches: Patch[]): Changed => ({
+		node,
+		object,
+		patches,
+		header,
+		at,
+		ephemeral,
+	})
+	if (fact.part === "value") return [make("value", fact.patches as Patch[])]
+	if (fact.part !== "attributes" && fact.part !== "children") return []
+	const kind = fact.part === "attributes" ? "info" : "children"
+	const held = entry?.value as Record<string, unknown> | undefined
+	const by = new Map<string, Patch[]>()
+	const add = (name: string, p: Patch) => by.set(name, [...by.get(name) ?? [], p])
+	for (const p of fact.patches) {
+		if (p.path.length === 0) continue
+		const name = String(p.path[0])
+		if (p.move === undefined) {
+			add(name, { ...p, path: p.path.slice(1) } as Patch)
+		} else if (
+			p.path.length === 1 && p.move.path.length === 1 && p.range === undefined &&
+			p.move.range === undefined
+		) {
+			// a rename: the name taken out, the new one put
+			add(String(p.move.path[0]), { path: [] })
+			add(name, { path: [], value: held?.[name] })
+		}
+	}
+	return [...by].map(([name, patches]) => make([kind, name], patches))
+}
+
+// what the host is given for a blop just taken in: its versions, and the blop's header, signer and
+// name
 export type Versions = (
 	node: string,
 	object: Blop["object"],
@@ -30,7 +86,7 @@ export type Versions = (
 ) => void
 
 export type Wiring = {
-	// the graph's `changed`: commits the record, takes its blop in at once, makes its object's
+	// a change made: commits the record, takes its blop in at once, makes its object's
 	// versions; sealing, storing and sending come after
 	changed(record: Changed): void
 	// resolves when no sealing, storing or sending is left; throws what one of them threw
@@ -47,7 +103,7 @@ export type Options = {
 	kind?: (live: unknown) => unknown
 }
 
-// an id for a node made, from the lock "unlocked" (ID.tex): the scheduler's id option
+// an id for a node made, from the lock "unlocked" (ID.tex)
 export const fresh = (random: (n: number) => Uint8Array): string => idOf("unlocked", random(32))
 
 export function createWiring(device: Device, options: Options): Wiring {

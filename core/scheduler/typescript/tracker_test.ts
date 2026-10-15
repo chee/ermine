@@ -690,32 +690,32 @@ Deno.test("scheduler: a reader linked twice to a spot runs once when it changes,
 	const s = createScheduler()
 	let runs = 0
 	let shape = ["a", "b"]
-	s.run(s.root(), () =>
-		s.compute(() => {
+	s.runWithScope(s.createRootScope(), () =>
+		s.createComputer(() => {
 			runs++
-			for (const k of shape) s.read(k)
+			for (const k of shape) s.track(k)
 			return runs
 		}, () => {}))
 	s.pulse()
 	assertEquals(runs, 1)
 	// old [a, b], read b, a, b: two links to b
 	shape = ["b", "a", "b"]
-	s.changed(["a"])
+	s.mark(["a"])
 	s.pulse()
 	assertEquals(runs, 2)
 	// changed on the doubled spot: due once, one run
-	s.changed(["b"])
+	s.mark(["b"])
 	s.pulse()
 	assertEquals(runs, 3)
 	// a run reading only a: the links to b are dropped, a change of b runs nothing
 	shape = ["a"]
-	s.changed(["b"])
+	s.mark(["b"])
 	s.pulse()
 	assertEquals(runs, 4)
-	s.changed(["b"])
+	s.mark(["b"])
 	s.pulse()
 	assertEquals(runs, 4)
-	s.changed(["a"])
+	s.mark(["a"])
 	s.pulse()
 	assertEquals(runs, 5)
 })

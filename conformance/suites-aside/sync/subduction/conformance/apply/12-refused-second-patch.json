@@ -113,8 +113,7 @@
 					},
 					"change": {
 						"actor": "a",
-						"time": 1028,
-						"node": "n"
+						"time": 1028
 					},
 					"because": {
 						"layer": "sync",

@@ -1,7 +1,7 @@
-# the demos and /slaygrounds/, built static: playground/demos/build.ts bundles each page's .ts and runs slaygrounds' own build (it runs `deno install` for its npm packages); Netlify can't run serve.ts
+# the demos and /slaygrounds/, built static by vite: playground/demos' `deno task build` (vite.config.ts) builds each page and runs slaygrounds' own build into /slaygrounds/
 [build]
   base = "."
-  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && $HOME/.deno/bin/deno run -A playground/demos/build.ts"
+  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && export PATH=$HOME/.deno/bin:$PATH && cd playground/demos && deno task build"
   publish = "playground/demos/dist"
 
 [[headers]]
@@ -11,6 +11,6 @@
 
 # slaygrounds' language server (49MB, under 100MB: ships); streaming compile wants this type
 [[headers]]
-  for = "/slaygrounds/dist/*.wasm"
+  for = "/slaygrounds/assets/*.wasm"
   [headers.values]
     Content-Type = "application/wasm"

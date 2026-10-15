@@ -7,7 +7,7 @@ import { assertEquals } from "@std/assert"
 const here = new URL(".", import.meta.url).pathname
 const reference = `deno run --quiet --allow-env ${here}harness.ts`
 const subject = (Deno.env.get("LAYOUT_HARNESS") ?? reference).split(" ")
-const scenarios = `${here}../../playground/files/conformance/layout/`
+const scenarios = `${here}../suites-aside/playground/files/conformance/layout/`
 
 type Request = Record<string, unknown> & { op: string }
 type Step = { request: Request; expect: unknown }

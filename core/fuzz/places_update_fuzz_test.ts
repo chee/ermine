@@ -10,7 +10,7 @@
 import { assert, assertEquals, assertStrictEquals } from "@std/assert"
 import apply from "@ermine/op/apply"
 import createEntry, { type Entry } from "@ermine/node/entry"
-import { createTable } from "@ermine/graph/table"
+import { createTable } from "@ermine/table"
 import { move, PlacesError } from "@ermine/places"
 import { differ, isMap, rand, snap } from "./gen.ts"
 import { createWorld, show, type Wrote } from "./world.ts"
@@ -62,7 +62,11 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				assert(c.change !== b.change, `${at}: ${key} at a new change`)
 				const back = apply(c.value, c.change.op!.undo)
 				assertEquals(differ(back, b.was), "", `${at}: ${key}'s undo ${show(c.change.op)}`)
-				assertEquals(differ(b.value, b.was, true), "", `${at}: ${key}'s old value changed`)
+				// a copy on write leaves the old value as it was; children and attributes change in
+				// place (places), so theirs is the new one
+				if (c.cow !== false) {
+					assertEquals(differ(b.value, b.was, true), "", `${at}: ${key}'s old value changed`)
+				}
 				undone++
 			}
 			// what lookup finds is there; the nearest is the first of all
@@ -72,14 +76,13 @@ Deno.test(`places + update fuzz: ${SEEDS} seeds × ${STEPS} writes, undo, nothin
 				for (const found of all) assert(get(w.p, found) !== undefined, `${at}: ${show(found)}`)
 				assertEquals(lookup(w.p, names, from), all[0], `${at}: nearest`)
 			}
-			// list: the names holding ids, in their order
+			// list: every name there, in its order, what it holds or not (a name holding no id is
+			// shown: chee, "Show it")
 			for (let k = 0; k < 4; k++) {
 				const where = w.path()
 				const id = get(w.p, where)
 				const v = id === undefined ? undefined : w.children(id)?.value
-				const want = isMap(v)
-					? Object.keys(v).filter((k) => typeof v[k] === "string" || typeof v[k] === "symbol")
-					: []
+				const want = isMap(v) ? Object.keys(v) : []
 				assertEquals(list(w.p, where), want, `${at}: list ${show(where)}`)
 			}
 		}

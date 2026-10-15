@@ -16,7 +16,7 @@ DENO = deno test --quiet --allow-run --allow-read --allow-env
 harness_src = conformance/c/harness.c core/op/c/value.c core/op/c/json.c
 
 tracker_src = $(harness_src) core/scheduler/c/tracker_harness.c core/scheduler/c/tracker.c
-table_src = $(harness_src) core/graph/c/table_harness.c core/graph/c/table.c
+table_src = $(harness_src) core/table/c/table_harness.c core/table/c/table.c
 node_src = $(harness_src) conformance/c/protocol.c core/node/c/node_harness.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
 pack_src = core/node/c/node.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c ermine/encoding/c/pack.c ermine/encoding/c/pack_harness.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c
 cbor_src = ermine/encoding/c/cbor_test.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c
@@ -38,34 +38,37 @@ transport_src = extensions/subduction/c/transport.c extensions/subduction/c/tran
 	ermine/encoding/c/blop.c ermine/encoding/c/json.c ermine/encoding/c/cbor.c $(blake3_src) extensions/subduction/c/ed25519/ed25519.c extensions/subduction/c/ed25519/sha2.c \
 	core/op/c/value.c core/op/c/apply.c core/node/c/update.c core/node/c/node.c \
 	extensions/subduction/c/subduction/store_memory.c extensions/subduction/c/subduction/platform_posix.c $(subduction_lib)
-# the wiring: the transport's, with the scheduler (and the graph under it) it is wired to
+# the wiring: the transport's (the graph it was wired to is the host's: the harness has none)
 wiring_flags = $(transport_flags)
 wiring_libs = $(transport_libs)
-wiring_src = extensions/subduction/c/wiring.c extensions/subduction/c/wiring_harness.c $(filter-out extensions/subduction/c/transport_harness.c,$(transport_src)) \
-	core/scheduler/c/scheduler.c filesystem/places/c/places.c core/scheduler/c/tracker.c
+wiring_src = extensions/subduction/c/wiring.c extensions/subduction/c/wiring_harness.c $(filter-out extensions/subduction/c/transport_harness.c,$(transport_src))
 fragment_src = extensions/subduction/c/fragment.c extensions/subduction/c/fragment_harness.c ermine/encoding/c/json.c
 squish_src = $(harness_src) core/op/c/squish.c core/op/c/squish_harness.c
 op-apply_src = $(harness_src) conformance/c/protocol.c core/op/c/apply_harness.c core/op/c/apply.c core/op/c/invert.c core/node/c/node.c
 paths_src = $(harness_src) conformance/c/protocol.c core/scheduler/c/paths_harness.c core/scheduler/c/paths.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/world.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+places_src = $(harness_src) filesystem/places/c/places_harness.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+processes_src = $(filter-out filesystem/places/c/places_harness.c,$(places_src)) ermine/processes/c/processes_harness.c ermine/processes/c/processes.c
 protect_src = filesystem/protect/c/protect.c filesystem/protect/c/protect_harness.c $(harness_src)
 update_src = $(harness_src) conformance/c/protocol.c core/node/c/update_harness.c core/node/c/update.c core/node/c/node.c core/op/c/apply.c core/op/c/invert.c
-guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/world.c core/graph/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+guard_src = $(harness_src) filesystem/places/c/guard_harness.c filesystem/places/c/guard.c filesystem/protect/c/protect.c conformance/c/protocol.c filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c filesystem/places/c/world.c core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 scheduler_src = $(harness_src) core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c core/scheduler/c/scheduler_harness.c
 names_src = playground/files/c/names.c playground/files/c/names_harness.c ermine/encoding/c/json.c
 diag_src = playground/files/c/diag.c playground/files/c/diag_harness.c ermine/encoding/c/json.c
 layout_src = playground/files/c/layout.c playground/files/c/layout_harness.c playground/files/c/names.c ermine/encoding/c/json.c
 store_src = playground/files/c/store.c playground/files/c/store_harness.c playground/files/c/sys.c playground/files/c/manifest.c playground/files/c/layout.c playground/files/c/names.c playground/files/c/diag.c \
 	playground/files/c/external.c playground/files/c/foundation.c \
-	core/node/c/node.c ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+	playground/files/c/saved.c playground/files/c/saved_shown.c playground/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+# the files graph (playground/files/c/graph.c): core's table, places and guard under a scheduler, and the policy they ask
+graph_src = filesystem/places/c/places.c filesystem/places/c/guard.c filesystem/protect/c/protect.c core/table/c/table.c core/node/c/node.c core/node/c/update.c \
+	core/op/c/value.c core/op/c/apply.c core/op/c/invert.c core/op/c/json.c core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
 # the files program: its watcher and harness, on the C store and the C scheduler (and the graph under it)
 # sys.c's Trash against homes of its own, no suite
 sys_src = playground/files/c/sys.c playground/files/c/foundation.c playground/files/c/sys_harness.c
-program_src = playground/files/c/program.c playground/files/c/watch.c playground/files/c/program_harness.c $(filter-out playground/files/c/store_harness.c,$(store_src)) \
-	core/scheduler/c/scheduler.c filesystem/places/c/places.c core/scheduler/c/tracker.c core/op/c/value.c core/op/c/apply.c core/node/c/update.c
+program_src = playground/files/c/program.c playground/files/c/watch.c playground/files/c/graph.c playground/files/c/program_harness.c $(filter-out playground/files/c/store_harness.c,$(store_src)) \
+	$(graph_src)
 program_libs = $(if $(filter Darwin,$(shell uname -s)),-framework CoreServices -framework CoreFoundation,) -lpthread
-manifest_src = playground/files/c/manifest.c playground/files/c/manifest_harness.c playground/files/c/diag.c core/node/c/node.c \
-	ermine/encoding/c/pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
+manifest_src = playground/files/c/manifest.c playground/files/c/manifest_harness.c playground/files/c/diag.c playground/files/c/saved.c playground/files/c/saved_shown.c \
+	playground/files/c/saved_pack.c ermine/encoding/c/cbor.c ermine/encoding/c/json.c $(blake3_src)
 
 # BLAKE3 portable only: no SIMD dispatch, no NEON (ermine/encoding/c/blake3 has no such files)
 blake3_src = ermine/encoding/c/blake3/blake3.c ermine/encoding/c/blake3/blake3_dispatch.c ermine/encoding/c/blake3/blake3_portable.c
@@ -73,7 +76,7 @@ BLAKE3FLAGS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AV
 
 # name: binary, sources, the suite, its env var, and what C skips
 tracker = core/scheduler/c/tracker-harness
-table = core/graph/c/table-harness
+table = core/table/c/table-harness
 node = core/node/c/node-harness
 pack = ermine/encoding/c/pack-harness
 cbor = ermine/encoding/c/cbor-test
@@ -90,6 +93,7 @@ squish = core/op/c/squish-harness
 op-apply = core/op/c/apply-harness
 paths = core/scheduler/c/paths-harness
 places = filesystem/places/c/places-harness
+processes = ermine/processes/c/processes-harness
 protect = filesystem/protect/c/protect-harness
 update = core/node/c/update-harness
 guard = filesystem/places/c/guard-harness
@@ -102,7 +106,7 @@ store = playground/files/c/store-harness
 program = playground/files/c/program-harness
 sys = playground/files/c/sys-harness
 
-LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places protect update guard scheduler names diag layout manifest store program sys
+LIBS = tracker table node pack cbor blop id seal fragment history apply commit transport wiring squish op-apply paths places processes protect update guard scheduler names diag layout manifest store program sys
 HARNESSES = $(foreach l,$(LIBS),$($(l)))
 CHECKS = $(addsuffix -check,$(HARNESSES))
 
@@ -129,7 +133,7 @@ endef
 tracker_suite = tracker
 tracker_tests = $(wildcard core/scheduler/typescript/tracker_harness_test.ts)
 table_suite = table
-table_tests = $(wildcard core/graph/typescript/table_harness_test.ts)
+table_tests = $(wildcard core/table/typescript/table_harness_test.ts)
 node_suite = node
 node_tests = $(wildcard core/node/typescript/node_harness_test.ts)
 update_suite = update
@@ -146,6 +150,8 @@ scheduler_suite = scheduler
 scheduler_tests = $(wildcard core/scheduler/typescript/scheduler_harness_test.ts)
 places_suite = places
 places_tests = $(wildcard filesystem/places/typescript/places_harness_test.ts)
+processes_suite = processes
+processes_tests = $(wildcard ermine/processes/typescript/processes_harness_test.ts)
 protect_suite = protect
 protect_tests = $(wildcard filesystem/protect/typescript/protect_harness_test.ts)
 guard_suite = guard
@@ -216,18 +222,15 @@ core/op/c/squish-bench: core/op/c/squish.c core/op/c/squish_bench.c
 core/op/c/apply-bench: core/op/c/apply.c core/op/c/value.c core/op/c/apply_bench.c
 	$(CC) $(CFLAGS) -o $@ $^ -lm
 
-# the files tool: a command line over the C store, and a shared document laid out in a folder and synced (playground/files/c/host.c):
-# the files program and watcher, the scheduler, the wiring and transport, and Subduction over a WebSocket (OpenSSL for wss).
-# No suite, not part of all; playground/files/c/test/sync.sh tries it. playground/files/c/files-check: the same with the sanitizers
-OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
-files_src = $(sort playground/files/c/files.c playground/files/c/host.c playground/files/c/program.c playground/files/c/watch.c $(filter-out playground/files/c/store_harness.c,$(store_src)) \
-	$(filter %.c,$(filter-out extensions/subduction/c/wiring_harness.c,$(wiring_src))) extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
-files_flags = $(transport_flags) -I$(OPENSSL)/include
-files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
-playground/files/c/files: $(files_src) $(subduction_lib) $(wildcard */*/c/*.h)
-	$(CC) $(CFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
-playground/files/c/files-check: $(files_src) $(subduction_lib) $(wildcard */*/c/*.h)
-	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
+# the files tool: a command line over the C store (playground/files/c/files.c). Its synced document (host.c: the files program and
+# watcher, the scheduler, the wiring and transport, Subduction over a WebSocket) is left out until sync is rewritten for today's graph:
+# host.c is a stub that says so. No suite, not part of all; playground/files/c/test/cli.sh tries it. playground/files/c/files-check:
+# the same with the sanitizers
+files_src = playground/files/c/files.c playground/files/c/host.c $(filter-out playground/files/c/store_harness.c,$(store_src))
+playground/files/c/files: $(files_src) $(wildcard */*/c/*.h)
+	$(CC) $(CFLAGS) $(BLAKE3FLAGS) -o $@ $(filter %.c,$^) -lm
+playground/files/c/files-check: $(files_src) $(wildcard */*/c/*.h)
+	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) -o $@ $(filter %.c,$^) -lm
 
 clean:
 	rm -rf playground/files/c/files playground/files/c/files-check playground/files/c/files-check.dSYM
