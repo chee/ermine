@@ -1,0 +1,242 @@
+{
+	"title": "a JavaScript runner loaded, then running a program: toy holds JavaScript source exporting run (it says each run and stop), run by js. tick.toy's chain: [toy (by [js])]. settled: toy loaded once, its run given the program's value and the api; the host's runner not called. stopped: toy's stop called",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"tick.toy": "P",
+				"toy": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "P",
+			"value": "tick",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "P",
+			"value": {
+				"ermine.type": "test.toy"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "T",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"test.toy"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "JS",
+			"load": "js",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "JS",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"js"
+			],
+			"node": "JS",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"tick"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"tick"
+				]
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
+							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"by": [
+								{
+									"id": "JS",
+									"at": [
+										"js"
+									],
+									"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
+							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"by": [
+								{
+									"id": "JS",
+									"at": [
+										"js"
+									],
+									"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run",
+						"proc:a",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 1,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run",
+						"proc:a",
+						"tick"
+					],
+					[
+						"stop",
+						"proc:a"
+					]
+				]
+			}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"tick"
+			],
+			"expect": {
+				"id": null
+			}
+		}
+	]
+}

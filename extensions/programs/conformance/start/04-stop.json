@@ -1,0 +1,242 @@
+{
+	"title": "stop: the runner's stop called, the process gone from the box at clock (what W saved there seen again: it was shadowed while the process ran), its node's entries gone, the built output kept in the cache. stopped twice: nothing more",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL",
+				"clock": "SAVED"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "upper",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "upper",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "SAVED"
+			}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "SAVED"
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [],
+				"status": null,
+				"args": null,
+				"cwd": null,
+				"pin": null
+			}
+		},
+		{
+			"op": "cache",
+			"expect": {
+				"size": 1
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": [
+					"a"
+				]
+			}
+		}
+	]
+}

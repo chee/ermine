@@ -1,0 +1,294 @@
+{
+	"title": "args: hehe.txt opened with the viewer (openWith's way: VIEW, run by JSRUN), its name in ermine.process.args, in two boxes, with over W and bare over W2: in with, hehe.txt is boxed, and the program finds it through its api; in bare, nothing. unboxed, the program sees it go; boxed into bare, the program there sees it come. a's pin: the opener, VIEW, and its chain, JSRUN alone",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "HEHE",
+			"value": "hehe",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "HEHE",
+			"value": {
+				"ermine.type": "public.plain-text"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "VIEW",
+			"value": "view",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "VIEW",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.opens": [
+					"public.plain-text"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "JSRUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "JSRUN",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "with",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "with",
+			"path": [
+				"hehe.txt"
+			],
+			"node": "HEHE",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "with",
+			"path": [
+				"view"
+			],
+			"node": "VIEW",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "with",
+			"path": [
+				"js"
+			],
+			"node": "JSRUN",
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "bare",
+			"folder": "W2",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "bare",
+			"path": [
+				"view"
+			],
+			"node": "VIEW",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "bare",
+			"path": [
+				"js"
+			],
+			"node": "JSRUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "with",
+			"file": "HEHE",
+			"from": [],
+			"at": [
+				"viewer"
+			],
+			"args": [
+				"hehe.txt"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"viewer"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "bare",
+			"file": "HEHE",
+			"from": [],
+			"at": [
+				"viewer"
+			],
+			"args": [
+				"hehe.txt"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"viewer"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "view",
+						"args": [
+							"hehe.txt"
+						],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					},
+					{
+						"process": "b",
+						"code": "view",
+						"args": [
+							"hehe.txt"
+						],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 1,
+				"found": {
+					"hehe.txt": "HEHE"
+				}
+			}
+		},
+		{
+			"op": "found",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"found": {
+					"hehe.txt": null
+				}
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "with",
+			"path": [
+				"hehe.txt"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"hehe.txt": null
+				}
+			}
+		},
+		{
+			"op": "box",
+			"box": "bare",
+			"path": [
+				"hehe.txt"
+			],
+			"node": "HEHE",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "b",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"hehe.txt": "HEHE"
+				}
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": [
+					"hehe.txt"
+				],
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "VIEW",
+						"at": [
+							"view"
+						],
+						"hash": "fc14c209af6c05501f6b1400aa6abfc922efc76dccbdc93bb31f6b62a7cf33eb"
+					},
+					"chain": [
+						{
+							"id": "JSRUN",
+							"at": [
+								"js"
+							],
+							"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		}
+	]
+}

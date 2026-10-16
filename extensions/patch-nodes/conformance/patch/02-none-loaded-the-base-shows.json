@@ -1,0 +1,106 @@
+{
+	"title": "no patch node loaded: the base shows, and nothing is at /me/skins/title",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"doc": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "theirs",
+				"body": "hello"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"me",
+				"skins",
+				"title"
+			],
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"expect": {
+				"value": {
+					"title": "theirs",
+					"body": "hello"
+				}
+			}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"read": [
+					{
+						"get": [
+							"work",
+							"doc"
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"value": {
+					"title": "theirs",
+					"body": "hello"
+				}
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"path": [
+				"title"
+			],
+			"expect": {
+				"items": [
+					{
+						"value": "theirs",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "index",
+			"expect": {
+				"size": 0
+			}
+		}
+	]
+}

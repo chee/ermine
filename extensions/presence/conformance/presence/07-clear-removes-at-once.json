@@ -1,0 +1,143 @@
+{
+	"title": "clear removes the row at once, there too",
+	"steps": [
+		{
+			"op": "now",
+			"t": 1000
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "watch",
+			"dev": "b",
+			"name": "seen",
+			"f": {
+				"presence": "work"
+			}
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": 1,
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "state",
+			"name": "seen",
+			"expect": {
+				"runs": 2,
+				"value": [
+					{
+						"who": "a",
+						"value": 1,
+						"until": 6000
+					}
+				]
+			}
+		},
+		{
+			"op": "clear",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x"
+		},
+		{
+			"op": "presence",
+			"dev": "a",
+			"anchor": "work",
+			"expect": {
+				"rows": []
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": []
+			}
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": 1
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"gone": true
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "state",
+			"name": "seen",
+			"expect": {
+				"runs": 3,
+				"value": []
+			}
+		},
+		{
+			"op": "clear",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x"
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": 1
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"gone": true
+						}
+					}
+				]
+			}
+		}
+	]
+}

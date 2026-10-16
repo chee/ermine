@@ -1,0 +1,214 @@
+{
+	"title": "a reader reruns on a patch node added, changed and taken out; another node's reader never",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "base"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "O",
+			"value": {
+				"title": "other"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "n",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"title"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "m",
+			"scope": "o",
+			"f": {
+				"read": [
+					"O",
+					[
+						"title"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "n",
+			"expect": {
+				"runs": 1,
+				"value": "base"
+			}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "a"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "n",
+			"expect": {
+				"runs": 2,
+				"value": "a"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "patch",
+			"id": "P",
+			"patches": [
+				{
+					"path": [
+						"patches",
+						0,
+						"value"
+					],
+					"value": "b"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "n",
+			"expect": {
+				"runs": 3,
+				"value": "b"
+			}
+		},
+		{
+			"op": "del",
+			"part": "patch",
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "n",
+			"expect": {
+				"runs": 4,
+				"value": "base"
+			}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 1,
+				"value": "other"
+			}
+		},
+		{
+			"op": "patch",
+			"id": "Q",
+			"on": "N",
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "q"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"part": "patch",
+			"id": "Q",
+			"patches": [
+				{
+					"path": [
+						"on"
+					],
+					"value": "O"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "n",
+			"expect": {
+				"runs": 6,
+				"value": "base"
+			}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 2,
+				"value": "q"
+			}
+		},
+		{
+			"op": "index",
+			"id": "N",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "index",
+			"id": "O",
+			"expect": {
+				"ids": [
+					"Q"
+				]
+			}
+		}
+	]
+}

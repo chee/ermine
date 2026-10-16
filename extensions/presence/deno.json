@@ -1,0 +1,8 @@
+{
+	"name": "@ermine/presence",
+	"version": "0.0.0",
+	"exports": {
+		".": "./typescript/presence.ts",
+		"./channel": "./typescript/channel.ts"
+	}
+}

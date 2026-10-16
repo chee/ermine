@@ -1,0 +1,1 @@
+{ "harness": "start", "allow": ["--allow-write", "--allow-ffi", "--allow-run=/usr/bin/codesign"] }

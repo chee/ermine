@@ -1,0 +1,282 @@
+{
+	"title": "an edit to a loader's value: toy's source edited after a starts; b, started after, loads it again (another hash, another key), its pin the new hash; a keeps its own: stopped, the old stop is called",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"tick.toy": "P",
+				"toy": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "P",
+			"value": "tick",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "P",
+			"value": {
+				"ermine.type": "test.toy"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "export function run(code, api) { say([\"run A\", api.process.id, code]); return { stop: () => say([\"stop A\", api.process.id]) } }",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "T",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"test.toy"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "JS",
+			"load": "js",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "JS",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"js"
+			],
+			"node": "JS",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"a"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run A",
+						"proc:a",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "export function run(code, api) { say([\"run B\", api.process.id, code]); return { stop: () => say([\"stop B\", api.process.id]) } }",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"b"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run A",
+						"proc:a",
+						"tick"
+					],
+					[
+						"run B",
+						"proc:b",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 2,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
+							"hash": "a5a2b7cac07c4706fa06dc2c0a0e16853f8821a75b5a36dfc4b0b56629755fab",
+							"by": [
+								{
+									"id": "JS",
+									"at": [
+										"js"
+									],
+									"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "process",
+			"name": "b",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "d15d53ab45bf0d69b049a6cbc68bfc100d593c4ee0e14f7fcca189f9e3f24b06",
+							"hash": "cc4ebc9bbe7f8f6f6b80323421d829be3bfe4516b19cbc82ada83d2c1badc446",
+							"by": [
+								{
+									"id": "JS",
+									"at": [
+										"js"
+									],
+									"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run A",
+						"proc:a",
+						"tick"
+					],
+					[
+						"run B",
+						"proc:b",
+						"tick"
+					],
+					[
+						"stop A",
+						"proc:a"
+					],
+					[
+						"stop B",
+						"proc:b"
+					]
+				]
+			}
+		}
+	]
+}

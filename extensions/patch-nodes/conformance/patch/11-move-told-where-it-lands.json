@@ -1,0 +1,209 @@
+{
+	"title": "a patch node's move: a write under where it moves from tells the reader where it lands; set aside, told too",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"a": {
+					"v": 1
+				},
+				"b": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "m",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"m"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"b"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "R",
+			"on": "N",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 2,
+				"value": {
+					"v": 1
+				}
+			}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"value": 0
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"v"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 3,
+				"value": {
+					"v": 2
+				}
+			}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"value": 0
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 3,
+				"value": {
+					"v": 2
+				}
+			}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"runs": 2,
+				"value": 1
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"path": [
+				"m"
+			],
+			"expect": {
+				"items": [
+					{
+						"from": "R",
+						"error": "no-key"
+					},
+					{
+						"from": "table"
+					}
+				]
+			}
+		}
+	]
+}

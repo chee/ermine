@@ -1,0 +1,210 @@
+{
+	"title": "stale is applied and said; patches that no longer apply are set aside, with the error",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "t",
+				"tags": {
+					"a": 1
+				}
+			},
+			"time": 100,
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "mine"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "Q",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"tags",
+						"a"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"expect": {
+				"value": {
+					"title": "mine",
+					"tags": {
+						"a": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"expect": {
+				"items": [
+					{
+						"value": {
+							"title": "mine",
+							"tags": {
+								"a": 2
+							}
+						},
+						"from": "Q"
+					},
+					{
+						"value": {
+							"title": "mine",
+							"tags": {
+								"a": 1
+							}
+						},
+						"from": "P"
+					},
+					{
+						"value": {
+							"title": "t",
+							"tags": {
+								"a": 1
+							}
+						},
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"tags"
+					]
+				}
+			],
+			"time": 200,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"expect": {
+				"value": {
+					"title": "mine"
+				}
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"expect": {
+				"items": [
+					{
+						"value": {
+							"title": "mine"
+						},
+						"from": "Q",
+						"stale": true,
+						"error": "no-key"
+					},
+					{
+						"value": {
+							"title": "mine"
+						},
+						"from": "P",
+						"stale": true
+					},
+					{
+						"value": {
+							"title": "t"
+						},
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "change",
+			"id": "N",
+			"expect": {
+				"time": 200,
+				"actor": "test",
+				"metadata": [
+					[
+						"actor",
+						"test"
+					],
+					[
+						"overlay",
+						[
+							"P"
+						]
+					]
+				],
+				"hasOp": false
+			}
+		},
+		{
+			"op": "edit",
+			"part": "patch",
+			"id": "P",
+			"patches": [
+				{
+					"path": [
+						"at"
+					],
+					"value": 200
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"expect": {
+				"items": [
+					{
+						"value": {
+							"title": "mine"
+						},
+						"from": "Q",
+						"stale": true,
+						"error": "no-key"
+					},
+					{
+						"value": {
+							"title": "mine"
+						},
+						"from": "P"
+					},
+					{
+						"value": {
+							"title": "t"
+						},
+						"from": "table"
+					}
+				]
+			}
+		}
+	]
+}

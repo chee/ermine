@@ -1,0 +1,324 @@
+{
+	"title": "a native compiler loaded, then used: cc holds the bytes of a library exporting compile (reverse: its input's bytes reversed), run by dl, the dlopen runner, whose load opens it. catclock.c's chain: [cc (by [dl]), run]. settled: loaded once, compiled once, run called with the bytes of ih; the library's file there while a process holds it. a second start: its build a hit in the cache and cc's load the one a holds, so nothing compiled or loaded again. both stopped: the file gone",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "dlopen",
+			"id": "DL",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "DL",
+			"value": {
+				"ermine.programs.takes": [
+					"com.apple.mach-o-dylib"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"test.reversed"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "fixture",
+			"id": "CC",
+			"name": "reverse",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CC",
+			"value": {
+				"ermine.type": "com.apple.mach-o-dylib",
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "test.reversed"
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "CC",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"dl"
+			],
+			"node": "DL",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"at": [
+				"clock"
+			],
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": null,
+				"cwd": []
+			},
+			"skip": [
+				"pin"
+			]
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": []
+			},
+			"skip": [
+				"pin"
+			]
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": {
+							"/": {
+								"bytes": "aWg"
+							}
+						},
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 1,
+				"files": 1,
+				"signed": 0,
+				"wrote": []
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "catclock.c",
+			"at": [
+				"clock2"
+			],
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"clock2"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "b",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": []
+			},
+			"skip": [
+				"pin"
+			]
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": {
+							"/": {
+								"bytes": "aWg"
+							}
+						},
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					},
+					{
+						"process": "b",
+						"code": {
+							"/": {
+								"bytes": "aWg"
+							}
+						},
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 1,
+				"files": 1,
+				"signed": 0,
+				"wrote": []
+			}
+		},
+		{
+			"op": "cache",
+			"expect": {
+				"size": 1
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 1,
+				"files": 1,
+				"signed": 0,
+				"wrote": []
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 1,
+				"files": 0,
+				"signed": 0,
+				"wrote": []
+			}
+		}
+	]
+}

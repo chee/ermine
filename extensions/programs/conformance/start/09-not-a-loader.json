@@ -1,0 +1,402 @@
+{
+	"title": "a step the host does not hold (wasm clang, its by the wasm runner): started, its load failing as the build runs, the wasm runner here having no load (no runner in the C does): the process's status the StartError not-a-loader, nothing compiled or run; its pin the step with its by (no hash: wasm clang has no value). stopped: gone. a program that is itself a live function (satisfy's empty chain) is refused no-runner. the same path then starts in web (wasm over W2, catclock.c's folder boxed in)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "upper",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "upper",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WCLANG",
+			"value": {
+				"ermine.type": "public.wasm-executable",
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.needs": [
+					"wasm32"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "WASMRUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WASMRUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				],
+				"ermine.programs.provides": [
+					"wasm32"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "TOOL",
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "wasm",
+			"folder": "W2",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "wasm",
+			"path": [
+				"clocks"
+			],
+			"node": "CL",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "wasm",
+			"path": [
+				"cc"
+			],
+			"node": "WCLANG",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "wasm",
+			"path": [
+				"run"
+			],
+			"node": "WASMRUN",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "wasm",
+			"path": [
+				"tool"
+			],
+			"node": "TOOL",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "wasm",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "wasm",
+			"program": "tool",
+			"from": [],
+			"at": [
+				"clock"
+			],
+			"expect": {
+				"refused": "no-runner",
+				"program": {
+					"id": "TOOL",
+					"at": [
+						"tool"
+					]
+				}
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "WCLANG",
+							"at": [
+								"cc"
+							],
+							"attributes": "68bed44f80f6268b3511a16b7d038ee5abd316cd58fe65adbb53b80af19c64db",
+							"by": [
+								{
+									"id": "WASMRUN",
+									"at": [
+										"run"
+									],
+									"attributes": "a426026f54b88e1362b5d83d0b92f710724aa1b4bb2a5d025d969b3636057136"
+								}
+							]
+						},
+						{
+							"id": "WASMRUN",
+							"at": [
+								"run"
+							],
+							"attributes": "a426026f54b88e1362b5d83d0b92f710724aa1b4bb2a5d025d969b3636057136"
+						}
+					],
+					"box": "W2",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": {
+					"failed": "not-a-loader"
+				},
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "WCLANG",
+							"at": [
+								"cc"
+							],
+							"attributes": "68bed44f80f6268b3511a16b7d038ee5abd316cd58fe65adbb53b80af19c64db",
+							"by": [
+								{
+									"id": "WASMRUN",
+									"at": [
+										"run"
+									],
+									"attributes": "a426026f54b88e1362b5d83d0b92f710724aa1b4bb2a5d025d969b3636057136"
+								}
+							]
+						},
+						{
+							"id": "WASMRUN",
+							"at": [
+								"run"
+							],
+							"attributes": "a426026f54b88e1362b5d83d0b92f710724aa1b4bb2a5d025d969b3636057136"
+						}
+					],
+					"box": "W2",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "calls",
+			"expect": {
+				"upper": 0,
+				"wrap": 0,
+				"slow": 0,
+				"boom": 0
+			}
+		},
+		{
+			"op": "here",
+			"box": "wasm",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"box": "wasm",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": null
+			}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"box": "web",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "c",
+						"code": "HI",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		}
+	]
+}

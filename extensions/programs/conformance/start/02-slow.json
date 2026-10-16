@@ -1,0 +1,255 @@
+{
+	"title": "a slow compile: the process pending after the pulse, the runner not called; settled, the status gone and the runner called with the code. no args given: none written, and the program given []",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "slow",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "slow",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "slow",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "calls",
+			"expect": {
+				"upper": 0,
+				"wrap": 0,
+				"slow": 1,
+				"boom": 0
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "slow",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "hi",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "calls",
+			"expect": {
+				"upper": 0,
+				"wrap": 0,
+				"slow": 1,
+				"boom": 0
+			}
+		}
+	]
+}

@@ -1,0 +1,339 @@
+{
+	"title": "the loaded, kept while a process holding them runs: a and b started together, toy loaded once, one file. a stopped, c started: b still holds toy, so not loaded again. b and c stopped: none holds it, the library let go and its file gone, so d loads it again",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"tick.toy": "P",
+				"toy": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "P",
+			"value": "tick",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "P",
+			"value": {
+				"ermine.type": "test.toy"
+			},
+			"expect": {}
+		},
+		{
+			"op": "fixture",
+			"id": "T",
+			"name": "runner",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "T",
+			"value": {
+				"ermine.type": "com.apple.mach-o-dylib",
+				"ermine.programs.takes": [
+					"test.toy"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "dlopen",
+			"id": "DL",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "DL",
+			"value": {
+				"ermine.programs.takes": [
+					"com.apple.mach-o-dylib"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"dl"
+			],
+			"node": "DL",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"a"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"b"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 0,
+				"files": 1,
+				"signed": 0,
+				"wrote": [
+					{
+						"process": "a",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "tick"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"c"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"c"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 0,
+				"files": 1,
+				"signed": 0,
+				"wrote": [
+					{
+						"process": "a",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "tick"
+					},
+					{
+						"process": "a",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "tick"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "c",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 1,
+				"compiles": 0,
+				"files": 0,
+				"signed": 0,
+				"wrote": [
+					{
+						"process": "a",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "tick"
+					},
+					{
+						"process": "a",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "stop"
+					}
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "d",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"d"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:d",
+				"at": [
+					"d"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 2,
+				"compiles": 0,
+				"files": 1,
+				"signed": 0,
+				"wrote": [
+					{
+						"process": "a",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "tick"
+					},
+					{
+						"process": "a",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "stop"
+					},
+					{
+						"process": "d",
+						"text": "tick"
+					}
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "d",
+			"expect": {}
+		},
+		{
+			"op": "native",
+			"expect": {
+				"loads": 2,
+				"compiles": 0,
+				"files": 0,
+				"signed": 0,
+				"wrote": [
+					{
+						"process": "a",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "tick"
+					},
+					{
+						"process": "a",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "tick"
+					},
+					{
+						"process": "b",
+						"text": "stop"
+					},
+					{
+						"process": "c",
+						"text": "stop"
+					},
+					{
+						"process": "d",
+						"text": "tick"
+					},
+					{
+						"process": "d",
+						"text": "stop"
+					}
+				]
+			}
+		}
+	]
+}
