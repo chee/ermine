@@ -34,7 +34,7 @@
 // whether a run reads it: @ermine/clingy)
 //
 // never: run called in the reader's run, its result as it is, nothing looked up or kept (the
-// notebook's // nocache). every entry is kept: how many to keep is open
+// notebook's // nocache). type: its outputs' ermine.type, not in the key. every entry is kept: how many to keep is open
 //
 // compile(compiler, input): the step (the compiler's identity, its input). its run reads nothing,
 // so its one entry always hits. a compiler: a node whose value is a live function from the host,
@@ -125,12 +125,12 @@ export type Setup = {
 
 export type Builds = {
 	// run's output for (name, code): a hit, or PENDING while it runs, or an Error (run's own, or a
-	// BuildError). tracked in a run. never: run's result as it is, nothing kept
+	// BuildError). tracked in a run. never: run's result as it is, nothing kept. type: its outputs'
 	step: (
 		name: unknown,
 		code: unknown,
 		run: () => unknown,
-		options?: { never?: boolean },
+		options?: { never?: boolean; type?: string },
 	) => unknown
 	// the compiler's output for the input: the step (its identity, the input)
 	compile: (compiler: Id, input: unknown) => unknown
@@ -432,13 +432,13 @@ export function createBuilds(setup: Setup): Builds {
 		name: unknown,
 		code: unknown,
 		run: () => unknown,
-		options: { never?: boolean } = {},
+		options: { never?: boolean; type?: string } = {},
 	): unknown {
 		if (options.never) {
 			tell({ name, found: "never", checked: 0, entries: 0 })
 			return run()
 		}
-		return ask(name, code, () => run())
+		return ask(name, code, () => run(), () => options.type)
 	}
 
 	function compile(compiler: Id, input: unknown): unknown {
