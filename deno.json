@@ -23,6 +23,7 @@
 		"./extensions/presence",
 		"./extensions/patch-nodes",
 		"./playground/demo-world",
+		"./playground/demos",
 		"./playground/libraries/pack-indexeddb"
 	],
 	"tasks": {
