@@ -595,10 +595,10 @@ static Json *itemsJson(const ap_items *items) {
 		const ap_item *it = &items->items[i];
 		Json *o = jsonObject(), *route = jsonArray();
 		jsonAdd(o, "id", jsonString(it->id));
-		for (size_t r = 0; r < it->nroute; r++) jsonPush(route, drvMap("name", jsonString(it->route[r]), NULL));
+		for (size_t r = 0; r < it->nroute; r++) jsonPush(route, jsonRef(drvMap("name", jsonString(it->route[r]), NULL)));
 		jsonAdd(o, "route", route);
 		if (it->node) {
-			jsonAdd(o, "node", drvMap("id", jsonString(it->id), NULL));
+			jsonAdd(o, "node", jsonRef(drvMap("id", jsonString(it->id), NULL)));
 			jsonAdd(o, "ephemeral", jsonBoolean(it->ephemeral));
 		}
 		if (it->node && it->has_versions) {
@@ -608,7 +608,7 @@ static Json *itemsJson(const ap_items *items) {
 				Json *ver = jsonObject();
 				jsonAdd(ver, "content", v->content ? jsonOfVal(v->content) : jsonNull());
 				jsonAdd(ver, "change", changeJson(&v->change));
-				if (v->status) jsonAdd(ver, "because", drvMap("layer", jsonString("scheduler"), "place", jsonString("status"), NULL));
+				if (v->status) jsonAdd(ver, "because", jsonRef(drvMap("layer", jsonString("scheduler"), "place", jsonString("status"), NULL)));
 				jsonPush(vs, ver);
 			}
 			jsonAdd(o, "versions", vs);
@@ -690,7 +690,6 @@ static const ap_error *event(ap_fn *self, ap_given *g, op_value **out, int *pend
 	if (x->gone || x->ended) return ap_error_new(g->os, "stopped", "the program has ended");
 	Json *e = drvMap("event", jsonInteger(f->fn), "args", g->args ? jsonOfVal(g->args) : jsonArray(), NULL);
 	const char *code = NULL, *why = tell(x, e, true, &code);
-	jsonFree(e);
 	if (why) return ap_error_new(g->os, code, why);
 	return NULL;
 }
@@ -860,16 +859,14 @@ static void serve(Exec *x, ap_given *g, const Json *frame) {
 		Json *why = drvMap("code", jsonString(wrong ? "wrong-field" : e->code ? e->code : "thrown"),
 		                   "message", jsonString(wrong ? wrong : e->message ? e->message : e->code ? e->code : "thrown"), NULL);
 		if (e && e->name) jsonAdd(why, "name", jsonString(e->name));
-		jsonAdd(answer, "error", why);
+		jsonAdd(answer, "error", jsonRef(why));
 		jsonFree(ok);
 	} else jsonAdd(answer, "ok", ok ? ok : jsonNull());
 	const char *code = NULL, *why = tell(x, answer, false, &code);
-	jsonFree(answer);
 	if (why && strcmp(code, "stopped")) {
 		// an answer that cannot be sent (too large, or no encoding): it is told so instead, so it does not wait for it
 		Json *instead = drvMap("seq", seq ? jsonShallow(seq) : jsonNull(), "error", drvMap("code", jsonString(code), "message", jsonString(why), NULL), NULL);
 		tell(x, instead, false, &code);
-		jsonFree(instead);
 	}
 }
 
@@ -1102,12 +1099,11 @@ static const ap_error *setup(ap_fn *self, ap_given *g, op_value **out, int *pend
 		snprintf(why, sizeof why, "no program %s (looked at %s)", p->argv[0], looked);
 		return ap_error_new(g->os, "nothing-there", why);
 	}
-	Json *known = hostHere(h, g->self);
-	if (!known) {
+	Json *here = hostHere(h, g->self);
+	if (!here) {
 		free(path);
 		return ap_error_new(g->os, "nothing-there", "the host does not know where this process is");
 	}
-	Json *here = jsonShallow(known);
 	int pair[2], output[2], wake[2], stop[2];
 	if (!pipes(pair, output, wake, stop)) {
 		jsonFree(here);

@@ -145,8 +145,8 @@ static ErmErr planesCompute(void *data, const ErmGiven *g, Json **out) {
 	for (int i = 0; names && i < names->array.count; i++) {
 		const char *name = jsonText(names->array.items[i]);
 		Json *v = drvRead(g->api, drvPath("/", "dev", "vram", "planes", name, NULL));
-		jsonPush(*out, drvMap("name", jsonString(name), "w", jsonGet(v, "w") ? jsonShallow(jsonGet(v, "w")) : jsonNull(),
-		                      "h", jsonGet(v, "h") ? jsonShallow(jsonGet(v, "h")) : jsonNull(), NULL));
+		jsonPush(*out, jsonRef(drvMap("name", jsonString(name), "w", jsonGet(v, "w") ? jsonShallow(jsonGet(v, "w")) : jsonNull(),
+		                              "h", jsonGet(v, "h") ? jsonShallow(jsonGet(v, "h")) : jsonNull(), NULL)));
 	}
 	return ermOk();
 }
@@ -186,7 +186,7 @@ static ErmErr planesEffect(void *data, const ErmGiven *g, Json **out) {
 		Json *patches = jsonArray();
 		const char *keys[] = { "id", "stride", "shm" };
 		Json *values[] = { jsonInteger(p->id), jsonInteger(p->w), jsonString(p->shm) };
-		for (int i = 0; i < 3; i++) jsonPush(patches, drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString(keys[i]), "value", values[i], NULL));
+		for (int i = 0; i < 3; i++) jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString(keys[i]), "value", values[i], NULL)));
 		drvOp(g->api, "write", drvMap("address", drvPath("/", "dev", "vram", "planes", name, NULL), "patches", patches, NULL));
 	}
 	return ermOk();

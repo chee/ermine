@@ -40,6 +40,15 @@ main h2 {
 	display: flex;
 	min-height: 0;
 }
+#url {
+	flex: 0 1 24em;
+	min-width: 8em;
+	font: 11px var(--mono);
+}
+#said {
+	white-space: nowrap;
+	font-size: 12px;
+}
 @media (max-width: 760px) {
 	main {
 		grid-template-columns: 1fr;
@@ -48,15 +57,17 @@ main h2 {
 }
 </style>
 <header
-	class="bar"><a href="/"><b>ermine</b></a><span>shape — places and the scheduler's graph</span><span
-		class="grow"></span>
+	class="bar"><a href="/"><b>ermine</b></a><span>shape</span>
+	<input id="url" spellcheck="false" placeholder="ermine://…" title="the graph at /graph: paste an ermine:// id or a link to open it"><button
+		id="new">new</button><button id="save">save</button><button id="load">load</button><input id="file"
+		type="file" accept=".ermine" hidden><span id="said" class="grow"></span>
 	<button id="bump">a + 1</button><button id="more">add a reader of a</button><button id="less">kill the newest reader</button></header>
 <div
 	class="try">pick a box on the right: blue is what it waits on, cherry what waits on it<button class="more">?</button></div>
 <div class="try-more" hidden></div>
 <main>
 	<div>
-		<h2>places (the host's tree)</h2>
+		<h2>places (the host's tree; /graph is shared)</h2>
 		<div id="places"></div>
 	</div>
 	<div>

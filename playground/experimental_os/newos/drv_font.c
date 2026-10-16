@@ -72,7 +72,7 @@ static void ask(Fonts *f, Face *x, int page) {
 /** /dev/font/<role> as its face now is, and every page of it that has come */
 static void show(Fonts *f, const ErmPartApi *api, const char *role, Face *x, Json *page, int n) {
 	if (!x->metrics) return;
-	Json *value = drvMap("font", jsonString(role), "family", x->family, "size", jsonNumber(x->size), "h", jsonInteger(x->h), "ascent", jsonInteger(x->ascent), NULL);
+	Json *value = drvMap("font", jsonString(role), "family", jsonRef(x->family), "size", jsonNumber(x->size), "h", jsonInteger(x->h), "ascent", jsonInteger(x->ascent), NULL);
 	Json *at = drvPath("/", "dev", "font", role, NULL);
 	char *id = formatString("font/%s", role), *pages = formatString("font/%s/pages", role);
 	if (drvHas(api, at)) drvSnap(api, at, value);
@@ -115,6 +115,7 @@ static ErmErr fontIrq(void *data, const ErmGiven *g, Json **out) {
 		Json *bold = jsonGet(r, "bold");
 		Face *x = face(f, name, jsonGet(r, "size") ? jsonGet(r, "size")->number : 0, bold && bold->type == JSON_BOOLEAN && bold->boolean);
 		x->metrics = true;
+		jsonFree(x->family);
 		x->family = jsonShallow(jsonGet(r, "family"));
 		int64_t h = 0, ascent = 0, n = 0;
 		jsonIsWhole(jsonGet(r, "h"), &h);
@@ -146,7 +147,7 @@ static ErmErr rolesCompute(void *data, const ErmGiven *g, Json **out) {
 	Json *theme = drvRead(g->api, drvPath("/", "etc", "theme", NULL));
 	Json *mode = drvRead(g->api, drvPath("/", "dev", "display", "mode", NULL));
 	Json *fonts = jsonGet(theme, "fonts"), *unit = jsonGet(mode, "unit");
-	*out = drvMap("fonts", fonts ? fonts : jsonObject(), "unit", unit ? unit : jsonInteger(1), NULL);
+	*out = drvMap("fonts", fonts ? jsonRef(fonts) : jsonObject(), "unit", unit ? jsonRef(unit) : jsonInteger(1), NULL);
 	return ermOk();
 }
 

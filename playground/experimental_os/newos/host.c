@@ -873,9 +873,11 @@ static void timers(Host *h) {
 		size_t n;
 		const char *const *address = hostPathOf(h, to, &n);
 		// a timer cancelled, or its process stopped: its handler is gone, and so is the timer
-		if (!address || !hostLook(ap_host(h->os), address, n)) continue;
-		op_value *out = NULL;
-		hostFailed(h, ap_call_host(h->os, address, n, NULL, &out), "timer");
+		if (address && hostLook(ap_host(h->os), address, n)) {
+			op_value *out = NULL;
+			hostFailed(h, ap_call_host(h->os, address, n, NULL, &out), "timer");
+		}
+		jsonFree(to);
 	}
 }
 
@@ -964,6 +966,7 @@ void hostTurn(Host *h, const char *const *records, int count) {
 	free(groups);
 	tick(h);
 	ap_sweep(h->os);
+	drvSweep();
 	valSweep();
 }
 

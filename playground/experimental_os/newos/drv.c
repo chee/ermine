@@ -1,4 +1,15 @@
 // drv.c: what the drivers share, over newOS's API (drv.h).
+//
+// THE KIT'S JSON IS THE TURN'S. Every Json the kit makes or hands out (drvPath,
+// drvUnder, drvMap, drvHere, drvItem, drvRead, drvNames, drvOp's answer, an
+// error's why, an ErmGiven's fields) is held by the kit's pool and let go at
+// the turn's end (drvSweep, from hostTurn). A driver borrows it (json.h): to
+// keep it past the turn, or to put it in a container of its own, it jsonRefs
+// it first, and lets that hold go itself. What a driver gives the kit (a
+// map's values, a write's value, a function's output) the kit takes, as a
+// container does: a fresh value becomes the turn's too; the turn's stays the
+// turn's (the kit takes a hold of its own); a value borrowed from elsewhere (a
+// part of a read, one the driver keeps) is jsonRef'd or jsonShallow'd first.
 
 #include "drv.h"
 
@@ -12,6 +23,72 @@ static Host *host;
 void drvUse(Host *h) { host = h; }
 Host *drvHost(void) { return host; }
 
+// --- the turn's values: held here, by address, let go at the sweep
+
+static struct {
+	Json **items;
+	size_t n, room;
+	size_t *slots, nslots; // open addressing: items' index + 1; 0: empty
+} pool;
+
+static size_t slotHash(const Json *v) {
+	uintptr_t x = (uintptr_t)v;
+	x ^= x >> 33;
+	x *= 0xff51afd7ed558ccdull;
+	x ^= x >> 33;
+	return (size_t)x;
+}
+
+static bool pooled(const Json *v) {
+	if (!v || !pool.nslots) return false;
+	for (size_t s = slotHash(v) & (pool.nslots - 1); pool.slots[s]; s = (s + 1) & (pool.nslots - 1))
+		if (pool.items[pool.slots[s] - 1] == v) return true;
+	return false;
+}
+
+/** v the turn's: its one hold the pool's, let go at the sweep; v (already the turn's: as it is) */
+static Json *turn(Json *v) {
+	if (!v || pooled(v)) return v;
+	if (pool.n == pool.room) {
+		pool.room = pool.room ? pool.room * 2 : 1024;
+		pool.items = realloc(pool.items, sizeof *pool.items * pool.room);
+	}
+	pool.items[pool.n++] = v;
+	if (pool.n * 2 >= pool.nslots) {
+		free(pool.slots);
+		pool.nslots = pool.nslots ? pool.nslots * 2 : 4096;
+		pool.slots = calloc(pool.nslots, sizeof *pool.slots);
+		for (size_t i = 0; i < pool.n; i++) {
+			size_t s = slotHash(pool.items[i]) & (pool.nslots - 1);
+			while (pool.slots[s]) s = (s + 1) & (pool.nslots - 1);
+			pool.slots[s] = i + 1;
+		}
+	} else {
+		size_t s = slotHash(v) & (pool.nslots - 1);
+		while (pool.slots[s]) s = (s + 1) & (pool.nslots - 1);
+		pool.slots[s] = pool.n;
+	}
+	return v;
+}
+
+/** a value given to the kit to hold in a container: a hold of the kit's own of the turn's, else the caller's hold taken */
+static Json *given(Json *v) {
+	return pooled(v) ? jsonRef(v) : v;
+}
+
+/** a hold given to the kit (jsonOfValKept's): the turn's; one the pool holds already is let go */
+static Json *held(Json *v) {
+	if (!pooled(v)) return turn(v);
+	jsonFree(v);
+	return v;
+}
+
+void drvSweep(void) {
+	for (size_t i = 0; i < pool.n; i++) jsonFree(pool.items[i]);
+	pool.n = 0;
+	if (pool.nslots) memset(pool.slots, 0, sizeof *pool.slots * pool.nslots);
+}
+
 // --- errors
 
 ErmErr ermOk(void) { return (ErmErr){ 0 }; }
@@ -21,8 +98,8 @@ ErmErr ermInvalid(const char *code) {
 }
 
 ErmErr ermDetail(ErmErr err, const char *key, Json *value) {
-	if (!err.why) err.why = jsonObject();
-	jsonAdd(err.why, key, value);
+	if (!err.why) err.why = turn(jsonObject());
+	jsonAdd(err.why, key, given(value));
 	return err;
 }
 
@@ -62,12 +139,12 @@ static const ap_error *call(ap_fn *self, ap_given *ag, op_value **out, int *pend
 		.sc = ag,
 		.api = ag->api,
 		.peep = ag->peep,
-		.self = ag->self ? jsonString(ag->self) : NULL,
-		.name = ag->name ? jsonString(ag->name) : NULL,
-		.value = ag->value ? jsonOfValKept(ag->value) : NULL,
-		.previous = ag->previous ? jsonOfValKept(ag->previous) : NULL,
-		.args = ag->args ? jsonOfVal(ag->args) : NULL,
-		.killed = ag->part == AP_CLEANUP ? jsonBoolean(ag->killed) : NULL,
+		.self = ag->self ? turn(jsonString(ag->self)) : NULL,
+		.name = ag->name ? turn(jsonString(ag->name)) : NULL,
+		.value = ag->value ? held(jsonOfValKept(ag->value)) : NULL,
+		.previous = ag->previous ? held(jsonOfValKept(ag->previous)) : NULL,
+		.args = ag->args ? turn(jsonOfVal(ag->args)) : NULL,
+		.killed = ag->part == AP_CLEANUP ? turn(jsonBoolean(ag->killed)) : NULL,
 	};
 	if (depth < 64) running[depth] = ag;
 	depth++;
@@ -75,7 +152,7 @@ static const ap_error *call(ap_fn *self, ap_given *ag, op_value **out, int *pend
 	ErmErr e = f->fn.call(f->fn.data, &g, &o);
 	depth--;
 	if (e.kind) return apError(e);
-	*out = o ? valOf(o) : NULL;
+	*out = o ? valOf(turn(o)) : NULL;
 	return NULL;
 }
 
@@ -167,26 +244,26 @@ Json *drvPath(const char *first, ...) {
 	va_start(ap, first);
 	for (const char *p = first; p; p = va_arg(ap, const char *)) jsonPush(a, jsonString(p));
 	va_end(ap);
-	return a;
+	return turn(a);
 }
 
 Json *drvUnder(const Json *address, const char *first, ...) {
 	Json *a = jsonArray();
-	for (int i = 0; address && i < address->array.count; i++) jsonPush(a, address->array.items[i]);
+	for (int i = 0; address && i < address->array.count; i++) jsonPush(a, jsonRef(address->array.items[i]));
 	va_list ap;
 	va_start(ap, first);
 	for (const char *p = first; p; p = va_arg(ap, const char *)) jsonPush(a, jsonString(p));
 	va_end(ap);
-	return a;
+	return turn(a);
 }
 
 Json *drvMap(const char *key, ...) {
 	Json *m = jsonObject();
 	va_list ap;
 	va_start(ap, key);
-	for (const char *k = key; k; k = va_arg(ap, const char *)) jsonAdd(m, k, va_arg(ap, Json *));
+	for (const char *k = key; k; k = va_arg(ap, const char *)) jsonAdd(m, k, given(va_arg(ap, Json *)));
 	va_end(ap);
-	return m;
+	return turn(m);
 }
 
 /** an address's names, for this turn */
@@ -218,7 +295,11 @@ Json *drvItem(const ErmPartApi *api, Json *address) {
 			const ap_version *v = &it->versions[k];
 			if (v->status) continue;
 			// the same Json while the value is the same (val.h): the drivers' caches key on it
-			return drvMap("value", jsonOfValKept(v->content), "change", drvMap("time", jsonInteger(v->change.time), NULL), NULL);
+			Json *change = jsonObject(), *item = jsonObject();
+			jsonAdd(change, "time", jsonInteger(v->change.time));
+			jsonAdd(item, "value", jsonOfValKept(v->content));
+			jsonAdd(item, "change", change);
+			return turn(item);
 		}
 		return NULL;
 	}
@@ -226,7 +307,8 @@ Json *drvItem(const ErmPartApi *api, Json *address) {
 }
 
 Json *drvRead(const ErmPartApi *api, Json *address) {
-	return jsonGet(drvItem(api, address), "value");
+	Json *v = jsonGet(drvItem(api, address), "value");
+	return !v || pooled(v) ? v : turn(jsonRef(v));
 }
 
 bool drvHas(const ErmPartApi *api, Json *address) {
@@ -237,7 +319,7 @@ Json *drvNames(const ErmPartApi *api, Json *address) {
 	size_t n;
 	const char *const *a = names(address, &n);
 	ap_namelist list = { 0 };
-	Json *out = jsonArray();
+	Json *out = turn(jsonArray());
 	if (ap_names((ap_api *)api, a, n, &list)) return out;
 	// whether a node is loaded there, without its value: a name listed is not read, so a node under it
 	// written (a layer drawn, a window moved) runs no one who only listed its names again
@@ -294,17 +376,31 @@ static const ap_error *write(const ErmPartApi *api, Json *address, Json *patches
 	return e;
 }
 
-void drvSnap(const ErmPartApi *api, Json *address, Json *value) {
+/** one patch, the kit's own, holding the value given (the turn's: a hold of its own) */
+static Json *patch(const char *type, const char *key, Json *value) {
+	Json *p = jsonObject();
+	jsonAdd(p, "type", jsonString(type));
+	if (key) {
+		jsonAdd(p, "path", jsonArray());
+		jsonAdd(p, "key", jsonString(key));
+	}
+	jsonAdd(p, "value", given(turn(value)));
 	Json *patches = jsonArray();
-	jsonPush(patches, drvMap("type", jsonString("snapshot"), "value", value, NULL));
+	jsonPush(patches, p);
+	return patches;
+}
+
+void drvSnap(const ErmPartApi *api, Json *address, Json *value) {
+	Json *patches = patch("snapshot", NULL, value);
 	const ap_error *e = write(api, address, patches);
+	jsonFree(patches);
 	if (e) said("write", address, e);
 }
 
 void drvSet(const ErmPartApi *api, Json *address, const char *key, Json *value) {
-	Json *patches = jsonArray();
-	jsonPush(patches, drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString(key), "value", value, NULL));
+	Json *patches = patch("set", key, value);
 	const ap_error *e = write(api, address, patches);
+	jsonFree(patches);
 	if (e) said("write", address, e);
 }
 
@@ -318,13 +414,14 @@ static const ap_error *place(const ErmPartApi *api, Json *at, const char *name, 
 }
 
 void drvPlace(const ErmPartApi *api, Json *at, const char *name, const char *id, Json *value) {
-	op_value *v = valOf(value);
+	op_value *v = valOf(turn(value));
 	const ap_error *e = place(api, at, name, id, v, true);
 	op_free(v);
 	if (e) said("place", at, e);
 }
 
 void drvMake(const ErmPartApi *api, Json *at, const char *name, const char *id, Json *value) {
+	turn(value);
 	if (drvHas(api, drvUnder(at, name, NULL))) return;
 	op_value *v = valOf(value);
 	const ap_error *e = place(api, at, name, id, v, true);
@@ -354,10 +451,11 @@ static const ap_error *unplace(const ErmPartApi *api, Json *at, const char *name
 }
 
 Json *drvOp(const ErmPartApi *api, const char *op, Json *fields) {
+	turn(fields);
 	Json *address = jsonGet(fields, "address");
 	const char *name = jsonText(jsonGet(fields, "name")), *id = jsonText(jsonGet(fields, "id"));
 	const ap_error *e = NULL;
-	Json *ok = jsonNull();
+	Json *ok = turn(jsonNull());
 	if (!strcmp(op, "write")) {
 		e = write(api, address, jsonGet(fields, "patches"));
 	} else if (!strcmp(op, "place")) {
@@ -376,7 +474,7 @@ Json *drvOp(const ErmPartApi *api, const char *op, Json *fields) {
 		if (!g) e = ap_error_new(hostOs(host), "stopped", "call outside a part");
 		else e = ap_call(g, a, n, av, &out);
 		op_free(av);
-		if (!e && out) ok = jsonOfVal(out);
+		if (!e && out) ok = turn(jsonOfVal(out));
 	} else {
 		e = ap_error_new(hostOs(host), "unsupported", op);
 	}
@@ -391,7 +489,7 @@ Json *drvOp(const ErmPartApi *api, const char *op, Json *fields) {
 
 Json *drvHere(const ErmGiven *g) {
 	Json *here = hostHere(host, g->sc->self);
-	return here ? jsonShallow(here) : drvPath("/", NULL);
+	return here ? turn(here) : drvPath("/", NULL);
 }
 
 void drvHandler(const ErmGiven *g, Json *here, const char *name, ErmFn fn) {

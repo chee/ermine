@@ -9,6 +9,7 @@
 //   in the page is its compiler
 // - /slaygrounds/: its own vite build (deno task build there), copied in. in dev, its own dev server
 //   (deno task serve there, :8051), sent to
+// - /shape/: shape/index.html, a page like any (it imports slaygrounds/src/graph-file.ts)
 // - pigs: a terminal program, so its card only
 // imports resolve as Deno resolves them (@deno/vite-plugin): the workspace's @ermine/* libraries from
 // source, npm packages from the repo's node_modules (`deno install`, the names in deno.json)
@@ -84,7 +85,8 @@ const pages: Plugin = {
 		server.middlewares.use(async (req, res, next) => {
 			const path = req.url?.split("?")[0] ?? ""
 			try {
-				if (path.startsWith("/slaygrounds")) {
+				// the page only: a module under it (shape's import of src/graph-file.ts) is served here
+				if (path === "/slaygrounds" || path === "/slaygrounds/") {
 					const port = Number(Deno.env.get("SLAY_PORT") ?? 8051)
 					res.writeHead(302, { location: `http://localhost:${port}/` }).end()
 				} else if (path === "/catclock") {
@@ -177,7 +179,12 @@ export default defineConfig({
 	// package, unbundled
 	optimizeDeps: {
 		exclude: ["@yowasp/clang"],
-		entries: ["index.html", "catclock/web/index.html", "catclock/web/clock.html"],
+		entries: [
+			"index.html",
+			"catclock/web/index.html",
+			"catclock/web/clock.html",
+			"shape/index.html",
+		],
 	},
 	server: { port: 8040, strictPort: true, fs: { allow: [repo] } },
 	build: {
@@ -189,6 +196,7 @@ export default defineConfig({
 				index: `${here}index.html`,
 				catclock: `${cat}index.html`,
 				clock: `${cat}clock.html`,
+				shape: `${here}shape/index.html`,
 			},
 		},
 	},

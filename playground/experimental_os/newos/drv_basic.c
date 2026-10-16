@@ -34,7 +34,7 @@ static ErmErr kbdIrq(void *data, const ErmGiven *g, Json **out) {
 		Json *r = recs->array.items[i];
 		const char *e = event(r);
 		if (strcmp(e, "key") && strcmp(e, "compose") && strcmp(e, "commit")) continue;
-		jsonPush(all, r);
+		jsonPush(all, jsonRef(r));
 		if (!strcmp(e, "key")) last = r, keys++;
 	}
 	if (!all->array.count) return ermOk();
@@ -114,7 +114,7 @@ static ErmErr pointerIrq(void *data, const ErmGiven *g, Json **out) {
 	Json *to = drvRead(g->api, drvPath("/", "dev", "pointer", "to", NULL));
 	if (jsonIsArray(to)) {
 		Json *args = jsonArray();
-		jsonPush(args, recs);
+		jsonPush(args, jsonRef(recs));
 		drvOp(g->api, "call", drvMap("address", to, "args", args, NULL));
 	}
 	drvSnap(g->api, drvPath("/", "dev", "pointer", "at", NULL),

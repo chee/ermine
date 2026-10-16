@@ -1131,7 +1131,7 @@ static void show(const ErmGiven *g, Screen *s, const Box *dirty) {
 	s->serial++;
 	Json *p = drvMap("source", jsonString("vnc"), "id", jsonInteger(s->id), "serial", jsonInteger(s->serial), "x", jsonInteger(s->x), "y", jsonInteger(s->y), "w",
 	                 jsonInteger(s->vw), "h", jsonInteger(s->vh), NULL);
-	if (dirty && s->shown) jsonAdd(p, "dirty", drvMap("x", jsonInteger(dirty->x), "y", jsonInteger(dirty->y), "w", jsonInteger(dirty->w), "h", jsonInteger(dirty->h), NULL));
+	if (dirty && s->shown) jsonAdd(p, "dirty", jsonRef(drvMap("x", jsonInteger(dirty->x), "y", jsonInteger(dirty->y), "w", jsonInteger(dirty->w), "h", jsonInteger(dirty->h), NULL)));
 	drvSet(g->api, at, "plane", p);
 	s->shown = true;
 }
@@ -1288,7 +1288,7 @@ static Json *told(Vnc *v, Screen *s, bool counts) {
 	jsonAdd(o, "scale", jsonNumber((double)(int)(s->scale * 1000 + 0.5) / 1000));
 	jsonAdd(o, "x", jsonInteger(s->ox));
 	jsonAdd(o, "y", jsonInteger(s->oy));
-	jsonAdd(o, "keys", drvMap("cmd", jsonString(keysymName(cmdOf(s, mac))), "alt", jsonString(keysymName(altOf(s, mac))), NULL));
+	jsonAdd(o, "keys", jsonRef(drvMap("cmd", jsonString(keysymName(cmdOf(s, mac))), "alt", jsonString(keysymName(altOf(s, mac))), NULL)));
 	return o;
 }
 
