@@ -378,11 +378,19 @@ core/unread/c/unread-bench: core/node/c/node.c core/node/c/update.c core/op/c/va
 # watcher, the scheduler, the wiring and transport, Subduction over a WebSocket) is left out until sync is rewritten for today's graph:
 # host.c is a stub that says so. No suite, not part of all; playground/files/c/test/cli.sh tries it. playground/files/c/files-check:
 # the same with the sanitizers
-files_src = playground/files/c/files.c playground/files/c/host.c $(filter-out playground/files/c/store_harness.c playground/files/c/disk.c,$(store_src))
+# the files tool, and its host (host.c): the store, the files program and its watcher on the files graph, synced by
+# extensions/sync over Subduction (its files store, a WebSocket over OpenSSL)
+OPENSSL ?= $(shell brew --prefix openssl@3 2>/dev/null || echo /usr)
+files_src = $(sort playground/files/c/files.c playground/files/c/host.c playground/files/c/program.c playground/files/c/watch.c playground/files/c/graph.c \
+	$(filter-out playground/files/c/store_harness.c playground/files/c/disk.c,$(store_src)) $(graph_src) \
+	extensions/sync/c/sync.c extensions/sync/c/egwalker.c $(filter-out extensions/sync/c/commits.c ermine/encoding/c/commit_form.c,$(sync_transport_src)) extensions/subduction/c/subduction/store_files.c \
+	extensions/subduction/c/subduction/websocket.c extensions/subduction/c/subduction/transport_openssl.c)
+files_flags = $(subduction_rename) -I$(OPENSSL)/include
+files_libs = $(transport_libs) $(program_libs) -L$(OPENSSL)/lib -lssl -lcrypto
 playground/files/c/files: $(files_src) $(wildcard */*/c/*.h)
-	$(CC) $(CFLAGS) $(BLAKE3FLAGS) -o $@ $(filter %.c,$^) -lm
+	$(CC) $(CFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
 playground/files/c/files-check: $(files_src) $(wildcard */*/c/*.h)
-	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) -o $@ $(filter %.c,$^) -lm
+	$(CC) $(CHECKFLAGS) $(BLAKE3FLAGS) $(files_flags) -o $@ $(filter %.c,$^) $(files_libs) -lm
 
 clean:
 	rm -rf playground/files/c/files playground/files/c/files-check playground/files/c/files-check.dSYM
