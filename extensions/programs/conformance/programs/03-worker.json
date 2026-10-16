@@ -1,0 +1,386 @@
+{
+	"title": "a worker box (its host runner provides [javascript, fetch], no dom): the server clang still fits, run by the worker; a wasm runner needing dom does not: why says the worker lacks dom, and that runner has no whole chain",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "types",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL",
+				"loaders": "L"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "L",
+			"value": {
+				"ermine.programs.loaders": true
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "SCLANG",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.needs": [
+					"javascript",
+					"fetch"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WCLANG",
+			"value": {
+				"ermine.type": "public.wasm-executable",
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.needs": [
+					"wasm32"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WASMRUN",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				],
+				"ermine.programs.provides": [
+					"wasm32"
+				],
+				"ermine.programs.needs": [
+					"javascript"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"id": "PAGE",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "PAGE",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				],
+				"ermine.programs.provides": [
+					"javascript",
+					"dom",
+					"fetch"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"id": "WORKER",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WORKER",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				],
+				"ermine.programs.provides": [
+					"javascript",
+					"fetch"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CANVAS",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				],
+				"ermine.programs.provides": [
+					"wasm32",
+					"canvas"
+				],
+				"ermine.programs.needs": [
+					"javascript",
+					"dom"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "worker",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "worker",
+			"path": [
+				"ermine",
+				"types"
+			],
+			"node": "ermine/types",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "worker",
+			"path": [
+				"clocks",
+				"clang"
+			],
+			"node": "SCLANG",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "worker",
+			"path": [
+				"loaders",
+				"wasm"
+			],
+			"node": "WASMRUN",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "worker",
+			"path": [
+				"loaders",
+				"canvas"
+			],
+			"node": "CANVAS",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "worker",
+			"path": [
+				"worker"
+			],
+			"node": "WORKER",
+			"expect": {}
+		},
+		{
+			"op": "program",
+			"box": "worker",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"program": {
+					"id": "CAT",
+					"at": [
+						"clocks",
+						"catclock.c"
+					]
+				},
+				"chains": [
+					[
+						{
+							"id": "SCLANG",
+							"at": [
+								"clocks",
+								"clang"
+							],
+							"by": [
+								{
+									"id": "WORKER",
+									"at": [
+										"worker"
+									],
+									"by": []
+								}
+							]
+						},
+						{
+							"id": "WASMRUN",
+							"at": [
+								"loaders",
+								"wasm"
+							],
+							"by": [
+								{
+									"id": "WORKER",
+									"at": [
+										"worker"
+									],
+									"by": []
+								}
+							]
+						}
+					]
+				],
+				"why": [
+					{
+						"id": "SCLANG",
+						"at": [
+							"clocks",
+							"clang"
+						],
+						"for": "SCLANG",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "WORKER",
+						"at": [
+							"worker"
+						],
+						"for": "CAT",
+						"type": "public.c-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "WASMRUN",
+						"at": [
+							"loaders",
+							"wasm"
+						],
+						"for": "CAT",
+						"type": "public.c-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "CANVAS",
+						"at": [
+							"loaders",
+							"canvas"
+						],
+						"for": "CAT",
+						"type": "public.c-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "SCLANG",
+						"at": [
+							"clocks",
+							"clang"
+						],
+						"for": "CAT",
+						"type": "public.wasm-executable",
+						"why": "wrong-type"
+					},
+					{
+						"id": "WORKER",
+						"at": [
+							"worker"
+						],
+						"for": "CAT",
+						"type": "public.wasm-executable",
+						"why": "wrong-type"
+					},
+					{
+						"id": "SCLANG",
+						"at": [
+							"clocks",
+							"clang"
+						],
+						"for": "WASMRUN",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "SCLANG",
+						"at": [
+							"clocks",
+							"clang"
+						],
+						"for": "CANVAS",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "WORKER",
+						"at": [
+							"worker"
+						],
+						"for": "CANVAS",
+						"type": "com.netscape.javascript-source",
+						"why": "needs",
+						"missing": [
+							"dom"
+						]
+					},
+					{
+						"id": "WASMRUN",
+						"at": [
+							"loaders",
+							"wasm"
+						],
+						"for": "CANVAS",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "CANVAS",
+						"at": [
+							"loaders",
+							"canvas"
+						],
+						"for": "CANVAS",
+						"type": "com.netscape.javascript-source",
+						"why": "wrong-type"
+					},
+					{
+						"id": "CANVAS",
+						"at": [
+							"loaders",
+							"canvas"
+						],
+						"for": "CAT",
+						"type": "public.wasm-executable",
+						"why": "no-chain"
+					}
+				]
+			}
+		}
+	]
+}

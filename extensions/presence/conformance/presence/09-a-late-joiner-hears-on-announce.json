@@ -1,0 +1,55 @@
+{
+	"title": "a late joiner hears my rows when I announce",
+	"steps": [
+		{
+			"op": "now",
+			"t": 0
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": 1,
+			"ttl": 5000
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": []
+			}
+		},
+		{
+			"op": "announce",
+			"name": "ca"
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": 1,
+						"until": 5000
+					}
+				]
+			}
+		}
+	]
+}

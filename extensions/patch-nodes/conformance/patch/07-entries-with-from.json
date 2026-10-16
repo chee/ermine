@@ -1,0 +1,168 @@
+{
+	"title": "entries gives every layer at a path, front first, with from; told as a read",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "base",
+				"body": "b"
+			},
+			"time": 100,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"entries": [
+					"N",
+					[
+						"title"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "e",
+			"expect": {
+				"runs": 1,
+				"value": [
+					{
+						"value": "base",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "patch",
+			"id": "P1",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "one"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P2",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "two"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "e",
+			"expect": {
+				"runs": 2,
+				"value": [
+					{
+						"value": "two",
+						"from": "P2"
+					},
+					{
+						"value": "one",
+						"from": "P1"
+					},
+					{
+						"value": "base",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"path": [
+				"title"
+			],
+			"expect": {
+				"value": "two"
+			}
+		},
+		{
+			"op": "change",
+			"id": "N",
+			"expect": {
+				"time": 100,
+				"actor": "test",
+				"metadata": [
+					[
+						"actor",
+						"test"
+					],
+					[
+						"overlay",
+						[
+							"P1",
+							"P2"
+						]
+					]
+				],
+				"hasOp": false
+			}
+		},
+		{
+			"op": "entries",
+			"id": "nobody",
+			"expect": {
+				"items": []
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"path": [
+				"body"
+			],
+			"expect": {
+				"items": [
+					{
+						"value": "b",
+						"from": "P2"
+					},
+					{
+						"value": "b",
+						"from": "P1"
+					},
+					{
+						"value": "b",
+						"from": "table"
+					}
+				]
+			}
+		}
+	]
+}

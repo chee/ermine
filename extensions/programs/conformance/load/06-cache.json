@@ -1,0 +1,249 @@
+{
+	"title": "the loaded, kept while a process holding them runs: a and b started together, toy loaded once. a stopped, c started: b still holds toy, so not loaded again. b and c stopped: none holds it, so d loads it again (the host's load called again)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"tick.toy": "P",
+				"toy": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "P",
+			"value": "tick",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "P",
+			"value": {
+				"ermine.type": "test.toy"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "T",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"test.toy"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "JS",
+			"load": "js",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "JS",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"js"
+			],
+			"node": "JS",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"a"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"b"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 1,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run",
+						"proc:a",
+						"tick"
+					],
+					[
+						"run",
+						"proc:b",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"c"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"c"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 1,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "c",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "d",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"d"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:d",
+				"at": [
+					"d"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 2,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"run",
+						"proc:a",
+						"tick"
+					],
+					[
+						"run",
+						"proc:b",
+						"tick"
+					],
+					[
+						"stop",
+						"proc:a"
+					],
+					[
+						"run",
+						"proc:c",
+						"tick"
+					],
+					[
+						"stop",
+						"proc:b"
+					],
+					[
+						"stop",
+						"proc:c"
+					],
+					[
+						"run",
+						"proc:d",
+						"tick"
+					]
+				]
+			}
+		}
+	]
+}

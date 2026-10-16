@@ -1,0 +1,184 @@
+{
+	"title": "a computer asking the types of a folder reruns when a name changes (a.txt renamed a.c: c-source), a type's fileNameExtension is written (.zz claimed: plain text) or an attribute is (json wins over the name), and not when a type's mimeType is written",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "types",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"a.txt": "A",
+				"n.zz": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"test",
+					"o"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"folder": [
+				"work",
+				"clocks"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": {
+					"types": {
+						"a.txt": "public.plain-text",
+						"n.zz": null
+					}
+				}
+			}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"a.c": "A",
+				"n.zz": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": {
+					"types": {
+						"a.c": "public.c-source",
+						"n.zz": null
+					}
+				}
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "ermine/types/public.c-source",
+			"path": [
+				"mimeType"
+			],
+			"value": [
+				"text/x-c"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": {
+					"types": {
+						"a.c": "public.c-source",
+						"n.zz": null
+					}
+				}
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "ermine/types/public.plain-text",
+			"path": [
+				"fileNameExtension"
+			],
+			"value": [
+				".txt",
+				".zz"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": {
+					"types": {
+						"a.c": "public.c-source",
+						"n.zz": "public.plain-text"
+					}
+				}
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "attributes",
+			"id": "A",
+			"path": [
+				"ermine.type"
+			],
+			"value": "public.json",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 4,
+				"value": {
+					"types": {
+						"a.c": "public.json",
+						"n.zz": "public.plain-text"
+					}
+				}
+			}
+		}
+	]
+}

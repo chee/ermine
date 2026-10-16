@@ -1,0 +1,426 @@
+{
+	"title": "a cwd other than the root: boxing /work and starting at /docs/mouse/clock, the cwd is docs/mouse (the folder at is in): satisfy's from is the cwd when none is given (clocks/catclock.c found going up from it), the args are looked up from it nearest first, up to the box's \"/\" and never above (outside, at R, is not found); written as ermine.process.cwd and in the pin. a cwd given (docs) differs from at's folder; \"..\" at the root stays there. a name nearer the cwd unboxed: the next one up is found",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W",
+				"outside": "OUT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL",
+				"docs": "D",
+				"note": "NOTE_W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "D",
+			"value": {
+				"mouse": "M",
+				"note": "NOTE_D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "M",
+			"value": {
+				"note": "NOTE_M"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "upper",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "upper",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "b",
+			"at": "/work",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": "cc",
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "b",
+			"path": "run",
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "b",
+			"program": "clocks/catclock.c",
+			"at": "/docs/mouse/clock",
+			"args": [
+				"note",
+				"outside"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"docs",
+					"mouse",
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": [
+					"note",
+					"outside"
+				],
+				"cwd": [
+					"docs",
+					"mouse"
+				],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "upper",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": [
+						"docs",
+						"mouse"
+					]
+				}
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "b",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": "/clock2",
+			"cwd": "docs",
+			"args": [
+				"note"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"clock2"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "c",
+			"box": "b",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock3"
+			],
+			"cwd": "../../..",
+			"args": [
+				"note",
+				"outside"
+			],
+			"expect": {
+				"id": "proc:c",
+				"at": [
+					"clock3"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"box": "b",
+			"path": [
+				"docs",
+				"mouse",
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"note": "NOTE_M",
+					"outside": null
+				}
+			}
+		},
+		{
+			"op": "found",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"found": {
+					"note": "NOTE_D"
+				}
+			}
+		},
+		{
+			"op": "found",
+			"name": "c",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"note": "NOTE_W",
+					"outside": null
+				}
+			}
+		},
+		{
+			"op": "process",
+			"name": "b",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": [
+					"note"
+				],
+				"cwd": [
+					"docs"
+				],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "upper",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": [
+						"docs"
+					]
+				}
+			}
+		},
+		{
+			"op": "process",
+			"name": "c",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": [
+					"note",
+					"outside"
+				],
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "upper",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "b",
+			"path": "docs/mouse/note",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 3,
+				"found": {
+					"note": "NOTE_D",
+					"outside": null
+				}
+			}
+		},
+		{
+			"op": "found",
+			"name": "b",
+			"expect": {
+				"runs": 1,
+				"found": {
+					"note": "NOTE_D"
+				}
+			}
+		},
+		{
+			"op": "start",
+			"name": "d",
+			"box": "b",
+			"program": "catclock.c",
+			"at": "/docs/clock4",
+			"expect": {
+				"refused": "nothing-there",
+				"path": "catclock.c",
+				"at": [
+					"docs"
+				]
+			}
+		}
+	]
+}

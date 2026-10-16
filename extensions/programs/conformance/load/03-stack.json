@@ -1,0 +1,292 @@
+{
+	"title": "loaders stack: toy (its type a toy script) is run by mid, a JavaScript runner whose load imports a toy script, itself run by js, the host's. tick.toy's chain: [toy (by [mid (by [js])])]: mid loaded by js, then toy by mid, then toy runs the program. the pin nests the bys. a second start: neither loaded again",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"tick.toy": "P",
+				"toy": "T",
+				"mid": "M"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "P",
+			"value": "tick",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "P",
+			"value": {
+				"ermine.type": "test.toy"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "T",
+			"value": "export function run(code, api) { say([\"run\", api.process.id, code]); return { stop: () => say([\"stop\", api.process.id]) } }",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "T",
+			"value": {
+				"ermine.type": "test.toy-script",
+				"ermine.programs.takes": [
+					"test.toy"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "M",
+			"value": "export function load(code) { say([\"load\"]); return import(\"data:text/javascript,\" + encodeURIComponent(code)) }",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "M",
+			"value": {
+				"ermine.type": "com.netscape.javascript-source",
+				"ermine.programs.takes": [
+					"test.toy-script"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "JS",
+			"load": "js",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "JS",
+			"value": {
+				"ermine.programs.takes": [
+					"com.netscape.javascript-source"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"js"
+			],
+			"node": "JS",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"tick"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"tick"
+				]
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "05794a51b9b26fb15c65685a15e7349e279fda40a5398b7dd35655dc639eddb5",
+							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"by": [
+								{
+									"id": "M",
+									"at": [
+										"mid"
+									],
+									"attributes": "075b27507bdd39154870c301ddf96c47fde97578a548a55c63db5f10b33cd4bb",
+									"hash": "17668321cf412ee9659cec36890b1531c8f621a4f7f29378cebdd674cc1cf998",
+									"by": [
+										{
+											"id": "JS",
+											"at": [
+												"js"
+											],
+											"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+										}
+									]
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "P",
+						"at": [
+							"tick.toy"
+						],
+						"hash": "bf6b407a4c50ee6a7c169821a50327c1bef8083678c061e0f4fd682857ef05ac"
+					},
+					"chain": [
+						{
+							"id": "T",
+							"at": [
+								"toy"
+							],
+							"attributes": "05794a51b9b26fb15c65685a15e7349e279fda40a5398b7dd35655dc639eddb5",
+							"hash": "7889d48089a95b9f91ed0c64a561c90d2894807b8ccb8e639b53ed137486e677",
+							"by": [
+								{
+									"id": "M",
+									"at": [
+										"mid"
+									],
+									"attributes": "075b27507bdd39154870c301ddf96c47fde97578a548a55c63db5f10b33cd4bb",
+									"hash": "17668321cf412ee9659cec36890b1531c8f621a4f7f29378cebdd674cc1cf998",
+									"by": [
+										{
+											"id": "JS",
+											"at": [
+												"js"
+											],
+											"attributes": "2b187aaf4b362c8bd0452bca76a949e3bc472d67dc2dc9219eab312566220042"
+										}
+									]
+								}
+							]
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"load"
+					],
+					[
+						"run",
+						"proc:a",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 1,
+				"wasm": 0
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "tick.toy",
+			"at": [
+				"tock"
+			],
+			"from": [],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"tock"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "said",
+			"expect": {
+				"said": [
+					[
+						"load"
+					],
+					[
+						"run",
+						"proc:a",
+						"tick"
+					],
+					[
+						"run",
+						"proc:b",
+						"tick"
+					]
+				]
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 1,
+				"wasm": 0
+			}
+		}
+	]
+}

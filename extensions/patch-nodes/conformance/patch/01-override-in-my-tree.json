@@ -1,0 +1,157 @@
+{
+	"title": "a patch node in my tree overrides N's title; the table still says the base",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"doc": "N"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "theirs",
+				"body": "hello"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W",
+				"me": "M"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "M",
+			"value": {
+				"skins": "S"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "S",
+			"value": {
+				"title": "P"
+			},
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "mine"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"me",
+				"skins",
+				"title"
+			],
+			"expect": {
+				"id": "P"
+			}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"read": [
+					{
+						"get": [
+							"work",
+							"doc"
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "a",
+			"expect": {
+				"runs": 1,
+				"value": {
+					"title": "mine",
+					"body": "hello"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "N",
+			"expect": {
+				"value": {
+					"title": "theirs",
+					"body": "hello"
+				}
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"value": "hi"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "a",
+			"expect": {
+				"runs": 2,
+				"value": {
+					"title": "mine",
+					"body": "hi"
+				}
+			}
+		},
+		{
+			"op": "node",
+			"id": "N",
+			"expect": {
+				"value": {
+					"title": "theirs",
+					"body": "hi"
+				}
+			}
+		}
+	]
+}

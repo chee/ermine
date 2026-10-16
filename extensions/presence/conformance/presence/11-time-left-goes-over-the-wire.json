@@ -1,0 +1,102 @@
+{
+	"title": "what crosses is the time left, not a time: a later announce says less",
+	"steps": [
+		{
+			"op": "now",
+			"t": 1000
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": "v",
+			"ttl": 5000
+		},
+		{
+			"op": "now",
+			"t": 4000
+		},
+		{
+			"op": "announce",
+			"name": "ca"
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": "v"
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 2000,
+							"value": "v"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": "v",
+						"until": 6000
+					}
+				]
+			}
+		},
+		{
+			"op": "now",
+			"t": 6000
+		},
+		{
+			"op": "renew",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"ttl": 100,
+			"expect": {
+				"ok": true
+			}
+		},
+		{
+			"op": "presence",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"rows": [
+					{
+						"who": "a",
+						"value": "v",
+						"until": 6100
+					}
+				]
+			}
+		}
+	]
+}

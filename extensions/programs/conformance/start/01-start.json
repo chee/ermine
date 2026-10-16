@@ -1,0 +1,317 @@
+{
+	"title": "a start, in a box from W at clock: on the process's node (proc:a) at once its args, its pin (the program's id, place and hash of its value; each step's compiler identity, UP's, or the hash of its attributes, RUN's; the box's folder, W; the cwd) and its status, pending. the first pulse builds: upper called once, the runner called once with the built code, the args and the api's keys only (the harness's createProcessAPI: places, process, watch); the status gone. its scope's sites: where start was called, then where the programs were made (ermine/sites). the process is at clock in the box, its cwd the box's \"/\" (the folder clock is in); another box over the same folder sees it there too (a box is its folder)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "upper",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "upper",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"args": [
+				"hehe.txt"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "sites",
+			"name": "a",
+			"expect": {
+				"sites": [
+					"start_harness",
+					"start_harness"
+				]
+			}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": "pending",
+				"args": [
+					"hehe.txt"
+				],
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "upper",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "here",
+			"box": "web",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [],
+				"stops": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": [
+					"hehe.txt"
+				],
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "UP",
+							"at": [
+								"cc"
+							],
+							"identity": {
+								"name": "upper",
+								"version": "1"
+							}
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "8834c4ba2970472c8fc475d360d981459932aaa0b645c8a519773c21dc9dc9a7"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "HI",
+						"args": [
+							"hehe.txt"
+						],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "calls",
+			"expect": {
+				"upper": 1,
+				"wrap": 0,
+				"slow": 0,
+				"boom": 0
+			}
+		},
+		{
+			"op": "cache",
+			"expect": {
+				"size": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "HI",
+						"args": [
+							"hehe.txt"
+						],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "create",
+			"name": "other",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "here",
+			"box": "other",
+			"path": [
+				"clock"
+			],
+			"expect": {
+				"id": "proc:a"
+			}
+		}
+	]
+}

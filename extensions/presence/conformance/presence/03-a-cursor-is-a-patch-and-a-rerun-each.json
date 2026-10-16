@@ -1,0 +1,277 @@
+{
+	"title": "a cursor moving: a patch and a rerun a change, one send each",
+	"steps": [
+		{
+			"op": "now",
+			"t": 1000
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "mount",
+			"dev": "b",
+			"name": "doc",
+			"id": "work"
+		},
+		{
+			"op": "watchPath",
+			"dev": "b",
+			"name": "w",
+			"path": [
+				"doc"
+			]
+		},
+		{
+			"op": "watch",
+			"dev": "b",
+			"name": "row",
+			"f": {
+				"row": [
+					"work",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "state",
+			"name": "row",
+			"expect": {
+				"runs": 1,
+				"value": null
+			}
+		},
+		{
+			"op": "now",
+			"t": 1016
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					0,
+					0
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "now",
+			"t": 1032
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					1,
+					1
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "now",
+			"t": 1048
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					2,
+					2
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "now",
+			"t": 1064
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					3,
+					3
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "now",
+			"t": 1080
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": {
+				"cursor": [
+					4,
+					4
+				]
+			},
+			"ttl": 5000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "told",
+			"name": "w",
+			"expect": {
+				"patches": 5
+			}
+		},
+		{
+			"op": "state",
+			"name": "row",
+			"expect": {
+				"runs": 6,
+				"value": {
+					"who": "a",
+					"value": {
+						"cursor": [
+							4,
+							4
+						]
+					},
+					"until": 6080
+				}
+			}
+		},
+		{
+			"op": "sent",
+			"expect": {
+				"sent": [
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									0,
+									0
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									1,
+									1
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									2,
+									2
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									3,
+									3
+								]
+							}
+						}
+					},
+					{
+						"from": "a",
+						"topic": "work",
+						"message": {
+							"ttl": 5000,
+							"value": {
+								"cursor": [
+									4,
+									4
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "row",
+			"dev": "b",
+			"anchor": "work",
+			"who": "a",
+			"expect": {
+				"row": {
+					"who": "a",
+					"value": {
+						"cursor": [
+							4,
+							4
+						]
+					},
+					"until": 6080
+				}
+			}
+		}
+	]
+}

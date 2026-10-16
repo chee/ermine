@@ -1,0 +1,114 @@
+{
+	"title": "attributes change in place: a write under where a patch node moves from tells the reader where it lands",
+	"steps": [
+		{
+			"op": "edit",
+			"part": "attributes",
+			"id": "N",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": {
+							"x": 1
+						},
+						"b": 0
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "P",
+			"on": "N",
+			"part": "attributes",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "m",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"m",
+						"x"
+					],
+					"attributes"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 1,
+				"value": 1
+			}
+		},
+		{
+			"op": "edit",
+			"part": "attributes",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "m",
+			"expect": {
+				"runs": 2,
+				"value": 2
+			}
+		},
+		{
+			"op": "read",
+			"id": "N",
+			"path": [
+				"m"
+			],
+			"part": "attributes",
+			"expect": {
+				"value": {
+					"x": 2
+				}
+			}
+		}
+	]
+}

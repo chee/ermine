@@ -1,0 +1,172 @@
+{
+	"title": "an optimistic write shows until the base catches up, then is dropped; nobody told when it goes, nothing changed",
+	"steps": [
+		{
+			"op": "value",
+			"id": "N",
+			"value": {
+				"title": "draft"
+			},
+			"time": 100,
+			"expect": {}
+		},
+		{
+			"op": "root",
+			"name": "o",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "t",
+			"scope": "o",
+			"f": {
+				"read": [
+					"N",
+					[
+						"title"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "patch",
+			"id": "pending/1",
+			"on": "N",
+			"at": 100,
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "final"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "t",
+			"expect": {
+				"runs": 2,
+				"value": "final"
+			}
+		},
+		{
+			"op": "edit",
+			"part": "value",
+			"id": "N",
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"value": "final"
+				}
+			],
+			"time": 160,
+			"metadata": [
+				[
+					"answers",
+					"pending/1"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"path": [
+				"title"
+			],
+			"expect": {
+				"items": [
+					{
+						"value": "final",
+						"from": "pending/1",
+						"stale": true
+					},
+					{
+						"value": "final",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "change",
+			"id": "N",
+			"expect": {
+				"time": 160,
+				"actor": "test",
+				"metadata": [
+					[
+						"answers",
+						"pending/1"
+					],
+					[
+						"owner",
+						[
+							[
+								"actor",
+								"test"
+							]
+						]
+					],
+					[
+						"overlay",
+						[
+							"pending/1"
+						]
+					]
+				],
+				"hasOp": false
+			}
+		},
+		{
+			"op": "del",
+			"part": "patch",
+			"id": "pending/1",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "t",
+			"expect": {
+				"runs": 3,
+				"value": "final"
+			}
+		},
+		{
+			"op": "entries",
+			"id": "N",
+			"path": [
+				"title"
+			],
+			"expect": {
+				"items": [
+					{
+						"value": "final",
+						"from": "table"
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,109 @@
+{
+	"title": "a device going quiet: its row expires on the other side after until",
+	"steps": [
+		{
+			"op": "now",
+			"t": 1000
+		},
+		{
+			"op": "connect",
+			"dev": "a",
+			"name": "ca",
+			"topic": "work"
+		},
+		{
+			"op": "connect",
+			"dev": "b",
+			"name": "cb",
+			"topic": "work"
+		},
+		{
+			"op": "watch",
+			"dev": "b",
+			"name": "seen",
+			"f": {
+				"presence": "work"
+			}
+		},
+		{
+			"op": "set",
+			"dev": "a",
+			"anchor": "work",
+			"who": "x",
+			"value": 1,
+			"ttl": 2000
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "state",
+			"name": "seen",
+			"expect": {
+				"runs": 1,
+				"value": [
+					{
+						"who": "a",
+						"value": 1,
+						"until": 3000
+					}
+				]
+			}
+		},
+		{
+			"op": "now",
+			"t": 2999
+		},
+		{
+			"op": "sweep",
+			"dev": "b",
+			"expect": {
+				"swept": []
+			}
+		},
+		{
+			"op": "now",
+			"t": 3000
+		},
+		{
+			"op": "sweep",
+			"dev": "b",
+			"expect": {
+				"swept": [
+					{
+						"anchor": "work",
+						"who": "a"
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"dev": "b"
+		},
+		{
+			"op": "state",
+			"name": "seen",
+			"expect": {
+				"runs": 2,
+				"value": []
+			}
+		},
+		{
+			"op": "table",
+			"dev": "b",
+			"anchor": "work",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "sweep",
+			"dev": "b",
+			"expect": {
+				"swept": []
+			}
+		}
+	]
+}

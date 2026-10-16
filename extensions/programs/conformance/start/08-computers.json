@@ -1,0 +1,194 @@
+{
+	"title": "a computer the program makes in its run is the process's: it runs while the process does (note unboxed: it sees nothing), and goes at stop (note boxed again: it does not run)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compiler",
+			"id": "UP",
+			"compiler": "upper",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": {
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "public.wasm-executable",
+				"ermine.programs.compiler": {
+					"name": "upper",
+					"version": "1"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"public.wasm-executable"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"cc"
+			],
+			"node": "UP",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"note"
+			],
+			"node": "NOTE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"from": [
+				"clocks"
+			],
+			"at": [
+				"clock"
+			],
+			"args": [
+				"note"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 1,
+				"found": {
+					"note": "NOTE"
+				}
+			}
+		},
+		{
+			"op": "unbox",
+			"box": "web",
+			"path": [
+				"note"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"note": null
+				}
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"note"
+			],
+			"node": "NOTE",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "found",
+			"name": "a",
+			"expect": {
+				"runs": 2,
+				"found": {
+					"note": null
+				}
+			}
+		}
+	]
+}

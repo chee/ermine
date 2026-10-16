@@ -1,0 +1,147 @@
+{
+	"title": "a node's type: its ermine.type, else the type claiming the extension of the name it is placed under (case does not matter; the longest extension wins, .tar.gz before .gz; two types claiming .tar: the first in the folder's order, public.tar-archive); an explicit type wins over the name (b.c is plain text), one that is no string is passed over (w.c); no extension, an unknown one, or a name that is only an extension (.c): none; no name (a node at no place): none",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "types",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"a.c": "A",
+				"b.c": "B",
+				"C.TXT": "CU",
+				"notes.xyz": "N",
+				"Makefile": "M",
+				".c": "D",
+				"x.tar.gz": "TGZ",
+				"x.gz": "GZ",
+				"x.tar": "TAR",
+				"w.c": "W2",
+				"Y.Json": "Y",
+				"v.TAR.GZ": "V"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "B",
+			"value": {
+				"ermine.type": "public.plain-text"
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "W2",
+			"value": {
+				"ermine.type": 7
+			},
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"folder": [
+				"work",
+				"clocks"
+			],
+			"expect": {
+				"types": {
+					"a.c": "public.c-source",
+					"b.c": "public.plain-text",
+					"C.TXT": "public.plain-text",
+					"notes.xyz": null,
+					"Makefile": null,
+					".c": null,
+					"x.tar.gz": "org.gnu.gnu-zip-tar-archive",
+					"x.gz": "org.gnu.gnu-zip-archive",
+					"x.tar": "public.tar-archive",
+					"w.c": "public.c-source",
+					"Y.Json": "public.json",
+					"v.TAR.GZ": "org.gnu.gnu-zip-tar-archive"
+				}
+			}
+		},
+		{
+			"op": "type",
+			"node": {
+				"id": "A",
+				"at": [
+					"work",
+					"clocks",
+					"a.c"
+				]
+			},
+			"expect": {
+				"type": "public.c-source"
+			}
+		},
+		{
+			"op": "type",
+			"node": {
+				"id": "B",
+				"at": [
+					"work",
+					"clocks",
+					"a.c"
+				]
+			},
+			"expect": {
+				"type": "public.plain-text"
+			}
+		},
+		{
+			"op": "type",
+			"node": {
+				"id": "N",
+				"at": [
+					"work",
+					"clocks",
+					"notes.xyz"
+				]
+			},
+			"expect": {
+				"type": null
+			}
+		},
+		{
+			"op": "type",
+			"node": {
+				"id": "A",
+				"at": []
+			},
+			"expect": {
+				"type": null
+			}
+		},
+		{
+			"op": "type",
+			"node": {
+				"id": "A",
+				"at": [
+					"a.c"
+				]
+			},
+			"expect": {
+				"type": "public.c-source"
+			}
+		}
+	]
+}

@@ -1,0 +1,295 @@
+{
+	"title": "a wasm compiler loaded by the wasm runner: rev holds a wasm module (hand-assembled, 121 bytes) exporting memory and compile(n), reversing the n bytes at 0; it needs wasm32. wasm, the host's wasm runner, provides wasm32, its load instantiating the module (its compile(n) over the memory taken as compile(input)). catclock.c's chain: [rev (by [wasm]), run]: run called with \"ih\". a second start: loaded once",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"clocks": "CL"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "CL",
+			"value": {
+				"catclock.c": "CAT"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "CAT",
+			"value": "hi",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "CAT",
+			"value": {
+				"ermine.type": "public.c-source"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "REV",
+			"value": {
+				"/": {
+					"bytes": "AGFzbQEAAAABBgFgAX8BfwMCAQAFAwEAAQcUAgZtZW1vcnkCAAdjb21waWxlAAAKSAFGAQN/QQAhASAAQQFrIQICQANAIAEgAk4NASABLQAAIQMgASACLQAAOgAAIAIgAzoAACABQQFqIQEgAkEBayECDAALCyAACw"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "REV",
+			"value": {
+				"ermine.type": "test.wasm",
+				"ermine.programs.takes": [
+					"public.c-source"
+				],
+				"ermine.programs.gives": "test.reversed",
+				"ermine.programs.needs": [
+					"wasm32"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "WASM",
+			"load": "wasm",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WASM",
+			"value": {
+				"ermine.programs.takes": [
+					"test.wasm"
+				],
+				"ermine.programs.provides": [
+					"wasm32"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "runner",
+			"id": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "RUN",
+			"value": {
+				"ermine.programs.takes": [
+					"test.reversed"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "create",
+			"name": "web",
+			"folder": "W",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"rev"
+			],
+			"node": "REV",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"wasm"
+			],
+			"node": "WASM",
+			"expect": {}
+		},
+		{
+			"op": "box",
+			"box": "web",
+			"path": [
+				"run"
+			],
+			"node": "RUN",
+			"expect": {}
+		},
+		{
+			"op": "programs",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "a",
+			"box": "web",
+			"program": "catclock.c",
+			"at": [
+				"clock"
+			],
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"id": "proc:a",
+				"at": [
+					"clock"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "process",
+			"name": "a",
+			"expect": {
+				"parts": [
+					"attributes"
+				],
+				"status": null,
+				"args": null,
+				"cwd": [],
+				"pin": {
+					"program": {
+						"id": "CAT",
+						"at": [
+							"clocks",
+							"catclock.c"
+						],
+						"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+					},
+					"chain": [
+						{
+							"id": "REV",
+							"at": [
+								"rev"
+							],
+							"attributes": "3fa9c4908293d126f38d394328d7dd2f68433f6d0d504817110dc7a91d2e51e3",
+							"hash": "b5bd942cbec8f774636ebda6ad3482ea9da566b29623396135d0a13b0a142521",
+							"by": [
+								{
+									"id": "WASM",
+									"at": [
+										"wasm"
+									],
+									"attributes": "b68ca89b0d409d0ff6415a1455659b67a44a4f8225ae1d8993098b5e3d18656a"
+								}
+							]
+						},
+						{
+							"id": "RUN",
+							"at": [
+								"run"
+							],
+							"attributes": "a5f86972e3383ee9a97eba37ece2b7e8148a7296bab3fd8f3779ebacec8bc86a"
+						}
+					],
+					"box": "W",
+					"cwd": []
+				}
+			}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "ih",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 0,
+				"wasm": 1
+			}
+		},
+		{
+			"op": "start",
+			"name": "b",
+			"box": "web",
+			"program": "catclock.c",
+			"at": [
+				"clock2"
+			],
+			"from": [
+				"clocks"
+			],
+			"expect": {
+				"id": "proc:b",
+				"at": [
+					"clock2"
+				]
+			}
+		},
+		{
+			"op": "settle",
+			"expect": {}
+		},
+		{
+			"op": "runs",
+			"expect": {
+				"runs": [
+					{
+						"process": "a",
+						"code": "ih",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					},
+					{
+						"process": "b",
+						"code": "ih",
+						"args": [],
+						"keys": [
+							"places",
+							"process",
+							"watch"
+						]
+					}
+				],
+				"stops": []
+			}
+		},
+		{
+			"op": "loads",
+			"expect": {
+				"js": 0,
+				"wasm": 1
+			}
+		},
+		{
+			"op": "calls",
+			"expect": {
+				"upper": 0,
+				"wrap": 0,
+				"slow": 0,
+				"boom": 0
+			}
+		}
+	]
+}
