@@ -352,15 +352,16 @@ static void put(const ErmPartApi *api, Json *address, const Json *keys, bool dro
 	for (int i = 0; jsonIsObject(keys) && i < keys->object.count; i++) {
 		JsonMember *k = &keys->object.members[i];
 		Json *p = drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonStringOfLength(k->key, k->keyLength), NULL);
-		if (!(drop && k->value->type == JSON_NULL)) jsonAdd(p, "value", k->value);
-		jsonPush(patches, p);
+		if (!(drop && k->value->type == JSON_NULL)) jsonAdd(p, "value", jsonRef(k->value));
+		jsonPush(patches, jsonRef(p));
 	}
 	if (patches->array.count) drvOp(api, "write", drvMap("address", address, "patches", patches, NULL));
+	else jsonFree(patches);
 }
 
 static void unplaceAt(const ErmPartApi *api, Json *address, const char *id) {
 	Json *parent = jsonArray();
-	for (int i = 0; i < address->array.count - 1; i++) jsonPush(parent, address->array.items[i]);
+	for (int i = 0; i < address->array.count - 1; i++) jsonPush(parent, jsonRef(address->array.items[i]));
 	drvOp(api, "unplace", drvMap("address", parent, "name", jsonShallow(address->array.items[address->array.count - 1]), "id", jsonString(id), NULL));
 }
 
@@ -538,6 +539,7 @@ static void stop(Mac *m, const ErmGiven *g, View *v) {
 	free(v->name);
 	free(v->input);
 	free(v->state);
+	jsonFree(v->want);
 	free(v);
 }
 
@@ -604,8 +606,9 @@ static ErmErr viewsEffect(void *data, const ErmGiven *g, Json **out) {
 		// wmii's size: the window's
 		int64_t w, h;
 		if (v->window && jsonIsWhole(jsonGet(want, "w"), &w) && jsonIsWhole(jsonGet(want, "h"), &h) && !jsonEqual(want, v->want)) {
-			v->want = want;
-			act(m, NULL, jsonNull(), v->pid, v->window, "set", drvMap("w", jsonInteger(w), "h", jsonInteger(h), NULL), NULL, NULL);
+			jsonFree(v->want);
+			v->want = jsonRef(want);
+			act(m, NULL, jsonNull(), v->pid, v->window, "set", jsonRef(drvMap("w", jsonInteger(w), "h", jsonInteger(h), NULL)), NULL, NULL);
 		}
 	}
 	int k = 0;
@@ -707,7 +710,7 @@ static ErmErr onPointer(void *data, const ErmGiven *g, Json **out) {
 	Json *recs = recsOf(g);
 	if (!v || v->closed || !jsonIsArray(recs)) return ermOk();
 	if (strcmp(v->input, "press")) {
-		input(m, v, recs);
+		input(m, v, jsonRef(recs));
 		return ermOk();
 	}
 	// a click, down and up with no drag between, presses what is under it
@@ -727,8 +730,8 @@ static ErmErr onPointer(void *data, const ErmGiven *g, Json **out) {
 			// the point with it: the metal presses only if the element is still there
 			if (at)
 				act(m, NULL, jsonNull(), at->pid, at->n, at->press ? "AXPress" : "focus", NULL, NULL,
-				    drvMap("x", jsonInteger((int64_t)px), "y", jsonInteger((int64_t)py), NULL));
-		} else if (!strcmp(e, "scroll")) jsonPush(rest, r);
+				    jsonRef(drvMap("x", jsonInteger((int64_t)px), "y", jsonInteger((int64_t)py), NULL)));
+		} else if (!strcmp(e, "scroll")) jsonPush(rest, jsonRef(r));
 	}
 	input(m, v, rest);
 	return ermOk();
@@ -742,7 +745,7 @@ static ErmErr onHover(void *data, const ErmGiven *g, Json **out) {
 	if (!v || v->closed || !strcmp(v->input, "press")) return ermOk();
 	for (int i = 0; jsonIsArray(recs) && i < recs->array.count; i++) {
 		const char *e = jsonText(jsonGet(recs->array.items[i], "event"));
-		if (e && !strcmp(e, "move")) jsonPush(moves, recs->array.items[i]);
+		if (e && !strcmp(e, "move")) jsonPush(moves, jsonRef(recs->array.items[i]));
 	}
 	input(h->mac, v, moves);
 	return ermOk();
@@ -831,11 +834,12 @@ static void app(Mac *m, const ErmGiven *g, const Json *r) {
 		jsonAdd(v, "cut", jsonInteger(0));
 		a->wrote[0] = a->wrote[1] = 0;
 		char *id = idOf(n);
-		drvMake(g->api, dev("apps", NULL), p, id, v);
+		drvMake(g->api, dev("apps", NULL), p, id, jsonRef(v));
 		free(id);
 	} else put(g->api, dev("apps", p), v, false);
 	free(a->name);
 	a->name = jsonText(jsonGet(r, "name")) ? copyString(jsonText(jsonGet(r, "name"))) : NULL;
+	jsonFree(a->value);
 	a->value = v;
 }
 
@@ -867,6 +871,7 @@ static void quit(Mac *m, const ErmGiven *g, int pid) {
 	int k = 0;
 	for (int i = 0; i < m->apps.count; i++)
 		if (!m->apps.items[i].dead) m->apps.items[k++] = m->apps.items[i];
+		else free(m->apps.items[i].name), jsonFree(m->apps.items[i].value);
 	m->apps.count = k;
 }
 
@@ -888,7 +893,10 @@ static void done(Mac *m, const ErmGiven *g, const Json *r) {
 			Json *keys = drvMap("done", ask->n, "error", error ? jsonShallow(error) : jsonNull(), NULL);
 			if (jsonGet(r, "value")) jsonAdd(keys, "value", jsonShallow(jsonGet(r, "value")));
 			put(g->api, dev("do", ask->name), keys, false);
-		} else if (jsonText(error)) hostSay(m->host, "mac: macdo %lld: %s", (long long)req, jsonText(error));
+		} else {
+			jsonFree(ask->n);
+			if (jsonText(error)) hostSay(m->host, "mac: macdo %lld: %s", (long long)req, jsonText(error));
+		}
 		free(ask->name);
 		m->asks.items[i] = m->asks.items[--m->asks.count];
 		return;
@@ -1064,6 +1072,7 @@ static ErmErr doEffect(void *data, const ErmGiven *g, Json **out) {
 		}
 		did->seen = true;
 		if (!n || (did->n && jsonEqual(did->n, n))) continue;
+		jsonFree(did->n);
 		did->n = jsonShallow(n);
 		// a launch: at /dev/mac itself (or no at), the app by name, bundle id or path
 		if (what && !strcmp(what, "launch")) {
@@ -1099,7 +1108,7 @@ static ErmErr doEffect(void *data, const ErmGiven *g, Json **out) {
 	int k = 0;
 	for (int i = 0; i < m->dids.count; i++) {
 		if (m->dids.items[i].seen) m->dids.items[k++] = m->dids.items[i];
-		else free(m->dids.items[i].name);
+		else free(m->dids.items[i].name), jsonFree(m->dids.items[i].n);
 	}
 	m->dids.count = k;
 	return ermOk();
@@ -1169,6 +1178,7 @@ static ErmErr openEffect(void *data, const ErmGiven *g, Json **out) {
 			o = &m->opens.items[m->opens.count - 1];
 		}
 		o->seen = true;
+		jsonFree(o->at);
 		o->at = jsonGet(v, "at") ? jsonShallow(jsonGet(v, "at")) : jsonNull();
 		o->depth = whole(jsonGet(v, "depth"), 12);
 		if (o->depth < 1) o->depth = 1;
@@ -1182,6 +1192,7 @@ static ErmErr openEffect(void *data, const ErmGiven *g, Json **out) {
 		}
 		free(o->name);
 		free(o->said);
+		jsonFree(o->at);
 	}
 	m->opens.count = k;
 	leases(m, g->api);

@@ -51,6 +51,9 @@ const ap_error *ap_error_new(ap_os *os, const char *code, const char *message);
 // is returned (NULL: none)
 struct ap_fn {
 	const ap_error *(*call)(ap_fn *self, ap_given *g, op_value **out, int *pending);
+	// a live function's (ap_live): let go when the node holding it is gone, or out of its last front,
+	// or its process has ended; NULL: kept
+	void (*free)(ap_fn *self);
 };
 
 // what made a version: the change's header, as 10-12 gave it

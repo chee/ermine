@@ -186,8 +186,10 @@ static const ap_error *writeId(ap_api *api, const char *id, const Json *patches)
 
 static const ap_error *wholeId(ap_api *api, const char *id, Json *value) {
 	Json *patches = jsonArray();
-	jsonPush(patches, drvMap("path", jsonArray(), "value", value, NULL));
-	return writeId(api, id, patches);
+	jsonPush(patches, jsonRef(drvMap("path", jsonArray(), "value", value, NULL)));
+	const ap_error *e = writeId(api, id, patches);
+	jsonFree(patches);
+	return e;
 }
 
 /** a node holding value made (a document; ephemeral: the driver's own) and placed in parent's list name: its id, NULL on an error said */
@@ -442,7 +444,7 @@ static void unshare(const ErmGiven *g, Share *s) {
 
 /** W written: its program, its device, and how it ended (NULL: running) */
 static void windowSays(ap_api *api, Share *s, Json *exited) {
-	Json *w = drvMap("window", jsonInteger(1), "program", s->program, "by", jsonString(peerKey(L.peer)), NULL);
+	Json *w = drvMap("window", jsonInteger(1), "program", jsonRef(s->program), "by", jsonString(peerKey(L.peer)), NULL);
 	if (exited) jsonAdd(w, "exited", exited);
 	hostFailed(L.host, wholeId(api, s->w, w), "link: writing a window");
 }
@@ -450,12 +452,14 @@ static void windowSays(ap_api *api, Share *s, Json *exited) {
 /** the name's node pointed at W, over all the versions it has (versions: how many; a name shared before, elsewhere, has two once that one's history comes) */
 static void pointed(ap_api *api, Share *s, long versions) {
 	Json *patches = jsonArray();
-	jsonPush(patches, drvMap("path", jsonArray(), "value", drvMap("name", jsonString(s->name), "window", jsonString(s->w), "by", jsonString(peerKey(L.peer)), NULL), NULL));
+	jsonPush(patches, jsonRef(drvMap("path", jsonArray(), "value", drvMap("name", jsonString(s->name), "window", jsonString(s->w), "by", jsonString(peerKey(L.peer)), NULL), NULL)));
 	if (versions <= 1) {
 		hostFailed(L.host, writeId(api, s->n, patches), "link: pointing a name");
+		jsonFree(patches);
 		return;
 	}
 	op_value *v = valOf(jsonGet(patches->array.items[0], "value"));
+	jsonFree(patches);
 	op_patch p = valWhole(v);
 	(void)versions;
 	int64_t time;
@@ -475,7 +479,7 @@ static ErmErr onShare(void *data, const ErmGiven *g, Json **out) {
 	Json *r = g->args && g->args->array.count ? g->args->array.items[0] : NULL, *argv = jsonGet(r, "argv"), *program = jsonArray();
 	for (int i = 0; jsonIsArray(argv) && i < argv->array.count; i++) {
 		if (!jsonText(argv->array.items[i])) return ermField("wrong-field", "argv");
-		jsonPush(program, argv->array.items[i]);
+		jsonPush(program, jsonRef(argv->array.items[i]));
 	}
 	if (!program->array.count) {
 		const char *shell = getenv("SHELL") && *getenv("SHELL") ? getenv("SHELL") : "/bin/zsh";
@@ -508,7 +512,7 @@ static ErmErr onShare(void *data, const ErmGiven *g, Json **out) {
 	// the name's node: made (or, shared under it before on this card, here already), pointed at W
 	if (named && *named && s->k) s->n = dup(hostLook(g->api, ID(id)) ? id : put(g->api, NULL, NULL, jsonNull(), id, false));
 	if (s->n) pointed(g->api, s, 1);
-	s->at = s->w && s->s && s->z && s->k && (s->n || !named || !*named) ? dup(put(g->api, shares, name, drvMap("window", jsonString(s->w), "program", program, "state", jsonString("running"), NULL), NULL, true)) : NULL;
+	s->at = s->w && s->s && s->z && s->k && (s->n || !named || !*named) ? dup(put(g->api, shares, name, drvMap("window", jsonString(s->w), "program", jsonRef(program), "state", jsonString("running"), NULL), NULL, true)) : NULL;
 	if (!s->at) {
 		free(s->name), free(s->w), free(s->s), free(s->z), free(s->k), free(s->n), free(s);
 		return ermDetail(ermInvalid("not-made"), "text", jsonString("the window could not be made"));
@@ -520,8 +524,8 @@ static ErmErr onShare(void *data, const ErmGiven *g, Json **out) {
 	peerBring(L.peer, s->w, true);
 	if (s->n) peerBring(L.peer, s->n, true);
 	// the session, made inside the share's node once this returns (a call from a part waits till then)
-	Json *ask = drvMap("argv", program, "rows", jsonInteger(rows), "cols", jsonInteger(cols), "at", at("shares", name), NULL), *args = jsonArray();
-	jsonPush(args, ask);
+	Json *ask = drvMap("argv", jsonRef(program), "rows", jsonInteger(rows), "cols", jsonInteger(cols), "at", at("shares", name), NULL), *args = jsonArray();
+	jsonPush(args, jsonRef(ask));
 	drvOp(g->api, "call", drvMap("address", drvPath("/", "dev", "pty", "driver", "on", "new", NULL), "args", args, NULL));
 	hostSay(L.host, "link: sharing %s as %s (%s)", jsonText(program->array.items[0]), s->w, name);
 	return ermOk();
@@ -562,8 +566,8 @@ static ErmErr sharesCompute(void *data, const ErmGiven *g, Json **out) {
 		Json *where = session ? drvUnder(at("shares", s->name), jsonText(session), NULL) : NULL;
 		jsonPush(row, session ? jsonShallow(session) : jsonNull());
 		Json *screen = where ? drvRead(g->api, drvUnder(where, "screen", NULL)) : NULL, *status = where ? drvRead(g->api, drvUnder(where, "status", NULL)) : NULL;
-		jsonPush(row, screen ? screen : jsonNull());
-		jsonPush(row, status ? status : jsonNull());
+		jsonPush(row, screen ? jsonRef(screen) : jsonNull());
+		jsonPush(row, status ? jsonRef(status) : jsonNull());
 		const op_value *size = valueOf(g->api, s->z);
 		jsonPush(row, size ? jsonOfVal(size) : jsonNull());
 		ap_namelist list = { 0 };
@@ -631,30 +635,31 @@ static void mirror(ap_api *api, Share *s, Json *screen) {
 		else {
 			free(s->lines[r]);
 			s->lines[r] = text;
-			if (!all) jsonPush(patches, drvMap("path", row("lines", r), "value", line ? line : jsonString(""), NULL));
+			if (!all) jsonPush(patches, jsonRef(drvMap("path", row("lines", r), "value", line ? jsonRef(line) : jsonString(""), NULL)));
 		}
 		if (!all && s->styles[r] && !strcmp(style, s->styles[r])) free(style);
 		else {
 			free(s->styles[r]);
 			s->styles[r] = style;
-			if (!all) jsonPush(patches, drvMap("path", row("styles", r), "value", runs ? runs : jsonArray(), NULL));
+			if (!all) jsonPush(patches, jsonRef(drvMap("path", row("styles", r), "value", runs ? jsonRef(runs) : jsonArray(), NULL)));
 		}
 	}
 	if (all || !s->cursor || strcmp(cursor, s->cursor)) {
-		if (!all) jsonPush(patches, drvMap("path", drvPath("cursor", NULL), "value", jsonGet(screen, "cursor") ? jsonGet(screen, "cursor") : jsonNull(), NULL));
+		if (!all) jsonPush(patches, jsonRef(drvMap("path", drvPath("cursor", NULL), "value", jsonGet(screen, "cursor") ? jsonRef(jsonGet(screen, "cursor")) : jsonNull(), NULL)));
 		free(s->cursor);
 		s->cursor = cursor;
 	} else free(cursor);
 	if (all || !s->title || strcmp(title, s->title)) {
-		if (!all) jsonPush(patches, drvMap("path", drvPath("title", NULL), "value", jsonString(title), NULL));
+		if (!all) jsonPush(patches, jsonRef(drvMap("path", drvPath("title", NULL), "value", jsonString(title), NULL)));
 		free(s->title);
 		s->title = copyString(title);
 	}
 	if (all) {
-		Json *grid = drvMap("rows", jsonInteger(rows), "cols", jsonInteger(cols), "lines", lines, "styles", jsonIsArray(styles) ? styles : jsonArray(),
-		                    "cursor", jsonGet(screen, "cursor") ? jsonGet(screen, "cursor") : jsonNull(), "title", jsonString(title), NULL);
+		Json *grid = drvMap("rows", jsonInteger(rows), "cols", jsonInteger(cols), "lines", jsonRef(lines), "styles", jsonIsArray(styles) ? jsonRef(styles) : jsonArray(),
+		                    "cursor", jsonGet(screen, "cursor") ? jsonRef(jsonGet(screen, "cursor")) : jsonNull(), "title", jsonString(title), NULL);
 		hostFailed(L.host, wholeId(api, s->s, grid), "link: writing a screen");
 	} else if (patches->array.count) hostFailed(L.host, writeId(api, s->s, patches), "link: writing a screen");
+	jsonFree(patches);
 }
 
 /** each typer's keys not yet typed, typed into the session: appended to its keys (the last 64), stats.keys counting them */
@@ -668,16 +673,21 @@ static void feed(ap_api *api, Share *s, Json *where, Json *typers) {
 		if (!ermMapHas(&s->fed, name)) ermMapPut(&s->fed, name, (void *)(intptr_t)((s->first ? from + count : from) + 1));
 		int64_t next = (intptr_t)ermMapGet(&s->fed, name) - 1;
 		for (int64_t k = next > from ? next - from : 0; k < count; k++)
-			if (jsonText(keys->array.items[k])) jsonPush(records, recordOf(jsonText(keys->array.items[k])));
+			if (jsonText(keys->array.items[k])) jsonPush(records, jsonRef(recordOf(jsonText(keys->array.items[k]))));
 		if (from + count > next) ermMapPut(&s->fed, name, (void *)(intptr_t)(from + count + 1));
 	}
-	if (!records->array.count || !where) return;
+	if (!records->array.count || !where) {
+		jsonFree(records);
+		return;
+	}
 	Json *kept = drvRead(api, drvUnder(where, "keys", NULL)), *all = jsonArray(), *keys = jsonArray(), *stats = drvRead(api, drvUnder(where, "stats", NULL));
-	for (int i = 0; jsonIsArray(kept) && i < kept->array.count; i++) jsonPush(all, kept->array.items[i]);
-	for (int i = 0; i < records->array.count; i++) jsonPush(all, records->array.items[i]);
-	for (int i = all->array.count > KEPT ? all->array.count - KEPT : 0; i < all->array.count; i++) jsonPush(keys, all->array.items[i]);
+	for (int i = 0; jsonIsArray(kept) && i < kept->array.count; i++) jsonPush(all, jsonRef(kept->array.items[i]));
+	for (int i = 0; i < records->array.count; i++) jsonPush(all, jsonRef(records->array.items[i]));
+	for (int i = all->array.count > KEPT ? all->array.count - KEPT : 0; i < all->array.count; i++) jsonPush(keys, jsonRef(all->array.items[i]));
 	drvSnap(api, drvUnder(where, "keys", NULL), keys);
 	drvSet(api, drvUnder(where, "stats", NULL), "keys", jsonInteger(whole(jsonGet(stats, "keys"), 0) + records->array.count));
+	jsonFree(all);
+	jsonFree(records);
 }
 
 /** each share's screen kept in S, its size given, its typers' keys typed; one whose program exited, ended */

@@ -224,9 +224,18 @@ static JSValueRef toJs(const op_value *v) {
 	return JSValueMakeNull(ctx);
 }
 
+/** a live function let go (api.h, ap_fn's free): its JavaScript function unprotected, the JsFn freed */
+static void jsFree(ap_fn *self) {
+	JsFn *fn = (JsFn *)self;
+	if (fn->f) JSValueUnprotect(js.ctx, fn->f);
+	free(fn->source), free(fn->url), free(fn->wasm);
+	free(fn);
+}
+
 static JsFn *jsFn(JSObjectRef f) {
 	JsFn *fn = calloc(1, sizeof *fn);
 	fn->base.call = callJs;
+	fn->base.free = jsFree;
 	fn->f = f;
 	JSValueProtect(js.ctx, f);
 	return fn;
