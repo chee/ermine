@@ -6,6 +6,7 @@
 		"./core/util",
 		"./core/table",
 		"./core/unread",
+		"./core/blake3",
 		"./core/scheduler",
 		"./filesystem/protect",
 		"./ermine/encoding",
