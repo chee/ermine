@@ -248,7 +248,7 @@ static void dom(const ErmPartApi *api, View *v, const Json *r) {
 			Json *a = addressOf(v, n);
 			if (!e || !a) continue;
 			Json *up = jsonArray();
-			for (int k = 0; k < a->array.count - 1; k++) jsonPush(up, a->array.items[k]);
+			for (int k = 0; k < a->array.count - 1; k++) jsonPush(up, jsonRef(a->array.items[k]));
 			char *id = elemId(v, n);
 			drvOp(api, "unplace", drvMap("address", up, "name", jsonString(e->name), "id", jsonString(id), NULL));
 			free(id);

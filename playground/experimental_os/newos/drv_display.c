@@ -309,9 +309,9 @@ static ErmErr composeCompute(void *data, const ErmGiven *g, Json **out) {
 			if (jsonGet(l, keys[k])) jsonAdd(s, keys[k], jsonShallow(jsonGet(l, keys[k])));
 		jsonAdd(s, "draw", jsonBoolean(jsonGet(l, "draw") != NULL));
 		if (jsonIsObject(jsonGet(l, "plane"))) jsonAdd(s, "plane", jsonShallow(jsonGet(l, "plane")));
-		else if (page) jsonAdd(s, "plane", page);
+		else if (page) jsonAdd(s, "plane", jsonRef(page));
 		if (jsonIsObject(web) && jsonText(jsonGet(web, "id"))) jsonAdd(s, "web", jsonShallow(web));
-		jsonPush(layers, s);
+		jsonPush(layers, jsonRef(s));
 	}
 	char *fonts = fontsKey(api);
 	Json *mode = drvRead(api, drvPath("/", "dev", "display", "mode", NULL));
@@ -780,9 +780,9 @@ static Json *partsOf(const Chrome *c, int w, int h, bool collapsed) {
 	for (int s = 0; c->boxes && s < 2; s++) {
 		const char *side = s ? c->right : c->left;
 		for (int i = 0; side[i]; i++)
-			jsonAdd(p, side[i] == 'c' ? "close" : side[i] == 'm' ? "minimize" : "inspect", rectJson(boxAt(c, w, !s, i) - c->plate, by - c->plate, c->box + 2 * c->plate, c->box + 2 * c->plate));
+			jsonAdd(p, side[i] == 'c' ? "close" : side[i] == 'm' ? "minimize" : "inspect", jsonRef(rectJson(boxAt(c, w, !s, i) - c->plate, by - c->plate, c->box + 2 * c->plate, c->box + 2 * c->plate)));
 	}
-	jsonAdd(p, "grip", rectJson(w - c->grip, (collapsed ? 0 : h) - c->grip, c->grip, c->grip));
+	jsonAdd(p, "grip", jsonRef(rectJson(w - c->grip, (collapsed ? 0 : h) - c->grip, c->grip, c->grip)));
 	return p;
 }
 
@@ -905,6 +905,7 @@ static void said(Display *d, const ErmPartApi *api, Rendered *r, const char *nam
 	char *text = jsonPrint(runs);
 	if (r->runs && !strcmp(r->runs, text)) {
 		free(text);
+		jsonFree(runs);
 		return;
 	}
 	free(r->runs);
@@ -1157,6 +1158,7 @@ static void unsurfaceAll(Display *d) {
 	free(d->asked);
 	d->macKey = d->asked = NULL;
 	if (d->presents) {
+		jsonFree(d->presents);
 		d->presents = NULL;
 		d->waiting = false;
 		hostCommand(d->host, drvMap("op", jsonString("vsync"), "on", jsonBoolean(false), NULL));
@@ -1231,8 +1233,8 @@ static void windowsCompose(Display *d, const ErmPartApi *api, Json *layers, cons
 		if (!s->shown) s->shown = malloc((size_t)w * (size_t)h * 4);
 		for (int row = r.y; row < r.y + r.h; row++)
 			memcpy(s->shown + (size_t)row * (size_t)w + r.x, form->bits + (size_t)row * (size_t)form->stride + r.x, (size_t)r.w * 4);
-		jsonPush(presents, drvMap("id", jsonString(name), "sx", jsonInteger(sx), "sy", jsonInteger(sy),
-		                          "dirty", drvMap("x", jsonInteger(r.x), "y", jsonInteger(r.y), "w", jsonInteger(r.w), "h", jsonInteger(r.h), NULL), NULL));
+		jsonPush(presents, jsonRef(drvMap("id", jsonString(name), "sx", jsonInteger(sx), "sy", jsonInteger(sy),
+		                                  "dirty", drvMap("x", jsonInteger(r.x), "y", jsonInteger(r.y), "w", jsonInteger(r.w), "h", jsonInteger(r.h), NULL), NULL)));
 		sx += r.w;
 		if (r.h > rowH) rowH = r.h;
 	}
@@ -1595,7 +1597,7 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 				Json *sh = drvMap("color", jsonInteger(S.color), "opacity", jsonNumber(S.opacity), "radius", jsonNumber(S.radius), "x", jsonNumber(S.x), "y", jsonNumber(S.y), "box",
 				                  drvMap("x", jsonInteger(0), "y", jsonInteger(0), "w", jsonInteger(box.w - ch.drop), "h", jsonInteger(box.h - ch.drop), NULL), NULL);
 				if (curved) jsonAdd(sh, "corners", cornersJson(rad));
-				jsonAdd(item, "shadow", sh);
+				jsonAdd(item, "shadow", jsonRef(sh));
 			} else jsonAdd(item, "shadow", jsonNull());
 			// its rounded corners: only its frame, rounded, and that again drop down and right, is shown
 			if (curved)
@@ -1609,7 +1611,7 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 			sx += r.w;
 			if (r.h > rowH) rowH = r.h;
 		}
-		jsonPush(set, item);
+		jsonPush(set, jsonRef(item));
 	}
 	free(sorted);
 	// layers gone or hidden: dropped
@@ -1629,19 +1631,10 @@ static void layersCompose(Display *d, const ErmPartApi *api, Json *layers, const
 		jsonFree(drop);
 		return;
 	}
-	d->stack = drvMap("op", jsonString("layers"), "buffer", jsonInteger(back), "set", set, "drop", drop, NULL);
+	d->stack = jsonRef(drvMap("op", jsonString("layers"), "buffer", jsonInteger(back), "set", set, "drop", drop, NULL));
 	d->waiting = true;
 	d->waitBuffer = back;
 	hostCommand(d->host, drvMap("op", jsonString("vsync"), "on", jsonBoolean(true), NULL));
-}
-
-/** a copy made with jsonShallow, its values another's: only its keys and members freed */
-static void shellFree(Json *m) {
-	if (m->type == JSON_OBJECT) {
-		for (int k = 0; k < m->object.count; k++) free(m->object.members[k].key);
-		free(m->object.members);
-	} else if (m->type == JSON_ARRAY) free(m->array.items);
-	free(m);
 }
 
 static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
@@ -1654,7 +1647,8 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 	// what draws: the fonts and the selection as they are now
 	for (int i = 0; i < d->faces.count; i++) d->faces.items[i]->pages.count = 0, d->faces.items[i]->wanted.count = 0;
 	d->faces.count = 0;
-	d->selection = jsonGet(v, "selection");
+	jsonFree(d->selection);
+	d->selection = jsonRef(jsonGet(v, "selection"));
 	Json *themeJ = jsonGet(v, "theme");
 	Theme T = { colour(themeJ, "paper", 0xfdf8ea), colour(themeJ, "ink", 0x2a2228), colour(themeJ, "ink2", 0x6b5a66),
 	            colour(themeJ, "line", 0x1c1a17), colour(themeJ, "chrome", 0xece5d4), colour(themeJ, "select", 0xffff88) };
@@ -1678,22 +1672,19 @@ static ErmErr composeEffect(void *data, const ErmGiven *g, Json **out) {
 	ErmMap seen = { 0 };
 	for (int i = 0; jsonIsObject(all) && i < all->object.count; i++) {
 		const char *name = all->object.members[i].key;
-		Json *wl = all->object.members[i].value, *col = jsonGet(wl, "collapsed"), *m = wl;
+		Json *wl = all->object.members[i].value, *col = jsonGet(wl, "collapsed"), *m = jsonRef(wl);
 		bool titled = !windowsMode && jsonIsString(jsonGet(wl, "title"));
 		if (titled) {
 			Chrome ch = chromeOf(d, themeJ, &T, wl, true, u);
 			m = jsonShallow(wl);
-			jsonAdd(m, "parts", partsOf(&ch, (int)whole(jsonGet(wl, "w"), 0), (int)whole(jsonGet(wl, "h"), 0), col && col->type == JSON_BOOLEAN && col->boolean));
+			jsonAdd(m, "parts", jsonRef(partsOf(&ch, (int)whole(jsonGet(wl, "w"), 0), (int)whole(jsonGet(wl, "h"), 0), col && col->type == JSON_BOOLEAN && col->boolean)));
 		}
 		ermMapPut(&seen, name, (void *)1);
 		char *text = jsonPrint(m), *was = ermMapGet(&d->windows, name);
 		if (was && !strcmp(was, text)) {
 			// unchanged: the copy made here is scratch, its values the compute's
 			free(text);
-			if (titled) {
-				jsonFree(jsonGet(m, "parts"));
-				shellFree(m);
-			}
+			jsonFree(m);
 			continue;
 		}
 		Json *at = drvPath("/", "dev", "display", "windows", name, NULL);
@@ -2034,6 +2025,7 @@ static ErmErr displayIrq(void *data, const ErmGiven *g, Json **out) {
 				hostCommand(d->host, drvMap("op", jsonString("present"), "id", jsonShallow(jsonGet(p, "id")), "buffer", jsonInteger(d->waitBuffer),
 				                            "sx", jsonShallow(jsonGet(p, "sx")), "sy", jsonShallow(jsonGet(p, "sy")), "dirty", jsonShallow(jsonGet(p, "dirty")), NULL));
 			}
+			jsonFree(d->presents);
 			d->presents = NULL;
 			d->front = d->waitBuffer;
 			d->waiting = false;

@@ -9,6 +9,14 @@
 // is an ErmFn, given an ErmGiven whose values are Json, answering an ErmErr.
 // This kit turns that into the API's ap_fn and ap_given at the edge (PORT.md,
 // Drivers in C); addresses are Json lists of names, "/" first.
+//
+// Every Json the kit makes or hands out is the turn's: held by the kit and let
+// go at the turn's end (drvSweep). A driver borrows it; to keep it past the
+// turn, or to put it in a container of its own, it jsonRefs it. What a driver
+// gives the kit (a map's values, a write's value, a function's output) the kit
+// takes: a fresh value becomes the turn's; the turn's stays the turn's; a value
+// borrowed from elsewhere (a part of a read, one the driver keeps) is jsonRef'd
+// or jsonShallow'd first (drv.c, the top).
 
 #ifndef ERMOS_DRV_H
 #define ERMOS_DRV_H
@@ -80,6 +88,8 @@ void ermMapPut(ErmMap *map, const char *key, void *value);
 /** the kit's host: set once, before any driver runs (drivers.c) */
 void drvUse(Host *host);
 Host *drvHost(void);
+/** the turn's end: every Json the kit made or handed out this turn let go (hostTurn) */
+void drvSweep(void);
 
 /** an address: its parts, then NULL */
 Json *drvPath(const char *first, ...);

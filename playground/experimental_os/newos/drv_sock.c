@@ -324,7 +324,7 @@ static void connected(const ErmGiven *g, Sock *k, int fd) {
 	char n[16], *id = formatString("sock/%d", c->n);
 	snprintf(n, sizeof n, "%d", c->n);
 	Json *dev = drvPath("/", "dev", "sock", NULL);
-	c->at = drvUnder(dev, n, NULL);
+	c->at = jsonRef(drvUnder(dev, n, NULL));
 	drvMake(g->api, dev, n, id, drvMap("shell", jsonNull(), NULL));
 	free(id);
 	const char *names[] = { "rx", "tx", "stats", "vt" };
@@ -426,7 +426,7 @@ static ErmErr sendCompute(void *data, const ErmGiven *g, Json **out) {
 		jsonPush(row, jsonInteger(c->n));
 		jsonPush(row, jsonBoolean(there));
 		jsonPush(row, jsonBoolean(there && drvHas(g->api, at(c, "shell"))));
-		jsonPush(row, tx ? tx : jsonBytes("", 0));
+		jsonPush(row, tx ? jsonRef(tx) : jsonBytes("", 0));
 		jsonPush(*out, row);
 	}
 	return ermOk();

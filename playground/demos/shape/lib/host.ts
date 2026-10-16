@@ -52,7 +52,7 @@ import {
 } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { trace } from "@ermine/scheduler/trace"
-import { createTable, type Key, type Table } from "@ermine/table"
+import { createTable, type Id as TableId, type Key, type Table } from "@ermine/table"
 import { type FileLocation, frames } from "@ermine/util/stacktrace"
 
 export { PENDING }
@@ -205,7 +205,7 @@ export type Options = {
 	changed?: (c: Changed) => void
 	// what sits beside the table (sync): told each table event, an entry put or taken out whole,
 	// after places; and each write landed, after places
-	tableChanged?: (part: Key, id: Id) => void
+	tableChanged?: (part: Key, id: TableId) => void
 	wrote?: (changed: readonly Entry<unknown>[]) => void
 }
 
@@ -455,9 +455,12 @@ export function make(o: Options = {}): Host {
 	const names = (place: readonly string[], address: Address) => plan(["/", ...place, ...address])
 
 	// the item an address reaches (an id: itself), walked with r
+	// a node not there yet (sync brings it later): its value read with r, so a compute reading it
+	// runs again when it comes
 	function reach(r: Reader, place: readonly string[], where: Where): Item | undefined {
 		if (typeof where === "string") {
 			const node = nodeOf(where)
+			if (!node) r.value("value", where)
 			return node ? { id: where, route: [], node } : undefined
 		}
 		const path = names(place, where)
@@ -467,6 +470,7 @@ export function make(o: Options = {}): Host {
 		const route = steps.map((st, i) => ({ node: steps[i - 1]?.id ?? ROOT, ...st, at: 0 }))
 		const id = steps.at(-1)?.id ?? ROOT
 		const node = nodeOf(id)
+		if (!node) r.value("value", id)
 		return node ? { id, route, node } : { id, route }
 	}
 
