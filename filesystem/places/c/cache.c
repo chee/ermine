@@ -490,10 +490,10 @@ pc_cache *pc_new(pl *places, sc_scheduler *scheduler) {
 	c->entries = tb_new();
 	c->readers = tb_new();
 	c->tracked = tb_new();
-	c->marks = cl_new(scheduler, untracked, c);
 	c->took = tb_new();
 	c->index = sx_index_get(scheduler);
 	c->holder = (sx_holder){.marked = heard_mark, .data = c};
+	c->marks = cl_new(scheduler, untracked, c);
 	c->on_track = sc_on_tracking_start(scheduler, heard_track, c);
 	c->on_untrack = sc_on_tracking_end(scheduler, heard_untrack, c);
 	return c;

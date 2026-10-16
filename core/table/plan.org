@@ -861,3 +861,7 @@ Gaps found, most-hit first; ✦ touches the data structure:
   places it was duplicated" (the path cache, filesystem/places cache.ts; build steps,
   ermine/programs build.ts). goes with it: ermine/api's chee: true. early effects stay, and owner
   order for acts (E2). the rebuild agent was stopped mid-way (TS scheduler + scenarios touched).
+- same name, 10-16: with no run open the owner counts as the run (setup and a later timer call at
+  one name collide: already-there); chee: "Keep it stricter". clingy is now ermine/clingy (58 lines:
+  add/has/tracked/drop/stop, go when the last tracker leaves), used by the path cache and build
+  steps; core/scheduler selector.ts is a third copy, left alone.

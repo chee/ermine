@@ -7,6 +7,7 @@
 #include "../../../core/scheduler/c/ptrmap.h"
 #include "../../encoding/c/cbor.h"
 #include "../../encoding/c/hash.h"
+#include "../../clingy/c/clingy.h"
 #include "../../encoding/c/pack.h"
 #include "mem.h"
 
@@ -29,10 +30,9 @@ struct bd_task {
 	// its outputs' ermine.type; NULL: none
 	char *type;
 	sc_computer *c;
-	// how its last run ended; whether a run reads it; whether it was taken out
+	// how its last run ended; whether it was taken out
 	int has_ended;
 	sc_ended ended;
-	int held;
 	int retired;
 	// the reads of its run now
 	const void **keys;
@@ -54,8 +54,9 @@ struct bd {
 	// the steps out, by key
 	task **tasks;
 	size_t ntasks, captasks;
-	// every task made (the keys the scheduler tells of), and the computer of each
-	pm all, of;
+	// every step out: whether a run reads it (the last reader gone, it goes); the computer of each
+	cl_clingy *steps;
+	pm of;
 	// every task, to free
 	task **made;
 	size_t nmade, capmade;
@@ -66,7 +67,7 @@ struct bd {
 	task *recording;
 	bd_found_fn found;
 	void *found_ctx;
-	sc_listener *listeners[5];
+	sc_listener *listeners[3];
 	int stopped;
 };
 
@@ -399,6 +400,7 @@ static void retire(task *t) {
 		}
 	}
 	t->retired = 1;
+	if (b->steps != NULL) cl_drop(b->steps, t);
 	if (t->c != NULL && sc_scope_alive(t->c)) {
 		char *bad = sc_teardown(t->c);
 		free(bad);
@@ -433,7 +435,7 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	if (t != NULL && !t->retired) {
 		t->has_ended = 1;
 		t->ended = ended;
-		if (ended == SC_DONE || (failed(ended) && !t->held)) retire(t);
+		if (ended == SC_DONE || (failed(ended) && !cl_tracked(b->steps, t))) retire(t);
 	}
 	drain(b);
 }
@@ -443,18 +445,10 @@ static void effect(sc_computer *c, unsigned n, const char *error, void *data) {
 	drain(data);
 }
 
-static void tracking_start(const void *key, sc_run *run, void *data) {
-	(void)run;
-	bd *b = data;
-	task *t = pm_get(&b->all, key);
-	if (t != NULL) t->held = 1;
-}
-
-static void tracking_end(const void *key, void *data) {
-	bd *b = data;
-	task *t = pm_get(&b->all, key);
-	if (t == NULL) return;
-	t->held = 0;
+// no run reads it now (clingy.h)
+static void unread(const void *key, void *data) {
+	(void)data;
+	task *t = (task *)key;
 	if (!t->retired) retire(t);
 }
 
@@ -473,9 +467,8 @@ bd *bd_new(const bd_setup *setup) {
 	b->statuses = cst_new(&(cst_setup){setup->places, setup->table, setup->scheduler});
 	b->listeners[0] = sc_on_run_end(b->scheduler, run_end, b);
 	b->listeners[1] = sc_on_effect(b->scheduler, effect, b);
-	b->listeners[2] = sc_on_tracking_start(b->scheduler, tracking_start, b);
-	b->listeners[3] = sc_on_tracking_end(b->scheduler, tracking_end, b);
-	b->listeners[4] = sc_on_track(b->scheduler, on_track, b);
+	b->steps = cl_new(b->scheduler, unread, b);
+	b->listeners[2] = sc_on_track(b->scheduler, on_track, b);
 	return b;
 }
 
@@ -595,7 +588,7 @@ static bd_result ask(bd *b, const op_value *name, const op_value *code, bd_run r
 		}
 		PG_PUSH(b->tasks, b->ntasks, b->captasks, t);
 		PG_PUSH(b->made, b->nmade, b->capmade, t);
-		pm_set(&b->all, t, t);
+		cl_add(b->steps, t);
 		// outside a run, at once
 		if (sc_get_run(b->scheduler) == NULL) start(t);
 		else PG_PUSH(b->wanted, b->nwanted, b->capwanted, t);
@@ -642,7 +635,9 @@ bd_result bd_compile(bd *b, const char *compiler, const op_value *input) {
 void bd_stop(bd *b) {
 	if (b == NULL || b->stopped) return;
 	b->stopped = 1;
-	for (size_t i = 0; i < 5; i++) sc_remove_listener(b->listeners[i]);
+	for (size_t i = 0; i < 3; i++) sc_remove_listener(b->listeners[i]);
+	cl_free(b->steps);
+	b->steps = NULL;
 	cst_stop(b->statuses);
 	b->found = NULL;
 	b->nwanted = 0;
@@ -665,7 +660,6 @@ void bd_free(bd *b) {
 	}
 	free(b->made), free(b->tasks), free(b->wanted), free(b->cache);
 	op_free(b->info);
-	pm_clear(&b->all);
 	pm_clear(&b->of);
 	free(b);
 }

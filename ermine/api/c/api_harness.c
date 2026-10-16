@@ -296,9 +296,10 @@ static world *make(const op_value *o) {
 		.who = m->who,
 		.overlay = m->overlay,
 		.schedule = schedule,
-		.schedule_ctx = m,
-		.id = next_id,
-		.id_ctx = m};
+		.schedule_ctx = m};
+	// uuid: no setup.id, new ids the api's own
+	const op_value *uuid = o ? op_get(o, "uuid") : NULL;
+	if (!(uuid && uuid->type == OP_BOOL && uuid->bool_)) setup.id = next_id, setup.id_ctx = m;
 	m->apis = api_apis_new(&setup);
 	return m;
 }
@@ -889,6 +890,16 @@ static void run_program(void *data) {
 	s->out = run(s->r->api, &s->r->env, s->program);
 }
 
+// lowercase, 8-4-4-4-12, version 7, variant 10
+static bool is_uuidv7(const char *s) {
+	if (s == NULL || strlen(s) != 36) return false;
+	for (int i = 0; i < 36; i++) {
+		bool dash = i == 8 || i == 13 || i == 18 || i == 23;
+		if (dash ? s[i] != '-' : !((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f'))) return false;
+	}
+	return s[14] == '7' && strchr("89ab", s[19]) != NULL;
+}
+
 static op_value *answer(const op_value *r) {
 	const char *op = hh_str(r, "op");
 	if (op == NULL) return error_answer(API_FAILED, "no op");
@@ -928,6 +939,28 @@ static op_value *answer(const op_value *r) {
 		if (pl_get(m->places, (const char *const *)path, n, &id)) op_set(o, "id", op_str(id.string));
 		for (size_t i = 0; i < n; i++) free(path[i]);
 		free(path);
+		return o;
+	}
+	if (strcmp(op, "uuids") == 0) {
+		const op_value *paths = op_get(r, "paths");
+		bool v7 = true, ordered = true;
+		char *before = NULL;
+		for (size_t k = 0; paths && paths->type == OP_LIST && k < paths->count; k++) {
+			size_t n;
+			char **path = strings_of(paths->items[k], &n);
+			tb_key id;
+			char *now = pl_get(m->places, (const char *const *)path, n, &id) ? xdup(id.string) : NULL;
+			for (size_t i = 0; i < n; i++) free(path[i]);
+			free(path);
+			if (!is_uuidv7(now)) v7 = false;
+			if (k && (now == NULL || before == NULL || strcmp(now, before) <= 0)) ordered = false;
+			free(before);
+			before = now;
+		}
+		free(before);
+		op_value *o = op_map();
+		op_set(o, "v7", op_bool(v7));
+		op_set(o, "ordered", op_bool(ordered));
 		return o;
 	}
 	if (strcmp(op, "now") == 0) {

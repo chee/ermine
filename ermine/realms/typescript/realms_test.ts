@@ -175,7 +175,8 @@ Deno.test("a read of ./n: its first run pending, then the value lands and it run
 	)
 	const statuses: unknown[] = []
 	w.places.watchAll((f) => {
-		if (f.part !== "attributes" || f.id !== "effect:watcher") return
+		// its id a new one: found at its name
+		if (f.part !== "attributes" || f.id !== get(w.b.places, ["watcher"])) return
 		statuses.push((f.entry?.value as Record<string, unknown> | undefined)?.[STATUS])
 	})
 	w.start("reader.js", ["reader"])
@@ -228,7 +229,8 @@ Deno.test("a memo in the worker: its result node and its run record on the page"
 	w.start("double.js", ["doubler"])
 	await until(() => w.value(["double"]) === 14)
 	const id = get(w.b.places, ["double"])!
-	assertEquals(id, "memo:double")
+	// its id a new one, never from its name
+	assert(!String(id).includes("double"), String(id))
 	const record = w.attributes(id)?.[RUN] as { n: number; end: string; reads: unknown[] }
 	assertEquals(record.end, "done")
 	assertEquals(record.n, 2)

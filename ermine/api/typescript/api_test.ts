@@ -26,7 +26,7 @@ import { Refusal } from "@ermine/places/guard"
 import type { World } from "@ermine/presence"
 import { createOverlay, type Overlay } from "@ermine/patch-nodes"
 import { createSites } from "@ermine/sites"
-import { type API, createProcessAPIs, type Noticed, SendError } from "./api.ts"
+import { type API, createProcessAPIs, type Noticed, SendError, uuidv7 } from "./api.ts"
 
 const JS = "com.netscape.javascript-source"
 const tick = () => new Promise((r) => setTimeout(r, 0))
@@ -473,4 +473,12 @@ Deno.test("early: its first act happened by the time early returns, and a later 
 	const run = w.table.get("attributes", early.id)?.value?.[RUN] as Run
 	assertEquals(run.end, "done")
 	assertEquals(w.table.get("value", early.id)?.value, 2)
+})
+
+Deno.test("uuidv7: a new id, time-ordered: each after the one before, many in one ms too", () => {
+	const ids = Array.from({ length: 5000 }, () => uuidv7())
+	for (const id of ids) {
+		assert(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id), id)
+	}
+	for (let i = 1; i < ids.length; i++) assert(ids[i] > ids[i - 1], `${ids[i - 1]} ${ids[i]}`)
 })

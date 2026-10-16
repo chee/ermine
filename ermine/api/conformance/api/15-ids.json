@@ -1,0 +1,26 @@
+{
+	"title": "ids are flat and opaque: a memo's and an effect's id is a new one, as any node's, never from its name; the api's own (no setup.id) a uuidv7, later ones after",
+	"steps": [
+		{ "op": "world", "uuid": true, "expect": {} },
+		{ "op": "kids", "id": "R", "value": { "w": "W" }, "expect": {} },
+		{
+			"op": "start",
+			"name": "p",
+			"at": ["w", "p"],
+			"program": [
+				{ "do": ["open", "./n", 1], "as": "n" },
+				{ "do": ["memo", "./a", {}, ["read", "$n"]] },
+				{ "do": ["effect", "./e", ["read", "$n"], "e"] },
+				{ "do": ["memo", "./b", {}, ["read", "$n"]] }
+			],
+			"expect": { "id": "proc:p" }
+		},
+		{
+			"op": "uuids",
+			"paths": [["w", "n"], ["w", "a"], ["w", "e"], ["w", "b"]],
+			"expect": { "v7": true, "ordered": true }
+		},
+		{ "op": "do", "process": "p", "call": ["read", "./b"], "expect": { "value": 1 } },
+		{ "op": "log", "name": "e", "expect": { "values": [1] } }
+	]
+}

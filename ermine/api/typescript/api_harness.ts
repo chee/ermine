@@ -10,10 +10,10 @@
 // programs' own, its node, its row, the api made, and its program run as setup, untracked
 //
 // the world (first, or none: a plain one):
-// { op: "world", deny?, presence?, overlay?, who? } → {}   deny: [{ op, path }]: a policy saying no
-//    to an ask with that op whose target's path (names joined by "/") is path; presence: a
-//    presence world on the host's scope, its clock 0 (now moves it); overlay: places over a patch
-//    overlay; who: setup.who
+// { op: "world", deny?, presence?, overlay?, who?, uuid? } → {}   deny: [{ op, path }]: a policy
+//    saying no to an ask with that op whose target's path (names joined by "/") is path; presence:
+//    a presence world on the host's scope, its clock 0 (now moves it); overlay: places over a patch
+//    overlay; who: setup.who; uuid: no setup.id, new ids the api's own (uuidv7)
 // { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
 // { op: "put", part, id, value }           → {}   an entry there, replaced
 // { op: "saved", part, id }                → { value? }   as the table has it
@@ -21,6 +21,8 @@
 //    the first of each key in its pairs, however the header nests them (an "owner" pair holding
 //    the pairs of the scope above), the actor the header's own when it has one
 // { op: "id", path }                       → { id? }   lib's get, from "R"
+// { op: "uuids", paths }                   → { v7, ordered }   the id at each path (lib's get): each
+//    a uuidv7 (lowercase, 8-4-4-4-12, version 7, variant 10); each after the one before (as text)
 // { op: "now", t }                         → {}   the presence clock, ms
 // processes:
 // { op: "start", name, at, cwd?, args?, program } → { id }   program: steps, run as its setup
@@ -151,7 +153,7 @@ function make(o: Request = {}): Made {
 		who: o.who,
 		overlay,
 		schedule: (f) => void later.push(f),
-		id: () => `n${++n}`,
+		id: o.uuid ? undefined : () => `n${++n}`,
 	})
 	return {
 		s,
@@ -321,6 +323,18 @@ function answer(r: Request): Record<string, unknown> {
 		case "id": {
 			const id = get(world().places, r.path)
 			return id === undefined ? {} : { id }
+		}
+		case "uuids": {
+			const ids = (r.paths as string[][]).map((p) => {
+				const id = get(world().places, p)
+				return typeof id === "string" ? id : undefined
+			})
+			const v7 = ids.every((id) =>
+				id !== undefined &&
+				/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
+			)
+			const ordered = ids.every((id, i) => i === 0 || (id ?? "") > (ids[i - 1] ?? ""))
+			return { v7, ordered }
 		}
 		case "now":
 			world().clock.now = r.t

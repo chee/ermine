@@ -30,7 +30,8 @@
 // (the same trace kept already: nothing new); an output equal by bytes to one this step keeps is
 // kept as that same value, so a reader comparing by identity stops there (early cutoff). while out,
 // the reader gets its status (status.ts): PENDING, or the Error. errors are never kept: a failed
-// step goes once no run reads it. a step goes once done, or once no run reads it (mine, open)
+// step goes once no run reads it. a step goes once done, or once no run reads it (mine, open;
+// whether a run reads it: @ermine/clingy)
 //
 // never: run called in the reader's run, its result as it is, nothing looked up or kept (the
 // notebook's // nocache). every entry is kept: how many to keep is open
@@ -49,6 +50,7 @@
 // given, and only to it: a host with boxes hands a places whose commit tells them too
 import { CborError, encode, type Value } from "@ermine/encoding/cbor"
 import { hash } from "@ermine/encoding/hash"
+import { createClingy } from "@ermine/clingy"
 import createEntry from "@ermine/node/entry"
 import { asId, at, type Id, type Places } from "@ermine/places"
 import { createChangeHeader } from "@ermine/places/header"
@@ -138,7 +140,7 @@ export type Builds = {
 }
 
 // one step out: its computer (made once the run wanting it has ended), its status node, how its
-// last run ended, whether a run reads it, the reads of its run now
+// last run ended, the reads of its run now
 type Task = {
 	readonly key: string
 	readonly node: Id
@@ -148,7 +150,6 @@ type Task = {
 	readonly type?: string
 	c?: Computer
 	ended?: Ended
-	held: boolean
 	keys: unknown[]
 }
 
@@ -194,7 +195,8 @@ export function createBuilds(setup: Setup): Builds {
 	const statuses = createStatus({ places, table, scheduler: s })
 	// by key: the steps out
 	const tasks = new Map<string, Task>()
-	const all = new WeakSet<object>()
+	// every step out: whether a run reads it; the last reader gone, it goes
+	const clingy = createClingy<Task>(s, (t) => retire(t))
 	const of = new WeakMap<Computer, Task>()
 	// steps wanted in a run, made as it ends
 	const wanted: Task[] = []
@@ -328,6 +330,7 @@ export function createBuilds(setup: Setup): Builds {
 
 	// a step gone: its computer torn down, its status taken out
 	function retire(t: Task) {
+		clingy.drop(t)
 		if (tasks.get(t.key) === t) tasks.delete(t.key)
 		if (t.c !== undefined && t.c.state === "alive") s.teardown(t.c)
 		if (table.get("attributes", t.node) !== undefined) table.del("attributes", t.node)
@@ -338,8 +341,8 @@ export function createBuilds(setup: Setup): Builds {
 	}
 
 	// a step done goes (its entry kept); failed, once no run reads it; out, once no run reads it
-	// core candidate (scheduler): a computer that goes as the last reader of its key stops, as
-	// per-path computers do
+	// (clingy's go, above; chee 10-16, not in core: "take it out of core, make it a library that
+	// can be used in the two places it was duplicated")
 	const offs = [
 		s.onTrack((key, run) => {
 			if (recording !== undefined && run.computer === recording.c) recording.keys.push(key)
@@ -348,20 +351,11 @@ export function createBuilds(setup: Setup): Builds {
 			const t = of.get(c)
 			if (t !== undefined) {
 				t.ended = ended
-				if (ended === "done" || (failed(ended) && !t.held)) retire(t)
+				if (ended === "done" || (failed(ended) && !clingy.tracked(t))) retire(t)
 			}
 			drain()
 		}),
 		s.onEffect(drain),
-		s.onTrackingStart((k) => {
-			if (all.has(k as object)) (k as Task).held = true
-		}),
-		s.onTrackingEnd((k) => {
-			if (!all.has(k as object)) return
-			const t = k as Task
-			t.held = false
-			retire(t)
-		}),
 	]
 
 	// in the reader's run: the first entry whose reads all hash the same now, read again in order
@@ -422,11 +416,10 @@ export function createBuilds(setup: Setup): Builds {
 				name,
 				run,
 				type: type?.(),
-				held: false,
 				keys: [],
 			}
 			tasks.set(key, t)
-			all.add(t)
+			clingy.add(t)
 			// outside a run, at once
 			if (s.getRun() === undefined) start(t)
 			else wanted.push(t)
@@ -464,6 +457,7 @@ export function createBuilds(setup: Setup): Builds {
 
 	function stop() {
 		for (const off of offs) off()
+		clingy.stop()
 		statuses.stop()
 		told.length = 0
 		wanted.length = 0

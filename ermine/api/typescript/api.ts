@@ -632,10 +632,9 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			later()
 		}
 
-		// the computer last made at each path: its owner, and the run it was made in (the run
+		// the computers alive at each path: each one's owner, and the run it was made in (the run
 		// open's computer and number; none: the owner)
-		const named = new Map<string, { own: Scope; by: object; n?: number; id: Id }>()
-		const live = new Set<Id>()
+		const named = new Map<string, Set<{ own: Scope; by: object; n?: number }>>()
 
 		// a computer's node: a new id, placed at name, its entries gone with own. one alive there,
 		// made in this run under own: already-there
@@ -644,9 +643,11 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			const at = path.join("/")
 			const r = s.getRun()
 			const by = r?.computer ?? own
-			const was = named.get(at)
-			if (was && live.has(was.id) && was.own === own && was.by === by && was.n === r?.n) {
-				throw new PlacesError("already-there", at)
+			const there = named.get(at) ?? new Set()
+			for (const o of there) {
+				if (o.own === own && o.by === by && o.n === r?.n) {
+					throw new PlacesError("already-there", at)
+				}
 			}
 			const id = newId()
 			within(() => {
@@ -654,12 +655,12 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				if (parent === undefined) throw new PlacesError("nothing-there", at)
 				placeUnder(parent, path[path.length - 1], id)
 			})
-			named.set(at, { own, by, n: r?.n, id })
-			live.add(id)
+			const made = { own, by, n: r?.n }
+			named.set(at, there.add(made))
 			s.registerTeardown(own, () => {
 				memos.delete(id)
-				live.delete(id)
-				if (named.get(at)?.id === id) named.delete(at)
+				there.delete(made)
+				if (there.size === 0 && named.get(at) === there) named.delete(at)
 				try {
 					const [children, last] = slot(path)
 					if ((children.value as Record<string, unknown>)?.[last] === id) {
