@@ -26,6 +26,8 @@ export type Options = {
 	loose?: boolean
 	// fields compared as sets
 	unordered?: string[]
+	// a map's keys compared in order too
+	ordered?: boolean
 	// "now" in an expect: a whole number of seconds since 1970, as of the run
 	now?: boolean
 	// the scenarios run again, a request that has the field (or this op) given more fields
@@ -96,20 +98,34 @@ export function command(name: string): string[] {
 	return given ? given.split(" ") : reference(name)
 }
 
-// the requests, one per line (a string is sent as it is), and the answers, in order
+// a sanitizer's report: undefined behaviour goes on after it (exit 0), so it is looked for
+const sanitized = /runtime error:|Sanitizer/
+
+// the requests, one per line (a string is sent as it is), and the answers, in order. the harness
+// failing (exiting with other than 0: a crash, a sanitizer, leaks.sh finding a leak) or a sanitizer
+// reporting is an error, its stderr in it, even after the last answer; otherwise stderr is passed on
 export async function ask(cmd: string[], requests: (Request | string)[]): Promise<Answer[]> {
 	const child = new Deno.Command(cmd[0], {
 		args: cmd.slice(1),
 		stdin: "piped",
 		stdout: "piped",
+		stderr: "piped",
 	}).spawn()
 	// the answers are read while the requests are written: a big run fills the pipe both ways
 	const done = child.output()
 	const w = child.stdin.getWriter()
 	const text = requests.map((r) => typeof r === "string" ? r : line(r)).join("\n") + "\n"
-	await w.write(new TextEncoder().encode(text))
-	await w.close()
-	const { stdout } = await done
+	// a harness that dies early closes its stdin: its exit says why
+	try {
+		await w.write(new TextEncoder().encode(text))
+		await w.close()
+	} catch { /* told below */ }
+	const { stdout, stderr, code } = await done
+	const err = new TextDecoder().decode(stderr)
+	if (code !== 0 || sanitized.test(err)) {
+		throw new Error(`${cmd.join(" ")}: exited ${code}${err ? `\n${err}` : ""}`)
+	}
+	if (err) await Deno.stderr.write(stderr)
 	const lines = new TextDecoder().decode(stdout).trim().split("\n").filter((l) => l !== "")
 	return lines.map((l) => JSON.parse(l))
 }

@@ -11,7 +11,8 @@
 //   skip: fields of the answer left out of the comparing
 // no expect: the answer is not compared. <suite>/suite.json, if there, is the suite's one other say:
 //   loose: the answer may have fields beyond expect's (protect: its reads)
-//   unordered: fields compared as sets (paths: its spots)
+//   unordered: fields compared as sets
+//   ordered: a map's keys compared in order too (a key put back goes last: apply)
 //   now: "now" in an expect is a whole number of seconds since 1970 as of the run (node)
 //   again: the scenarios run once more with a request that has the field given more fields
 //   harness: the adapter and binary of another suite are this one's (invert speaks apply's)
@@ -73,6 +74,9 @@ function differs(
 		if (!isMap(got)) return `${show(got)}, not ${show(want)}`
 		const keys = Object.keys(want)
 		if (Object.keys(got).length !== keys.length) return `${show(got)}, not ${show(want)}`
+		if (o.ordered && Object.keys(got).some((k, i) => k !== keys[i])) {
+			return `keys ${show(Object.keys(got))}, not ${show(keys)}`
+		}
 		for (const k of keys) {
 			if (!Object.hasOwn(got, k)) return `${show(got)}, not ${show(want)}`
 			const d = differs(want[k], got[k], o, window)
