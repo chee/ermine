@@ -1,6 +1,6 @@
 // A node's history (history.h), in C. Every name it has been told of has a rec: a commit taken,
 // waiting or refused, or one only waited on (state NONE). Recs are found by name in a hash, and
-// never let go of until the history is
+// never let go of until the history is, but a head forgotten (hy_forget)
 #include "history.h"
 
 #include <stdlib.h>
@@ -23,6 +23,8 @@ struct rec {
 	state state;
 	hy_refusal refusal;
 	hy_kept kept;
+	// how many taken commits go on this one
+	size_t children;
 	// waiting: the parents not taken yet, in order
 	rec **on;
 	size_t on_length;
@@ -201,6 +203,7 @@ static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 	push(&h->taken, r);
 	for (size_t i = 0; i < r->kept.parents_length; i++) {
 		rec *p = find(h, r->kept.parents[i]);
+		p->children++;
 		for (size_t k = 0; k < h->heads.n; k++) {
 			if (h->heads.p[k] == p) {
 				memmove(&h->heads.p[k], &h->heads.p[k + 1], (h->heads.n - k - 1) * sizeof *h->heads.p);
@@ -353,6 +356,44 @@ size_t hy_heads(const hy_history *h, const hy_kept ***out) {
 }
 
 size_t hy_all(const hy_history *h, const hy_kept ***out) { return kept_of(&h->taken, out); }
+
+// r out of the list, looked for from its end
+static void unlist(list *l, const rec *r) {
+	for (size_t k = l->n; k-- > 0;) {
+		if (l->p[k] != r) continue;
+		memmove(&l->p[k], &l->p[k + 1], (l->n - k - 1) * sizeof *l->p);
+		l->n--;
+		return;
+	}
+}
+
+bool hy_forget(hy_history *h, const uint8_t name[32]) {
+	rec *r = find(h, name);
+	if (r == NULL || r->state != S_TAKEN || r->children > 0) return false;
+	unlist(&h->heads, r);
+	unlist(&h->taken, r);
+	for (size_t i = 0; i < r->kept.parents_length; i++) {
+		rec *p = find(h, r->kept.parents[i]);
+		if (p == NULL || --p->children > 0 || p->state != S_TAKEN) continue;
+		push(&h->heads, p);
+	}
+	// out of the hash: what follows it in its run moved back where it may stand
+	size_t mask = h->slots - 1, s = hash_of(name) & mask;
+	while (h->table[s] != r) s = (s + 1) & mask;
+	h->table[s] = NULL;
+	for (size_t j = (s + 1) & mask; h->table[j] != NULL; j = (j + 1) & mask) {
+		size_t home = hash_of(h->table[j]->kept.name) & mask;
+		// j's rec may stay unless the hole at s lies between its home and j
+		bool stays = s <= j ? (home > s && home <= j) : (home > s || home <= j);
+		if (stays) continue;
+		h->table[s] = h->table[j];
+		h->table[j] = NULL;
+		s = j;
+	}
+	h->count--;
+	free_rec(r);
+	return true;
+}
 
 const hy_kept *hy_get(const hy_history *h, const uint8_t name[32]) {
 	rec *r = find(h, name);

@@ -1,0 +1,464 @@
+{
+	"title": "a stored commit by another device lands mid-drag: the dragging device's next ephemeral commit goes on the new heads, carrying the whole value it shows; the stored under it is listed",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "host",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"host": "c",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "b",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"x": 0,
+						"y": 0
+					}
+				}
+			],
+			"name": "w0",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "ephemeral",
+			"host": "a",
+			"tables": [
+				"value"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"name": "e1",
+			"expect": {
+				"commits": 0,
+				"ephemeral": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "write",
+			"host": "b",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": 4
+				}
+			],
+			"name": "wb",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"wb"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 1,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 4
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e1",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"name": "e2",
+			"expect": {
+				"commits": 0,
+				"ephemeral": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"host": "c",
+			"id": "x",
+			"commit": "e2",
+			"layer": "ephemeral",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457403,
+					"parents": [
+						"wb"
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"x": 2,
+								"y": 0
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 2,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 2,
+					"y": 0
+				}
+			}
+		},
+		{
+			"op": "standing",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"standing": [
+					[
+						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"e2"
+					]
+				]
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 4
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e2",
+							"tables": [
+								"value"
+							],
+							"lamport": 3
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "ephemeral",
+			"host": "a",
+			"tables": [],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": 9
+				}
+			],
+			"name": "drop",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"host": "c",
+			"id": "x",
+			"commit": "drop",
+			"layer": "stored",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457404,
+					"parents": [
+						"wb"
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [
+								"x"
+							],
+							"value": 9
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 9,
+					"y": 4
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 9,
+					"y": 4
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": {
+					"x": 9,
+					"y": 4
+				}
+			}
+		},
+		{
+			"op": "standing",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"standing": []
+			}
+		},
+		{
+			"op": "standing",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"standing": []
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {}
+		}
+	]
+}

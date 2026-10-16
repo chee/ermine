@@ -1,0 +1,264 @@
+{
+	"title": "an ephemeral commit that stands no more is let go of: after 200 writes in one drag each host's ephemeral history holds the stored and the one standing, a beat later too; the drop leaves only the stored",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": ""
+				}
+			],
+			"name": "w0",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "ephemeral",
+			"host": "a",
+			"tables": [
+				"value"
+			],
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "pigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpi",
+			"name": "drag",
+			"expect": {
+				"commits": 0,
+				"ephemeral": 200
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "pigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpi"
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "pigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpigpi"
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [
+					"drag"
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [
+					"drag"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "commits",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "standing",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"standing": [
+					[
+						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"drag"
+					]
+				]
+			}
+		},
+		{
+			"op": "advance",
+			"ms": 1500,
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [
+					"drag"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "ephemeral",
+			"host": "a",
+			"tables": [],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": "oink"
+				}
+			],
+			"name": "w1",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "oink"
+			}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [
+					"w1"
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [
+					"w1"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "a",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "commits",
+			"host": "b",
+			"id": "x",
+			"layer": "ephemeral",
+			"expect": {
+				"commits": 2
+			}
+		},
+		{
+			"op": "standing",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"standing": []
+			}
+		}
+	]
+}

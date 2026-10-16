@@ -109,18 +109,22 @@ typedef struct {
 	header_t *change;
 } slot_t;
 
-// a device's standing ephemeral commits at a node: its key, the newest (tip, the ephemeral
-// history's), the highest lamport of the stored commits they went on (base), the tables they touched,
-// the tables at the tip (sync's own), when it was last heard from (this device's: last sent), ms
+// a standing ephemeral commit: it (the ephemeral history's), the highest lamport of the stored
+// commits it went on (base), its table's entry at it (sync's own; value NULL: none)
+typedef struct {
+	const hy_kept *kept;
+	int64_t base;
+	slot_t entry;
+} stand_t;
+
+// a device's standing ephemeral commits at a node: its key, its stands (one a table, in the order
+// their tables first stood), when it was last heard from (this device's: last sent), ms
 typedef struct {
 	uint8_t who[32];
-	const hy_kept *tip;
-	int64_t base;
-	char **tables;
-	size_t tables_count;
-	rp_tables *node;
+	stand_t *stands;
+	size_t stands_count;
 	uint64_t at;
-} chain_t;
+} peer_t;
 
 // a kept node: the head its tables show; its heads that don't show, each one's tables (sync's own,
 // from replays and commits decoded, never shared); the bytes of its commits taken before each and it,
@@ -149,12 +153,12 @@ typedef struct {
 	const rp_rule *walker_rule;
 	// the rules handed to a replay or a merge: each known one, the rule in use with walker
 	rp_merge *rules;
-	// ephemeral: the standing chains, in the order they came; what each kept table shows when
-	// overlaid (a tip's name as hex, "merge" and the names merged, "" to be shown again; NULL: the
-	// stored), and the stored entry under it; the highest lamport (+1) of a stored commit from each
-	// signer
-	chain_t *chains;
-	size_t chains_count;
+	// ephemeral: the devices whose ephemeral commits stand, in the order they came; what each kept
+	// table shows when overlaid (a commit's name as hex, "merge" and the names merged, "" to be shown
+	// again; NULL: the stored), and the stored entry under it; the highest lamport (+1) of a stored
+	// commit from each signer
+	peer_t *peers;
+	size_t peers_count;
 	char **over;
 	slot_t *under;
 	im_map latest;
@@ -186,7 +190,7 @@ struct sy_sync {
 	sy_ephemeral_fn ephemeral;
 	uint64_t beat, ttl;
 	void *context;
-	// an ephemeral commit's tables, made in its check, by name, until it arrives
+	// an ephemeral commit's table's entry (slot_t), made in its check, by name, until it arrives
 	im_map fresh;
 	// this device's count of commits, from a random start: two devices with one key don't count alike
 	int64_t nonce;
@@ -290,48 +294,61 @@ static void over_set(node_t *nd, size_t i, const char *mark) {
 	nd->over[i] = mark != NULL ? copyString(mark) : NULL;
 }
 
-static void chain_free(chain_t *c) {
-	for (size_t i = 0; i < c->tables_count; i++) free(c->tables[i]);
-	free(c->tables);
-	tables_free(c->node);
+static void peer_free(peer_t *p) {
+	for (size_t i = 0; i < p->stands_count; i++) slot_clear(&p->stands[i].entry);
+	free(p->stands);
 }
 
-static chain_t *chain_of(node_t *nd, const uint8_t who[32]) {
-	for (size_t i = 0; i < nd->chains_count; i++)
-		if (memcmp(nd->chains[i].who, who, 32) == 0) return &nd->chains[i];
+static peer_t *peer_of(node_t *nd, const uint8_t who[32]) {
+	for (size_t i = 0; i < nd->peers_count; i++)
+		if (memcmp(nd->peers[i].who, who, 32) == 0) return &nd->peers[i];
 	return NULL;
 }
 
-// what fleeting made for an arrival to come, by name: the chain's tables, gone with it
-static void unfresh(sy_sync *s, const rp_tables *node) {
-	uint8_t(*keys)[32] = malloc(s->fresh.count * 32 + 1);
-	if (keys == NULL) abort();
-	size_t n = 0;
-	for (size_t i = 0; i < s->fresh.slots; i++)
-		if (s->fresh.used[i] && s->fresh.values[i] == node) memcpy(keys[n++], s->fresh.keys[i], 32);
-	for (size_t i = 0; i < n; i++) im_del(&s->fresh, keys[i]);
-	free(keys);
+// a device standing at the node, made when there is none
+static peer_t *peer_make(node_t *nd, const uint8_t who[32], uint64_t at) {
+	peer_t *p = peer_of(nd, who);
+	if (p != NULL) return p;
+	nd->peers = realloc(nd->peers, (nd->peers_count + 1) * sizeof *nd->peers);
+	if (nd->peers == NULL) abort();
+	p = &nd->peers[nd->peers_count++];
+	*p = (peer_t){0};
+	memcpy(p->who, who, 32);
+	p->at = at;
+	return p;
 }
 
-static void chain_drop(sy_sync *s, node_t *nd, chain_t *c) {
-	unfresh(s, c->node);
-	chain_free(c);
-	size_t i = (size_t)(c - nd->chains);
-	memmove(&nd->chains[i], &nd->chains[i + 1], (nd->chains_count - i - 1) * sizeof *nd->chains);
-	nd->chains_count--;
+// ephemeral commits that stand no more are let go of, so what is kept of them is the standing ones
+// (beside the stored)
+static void forgotten(tp_device *device, const node_t *nd, const peer_t *p) {
+	for (size_t i = 0; p != NULL && i < p->stands_count; i++) tp_forget(device, nd->id, p->stands[i].kept->name);
 }
 
-static bool touched(const chain_t *c, const char *table) {
-	for (size_t i = 0; i < c->tables_count; i++)
-		if (strcmp(c->tables[i], table) == 0) return true;
-	return false;
+static void peer_drop(node_t *nd, peer_t *p) {
+	peer_free(p);
+	size_t i = (size_t)(p - nd->peers);
+	memmove(&nd->peers[i], &nd->peers[i + 1], (nd->peers_count - i - 1) * sizeof *nd->peers);
+	nd->peers_count--;
 }
 
-static void touch(chain_t *c, const char *table) {
-	if (touched(c, table)) return;
-	c->tables = realloc(c->tables, (c->tables_count + 1) * sizeof *c->tables);
-	if (c->tables == NULL) abort();
-	c->tables[c->tables_count++] = copyString(table);
+static stand_t *stand_of(peer_t *p, const char *table) {
+	for (size_t i = 0; i < p->stands_count; i++)
+		if (strcmp(p->stands[i].kept->table, table) == 0) return &p->stands[i];
+	return NULL;
+}
+
+// the commit stands for its table in place of the one before (the entry taken)
+static void stand_put(peer_t *p, const hy_kept *kept, int64_t base, slot_t *entry) {
+	stand_t *st = stand_of(p, kept->table);
+	if (st == NULL) {
+		p->stands = realloc(p->stands, (p->stands_count + 1) * sizeof *p->stands);
+		if (p->stands == NULL) abort();
+		st = &p->stands[p->stands_count++];
+	} else slot_clear(&st->entry);
+	st->kept = kept;
+	st->base = base;
+	st->entry = *entry;
+	*entry = (slot_t){0};
 }
 
 static void hex_name(const uint8_t name[32], char out[65]) {
@@ -674,6 +691,7 @@ static void heard(sy_sync *s, const char *doc, const hy_kept *kept);
 static void ended(sy_sync *s, const char *doc, const hy_kept *kept);
 static void landed(sy_sync *s, node_t *nd, const char *part, bool all, op_value *stored, const ch_header *change);
 static void show(sy_sync *s, node_t *nd, bool again);
+static void listed(sy_sync *s, node_t *nd);
 
 // a commit on the head shown, applied to its table's entry: update is its check
 static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
@@ -1108,6 +1126,7 @@ static void flush(sy_sync *s) {
 			if (n > 1) show_merge(s, nd);
 		}
 		conflicts(s, nd);
+		listed(s, nd);
 	}
 	s->dirty_count = 0;
 	s->applying = was;
@@ -1200,7 +1219,7 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 				later(s, nd);
 			}
 			if (on_merge) free(merged), merged = NULL;
-			if (nd->over != NULL || nd->chains_count > 0) landed(s, nd, part, all, stored, &c.change);
+			if (nd->over != NULL || nd->peers_count > 0) landed(s, nd, part, all, stored, &c.change);
 		}
 		hy_added_free(&a);
 		free(bytes);
@@ -1219,7 +1238,7 @@ static uint64_t ms_of(sy_sync *s) {
 	return s->now != NULL ? s->now(s->clock) : erm_host_now();
 }
 
-// the later of two devices' tips: higher lamport, then the greater name
+// the later of two ephemeral commits: higher lamport, then the greater name
 static bool after(const hy_kept *a, const hy_kept *b) {
 	return a->lamport != b->lamport ? a->lamport > b->lamport : memcmp(a->name, b->name, 32) > 0;
 }
@@ -1263,40 +1282,6 @@ static bool reaches(sy_sync *s, const char *doc, const hy_kept *from, const hy_k
 	return found;
 }
 
-// an ephemeral commit's chain, walked back to the stored commits it went on: their highest lamport (0
-// for none) in *base, and the tables its ephemeral commits touched into c
-static void root_of(sy_sync *s, const char *doc, const hy_kept *kept, chain_t *c) {
-	hy_history *eph = tp_history(s->device, doc, TP_EPHEMERAL), *stored = tp_history(s->device, doc, TP_STORED);
-	const hy_kept **todo = malloc(sizeof *todo);
-	if (todo == NULL) abort();
-	size_t n = 0, room = 1;
-	todo[n++] = kept;
-	im_map seen = {0};
-	c->base = 0;
-	while (n > 0) {
-		const hy_kept *k = todo[--n];
-		if (im_has(&seen, k->name)) continue;
-		im_set(&seen, k->name, SET);
-		if (hy_get(stored, k->name) != NULL) {
-			if (k->lamport > c->base) c->base = k->lamport;
-			continue;
-		}
-		touch(c, k->table);
-		for (size_t i = 0; i < k->parents_length; i++) {
-			const hy_kept *q = hy_get(eph, k->parents[i]);
-			if (q == NULL) continue;
-			if (n == room) {
-				room *= 2;
-				todo = realloc(todo, room * sizeof *todo);
-				if (todo == NULL) abort();
-			}
-			todo[n++] = q;
-		}
-	}
-	free(todo);
-	im_free(&seen);
-}
-
 // what a rule merging the ephemeral history is given: one commit's tables had without merging
 static bool eph_get(void *context, const hy_kept *const *from, size_t n, rp_tables *out) {
 	const replaying_t *r = context;
@@ -1309,121 +1294,111 @@ static bool eph_get(void *context, const hy_kept *const *from, size_t n, rp_tabl
 	return true;
 }
 
-// the tables at an ephemeral commit's parents, new, from the ephemeral history (which holds the
-// stored commits too)
-static rp_tables *start_of(sy_sync *s, const char *doc, const hy_kept *kept, const cm_commit *commit) {
-	hy_history *eph = tp_history(s->device, doc, TP_EPHEMERAL);
-	rp_tables *t = malloc(sizeof *t);
-	if (t == NULL) abort();
-	rp_init(t);
-	replaying_t r = {s, doc};
+// the value of an ephemeral commit's table at its parents, new (NULL: none): the stored entry's when
+// they are what the table shows as stored, else from the ephemeral history (which holds the stored
+// commits too)
+static op_value *start_of(sy_sync *s, node_t *nd, const hy_kept *kept, const cm_commit *commit) {
+	if (commit->parents_length == 0) return NULL;
+	const char *table = commit->table;
+	bool stored = commit->merge == NULL
+		? !nd->has_merged && nd->shown != NULL && commit->parents_length == 1 &&
+			memcmp(commit->parents[0], nd->shown->name, 32) == 0
+		: s->rule != NULL && strcmp(commit->merge, s->rule->name) == 0 && nd->has_merged &&
+			same_heads(nd->merged, nd->merged_count, commit->parents, commit->parents_length);
+	size_t at = table_index(s, table);
+	if (stored && at < s->tables_length) {
+		const op_value *v = NULL;
+		if (overlaid(nd, at)) v = nd->under[at].value;
+		else {
+			nd_entry *e = tb_get(s->table, tb_string(table), tb_string(nd->id));
+			v = e != NULL ? e->value : NULL;
+		}
+		return v != NULL ? copied(v) : NULL;
+	}
+	hy_history *eph = tp_history(s->device, nd->id, TP_EPHEMERAL);
+	rp_tables t;
+	rp_init(&t);
+	replaying_t r = {s, nd->id};
 	if (commit->merge != NULL) {
 		const rp_rule *by = rule_named(s, commit->merge);
 		const hy_kept **heads = malloc((commit->parents_length + 1) * sizeof *heads);
 		if (heads == NULL) abort();
 		for (size_t i = 0; i < commit->parents_length; i++) heads[i] = hy_get(eph, commit->parents[i]);
-		by->merge(NULL, eph, heads, commit->parents_length, eph_get, &r, t);
+		by->merge(NULL, eph, heads, commit->parents_length, eph_get, &r, &t);
 		free(heads);
-		return t;
+	} else if (kept->has_base) {
+		rp_merge *room = calloc(s->merges_length + 1, sizeof *room);
+		if (room == NULL) abort();
+		rp_merges m = pure(s, room);
+		rp_free(&t);
+		if (rp_replay(eph, kept->base, snapshots, &r, &m, &t) != RP_OK) rp_init(&t);
+		free(room);
 	}
-	if (!kept->has_base) return t;
-	rp_merge *room = calloc(s->merges_length + 1, sizeof *room);
-	if (room == NULL) abort();
-	rp_merges m = pure(s, room);
-	rp_free(t);
-	if (rp_replay(eph, kept->base, snapshots, &r, &m, t) != RP_OK) rp_init(t);
-	free(room);
-	return t;
+	const nd_entry *e = rp_find(&t, table);
+	op_value *out = e != NULL && e->value != NULL ? op_ref((op_value *)e->value) : NULL;
+	rp_free(&t);
+	return out;
 }
 
-// an ephemeral commit from elsewhere: does it apply to the tables it goes on. They are kept for its
-// arrival
+// an ephemeral commit from elsewhere: does it apply to its table's entry at its parents. What it makes
+// is kept for its arrival
 static hy_refusal fleeting(sy_sync *s, const char *doc, const hy_kept *kept, const cm_commit *commit) {
 	// signed with this device's key elsewhere: never stands here
 	if (memcmp(commit->signer, tp_key(s->device), 32) == 0) return 0;
-	node_t *nd = node_of(s, doc);
-	chain_t *chain = chain_of(nd, commit->signer);
-	bool on = chain != NULL && commit->merge == NULL && commit->parents_length == 1 &&
-		memcmp(commit->parents[0], chain->tip->name, 32) == 0;
-	rp_tables *node = on ? chain->node : start_of(s, doc, kept, commit);
-	cm_commit own;
-	bool ok = cm_decode(kept->bytes, kept->length, &own, NULL) == CM_OK;
-	if (ok && rp_apply(node, &own) != RP_OK) {
-		cm_free(&own);
-		ok = false;
-	}
-	if (!ok) {
-		if (!on) tables_free(node);
-		return HY_PATCHES;
-	}
-	im_set(&s->fresh, kept->name, node);
+	op_value *from = start_of(s, node_of(s, doc), kept, commit), *after;
+	size_t failed;
+	bool ok = op_apply(from, commit->patches, commit->patches_length, NULL, &after, &failed) == OP_OK;
+	op_free(from);
+	if (!ok) return HY_PATCHES;
+	slot_t *made = calloc(1, sizeof *made);
+	if (made == NULL) abort();
+	made->value = after;
+	if (after != NULL) made->change = header_copy(&commit->change);
+	slot_t *old = im_get(&s->fresh, kept->name);
+	if (old != NULL) slot_clear(old), free(old);
+	im_set(&s->fresh, kept->name, made);
 	return 0;
 }
 
-// an ephemeral commit from elsewhere, taken in: its device's tip now, unless a stored commit of its
-// follows it already. On the tip shown, its patches go to the table's entry
+// an ephemeral commit from elsewhere, taken in: it stands for its device's table in place of the one
+// before, unless that one is the later, or a stored commit of its device follows it already
 static void heard(sy_sync *s, const char *doc, const hy_kept *kept) {
-	rp_tables *node = im_del(&s->fresh, kept->name);
-	if (node == NULL) return;
+	slot_t *made = im_del(&s->fresh, kept->name);
+	// one that never stands here is let go of at once
 	cm_commit own;
-	if (cm_decode(kept->bytes, kept->length, &own, NULL) != CM_OK) return;
+	if (made == NULL || cm_decode(kept->bytes, kept->length, &own, NULL) != CM_OK) {
+		if (made != NULL) slot_clear(made), free(made);
+		tp_forget(s->device, doc, kept->name);
+		return;
+	}
+	uint8_t who[32];
+	memcpy(who, own.signer, 32);
+	cm_free(&own);
 	node_t *nd = node_of(s, doc);
-	chain_t *was = chain_of(nd, own.signer);
-	bool on = was != NULL && kept->parents_length == 1 && memcmp(kept->parents[0], was->tip->name, 32) == 0;
-	chain_t fresh = {0};
-	memcpy(fresh.who, own.signer, 32);
-	if (!on) root_of(s, doc, kept, &fresh);
-	int64_t base = on ? was->base : fresh.base;
-	uintptr_t latest = (uintptr_t)im_get(&nd->latest, own.signer);
-	if (latest > 0 && (int64_t)latest - 1 > base) {
-		chain_free(&fresh);
-		if (node != (was ? was->node : NULL)) tables_free(node);
-		cm_free(&own);
+	hy_history *eph = tp_history(s->device, doc, TP_EPHEMERAL);
+	int64_t base = 0;
+	for (size_t i = 0; i < kept->parents_length; i++) {
+		const hy_kept *q = hy_get(eph, kept->parents[i]);
+		if (q != NULL && q->lamport > base) base = q->lamport;
+	}
+	uintptr_t latest = (uintptr_t)im_get(&nd->latest, who);
+	if (!kept_table(s, kept->table) || (latest > 0 && (int64_t)latest - 1 > base)) {
+		slot_clear(made), free(made);
+		tp_forget(s->device, doc, kept->name);
 		return;
 	}
 	overlay_room(s, nd);
-	char before[65];
-	if (on) hex_name(was->tip->name, before);
-	chain_t *c = was;
-	if (on) {
-		c->tip = kept;
-	} else {
-		if (was != NULL) {
-			unfresh(s, was->node);
-			chain_free(was);
-			*was = fresh;
-		} else {
-			nd->chains = realloc(nd->chains, (nd->chains_count + 1) * sizeof *nd->chains);
-			if (nd->chains == NULL) abort();
-			nd->chains[nd->chains_count++] = fresh;
-			c = &nd->chains[nd->chains_count - 1];
-		}
-		c->tip = kept;
-		c->node = node;
+	peer_t *p = peer_make(nd, who, ms_of(s));
+	p->at = ms_of(s);
+	const stand_t *was = stand_of(p, kept->table);
+	if (was != NULL && !after(kept, was->kept)) {
+		slot_clear(made), free(made);
+		tp_forget(s->device, doc, kept->name);
+		return;
 	}
-	touch(c, kept->table);
-	c->at = ms_of(s);
-	size_t at = table_index(s, kept->table);
-	if (on && s->rule == NULL && at < s->tables_length && nd->over[at] != NULL && strcmp(nd->over[at], before) == 0) {
-		nd_entry *e = tb_get(s->table, tb_string(own.table), tb_string(doc));
-		if (e != NULL && e->value != NULL) {
-			size_t failed;
-			if (nd_update(e, own.patches, own.patches_length, own.change, &failed) == OP_OK) {
-				hold_t *h = hold(s, e, own.table, doc, false);
-				char *table = copyString(own.table);
-				hold_commit(h, &own);
-				if (e->value == NULL) {
-					tb_del(s->table, tb_string(table), tb_string(doc));
-					gone(s, e);
-				} else if (s->commit != NULL) s->commit(s->context, &e, 1);
-				free(table);
-				char now[65];
-				hex_name(kept->name, now);
-				over_set(nd, at, now);
-			}
-		}
-	}
-	cm_free(&own);
+	if (was != NULL) tp_forget(s->device, doc, was->kept->name);
+	stand_put(p, kept, base, made);
+	free(made);
 	show(s, nd, false);
 }
 
@@ -1434,12 +1409,21 @@ static void ended(sy_sync *s, const char *doc, const hy_kept *kept) {
 	node_t *nd = node_of(s, doc);
 	uintptr_t was = (uintptr_t)im_get(&nd->latest, c.signer);
 	if (was == 0 || (int64_t)was - 1 < kept->lamport) im_set(&nd->latest, c.signer, (void *)(uintptr_t)(kept->lamport + 1));
-	chain_t *chain = chain_of(nd, c.signer);
+	peer_t *p = peer_of(nd, c.signer);
 	cm_free(&c);
-	if (chain != NULL && kept->lamport > chain->base) {
-		chain_drop(s, nd, chain);
-		show(s, nd, false);
-	} else if (s->rule != NULL && nd->chains_count > 0) show(s, nd, false);
+	bool gone = false;
+	for (size_t i = 0; p != NULL && i < p->stands_count;) {
+		if (kept->lamport <= p->stands[i].base) {
+			i++;
+			continue;
+		}
+		tp_forget(s->device, doc, p->stands[i].kept->name);
+		slot_clear(&p->stands[i].entry);
+		memmove(&p->stands[i], &p->stands[i + 1], (p->stands_count - i - 1) * sizeof *p->stands);
+		p->stands_count--;
+		gone = true;
+	}
+	if (gone || (s->rule != NULL && nd->peers_count > 0)) show(s, nd, false);
 }
 
 // the stored tables the table shows (under any overlay), new, into t
@@ -1485,9 +1469,82 @@ static int by_agreed(const void *a, const void *b) {
 	return hy_agreed(*(const hy_kept *const *)a, *(const hy_kept *const *)b);
 }
 
-// the table shows, for each table a standing chain touched, the later tip's (with a rule, the stored
-// heads and the tips merged), and the stored again where none stands. again: worked out again even
-// where it shows the same tips
+// a standing commit and its device's key, for the list
+typedef struct {
+	const uint8_t *by;
+	const hy_kept *kept;
+} listed_t;
+
+static int by_later(const void *a, const void *b) {
+	const hy_kept *x = ((const listed_t *)a)->kept, *y = ((const listed_t *)b)->kept;
+	return after(x, y) ? 1 : -1;
+}
+
+// the "ephemeral" table at the id, while anything stands there: the stored under each overlaid table,
+// and every standing ephemeral commit, the later last. None when nothing stands
+static void listed(sy_sync *s, node_t *nd) {
+	size_t n = 0;
+	for (size_t i = 0; i < nd->peers_count; i++) n += nd->peers[i].stands_count;
+	tb_key part = tb_string("ephemeral"), id = tb_string(nd->id);
+	nd_entry *have = tb_get(s->table, part, id);
+	bool was = s->applying;
+	s->applying = true;
+	if (n == 0) {
+		if (have != NULL) {
+			tb_del(s->table, part, id);
+			gone(s, have);
+		}
+		s->applying = was;
+		return;
+	}
+	listed_t *on = malloc(n * sizeof *on);
+	if (on == NULL) abort();
+	n = 0;
+	for (size_t i = 0; i < nd->peers_count; i++)
+		for (size_t j = 0; j < nd->peers[i].stands_count; j++) on[n++] = (listed_t){nd->peers[i].who, nd->peers[i].stands[j].kept};
+	qsort(on, n, sizeof *on, by_later);
+	op_value *under = op_map();
+	for (size_t i = 0; i < s->tables_length; i++)
+		if (overlaid(nd, i) && nd->under[i].value != NULL) op_set(under, s->tables[i], copied(nd->under[i].value));
+	op_value *list = op_list();
+	for (size_t i = 0; i < n; i++) {
+		char by[65], name[65];
+		hex_name(on[i].by, by);
+		hex_name(on[i].kept->name, name);
+		op_value *tables = op_list();
+		op_push(tables, op_str(on[i].kept->table));
+		op_value *m = op_map();
+		op_set(m, "by", op_str(by));
+		op_set(m, "name", op_str(name));
+		op_set(m, "tables", tables);
+		op_set(m, "lamport", op_num((double)on[i].kept->lamport));
+		op_push(list, m);
+	}
+	free(on);
+	op_value *value = op_map();
+	op_set(value, "under", under);
+	op_set(value, "on", list);
+	if (have != NULL && have->value != NULL && same(have->value, value)) {
+		op_free(value);
+		s->applying = was;
+		return;
+	}
+	header_t *c = stamp(now_of(s));
+	nd_entry *e = nd_make_entry(value, &c->h, NULL);
+	if (e == NULL) abort();
+	op_free(value);
+	hold_header(hold(s, e, "ephemeral", nd->id, true), c);
+	if (have == NULL) tb_add(s->table, part, id, e);
+	else {
+		tb_sub(s->table, part, id, e);
+		gone(s, have);
+	}
+	s->applying = was;
+}
+
+// the table shows, for each table, the later standing one's (with a rule, the stored heads and every
+// standing one merged), and the stored again where none stands. again: worked out again even where it
+// shows the same ones
 static void show(sy_sync *s, node_t *nd, bool again) {
 	if (nd->over == NULL) return;
 	bool was = s->applying;
@@ -1495,18 +1552,23 @@ static void show(sy_sync *s, node_t *nd, bool again) {
 	rp_tables merged;
 	bool has_merged = false;
 	char *mark = NULL;
-	if (s->rule != NULL && nd->chains_count > 0) {
+	size_t standing = 0;
+	for (size_t p = 0; p < nd->peers_count; p++) standing += nd->peers[p].stands_count;
+	if (s->rule != NULL && standing > 0) {
 		const hy_kept **heads;
 		size_t n = hy_heads(tp_history(s->device, nd->id, TP_STORED), &heads);
-		const hy_kept **all = malloc((n + nd->chains_count + 1) * sizeof *all);
+		const hy_kept **all = malloc((n + standing + 1) * sizeof *all);
 		if (all == NULL) abort();
 		size_t count = 0;
 		for (size_t i = 0; i < n; i++) {
 			bool covered = false;
-			for (size_t c = 0; c < nd->chains_count && !covered; c++) covered = reaches(s, nd->id, nd->chains[c].tip, heads[i]);
+			for (size_t p = 0; p < nd->peers_count && !covered; p++)
+				for (size_t j = 0; j < nd->peers[p].stands_count && !covered; j++)
+					covered = reaches(s, nd->id, nd->peers[p].stands[j].kept, heads[i]);
 			if (!covered) all[count++] = heads[i];
 		}
-		for (size_t c = 0; c < nd->chains_count; c++) all[count++] = nd->chains[c].tip;
+		for (size_t p = 0; p < nd->peers_count; p++)
+			for (size_t j = 0; j < nd->peers[p].stands_count; j++) all[count++] = nd->peers[p].stands[j].kept;
 		qsort(all, count, sizeof *all, by_agreed);
 		hy_history *eph = tp_history(s->device, nd->id, TP_EPHEMERAL);
 		replaying_t r = {s, nd->id};
@@ -1529,14 +1591,25 @@ static void show(sy_sync *s, node_t *nd, bool again) {
 	}
 	for (size_t i = 0; i < s->tables_length; i++) {
 		const char *t = s->tables[i];
-		const chain_t *top = NULL;
-		for (size_t c = 0; c < nd->chains_count; c++)
-			if (touched(&nd->chains[c], t) && (top == NULL || after(nd->chains[c].tip, top->tip))) top = &nd->chains[c];
+		const stand_t *top = NULL;
+		for (size_t p = 0; p < nd->peers_count; p++)
+			for (size_t j = 0; j < nd->peers[p].stands_count; j++) {
+				const stand_t *st = &nd->peers[p].stands[j];
+				if (strcmp(st->kept->table, t) == 0 && (top == NULL || after(st->kept, top->kept))) top = st;
+			}
 		char want[65];
 		const char *wanted = NULL;
-		const nd_entry *entry = NULL;
-		if (top != NULL && has_merged) wanted = mark, entry = rp_find(&merged, t);
-		else if (top != NULL) hex_name(top->tip->name, want), wanted = want, entry = rp_find(top->node, t);
+		const op_value *value = NULL;
+		const ch_header *change = NULL;
+		if (top != NULL && has_merged) {
+			wanted = mark;
+			const nd_entry *e = rp_find(&merged, t);
+			if (e != NULL) value = e->value, change = &e->change;
+		} else if (top != NULL) {
+			hex_name(top->kept->name, want), wanted = want;
+			value = top->entry.value;
+			change = top->entry.change != NULL ? &top->entry.change->h : NULL;
+		}
 		const char *have = nd->over[i];
 		bool same = wanted == NULL ? have == NULL : have != NULL && strcmp(wanted, have) == 0;
 		if (same && !again) continue;
@@ -1556,12 +1629,17 @@ static void show(sy_sync *s, node_t *nd, bool again) {
 			put_shown(s, nd->id, t, u.value, u.change != NULL ? u.change : header_new());
 		} else {
 			over_set(nd, i, wanted);
-			if (entry != NULL && entry->value != NULL) put_shown(s, nd->id, t, copied(entry->value), header_copy(&entry->change));
+			if (value != NULL) put_shown(s, nd->id, t, copied(value), change != NULL ? header_copy(change) : header_new());
 			else put_shown(s, nd->id, t, NULL, NULL);
 		}
 	}
 	if (has_merged) rp_free(&merged);
 	free(mark);
+	for (size_t p = 0; p < nd->peers_count;) {
+		if (nd->peers[p].stands_count == 0) peer_drop(nd, &nd->peers[p]);
+		else p++;
+	}
+	listed(s, nd);
 	s->applying = was;
 }
 
@@ -1579,13 +1657,15 @@ static void landed(sy_sync *s, node_t *nd, const char *part, bool all, op_value 
 		// shown again, whatever it showed
 		over_set(nd, at, "");
 	}
-	chain_t *mine = chain_of(nd, tp_key(s->device));
-	if (mine != NULL) chain_drop(s, nd, mine);
+	peer_t *mine = peer_of(nd, tp_key(s->device));
+	forgotten(s->device, nd, mine);
+	if (mine != NULL) peer_drop(nd, mine);
 	show(s, nd, false);
 }
 
-// a change to an ephemeral table here: one ephemeral commit on this device's tip at the node, or on
-// what a stored write goes on. Lamport above every tip there, so the newest write is the later
+// a change to an ephemeral table here: one ephemeral commit on what a stored write goes on, in place of
+// this device's standing one at the table (sync.ts's fleet says how its patches are made). Lamport
+// above every standing one there, so the newest write is the later
 static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patch *patches, size_t count,
 	const ch_header *change) {
 	sy_follow(s, id);
@@ -1594,7 +1674,8 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	overlay_room(s, nd);
 	size_t at = table_index(s, part);
 	const uint8_t *me = tp_key(s->device);
-	chain_t *mine = chain_of(nd, me);
+	peer_t *mine = peer_of(nd, me);
+	const stand_t *was = mine != NULL ? stand_of(mine, part) : NULL;
 	hy_history *history = tp_history(s->device, id, TP_STORED);
 	const hy_kept **heads;
 	size_t n = hy_heads(history, &heads);
@@ -1602,31 +1683,50 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	const hy_kept *const *on;
 	size_t on_count;
 	const char *merge = NULL;
-	if (mine != NULL) on = (const hy_kept *const *)&mine->tip, on_count = 1;
-	else if (nd->has_merged) on = nd->merged, on_count = nd->merged_count, merge = s->rule->name;
+	if (nd->has_merged) on = nd->merged, on_count = nd->merged_count, merge = s->rule->name;
 	else on = &head, on_count = head != NULL;
-	// the patches were made on what the table shows: what the commit goes on, or they are tried on that
-	// (this device's tip, or the stored under others' commits)
-	char tip[65] = "";
-	if (mine != NULL) hex_name(mine->tip->name, tip);
-	bool fine = mine != NULL ? nd->over[at] != NULL && strcmp(nd->over[at], tip) == 0 : !overlaid(nd, at);
+	// the table showed the stored, or this device's standing one: it shows the device's now
+	char last[65] = "";
+	if (was != NULL) hex_name(was->kept->name, last);
+	const char *have = nd->over[at];
+	bool fine = have == NULL || (was != NULL && strcmp(have, last) == 0), applied = true;
 	nd_entry *now = tb_get(s->table, tb_string(part), tb_string(id));
 	op_value *value = now != NULL && now->value != NULL ? op_ref(now->value) : NULL;
 	static const op_key root[1];
 	op_patch whole = {.place = {.path = root, .length = 0}};
 	if (!fine) {
-		const nd_entry *base = mine != NULL ? rp_find(mine->node, part) : NULL;
-		const op_value *from = mine != NULL ? (base != NULL ? base->value : NULL) : nd->under[at].value;
+		const op_value *from = was != NULL ? was->entry.value : nd->under[at].value;
 		op_value *after;
 		size_t failed;
 		if (op_apply(from, patches, count, NULL, &after, &failed) == OP_OK) {
 			op_free(value);
 			value = after;
 		} else {
+			applied = false;
 			if (now != NULL && now->value != NULL) whole.has_value = 1, whole.value = now->value;
 			patches = &whole;
 			count = 1;
 		}
+	}
+	// over a standing one of this device's: the whole value it makes; with a rule, that one's patches
+	// and these
+	cm_commit before = {0};
+	bool has_before = false;
+	op_patch *joined = NULL;
+	if (was != NULL && s->rule != NULL && applied && !fine &&
+		cm_decode(was->kept->bytes, was->kept->length, &before, NULL) == CM_OK) {
+		has_before = true;
+		joined = malloc((before.patches_length + count + 1) * sizeof *joined);
+		if (joined == NULL) abort();
+		memcpy(joined, before.patches, before.patches_length * sizeof *joined);
+		memcpy(joined + before.patches_length, patches, count * sizeof *joined);
+		patches = joined;
+		count += before.patches_length;
+	} else if (was != NULL) {
+		whole = (op_patch){.place = {.path = root, .length = 0}};
+		if (value != NULL) whole.has_value = 1, whole.value = value;
+		patches = &whole;
+		count = 1;
 	}
 	const uint8_t **sorted = malloc((on_count + 1) * sizeof *sorted);
 	uint8_t(*parents)[32] = malloc(on_count * 32 + 1);
@@ -1637,8 +1737,9 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 		if (on[i]->lamport > base) base = on[i]->lamport;
 	}
 	top = base;
-	for (size_t c = 0; c < nd->chains_count; c++)
-		if (nd->chains[c].tip->lamport > top) top = nd->chains[c].tip->lamport;
+	for (size_t p = 0; p < nd->peers_count; p++)
+		for (size_t j = 0; j < nd->peers[p].stands_count; j++)
+			if (nd->peers[p].stands[j].kept->lamport > top) top = nd->peers[p].stands[j].kept->lamport;
 	qsort(sorted, on_count, sizeof *sorted, by_name);
 	for (size_t i = 0; i < on_count; i++) memcpy(parents[i], sorted[i], 32);
 	carried_t carried;
@@ -1677,39 +1778,15 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 				}
 				rp_free(&pre);
 			}
-			mine = chain_of(nd, me);
-			if (mine == NULL) {
-				rp_tables t;
-				carried_t *list = from_table(s, id, &t);
-				uint8_t *packed;
-				size_t size;
-				rp_tables *node = malloc(sizeof *node);
-				if (node == NULL) abort();
-				rp_init(node);
-				if (sn_snapshot(&t, &packed, &size) == PK_OK) {
-					if (sn_tables(packed, size, node) != PK_OK) rp_free(node), rp_init(node);
-					free(packed);
-				}
-				rp_free(&t);
-				carried_list_free(s, list);
-				nd->chains = realloc(nd->chains, (nd->chains_count + 1) * sizeof *nd->chains);
-				if (nd->chains == NULL) abort();
-				mine = &nd->chains[nd->chains_count++];
-				*mine = (chain_t){0};
-				memcpy(mine->who, me, 32);
-				mine->base = base;
-				mine->node = node;
-			}
-			if (value == NULL) rp_drop(mine->node, part);
-			else {
-				op_value *own = copied(value);
-				rp_put_copy(mine->node, part, own, &c.change);
-				op_free(own);
-			}
-			touch(mine, part);
-			mine->tip = kept;
+			slot_t entry = {0};
+			if (value != NULL) entry.value = copied(value), entry.change = header_copy(&c.change);
+			mine = peer_make(nd, me, 0);
+			// the one it replaces is let go of (tp_forget waits until it is sent)
+			const stand_t *gone_one = stand_of(mine, part);
+			if (gone_one != NULL) tp_forget(s->device, id, gone_one->kept->name);
+			stand_put(mine, kept, base, &entry);
 			mine->at = ms_of(s);
-			// the table shows the new tip when the patches were made on the one before; else shown again
+			// the table shows the new one when the patches were made on what it showed; else shown again
 			char name[65];
 			hex_name(made.name, name);
 			over_set(nd, at, fine ? name : "");
@@ -1718,6 +1795,8 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 		hy_added_free(&a);
 		free(bytes);
 	}
+	free(joined);
+	if (has_before) cm_free(&before);
 	op_free(value);
 	carried_free(&carried);
 	free(sorted);
@@ -1732,9 +1811,9 @@ static int64_t wait_of(sy_sync *s, uint64_t now) {
 	const uint8_t *me = tp_key(s->device);
 	for (size_t i = 0; i < s->list_count; i++) {
 		node_t *nd = s->list[i];
-		for (size_t c = 0; c < nd->chains_count; c++) {
-			const chain_t *ch = &nd->chains[c];
-			uint64_t due = ch->at + (memcmp(ch->who, me, 32) == 0 ? s->beat : s->ttl);
+		for (size_t p = 0; p < nd->peers_count; p++) {
+			const peer_t *pr = &nd->peers[p];
+			uint64_t due = pr->at + (memcmp(pr->who, me, 32) == 0 ? s->beat : s->ttl);
 			int64_t w = due > now ? (int64_t)(due - now) : 0;
 			if (next < 0 || w < next) next = w;
 		}
@@ -1748,16 +1827,20 @@ static void tick(sy_sync *s, uint64_t now) {
 	for (size_t i = 0; i < s->list_count; i++) {
 		node_t *nd = s->list[i];
 		bool dropped = false;
-		for (size_t c = 0; c < nd->chains_count;) {
-			chain_t *ch = &nd->chains[c];
-			if (memcmp(ch->who, me, 32) == 0) {
-				if (now >= ch->at + s->beat) tp_again(s->device, nd->id, ch->tip->name), ch->at = now;
-			} else if (now >= ch->at + s->ttl) {
-				chain_drop(s, nd, ch);
+		for (size_t p = 0; p < nd->peers_count;) {
+			peer_t *pr = &nd->peers[p];
+			if (memcmp(pr->who, me, 32) == 0) {
+				if (now >= pr->at + s->beat) {
+					for (size_t j = 0; j < pr->stands_count; j++) tp_again(s->device, nd->id, pr->stands[j].kept->name);
+					pr->at = now;
+				}
+			} else if (now >= pr->at + s->ttl) {
+				forgotten(s->device, nd, pr);
+				peer_drop(nd, pr);
 				dropped = true;
 				continue;
 			}
-			c++;
+			p++;
 		}
 		if (dropped) show(s, nd, false);
 	}
@@ -1770,14 +1853,16 @@ static void hearing(void *context, const char *doc, const uint8_t from[32], cons
 	uint8_t bytes[32];
 	if (!tp_doc(doc, bytes) || memcmp(from, tp_key(s->device), 32) == 0) return;
 	node_t *nd = im_get(&s->nodes, bytes);
-	chain_t *c = nd != NULL ? chain_of(nd, from) : NULL;
-	if (c != NULL) c->at = ms_of(s);
+	peer_t *p = nd != NULL ? peer_of(nd, from) : NULL;
+	if (p != NULL) p->at = ms_of(s);
 }
 
 // ---- the integration
 
 static int by_name_row(const void *a, const void *b) {
-	return memcmp(((const sy_standing_row *)a)->key, ((const sy_standing_row *)b)->key, 32);
+	const sy_standing_row *x = a, *y = b;
+	int k = memcmp(x->key, y->key, 32);
+	return k != 0 ? k : memcmp(x->tip, y->tip, 32);
 }
 
 sy_sync *sy_create(const sy_options *o) {
@@ -1835,8 +1920,8 @@ void sy_free(sy_sync *s) {
 		walker_drop(nd);
 		free(nd->merged);
 		free(nd->rules);
-		for (size_t c = 0; c < nd->chains_count; c++) chain_free(&nd->chains[c]);
-		free(nd->chains);
+		for (size_t c = 0; c < nd->peers_count; c++) peer_free(&nd->peers[c]);
+		free(nd->peers);
 		for (size_t t = 0; nd->over != NULL && t < s->tables_length; t++) free(nd->over[t]), slot_clear(&nd->under[t]);
 		free(nd->over);
 		free(nd->under);
@@ -1844,7 +1929,9 @@ void sy_free(sy_sync *s) {
 		free(nd);
 	}
 	free(s->list);
-	// what fleeting made that never arrived (a chain's is the chain's, let go of above)
+	// what fleeting made that never arrived
+	for (size_t i = 0; i < s->fresh.slots; i++)
+		if (s->fresh.used[i]) slot_clear(s->fresh.values[i]), free(s->fresh.values[i]);
 	im_free(&s->fresh);
 	for (size_t i = 0; i < s->holds.slots; i++) {
 		if (!s->holds.used[i]) continue;
@@ -2018,12 +2105,16 @@ bool sy_use(sy_sync *s, const char *name) {
 size_t sy_standing(sy_sync *s, const char *id, sy_standing_row **out) {
 	uint8_t bytes[32];
 	node_t *nd = tp_doc(id, bytes) ? im_get(&s->nodes, bytes) : NULL;
-	size_t n = nd != NULL ? nd->chains_count : 0;
+	size_t n = 0;
+	for (size_t i = 0; nd != NULL && i < nd->peers_count; i++) n += nd->peers[i].stands_count;
 	*out = malloc((n + 1) * sizeof **out);
 	if (*out == NULL) abort();
-	for (size_t i = 0; i < n; i++) {
-		memcpy((*out)[i].key, nd->chains[i].who, 32);
-		memcpy((*out)[i].tip, nd->chains[i].tip->name, 32);
+	n = 0;
+	for (size_t i = 0; nd != NULL && i < nd->peers_count; i++) {
+		for (size_t j = 0; j < nd->peers[i].stands_count; j++, n++) {
+			memcpy((*out)[n].key, nd->peers[i].who, 32);
+			memcpy((*out)[n].tip, nd->peers[i].stands[j].kept->name, 32);
+		}
 	}
 	qsort(*out, n, sizeof **out, by_name_row);
 	return n;

@@ -20,13 +20,16 @@
 // while it is in use (eg-walker's walker). sy_use switches the rule, or merging off, while running.
 //
 // Ephemeral (sync.ts's header says the rules): a change to a table the host says is ephemeral goes
-// out as an ephemeral commit, on the device's previous one at the node while that stands, else on
-// what a stored write goes on; never sealed, never stored. The table shows the stored heads and, for
-// each table a device's standing ephemeral commits touched, the later device's on top (with a rule,
-// all merged by it); the stored entries under are sync's own. A device's ephemeral commits stop
-// standing when a stored commit of its follows them, or after ttl ms with nothing heard from it; this
-// device's standing one is sent again every beat ms, by sy_run on the device's clock. Nothing
-// ephemeral outlives the sync.
+// out as an ephemeral commit on what a stored write goes on (never on another ephemeral one), its
+// patches taking that stored state to what the device shows; never sealed, never stored. Each stands
+// alone, in place of its device's previous one at its table. The table shows the stored heads and, for
+// each table, the later standing one on top (with a rule, all merged by it); the stored entries under
+// are sync's own, and the "ephemeral" table at the id ({under: {table: value}, on: [{by, name,
+// tables, lamport}]}, by and name as hex, the later last) lists them and what stands while anything
+// does. A device's ephemeral commits stop standing when a stored commit of its follows them, or after
+// ttl ms with nothing heard from it; this device's standing ones are sent again every beat ms, by
+// sy_run on the device's clock. One that stands no more is let go of (tp_forget). Nothing ephemeral
+// outlives the sync.
 //
 // It runs no scheduler and knows no places: the host hands it its writes (sy_wrote, after places'
 // commit, with the change headers they carry) and its table's events (sy_table_changed), and is told
@@ -122,8 +125,8 @@ rp_code sy_get(sy_sync *s, const char *id, const uint8_t name[32], rp_tables *ou
 // such rule, nothing changed
 bool sy_use(sy_sync *s, const char *merge);
 
-// each device whose ephemeral commits stand at the id (this one's too): its key and its newest one's
-// name, by key; *out malloc'd (free it)
+// each ephemeral commit standing at the id (this device's too): its signer's key and its name, by key,
+// then name; *out malloc'd (free it)
 typedef struct {
 	uint8_t key[32];
 	uint8_t tip[32];

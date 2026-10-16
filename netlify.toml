@@ -14,3 +14,11 @@
   for = "/slaygrounds/assets/*.wasm"
   [headers.values]
     Content-Type = "application/wasm"
+
+# the cat clock's compiler: wasm-clang (@yowasp/clang) at /catclock/compile, for the demos site
+# (playground/catclock/functions/compile.mts). @yowasp/clang kept whole: its wasm beside its
+# bundle.js (27 MB zipped)
+[functions]
+  directory = "playground/catclock/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@yowasp/clang"]

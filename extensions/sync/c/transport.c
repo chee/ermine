@@ -187,6 +187,9 @@ struct doc {
 	im_map bad;
 	// how many taken-in seals have a depth, so a build with none is passed over
 	size_t deep;
+	// ephemeral commits to let go of once nothing queued holds them (tp_forget)
+	uint8_t (*forgets)[32];
+	size_t forgets_count, forgets_room;
 	bool followed, follow_later;
 	// asked for again at due, the ask'th time
 	bool asking;
@@ -584,6 +587,7 @@ static void doc_free(doc *d) {
 	im_free(&d->refused);
 	im_free(&d->broken);
 	im_free(&d->heard);
+	free(d->forgets);
 	im_free(&d->bad);
 	free(d);
 }
@@ -1880,6 +1884,8 @@ static void sweep(tp_device *t) {
 	}
 }
 
+static void forget_due(tp_device *t);
+
 int64_t tp_run(tp_device *t) {
 	for (;;) {
 		uint64_t now = now_of(t);
@@ -1890,6 +1896,7 @@ int64_t tp_run(tp_device *t) {
 		moved = timers(t, now) || moved;
 		if (moved || wait == 0) continue;
 		sweep(t);
+		forget_due(t);
 		int64_t timer = -1;
 		for (doc *d = t->first; d; d = d->next) {
 			if (!d->asking) continue;
@@ -2029,6 +2036,48 @@ bool tp_again(tp_device *t, const char *id, const uint8_t name[32]) {
 	if (kept == NULL || hy_get(d->histories[TP_STORED], name) != NULL) return false;
 	enqueue(t, d, TP_EPHEMERAL, kept);
 	return true;
+}
+
+bool tp_forget(tp_device *t, const char *id, const uint8_t name[32]) {
+	doc *d = named(t, id);
+	if (d == NULL || hy_get(d->histories[TP_EPHEMERAL], name) == NULL ||
+		hy_get(d->histories[TP_STORED], name) != NULL)
+		return false;
+	ROOM(d->forgets, d->forgets_count, d->forgets_room);
+	memcpy(d->forgets[d->forgets_count++], name, 32);
+	return true;
+}
+
+// whether anything queued here holds the commit: an item going out, an arrival to tell
+static bool held(const tp_device *t, const hy_kept *k) {
+	for (const item *it = t->items; it != NULL; it = it->next)
+		if (it->kept == k) return true;
+	for (size_t i = t->told_next; i < t->told_count; i++)
+		if (t->told[i].kept == k) return true;
+	for (size_t i = t->released_next; i < t->released_count; i++)
+		if (t->released[i].kept == k) return true;
+	return false;
+}
+
+// the ephemeral commits forgotten that nothing holds now, let go of
+static void forget_due(tp_device *t) {
+	for (doc *d = t->first; d; d = d->next) {
+		size_t keep = 0;
+		for (size_t i = 0; i < d->forgets_count; i++) {
+			const uint8_t *name = d->forgets[i];
+			const hy_kept *k = hy_get(d->histories[TP_EPHEMERAL], name);
+			if (k == NULL || hy_get(d->histories[TP_STORED], name) != NULL) continue;
+			if (held(t, k)) {
+				memmove(d->forgets[keep++], name, 32);
+				continue;
+			}
+			hy_forget(d->histories[TP_EPHEMERAL], name);
+			im_del(&d->elsewhere[TP_EPHEMERAL], name);
+			im_del(&d->own[TP_EPHEMERAL], name);
+			im_del(&d->heard, name);
+		}
+		d->forgets_count = keep;
+	}
 }
 
 bool tp_snapshot(tp_device *t, const char *id, const uint8_t name[32], rp_tables *out) {

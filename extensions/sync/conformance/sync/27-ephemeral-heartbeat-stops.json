@@ -177,6 +177,12 @@
 			}
 		},
 		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
 			"op": "read",
 			"host": "a",
 			"id": "x",
@@ -198,6 +204,31 @@
 						"e1"
 					]
 				]
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 0
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e1",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						}
+					]
+				}
 			}
 		}
 	]

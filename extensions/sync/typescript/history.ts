@@ -49,6 +49,9 @@ export type History = {
 	refused(): { name: string; refused: Refusal }[]
 	// every commit taken in, in the order taken
 	all(): Kept[]
+	// a head taken in let go of, as if never told of it: its parents heads again where nothing else
+	// goes on them. false: not taken, or something goes on it
+	forget(name: Uint8Array): boolean
 }
 
 // check: given a commit whose parents are all taken, whether its patches apply to its parent's
@@ -60,6 +63,8 @@ export function createHistory(
 	const taken = new Map<string, Kept>()
 	const order: Kept[] = []
 	const heads = new Set<string>()
+	// how many taken commits go on each one, where any do
+	const children = new Map<string, number>()
 	// a commit not taken in yet: its own, and the names it waits on
 	const waits = new Map<string, { kept: Kept; commit: Commit; on: Set<string> }>()
 	const waiters = new Map<string, Set<string>>()
@@ -94,7 +99,11 @@ export function createHistory(
 		}
 		taken.set(n, kept)
 		order.push(kept)
-		for (const p of kept.parents) heads.delete(hex(p))
+		for (const p of kept.parents) {
+			const h = hex(p)
+			heads.delete(h)
+			children.set(h, (children.get(h) ?? 0) + 1)
+		}
 		heads.add(n)
 		for (const f of listeners) f(kept)
 		for (const w of waiters.get(n) ?? []) {
@@ -162,6 +171,24 @@ export function createHistory(
 		waiting: () => [...waits].map(([name, w]) => ({ name, waiting: [...w.on] })),
 		refused: () => [...refusals].map(([name, refused]) => ({ name, refused })),
 		all: () => order.slice(),
+		forget(name) {
+			const n = hex(name), kept = taken.get(n)
+			if (kept === undefined || children.has(n)) return false
+			taken.delete(n)
+			heads.delete(n)
+			// most often among the last taken
+			const i = order.lastIndexOf(kept)
+			if (i >= 0) order.splice(i, 1)
+			for (const p of kept.parents) {
+				const h = hex(p), c = children.get(h)! - 1
+				if (c > 0) children.set(h, c)
+				else {
+					children.delete(h)
+					if (taken.has(h)) heads.add(h)
+				}
+			}
+			return true
+		},
 	}
 }
 

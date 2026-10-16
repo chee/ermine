@@ -95,6 +95,17 @@ s.changed(keys, by?)                  // these landed
   queues. we'll want optimistic state too, and transactions. but msybe there is an emergent way to
   build them on the graph, but probably need the scheduler" (10-13). Solid 2.0's words: a lane per
   transition or action, holding its optimistic guesses; render effects run in an earlier queue
+- key handles, not wired yet (chee 10-16: "we don't wire this up yet, but note that using it
+  would improve fan in a lot"): `key(of)` hands out a tracker node; `track`/`mark` take it, so a
+  read skips `nodes.get` and `writers.get`. Fan in of 1000: about −30% (prototype on 1c88e22,
+  in-process A/B); fan and chain: no change. Before wiring: listeners give `of` while callers
+  keep keys (places record, cache, keyed, clingy, lazy-memo) — a rule and types for which is
+  which; C needs an owner for keys (free while unread loops, a freed key in its writer's wrote);
+  marks from outside make keys for untracked spots. Cheaper half-steps: one Map with the writer
+  on the node (−9% fan in only); handles optional, opted into by places' spots and the cache
+- C bug seen 10-16, today's code: scheduler.c `writers` is keyed by raw spot pointers, and
+  pl_forget frees the spot without unhooking it, so a new spot at the same address inherits an
+  unrelated writer (wrong waits and rank edges, no crash)
 
 * Naming, decided 10-13
 - the round is `pulse`: "make it s.pulse()"

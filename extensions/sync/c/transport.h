@@ -167,6 +167,10 @@ void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context);
 // an ephemeral commit of this device's (in the ephemeral history, not a stored one) published again,
 // queued as a take is; false: no such commit
 bool tp_again(tp_device *t, const char *doc, const uint8_t name[32]);
+// an ephemeral commit (not a stored one) let go of: out of the ephemeral history and whatever was kept
+// for it, as if never heard; heard again, it comes in again. Done once nothing queued here holds it
+// (at the end of a tp_run): its kept is freed then. false: none such
+bool tp_forget(tp_device *t, const char *doc, const uint8_t name[32]);
 // the tables at a commit, when a fragment headed by it carried a snapshot: new ones put in *out
 // (rp_init'd), true
 bool tp_snapshot(tp_device *t, const char *doc, const uint8_t name[32], rp_tables *out);

@@ -1,5 +1,5 @@
 {
-	"title": "a host that joins while an ephemeral commit stands sees nothing of it: not its tip sent again, nor what goes on it; a stored commit ends it, and the next ephemeral one shows",
+	"title": "a host that joins while an ephemeral commit stands takes the next beat: each ephemeral commit goes on the stored and stands alone, so it shows then; a stored commit ends it",
 	"steps": [
 		{
 			"op": "host",
@@ -127,6 +127,12 @@
 			}
 		},
 		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
 			"op": "advance",
 			"ms": 1500,
 			"expect": {}
@@ -141,7 +147,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"x": 0,
+					"x": 2,
 					"y": 0
 				}
 			}
@@ -151,8 +157,81 @@
 			"host": "b",
 			"id": "x",
 			"expect": {
-				"standing": []
+				"standing": [
+					[
+						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"e2"
+					]
+				]
 			}
+		},
+		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 0
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e2",
+							"tables": [
+								"value"
+							],
+							"lamport": 3
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "e2",
+			"layer": "ephemeral",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457403,
+					"parents": [
+						"w0"
+					],
+					"lamport": 3,
+					"patches": [
+						{
+							"path": [],
+							"value": {
+								"x": 2,
+								"y": 0
+							}
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "e1",
+			"layer": "ephemeral",
+			"expect": {}
 		},
 		{
 			"op": "write",
@@ -182,7 +261,7 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"x": 0,
+					"x": 3,
 					"y": 0
 				}
 			}
@@ -192,7 +271,12 @@
 			"host": "b",
 			"id": "x",
 			"expect": {
-				"standing": []
+				"standing": [
+					[
+						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"e3"
+					]
+				]
 			}
 		},
 		{
@@ -234,58 +318,24 @@
 			}
 		},
 		{
-			"op": "ephemeral",
-			"host": "a",
-			"tables": [
-				"value"
-			],
-			"expect": {}
-		},
-		{
-			"op": "write",
-			"host": "a",
-			"id": "x",
-			"patches": [
-				{
-					"path": [
-						"y"
-					],
-					"value": 5
-				}
-			],
-			"name": "e4",
-			"expect": {
-				"commits": 0,
-				"ephemeral": 1
-			}
-		},
-		{
-			"op": "quiet",
-			"expect": {}
-		},
-		{
-			"op": "read",
-			"host": "b",
-			"id": "x",
-			"expect": {
-				"value": {
-					"x": 4,
-					"y": 5
-				}
-			}
-		},
-		{
 			"op": "standing",
 			"host": "b",
 			"id": "x",
 			"expect": {
-				"standing": [
-					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-						"e4"
-					]
-				]
+				"standing": []
 			}
+		},
+		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {}
 		}
 	]
 }

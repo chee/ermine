@@ -100,3 +100,23 @@ Deno.test("snapshot: replay starts at one, its tables new each time", () => {
 	assertEquals(used, 1)
 	assert(tablesOf(packed).value.value !== tablesOf(packed).value.value)
 })
+
+Deno.test("history: a head forgotten is gone as if never told of; its parent a head again once nothing goes on it", () => {
+	const h = createHistory()
+	const a = make("value", [], 1, [{ path: [], value: { n: 0 } }])
+	const b = make("value", [a.name], 2, [{ path: ["n"], value: 1 }])
+	const c = make("value", [a.name], 2, [{ path: ["n"], value: 2 }])
+	h.add(a.bytes), h.add(b.bytes), h.add(c.bytes)
+	// something goes on a: not forgotten
+	assertEquals(h.forget(a.name), false)
+	assertEquals(h.forget(b.name), true)
+	assertEquals(h.forget(b.name), false)
+	assertEquals(h.get(b.name), undefined)
+	assertEquals(h.heads().map((k) => hex(k.name)), [hex(c.name)])
+	assertEquals(h.forget(c.name), true)
+	assertEquals(h.heads().map((k) => hex(k.name)), [hex(a.name)])
+	assertEquals(h.all().map((k) => hex(k.name)), [hex(a.name)])
+	// told again, it comes in again
+	assertEquals(h.add(b.bytes), "taken")
+	assertEquals(h.heads().map((k) => hex(k.name)), [hex(b.name)])
+})

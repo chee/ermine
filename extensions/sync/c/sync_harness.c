@@ -635,6 +635,38 @@ static void conflicts(const op_value *r, FILE *out) {
 	fputs("]}", out);
 }
 
+// the "ephemeral" table's entry at the id: {under, on: [{by, name, tables, lamport}]}, name a commit
+static void overlay(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	nd_entry *e = tb_get(h->table, tb_string("ephemeral"), tb_string(id_of(op_get(r, "id"))));
+	if (e == NULL || e->value == NULL) {
+		fputs("{}", out);
+		return;
+	}
+	fputs("{\"overlay\":{\"under\":", out);
+	op_json_write(out, op_get(e->value, "under"));
+	fputs(",\"on\":[", out);
+	const op_value *list = op_get(e->value, "on");
+	for (size_t i = 0; list != NULL && list->type == OP_LIST && i < list->count; i++) {
+		const op_value *o = list->items[i], *name = op_get(o, "name");
+		if (i) fputc(',', out);
+		fputs("{\"by\":", out);
+		op_json_write(out, op_get(o, "by"));
+		fputs(",\"name\":", out);
+		uint8_t *bytes;
+		size_t n;
+		if (name != NULL && name->type == OP_STR && cf_unhex(name->str, &bytes, &n) && n == 32) put_label(out, bytes);
+		else op_json_write(out, name);
+		fputs(",\"tables\":", out);
+		op_json_write(out, op_get(o, "tables"));
+		fputs(",\"lamport\":", out);
+		op_json_write(out, op_get(o, "lamport"));
+		fputc('}', out);
+	}
+	fputs("]}}", out);
+}
+
 static hy_history *history_of(const op_value *r, FILE *out, host_t **h) {
 	*h = of(r, "host", out);
 	if (*h == NULL) return NULL;
@@ -806,5 +838,6 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "ephemeral") == 0) ephemeral(r, out);
 	else if (strcmp(op, "advance") == 0) advance(r, out);
 	else if (strcmp(op, "standing") == 0) standing(r, out);
+	else if (strcmp(op, "overlay") == 0) overlay(r, out);
 	else hh_unknown(out, r);
 }

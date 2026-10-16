@@ -77,6 +77,9 @@ size_t hy_heads(const hy_history *h, const hy_kept ***out);
 const hy_kept *hy_get(const hy_history *h, const uint8_t name[32]);
 // every commit taken in, in the order taken: *out malloc'd, free it
 size_t hy_all(const hy_history *h, const hy_kept ***out);
+// a head taken in let go of, as if never told of it (its kept freed): its parents heads again where
+// nothing else goes on them. false: not taken, or something goes on it
+bool hy_forget(hy_history *h, const uint8_t name[32]);
 
 // told each commit taken in, in the order taken, released ones too
 typedef void (*hy_taken)(void *context, const hy_kept *kept);

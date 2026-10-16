@@ -53,8 +53,11 @@
 // { op: "heads", host, id, layer? }     → { heads }         the history's, in the agreed order;
 //                                                            layer: stored (default) or ephemeral
 // { op: "commits", host, id, layer? }   → { commits }       how many the history has taken in
-// { op: "standing", host, id }          → { standing }      each device's standing ephemeral tip
-//                                                            at the id: [[key, commit]], by key
+// { op: "standing", host, id }          → { standing }      each ephemeral commit standing at the
+//                                                            id: [[key, commit]], by key, then name
+// { op: "overlay", host, id }           → { overlay } | {}   the "ephemeral" table's entry at the id:
+//                                                            { under, on: [{ by, name, tables,
+//                                                            lamport }] }, name a commit; {}: none
 // { op: "commit", host, id, commit, layer? } → { commit } | {}   a commit taken in, in JSON
 // { op: "get", host, id, commit }       → { tables } | {}   sync.get: the node's tables at it
 // { op: "stored", host, id }            → { stored }        how many loose commits are stored
@@ -76,9 +79,10 @@ import { type Answer, type Request, serve } from "../../../conformance/typescrip
 import { hex, jsonOf, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { pipe, quiet, tablesJson } from "./harnesses.ts"
 import { createSigner } from "./seal.ts"
-import { type Conflict, createSync, type Sync } from "./sync.ts"
+import { type Conflict, createSync, type Ephemeral, type Sync } from "./sync.ts"
 import { egwalker } from "./egwalker.ts"
 import type { Merges } from "./replay.ts"
+import type { Kept } from "./history.ts"
 
 // every rule a host may be given
 const RULES: Merges = { "eg-walker": egwalker }
@@ -180,12 +184,15 @@ const nameOf = (x: unknown) => {
 	return unhex(n)
 }
 
-// what the host made in f: how many commits, the last labelled
+// what the host made in f: how many commits, the last labelled. the ephemeral ones as its ephemeral
+// history takes them in (one replaced is let go of at once)
 function counting(h: Host, id: string, r: Request, f: () => void): Answer {
 	// an id that is not a document's has no history: nothing is made for it
 	const history = ID.test(id) ? h.sync.device.history(id) : undefined
 	const eph = ID.test(id) ? h.sync.device.history(id, "ephemeral") : undefined
-	const before = history?.all().length ?? 0, ephBefore = eph?.all().length ?? 0
+	const before = history?.all().length ?? 0
+	const taken: Kept[] = []
+	const off = eph?.taken((k) => taken.push(k))
 	const was = Date.now
 	const now = (r.time ?? TIME) * 1000
 	Date.now = () => now
@@ -193,12 +200,13 @@ function counting(h: Host, id: string, r: Request, f: () => void): Answer {
 		f()
 	} finally {
 		Date.now = was
+		off?.()
 	}
-	const all = history?.all() ?? [], ephAll = eph?.all() ?? []
+	const all = history?.all() ?? []
 	const made = all.length - before
 	// the ephemeral history takes every stored commit too
-	const fleeting = ephAll.length - ephBefore - made
-	const last = ephAll.length > ephBefore ? ephAll[ephAll.length - 1] : all[all.length - 1]
+	const fleeting = taken.filter((k) => history!.get(k.name) === undefined).length
+	const last = taken.length ? taken[taken.length - 1] : all[all.length - 1]
 	if (made + fleeting > 0 && typeof r.name === "string") {
 		const n = hex(last.name)
 		names.set(r.name, n)
@@ -357,6 +365,22 @@ async function answer(r: Request): Promise<Answer> {
 			return {
 				standing: of(r.host).sync.standing(idOf(r.id)).map(([key, n]) => [key, label(n)]),
 			}
+		case "overlay": {
+			const e = of(r.host).table.get("ephemeral", idOf(r.id))
+			if (e === undefined || e.value === undefined) return {}
+			const v = e.value as Ephemeral
+			return {
+				overlay: {
+					under: toJson(v.under),
+					on: v.on.map((o) => ({
+						by: o.by,
+						name: label(o.name),
+						tables: o.tables,
+						lamport: o.lamport,
+					})),
+				},
+			}
+		}
 		case "commit": {
 			const k = of(r.host).sync.device.history(idOf(r.id), r.layer ?? "stored").get(
 				nameOf(r.commit),

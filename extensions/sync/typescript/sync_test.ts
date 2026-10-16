@@ -368,3 +368,40 @@ Deno.test({
 		await b.sync.close()
 	},
 })
+
+Deno.test({
+	name: "sync: 2000 ephemeral writes in one drag: each let go of once replaced, so both " +
+		"ephemeral histories hold the stored and the one standing, and the last writes cost what " +
+		"the first did",
+	...opts,
+	async fn() {
+		let held = false
+		// a clock that never moves: no beats, no ttl. the bound is loose: a loaded machine is noisy
+		const now = () => 1_760_000_000_000
+		const a = await host(1, undefined, false, false, {
+			ephemeral: (_doc, part) => held && part === "value",
+			now,
+		})
+		const b = await host(2, undefined, false, false, { now })
+		const id = a.sync.mint()
+		await b.sync.follow(id)
+		await connect(a, b)
+		a.write("value", id, [{ path: [], value: { x: 0, y: 0 } }])
+		await quiet(a, b)
+		held = true
+		const times: number[] = []
+		for (let k = 0; k < 4; k++) {
+			const t0 = performance.now()
+			for (let i = 0; i < 500; i++) a.write("value", id, [{ path: ["x"], value: k * 500 + i }])
+			await quiet(a, b)
+			times.push(performance.now() - t0)
+			assertEquals(a.device.history(id, "ephemeral").all().length, 2)
+			assertEquals(b.device.history(id, "ephemeral").all().length, 2)
+		}
+		assertEquals(b.read("value", id), { x: 1999, y: 0 })
+		assertEquals(b.sync.standing(id).length, 1)
+		const first = Math.min(times[0], times[1])
+		assert(times[3] < 4 * first + 250, `500 writes each: ${times.map(Math.round)} ms`)
+		await a.sync.close(), await b.sync.close()
+	},
+})

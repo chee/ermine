@@ -264,6 +264,56 @@
 			}
 		},
 		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 4
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e2",
+							"tables": [
+								"value"
+							],
+							"lamport": 3
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 4
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "e2",
+							"tables": [
+								"value"
+							],
+							"lamport": 3
+						}
+					]
+				}
+			}
+		},
+		{
 			"op": "ephemeral",
 			"host": "a",
 			"tables": [],
@@ -379,6 +429,24 @@
 			"expect": {
 				"standing": []
 			}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "overlay",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {}
 		},
 		{
 			"op": "heads",

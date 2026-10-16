@@ -1,5 +1,5 @@
 {
-	"title": "two hosts write an ephemeral table apart: once each is heard (a beat sends it again), every host shows the later (lamport, then name); a write is later than every one its host has seen",
+	"title": "two hosts write an ephemeral table apart: once each is heard (a beat sends it again), every host shows the later (lamport, then name); a write is later than every one its host has seen, and over its own standing one carries the whole value",
 	"steps": [
 		{
 			"op": "host",
@@ -264,6 +264,72 @@
 			}
 		},
 		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 0
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "ea",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						},
+						{
+							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"name": "eb",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "overlay",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 0
+						}
+					},
+					"on": [
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "ea",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						},
+						{
+							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"name": "eb",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						}
+					]
+				}
+			}
+		},
+		{
 			"op": "write",
 			"host": "a",
 			"id": "x",
@@ -336,6 +402,39 @@
 			}
 		},
 		{
+			"op": "overlay",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"overlay": {
+					"under": {
+						"value": {
+							"x": 0,
+							"y": 0
+						}
+					},
+					"on": [
+						{
+							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"name": "eb",
+							"tables": [
+								"value"
+							],
+							"lamport": 2
+						},
+						{
+							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "ea2",
+							"tables": [
+								"value"
+							],
+							"lamport": 3
+						}
+					]
+				}
+			}
+		},
+		{
 			"op": "commit",
 			"host": "c",
 			"id": "x",
@@ -355,15 +454,16 @@
 					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457402,
 					"parents": [
-						"ea"
+						"w0"
 					],
 					"lamport": 3,
 					"patches": [
 						{
-							"path": [
-								"x"
-							],
-							"value": 3
+							"path": [],
+							"value": {
+								"x": 3,
+								"y": 0
+							}
 						}
 					]
 				}

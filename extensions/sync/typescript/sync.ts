@@ -26,15 +26,17 @@
 // use(rule) switches the rule, or merging off, while running
 //
 // ephemeral (plan.org, Ephemeral): a change to a table the host says is ephemeral goes out as an
-// ephemeral commit: on the device's previous one at the node while that stands, else on what a
-// stored write would be on; never sealed, never stored. what shows: the stored heads, and on top,
-// for each table a device's standing ephemeral commits touched, the later device's (lamport, then
-// name; with a rule, the stored heads and every standing one merged by it). the table holds what
-// shows; the stored tables under an overlaid one are sync's own (under). a device's ephemeral
-// commits stop standing when a stored commit of its follows them (its lamport above what they went
-// on), or when nothing is heard from it for ttl ms; while one of this device's stands it is sent
-// again every beat ms. a write to a table that does not show what the commit goes on carries its
-// whole value. nothing ephemeral outlives the sync
+// ephemeral commit, on what a stored write would be on (never on another ephemeral one), its patches
+// taking that stored state to what the device shows; never sealed, never stored. each stands alone:
+// it replaces its device's previous one at the node's table, and one heard late shows at once. what
+// shows: the stored heads, and on top, for each table, the later standing one (lamport, then name;
+// with a rule, the stored heads and every standing one merged by it). the table holds what shows;
+// the stored tables under an overlaid one are sync's own (under), and the "ephemeral" table at the
+// id lists them and what stands while anything does. a device's ephemeral commits stop standing when
+// a stored commit of its follows them (its lamport above what they went on), or when nothing is
+// heard from it for ttl ms; while one of this device's stands it is sent again every beat ms. one
+// that stands no more is let go of (device.forget): the ephemeral history is the stored and what
+// stands. nothing ephemeral outlives the sync
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Patch } from "@ermine/op/apply"
@@ -57,9 +59,18 @@ export type Conflict = {
 	tables: Record<string, unknown>
 }
 
+// what stands ephemeral at a node: the stored value under each overlaid table, and each standing
+// ephemeral commit (its signer's key and its name, hex; its table; its lamport) in the order they
+// apply, the one that shows last
+export type Ephemeral = {
+	under: Record<string, unknown>
+	on: { by: string; name: string; tables: string[]; lamport: number }[]
+}
+
 declare module "@ermine/table" {
 	interface Tables {
 		conflicts: Conflict[]
+		ephemeral: Ephemeral
 	}
 }
 
@@ -119,8 +130,8 @@ export type Sync = {
 	// the beats due sent, the devices quiet past ttl dropped: the ms until it is due again, or
 	// undefined for none
 	tick(): number | undefined
-	// each device whose ephemeral commits stand at the id (this one's too): its key (hex) and its
-	// newest one's name, by key
+	// each ephemeral commit standing at the id (this device's too): its signer's key (hex) and its
+	// name, by key, then name
 	standing(id: string): [string, Uint8Array][]
 	// the timers stopped, the device closed
 	close(): Promise<void>
@@ -239,25 +250,29 @@ export function createSync(options: Options): Sync {
 	const ephemeral = options.ephemeral ?? (() => false)
 	const clock = options.now ?? Date.now
 	const beat = options.beat ?? 1000, ttl = options.ttl ?? 4000
-	// a device's standing ephemeral commits at a node: the newest (tip), the highest lamport of the
-	// stored commits they went on (base), the tables they touched, the tables at the tip (sync's
-	// own), when it was last heard from (this device's: last sent)
-	type Chain = { tip: Kept; base: number; tables: Set<string>; node: Tables; at: number }
-	// a node with any: the chains by signer (hex); what each overlaid table shows (a tip's name,
-	// or "merge" and the names merged); the stored entries under the overlaid tables
-	type Overlay = { chains: Map<string, Chain>; over: Map<string, string>; under: Tables }
+	// a standing ephemeral commit: it, the highest lamport of the stored commits it went on (base),
+	// its table's entry at it (sync's own; none: no value)
+	type Stand = { kept: Kept; base: number; entry: Entry<unknown> | undefined }
+	// a device's standing ephemeral commits at a node, by table, and when it was last heard from
+	// (this device's: last sent)
+	type Peer = { stands: Map<string, Stand>; at: number }
+	// a node with any: the devices' by signer (hex); what each overlaid table shows (a commit's
+	// name, "merge" and the names merged, or "" to be shown again); the stored entries under the
+	// overlaid tables
+	type Overlay = { peers: Map<string, Peer>; over: Map<string, string>; under: Tables }
 	const overlays = new Map<string, Overlay>()
 	// the highest lamport of a stored commit from each signer at a node: an ephemeral commit that
 	// went on less is followed already
 	const latest = new Map<string, Map<string, number>>()
-	// an ephemeral commit's tables, made in its check, by name, until it arrives
-	const fresh = new Map<string, Tables>()
+	// an ephemeral commit's table's entry, made in its check, by name, until it arrives
+	const fresh = new Map<string, { entry: Entry<unknown> | undefined }>()
 	let timer: ReturnType<typeof setTimeout> | undefined
 	const overlayOf = (doc: string) => {
 		let o = overlays.get(doc)
-		if (!o) overlays.set(doc, o = { chains: new Map(), over: new Map(), under: {} })
+		if (!o) overlays.set(doc, o = { peers: new Map(), over: new Map(), under: {} })
 		return o
 	}
+	const standsOf = (o: Overlay) => [...o.peers.values()].flatMap((p) => [...p.stands.values()])
 	// the stored entry at (part, doc): under the overlay, or the table's
 	const storedEntry = (doc: string, part: Key) => {
 		const o = overlays.get(doc)
@@ -283,8 +298,8 @@ export function createSync(options: Options): Sync {
 		}
 	})
 	device.heard((doc, from) => {
-		const c = overlays.get(doc)?.chains.get(from)
-		if (c !== undefined && from !== me) c.at = clock()
+		const p = overlays.get(doc)?.peers.get(from)
+		if (p !== undefined && from !== me) p.at = clock()
 	})
 
 	function grew(doc: string, name: Uint8Array, bytes: number) {
@@ -531,6 +546,7 @@ export function createSync(options: Options): Sync {
 			for (const doc of docs) {
 				if (rule !== undefined && device.history(doc).heads().length > 1) showMerge(doc)
 				conflicts(doc)
+				listed(doc)
 			}
 		} finally {
 			applying = was
@@ -633,7 +649,8 @@ export function createSync(options: Options): Sync {
 			// shown again, whatever it showed
 			o.over.set(t, "")
 		}
-		o.chains.delete(me)
+		forgotten(id, o.peers.get(me))
+		o.peers.delete(me)
 		show(id)
 	}
 
@@ -653,11 +670,21 @@ export function createSync(options: Options): Sync {
 
 	// ---- ephemeral
 
-	// a copy of an entry, sync's own: its value new, its change as a commit carries it
-	const copied = (e: Entry<unknown>): Entry<unknown> =>
-		tablesOf(snapshot({ e: { value: e.value, change: carried(e.change) as ChangeHeader } })).e
+	// ephemeral commits that stand no more are let go of, so what is kept of them is the standing
+	// ones (beside the stored)
+	const forgotten = (doc: string, p: Peer | undefined) => {
+		for (const s of p?.stands.values() ?? []) device.forget(doc, s.kept.name)
+	}
 
-	// the later of two devices' tips: higher lamport, then the greater name
+	// a copy of an entry, sync's own: its value new (through its encoding, never packed: a pack
+	// deflates), its change as a commit carries it
+	const copied = (e: Entry<unknown>): Entry<unknown> =>
+		({
+			value: e.value === undefined ? undefined : cbor.decode(cbor.encode(e.value as cbor.Value)),
+			change: carried(e.change) as ChangeHeader,
+		}) as Entry<unknown>
+
+	// the later of two ephemeral commits: higher lamport, then the greater name
 	const after = (a: Kept, b: Kept) =>
 		a.lamport !== b.lamport ? a.lamport > b.lamport : compare(a.name, b.name) > 0
 
@@ -679,91 +706,70 @@ export function createSync(options: Options): Sync {
 		return false
 	}
 
-	// an ephemeral commit's chain, walked back to the stored commits it went on: their highest
-	// lamport (0 for none), and the tables its ephemeral commits touched
-	function rootOf(doc: string, kept: Kept): { base: number; tables: Set<string> } {
-		const eph = device.history(doc, "ephemeral"), stored = device.history(doc)
-		let base = 0
-		const touched = new Set<string>(), seen = new Set<string>(), todo = [kept]
-		while (todo.length) {
-			const k = todo.pop()!, n = hex(k.name)
-			if (seen.has(n)) continue
-			seen.add(n)
-			if (stored.get(k.name) !== undefined) {
-				base = Math.max(base, k.lamport)
-				continue
-			}
-			touched.add(k.table)
-			for (const p of k.parents) {
-				const q = eph.get(p)
-				if (q !== undefined) todo.push(q)
-			}
+	// an ephemeral commit's table's entry at its parents, new: the stored entry when they are what
+	// the table shows as stored, else from the ephemeral history (which holds the stored commits too)
+	function startOf(doc: string, kept: Kept, commit: Commit): Entry<unknown> | undefined {
+		const t = commit.table
+		if (commit.parents.length === 0) return undefined
+		const on = merged.get(doc), head = shown.get(doc)
+		const stored = commit.merge === undefined
+			? on === undefined && head !== undefined && commit.parents.length === 1 &&
+				compare(commit.parents[0], head.name) === 0
+			: commit.merge === rule && on !== undefined && sameHeads(on, commit.parents)
+		if (stored && tables.includes(t as Key)) {
+			const e = storedEntry(doc, t as Key)
+			return e?.value === undefined ? undefined : copied(e)
 		}
-		return { base, tables: touched }
-	}
-
-	// the tables at an ephemeral commit's parents, new: its device's tip's own when it goes on that,
-	// else from the ephemeral history (which holds the stored commits too)
-	function startOf(doc: string, kept: Kept, commit: Commit): Tables {
 		const eph = device.history(doc, "ephemeral")
 		if (commit.merge !== undefined) {
 			return merges[commit.merge](
 				eph,
 				commit.parents.map((p) => eph.get(p)!),
 				(ns) => ns.length === 1 ? plain(eph, ns[0], snapshots(doc)) : undefined,
-			)
+			)[t]
 		}
-		if (kept.base === undefined) return {}
-		return replay(eph, kept.base, snapshots(doc), merges) ?? {}
+		if (kept.base === undefined) return undefined
+		return replay(eph, kept.base, snapshots(doc), merges)?.[t]
 	}
 
-	// an ephemeral commit from elsewhere: does it apply to the tables it goes on. they are kept for
-	// its arrival
+	// an ephemeral commit from elsewhere: does it apply to its table's entry at its parents. what it
+	// makes is kept for its arrival
 	function fleeting(doc: string, kept: Kept, commit: Commit): boolean {
 		// signed with this device's key elsewhere: never stands here
 		if (hex(commit.signer) === me) return true
-		const chain = overlays.get(doc)?.chains.get(hex(commit.signer))
-		const on = chain !== undefined && commit.merge === undefined && commit.parents.length === 1 &&
-			compare(commit.parents[0], chain.tip.name) === 0
-		const node = on ? chain.node : startOf(doc, kept, commit)
+		let value: unknown
 		try {
-			const value = apply(node[commit.table]?.value, commit.patches as Patch[], { cow: false })
-			if (value === undefined) delete node[commit.table]
-			else node[commit.table] = { value, change: changeOf(commit) }
+			value = apply(startOf(doc, kept, commit)?.value, commit.patches as Patch[], { cow: false })
 		} catch {
 			return false
 		}
-		fresh.set(hex(kept.name), node)
+		const entry = value === undefined
+			? undefined
+			: { value, change: changeOf(commit) } as Entry<unknown>
+		fresh.set(hex(kept.name), { entry })
 		return true
 	}
 
-	// an ephemeral commit from elsewhere, taken in: its device's tip now, unless a stored commit of
-	// its follows it already. on the tip shown, its patches go to the table's entry
+	// an ephemeral commit from elsewhere, taken in: it stands for its device's table in place of the
+	// one before, unless that one is the later, or a stored commit of its device follows it already
 	function heard(doc: string, kept: Kept) {
-		const node = fresh.get(hex(kept.name))
-		fresh.delete(hex(kept.name))
-		const commit = decode(kept.bytes), who = hex(commit.signer)
-		if (who === me || node === undefined) return
-		const o = overlayOf(doc), was = o.chains.get(who)
-		const on = was !== undefined && kept.parents.length === 1 &&
-			compare(kept.parents[0], was.tip.name) === 0
-		const { base, tables: touched } = on ? was : rootOf(doc, kept)
-		if ((latest.get(doc)?.get(who) ?? -1) > base) {
-			if (o.chains.size === 0 && o.over.size === 0) overlays.delete(doc)
-			return
-		}
-		touched.add(kept.table)
-		o.chains.set(who, { tip: kept, base, tables: touched, node, at: clock() })
-		const t = kept.table
-		if (on && rule === undefined && o.over.get(t) === hex(was.tip.name)) {
-			const entry = table.get(t as Key, doc)
-			if (entry !== undefined && entry.value !== undefined) {
-				update(entry, commit.patches as never, changeOf(commit))
-				if (entry.value === undefined) table.del(t as Key, doc)
-				else options.commit?.([entry])
-				o.over.set(t, hex(kept.name))
-			}
-		}
+		const n = hex(kept.name), made = fresh.get(n)
+		fresh.delete(n)
+		const who = hex(decode(kept.bytes).signer)
+		// one that never stands here is let go of at once
+		const gone = () => void device.forget(doc, kept.name)
+		if (who === me || made === undefined || !tables.includes(kept.table as Key)) return gone()
+		const eph = device.history(doc, "ephemeral")
+		const base = Math.max(0, ...kept.parents.map((p) => eph.get(p)?.lamport ?? 0))
+		if ((latest.get(doc)?.get(who) ?? -1) > base) return gone()
+		const o = overlayOf(doc)
+		let p = o.peers.get(who)
+		if (p === undefined) o.peers.set(who, p = { stands: new Map(), at: clock() })
+		p.at = clock()
+		const was = p.stands.get(kept.table)
+		if (was !== undefined && !after(kept, was.kept)) return gone()
+		p.stands.set(kept.table, { kept, base, entry: made.entry })
+		if (was !== undefined) device.forget(doc, was.kept.name)
 		show(doc)
 		arm()
 	}
@@ -776,9 +782,15 @@ export function createSync(options: Options): Sync {
 		if ((m.get(who) ?? -1) < kept.lamport) m.set(who, kept.lamport)
 		const o = overlays.get(doc)
 		if (o === undefined) return
-		const chain = o.chains.get(who)
-		if (chain !== undefined && kept.lamport > chain.base) o.chains.delete(who), show(doc)
-		else if (rule !== undefined && o.chains.size) show(doc)
+		const p = o.peers.get(who)
+		let gone = false
+		for (const [t, s] of p?.stands ?? []) {
+			if (kept.lamport <= s.base) continue
+			p!.stands.delete(t)
+			device.forget(doc, s.kept.name)
+			gone = true
+		}
+		if (gone || (rule !== undefined && o.peers.size)) show(doc)
 	}
 
 	// the stored tables the table shows (under any overlay), new
@@ -790,8 +802,12 @@ export function createSync(options: Options): Sync {
 		return head === undefined ? {} : replayed(doc, head.name)
 	}
 
-	// a change to an ephemeral table here: one ephemeral commit on this device's tip at the node, or
-	// on what a stored write goes on. lamport above every tip there, so the newest write is the later
+	// a change to an ephemeral table here: one ephemeral commit on what a stored write goes on, in
+	// place of this device's standing one at the table. its patches take the stored to what the
+	// device shows: as made, when the table showed the stored; else tried on what the device showed
+	// (its standing one, or the stored), the whole value if they don't apply; and over a standing one
+	// of this device's, the whole value it makes (with a rule: that one's patches, then these).
+	// lamport above every standing one there, so the newest write is the later
 	function fleet(
 		id: string,
 		part: Key,
@@ -800,26 +816,29 @@ export function createSync(options: Options): Sync {
 	) {
 		follow(id).catch(() => {})
 		const t = part as string
-		const o = overlayOf(id), mine = o.chains.get(me)
+		const o = overlayOf(id), was = o.peers.get(me)?.stands.get(t)
 		const history = device.history(id)
-		let parents: readonly Kept[], merge: string | undefined
-		if (mine !== undefined) parents = [mine.tip]
-		else {
-			const on = merged.get(id), head = shown.get(id) ?? history.heads()[0]
-			parents = on ?? (head ? [head] : [])
-			if (on !== undefined) merge = rule
-		}
-		// the patches were made on what the table shows: what the commit goes on, or they are tried
-		// on that (this device's tip, or the stored under others' commits)
-		const fine = mine !== undefined ? o.over.get(t) === hex(mine.tip.name) : !o.over.has(t)
+		const on = merged.get(id), head = shown.get(id) ?? history.heads()[0]
+		const parents = on ?? (head ? [head] : [])
 		const now = table.get(part, id)
 		let value = now?.value
+		// the table showed the stored, or this device's standing one: it shows the device's now
+		const have = o.over.get(t)
+		const fine = have === undefined || (was !== undefined && have === hex(was.kept.name))
+		let applied = true
 		if (!fine) {
-			const on = mine !== undefined ? mine.node[t]?.value : o.under[t]?.value
-			;[patches, value] = tried(on, patches, now)
+			const out = tried(was !== undefined ? was.entry?.value : o.under[t]?.value, patches, now)
+			applied = out[0] === patches
+			;[patches, value] = out
 		}
-		let top = Math.max(0, ...parents.map((k) => k.lamport))
-		for (const c of o.chains.values()) top = Math.max(top, c.tip.lamport)
+		if (was !== undefined) {
+			patches = rule !== undefined && applied && !fine
+				? [...decode(was.kept.bytes).patches as Patch[], ...patches]
+				: [value === undefined ? { path: [] } : { path: [], value }]
+		}
+		const base = Math.max(0, ...parents.map((k) => k.lamport))
+		let top = base
+		for (const s of standsOf(o)) top = Math.max(top, s.kept.lamport)
 		const commit: Commit = {
 			table: t,
 			...carried(change),
@@ -829,7 +848,7 @@ export function createSync(options: Options): Sync {
 			lamport: 1 + top,
 			patches: patches as Commit["patches"],
 		}
-		if (merge !== undefined) commit.merge = merge
+		if (on !== undefined) commit.merge = rule
 		const bytes = encode(commit), name = nameOf(bytes)
 		if (device.take(id, bytes, "ephemeral", { commit, name }) !== "taken") return
 		const kept = device.history(id, "ephemeral").get(name)!
@@ -839,32 +858,33 @@ export function createSync(options: Options): Sync {
 			if (before === undefined) delete o.under[t]
 			else o.under[t] = before
 		}
-		const node = mine?.node ?? tablesOf(snapshot(fromTable(id)))
-		if (value === undefined) delete node[t]
-		else node[t] = copied({ value, change: changeOf(commit) })
-		const touched = mine?.tables ?? new Set<string>()
-		touched.add(t)
-		const base = mine?.base ?? Math.max(0, ...parents.map((k) => k.lamport))
-		o.chains.set(me, { tip: kept, base, tables: touched, node, at: clock() })
-		// the table shows the new tip when the patches were made on the one before; else shown again
+		let mine = o.peers.get(me)
+		if (mine === undefined) o.peers.set(me, mine = { stands: new Map(), at: 0 })
+		const entry = value === undefined
+			? undefined
+			: copied({ value, change: changeOf(commit) } as Entry<unknown>)
+		mine.stands.set(t, { kept, base, entry })
+		if (was !== undefined) device.forget(id, was.kept.name)
+		mine.at = clock()
+		// the table shows the new one when the patches were made on what it showed; else shown again
 		o.over.set(t, fine ? hex(name) : "")
 		show(id)
 		arm()
 	}
 
-	// the table shows, for each table a standing chain touched, the later tip's (with a rule, the
-	// stored heads and the tips merged), and the stored again where none stands. again: worked out
-	// again even where it shows the same tips
+	// the table shows, for each table, the later standing one's (with a rule, the stored heads and
+	// every standing one merged), and the stored again where none stands. again: worked out again
+	// even where it shows the same ones
 	function show(doc: string, again = false) {
 		const o = overlays.get(doc)
-		if (o === undefined) return
+		if (o === undefined) return listed(doc)
 		const was = applying
 		applying = true
 		try {
 			let merged: Tables | undefined, mark = ""
-			const chains = [...o.chains.values()]
-			if (rule !== undefined && chains.length) {
-				const tips = chains.map((c) => c.tip)
+			const stands = standsOf(o)
+			if (rule !== undefined && stands.length) {
+				const tips = stands.map((s) => s.kept)
 				const heads = device.history(doc).heads().filter((h) =>
 					!tips.some((t) => reaches(doc, t, h))
 				)
@@ -882,12 +902,12 @@ export function createSync(options: Options): Sync {
 			for (const part of tables) {
 				const t = part as string
 				let want: string | undefined, entry: Entry<unknown> | undefined
-				let top: Chain | undefined
-				for (const c of chains) {
-					if (c.tables.has(t) && (top === undefined || after(c.tip, top.tip))) top = c
+				let top: Stand | undefined
+				for (const s of stands) {
+					if (s.kept.table === t && (top === undefined || after(s.kept, top.kept))) top = s
 				}
 				if (top !== undefined && merged !== undefined) want = mark, entry = merged[t]
-				else if (top !== undefined) want = hex(top.tip.name), entry = top.node[t]
+				else if (top !== undefined) want = hex(top.kept.name), entry = top.entry
 				const have = o.over.get(t)
 				if (want === have && !again) continue
 				if (want === undefined && have === undefined) continue
@@ -911,7 +931,54 @@ export function createSync(options: Options): Sync {
 					table.add(part, doc, createEntry(entry.value as never, entry.change))
 				} else table.sub(part, doc, createEntry(entry.value as never, entry.change))
 			}
-			if (o.chains.size === 0 && o.over.size === 0) overlays.delete(doc)
+			for (const [who, p] of o.peers) if (p.stands.size === 0) o.peers.delete(who)
+			if (o.peers.size === 0 && o.over.size === 0) overlays.delete(doc)
+			listed(doc)
+		} finally {
+			applying = was
+		}
+	}
+
+	// the "ephemeral" table at the id, while anything stands there: the stored under each overlaid
+	// table, and every standing ephemeral commit, the later last. none when nothing stands
+	function listed(doc: string) {
+		const o = overlays.get(doc)
+		const on = o === undefined
+			? []
+			: [...o.peers].flatMap(([by, p]) =>
+				[...p.stands.values()].map((s) => ({ by, kept: s.kept }))
+			)
+		on.sort((a, b) => after(a.kept, b.kept) ? 1 : -1)
+		const under: Record<string, unknown> = {}
+		for (const part of tables) {
+			const t = part as string, e = o?.under[t]
+			if (o?.over.has(t) && e?.value !== undefined) under[t] = e.value
+		}
+		const value: Ephemeral = {
+			under,
+			on: on.map(({ by, kept }) => ({
+				by,
+				name: hex(kept.name),
+				tables: [kept.table],
+				lamport: kept.lamport,
+			})),
+		}
+		const have = table.get("ephemeral", doc)
+		if (on.length > 0 && have !== undefined && same(have.value, value)) return
+		const was = applying
+		applying = true
+		try {
+			if (on.length === 0) {
+				if (have !== undefined) table.del("ephemeral", doc)
+				return
+			}
+			// sync's own: the values under are copied, or the last list's kept when they are the same
+			const before = have?.value as Ephemeral | undefined
+			if (before !== undefined && same(before.under, under)) value.under = before.under
+			else for (const t of Object.keys(under)) under[t] = copied(o!.under[t]).value
+			const entry = createEntry(value, { time: Math.floor(Date.now() / 1000), actor: null })
+			if (have) table.sub("ephemeral", doc, entry)
+			else table.add("ephemeral", doc, entry)
 		} finally {
 			applying = was
 		}
@@ -921,8 +988,8 @@ export function createSync(options: Options): Sync {
 	function wait(now: number): number | undefined {
 		let next: number | undefined
 		for (const o of overlays.values()) {
-			for (const [who, c] of o.chains) {
-				const due = c.at + (who === me ? beat : ttl)
+			for (const [who, p] of o.peers) {
+				const due = p.at + (who === me ? beat : ttl)
 				if (next === undefined || due < next) next = due
 			}
 		}
@@ -932,10 +999,16 @@ export function createSync(options: Options): Sync {
 		const now = clock()
 		for (const [doc, o] of [...overlays]) {
 			let dropped = false
-			for (const [who, c] of [...o.chains]) {
+			for (const [who, p] of [...o.peers]) {
 				if (who === me) {
-					if (now - c.at >= beat) device.again(doc, c.tip.name), c.at = now
-				} else if (now - c.at >= ttl) o.chains.delete(who), dropped = true
+					if (now - p.at < beat) continue
+					for (const s of p.stands.values()) device.again(doc, s.kept.name)
+					p.at = now
+				} else if (now - p.at >= ttl) {
+					forgotten(doc, p)
+					o.peers.delete(who)
+					dropped = true
+				}
 			}
 			if (dropped) show(doc)
 		}
@@ -1044,10 +1117,9 @@ export function createSync(options: Options): Sync {
 		},
 		tick,
 		standing: (id) =>
-			[...overlays.get(id)?.chains ?? []].map(([who, c]): [string, Uint8Array] => [
-				who,
-				c.tip.name,
-			]).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+			[...overlays.get(id)?.peers ?? []].flatMap(([who, p]) =>
+				[...p.stands.values()].map((s): [string, Uint8Array] => [who, s.kept.name])
+			).sort(([a, x], [b, y]) => a < b ? -1 : a > b ? 1 : compare(x, y)),
 		async close() {
 			clearTimeout(timer)
 			timer = undefined

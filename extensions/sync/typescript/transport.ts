@@ -96,6 +96,10 @@ export type Device = {
 	// an ephemeral commit of this device's (in the ephemeral history, not a stored one) published
 	// again, queued as a take is; false: no such commit
 	again(doc: string, name: Uint8Array): boolean
+	// an ephemeral commit (not a stored one) let go of: out of the ephemeral history and whatever
+	// was kept for it, as if never heard; heard again, it comes in again. false: none such, or
+	// something goes on it
+	forget(doc: string, name: Uint8Array): boolean
 	// the tables at a commit, when a fragment headed by it carried a snapshot: new objects each time
 	snapshot(doc: string, name: Uint8Array): Tables | undefined
 	// bytes to whoever listens on a topic (a string, named by hash so it is never a document's):
@@ -1015,6 +1019,15 @@ export function createDevice(
 			const kept = d.histories.ephemeral.get(name)
 			if (kept === undefined || d.histories.stored.get(name) !== undefined) return false
 			outgoing(() => publish(d, kept))
+			return true
+		},
+		forget(doc, name) {
+			const d = named(doc), n = hex(name)
+			if (d.histories.stored.get(name) !== undefined) return false
+			if (!d.histories.ephemeral.forget(name)) return false
+			d.elsewhere.ephemeral.delete(n)
+			d.own.ephemeral.delete(n)
+			d.heard.delete(n)
 			return true
 		},
 		snapshot(doc, name) {

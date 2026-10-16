@@ -293,25 +293,41 @@ write after a merge is relative to: "`merge-type: eg-walker` or something? i'm h
 - *lean*: "the use of subduction might be making me conflate ephemeral and not saved and local."
 
 * Ephemeral
-- built 10-16, TS + C (extensions/sync, sync scenarios 23-30), the design chee approved (10-16
+- built 10-16, TS + C (extensions/sync, sync scenarios 23-33), the design chee approved (10-16
   brief):
   - writing: sync option ephemeral(doc, table) (C: sy_options.ephemeral). such a change: one
-    ephemeral commit. parents: this device's standing one at the node, else what a stored write
-    goes on. programs unchanged
-  - showing: stored heads, every device's latest standing one on top. two at once: the later
-    (lamport, then name). with a rule: merged by it. only-ephemeral commits checked on what they go on
+    ephemeral commit. parents: what a stored write goes on, never another ephemeral commit; its
+    patches take that stored state to what the device shows. each stands alone, in place of its
+    device's previous one (fix 1, 10-16, chee: "yes make fix 1"). programs unchanged
+  - showing: stored heads, the latest standing one on top. two at once: the later (lamport, then
+    name). with a rule: merged by it. only-ephemeral commits checked on what they go on
   - ending: a stored commit of that device's that follows them (arriving or made here); ttl (4000
-    ms) with nothing heard. beats: the standing tip sent again every beat (1000 ms), stopped by its
+    ms) with nothing heard. beats: the standing ones sent again every beat (1000 ms), stopped by its
     own stored commit
-  - late joiners: nothing until a commit they can take. a restart: nothing ephemeral
+  - late joiners: take the next beat (fix 1). a restart: nothing ephemeral
+  - visible (10-16 brief): the "ephemeral" part at the doc's id while anything stands, deleted when
+    nothing does: {under: {[table]: the stored value under the overlay}, on: [{by: signer hex, name:
+    commit hex, tables: [table], lamport}]}, on in the order they apply (the winner last). sync's
+    own events, like conflicts, never sent. harness op overlay
 - *mine*:
-  - follows: same signer, lamport above base (the highest stored lamport the chain went on). one
-    arriving already followed: dropped
-  - an ephemeral commit's lamport: 1 + every tip at the node too, so the newest write is the later
-  - per table: only tables a standing chain touched show it; the stored under them is sync's own; the
-    table holds what shows. with a rule: stored heads not under a tip, and the tips, merged
-  - a write made on something else than it goes on (another's tip shows, or the stored under one):
-    its patches tried on what it goes on, the whole value if they don't apply
+  - follows: same signer, lamport above base (the highest lamport of its parents). one arriving
+    already followed, or older than its device's standing one at the table: dropped
+  - an ephemeral commit's lamport: 1 + every standing one at the node too, so the newest write is
+    the later
+  - one standing a (device, table): a device writing two ephemeral tables has two; standing(id)
+    lists each (by key, then name); a part's tables is always one table
+  - patches: as made when the table showed the stored; else tried on what the device showed (its
+    own standing one, or the stored under another's), the whole value if they don't apply; over its
+    own standing one, the whole value it makes (with a rule: that one's patches, then these, so
+    merges stay per key)
+  - the stored under overlaid tables is sync's own; the table holds what shows. a receiver starts
+    from the stored entry when the commit goes on what shows as stored, else a replay of its parents
+  - let go of (10-16): an ephemeral commit replaced, dropped (ttl, ended) or never standing (older,
+    followed, this device's key) is forgotten: out of the ephemeral history (history.forget, a head
+    only) and the transport's marks (device.forget; C: tp_forget, done at the end of a tp_run once
+    nothing queued holds it). the ephemeral history is the stored and the standing ones. scenario
+    33, sync_test's 2000 writes
+  - copies of values: through their encoding (cbor), never a pack (a pack deflates: ~10x a write)
   - time: TS option now (ms) + tick(), no timers then; else sync's own setTimeout. C: the device
     clock, in sy_run. beat, ttl options. standing(id), close()
   - transport: heard(listener) (every ephemeral commit heard, sent again too), again(doc, name). C:
@@ -319,10 +335,10 @@ write after a merge is relative to: "`merge-type: eg-walker` or something? i'm h
   - lab-pig: the pig's value table ephemeral while this device holds it; a drag writes {x, y, by,
     colour} once a frame; the drop writes {x, y}, stored. presence: pointers only
 - open:
-  - a joiner mid-chain never takes that chain (its commits wait on ones never sent again): only a
-    stored commit, then a new chain, shows. a beat sends the tip only
   - with a rule, ephemeral typing at once: patches made on the merge are tried on the device's own
-    tip, so positions shift
+    standing one, so positions shift
+  - a stored commit from elsewhere mid-drag: the dragging device still shows its value made on the
+    old stored, and its next commit (whole) carries that over the new heads, until the drop
 - earlier thinking, not built: a patch node {patches, on, at} placed by places; carried forward as
   big-duet's caret is (the anchors library); lanes and optimistic values at transactions
 - presence and running process names: rows in a part on the anchor's node, one per device, never
