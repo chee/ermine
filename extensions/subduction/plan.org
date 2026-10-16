@@ -385,5 +385,42 @@ write after a merge is relative to: "`merge-type: eg-walker` or something? i'm h
   "this isss true"
 - circles, *lean*: "circles might be different"
 
+* Open, 10-16 (found while building ephemeral, pigs, erminex)
+- sync, TS harness: history_harness.ts since doesn't check the heads are taken (TypeError where C
+  answers "not taken")
+- sync, merge rule: two devices typing ephemerally at once see text positions shift
+- sync, ephemeral: a stored commit from another device mid-drag: the dragger keeps its value made on
+  the old stored and carries it onto the new heads until the drop
+- sync, C: a forgotten ephemeral commit lives until the end of the next tp_run (TS: at once); a
+  harness read right after a write, without quiet, could differ
+- sync, memory: a --keep erminex window still grows 20-50 B a frame on sync's side (memory-test,
+  offline device); not chased
+- sync, transport: heard/again only exercised through the sync scenarios, no transport scenario
+- follow race: once, ermine-look didn't get a window's children within 15 s (the old
+  missed-commit-at-follow look); not seen in later runs
+- egwalker: equality of the kept walker with the pure rule rests on rule 1, unproved
+- slaygrounds inspector: the "ephemeral on top" badge names by presence rows at the node's own id; a
+  room's pointers are at the room, so lab-pig's badge shows a short key, not a name
+- slaygrounds map tab: ~11 fps at 800 cards (layout redone each change); scheduler column swaps
+  rows twice a second
+- lab-pig: walkers' bodies can overlap a shamed pig (avoidance is by feet); the corner fold can jump
+  up to ~0.2 on the diagonal (a smoother fold changes the frozen walk, C too); a pig binned:true
+  while the room still lists it (page closed in the 420 ms gap) stays invisible; two devices adding
+  at once: mended by a random-delay rewrite + settle, two equal versions can remain; anyone can bin
+  the first pig, which hides it in every room
+- lab-pig web: the NetHack player's @ tile is small and its label hard to read
+- pigs (C): device.c is a cut-down copy of playground/term/host.c, which now has ephemeral
+  (th_set_as, th_ephemeral) and could replace it; the room fills the whole terminal in the nethack
+  look (real rooms ~80x21); one pixel-look interop run failed a mid-drag position check (0.037 vs
+  0.03), reruns passed
+- erminex: frames cross the network whole (sync sends a standing ephemeral commit's whole value),
+  up to ~58 KB a frame; ermine-term and ermine-look don't follow a shared scrub; the page draws
+  quadrant/shade blocks as glyphs, not cell backgrounds
+- host.ts as a todo list: lab-pig's host lists what the world/API lacks (sync in the world, an
+  ephemeral write, presence, a new kept id, settle, place/unplace, send/hear); not yet in
+  playground/ermine-slaygrounds/NEEDS.api.md
+- a subduction_cli on port 8618 has been running since Thursday (not ours); the slaygrounds dev
+  server on 8051 went down during testing and wasn't restarted
+
 * Looked at and not taken
 - HgCRDT / HgCPRDT (hypergraph CRDTs): "hmm seems like a bad fit"
