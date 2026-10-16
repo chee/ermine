@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cat Clock</title>
+		<meta name="description"
+			content="xclock's cat, in C, as nodes you can open and change: the build and the clock follow" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400..800;1,400..800&display=swap"
+		/>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<header>
+			<h1><span aria-hidden="true">🐈‍⬛</span> catclock</h1>
+			<p class="lead">
+				xclock's cat (X11, 1988) in plain C. Its source, compiler, runner and builds are nodes in an
+				ermine graph.
+			</p>
+		</header>
+
+		<main>
+			<!-- the graph and the editor, one window: the map is the editor's file browser -->
+			<section id="desk" class="window joined" aria-label="the graph, and a node of it open">
+				<div id="map" class="pane map-pane">
+					<div class="bar">
+						<span class="views mapviews" role="group" aria-label="the map shows">
+							<button data-map="graph" aria-pressed="true"
+								title="the nodes, and the lines between them">graph</button>
+							<button data-map="chain" aria-pressed="false"
+								title="what satisfy found, why, and the box">chain</button>
+						</span>
+					</div>
+					<div class="body">
+						<svg class="paper" role="group"
+							aria-label="the nodes: click one to open it, or a build to run it"></svg>
+					</div>
+				</div>
+				<div class="pane doc-pane">
+					<div class="bar">
+						<span id="title" class="title idle">nothing open</span>
+						<button id="close" class="close" aria-label="close" title="close" hidden>
+							<svg viewBox="0 0 10 10" aria-hidden="true">
+								<path d="M2,2 L8,8 M8,2 L2,8" />
+							</svg>
+						</button>
+					</div>
+					<div id="hint" class="empty">
+						<p>
+							Open a node from the list. Saving a C file or canvas.js rebuilds and restarts the clock.
+						</p>
+						<button id="start" class="button">Open colours.h</button>
+					</div>
+					<div id="window" hidden>
+						<div class="about">
+							<code id="where"></code>
+							<span id="load" class="tag" hidden></span>
+						</div>
+						<div id="code" class="code"></div>
+						<div class="footer">
+							<button id="save" class="button accent">save <kbd>⌘S</kbd></button>
+							<span class="unsaved">unsaved changes</span>
+							<span id="program" class="fp" hidden></span>
+							<label class="switch"
+								title="save as you type: each keystroke is a build, the one before it cancelled"><input type="checkbox" id="autosave" /><span class="track"></span>autosave</label>
+						</div>
+						<div id="note" class="note quiet" aria-live="polite"></div>
+					</div>
+				</div>
+			</section>
+
+			<section id="stage" aria-label="the clock">
+				<!-- the frame printed twice, the second a little off register -->
+				<div class="print">
+					<div class="window star">
+						<div class="bar"><span class="title">Cat Clock</span></div>
+						<div class="body sky">
+							<div class="clock" id="clockbox">
+								<canvas id="clock" width="150" height="300"
+									aria-label="a cat clock: the eyes and tail swing, the hands tell the time"></canvas>
+							</div>
+						</div>
+					</div>
+				</div>
+				<p id="trouble" class="trouble" hidden></p>
+			</section>
+
+			<section id="files" class="window files" aria-label="the whole graph, as files">
+				<div class="bar">
+					<span class="title">Files</span>
+				</div>
+				<div class="toolbar">
+					<span class="nav">
+						<button class="round back" aria-label="back" title="back">
+							<svg viewBox="0 0 10 10" aria-hidden="true">
+								<path d="M6.5,1.5 L3,5 L6.5,8.5" />
+							</svg>
+						</button>
+						<button class="round forward" aria-label="forward" title="forward">
+							<svg viewBox="0 0 10 10" aria-hidden="true">
+								<path d="M3.5,1.5 L7,5 L3.5,8.5" />
+							</svg>
+						</button>
+					</span>
+					<nav class="crumbs" aria-label="where you are"></nav>
+					<span class="views" role="group" aria-label="view">
+						<button data-view="icons" aria-label="icons" title="icons">
+							<svg viewBox="0 0 14 14" aria-hidden="true">
+								<rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1.2" />
+								<rect x="8" y="1.5" width="4.5" height="4.5" rx="1.2" />
+								<rect x="1.5" y="8" width="4.5" height="4.5" rx="1.2" />
+								<rect x="8" y="8" width="4.5" height="4.5" rx="1.2" />
+							</svg>
+						</button>
+						<button data-view="list" aria-label="list" title="list">
+							<svg viewBox="0 0 14 14" aria-hidden="true">
+								<path d="M2,3 H12 M2,7 H12 M2,11 H12" />
+							</svg>
+						</button>
+						<button data-view="columns" aria-label="columns" title="columns">
+							<svg viewBox="0 0 14 14" aria-hidden="true">
+								<rect x="1.5" y="2" width="3.2" height="10" rx="1" />
+								<rect x="5.4" y="2" width="3.2" height="10" rx="1" />
+								<rect x="9.3" y="2" width="3.2" height="10" rx="1" />
+							</svg>
+						</button>
+						<button data-view="map" aria-label="map" title="map">
+							<svg viewBox="0 0 14 14" aria-hidden="true">
+								<circle cx="3" cy="7" r="1.8" />
+								<circle cx="11" cy="3" r="1.8" />
+								<circle cx="11" cy="11" r="1.8" />
+								<path
+									d="M4.6,6.2 C7,4.6 7.4,3.4 9.3,3.1 M4.6,7.8 C7,9.4 7.4,10.6 9.3,10.9" />
+							</svg>
+						</button>
+					</span>
+				</div>
+				<div class="panes">
+					<aside class="side" aria-label="places"></aside>
+					<div class="main"></div>
+					<aside class="info" aria-label="the one picked" aria-live="polite"></aside>
+				</div>
+				<div class="status"></div>
+			</section>
+		</main>
+
+		<!-- what moves between the windows: the runner's line to the clock, and what travels on it -->
+		<svg id="flow" class="flow" aria-hidden="true"></svg>
+
+		<script type="module" src="demo.js"></script>
+	</body>
+</html>
