@@ -60,3 +60,12 @@ __pycache__/
 .vite/
 # the native fixtures the root Makefile builds (playground/programs/c/fixtures)
 **/c/fixtures/*.so
+
+# local only (removed from history 2026-10-16)
+.claude/
+playground/files/c/files
+playground/files/c/files-check
+playground/term/memory-test
+extensions/sync/c/merge-bench-check
+playground/experimental_os/mac-archive/ermineOS
+playground/experimental_os/mac-archive/ermineOS-newos
