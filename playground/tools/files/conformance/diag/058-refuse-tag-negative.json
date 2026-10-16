@@ -1,0 +1,15 @@
+{
+	"title": "a negative number takes no tag",
+	"steps": [
+		{
+			"op": "read",
+			"text": "-1(h'00')",
+			"expect": {
+				"code": "not-diag",
+				"at": 2,
+				"line": 1,
+				"column": 3
+			}
+		}
+	]
+}

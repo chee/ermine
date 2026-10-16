@@ -1,0 +1,922 @@
+{
+	"title": "a crashed batch moving a node's home: its folder renamed already, its file not; loading finishes the moves",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 5,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"one",
+							[
+								{
+									"content": [
+										"n"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"two",
+							[
+								{
+									"content": [
+										"n"
+									],
+									"change": {
+										"time": 5,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "n",
+					"value": [
+						{
+							"content": "moving",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "n"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"inner",
+							[
+								{
+									"content": [
+										"i"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "n"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "i",
+					"value": [
+						{
+							"content": "in",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "i"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94500",
+									"plan": [
+										{
+											"id": "n",
+											"to": "one",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "n",
+											"to": "one.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "n",
+											"to": "two",
+											"what": "link",
+											"after": {
+												"link": "one"
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "n",
+											"to": "two.txt",
+											"what": "link",
+											"after": {
+												"link": "one.txt"
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "i",
+											"to": "one/inner.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "hpYY9qZ0mODD1ShdgyIynRpqFEPAH91ClMqwRQeD/3M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										}
+									],
+									"node:i": "a5626964616964696e666f806576616c756581a2646b657074825820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff7363747874666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n": "a5626964616e64696e666f806576616c756581a2646b657074825820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b63747874666368616e6765a3646e6f6465616e6474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f6465616e6474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481616e826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+									"shown:i": "a36466696c6569696e6e65722e74787464686f6d6583616e65696e6e6572f90000646c6169645820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+									"shown:n": "a56466696c65676f6e652e74787464686f6d65836172636f6e65f90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:r": "a266666f6c646572f567656e7472696573a2636f6e65636f6e656374776f6374776f"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94500647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+						"kind": "file",
+						"hex": "696e"
+					},
+					{
+						"path": ".ermine/values/ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b",
+						"kind": "file",
+						"hex": "6d6f76696e67"
+					},
+					{
+						"path": "one",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "one.txt",
+						"kind": "file",
+						"hex": "6d6f76696e67",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "one/inner.txt",
+						"kind": "file",
+						"hex": "696e",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					},
+					{
+						"path": "two",
+						"kind": "link",
+						"target": "one",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "two.txt",
+						"kind": "link",
+						"target": "one.txt",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "frame",
+			"records": {
+				"meta": "a264726f6f7461726474696d65f94600",
+				"plan": [
+					{
+						"id": "n",
+						"from": "two",
+						"what": "remove",
+						"after": null,
+						"before": {
+							"link": "one"
+						},
+						"number": 1
+					},
+					{
+						"id": "n",
+						"from": "two.txt",
+						"what": "remove",
+						"after": null,
+						"before": {
+							"link": "one.txt"
+						},
+						"number": 2
+					},
+					{
+						"id": "n",
+						"to": "two",
+						"from": "one",
+						"what": "rename",
+						"after": {
+							"folder": {
+								"ino": "one"
+							}
+						},
+						"before": {
+							"folder": {
+								"ino": "one"
+							}
+						},
+						"number": 3
+					},
+					{
+						"id": "n",
+						"to": "two.txt",
+						"form": "txt",
+						"from": "one.txt",
+						"what": "rename",
+						"after": {
+							"file": {
+								"/": {
+									"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+								}
+							}
+						},
+						"before": {
+							"file": {
+								"/": {
+									"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+								}
+							}
+						},
+						"number": 4
+					}
+				],
+				"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7480826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+				"shown:n": "a56466696c656774776f2e74787464686f6d658361726374776ff90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+				"shown:r": "a266666f6c646572f567656e7472696573a16374776f6374776f"
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94500",
+									"plan": [
+										{
+											"id": "n",
+											"to": "one",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "n",
+											"to": "one.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "n",
+											"to": "two",
+											"what": "link",
+											"after": {
+												"link": "one"
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "n",
+											"to": "two.txt",
+											"what": "link",
+											"after": {
+												"link": "one.txt"
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "i",
+											"to": "one/inner.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "hpYY9qZ0mODD1ShdgyIynRpqFEPAH91ClMqwRQeD/3M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										}
+									],
+									"node:i": "a5626964616964696e666f806576616c756581a2646b657074825820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff7363747874666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n": "a5626964616e64696e666f806576616c756581a2646b657074825820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b63747874666368616e6765a3646e6f6465616e6474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f6465616e6474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481616e826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+									"shown:i": "a36466696c6569696e6e65722e74787464686f6d6583616e65696e6e6572f90000646c6169645820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+									"shown:n": "a56466696c65676f6e652e74787464686f6d65836172636f6e65f90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:r": "a266666f6c646572f567656e7472696573a2636f6e65636f6e656374776f6374776f"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94500647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "n",
+											"from": "two",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"link": "one"
+											},
+											"number": 1
+										},
+										{
+											"id": "n",
+											"from": "two.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"link": "one.txt"
+											},
+											"number": 2
+										},
+										{
+											"id": "n",
+											"to": "two",
+											"from": "one",
+											"what": "rename",
+											"after": {
+												"folder": {
+													"ino": "one"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "one"
+												}
+											},
+											"number": 3
+										},
+										{
+											"id": "n",
+											"to": "two.txt",
+											"form": "txt",
+											"from": "one.txt",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"number": 4
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7480826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+									"shown:n": "a56466696c656774776f2e74787464686f6d658361726374776ff90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:r": "a266666f6c646572f567656e7472696573a16374776f6374776f"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+						"kind": "file",
+						"hex": "696e"
+					},
+					{
+						"path": ".ermine/values/ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b",
+						"kind": "file",
+						"hex": "6d6f76696e67"
+					},
+					{
+						"path": "one",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "one.txt",
+						"kind": "file",
+						"hex": "6d6f76696e67",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "one/inner.txt",
+						"kind": "file",
+						"hex": "696e",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					},
+					{
+						"path": "two",
+						"kind": "link",
+						"target": "one",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "two.txt",
+						"kind": "link",
+						"target": "one.txt",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 6,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"one",
+									[
+										{
+											"content": [],
+											"change": {
+												"node": "r",
+												"time": 6,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"two",
+									[
+										{
+											"content": [
+												"n"
+											],
+											"change": {
+												"node": "r",
+												"time": 5,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "n",
+							"value": [
+								{
+									"content": "moving",
+									"change": {
+										"node": "n",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [
+								[
+									"inner",
+									[
+										{
+											"content": [
+												"i"
+											],
+											"change": {
+												"node": "n",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "i",
+							"value": [
+								{
+									"content": "in",
+									"change": {
+										"node": "i",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94500",
+									"plan": [
+										{
+											"id": "n",
+											"to": "one",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "n",
+											"to": "one.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "n",
+											"to": "two",
+											"what": "link",
+											"after": {
+												"link": "one"
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "n",
+											"to": "two.txt",
+											"what": "link",
+											"after": {
+												"link": "one.txt"
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "i",
+											"to": "one/inner.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "hpYY9qZ0mODD1ShdgyIynRpqFEPAH91ClMqwRQeD/3M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										}
+									],
+									"node:i": "a5626964616964696e666f806576616c756581a2646b657074825820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff7363747874666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n": "a5626964616e64696e666f806576616c756581a2646b657074825820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b63747874666368616e6765a3646e6f6465616e6474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f6465616e6474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481616e826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+									"shown:i": "a36466696c6569696e6e65722e74787464686f6d6583616e65696e6e6572f90000646c6169645820869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+									"shown:n": "a56466696c65676f6e652e74787464686f6d65836172636f6e65f90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:r": "a266666f6c646572f567656e7472696573a2636f6e65636f6e656374776f6374776f"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94500647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "n",
+											"from": "two",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"link": "one"
+											},
+											"number": 1
+										},
+										{
+											"id": "n",
+											"from": "two.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"link": "one.txt"
+											},
+											"number": 2
+										},
+										{
+											"id": "n",
+											"to": "two",
+											"from": "one",
+											"what": "rename",
+											"after": {
+												"folder": {
+													"ino": "two"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "two"
+												}
+											},
+											"number": 3
+										},
+										{
+											"id": "n",
+											"to": "two.txt",
+											"form": "txt",
+											"from": "one.txt",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "7AUA9JnfWlVNpMzuiAY0uzaRU5zmhBvyrbjCRuoQg0s"
+													}
+												}
+											},
+											"number": 4
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282636f6e6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7480826374776f81a2666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737467636f6e74656e7481616e",
+									"shown:n": "a56466696c656774776f2e74787464686f6d658361726374776ff90000646c6169645820ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b66666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:r": "a266666f6c646572f567656e7472696573a16374776f6374776f"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94600647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/869618f6a67498e0c3d5285d8322329d1a6a1443c01fdd4294cab0450783ff73",
+						"kind": "file",
+						"hex": "696e"
+					},
+					{
+						"path": ".ermine/values/ec0500f499df5a554da4ccee880634bb3691539ce6841bf2adb8c246ea10834b",
+						"kind": "file",
+						"hex": "6d6f76696e67"
+					},
+					{
+						"path": "two",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "two.txt",
+						"kind": "file",
+						"hex": "6d6f76696e67",
+						"attrs": {
+							"party.chee.ermine.id": "n"
+						}
+					},
+					{
+						"path": "two/inner.txt",
+						"kind": "file",
+						"hex": "696e",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		}
+	]
+}

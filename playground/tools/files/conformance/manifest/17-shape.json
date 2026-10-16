@@ -1,0 +1,122 @@
+{
+	"title": "a shape: the first value or null's, each later version, each info's first, each first list",
+	"steps": [
+		{
+			"op": "shape",
+			"record": "a5626964617364696e666f828261788082617982a1646b6570748258202dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e26463626f72a1646b657074825820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19637478746576616c756583a1646b657074825820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e196362696ea1646b6570748258202dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e263747874a1646b6570748258204c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb6362696e66686561646572a0686368696c6472656e8382616182a167636f6e74656e7480a167636f6e74656e7481617a8261628082616382a167636f6e74656e748261706171a167636f6e74656e74816172",
+			"heads": [
+				[
+					"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"0102"
+				]
+			],
+			"expect": {
+				"shape": {
+					"kept": [
+						"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"bin"
+					],
+					"head": "0102",
+					"sides": [
+						[
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						[
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"bin"
+						]
+					],
+					"info": [
+						[
+							"y",
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"cbor"
+						]
+					],
+					"directory": [
+						[
+							"c",
+							[
+								"p",
+								"q"
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e80",
+			"heads": [],
+			"expect": {
+				"shape": {
+					"kept": [
+						"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+						"cbor"
+					],
+					"sides": [],
+					"info": [],
+					"directory": []
+				}
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656ea0",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e81816161",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e8182f93c0080",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e81826161a0",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e8182616181a167636f6e74656e7481f93c00",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c75658066686561646572a0686368696c6472656e81826161816178",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "shape",
+			"record": "a5626964616e64696e666f806576616c756581a066686561646572a0686368696c6472656e80",
+			"heads": [],
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

@@ -1,0 +1,35 @@
+{
+	"title": "an id with a lone surrogate cannot be encoded",
+	"steps": [
+		{
+			"op": "percent",
+			"id": "\ud800",
+			"fails": true
+		},
+		{
+			"op": "percent",
+			"id": "\udc00",
+			"fails": true
+		},
+		{
+			"op": "percent",
+			"id": "a\ud800b",
+			"fails": true
+		},
+		{
+			"op": "percent",
+			"id": "\udc00\ud800",
+			"fails": true
+		},
+		{
+			"op": "percent",
+			"id": "😀\ud83d",
+			"fails": true
+		},
+		{
+			"op": "percent",
+			"id": "a.\ude00",
+			"fails": true
+		}
+	]
+}

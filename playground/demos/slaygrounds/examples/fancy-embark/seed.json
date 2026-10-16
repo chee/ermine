@@ -1,0 +1,2072 @@
+{
+	"geocode/146037ebaf98a0e9": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=St%20Andrews%2C%20Fife&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:02.632Z",
+		"ms": 5,
+		"result": [
+			{
+				"place_id": 272809785,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 21511530,
+				"lat": "56.3403678",
+				"lon": "-2.7950440",
+				"category": "place",
+				"type": "town",
+				"place_rank": 18,
+				"importance": 0.5425566069700949,
+				"addresstype": "town",
+				"name": "St Andrews",
+				"display_name": "St Andrews, Fife, Scotland, KY16 9NU, United Kingdom",
+				"extratags": {
+					"is_in": "Fife, Scotland, UK",
+					"wikidata": "Q207736",
+					"wikipedia": "en:St Andrews",
+					"population": "16460",
+					"population:date": "2022"
+				},
+				"boundingbox": ["56.3003678", "56.3803678", "-2.8350440", "-2.7550440"]
+			}
+		]
+	},
+	"geocode/18b09936da08faaf": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Edinburgh%20Castle&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:32:57.126Z",
+		"ms": 5,
+		"result": [
+			{
+				"place_id": 275490215,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 4301292,
+				"lat": "55.9486884",
+				"lon": "-3.2004184",
+				"category": "tourism",
+				"type": "attraction",
+				"place_rank": 30,
+				"importance": 0.5291587855603935,
+				"addresstype": "tourism",
+				"name": "Edinburgh Castle",
+				"display_name": "Edinburgh Castle, Castlehill, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 2NG, United Kingdom",
+				"extratags": {
+					"fee": "yes",
+					"image": "https://commons.wikimedia.org/wiki/File%3AEdinburgh_Castle_from_the_south_east.JPG",
+					"phone": "+44 131 225 9846",
+					"website": "https://www.edinburghcastle.scot/",
+					"historic": "castle",
+					"wikidata": "Q212065",
+					"wikipedia": "en:Edinburgh Castle",
+					"wheelchair": "limited",
+					"castle_type": "fortress",
+					"opening_hours": "Apr 01-Sep 30 09:30-18:00; Oct 01-Dec 23,Dec 27-31,Jan 02-Mar 31 09:30-17:00; Dec 24 09:30-16:00; Jan 01 11:00-17:00; Dec 25-26 off",
+					"fee:conditional": "no @ (age < 7)",
+					"toilets:wheelchair": "yes",
+					"check_date:opening_hours": "2024-01-11"
+				},
+				"boundingbox": ["55.9479055", "55.9494444", "-3.2025476", "-3.1982626"]
+			}
+		]
+	},
+	"geocode/1de4460d43075aac": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Mother%20India's%20Cafe%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:00.431Z",
+		"ms": 6,
+		"result": [
+			{
+				"place_id": 274372568,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 499990285,
+				"lat": "55.9480977",
+				"lon": "-3.1860003",
+				"category": "amenity",
+				"type": "restaurant",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "amenity",
+				"name": "Mother India's Cafe",
+				"display_name": "Mother India's Cafe, 3-5, Infirmary Street, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 1LT, United Kingdom",
+				"extratags": {
+					"phone": "+44 131 524 9801",
+					"cuisine": "indian",
+					"fhrs:id": "68570",
+					"website": "https://www.motherindia.co.uk/restaurant/mother-india-edinburgh/",
+					"check_date": "2026-10-05",
+					"opening_hours": "Mo-We 12:00-14:00, 17:00-22:30; Th 12:00-22:30; Fr-Sa 12:00-23:00; Su 12:00-22:00",
+					"diet:vegetarian": "yes"
+				},
+				"boundingbox": ["55.9480477", "55.9481477", "-3.1860503", "-3.1859503"]
+			}
+		]
+	},
+	"geocode/320d5e40c23315b4": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=West%20Sands%2C%20St%20Andrews&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:04.839Z",
+		"ms": 8,
+		"result": [
+			{
+				"place_id": 275003389,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 26998937,
+				"lat": "56.3587614",
+				"lon": "-2.8094043",
+				"category": "natural",
+				"type": "beach",
+				"place_rank": 22,
+				"importance": 0.10672603265430683,
+				"addresstype": "beach",
+				"name": "West Sands",
+				"display_name": "West Sands, St Andrews, Fife, Scotland, United Kingdom",
+				"extratags": null,
+				"boundingbox": ["56.3443862", "56.3730581", "-2.8229006", "-2.8011525"]
+			}
+		]
+	},
+	"geocode/42bf9f60cfa8138a": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=St%20Andrews%20Cathedral%2C%20St%20Andrews&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:03.735Z",
+		"ms": 6,
+		"result": [
+			{
+				"place_id": 417323052,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 880894619,
+				"lat": "56.3400694",
+				"lon": "-2.7878282",
+				"category": "tourism",
+				"type": "attraction",
+				"place_rank": 30,
+				"importance": 0.3750543179568698,
+				"addresstype": "tourism",
+				"name": "St Andrews Cathedral (Ruins)",
+				"display_name": "St Andrews Cathedral (Ruins), Gregory Place, Ladyhead, St Andrews, Fife, Scotland, KY16 9PU, United Kingdom",
+				"extratags": {
+					"ruins": "church",
+					"heritage": "yes",
+					"historic": "ruins",
+					"wikidata": "Q2361738",
+					"wikipedia": "en:St Andrews Cathedral"
+				},
+				"boundingbox": ["56.3400194", "56.3401194", "-2.7878782", "-2.7877782"]
+			},
+			{
+				"place_id": 273657408,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 134642110,
+				"lat": "56.3396224",
+				"lon": "-2.7874803",
+				"category": "landuse",
+				"type": "grass",
+				"place_rank": 24,
+				"importance": 0.08005936598764016,
+				"addresstype": "grass",
+				"name": "St Andrews Cathedral",
+				"display_name": "St Andrews Cathedral, Ladyhead, St Andrews, Fife, Scotland, KY16 9QL, United Kingdom",
+				"extratags": { "landuse": "grass", "designation": "common" },
+				"boundingbox": ["56.3384875", "56.3405669", "-2.7891226", "-2.7848276"]
+			}
+		]
+	},
+	"geocode/42e92cf944d22309": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Scottish%20National%20Gallery&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:10.342Z",
+		"ms": 6,
+		"result": [
+			{
+				"place_id": 274527917,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 5182746,
+				"lat": "55.9508850",
+				"lon": "-3.1956117",
+				"category": "tourism",
+				"type": "gallery",
+				"place_rank": 30,
+				"importance": 0.4960954917878121,
+				"addresstype": "tourism",
+				"name": "National Gallery",
+				"display_name": "National Gallery, The Mound, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH2 2EL, United Kingdom",
+				"extratags": {
+					"fee": "no",
+					"website": "https://www.nationalgalleries.org/",
+					"building": "yes",
+					"operator": "National Galleries of Scotland",
+					"wikidata": "Q942713",
+					"wikipedia": "en:Scottish National Gallery",
+					"opening_hours": "Mo-Su 10:00-17:00; Th 10:00-19:00",
+					"operator:wikidata": "Q2051997"
+				},
+				"boundingbox": ["55.9505010", "55.9512615", "-3.1960085", "-3.1952251"]
+			}
+		]
+	},
+	"geocode/4b2f8f62124d6213": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Dean%20Village%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:07.042Z",
+		"ms": 9,
+		"result": [
+			{
+				"place_id": 274334837,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "relation",
+				"osm_id": 18573379,
+				"lat": "55.9522594",
+				"lon": "-3.2182207",
+				"category": "place",
+				"type": "suburb",
+				"place_rank": 19,
+				"importance": 0.3898810858579735,
+				"addresstype": "suburb",
+				"name": "Dean Village",
+				"display_name": "Dean Village, West End, City of Edinburgh, Scotland, United Kingdom",
+				"extratags": {
+					"is_in": "Edinburgh, Scotland",
+					"tourism": "yes",
+					"website": "https://www.visitscotland.com/info/see-do/dean-village-p1419651",
+					"historic": "district",
+					"wikidata": "Q5246524",
+					"wikipedia": "en:Dean Village",
+					"linked_place": "suburb",
+					"opening_hours": "24/7"
+				},
+				"boundingbox": ["55.9511803", "55.9531517", "-3.2199783", "-3.2142645"]
+			}
+		]
+	},
+	"geocode/69a1eeccd6a8589f": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Calton%20Hill%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:09.241Z",
+		"ms": 6,
+		"result": [
+			{
+				"place_id": 417998814,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 1519743672,
+				"lat": "55.9552543",
+				"lon": "-3.1827977",
+				"category": "leisure",
+				"type": "park",
+				"place_rank": 24,
+				"importance": 0.44205659932355756,
+				"addresstype": "park",
+				"name": "Calton Hill",
+				"display_name": "Calton Hill, Broughton, New Town/Broughton, City of Edinburgh, Scotland, EH7 5AA, United Kingdom",
+				"extratags": { "wikidata": "Q1199959", "wikipedia": "en:Calton Hill" },
+				"boundingbox": ["55.9537050", "55.9568249", "-3.1861422", "-3.1788532"]
+			},
+			{
+				"place_id": 275765359,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 1149620440,
+				"lat": "55.9555565",
+				"lon": "-3.1822564",
+				"category": "natural",
+				"type": "peak",
+				"place_rank": 18,
+				"importance": 0.44205659932355756,
+				"addresstype": "peak",
+				"name": "Calton Hill",
+				"display_name": "Calton Hill, City of Edinburgh, Scotland, EH7 5AA, United Kingdom",
+				"extratags": { "ele": "103", "wikidata": "Q1199959", "wikipedia": "en:Calton Hill" },
+				"boundingbox": ["55.9555065", "55.9556065", "-3.1823064", "-3.1822064"]
+			}
+		]
+	},
+	"geocode/938618c10a5103c1": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Stockbridge%20Market%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:05.939Z",
+		"ms": 8,
+		"result": [
+			{
+				"place_id": 271715896,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 2338447599,
+				"lat": "55.9576289",
+				"lon": "-3.2084430",
+				"category": "amenity",
+				"type": "marketplace",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "amenity",
+				"name": "Stockbridge Market",
+				"display_name": "Stockbridge Market, Saunders Street, Silvermills, Stockbridge/Inverleith, City of Edinburgh, Scotland, EH3 6TQ, United Kingdom",
+				"extratags": {
+					"tourism": "attraction",
+					"website": "https://www.stockbridgemarket.com/",
+					"start_date": "2011",
+					"opening_hours": "Su 10:00-17:00"
+				},
+				"boundingbox": ["55.9575789", "55.9576789", "-3.2084930", "-3.2083930"]
+			}
+		]
+	},
+	"geocode/ac6495a7d24978df": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Arthur's%20Seat&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:08.143Z",
+		"ms": 8,
+		"result": [
+			{
+				"place_id": 275683550,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 31209291,
+				"lat": "55.9440693",
+				"lon": "-3.1616030",
+				"category": "natural",
+				"type": "peak",
+				"place_rank": 18,
+				"importance": 0.39696805131781304,
+				"addresstype": "peak",
+				"name": "Arthur's Seat",
+				"display_name": "Arthur's Seat, City of Edinburgh, Scotland, EH8 8HG, United Kingdom",
+				"extratags": {
+					"ele": "251",
+					"wikidata": "Q712311",
+					"wikipedia": "en:Arthur's Seat",
+					"communication:amateur_radio:sota": "GM/SS-272",
+					"communication:amateur_radio:sota:points": "1"
+				},
+				"boundingbox": ["55.9440193", "55.9441193", "-3.1616530", "-3.1615530"]
+			}
+		]
+	},
+	"geocode/b89da521808d74f3": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=The%20Witchery%20by%20the%20Castle%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:33:01.532Z",
+		"ms": 5,
+		"result": [
+			{
+				"place_id": 275505859,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 1472180941,
+				"lat": "55.9488068",
+				"lon": "-3.1956257",
+				"category": "amenity",
+				"type": "restaurant",
+				"place_rank": 30,
+				"importance": 0.10540294855860563,
+				"addresstype": "amenity",
+				"name": "The Witchery",
+				"display_name": "The Witchery, 352, Castlehill, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 2NF, United Kingdom",
+				"extratags": {
+					"phone": "+44 131 225 5613",
+					"fhrs:id": "52853",
+					"website": "https://www.thewitchery.com/",
+					"wikidata": "Q7775304",
+					"wikipedia": "en:The Witchery by the Castle",
+					"check_date": "2024-09-24",
+					"opening_hours": "Mo-Su 12:00-23:30"
+				},
+				"boundingbox": ["55.9487568", "55.9488568", "-3.1956757", "-3.1955757"]
+			}
+		]
+	},
+	"geocode/c463501fe093b8ec": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Edinburgh%20Waverley&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:32:56.031Z",
+		"ms": 11,
+		"result": [
+			{
+				"place_id": 271596250,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 7149998196,
+				"lat": "55.9519018",
+				"lon": "-3.1904199",
+				"category": "railway",
+				"type": "station",
+				"place_rank": 30,
+				"importance": 0.4932102822428882,
+				"addresstype": "railway",
+				"name": "Edinburgh Waverley",
+				"display_name": "Edinburgh Waverley, South Ramp, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 1QB, United Kingdom",
+				"extratags": {
+					"train": "yes",
+					"network": "National Rail",
+					"ref:crs": "EDB",
+					"operator": "Network Rail",
+					"wikidata": "Q800716",
+					"platforms": "20",
+					"wikipedia": "en:Edinburgh Waverley railway station",
+					"wheelchair": "yes",
+					"opening_hours": "Mo-Sa 04:00-00:45; Su 06:00-00:45",
+					"network:website": "https://www.nationalrail.co.uk/stations/edb/",
+					"network:wikidata": "Q26334",
+					"public_transport": "station",
+					"railway:position": "mi:0",
+					"operator:wikidata": "Q1501071"
+				},
+				"boundingbox": ["55.9469018", "55.9569018", "-3.1954199", "-3.1854199"]
+			},
+			{
+				"place_id": 272152437,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "relation",
+				"osm_id": 240040,
+				"lat": "55.9520511",
+				"lon": "-3.1870896",
+				"category": "building",
+				"type": "roof",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "building",
+				"name": "Edinburgh Waverley",
+				"display_name": "Edinburgh Waverley, North Bridge, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH2 2EQ, United Kingdom",
+				"extratags": { "layer": "1" },
+				"boundingbox": ["55.9512417", "55.9528613", "-3.1917751", "-3.1854756"]
+			},
+			{
+				"place_id": 274811366,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 5208866,
+				"lat": "55.9520366",
+				"lon": "-3.1884080",
+				"category": "building",
+				"type": "train_station",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "building",
+				"name": "Edinburgh Waverley",
+				"display_name": "Edinburgh Waverley, North Bridge, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH2 2EQ, United Kingdom",
+				"extratags": { "layer": "1", "opening_hours": "Mo-Sa 04:00-00:45; Su 06:00-00:45" },
+				"boundingbox": ["55.9512417", "55.9528613", "-3.1917751", "-3.1854756"]
+			},
+			{
+				"place_id": 275165229,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 13578272092,
+				"lat": "55.9518253",
+				"lon": "-3.1919323",
+				"category": "railway",
+				"type": "stop",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "railway",
+				"name": "Edinburgh Waverley",
+				"display_name": "Edinburgh Waverley, Waverley Bridge, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH2 2QP, United Kingdom",
+				"extratags": { "train": "yes", "public_transport": "stop_position" },
+				"boundingbox": ["55.9517753", "55.9518753", "-3.1919823", "-3.1918823"]
+			},
+			{
+				"place_id": 275046039,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 11976713822,
+				"lat": "55.9515002",
+				"lon": "-3.1897049",
+				"category": "railway",
+				"type": "stop",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "railway",
+				"name": "Edinburgh Waverley",
+				"display_name": "Edinburgh Waverley, Waverley Concourse, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 1BB, United Kingdom",
+				"extratags": { "train": "yes", "public_transport": "stop_position" },
+				"boundingbox": ["55.9514502", "55.9515502", "-3.1897549", "-3.1896549"]
+			}
+		]
+	},
+	"geocode/db1cf58d70f14a70": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Oink%2C%20Victoria%20Street%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:32:59.330Z",
+		"ms": 6,
+		"result": [
+			{
+				"place_id": 274362973,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 2339288064,
+				"lat": "55.9485886",
+				"lon": "-3.1942458",
+				"category": "amenity",
+				"type": "fast_food",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "amenity",
+				"name": "Oink",
+				"display_name": "Oink, 34, Victoria Street, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 2JW, United Kingdom",
+				"extratags": {
+					"fhrs:id": "68744",
+					"check_date": "2026-02-05",
+					"wheelchair": "no",
+					"contact:phone": "+44 7771 968233",
+					"opening_hours": "Mo-Su 11:00-17:00",
+					"contact:website": "https://www.oinkhogroast.co.uk/shops/victoria-street/",
+					"contact:facebook": "https://www.facebook.com/people/Oink-Edinburgh/100089961915606/",
+					"contact:tripadvisor": "https://www.tripadvisor.com/Restaurant_Review-g186525-d1520621-Reviews-Oink_Edinburgh-Edinburgh_Scotland.html"
+				},
+				"boundingbox": ["55.9485386", "55.9486386", "-3.1942958", "-3.1941958"]
+			}
+		]
+	},
+	"geocode/e38b3a4c254714a0": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Victoria%20Street%2C%20Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:32:58.228Z",
+		"ms": 5,
+		"result": [
+			{
+				"place_id": 272941607,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 416314343,
+				"lat": "55.9486505",
+				"lon": "-3.1937686",
+				"category": "highway",
+				"type": "pedestrian",
+				"place_rank": 26,
+				"importance": 0.04539457909600718,
+				"addresstype": "road",
+				"name": "Victoria Street",
+				"display_name": "Victoria Street, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 2HE, United Kingdom",
+				"extratags": {
+					"lit": "yes",
+					"lanes": "2",
+					"oneway": "no",
+					"bicycle": "designated",
+					"incline": "up",
+					"surface": "sett",
+					"maxspeed": "20 mph",
+					"sidewalk": "both",
+					"wikidata": "Q12268861",
+					"smoothness": "bad",
+					"cycleway:both": "no",
+					"motor_vehicle": "destination",
+					"sidewalk:both:surface": "paving_stones"
+				},
+				"boundingbox": ["55.9485383", "55.9487228", "-3.1941691", "-3.1933593"]
+			},
+			{
+				"place_id": 277219986,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "way",
+				"osm_id": 231668414,
+				"lat": "55.9486788",
+				"lon": "-3.1927917",
+				"category": "highway",
+				"type": "pedestrian",
+				"place_rank": 26,
+				"importance": 0.04539457909600718,
+				"addresstype": "road",
+				"name": "Victoria Street",
+				"display_name": "Victoria Street, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 2EX, United Kingdom",
+				"extratags": {
+					"lit": "yes",
+					"lanes": "2",
+					"oneway": "no",
+					"bicycle": "designated",
+					"incline": "up",
+					"surface": "sett",
+					"maxspeed": "20 mph",
+					"sidewalk": "both",
+					"wikidata": "Q12268861",
+					"smoothness": "bad",
+					"cycleway:both": "no",
+					"motor_vehicle": "destination",
+					"sidewalk:both:surface": "paving_stones"
+				},
+				"boundingbox": ["55.9486287", "55.9487312", "-3.1933593", "-3.1922286"]
+			},
+			{
+				"place_id": 272941525,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "node",
+				"osm_id": 502531543,
+				"lat": "55.9487542",
+				"lon": "-3.1921184",
+				"category": "highway",
+				"type": "bus_stop",
+				"place_rank": 30,
+				"importance": 7.767071030742378e-05,
+				"addresstype": "highway",
+				"name": "Victoria Street",
+				"display_name": "Victoria Street, George IV Bridge, Abbeyhill, Old Town, City of Edinburgh, Scotland, EH1 1AD, United Kingdom",
+				"extratags": {
+					"bin": "yes",
+					"bus": "yes",
+					"lit": "yes",
+					"bench": "yes",
+					"shelter": "yes",
+					"wheelchair": "yes",
+					"tactile_paving": "no",
+					"public_transport": "platform",
+					"check_date:shelter": "2026-07-23",
+					"passenger_information_display": "yes"
+				},
+				"boundingbox": ["55.9487042", "55.9488042", "-3.1921684", "-3.1920684"]
+			}
+		]
+	},
+	"geocode/f84cebc11ff6971b": {
+		"api": "geocode",
+		"url": "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&extratags=1&q=Edinburgh&viewbox=-3.50,56.10,-2.90,55.80&bounded=0",
+		"at": "2026-10-14T05:32:54.951Z",
+		"ms": 32,
+		"result": [
+			{
+				"place_id": 272795348,
+				"licence": "Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright",
+				"osm_type": "relation",
+				"osm_id": 1920901,
+				"lat": "55.9533456",
+				"lon": "-3.1883749",
+				"category": "boundary",
+				"type": "administrative",
+				"place_rank": 12,
+				"importance": 0.7363481185006193,
+				"addresstype": "city",
+				"name": "City of Edinburgh",
+				"display_name": "City of Edinburgh, Scotland, United Kingdom",
+				"extratags": {
+					"ele": "47",
+					"burgh": "royal;county of city",
+					"capital": "4",
+					"ref:gss": "S12000036",
+					"website": "https://www.edinburgh.gov.uk/",
+					"wikidata": "Q23436",
+					"wikipedia": "en:Edinburgh",
+					"population": "488050",
+					"designation": "scottish_council",
+					"council_name": "City of Edinburgh Council",
+					"linked_place": "city",
+					"council_style": "city",
+					"council_name:gd": "Comhairle Baile Dhùn Èideann",
+					"burgh:start_date": "1124-1127",
+					"source_ref:capital": "http://comments.gmane.org/gmane.comp.gis.openstreetmap/55712",
+					"admin_level": "6"
+				},
+				"boundingbox": ["55.8187919", "56.0040837", "-3.4495326", "-3.0749528"]
+			}
+		]
+	},
+	"route/0689d7d6d3ea7881": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-3.19042,55.95190;-2.79504,56.34037?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:02.749Z",
+		"ms": 106,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 4834.5,
+							"summary": "",
+							"duration": 4834.5,
+							"distance": 85672
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.191617, 55.951536],
+							[-3.195825, 55.950214],
+							[-3.202574, 55.956824],
+							[-3.217486, 55.959496],
+							[-3.242533, 55.95614],
+							[-3.271557, 55.962509],
+							[-3.311411, 55.961231],
+							[-3.346508, 55.979064],
+							[-3.384294, 55.9781],
+							[-3.420321, 55.982997],
+							[-3.422686, 55.988718],
+							[-3.405607, 56.016487],
+							[-3.405688, 56.042751],
+							[-3.387767, 56.054342],
+							[-3.391787, 56.079883],
+							[-3.380874, 56.087622],
+							[-3.352963, 56.096089],
+							[-3.298399, 56.12041],
+							[-3.194006, 56.141911],
+							[-3.138174, 56.1459],
+							[-3.138375, 56.169356],
+							[-3.155738, 56.189585],
+							[-3.15394, 56.198349],
+							[-3.161261, 56.20649],
+							[-3.153607, 56.21671],
+							[-3.155736, 56.233792],
+							[-3.140427, 56.24332],
+							[-3.091087, 56.234168],
+							[-3.086413, 56.25358],
+							[-3.073584, 56.262918],
+							[-3.036416, 56.268896],
+							[-3.027933, 56.276504],
+							[-2.971268, 56.292026],
+							[-2.914131, 56.324821],
+							[-2.812424, 56.335606],
+							[-2.795036, 56.340394]
+						],
+						"type": "LineString"
+					},
+					"weight": 4834.5,
+					"duration": 4834.5,
+					"distance": 85672
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "_kkCgBCAE4gDAAAAAAAAAAAAAAAAAAAAKgMUQAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAAAAACIKAEAv0zP_7DAVQNsUc__HMJVAwAAjxUAAAAA",
+					"location": [-3.191617, 55.951536],
+					"name": "Waverley Bridge",
+					"distance": 85.01449384
+				},
+				{
+					"hint": "mK4QgJ6uEIAEAAAALQAAAAkAAAAvAAAAYDFDQCQL_0HZ9NNALscEQgQAAAAtAAAACQAAAC8AAACIKAEA5FnV_6qvWwPgWdX_kq9bAwIA_wUAAAAA",
+					"location": [-2.795036, 56.340394],
+					"name": "Market Street",
+					"distance": 2.683779484
+				}
+			]
+		}
+	},
+	"route/22c8665085b073d4": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-bike/route/v1/bike/-3.20042,55.94869;-3.19377,55.94865?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:45.987Z",
+		"ms": 28,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 332.1,
+							"summary": "",
+							"duration": 332.1,
+							"distance": 702.3
+						}
+					],
+					"weight_name": "duration",
+					"geometry": {
+						"coordinates": [
+							[-3.198999, 55.949147],
+							[-3.198433, 55.94921],
+							[-3.198115, 55.94929],
+							[-3.197866, 55.949448],
+							[-3.197284, 55.949672],
+							[-3.197102, 55.949795],
+							[-3.19702, 55.949892],
+							[-3.19688, 55.949961],
+							[-3.196667, 55.950031],
+							[-3.196369, 55.950041],
+							[-3.196084, 55.9503],
+							[-3.195972, 55.950328],
+							[-3.195877, 55.950237],
+							[-3.195761, 55.9502],
+							[-3.1951, 55.950193],
+							[-3.194475, 55.950018],
+							[-3.193946, 55.949985],
+							[-3.193119, 55.950043],
+							[-3.192928, 55.949998],
+							[-3.192879, 55.949946],
+							[-3.192754, 55.949567],
+							[-3.192229, 55.948674],
+							[-3.192572, 55.948631],
+							[-3.192996, 55.948719],
+							[-3.193269, 55.94873],
+							[-3.19377, 55.948651]
+						],
+						"type": "LineString"
+					},
+					"weight": 332.1,
+					"duration": 332.1,
+					"distance": 702.3
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "F6CZiWxn_JwGAAAAAAAAAAAAAAAAAAAAZsSEPwAAAAAAAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAA3EwAA6S_P_1u3VQNcKs__krVVAwAA7xIAAAAA",
+					"location": [-3.198999, 55.949147],
+					"name": "",
+					"distance": 102.372447
+				},
+				{
+					"hint": "qF4CgLmmUYAnAAAAAwAAAAAAAAAvAAAAlEbRQLBj-z4AAAAAT136QCcAAAADAAAAAAAAAC8AAAA3EwAAVkTP_2u1VQNWRM__arVVAwAAfw8AAAAA",
+					"location": [-3.19377, 55.948651],
+					"name": "Victoria Street",
+					"distance": 0.1113404642
+				}
+			]
+		}
+	},
+	"route/32dbd07ba7eb2677": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-foot/route/v1/foot/-3.20844,55.95763;-3.21822,55.95226?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:07.094Z",
+		"ms": 26,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 118.13,
+							"summary": "",
+							"duration": 1101.7,
+							"distance": 1377.4
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.208424, 55.957617],
+							[-3.208388, 55.957705],
+							[-3.208373, 55.957604],
+							[-3.208288, 55.95764],
+							[-3.208112, 55.957511],
+							[-3.208104, 55.957378],
+							[-3.207923, 55.957304],
+							[-3.207738, 55.956715],
+							[-3.207493, 55.956397],
+							[-3.208485, 55.956149],
+							[-3.209228, 55.955732],
+							[-3.20933, 55.955581],
+							[-3.209146, 55.955416],
+							[-3.209718, 55.955235],
+							[-3.209942, 55.955041],
+							[-3.209981, 55.954439],
+							[-3.209787, 55.954229],
+							[-3.209518, 55.954145],
+							[-3.2095, 55.954089],
+							[-3.20987, 55.953764],
+							[-3.210359, 55.953707],
+							[-3.210773, 55.953481],
+							[-3.210945, 55.953178],
+							[-3.210829, 55.952905],
+							[-3.211505, 55.952295],
+							[-3.212185, 55.952297],
+							[-3.212477, 55.952202],
+							[-3.212753, 55.952036],
+							[-3.212246, 55.95186],
+							[-3.212384, 55.951721],
+							[-3.21371, 55.952065],
+							[-3.213605, 55.952081],
+							[-3.213804, 55.952282],
+							[-3.215076, 55.95248],
+							[-3.215829, 55.952437],
+							[-3.216425, 55.952286],
+							[-3.216817, 55.952336],
+							[-3.217359, 55.952484],
+							[-3.218132, 55.95235],
+							[-3.218238, 55.952285]
+						],
+						"type": "LineString"
+					},
+					"weight": 118.13,
+					"duration": 1101.7,
+					"distance": 1377.4
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "y7l7nM65e5wAAAAACgAAAEQAAABFAAAAyrl_PcY-kz_iOgNBNuMDQQAAAAAKAAAAQQAAAEIAAAB-AAAAGAvP_3HYVQMIC8__fthVAw4Azw4AAAAA",
+					"location": [-3.208424, 55.957617],
+					"name": "",
+					"distance": 1.758674174
+				},
+				{
+					"hint": "DM9Oij0NaZwxAAAAGgAAACEAAAAAAAAAy5acQGLTJEDlN1BAAAAAACcAAAAVAAAAGgAAAAAAAAB-AAAAwuTO_53DVQPU5M7_hMNVAwIATwQAAAAA",
+					"location": [-3.218238, 55.952285],
+					"name": "Damside",
+					"distance": 3.001829129
+				}
+			]
+		}
+	},
+	"route/3a2d350e08a13e35": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-bike/route/v1/bike/-2.79504,56.34037;-2.78783,56.34007?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:42.917Z",
+		"ms": 33,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 202.4,
+							"summary": "",
+							"duration": 202.4,
+							"distance": 578.9
+						}
+					],
+					"weight_name": "duration",
+					"geometry": {
+						"coordinates": [
+							[-2.795036, 56.340394],
+							[-2.793998, 56.340333],
+							[-2.793914, 56.34112],
+							[-2.791908, 56.340866],
+							[-2.790658, 56.340641],
+							[-2.78908, 56.340396],
+							[-2.788948, 56.340351],
+							[-2.788878, 56.340376],
+							[-2.788052, 56.340243],
+							[-2.787667, 56.340284],
+							[-2.787656, 56.340073]
+						],
+						"type": "LineString"
+					},
+					"weight": 202.4,
+					"duration": 202.4,
+					"distance": 578.9
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "_FLQhN1SP4ULAAAAcwAAAAAAAAAAAAAAYDFDQCQL_0EAAAAAAAAAAAsAAABzAAAAAAAAAAAAAAA3EwAA5FnV_6qvWwPgWdX_kq9bAwAA_wUAAAAA",
+					"location": [-2.795036, 56.340394],
+					"name": "Market Street",
+					"distance": 2.683779484
+				},
+				{
+					"hint": "ZI6phfkYUY1pAAAAagAAAAAAAAAAAAAApwi8QbUku0EAAAAAAAAAAGkAAABqAAAAAAAAAAAAAAA3EwAAuHbV_2muWwMKdtX_Zq5bAwAALwsAAAAA",
+					"location": [-2.787656, 56.340073],
+					"name": "",
+					"distance": 10.77024244
+				}
+			]
+		}
+	},
+	"route/3cca20730a41bad3": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-3.19425,55.94859;-3.18600,55.94810?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:50.059Z",
+		"ms": 32,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 105.3,
+							"summary": "",
+							"duration": 89.7,
+							"distance": 599.5
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.194141, 55.947833],
+							[-3.193645, 55.947816],
+							[-3.193377, 55.947838],
+							[-3.193215, 55.947917],
+							[-3.192445, 55.948105],
+							[-3.191421, 55.948293],
+							[-3.188945, 55.94855],
+							[-3.187317, 55.948672],
+							[-3.186164, 55.94884],
+							[-3.185948, 55.948463],
+							[-3.185851, 55.948113]
+						],
+						"type": "LineString"
+					},
+					"weight": 105.3,
+					"duration": 89.7,
+					"distance": 599.5
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "myoCgHGQ_IUGAAAAAAAAAD0AAAAIAAAA4QeOQAAAAABKcy5C2verQAYAAAAAAAAAPQAAAAgAAACIKAEA40LP_zmyVQN2Qs__LrVVAwoA7xAAAAAA",
+					"location": [-3.194141, 55.947833],
+					"name": "Cowgatehead",
+					"distance": 84.55972011
+				},
+				{
+					"hint": "qgUcgEph6YUNAAAAvgAAAAAAAAAAAAAAFWA7QKPAHUIAAAAAAAAAAAcAAABfAAAAAAAAAAAAAACIKAEARWPP_1GzVQOwYs__RLNVAwAA_xUAAAAA",
+					"location": [-3.185851, 55.948113],
+					"name": "Robertson's Close",
+					"distance": 9.426308682
+				}
+			]
+		}
+	},
+	"route/52b0208dd480e146": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-foot/route/v1/foot/-3.20042,55.94869;-3.19377,55.94865?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:32:58.319Z",
+		"ms": 77,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 53.12,
+							"summary": "",
+							"duration": 471,
+							"distance": 586.3
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.198999, 55.949147],
+							[-3.198433, 55.94921],
+							[-3.198115, 55.94929],
+							[-3.197866, 55.949448],
+							[-3.197284, 55.949672],
+							[-3.197102, 55.949795],
+							[-3.19702, 55.949892],
+							[-3.19688, 55.949961],
+							[-3.196667, 55.950031],
+							[-3.196369, 55.950041],
+							[-3.196084, 55.9503],
+							[-3.195972, 55.950328],
+							[-3.195877, 55.950237],
+							[-3.195761, 55.9502],
+							[-3.19514, 55.950198],
+							[-3.194534, 55.950028],
+							[-3.194216, 55.949994],
+							[-3.193851, 55.949988],
+							[-3.193784, 55.949805],
+							[-3.193765, 55.949774],
+							[-3.193718, 55.94978],
+							[-3.193521, 55.949423],
+							[-3.193371, 55.949281],
+							[-3.193109, 55.948805],
+							[-3.193401, 55.948798],
+							[-3.193722, 55.948747],
+							[-3.193673, 55.948673],
+							[-3.19377, 55.948651]
+						],
+						"type": "LineString"
+					},
+					"weight": 53.12,
+					"duration": 471,
+					"distance": 586.3
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "zV41in1F4J4JAAAAAAAAAAAAAAAAAAAAZsSEPwAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAB-AAAA6S_P_1u3VQNcKs__krVVAwAA7xIAAAAA",
+					"location": [-3.198999, 55.949147],
+					"name": "",
+					"distance": 102.372447
+				},
+				{
+					"hint": "hmUCgOnTU4A3AAAABAAAAAAAAABBAAAAlEbRQLBj-z4AAAAAT136QDQAAAAEAAAAAAAAAD8AAAB-AAAAVkTP_2u1VQNWRM__arVVAwAAfw8AAAAA",
+					"location": [-3.19377, 55.948651],
+					"name": "Victoria Street",
+					"distance": 0.1113404642
+				}
+			]
+		}
+	},
+	"route/5611fa00641e6c4f": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-bike/route/v1/bike/-2.78783,56.34007;-2.80940,56.35876?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:38.859Z",
+		"ms": 33,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 684.9,
+							"summary": "",
+							"duration": 684.9,
+							"distance": 3068.3
+						}
+					],
+					"weight_name": "duration",
+					"geometry": {
+						"coordinates": [
+							[-2.787656, 56.340073],
+							[-2.787667, 56.340284],
+							[-2.788878, 56.340376],
+							[-2.788746, 56.341145],
+							[-2.789241, 56.341464],
+							[-2.793261, 56.342459],
+							[-2.798199, 56.342878],
+							[-2.802029, 56.343591],
+							[-2.802017, 56.343879],
+							[-2.805803, 56.344002],
+							[-2.806582, 56.344324],
+							[-2.808142, 56.345637],
+							[-2.806957, 56.345809],
+							[-2.807927, 56.348227],
+							[-2.807772, 56.349294],
+							[-2.81151, 56.357614],
+							[-2.810689, 56.357724]
+						],
+						"type": "LineString"
+					},
+					"weight": 684.9,
+					"duration": 684.9,
+					"distance": 3068.3
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "ZI6phfkYUY1pAAAAagAAAAAAAAAAAAAApwi8QbUku0EAAAAAAAAAAGkAAABqAAAAAAAAAAAAAAA3EwAAuHbV_2muWwMKdtX_Zq5bAwAALwsAAAAA",
+					"location": [-2.787656, 56.340073],
+					"name": "",
+					"distance": 10.77024244
+				},
+				{
+					"hint": "9iF7nfche50rAAAAAAAAAMwAAAAAAAAAFN4YQQAAAAAxVTRCAAAAACsAAAAAAAAAzAAAAAAAAAA3EwAAvxzV_1zzWwPIIdX_aPdbAwgATwMAAAAA",
+					"location": [-2.810689, 56.357724],
+					"name": "",
+					"distance": 140.1799329
+				}
+			]
+		}
+	},
+	"route/5b5696412db08792": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-foot/route/v1/foot/-2.78783,56.34007;-2.80940,56.35876?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:37.852Z",
+		"ms": 28,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 291.97,
+							"summary": "",
+							"duration": 2293.3,
+							"distance": 3088.2
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-2.787656, 56.340073],
+							[-2.787667, 56.340284],
+							[-2.788878, 56.340376],
+							[-2.788746, 56.341145],
+							[-2.789456, 56.341554],
+							[-2.793261, 56.342459],
+							[-2.798199, 56.342878],
+							[-2.799991, 56.343297],
+							[-2.800105, 56.343642],
+							[-2.801052, 56.344031],
+							[-2.801005, 56.344886],
+							[-2.802909, 56.345041],
+							[-2.80381, 56.344472],
+							[-2.804503, 56.344341],
+							[-2.806284, 56.344508],
+							[-2.806981, 56.34764],
+							[-2.81151, 56.357614],
+							[-2.810689, 56.357724]
+						],
+						"type": "LineString"
+					},
+					"weight": 291.97,
+					"duration": 2293.3,
+					"distance": 3088.2
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "dNEHhi-eLo7EAAAAwwAAAAAAAAAAAAAApwi8QbUku0EAAAAAAAAAALwAAAC7AAAAAAAAAAAAAAB-AAAAuHbV_2muWwMKdtX_Zq5bAwAALwsAAAAA",
+					"location": [-2.787656, 56.340073],
+					"name": "",
+					"distance": 10.77024244
+				},
+				{
+					"hint": "UW5rn1Jua59QAAAAAAAAAHgBAAAAAAAAFN4YQQAAAAAxVTRCAAAAAEwAAAAAAAAAaAEAAAAAAAB-AAAAvxzV_1zzWwPIIdX_aPdbAwgATwMAAAAA",
+					"location": [-2.810689, 56.357724],
+					"name": "",
+					"distance": 140.1799329
+				}
+			]
+		}
+	},
+	"route/5e60c61f5e4ce273": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-bike/route/v1/bike/-3.20844,55.95763;-3.21822,55.95226?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:29.729Z",
+		"ms": 27,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 486.2,
+							"summary": "",
+							"duration": 486.2,
+							"distance": 1031.7
+						}
+					],
+					"weight_name": "duration",
+					"geometry": {
+						"coordinates": [
+							[-3.208424, 55.957617],
+							[-3.208601, 55.957648],
+							[-3.208554, 55.957594],
+							[-3.208618, 55.957545],
+							[-3.208821, 55.957605],
+							[-3.209467, 55.957037],
+							[-3.210545, 55.956278],
+							[-3.210489, 55.956249],
+							[-3.210565, 55.956116],
+							[-3.210895, 55.955912],
+							[-3.211311, 55.955357],
+							[-3.212325, 55.953298],
+							[-3.212837, 55.952819],
+							[-3.213099, 55.952727],
+							[-3.213683, 55.952709],
+							[-3.215361, 55.952821],
+							[-3.215886, 55.95279],
+							[-3.216425, 55.952286],
+							[-3.217221, 55.952497],
+							[-3.218238, 55.952285]
+						],
+						"type": "LineString"
+					},
+					"weight": 486.2,
+					"duration": 486.2,
+					"distance": 1031.7
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "iGLLmotiy5oAAAAABwAAADEAAAAyAAAAyrl_PcY-kz_iOgNBNuMDQQAAAAAHAAAAMQAAADIAAAA3EwAAGAvP_3HYVQMIC8__fthVAw4Azw4AAAAA",
+					"location": [-3.208424, 55.957617],
+					"name": "",
+					"distance": 1.758674174
+				},
+				{
+					"hint": "VHaxidg-upoLAAAABwAAAAgAAAAAAAAAy5acQGLTJEDlN1BAAAAAAAsAAAAHAAAACAAAAAAAAAA3EwAAwuTO_53DVQPU5M7_hMNVAwIATwQAAAAA",
+					"location": [-3.218238, 55.952285],
+					"name": "Damside",
+					"distance": 3.001829129
+				}
+			]
+		}
+	},
+	"route/73da7731779b8839": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-bike/route/v1/bike/-3.19425,55.94859;-3.18600,55.94810?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:51.059Z",
+		"ms": 29,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 289.7,
+							"summary": "",
+							"duration": 289.7,
+							"distance": 784.8
+						}
+					],
+					"weight_name": "duration",
+					"geometry": {
+						"coordinates": [
+							[-3.194257, 55.948596],
+							[-3.193722, 55.948747],
+							[-3.193673, 55.948673],
+							[-3.194399, 55.948468],
+							[-3.194533, 55.948386],
+							[-3.194506, 55.948139],
+							[-3.194266, 55.947811],
+							[-3.194141, 55.947833],
+							[-3.193645, 55.947816],
+							[-3.193377, 55.947838],
+							[-3.193215, 55.947917],
+							[-3.192445, 55.948105],
+							[-3.191421, 55.948293],
+							[-3.188945, 55.94855],
+							[-3.187317, 55.948672],
+							[-3.186164, 55.94884],
+							[-3.185948, 55.948463],
+							[-3.185851, 55.948113]
+						],
+						"type": "LineString"
+					},
+					"weight": 289.7,
+					"duration": 289.7,
+					"distance": 784.8
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "LnQgiQEWX4l-AAAAEwAAACABAACmAAAAIz-pQTZrQ0DpvUBCJtDcQX4AAAATAAAAIAEAAKYAAAA3EwAAb0LP_zS1VQN2Qs__LrVVAxAAvwMAAAAA",
+					"location": [-3.194257, 55.948596],
+					"name": "Victoria Terrace",
+					"distance": 0.7986052817
+				},
+				{
+					"hint": "3qG9h452zocKAAAAjwAAABgAAAAAAAAAFWA7QKPAHUL2wtFAAAAAAAoAAACPAAAAGAAAAAAAAAA3EwAARWPP_1GzVQOwYs__RLNVAwIA_xUAAAAA",
+					"location": [-3.185851, 55.948113],
+					"name": "Robertson's Close",
+					"distance": 9.426308682
+				}
+			]
+		}
+	},
+	"route/78421de1852734c8": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-2.79504,56.34037;-2.78783,56.34007?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:41.914Z",
+		"ms": 31,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{ "steps": [], "weight": 105.9, "summary": "", "duration": 93, "distance": 565.1 }
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-2.795036, 56.340394],
+							[-2.793998, 56.340333],
+							[-2.793914, 56.34112],
+							[-2.791908, 56.340866],
+							[-2.790658, 56.340641],
+							[-2.78908, 56.340396],
+							[-2.788948, 56.340351],
+							[-2.788878, 56.340376],
+							[-2.788848, 56.340475],
+							[-2.788742, 56.340574],
+							[-2.788681, 56.340589],
+							[-2.787732, 56.340526]
+						],
+						"type": "LineString"
+					},
+					"weight": 105.9,
+					"duration": 93,
+					"distance": 565.1
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "mK4QgJ6uEIAEAAAALQAAAAkAAAAvAAAAYDFDQCQL_0HZ9NNALscEQgQAAAAtAAAACQAAAC8AAACIKAEA5FnV_6qvWwPgWdX_kq9bAwIA_wUAAAAA",
+					"location": [-2.795036, 56.340394],
+					"name": "Market Street",
+					"distance": 2.683779484
+				},
+				{
+					"hint": "Dd2bghzdm4IqAAAApgAAAAAAAAAMAAAAAC11QZqFbEIAAAAAohCEQBUAAABTAAAAAAAAAAYAAACIKAEAbHbV_y6wWwMKdtX_Zq5bAwAATxEAAAAA",
+					"location": [-2.787732, 56.340526],
+					"name": "Gregory Place",
+					"distance": 51.13528163
+				}
+			]
+		}
+	},
+	"route/812791e16ee4732e": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-foot/route/v1/foot/-3.19425,55.94859;-3.18600,55.94810?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:50.056Z",
+		"ms": 28,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 67.75,
+							"summary": "",
+							"duration": 571.1,
+							"distance": 711.6
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.194257, 55.948596],
+							[-3.193722, 55.948747],
+							[-3.193673, 55.948673],
+							[-3.19318, 55.948731],
+							[-3.192996, 55.948719],
+							[-3.192572, 55.948631],
+							[-3.192229, 55.948674],
+							[-3.19132, 55.947164],
+							[-3.191036, 55.947216],
+							[-3.190948, 55.947102],
+							[-3.188363, 55.947643],
+							[-3.188392, 55.947698],
+							[-3.188237, 55.947692],
+							[-3.186477, 55.947995],
+							[-3.186434, 55.947922],
+							[-3.185939, 55.948006],
+							[-3.185826, 55.948029],
+							[-3.185851, 55.948113]
+						],
+						"type": "LineString"
+					},
+					"weight": 67.75,
+					"duration": 571.1,
+					"distance": 711.6
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "EC60iaEG94mwAAAAGgAAAJIBAADmAAAAIz-pQTZrQ0DpvUBCJtDcQakAAAAZAAAAggEAANwAAAB-AAAAb0LP_zS1VQN2Qs__LrVVAxAAvwMAAAAA",
+					"location": [-3.194257, 55.948596],
+					"name": "Victoria Terrace",
+					"distance": 0.7986052817
+				},
+				{
+					"hint": "Qmc6iBVDTIgdAAAAiwEAAEIAAAAAAAAAFWA7QKPAHUL2wtFAAAAAABcAAAA8AQAANAAAAAAAAAB-AAAARWPP_1GzVQOwYs__RLNVAwIA_xUAAAAA",
+					"location": [-3.185851, 55.948113],
+					"name": "Robertson's Close",
+					"distance": 9.426308682
+				}
+			]
+		}
+	},
+	"route/a77a802b80844e87": {
+		"api": "route",
+		"url": "https://routing.openstreetmap.de/routed-foot/route/v1/foot/-2.79504,56.34037;-2.78783,56.34007?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:41.910Z",
+		"ms": 27,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 60.17,
+							"summary": "",
+							"duration": 422.3,
+							"distance": 528
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-2.795036, 56.340394],
+							[-2.793998, 56.340333],
+							[-2.793581, 56.340284],
+							[-2.791089, 56.340184],
+							[-2.790783, 56.340662],
+							[-2.78908, 56.340396],
+							[-2.788948, 56.340351],
+							[-2.788878, 56.340376],
+							[-2.788119, 56.340247],
+							[-2.787667, 56.340284],
+							[-2.787656, 56.340073]
+						],
+						"type": "LineString"
+					},
+					"weight": 60.17,
+					"duration": 422.3,
+					"distance": 528
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "BEIhhbwnl4UhAAAAYwEAAAAAAAAAAAAAYDFDQCQL_0EAAAAAAAAAABgAAAD_AAAAAAAAAAAAAAB-AAAA5FnV_6qvWwPgWdX_kq9bAwAA_wUAAAAA",
+					"location": [-2.795036, 56.340394],
+					"name": "Market Street",
+					"distance": 2.683779484
+				},
+				{
+					"hint": "dNEHhi-eLo7EAAAAwwAAAAAAAAAAAAAApwi8QbUku0EAAAAAAAAAALwAAAC7AAAAAAAAAAAAAAB-AAAAuHbV_2muWwMKdtX_Zq5bAwAALwsAAAAA",
+					"location": [-2.787656, 56.340073],
+					"name": "",
+					"distance": 10.77024244
+				}
+			]
+		}
+	},
+	"route/edee95df7a895388": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-3.20042,55.94869;-3.19377,55.94865?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:45.991Z",
+		"ms": 33,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 136.5,
+							"summary": "",
+							"duration": 136.5,
+							"distance": 877.9
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.200759, 55.947595],
+							[-3.201108, 55.947626],
+							[-3.201449, 55.947562],
+							[-3.202044, 55.947137],
+							[-3.202425, 55.946802],
+							[-3.201004, 55.946133],
+							[-3.200387, 55.946292],
+							[-3.199719, 55.946423],
+							[-3.199381, 55.946472],
+							[-3.198677, 55.946524],
+							[-3.19746, 55.946938],
+							[-3.196368, 55.947269],
+							[-3.194224, 55.947821],
+							[-3.193645, 55.947816],
+							[-3.193377, 55.947838],
+							[-3.193215, 55.947917],
+							[-3.192684, 55.948046],
+							[-3.192911, 55.948404]
+						],
+						"type": "LineString"
+					},
+					"weight": 136.5,
+					"duration": 136.5,
+					"distance": 877.9
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "mDECgFaR_IUMAAAADwAAAIUAAACqAQAAazARQS9OHkFwYcBCXIWYQwwAAAAPAAAAhQAAAKoBAACIKAEACSnP_0uxVQNcKs__krVVAxgAPwYAAAAA",
+					"location": [-3.200759, 55.947595],
+					"name": "Johnston Terrace",
+					"distance": 123.7459367
+				},
+				{
+					"hint": "odymgdUxp4EKAAAAAAAAADEAAAAAAAAAqzjgQAAAAADBNw1CAAAAAAoAAAAAAAAAMQAAAAAAAACIKAEAsUfP_3S0VQNWRM__arVVAwQAPxUAAAAA",
+					"location": [-3.192911, 55.948404],
+					"name": "McConnachie's Close",
+					"distance": 60.28097447
+				}
+			]
+		}
+	},
+	"route/fd4b4891c337e7ea": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-3.20844,55.95763;-3.21822,55.95226?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:29.735Z",
+		"ms": 32,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{
+							"steps": [],
+							"weight": 246.5,
+							"summary": "",
+							"duration": 241,
+							"distance": 1555.5
+						}
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-3.208254, 55.957749],
+							[-3.208996, 55.958033],
+							[-3.209542, 55.958417],
+							[-3.211643, 55.957423],
+							[-3.212344, 55.957358],
+							[-3.213545, 55.957399],
+							[-3.214099, 55.957254],
+							[-3.214459, 55.956861],
+							[-3.216906, 55.955396],
+							[-3.217036, 55.955232],
+							[-3.220043, 55.955127],
+							[-3.221708, 55.955015],
+							[-3.221927, 55.955038],
+							[-3.219787, 55.952875],
+							[-3.219389, 55.952713],
+							[-3.21774, 55.95263],
+							[-3.217221, 55.952497],
+							[-3.218238, 55.952285]
+						],
+						"type": "LineString"
+					},
+					"weight": 246.5,
+					"duration": 241,
+					"distance": 1555.5
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "azECgG4xAoARAAAABQAAAAAAAAAaAAAA7wxBQQgkVkAAAAAAzV6TQREAAAAFAAAAAAAAABoAAACIKAEAwgvP__XYVQMIC8__fthVAwAAfxMAAAAA",
+					"location": [-3.208254, 55.957749],
+					"name": "Kerr Street",
+					"distance": 17.61827864
+				},
+				{
+					"hint": "F8JvgG5fU4cDAAAABwAAAAEAAAAFAAAAYtMkQMuWnEBg0oY_5TdQQAMAAAAHAAAAAQAAAAUAAACIKAEAwuTO_53DVQPU5M7_hMNVAwIAjw8AAAAA",
+					"location": [-3.218238, 55.952285],
+					"name": "Damside",
+					"distance": 3.001829129
+				}
+			]
+		}
+	},
+	"route/fe674eefa6927e35": {
+		"api": "route",
+		"url": "https://router.project-osrm.org/route/v1/driving/-2.78783,56.34007;-2.80940,56.35876?overview=simplified&geometries=geojson",
+		"at": "2026-10-14T05:33:37.860Z",
+		"ms": 35,
+		"result": {
+			"code": "Ok",
+			"routes": [
+				{
+					"legs": [
+						{ "steps": [], "weight": 457, "summary": "", "duration": 444.1, "distance": 3139 }
+					],
+					"weight_name": "routability",
+					"geometry": {
+						"coordinates": [
+							[-2.787732, 56.340526],
+							[-2.788681, 56.340589],
+							[-2.788948, 56.340351],
+							[-2.802379, 56.342158],
+							[-2.802007, 56.344222],
+							[-2.802318, 56.344869],
+							[-2.802924, 56.344951],
+							[-2.804271, 56.344311],
+							[-2.806315, 56.344469],
+							[-2.807632, 56.347154],
+							[-2.807943, 56.348337],
+							[-2.807772, 56.349294],
+							[-2.811873, 56.358418]
+						],
+						"type": "LineString"
+					},
+					"weight": 457,
+					"duration": 444.1,
+					"distance": 3139
+				}
+			],
+			"waypoints": [
+				{
+					"hint": "Dd2bghzdm4IqAAAApgAAAAAAAAAMAAAAAC11QZqFbEIAAAAAohCEQBUAAABTAAAAAAAAAAYAAACIKAEAbHbV_y6wWwMKdtX_Zq5bAwAATxEAAAAA",
+					"location": [-2.787732, 56.340526],
+					"name": "Gregory Place",
+					"distance": 51.13528163
+				},
+				{
+					"hint": "omuXg45_uIV8AAAAkwAAAKMCAAC9AAAAYa6xQoR-0kJBIPFDhTkHQ3wAAACTAAAAowIAAL0AAACIKAEAHxjV_xL2WwPIIdX_aPdbAwwAnxUAAAAA",
+					"location": [-2.811873, 56.358418],
+					"name": "West Sands Road",
+					"distance": 157.4738133
+				}
+			]
+		}
+	},
+	"weather/6fd65d591c2c3916": {
+		"api": "weather",
+		"url": "https://api.open-meteo.com/v1/forecast?latitude=55.95&longitude=-3.19&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&hourly=precipitation_probability,temperature_2m,weather_code&timezone=auto&start_date=2026-10-18&end_date=2026-10-18",
+		"at": "2026-10-14T05:33:25.458Z",
+		"ms": 31,
+		"result": {
+			"latitude": 55.94137,
+			"longitude": -3.174408,
+			"generationtime_ms": 0.592350959777832,
+			"utc_offset_seconds": 3600,
+			"timezone": "Europe/London",
+			"timezone_abbreviation": "GMT+1",
+			"elevation": 73,
+			"hourly_units": {
+				"time": "iso8601",
+				"precipitation_probability": "%",
+				"temperature_2m": "°C",
+				"weather_code": "wmo code"
+			},
+			"hourly": {
+				"time": [
+					"2026-10-18T00:00",
+					"2026-10-18T01:00",
+					"2026-10-18T02:00",
+					"2026-10-18T03:00",
+					"2026-10-18T04:00",
+					"2026-10-18T05:00",
+					"2026-10-18T06:00",
+					"2026-10-18T07:00",
+					"2026-10-18T08:00",
+					"2026-10-18T09:00",
+					"2026-10-18T10:00",
+					"2026-10-18T11:00",
+					"2026-10-18T12:00",
+					"2026-10-18T13:00",
+					"2026-10-18T14:00",
+					"2026-10-18T15:00",
+					"2026-10-18T16:00",
+					"2026-10-18T17:00",
+					"2026-10-18T18:00",
+					"2026-10-18T19:00",
+					"2026-10-18T20:00",
+					"2026-10-18T21:00",
+					"2026-10-18T22:00",
+					"2026-10-18T23:00"
+				],
+				"precipitation_probability": [
+					0,
+					0,
+					0,
+					0,
+					0,
+					1,
+					1,
+					2,
+					2,
+					2,
+					2,
+					4,
+					7,
+					8,
+					7,
+					5,
+					4,
+					4,
+					4,
+					4,
+					3,
+					1,
+					0,
+					0
+				],
+				"temperature_2m": [
+					6.8,
+					6.5,
+					6.3,
+					6.2,
+					6,
+					5.8,
+					5.7,
+					5.5,
+					5.4,
+					5.3,
+					5.5,
+					6.3,
+					7.4,
+					8.4,
+					9.1,
+					9.7,
+					10,
+					9.8,
+					9.3,
+					8.8,
+					8.4,
+					8,
+					7.6,
+					7.2
+				],
+				"weather_code": [2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+			},
+			"daily_units": {
+				"time": "iso8601",
+				"weather_code": "wmo code",
+				"temperature_2m_max": "°C",
+				"temperature_2m_min": "°C",
+				"precipitation_probability_max": "%",
+				"sunrise": "iso8601",
+				"sunset": "iso8601"
+			},
+			"daily": {
+				"time": ["2026-10-18"],
+				"weather_code": [3],
+				"temperature_2m_max": [10],
+				"temperature_2m_min": [5.3],
+				"precipitation_probability_max": [8],
+				"sunrise": ["2026-10-18T07:49"],
+				"sunset": ["2026-10-18T18:04"]
+			}
+		}
+	},
+	"weather/9b636f67442af212": {
+		"api": "weather",
+		"url": "https://api.open-meteo.com/v1/forecast?latitude=55.95&longitude=-3.19&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&hourly=precipitation_probability,temperature_2m,weather_code&timezone=auto&start_date=2026-10-17&end_date=2026-10-17",
+		"at": "2026-10-14T05:32:55.311Z",
+		"ms": 28,
+		"result": {
+			"latitude": 55.94137,
+			"longitude": -3.174408,
+			"generationtime_ms": 0.49304962158203125,
+			"utc_offset_seconds": 3600,
+			"timezone": "Europe/London",
+			"timezone_abbreviation": "GMT+1",
+			"elevation": 73,
+			"hourly_units": {
+				"time": "iso8601",
+				"precipitation_probability": "%",
+				"temperature_2m": "°C",
+				"weather_code": "wmo code"
+			},
+			"hourly": {
+				"time": [
+					"2026-10-17T00:00",
+					"2026-10-17T01:00",
+					"2026-10-17T02:00",
+					"2026-10-17T03:00",
+					"2026-10-17T04:00",
+					"2026-10-17T05:00",
+					"2026-10-17T06:00",
+					"2026-10-17T07:00",
+					"2026-10-17T08:00",
+					"2026-10-17T09:00",
+					"2026-10-17T10:00",
+					"2026-10-17T11:00",
+					"2026-10-17T12:00",
+					"2026-10-17T13:00",
+					"2026-10-17T14:00",
+					"2026-10-17T15:00",
+					"2026-10-17T16:00",
+					"2026-10-17T17:00",
+					"2026-10-17T18:00",
+					"2026-10-17T19:00",
+					"2026-10-17T20:00",
+					"2026-10-17T21:00",
+					"2026-10-17T22:00",
+					"2026-10-17T23:00"
+				],
+				"precipitation_probability": [
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0
+				],
+				"temperature_2m": [
+					7.3,
+					6.9,
+					6.6,
+					6.3,
+					6.1,
+					5.7,
+					5.4,
+					5.2,
+					5.3,
+					5.5,
+					6,
+					6.9,
+					8,
+					8.8,
+					9.3,
+					9.4,
+					9.4,
+					9.1,
+					8.6,
+					8.1,
+					7.8,
+					7.5,
+					7.3,
+					7
+				],
+				"weather_code": [0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1]
+			},
+			"daily_units": {
+				"time": "iso8601",
+				"weather_code": "wmo code",
+				"temperature_2m_max": "°C",
+				"temperature_2m_min": "°C",
+				"precipitation_probability_max": "%",
+				"sunrise": "iso8601",
+				"sunset": "iso8601"
+			},
+			"daily": {
+				"time": ["2026-10-17"],
+				"weather_code": [1],
+				"temperature_2m_max": [9.5],
+				"temperature_2m_min": [5.2],
+				"precipitation_probability_max": [0],
+				"sunrise": ["2026-10-17T07:47"],
+				"sunset": ["2026-10-17T18:07"]
+			}
+		}
+	},
+	"weather/a97c6ef36acd9adb": {
+		"api": "weather",
+		"url": "https://api.open-meteo.com/v1/forecast?latitude=55.95&longitude=-3.19&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&hourly=precipitation_probability,temperature_2m,weather_code&timezone=auto&start_date=2026-10-16&end_date=2026-10-16",
+		"at": "2026-10-14T05:32:55.094Z",
+		"ms": 113,
+		"result": {
+			"latitude": 55.94137,
+			"longitude": -3.174408,
+			"generationtime_ms": 0.4646778106689453,
+			"utc_offset_seconds": 3600,
+			"timezone": "Europe/London",
+			"timezone_abbreviation": "GMT+1",
+			"elevation": 73,
+			"hourly_units": {
+				"time": "iso8601",
+				"precipitation_probability": "%",
+				"temperature_2m": "°C",
+				"weather_code": "wmo code"
+			},
+			"hourly": {
+				"time": [
+					"2026-10-16T00:00",
+					"2026-10-16T01:00",
+					"2026-10-16T02:00",
+					"2026-10-16T03:00",
+					"2026-10-16T04:00",
+					"2026-10-16T05:00",
+					"2026-10-16T06:00",
+					"2026-10-16T07:00",
+					"2026-10-16T08:00",
+					"2026-10-16T09:00",
+					"2026-10-16T10:00",
+					"2026-10-16T11:00",
+					"2026-10-16T12:00",
+					"2026-10-16T13:00",
+					"2026-10-16T14:00",
+					"2026-10-16T15:00",
+					"2026-10-16T16:00",
+					"2026-10-16T17:00",
+					"2026-10-16T18:00",
+					"2026-10-16T19:00",
+					"2026-10-16T20:00",
+					"2026-10-16T21:00",
+					"2026-10-16T22:00",
+					"2026-10-16T23:00"
+				],
+				"precipitation_probability": [
+					3,
+					4,
+					3,
+					3,
+					2,
+					2,
+					2,
+					2,
+					1,
+					1,
+					0,
+					0,
+					0,
+					0,
+					2,
+					5,
+					6,
+					5,
+					2,
+					0,
+					0,
+					0,
+					0,
+					0
+				],
+				"temperature_2m": [
+					9.2,
+					9.1,
+					8.9,
+					8.7,
+					8.9,
+					8.2,
+					7.9,
+					7.6,
+					7.5,
+					7.6,
+					8,
+					9,
+					10.3,
+					11.4,
+					11.9,
+					12,
+					11.9,
+					11.5,
+					10.9,
+					10.2,
+					9.6,
+					8.9,
+					8.3,
+					7.7
+				],
+				"weather_code": [
+					0,
+					1,
+					1,
+					3,
+					3,
+					0,
+					2,
+					3,
+					1,
+					0,
+					0,
+					0,
+					0,
+					0,
+					51,
+					51,
+					51,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0
+				]
+			},
+			"daily_units": {
+				"time": "iso8601",
+				"weather_code": "wmo code",
+				"temperature_2m_max": "°C",
+				"temperature_2m_min": "°C",
+				"precipitation_probability_max": "%",
+				"sunrise": "iso8601",
+				"sunset": "iso8601"
+			},
+			"daily": {
+				"time": ["2026-10-16"],
+				"weather_code": [51],
+				"temperature_2m_max": [12],
+				"temperature_2m_min": [7.3],
+				"precipitation_probability_max": [6],
+				"sunrise": ["2026-10-16T07:45"],
+				"sunset": ["2026-10-16T18:09"]
+			}
+		}
+	}
+}

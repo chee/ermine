@@ -1,0 +1,15 @@
+{
+	"title": "a typed array's bytes that are not whole elements",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[70(h'0102')]",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

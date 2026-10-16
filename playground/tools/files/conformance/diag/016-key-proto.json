@@ -1,0 +1,23 @@
+{
+	"title": "a key __proto__ is a key like any",
+	"steps": [
+		{
+			"op": "write",
+			"value": {
+				"__proto__": 1
+			},
+			"expect": {
+				"text": "{\n  \"__proto__\": 1.0\n}"
+			}
+		},
+		{
+			"op": "read",
+			"text": "{\n  \"__proto__\": 1.0\n}",
+			"expect": {
+				"value": {
+					"__proto__": 1
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,12 @@
+{
+	"title": "a comment may hold anything but /",
+	"steps": [
+		{
+			"op": "read",
+			"text": "/ [ { ' \" ( , : # \n é / 7",
+			"expect": {
+				"value": 7
+			}
+		}
+	]
+}

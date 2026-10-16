@@ -1,0 +1,25 @@
+{
+	"title": "a frame before the last that is not deterministic CBOR is a store error",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000009a2616241016161410200000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

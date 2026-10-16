@@ -1,0 +1,20 @@
+{
+	"title": "-Infinity beside -1",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[-Infinity, -1, -1.5]",
+			"expect": {
+				"value": [
+					{
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					-1,
+					-1.5
+				]
+			}
+		}
+	]
+}

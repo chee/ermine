@@ -1,0 +1,173 @@
+{
+	"title": "the slot a renamed entry gives",
+	"steps": [
+		{
+			"op": "renamed",
+			"entry": "b",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.txt",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.md",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "b.md"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.txt.txt",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "b.txt"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.TXT",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "b.TXT"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b",
+			"folder": false,
+			"expect": {
+				"result": "b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.txt",
+			"folder": false,
+			"expect": {
+				"result": "b.txt"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.txt",
+			"ext": "",
+			"folder": false,
+			"expect": {
+				"result": "b.txt"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b",
+			"ext": "md",
+			"folder": true,
+			"expect": {
+				"result": "b.md"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b.md",
+			"ext": "md",
+			"folder": true,
+			"expect": {
+				"result": "b.md.md"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b",
+			"folder": true,
+			"expect": {
+				"result": "b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "b",
+			"ext": "",
+			"folder": true,
+			"expect": {
+				"result": "b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "a:b.txt",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": "a/b"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "a：b",
+			"ext": "md",
+			"folder": true,
+			"expect": {
+				"result": "a:b.md"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": ".txt",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": ".txt"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "日本.png",
+			"ext": "png",
+			"folder": false,
+			"expect": {
+				"result": "日本"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "x.float32",
+			"ext": "float32",
+			"folder": false,
+			"expect": {
+				"result": "x"
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "",
+			"ext": "txt",
+			"folder": false,
+			"expect": {
+				"result": ""
+			}
+		},
+		{
+			"op": "renamed",
+			"entry": "",
+			"ext": "txt",
+			"folder": true,
+			"expect": {
+				"result": ".txt"
+			}
+		}
+	]
+}

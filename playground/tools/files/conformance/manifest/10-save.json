@@ -1,0 +1,545 @@
+{
+	"title": "a node's record is as pack writes it, each content kept by its hash",
+	"steps": [
+		{
+			"op": "save",
+			"node": {
+				"id": "n",
+				"value": [
+					{
+						"content": "12:00",
+						"change": {
+							"time": 1,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						}
+					},
+					{
+						"content": {
+							"/": {
+								"float32": [
+									1.5,
+									"NaN"
+								]
+							}
+						},
+						"change": {
+							"time": 2,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						},
+						"because": {
+							"layer": "sync",
+							"place": 1
+						}
+					},
+					{
+						"content": "live",
+						"change": {
+							"time": 3,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						}
+					}
+				],
+				"info": [
+					[
+						"color",
+						[
+							{
+								"content": "red",
+								"change": {
+									"time": 4,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"big",
+						[
+							{
+								"content": {
+									"a": [
+										1,
+										null,
+										true
+									],
+									"n": -0
+								},
+								"change": {
+									"time": 5,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							},
+							{
+								"content": 5,
+								"change": {
+									"time": 6,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"none",
+						[]
+					]
+				],
+				"children": [
+					[
+						"docs",
+						[
+							{
+								"content": [
+									"d1",
+									{
+										"symbol": "x"
+									},
+									"e1",
+									"d2"
+								],
+								"change": {
+									"time": 7,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							},
+							{
+								"content": [
+									"d3"
+								],
+								"change": {
+									"time": 8,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"empty",
+						[
+							{
+								"content": [],
+								"change": {
+									"time": 9,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					]
+				],
+				"header": {
+					"time": 1,
+					"actor": "host",
+					"site": {
+						"file": "manifest_test.ts",
+						"line": 1,
+						"column": 1
+					}
+				}
+			},
+			"without": [
+				"e1"
+			],
+			"live": [
+				[
+					"value",
+					2,
+					"content"
+				]
+			],
+			"expect": {
+				"record": "a5626964616e64696e666f838265636f6c6f7281a2646b65707482582041c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f52563747874666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94400656163746f7264686f7374826362696782a2646b657074825820d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac94316463626f72666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94500656163746f7264686f7374a2646b657074825820bb1197eb9afa1952e10d17ab7affd0c8f16a48fbe6c0bd255318189c85de82086463626f72666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94600656163746f7264686f737482646e6f6e65806576616c756582a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f93c00656163746f7264686f7374a3646b65707482582029a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc67666c6f61743332666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94000656163746f7264686f73746762656361757365a2656c617965726473796e6365706c616365f93c0066686561646572a36473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f93c00656163746f7264686f7374686368696c6472656e828264646f637382a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94700656163746f7264686f737467636f6e74656e7482626431626432a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94800656163746f7264686f737467636f6e74656e74816264338265656d70747981a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94880656163746f7264686f737467636f6e74656e7480",
+				"values": [
+					[
+						"29a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc",
+						{
+							"/": {
+								"float32": [
+									1.5,
+									"NaN"
+								]
+							}
+						}
+					],
+					[
+						"41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+						"red"
+					],
+					[
+						"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"12:00"
+					],
+					[
+						"bb1197eb9afa1952e10d17ab7affd0c8f16a48fbe6c0bd255318189c85de8208",
+						5
+					],
+					[
+						"d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac9431",
+						{
+							"a": [
+								1,
+								null,
+								true
+							],
+							"n": -0
+						}
+					]
+				],
+				"shape": {
+					"kept": [
+						"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"txt"
+					],
+					"sides": [
+						[
+							"29a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc",
+							"float32"
+						]
+					],
+					"info": [
+						[
+							"color",
+							"41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+							"txt"
+						],
+						[
+							"big",
+							"d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac9431",
+							"cbor"
+						]
+					],
+					"directory": [
+						[
+							"docs",
+							[
+								"d1",
+								"d2"
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "n",
+				"value": [
+					{
+						"content": "12:00",
+						"change": {
+							"time": 1,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						}
+					},
+					{
+						"content": {
+							"/": {
+								"float32": [
+									1.5,
+									"NaN"
+								]
+							}
+						},
+						"change": {
+							"time": 2,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						},
+						"because": {
+							"layer": "sync",
+							"place": 1
+						}
+					},
+					{
+						"content": "live",
+						"change": {
+							"time": 3,
+							"actor": "host",
+							"node": "n",
+							"site": {
+								"file": "manifest_test.ts",
+								"line": 1,
+								"column": 1
+							}
+						}
+					}
+				],
+				"info": [
+					[
+						"color",
+						[
+							{
+								"content": "red",
+								"change": {
+									"time": 4,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"big",
+						[
+							{
+								"content": {
+									"a": [
+										1,
+										null,
+										true
+									],
+									"n": -0
+								},
+								"change": {
+									"time": 5,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							},
+							{
+								"content": 5,
+								"change": {
+									"time": 6,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"none",
+						[]
+					]
+				],
+				"children": [
+					[
+						"docs",
+						[
+							{
+								"content": [
+									"d1",
+									{
+										"symbol": "x"
+									},
+									"e1",
+									"d2"
+								],
+								"change": {
+									"time": 7,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							},
+							{
+								"content": [
+									"d3"
+								],
+								"change": {
+									"time": 8,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					],
+					[
+						"empty",
+						[
+							{
+								"content": [],
+								"change": {
+									"time": 9,
+									"actor": "host",
+									"node": "n",
+									"site": {
+										"file": "manifest_test.ts",
+										"line": 1,
+										"column": 1
+									}
+								}
+							}
+						]
+					]
+				],
+				"header": {
+					"time": 1,
+					"actor": "host",
+					"site": {
+						"file": "manifest_test.ts",
+						"line": 1,
+						"column": 1
+					}
+				}
+			},
+			"live": [
+				[
+					"value",
+					2,
+					"content"
+				]
+			],
+			"expect": {
+				"record": "a5626964616e64696e666f838265636f6c6f7281a2646b65707482582041c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f52563747874666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94400656163746f7264686f7374826362696782a2646b657074825820d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac94316463626f72666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94500656163746f7264686f7374a2646b657074825820bb1197eb9afa1952e10d17ab7affd0c8f16a48fbe6c0bd255318189c85de82086463626f72666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94600656163746f7264686f737482646e6f6e65806576616c756582a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f93c00656163746f7264686f7374a3646b65707482582029a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc67666c6f61743332666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94000656163746f7264686f73746762656361757365a2656c617965726473796e6365706c616365f93c0066686561646572a36473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f93c00656163746f7264686f7374686368696c6472656e828264646f637382a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94700656163746f7264686f737467636f6e74656e7483626431626531626432a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94800656163746f7264686f737467636f6e74656e74816264338265656d70747981a2666368616e6765a4646e6f6465616e6473697465a36466696c65706d616e69666573745f746573742e7473646c696e65f93c0066636f6c756d6ef93c006474696d65f94880656163746f7264686f737467636f6e74656e7480",
+				"values": [
+					[
+						"29a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc",
+						{
+							"/": {
+								"float32": [
+									1.5,
+									"NaN"
+								]
+							}
+						}
+					],
+					[
+						"41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+						"red"
+					],
+					[
+						"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"12:00"
+					],
+					[
+						"bb1197eb9afa1952e10d17ab7affd0c8f16a48fbe6c0bd255318189c85de8208",
+						5
+					],
+					[
+						"d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac9431",
+						{
+							"a": [
+								1,
+								null,
+								true
+							],
+							"n": -0
+						}
+					]
+				],
+				"shape": {
+					"kept": [
+						"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"txt"
+					],
+					"sides": [
+						[
+							"29a2d75ba9e7704b1fa2e96cda97f7d774d9c56a181d3459e7418aebabea3fdc",
+							"float32"
+						]
+					],
+					"info": [
+						[
+							"color",
+							"41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+							"txt"
+						],
+						[
+							"big",
+							"d8d7ff6f05f5cc762cf3e553c56b65a0cba440afb327cb995db8cc6b64ac9431",
+							"cbor"
+						]
+					],
+					"directory": [
+						[
+							"docs",
+							[
+								"d1",
+								"e1",
+								"d2"
+							]
+						]
+					]
+				}
+			}
+		}
+	]
+}

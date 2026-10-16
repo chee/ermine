@@ -1,0 +1,173 @@
+{
+	"title": "sameInfo: the same names and values in the same order",
+	"steps": [
+		{
+			"op": "sameInfo",
+			"a": [],
+			"b": [],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"b": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"b": [
+				[
+					"tag",
+					"a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+					"txt"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"b": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"cbor"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"b": [
+				[
+					"Tag",
+					"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+					"txt"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				],
+				[
+					"b",
+					"5a115c09a519b69e196ef699c1b995defdc8544bc3209d69532233e45cbffca7",
+					"cbor"
+				]
+			],
+			"b": [
+				[
+					"b",
+					"5a115c09a519b69e196ef699c1b995defdc8544bc3209d69532233e45cbffca7",
+					"cbor"
+				],
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				]
+			],
+			"b": [
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				],
+				[
+					"b",
+					"5a115c09a519b69e196ef699c1b995defdc8544bc3209d69532233e45cbffca7",
+					"cbor"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "sameInfo",
+			"a": [
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				],
+				[
+					"b",
+					"5a115c09a519b69e196ef699c1b995defdc8544bc3209d69532233e45cbffca7",
+					"cbor"
+				]
+			],
+			"b": [
+				[
+					"a",
+					"09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+					"cbor"
+				]
+			],
+			"expect": {
+				"same": false
+			}
+		}
+	]
+}

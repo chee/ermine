@@ -1,0 +1,167 @@
+{
+	"title": "the number a member's stem starts with and the words after it",
+	"steps": [
+		{
+			"op": "number",
+			"stem": "1",
+			"expect": {
+				"result": [
+					1,
+					""
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "2 second",
+			"expect": {
+				"result": [
+					2,
+					" second"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "10x",
+			"expect": {
+				"result": [
+					10,
+					"x"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "007 bond",
+			"expect": {
+				"result": [
+					7,
+					" bond"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "0",
+			"expect": {
+				"result": [
+					0,
+					""
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": "x1",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": " 1",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": "-1",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": "1.5",
+			"expect": {
+				"result": [
+					1,
+					".5"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "1e3",
+			"expect": {
+				"result": [
+					1,
+					"e3"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "٣ three",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": "３",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "number",
+			"stem": "12\n13",
+			"expect": {
+				"result": [
+					12,
+					"\n13"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "5 日本\n語",
+			"expect": {
+				"result": [
+					5,
+					" 日本\n語"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "9007199254740993",
+			"expect": {
+				"result": [
+					9007199254740992,
+					""
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "123456789012345678901234567890 big",
+			"expect": {
+				"result": [
+					1.2345678901234568e+29,
+					" big"
+				]
+			}
+		},
+		{
+			"op": "number",
+			"stem": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"result": [
+					null,
+					""
+				]
+			}
+		}
+	]
+}

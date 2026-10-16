@@ -1,0 +1,124 @@
+{
+	"title": "names that key the same compare equal: the keys of each pair are one",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "Résumé.txt",
+			"expect": {
+				"result": "résumé.txt"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Résumé.TXT",
+			"expect": {
+				"result": "résumé.txt"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "RÉSUMÉ.txt",
+			"expect": {
+				"result": "résumé.txt"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "STRASSE",
+			"expect": {
+				"result": "strasse"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Straße",
+			"expect": {
+				"result": "strasse"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "STRAẞE",
+			"expect": {
+				"result": "strasse"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "strasse",
+			"expect": {
+				"result": "strasse"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ΣΊΣΥΦΟΣ",
+			"expect": {
+				"result": "σίσυφος"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "σίσυφος",
+			"expect": {
+				"result": "σίσυφος"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "σίσυφοσ",
+			"expect": {
+				"result": "σίσυφος"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "한글",
+			"expect": {
+				"result": "한글"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "한글",
+			"expect": {
+				"result": "한글"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǅ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǆ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ǆ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǅ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ǆ",
+			"expect": {
+				"result": "ǆ"
+			}
+		}
+	]
+}

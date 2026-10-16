@@ -1,0 +1,562 @@
+{
+	"title": "the root's value is .ermine/root.<ext>; the store's folder carries its id",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 4,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [
+						{
+							"content": "the root's own value",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "r"
+							}
+						}
+					],
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "root",
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"kid",
+							[
+								{
+									"content": [
+										"k"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "k",
+					"value": [
+						{
+							"content": "kid",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "k"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "k",
+											"to": "kid.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "IPEM8/ETgGvg02ogJPnN3ESPfPAqOThOydJ3dsMrME0"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "r",
+											"to": ".ermine/root.txt",
+											"form": "txt",
+											"info": [
+												[
+													"title",
+													{
+														"/": {
+															"bytes": "magqT9Sa8O2XDbfohb8nO05hfyoe516S4A18cqyNPAo"
+														}
+													},
+													"txt"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "f5MALnEPksd7HmyUmpaMlNefoJM9fptuOTMmYrGBk/8"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										}
+									],
+									"node:k": "a5626964616b64696e666f806576616c756581a2646b65707482582020f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d63747874666368616e6765a3646e6f6465616b6474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f8182657469746c6581a2646b65707482582099a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a63747874666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f73746576616c756581a2646b6570748258207f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff63747874666368616e6765a3646e6f646561726474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e8182636b696481a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481616b",
+									"shown:k": "a36466696c65676b69642e74787464686f6d65836172636b6964f90000646c616964582020f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d",
+									"shown:r": "a46466696c6568726f6f742e747874646c61696458207f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff66666f6c646572f567656e7472696573a1636b6964636b6964"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/root.txt",
+						"kind": "file",
+						"hex": "74686520726f6f742773206f776e2076616c7565",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.info.title": "root"
+						}
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/20f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d",
+						"kind": "file",
+						"hex": "6b6964"
+					},
+					{
+						"path": ".ermine/values/7f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff",
+						"kind": "file",
+						"hex": "74686520726f6f742773206f776e2076616c7565"
+					},
+					{
+						"path": ".ermine/values/99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"kind": "file",
+						"hex": "726f6f74"
+					},
+					{
+						"path": "kid.txt",
+						"kind": "file",
+						"hex": "6b6964",
+						"attrs": {
+							"party.chee.ermine.id": "k"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 5,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [
+						{
+							"content": {
+								"now": "a map"
+							},
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "r"
+							}
+						}
+					],
+					"info": [
+						[
+							"title",
+							[
+								{
+									"content": "root",
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"kid",
+							[
+								{
+									"content": [
+										"k"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "k",
+					"value": [
+						{
+							"content": "kid",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "k"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "k",
+											"to": "kid.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "IPEM8/ETgGvg02ogJPnN3ESPfPAqOThOydJ3dsMrME0"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "r",
+											"to": ".ermine/root.txt",
+											"form": "txt",
+											"info": [
+												[
+													"title",
+													{
+														"/": {
+															"bytes": "magqT9Sa8O2XDbfohb8nO05hfyoe516S4A18cqyNPAo"
+														}
+													},
+													"txt"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "f5MALnEPksd7HmyUmpaMlNefoJM9fptuOTMmYrGBk/8"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										}
+									],
+									"node:k": "a5626964616b64696e666f806576616c756581a2646b65707482582020f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d63747874666368616e6765a3646e6f6465616b6474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f8182657469746c6581a2646b65707482582099a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a63747874666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f73746576616c756581a2646b6570748258207f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff63747874666368616e6765a3646e6f646561726474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e8182636b696481a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481616b",
+									"shown:k": "a36466696c65676b69642e74787464686f6d65836172636b6964f90000646c616964582020f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d",
+									"shown:r": "a46466696c6568726f6f742e747874646c61696458207f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff66666f6c646572f567656e7472696573a1636b6964636b6964"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94500",
+									"plan": [
+										{
+											"id": "r",
+											"form": "txt",
+											"from": ".ermine/root.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "f5MALnEPksd7HmyUmpaMlNefoJM9fptuOTMmYrGBk/8"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "r",
+											"to": ".ermine/root.text",
+											"form": "cbor",
+											"info": [
+												[
+													"title",
+													{
+														"/": {
+															"bytes": "magqT9Sa8O2XDbfohb8nO05hfyoe516S4A18cqyNPAo"
+														}
+													},
+													"txt"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "t5pMP+cu1oDYiifmzSX1smRVYAOgDbgi2yHcW54QZYo"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										}
+									],
+									"node:r": "a5626964617264696e666f8182657469746c6581a2646b65707482582099a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a63747874666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f73746576616c756581a2646b657074825820b79a4c3fe72ed680d88a27e6cd25f5b264556003a00db822db21dc5b9e10658a6463626f72666368616e6765a3646e6f646561726474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e8182636b696481a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481616b",
+									"shown:r": "a56377617358207f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff6466696c6569726f6f742e74657874646c6169645820b79a4c3fe72ed680d88a27e6cd25f5b264556003a00db822db21dc5b9e10658a66666f6c646572f567656e7472696573a1636b6964636b6964"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94500647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00",
+									"shown:r": "a46466696c6569726f6f742e74657874646c6169645820b79a4c3fe72ed680d88a27e6cd25f5b264556003a00db822db21dc5b9e10658a66666f6c646572f567656e7472696573a1636b6964636b6964"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/root.text",
+						"kind": "file",
+						"hex": "7b0a2020226e6f77223a202261206d6170220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.info.title": "root"
+						}
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/20f10cf3f113806be0d36a2024f9cddc448f7cf02a39384ec9d27776c32b304d",
+						"kind": "file",
+						"hex": "6b6964"
+					},
+					{
+						"path": ".ermine/values/7f93002e710f92c77b1e6c949a968c94d79fa0933d7e9b6e39332662b18193ff",
+						"kind": "file",
+						"hex": "74686520726f6f742773206f776e2076616c7565"
+					},
+					{
+						"path": ".ermine/values/99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"kind": "file",
+						"hex": "726f6f74"
+					},
+					{
+						"path": ".ermine/values/b79a4c3fe72ed680d88a27e6cd25f5b264556003a00db822db21dc5b9e10658a",
+						"kind": "file",
+						"hex": "a1636e6f776561206d6170"
+					},
+					{
+						"path": "kid.txt",
+						"kind": "file",
+						"hex": "6b6964",
+						"attrs": {
+							"party.chee.ermine.id": "k"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 5,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [
+								{
+									"content": {
+										"now": "a map"
+									},
+									"change": {
+										"node": "r",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [
+								[
+									"title",
+									[
+										{
+											"content": "root",
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"children": [
+								[
+									"kid",
+									[
+										{
+											"content": [
+												"k"
+											],
+											"change": {
+												"node": "r",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "k",
+							"value": [
+								{
+									"content": "kid",
+									"change": {
+										"node": "k",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

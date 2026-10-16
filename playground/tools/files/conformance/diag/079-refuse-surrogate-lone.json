@@ -1,0 +1,15 @@
+{
+	"title": "a lone surrogate by escape",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[\"\\ud800\"]",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

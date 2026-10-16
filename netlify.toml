@@ -1,7 +1,9 @@
-# the demos and /slaygrounds/, built static by vite: playground/demos' `deno task build` (vite.config.ts) builds each page and runs slaygrounds' own build into /slaygrounds/
+# the demos site: playground/demos/build.ts builds its index, slaygrounds (its own vite build) and the
+# cat clock into playground/demos/dist. node_modules for @yowasp/clang: the cat clock's wasm-clang,
+# copied beside its worker and kept whole in its function
 [build]
   base = "."
-  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && export PATH=$HOME/.deno/bin:$PATH && cd playground/demos && deno task build"
+  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && export PATH=$HOME/.deno/bin:$PATH && deno install --quiet --node-modules-dir=auto && deno run -A playground/demos/build.ts"
   publish = "playground/demos/dist"
 
 [[headers]]
@@ -15,10 +17,10 @@
   [headers.values]
     Content-Type = "application/wasm"
 
-# the cat clock's compiler: wasm-clang (@yowasp/clang) at /catclock/compile, for the demos site
-# (playground/catclock/functions/compile.mts). @yowasp/clang kept whole: its wasm beside its
+# the cat clock's compiler: wasm-clang (@yowasp/clang) at /catclock/compile
+# (playground/demos/catclock/functions/compile.mts). @yowasp/clang kept whole: its wasm beside its
 # bundle.js (27 MB zipped)
 [functions]
-  directory = "playground/catclock/functions"
+  directory = "playground/demos/catclock/functions"
   node_bundler = "esbuild"
   external_node_modules = ["@yowasp/clang"]

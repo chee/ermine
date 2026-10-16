@@ -1,0 +1,15 @@
+{
+	"title": "base64 padding that is not whole",
+	"steps": [
+		{
+			"op": "read",
+			"text": "b64'ab='",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

@@ -1,0 +1,31 @@
+{
+	"title": "true, false, null, NaN, Infinity, -Infinity",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[true, false, null, NaN, Infinity, -Infinity]",
+			"expect": {
+				"value": [
+					true,
+					false,
+					null,
+					{
+						"/": {
+							"number": "NaN"
+						}
+					},
+					{
+						"/": {
+							"number": "Infinity"
+						}
+					},
+					{
+						"/": {
+							"number": "-Infinity"
+						}
+					}
+				]
+			}
+		}
+	]
+}

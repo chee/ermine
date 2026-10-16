@@ -1,0 +1,173 @@
+{
+	"title": "an astral scalar value sorts after every BMP one, though its surrogates sort before U+E000",
+	"steps": [
+		{
+			"op": "bycodepoint",
+			"a": "𐀀",
+			"b": "￿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "￿",
+			"b": "𐀀",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "𐀀",
+			"b": "",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "",
+			"b": "𐀀",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "𐀀",
+			"b": "퟿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "～",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "ｱ",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "😁",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😁",
+			"b": "😀",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "😀",
+			"expect": {
+				"result": 0
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "😀a",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀a",
+			"b": "😀",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "a😀",
+			"b": "a￿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "a😀",
+			"b": "ab",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "𐀀",
+			"b": "􏿿",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "􏿿",
+			"b": "𐀀",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "😀",
+			"b": "𝟿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "󠀁",
+			"b": "😀",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "퟿𐀀",
+			"b": "",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "𐐀",
+			"b": "𐐨",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "日本",
+			"b": "日😀",
+			"expect": {
+				"result": -1
+			}
+		}
+	]
+}

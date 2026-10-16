@@ -1,0 +1,110 @@
+{
+	"title": "a bin value's extension by its first bytes",
+	"steps": [
+		{
+			"op": "sniff",
+			"head": "89504e470d0a1a0a00000000",
+			"expect": {
+				"result": "png"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "89504e470d0a1a",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "ffd8ff",
+			"expect": {
+				"result": "jpg"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "ffd8",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "474946383761",
+			"expect": {
+				"result": "gif"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "474946383961",
+			"expect": {
+				"result": "gif"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "474946383861",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "255044462d312e37",
+			"expect": {
+				"result": "pdf"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "25504446",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "524946460102030457454250",
+			"expect": {
+				"result": "webp"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "524946460102030457415645",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "5249464601020304574542",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "00",
+			"expect": {
+				"result": "bin"
+			}
+		},
+		{
+			"op": "sniff",
+			"head": "00255044462d",
+			"expect": {
+				"result": "bin"
+			}
+		}
+	]
+}

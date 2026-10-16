@@ -1,0 +1,1457 @@
+{
+	"title": "a slot holding several is a folder carrying party.chee.ermine.slot, members 1, 2, ... in slot order, numbered again as members come and go",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 8,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"pile",
+							[
+								{
+									"content": [
+										"u1",
+										"u2",
+										"u3"
+									],
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u1",
+					"value": [
+						{
+							"content": "first",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "u1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "u2"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"under",
+							[
+								{
+									"content": [
+										"u4"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "u2"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u3",
+					"value": [
+						{
+							"content": {
+								"third": 3
+							},
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "u3"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u4",
+					"value": [
+						{
+							"content": "inside a member",
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "u4"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94800",
+									"plan": [
+										{
+											"to": "pile",
+											"slot": [
+												"r",
+												"pile"
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "u1",
+											"to": "pile/1.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "omnWPFymnEZwSIQPzXfCoP2NOyPA2mgfQtV+hb7jB+w"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/2",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "u2",
+											"to": "pile/2.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "u3",
+											"to": "pile/3.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										},
+										{
+											"id": "u4",
+											"to": "pile/2/under.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "dkkk3KNZwJb3PqmFUXfGS5xVMELAW1Pcv7bMN1vS5gI"
+													}
+												}
+											},
+											"before": null,
+											"number": 6
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7483627531627532627533",
+									"node:u1": "a562696462753164696e666f806576616c756581a2646b657074825820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec63747874666368616e6765a3646e6f64656275316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u2": "a562696462753264696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f64656275326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e818265756e64657281a2666368616e6765a3646e6f64656275326474696d65f94800656163746f7264686f737467636f6e74656e7481627534",
+									"node:u3": "a562696462753364696e666f806576616c756581a2646b65707482582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff36463626f72666368616e6765a3646e6f64656275336474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u4": "a562696462753464696e666f806576616c756581a2646b657074825820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e60263747874666368616e6765a3646e6f64656275346474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65846470696c65613161326133",
+									"shown:u1": "a36466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+									"shown:u2": "a56466696c6565322e706e6764686f6d658361726470696c65f93c00646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566332e7465787464686f6d658361726470696c65f94000646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+									"shown:u4": "a36466696c6569756e6465722e74787464686f6d658362753265756e646572f90000646c6169645820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94800647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/19ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+						"kind": "file",
+						"hex": "a1657468697264f94200"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572"
+					},
+					{
+						"path": ".ermine/values/a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+						"kind": "file",
+						"hex": "6669727374"
+					},
+					{
+						"path": "pile",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": {
+								"hex": "8261726470696c65"
+							}
+						}
+					},
+					{
+						"path": "pile/1.txt",
+						"kind": "file",
+						"hex": "6669727374",
+						"attrs": {
+							"party.chee.ermine.id": "u1"
+						}
+					},
+					{
+						"path": "pile/2",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/2.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/2/under.txt",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572",
+						"attrs": {
+							"party.chee.ermine.id": "u4"
+						}
+					},
+					{
+						"path": "pile/3.text",
+						"kind": "file",
+						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"attrs": {
+							"party.chee.ermine.id": "u3"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 9,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"pile",
+							[
+								{
+									"content": [
+										"u2",
+										"u3"
+									],
+									"change": {
+										"time": 9,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u1",
+					"value": [
+						{
+							"content": "first",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "u1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "u2"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"under",
+							[
+								{
+									"content": [
+										"u4"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "u2"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u3",
+					"value": [
+						{
+							"content": {
+								"third": 3
+							},
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "u3"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u4",
+					"value": [
+						{
+							"content": "inside a member",
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "u4"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94800",
+									"plan": [
+										{
+											"to": "pile",
+											"slot": [
+												"r",
+												"pile"
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "u1",
+											"to": "pile/1.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "omnWPFymnEZwSIQPzXfCoP2NOyPA2mgfQtV+hb7jB+w"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/2",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "u2",
+											"to": "pile/2.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "u3",
+											"to": "pile/3.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										},
+										{
+											"id": "u4",
+											"to": "pile/2/under.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "dkkk3KNZwJb3PqmFUXfGS5xVMELAW1Pcv7bMN1vS5gI"
+													}
+												}
+											},
+											"before": null,
+											"number": 6
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7483627531627532627533",
+									"node:u1": "a562696462753164696e666f806576616c756581a2646b657074825820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec63747874666368616e6765a3646e6f64656275316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u2": "a562696462753264696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f64656275326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e818265756e64657281a2666368616e6765a3646e6f64656275326474696d65f94800656163746f7264686f737467636f6e74656e7481627534",
+									"node:u3": "a562696462753364696e666f806576616c756581a2646b65707482582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff36463626f72666368616e6765a3646e6f64656275336474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u4": "a562696462753464696e666f806576616c756581a2646b657074825820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e60263747874666368616e6765a3646e6f64656275346474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65846470696c65613161326133",
+									"shown:u1": "a36466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+									"shown:u2": "a56466696c6565322e706e6764686f6d658361726470696c65f93c00646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566332e7465787464686f6d658361726470696c65f94000646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+									"shown:u4": "a36466696c6569756e6465722e74787464686f6d658362753265756e646572f90000646c6169645820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94800647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94880",
+									"plan": [
+										{
+											"id": "u1",
+											"form": "txt",
+											"from": "pile/1.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "omnWPFymnEZwSIQPzXfCoP2NOyPA2mgfQtV+hb7jB+w"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "u2",
+											"to": "pile/1",
+											"from": "pile/2",
+											"what": "rename",
+											"after": {
+												"folder": {
+													"ino": "pile/1"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "pile/1"
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/1.png",
+											"form": "bin",
+											"from": "pile/2.png",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"number": 3
+										},
+										{
+											"id": "u3",
+											"to": "pile/2.text",
+											"form": "cbor",
+											"from": "pile/3.text",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"number": 4
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94880656163746f7264686f737467636f6e74656e7482627532627533",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65836470696c6561316132",
+									"shown:u1": "a46461776179f56466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+									"shown:u2": "a56466696c6565312e706e6764686f6d658361726470696c65f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566322e7465787464686f6d658361726470696c65f93c00646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94880647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/19ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+						"kind": "file",
+						"hex": "a1657468697264f94200"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572"
+					},
+					{
+						"path": ".ermine/values/a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+						"kind": "file",
+						"hex": "6669727374"
+					},
+					{
+						"path": "pile",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": {
+								"hex": "8261726470696c65"
+							}
+						}
+					},
+					{
+						"path": "pile/1",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/1.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/1/under.txt",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572",
+						"attrs": {
+							"party.chee.ermine.id": "u4"
+						}
+					},
+					{
+						"path": "pile/2.text",
+						"kind": "file",
+						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"attrs": {
+							"party.chee.ermine.id": "u3"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 11,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"pile",
+							[
+								{
+									"content": [
+										"u5",
+										"u2",
+										"u3"
+									],
+									"change": {
+										"time": 11,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u1",
+					"value": [
+						{
+							"content": "first",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "u1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "u2"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"under",
+							[
+								{
+									"content": [
+										"u4"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "u2"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "u3",
+					"value": [
+						{
+							"content": {
+								"third": 3
+							},
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "u3"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u4",
+					"value": [
+						{
+							"content": "inside a member",
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "u4"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "u5",
+					"value": [
+						{
+							"content": "new first",
+							"change": {
+								"time": 10,
+								"actor": "host",
+								"node": "u5"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94800",
+									"plan": [
+										{
+											"to": "pile",
+											"slot": [
+												"r",
+												"pile"
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "u1",
+											"to": "pile/1.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "omnWPFymnEZwSIQPzXfCoP2NOyPA2mgfQtV+hb7jB+w"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/2",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "u2",
+											"to": "pile/2.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "u3",
+											"to": "pile/3.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										},
+										{
+											"id": "u4",
+											"to": "pile/2/under.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "dkkk3KNZwJb3PqmFUXfGS5xVMELAW1Pcv7bMN1vS5gI"
+													}
+												}
+											},
+											"before": null,
+											"number": 6
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7483627531627532627533",
+									"node:u1": "a562696462753164696e666f806576616c756581a2646b657074825820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec63747874666368616e6765a3646e6f64656275316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u2": "a562696462753264696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f64656275326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e818265756e64657281a2666368616e6765a3646e6f64656275326474696d65f94800656163746f7264686f737467636f6e74656e7481627534",
+									"node:u3": "a562696462753364696e666f806576616c756581a2646b65707482582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff36463626f72666368616e6765a3646e6f64656275336474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:u4": "a562696462753464696e666f806576616c756581a2646b657074825820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e60263747874666368616e6765a3646e6f64656275346474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65846470696c65613161326133",
+									"shown:u1": "a36466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+									"shown:u2": "a56466696c6565322e706e6764686f6d658361726470696c65f93c00646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566332e7465787464686f6d658361726470696c65f94000646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+									"shown:u4": "a36466696c6569756e6465722e74787464686f6d658362753265756e646572f90000646c6169645820764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94800647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94880",
+									"plan": [
+										{
+											"id": "u1",
+											"form": "txt",
+											"from": "pile/1.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "omnWPFymnEZwSIQPzXfCoP2NOyPA2mgfQtV+hb7jB+w"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "u2",
+											"to": "pile/1",
+											"from": "pile/2",
+											"what": "rename",
+											"after": {
+												"folder": {
+													"ino": "pile/2"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "pile/2"
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/1.png",
+											"form": "bin",
+											"from": "pile/2.png",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"number": 3
+										},
+										{
+											"id": "u3",
+											"to": "pile/2.text",
+											"form": "cbor",
+											"from": "pile/3.text",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"number": 4
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94880656163746f7264686f737467636f6e74656e7482627532627533",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65836470696c6561316132",
+									"shown:u1": "a46461776179f56466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+									"shown:u2": "a56466696c6565312e706e6764686f6d658361726470696c65f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566322e7465787464686f6d658361726470696c65f93c00646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94880647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94980",
+									"plan": [
+										{
+											"id": "u5",
+											"to": "pile/1.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "roizjsS8ClFEc+J4n+DseuX4J+A9lskesLry45wpIX4"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "u2",
+											"to": "pile/2",
+											"from": "pile/1",
+											"what": "rename",
+											"after": {
+												"folder": {
+													"ino": "pile/2"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "pile/2"
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "u2",
+											"to": "pile/2.png",
+											"form": "bin",
+											"from": "pile/1.png",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"number": 3
+										},
+										{
+											"id": "u3",
+											"to": "pile/3.text",
+											"form": "cbor",
+											"from": "pile/2.text",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "GatkKWbMAIHxaP44351OW4S1KDi4VngAWNecXBEPX/M"
+													}
+												}
+											},
+											"number": 4
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e81826470696c6581a2666368616e6765a3646e6f646561726474696d65f94980656163746f7264686f737467636f6e74656e7483627535627532627533",
+									"node:u5": "a562696462753564696e666f806576616c756581a2646b657074825820ae88b38ec4bc0a514473e2789fe0ec7ae5f827e03d96c91eb0baf2e39c29217e63747874666368616e6765a3646e6f64656275356474696d65f94900656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a16470696c65846470696c65613161326133",
+									"shown:u2": "a56466696c6565322e706e6764686f6d658361726470696c65f93c00646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb66666f6c646572f567656e7472696573a165756e64657265756e646572",
+									"shown:u3": "a36466696c6566332e7465787464686f6d658361726470696c65f94000646c616964582019ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+									"shown:u5": "a36466696c6565312e74787464686f6d658361726470696c65f90000646c6169645820ae88b38ec4bc0a514473e2789fe0ec7ae5f827e03d96c91eb0baf2e39c29217e"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94980647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/19ab642966cc0081f168fe38df9d4e5b84b52838b856780058d79c5c110f5ff3",
+						"kind": "file",
+						"hex": "a1657468697264f94200"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/764924dca359c096f73ea9855177c64b9c553042c05b53dcbfb6cc375bd2e602",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572"
+					},
+					{
+						"path": ".ermine/values/a269d63c5ca69c467048840fcd77c2a0fd8d3b23c0da681f42d57e85bee307ec",
+						"kind": "file",
+						"hex": "6669727374"
+					},
+					{
+						"path": ".ermine/values/ae88b38ec4bc0a514473e2789fe0ec7ae5f827e03d96c91eb0baf2e39c29217e",
+						"kind": "file",
+						"hex": "6e6577206669727374"
+					},
+					{
+						"path": "pile",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": {
+								"hex": "8261726470696c65"
+							}
+						}
+					},
+					{
+						"path": "pile/1.txt",
+						"kind": "file",
+						"hex": "6e6577206669727374",
+						"attrs": {
+							"party.chee.ermine.id": "u5"
+						}
+					},
+					{
+						"path": "pile/2",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/2.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "u2"
+						}
+					},
+					{
+						"path": "pile/2/under.txt",
+						"kind": "file",
+						"hex": "696e736964652061206d656d626572",
+						"attrs": {
+							"party.chee.ermine.id": "u4"
+						}
+					},
+					{
+						"path": "pile/3.text",
+						"kind": "file",
+						"hex": "7b0a2020227468697264223a20332e300a7d",
+						"attrs": {
+							"party.chee.ermine.id": "u3"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 11,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"pile",
+									[
+										{
+											"content": [
+												"u5",
+												"u2",
+												"u3"
+											],
+											"change": {
+												"node": "r",
+												"time": 11,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "u5",
+							"value": [
+								{
+									"content": "new first",
+									"change": {
+										"node": "u5",
+										"time": 10,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "u2",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"bytes": "iVBORw0KGgo"
+										}
+									},
+									"change": {
+										"node": "u2",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [
+								[
+									"under",
+									[
+										{
+											"content": [
+												"u4"
+											],
+											"change": {
+												"node": "u2",
+												"time": 8,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "u3",
+							"value": [
+								{
+									"content": {
+										"third": 3
+									},
+									"change": {
+										"node": "u3",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "u4",
+							"value": [
+								{
+									"content": "inside a member",
+									"change": {
+										"node": "u4",
+										"time": 7,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [
+						{
+							"id": "u1",
+							"value": [
+								{
+									"content": "first",
+									"change": {
+										"node": "u1",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"missing": []
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,355 @@
+{
+	"title": "key is NFD: composed and decomposed compare equal, marks in canonical order",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "é",
+			"expect": {
+				"result": "é"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "é",
+			"expect": {
+				"result": "é"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "É",
+			"expect": {
+				"result": "é"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǻ",
+			"expect": {
+				"result": "ǻ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ḉ",
+			"expect": {
+				"result": "ḉ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ệ",
+			"expect": {
+				"result": "ệ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ạ́",
+			"expect": {
+				"result": "ạ́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ạ́",
+			"expect": {
+				"result": "ạ́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ạ́́",
+			"expect": {
+				"result": "ạ́́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "á̖̗̂",
+			"expect": {
+				"result": "á̖̗̂"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "à֮̀̕̕",
+			"expect": {
+				"result": "à֮̀̕̕"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Å",
+			"expect": {
+				"result": "å"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Å",
+			"expect": {
+				"result": "å"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ω",
+			"expect": {
+				"result": "ω"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ŉ",
+			"expect": {
+				"result": "ʼn"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ﬀ",
+			"expect": {
+				"result": "ff"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "①",
+			"expect": {
+				"result": "①"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "㎏",
+			"expect": {
+				"result": "㎏"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ｱ",
+			"expect": {
+				"result": "ｱ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝐀𝐁𝐂",
+			"expect": {
+				"result": "𝐀𝐁𝐂"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ĳ",
+			"expect": {
+				"result": "ĳ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǆ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "́",
+			"expect": {
+				"result": "́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "̣́",
+			"expect": {
+				"result": "̣́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "̣́",
+			"expect": {
+				"result": "̣́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ẹ́́",
+			"expect": {
+				"result": "ẹ́́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ᾀ",
+			"expect": {
+				"result": "ἀι"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ᾈ",
+			"expect": {
+				"result": "ἀι"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Άͅ",
+			"expect": {
+				"result": "άι"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ᾴ",
+			"expect": {
+				"result": "άι"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ﬁ́",
+			"expect": {
+				"result": "fí"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ŉ́",
+			"expect": {
+				"result": "ʼń"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "゙゙",
+			"expect": {
+				"result": "゙゙"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "が",
+			"expect": {
+				"result": "が"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "が",
+			"expect": {
+				"result": "が"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ガ",
+			"expect": {
+				"result": "ガ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ｶﾞ",
+			"expect": {
+				"result": "ｶﾞ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ཱི",
+			"expect": {
+				"result": "ཱི"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ཱི",
+			"expect": {
+				"result": "ཱི"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ཱི",
+			"expect": {
+				"result": "ཱི"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ẛ̣",
+			"expect": {
+				"result": "ṩ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "̈́",
+			"expect": {
+				"result": "̈́"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "क़",
+			"expect": {
+				"result": "क़"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ω",
+			"expect": {
+				"result": "ω"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Å",
+			"expect": {
+				"result": "å"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "⫝̸",
+			"expect": {
+				"result": "⫝̸"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝅗𝅥",
+			"expect": {
+				"result": "𝅗𝅥"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝆹𝅥𝅮",
+			"expect": {
+				"result": "𝆹𝅥𝅮"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝅗𝅥",
+			"expect": {
+				"result": "𝅗𝅥"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "丽",
+			"expect": {
+				"result": "丽"
+			}
+		}
+	]
+}

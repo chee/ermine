@@ -29,9 +29,13 @@ const under = (p: readonly Key[], q: readonly Key[]) =>
 
 // next puts or removes the whole of prev's place, so prev is dead
 // a move in prev may take from anywhere: never dead
+// prev removing a list element (a number last) moves the ones after it: next at the same place is
+// at another element
 function dies(prev: Patch, next: Patch): boolean {
 	return next.range === undefined && next.move === undefined && prev.move === undefined &&
-		under(prev.path, next.path)
+		under(prev.path, next.path) &&
+		!(plain(prev) && prev.range === undefined && typeof prev.path.at(-1) === "number" &&
+			prev.path.length === next.path.length)
 }
 
 // the last patch's value, as known: so typing one at a time costs what it types

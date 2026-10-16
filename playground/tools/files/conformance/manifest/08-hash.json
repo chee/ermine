@@ -1,0 +1,125 @@
+{
+	"title": "a value's hash is the BLAKE3 of its deterministic CBOR; null's is NULL",
+	"steps": [
+		{
+			"op": "hash",
+			"value": "hi",
+			"expect": {
+				"hash": "e7778fd06da2f00fa713c4523b60f78dcb0d1f6ac5af613e5b84061146f4f0a6"
+			}
+		},
+		{
+			"op": "hash",
+			"value": "",
+			"expect": {
+				"hash": "4d86d0ecb09ceacb693ff1906c2c81cfb38d835233adbd232942b763356da1d0"
+			}
+		},
+		{
+			"op": "hash",
+			"value": null,
+			"expect": {
+				"hash": "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4"
+			}
+		},
+		{
+			"op": "hash",
+			"value": {
+				"a": [
+					1,
+					2
+				]
+			},
+			"expect": {
+				"hash": "60912202d6d2f27afc3ee625c9763aec1e3c3bbb9927c6455f1d18f7a1d7483c"
+			}
+		},
+		{
+			"op": "hash",
+			"value": {
+				"/": {
+					"float32": [
+						1,
+						"NaN"
+					]
+				}
+			},
+			"expect": {
+				"hash": "92d56ff014557cc91cca0a8ad8bc26adf192df5a62f755ef14cebb8e2d5e82e4"
+			}
+		},
+		{
+			"op": "hash",
+			"value": {
+				"/": {
+					"bytes": "AQID"
+				}
+			},
+			"expect": {
+				"hash": "5ee97f87a1b8648b79ed6ccda908adaf15ba3c1d93b6338ce30a777443af1f2f"
+			}
+		},
+		{
+			"op": "hash",
+			"value": {
+				"/": {
+					"live": "clock"
+				}
+			},
+			"expect": {
+				"hash": "251a49fb4e845f8bd2df6fad6311d4d58f696dcc4483a6e897f24402167c21b1"
+			}
+		},
+		{
+			"op": "hash",
+			"value": -0,
+			"expect": {
+				"hash": "931be8b2ed006e00d47665ab8f63c29d0427a69ab8eb091919734cee61a34d66"
+			}
+		},
+		{
+			"op": "hash",
+			"value": 9007199254740992,
+			"expect": {
+				"hash": "983be60d6254ad0b920a3d5c69e0791f42a9bd88f8a3ba43ddc6b1bc36c5d711"
+			}
+		},
+		{
+			"op": "hash",
+			"value": {
+				"b": 2,
+				"a": 1
+			},
+			"expect": {
+				"hash": "a653b0a2109d94b8c22417ff991ebdadda2fb23d78cac5f5b7af0a647e0df336"
+			}
+		},
+		{
+			"op": "null",
+			"expect": {
+				"hash": "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4"
+			}
+		},
+		{
+			"op": "digest",
+			"bytes": "",
+			"expect": {
+				"hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+			}
+		},
+		{
+			"op": "digest",
+			"bytes": "616263",
+			"expect": {
+				"hash": "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85"
+			}
+		},
+		{
+			"op": "digest",
+			"bytes": "f6",
+			"expect": {
+				"hash": "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4"
+			}
+		}
+	]
+}

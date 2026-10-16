@@ -1,0 +1,15 @@
+{
+	"title": "a key that is bytes",
+	"steps": [
+		{
+			"op": "read",
+			"text": "{h'00': 1}",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

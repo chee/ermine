@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ermine slaygrounds</title>
+		<meta name="description"
+			content="a live editor for ermine programs: editor, render, console, graph, map and files, with many examples" />
+		<meta name="order" content="0" />
+		<link rel="icon" href="src/ermine.svg" type="image/svg+xml" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..600,0..100,0..1&family=Jost:wght@400;500;600&display=swap"
+			rel="stylesheet" />
+		<link rel="stylesheet" href="src/style.css" />
+	</head>
+	<body>
+		<header>
+			<strong><img class="ermine" src="src/ermine.svg" alt="" /> ermine slaygrounds</strong>
+			<div id="example" class="menu" title="examples: a host.ts and a program.ts each"></div>
+			<button id="run" title="restart: a fresh world (cmd/ctrl+enter)">🍒 Restart</button>
+			<button id="save"
+				title="save graph: everything the root reaches, packed into a .ermine file (live values as stand-ins). lab-load opens one">💾 save graph</button>
+			<span id="state"></span>
+			<span id="types" title="typescript 7 (tsgo, wasm) for hovers and errors"></span>
+			<span class="fill"></span>
+			<button id="explain" aria-pressed="false"
+				title="explain: badges on what is bound (🔗 a node, 🪝 a handler), a flash when its node changes, and what just happened">💡 explain</button>
+			<label><input type="checkbox" id="auto" checked /> reload on edit</label>
+		</header>
+		<main>
+			<section id="left" class="pane">
+				<h2>
+					<nav id="files">
+						<button data-file="host.ts">host.ts</button>
+						<button data-file="program.ts" aria-selected="true">program.ts</button>
+					</nav>
+				</h2>
+				<article id="code"></article>
+			</section>
+			<button class="grab across" id="across" aria-label="resize editor"></button>
+			<div id="right">
+				<section id="render" class="pane">
+					<h2>render</h2>
+					<div id="frame"></div>
+					<div id="happened" hidden></div>
+				</section>
+				<button class="grab down" id="down" aria-label="resize console"></button>
+				<section id="console" class="pane">
+					<h2>
+						<button id="pick" aria-pressed="false"
+							title="inspect element: hover the render, click to pick (esc stops)">⌖</button>
+						<nav id="tabs">
+							<button data-tab="console" aria-selected="true">console</button>
+							<button data-tab="graph" aria-selected="false">graph</button>
+							<button data-tab="map" aria-selected="false">map</button>
+							<button data-tab="files" aria-selected="false">files</button>
+						</nav>
+						<button id="clear">clear</button>
+					</h2>
+					<div id="tab-console" class="tab">
+						<ol id="lines"></ol>
+						<label
+							id="eval">› <input id="expr" placeholder="run in the program" spellcheck="false" autocomplete="off" /></label>
+					</div>
+					<div id="tab-graph" class="tab" hidden></div>
+				</section>
+			</div>
+		</main>
+		<script type="module" src="src/editor.ts"></script>
+	</body>
+</html>

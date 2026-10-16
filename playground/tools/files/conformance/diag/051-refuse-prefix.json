@@ -1,0 +1,15 @@
+{
+	"title": "bytes prefixes other than h and b64",
+	"steps": [
+		{
+			"op": "read",
+			"text": "x'ab'",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

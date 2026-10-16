@@ -1,0 +1,91 @@
+{
+	"title": "a fold replaces a last frame cut short",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"a",
+					"31"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest",
+					"."
+				]
+			}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "000009",
+			"append": true,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"a",
+						"31"
+					]
+				]
+			}
+		},
+		{
+			"op": "fold",
+			"records": [
+				[
+					"a",
+					"31"
+				]
+			],
+			"expect": {
+				"synced": [
+					"tmp/manifest",
+					"."
+				]
+			}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"b",
+					"32"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": [
+					[
+						"manifest",
+						"00000005a16161413100000005a161624132"
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,235 @@
+{
+	"title": "a fresh store's first layout: the root's folder, a map, a string",
+	"steps": [
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"apps": [
+								"a"
+							],
+							"readme": [
+								"t"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"t": {
+						"kept": [
+							"90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {},
+			"probe": {
+				"": [
+					".ermine"
+				],
+				".ermine": []
+			},
+			"time": 1,
+			"ino": {},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"apps": "apps",
+							"readme": "readme"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"apps",
+							0
+						],
+						"file": "apps.text",
+						"laid": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214"
+					},
+					"t": {
+						"home": [
+							"r",
+							"readme",
+							0
+						],
+						"file": "readme.txt",
+						"laid": "90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"apps": "apps",
+							"readme": "readme"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"apps",
+							0
+						],
+						"file": "apps.text",
+						"laid": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214"
+					},
+					"t": {
+						"home": [
+							"r",
+							"readme",
+							0
+						],
+						"file": "readme.txt",
+						"laid": "90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9"
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "file",
+						"to": "apps.text",
+						"before": null,
+						"after": {
+							"file": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214"
+						},
+						"id": "a",
+						"form": "cbor",
+						"info": []
+					},
+					{
+						"number": 2,
+						"what": "file",
+						"to": "readme.txt",
+						"before": null,
+						"after": {
+							"file": "90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9"
+						},
+						"id": "t",
+						"form": "txt",
+						"info": []
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"apps": [
+								"a"
+							],
+							"readme": [
+								"t"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"t": {
+						"kept": [
+							"90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"apps": "apps",
+						"readme": "readme"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"apps",
+						0
+					],
+					"file": "apps.text",
+					"laid": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214"
+				},
+				"t": {
+					"home": [
+						"r",
+						"readme",
+						0
+					],
+					"file": "readme.txt",
+					"laid": "90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9"
+				}
+			},
+			"expect": {
+				"laid": {
+					"apps.text": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"apps",
+							0
+						],
+						"form": "cbor",
+						"hash": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+						"info": []
+					},
+					"readme.txt": {
+						"kind": "file",
+						"id": "t",
+						"home": [
+							"r",
+							"readme",
+							0
+						],
+						"form": "txt",
+						"hash": "90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+						"info": []
+					}
+				}
+			}
+		}
+	]
+}

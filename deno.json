@@ -17,25 +17,19 @@
 		"./ermine/realms",
 		"./ermine/sites",
 		"./ermine/clingy",
-		"./playground/slaygrounds-world",
-		"./playground/programs",
 		"./extensions/subduction",
 		"./extensions/sync",
-		"./playground/files",
-		"./playground/solid",
-		"./playground/demos",
-		"./playground/demos/console",
-		"./playground/places-fresh",
-		"./playground/pack-indexeddb",
-		"./playground/presence",
-		"./playground/patch-nodes"
+		"./extensions/programs",
+		"./extensions/presence",
+		"./extensions/patch-nodes",
+		"./playground/demo-world",
+		"./playground/libraries/pack-indexeddb"
 	],
 	"tasks": {
 		"test": "deno test --allow-run --allow-read --allow-env && deno task conformance",
 		"conformance": "deno test --quiet --allow-run --allow-read --allow-env conformance/run.ts --",
 		"check": "deno check .",
-		"bench": "deno bench",
-		"bundle": "deno run --allow-read --allow-write --allow-run playground/bundle/bundle.ts"
+		"bench": "deno bench"
 	},
 	"imports": {
 		"@std/assert": "jsr:@std/assert@^1",
@@ -54,7 +48,6 @@
 		"**/c",
 		"**/target",
 		".graveyard",
-		"playground/experimental_os",
 		"conformance/suites-aside",
 		".claude",
 		".agent-shell"

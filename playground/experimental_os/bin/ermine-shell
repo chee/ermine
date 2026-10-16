@@ -1,0 +1,38 @@
+#!/bin/sh
+# ermine-shell: the shell of the ermineOS running on this Mac, in this
+# terminal, over its Unix socket (newos/drv_sock.c): ~/.ermine/shell.sock, or
+# $ERMINE_SOCK. Raw mode, the terminal put back on the way out, its size
+# sent as it changes, so `pty vim` there fills it. exit or ctrl-d ends it;
+# ermineOS goes on.
+#
+# The client is ermine-shell.c beside this, built once into
+# ../mac/build/bin. With no cc, nc -U (or socat) in raw mode, the size sent
+# once. Not on a terminal, it is a pipe both ways: from a script,
+#   printf 'ls /\n' | playground/experimental_os/bin/ermine-shell
+# or nc -U ~/.ermine/shell.sock with exit as the last line (the Mac's nc
+# does not end its sending side when its input ends).
+here="$(cd "$(dirname "$0")" && pwd)"
+sock="${ERMINE_SOCK:-$HOME/.ermine/shell.sock}"
+if [ ! -S "$sock" ]; then
+	echo "ermine-shell: no socket at $sock (is ermineOS running?)" >&2
+	exit 1
+fi
+bin="$here/../mac/build/bin/ermine-shell"
+if [ ! -x "$bin" ] || [ "$here/ermine-shell.c" -nt "$bin" ]; then
+	mkdir -p "$(dirname "$bin")"
+	cc -std=c11 -O2 -Wall -o "$bin" "$here/ermine-shell.c" 2>/dev/null || rm -f "$bin"
+fi
+if [ -x "$bin" ]; then exec "$bin" "$sock"; fi
+
+if command -v nc >/dev/null 2>&1; then connect() { nc -U "$sock"; }
+elif command -v socat >/dev/null 2>&1; then connect() { socat - "UNIX-CONNECT:$sock"; }
+else
+	echo "ermine-shell: needs cc, nc or socat" >&2
+	exit 1
+fi
+if [ ! -t 0 ]; then connect; exit; fi
+saved="$(stty -g)"
+trap 'stty "$saved"' EXIT INT TERM HUP
+stty raw -echo
+# the size, as a terminal reports its own: CSI 8 ; rows ; cols t
+{ printf '\033[8;%d;%dt' "$(tput lines)" "$(tput cols)"; cat; } | connect

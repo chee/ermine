@@ -1,0 +1,89 @@
+{
+	"title": "meta: the root and the time",
+	"steps": [
+		{
+			"op": "encode",
+			"codec": "meta",
+			"record": {
+				"root": "r",
+				"time": 6
+			},
+			"expect": {
+				"bytes": "a264726f6f7461726474696d65f94600"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "a264726f6f7461726474696d65f94600",
+			"expect": {
+				"record": {
+					"root": "r",
+					"time": 6
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "meta",
+			"record": {
+				"root": "",
+				"time": 1.5
+			},
+			"expect": {
+				"bytes": "a264726f6f74606474696d65f93e00"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "a264726f6f74606474696d65f93e00",
+			"expect": {
+				"record": {
+					"root": "",
+					"time": 1.5
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "ff",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "826172f94600",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "a264726f6f74f93c006474696d65f94600",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "a264726f6f7461726474696d656136",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "meta",
+			"bytes": "a164726f6f746172",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

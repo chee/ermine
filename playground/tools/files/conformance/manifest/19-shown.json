@@ -1,0 +1,199 @@
+{
+	"title": "a layout record holds only what is there, hashes as 32 bytes",
+	"steps": [
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"entries": {
+					"clock": "clock"
+				},
+				"file": "apps.text",
+				"folder": true,
+				"home": [
+					"r",
+					"apps",
+					0
+				],
+				"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+			},
+			"expect": {
+				"bytes": "a56466696c6569617070732e7465787464686f6d658361726461707073f90000646c6169645820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e1966666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a56466696c6569617070732e7465787464686f6d658361726461707073f90000646c6169645820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e1966666f6c646572f567656e7472696573a165636c6f636b65636c6f636b",
+			"expect": {
+				"record": {
+					"entries": {
+						"clock": "clock"
+					},
+					"file": "apps.text",
+					"folder": true,
+					"home": [
+						"r",
+						"apps",
+						0
+					],
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"home": [
+					"r",
+					"docs",
+					1.5
+				],
+				"file": "2 cat.png",
+				"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+				"was": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+				"sides": [
+					"2 cat 2.png",
+					"2 cat 3.png"
+				],
+				"folder": true,
+				"entries": {
+					"docs": [
+						"docs",
+						"1",
+						"2 cat"
+					],
+					"a/b": "a:b"
+				},
+				"left": [
+					"docs/x"
+				],
+				"away": true
+			},
+			"expect": {
+				"bytes": "a96377617358202dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e26461776179f56466696c656932206361742e706e6764686f6d6583617264646f6373f93e00646c6169645820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19646c6566748166646f63732f78657369646573826b322063617420322e706e676b322063617420332e706e6766666f6c646572f567656e7472696573a263612f6263613a6264646f63738364646f63736131653220636174"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a96377617358202dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e26461776179f56466696c656932206361742e706e6764686f6d6583617264646f6373f93e00646c6169645820211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19646c6566748166646f63732f78657369646573826b322063617420322e706e676b322063617420332e706e6766666f6c646572f567656e7472696573a263612f6263613a6264646f63738364646f63736131653220636174",
+			"expect": {
+				"record": {
+					"home": [
+						"r",
+						"docs",
+						1.5
+					],
+					"file": "2 cat.png",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"was": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+					"sides": [
+						"2 cat 2.png",
+						"2 cat 3.png"
+					],
+					"folder": true,
+					"entries": {
+						"docs": [
+							"docs",
+							"1",
+							"2 cat"
+						],
+						"a/b": "a:b"
+					},
+					"left": [
+						"docs/x"
+					],
+					"away": true
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {},
+			"expect": {
+				"bytes": "a0"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a0",
+			"expect": {
+				"record": {}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"away": true
+			},
+			"expect": {
+				"bytes": "a16461776179f5"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a16461776179f5",
+			"expect": {
+				"record": {
+					"away": true
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"entries": {}
+			},
+			"expect": {
+				"bytes": "a167656e7472696573a0"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a167656e7472696573a0",
+			"expect": {
+				"record": {
+					"entries": {}
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"sides": []
+			},
+			"expect": {
+				"bytes": "a0"
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"laid": "zz"
+			},
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "shown",
+			"record": {
+				"was": "211DB469968E18AF8A4C08B0AACA0901A09E1DD5929DF5BEBF8C38C8C8A12E19"
+			},
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

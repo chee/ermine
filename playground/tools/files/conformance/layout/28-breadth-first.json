@@ -1,0 +1,561 @@
+{
+	"title": "a new home is the first slot breadth first, a holder's slots in code point order",
+	"steps": [
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"x"
+							],
+							"a": [
+								"deep"
+							],
+							"B": [
+								"y"
+							],
+							"é": [
+								"z"
+							],
+							"e": [
+								"z"
+							]
+						}
+					},
+					"deep": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"x": [
+								"x"
+							],
+							"y": [
+								"y"
+							],
+							"a": [
+								"w"
+							]
+						}
+					},
+					"x": {
+						"kept": [
+							"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"y": {
+						"kept": [
+							"a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"z": {
+						"kept": [
+							"56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"w": {
+						"kept": [
+							"cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {},
+			"probe": {
+				"": [
+					".ermine"
+				],
+				".ermine": []
+			},
+			"time": 1,
+			"ino": {},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"B": "B",
+							"a": "a",
+							"b": "b.FINAL",
+							"e": "e",
+							"é": "é"
+						}
+					},
+					"y": {
+						"home": [
+							"r",
+							"B",
+							0
+						],
+						"file": "B.txt",
+						"laid": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f"
+					},
+					"deep": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"a": "a",
+							"x": "x",
+							"y": "y"
+						}
+					},
+					"x": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"file": "b.FINAL.txt",
+						"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+					},
+					"z": {
+						"home": [
+							"r",
+							"e",
+							0
+						],
+						"file": "e.txt",
+						"laid": "56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4"
+					},
+					"w": {
+						"home": [
+							"deep",
+							"a",
+							0
+						],
+						"file": "a.txt",
+						"laid": "cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"B": "B",
+							"a": "a",
+							"b": "b.FINAL",
+							"e": "e",
+							"é": "é"
+						}
+					},
+					"y": {
+						"home": [
+							"r",
+							"B",
+							0
+						],
+						"file": "B.txt",
+						"laid": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f"
+					},
+					"deep": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"a": "a",
+							"x": "x",
+							"y": "y"
+						}
+					},
+					"x": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"file": "b.FINAL.txt",
+						"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+					},
+					"z": {
+						"home": [
+							"r",
+							"e",
+							0
+						],
+						"file": "e.txt",
+						"laid": "56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4"
+					},
+					"w": {
+						"home": [
+							"deep",
+							"a",
+							0
+						],
+						"file": "a.txt",
+						"laid": "cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b"
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "file",
+						"to": "B.txt",
+						"before": null,
+						"after": {
+							"file": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f"
+						},
+						"id": "y",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 2,
+						"what": "folder",
+						"to": "a",
+						"before": null,
+						"after": {
+							"folder": null
+						},
+						"id": "deep",
+						"info": []
+					},
+					{
+						"number": 3,
+						"what": "file",
+						"to": "b.FINAL.txt",
+						"before": null,
+						"after": {
+							"file": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+						},
+						"id": "x",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 4,
+						"what": "file",
+						"to": "e.txt",
+						"before": null,
+						"after": {
+							"file": "56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4"
+						},
+						"id": "z",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 5,
+						"what": "link",
+						"to": "é.txt",
+						"before": null,
+						"after": {
+							"link": "e.txt"
+						},
+						"id": "z"
+					},
+					{
+						"number": 6,
+						"what": "file",
+						"to": "a/a.txt",
+						"before": null,
+						"after": {
+							"file": "cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b"
+						},
+						"id": "w",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 7,
+						"what": "link",
+						"to": "a/x.txt",
+						"before": null,
+						"after": {
+							"link": "../b.FINAL.txt"
+						},
+						"id": "x"
+					},
+					{
+						"number": 8,
+						"what": "link",
+						"to": "a/y.txt",
+						"before": null,
+						"after": {
+							"link": "../B.txt"
+						},
+						"id": "y"
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"x"
+							],
+							"a": [
+								"deep"
+							],
+							"B": [
+								"y"
+							],
+							"é": [
+								"z"
+							],
+							"e": [
+								"z"
+							]
+						}
+					},
+					"deep": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"x": [
+								"x"
+							],
+							"y": [
+								"y"
+							],
+							"a": [
+								"w"
+							]
+						}
+					},
+					"x": {
+						"kept": [
+							"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"y": {
+						"kept": [
+							"a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"z": {
+						"kept": [
+							"56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"w": {
+						"kept": [
+							"cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"B": "B",
+						"a": "a",
+						"b": "b.FINAL",
+						"e": "e",
+						"é": "é"
+					}
+				},
+				"y": {
+					"home": [
+						"r",
+						"B",
+						0
+					],
+					"file": "B.txt",
+					"laid": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f"
+				},
+				"deep": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"x": "x",
+						"y": "y"
+					}
+				},
+				"x": {
+					"home": [
+						"r",
+						"b",
+						0
+					],
+					"file": "b.FINAL.txt",
+					"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+				},
+				"z": {
+					"home": [
+						"r",
+						"e",
+						0
+					],
+					"file": "e.txt",
+					"laid": "56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4"
+				},
+				"w": {
+					"home": [
+						"deep",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b"
+				}
+			},
+			"expect": {
+				"laid": {
+					"B.txt": {
+						"kind": "file",
+						"id": "y",
+						"home": [
+							"r",
+							"B",
+							0
+						],
+						"form": "txt",
+						"hash": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+						"info": []
+					},
+					"a": {
+						"kind": "folder",
+						"id": "deep",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"b.FINAL.txt": {
+						"kind": "file",
+						"id": "x",
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"form": "txt",
+						"hash": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+						"info": []
+					},
+					"e.txt": {
+						"kind": "file",
+						"id": "z",
+						"home": [
+							"r",
+							"e",
+							0
+						],
+						"form": "txt",
+						"hash": "56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4",
+						"info": []
+					},
+					"a/a.txt": {
+						"kind": "file",
+						"id": "w",
+						"home": [
+							"deep",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "cecaca8024d186305967d28e194008fc4b2a8f1915c8253b42798f35c4d22f4b",
+						"info": []
+					},
+					"é.txt": {
+						"kind": "link",
+						"id": "z",
+						"home": [
+							"r",
+							"é",
+							0
+						],
+						"target": "e.txt",
+						"half": "file"
+					},
+					"a/x.txt": {
+						"kind": "link",
+						"id": "x",
+						"home": [
+							"deep",
+							"x",
+							0
+						],
+						"target": "../b.FINAL.txt",
+						"half": "file"
+					},
+					"a/y.txt": {
+						"kind": "link",
+						"id": "y",
+						"home": [
+							"deep",
+							"y",
+							0
+						],
+						"target": "../B.txt",
+						"half": "file"
+					}
+				}
+			}
+		}
+	]
+}

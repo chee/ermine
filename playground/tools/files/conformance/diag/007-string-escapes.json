@@ -1,0 +1,19 @@
+{
+	"title": "escapes as JSON has them, other controls and DEL as \\u00xx, the rest as is",
+	"steps": [
+		{
+			"op": "write",
+			"value": "a\"b\\c/\b\f\n\r\t\u0000\u001fé😀 ",
+			"expect": {
+				"text": "\"a\\\"b\\\\c/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007fé😀 \""
+			}
+		},
+		{
+			"op": "read",
+			"text": "\"a\\\"b\\\\c/\\b\\f\\n\\r\\t\\u0000\\u001f\\u007fé😀 \"",
+			"expect": {
+				"value": "a\"b\\c/\b\f\n\r\t\u0000\u001fé😀 "
+			}
+		}
+	]
+}

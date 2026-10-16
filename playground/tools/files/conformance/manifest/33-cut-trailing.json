@@ -1,0 +1,60 @@
+{
+	"title": "a last frame whole in length that is not deterministic CBOR (trailing) is cut short",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000006a16164410100",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"a",
+						"31"
+					]
+				]
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"c",
+					"33"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [],
+				"files": [
+					[
+						"manifest",
+						"00000005a16161413100000005a161634133"
+					]
+				]
+			}
+		}
+	]
+}

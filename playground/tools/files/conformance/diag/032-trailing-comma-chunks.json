@@ -1,0 +1,12 @@
+{
+	"title": "a last comma in (_ )",
+	"steps": [
+		{
+			"op": "read",
+			"text": "(_ \"a\", \"b\",)",
+			"expect": {
+				"value": "ab"
+			}
+		}
+	]
+}

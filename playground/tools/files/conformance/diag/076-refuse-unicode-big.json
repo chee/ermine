@@ -1,0 +1,15 @@
+{
+	"title": "\\u{...} past U+10FFFF",
+	"steps": [
+		{
+			"op": "read",
+			"text": "\"\\u{110000}\"",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

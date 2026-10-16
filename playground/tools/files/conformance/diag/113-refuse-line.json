@@ -1,0 +1,15 @@
+{
+	"title": "the line and column of a fault",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[\n  1,\n  x\n]",
+			"expect": {
+				"code": "not-diag",
+				"at": 9,
+				"line": 3,
+				"column": 3
+			}
+		}
+	]
+}

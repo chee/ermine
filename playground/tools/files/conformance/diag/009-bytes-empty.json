@@ -1,0 +1,27 @@
+{
+	"title": "no bytes is h''",
+	"steps": [
+		{
+			"op": "write",
+			"value": {
+				"/": {
+					"bytes": ""
+				}
+			},
+			"expect": {
+				"text": "h''"
+			}
+		},
+		{
+			"op": "read",
+			"text": "h''",
+			"expect": {
+				"value": {
+					"/": {
+						"bytes": ""
+					}
+				}
+			}
+		}
+	]
+}

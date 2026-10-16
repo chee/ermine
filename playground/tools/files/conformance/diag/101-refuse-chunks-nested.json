@@ -1,0 +1,15 @@
+{
+	"title": "chunks inside chunks",
+	"steps": [
+		{
+			"op": "read",
+			"text": "(_ (_ \"a\"))",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}

@@ -1,0 +1,180 @@
+{
+	"title": "scalar values past U+FFFF: Deseret, Osage, Adlam, Warang Citi, math letters",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "𐐀",
+			"expect": {
+				"result": "𐐨"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐐨",
+			"expect": {
+				"result": "𐐨"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐒰",
+			"expect": {
+				"result": "𐓘"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐓘",
+			"expect": {
+				"result": "𐓘"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𞤀",
+			"expect": {
+				"result": "𞤢"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𞤢",
+			"expect": {
+				"result": "𞤢"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𑢠",
+			"expect": {
+				"result": "𑣀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𑣀",
+			"expect": {
+				"result": "𑣀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐲀",
+			"expect": {
+				"result": "𐳀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐳀",
+			"expect": {
+				"result": "𐳀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𖹀",
+			"expect": {
+				"result": "𖹠"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𖹠",
+			"expect": {
+				"result": "𖹠"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝐀",
+			"expect": {
+				"result": "𝐀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𝒜",
+			"expect": {
+				"result": "𝒜"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "🅐",
+			"expect": {
+				"result": "🅐"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "😀",
+			"expect": {
+				"result": "😀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "👨‍👩‍👧",
+			"expect": {
+				"result": "👨‍👩‍👧"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "🇦🇧",
+			"expect": {
+				"result": "🇦🇧"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𠀀",
+			"expect": {
+				"result": "𠀀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐐀𐐁𐐂",
+			"expect": {
+				"result": "𐐨𐐩𐐪"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "a𐐀b",
+			"expect": {
+				"result": "a𐐨b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "A𐐀B",
+			"expect": {
+				"result": "a𐐨b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𞤀Σ",
+			"expect": {
+				"result": "𞤢ς"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Σ𞤀",
+			"expect": {
+				"result": "σ𞤢"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "𐐀Σ𐐀",
+			"expect": {
+				"result": "𐐨σ𐐨"
+			}
+		}
+	]
+}

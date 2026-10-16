@@ -1,0 +1,149 @@
+{
+	"title": "a layout record that is not one is a store error",
+	"steps": [
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "1f",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "8164686f6d65",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a164686f6d658261726178",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a164686f6d6583617261786130",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a164686f6d6583f93c006178f90000",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a16466696c65f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1646c616964581f00000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1646c616964784032313164623436393936386531386166386134633038623061616361303930316130396531646435393239646635626562663863333863386338613132653139",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1637761735821000000000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1657369646573826178f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a166666f6c646572f4",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a167656e7472696573a16161f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a167656e7472696573a1616180",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a167656e7472696573a16161826178f94000",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a167656e747269657380",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1646c6566746178",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a16461776179f6",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "shown",
+			"bytes": "a1656578747261f93c00",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

@@ -1,0 +1,1507 @@
+{
+	"title": "names equal by case folding and NFD clash; the first in code point order keeps the name",
+	"steps": [
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"A": [
+								"a"
+							],
+							"a": [
+								"b"
+							],
+							"café": [
+								"c"
+							],
+							"café": [
+								"d"
+							],
+							"STRASSE": [
+								"e"
+							],
+							"straße": [
+								"f"
+							],
+							"ı": [
+								"g"
+							],
+							"I": [
+								"h"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"c": {
+						"kept": [
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"d": {
+						"kept": [
+							"527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"e": {
+						"kept": [
+							"b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"f": {
+						"kept": [
+							"a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"g": {
+						"kept": [
+							"e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"h": {
+						"kept": [
+							"ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {},
+			"probe": {
+				"": [
+					".ermine"
+				],
+				".ermine": []
+			},
+			"time": 1,
+			"ino": {},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"A": "A",
+							"I": "I",
+							"STRASSE": "STRASSE",
+							"a": "a.FINAL",
+							"café": "café",
+							"café": "café.FINAL",
+							"straße": "straße.FINAL",
+							"ı": "ı"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"A",
+							0
+						],
+						"file": "A.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+					},
+					"h": {
+						"home": [
+							"r",
+							"I",
+							0
+						],
+						"file": "I.txt",
+						"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+					},
+					"e": {
+						"home": [
+							"r",
+							"STRASSE",
+							0
+						],
+						"file": "STRASSE.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+					},
+					"b": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"file": "a.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+					},
+					"d": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.txt",
+						"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+					},
+					"c": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.FINAL.txt",
+						"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+					},
+					"f": {
+						"home": [
+							"r",
+							"straße",
+							0
+						],
+						"file": "straße.FINAL.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+					},
+					"g": {
+						"home": [
+							"r",
+							"ı",
+							0
+						],
+						"file": "ı.txt",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"A": "A",
+							"I": "I",
+							"STRASSE": "STRASSE",
+							"a": "a.FINAL",
+							"café": "café",
+							"café": "café.FINAL",
+							"straße": "straße.FINAL",
+							"ı": "ı"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"A",
+							0
+						],
+						"file": "A.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+					},
+					"h": {
+						"home": [
+							"r",
+							"I",
+							0
+						],
+						"file": "I.txt",
+						"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+					},
+					"e": {
+						"home": [
+							"r",
+							"STRASSE",
+							0
+						],
+						"file": "STRASSE.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+					},
+					"b": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"file": "a.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+					},
+					"d": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.txt",
+						"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+					},
+					"c": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.FINAL.txt",
+						"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+					},
+					"f": {
+						"home": [
+							"r",
+							"straße",
+							0
+						],
+						"file": "straße.FINAL.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+					},
+					"g": {
+						"home": [
+							"r",
+							"ı",
+							0
+						],
+						"file": "ı.txt",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "file",
+						"to": "A.txt",
+						"before": null,
+						"after": {
+							"file": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+						},
+						"id": "a",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 2,
+						"what": "file",
+						"to": "I.txt",
+						"before": null,
+						"after": {
+							"file": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+						},
+						"id": "h",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 3,
+						"what": "file",
+						"to": "STRASSE.txt",
+						"before": null,
+						"after": {
+							"file": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+						},
+						"id": "e",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 4,
+						"what": "file",
+						"to": "a.FINAL.txt",
+						"before": null,
+						"after": {
+							"file": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+						},
+						"id": "b",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 5,
+						"what": "file",
+						"to": "café.txt",
+						"before": null,
+						"after": {
+							"file": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+						},
+						"id": "d",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 6,
+						"what": "file",
+						"to": "café.FINAL.txt",
+						"before": null,
+						"after": {
+							"file": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+						},
+						"id": "c",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 7,
+						"what": "file",
+						"to": "straße.FINAL.txt",
+						"before": null,
+						"after": {
+							"file": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+						},
+						"id": "f",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 8,
+						"what": "file",
+						"to": "ı.txt",
+						"before": null,
+						"after": {
+							"file": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+						},
+						"id": "g",
+						"form": "txt",
+						"info": []
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"A": [
+								"a"
+							],
+							"a": [
+								"b"
+							],
+							"café": [
+								"c"
+							],
+							"café": [
+								"d"
+							],
+							"STRASSE": [
+								"e"
+							],
+							"straße": [
+								"f"
+							],
+							"ı": [
+								"g"
+							],
+							"I": [
+								"h"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"c": {
+						"kept": [
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"d": {
+						"kept": [
+							"527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"e": {
+						"kept": [
+							"b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"f": {
+						"kept": [
+							"a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"g": {
+						"kept": [
+							"e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"h": {
+						"kept": [
+							"ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"A": "A",
+						"I": "I",
+						"STRASSE": "STRASSE",
+						"a": "a.FINAL",
+						"café": "café",
+						"café": "café.FINAL",
+						"straße": "straße.FINAL",
+						"ı": "ı"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"A",
+						0
+					],
+					"file": "A.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+				},
+				"h": {
+					"home": [
+						"r",
+						"I",
+						0
+					],
+					"file": "I.txt",
+					"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+				},
+				"e": {
+					"home": [
+						"r",
+						"STRASSE",
+						0
+					],
+					"file": "STRASSE.txt",
+					"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+				},
+				"b": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.FINAL.txt",
+					"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+				},
+				"d": {
+					"home": [
+						"r",
+						"café",
+						0
+					],
+					"file": "café.txt",
+					"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+				},
+				"c": {
+					"home": [
+						"r",
+						"café",
+						0
+					],
+					"file": "café.FINAL.txt",
+					"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+				},
+				"f": {
+					"home": [
+						"r",
+						"straße",
+						0
+					],
+					"file": "straße.FINAL.txt",
+					"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+				},
+				"g": {
+					"home": [
+						"r",
+						"ı",
+						0
+					],
+					"file": "ı.txt",
+					"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+				}
+			},
+			"expect": {
+				"laid": {
+					"A.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"A",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"I.txt": {
+						"kind": "file",
+						"id": "h",
+						"home": [
+							"r",
+							"I",
+							0
+						],
+						"form": "txt",
+						"hash": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+						"info": []
+					},
+					"STRASSE.txt": {
+						"kind": "file",
+						"id": "e",
+						"home": [
+							"r",
+							"STRASSE",
+							0
+						],
+						"form": "txt",
+						"hash": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+						"info": []
+					},
+					"a.FINAL.txt": {
+						"kind": "file",
+						"id": "b",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+						"info": []
+					},
+					"café.txt": {
+						"kind": "file",
+						"id": "d",
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"form": "txt",
+						"hash": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+						"info": []
+					},
+					"café.FINAL.txt": {
+						"kind": "file",
+						"id": "c",
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"form": "txt",
+						"hash": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+						"info": []
+					},
+					"straße.FINAL.txt": {
+						"kind": "file",
+						"id": "f",
+						"home": [
+							"r",
+							"straße",
+							0
+						],
+						"form": "txt",
+						"hash": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+						"info": []
+					},
+					"ı.txt": {
+						"kind": "file",
+						"id": "g",
+						"home": [
+							"r",
+							"ı",
+							0
+						],
+						"form": "txt",
+						"hash": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+						"info": []
+					}
+				}
+			}
+		},
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"Doc": [
+								"x"
+							],
+							"doc": [
+								"y"
+							]
+						}
+					},
+					"x": {
+						"kept": [
+							"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"y": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"c"
+							]
+						}
+					},
+					"c": {
+						"kept": [
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"A": "A",
+						"I": "I",
+						"STRASSE": "STRASSE",
+						"a": "a.FINAL",
+						"café": "café",
+						"café": "café.FINAL",
+						"straße": "straße.FINAL",
+						"ı": "ı"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"A",
+						0
+					],
+					"file": "A.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+				},
+				"h": {
+					"home": [
+						"r",
+						"I",
+						0
+					],
+					"file": "I.txt",
+					"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+				},
+				"e": {
+					"home": [
+						"r",
+						"STRASSE",
+						0
+					],
+					"file": "STRASSE.txt",
+					"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+				},
+				"b": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.FINAL.txt",
+					"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+				},
+				"d": {
+					"home": [
+						"r",
+						"café",
+						0
+					],
+					"file": "café.txt",
+					"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+				},
+				"c": {
+					"home": [
+						"r",
+						"café",
+						0
+					],
+					"file": "café.FINAL.txt",
+					"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+				},
+				"f": {
+					"home": [
+						"r",
+						"straße",
+						0
+					],
+					"file": "straße.FINAL.txt",
+					"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+				},
+				"g": {
+					"home": [
+						"r",
+						"ı",
+						0
+					],
+					"file": "ı.txt",
+					"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+				}
+			},
+			"probe": {
+				"": [
+					".ermine",
+					"A.txt",
+					"I.txt",
+					"STRASSE.txt",
+					"a.FINAL.txt",
+					"café.txt",
+					"café.FINAL.txt",
+					"straße.FINAL.txt",
+					"ı.txt"
+				],
+				".ermine": []
+			},
+			"time": 2,
+			"ino": {},
+			"before": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"A": [
+								"a"
+							],
+							"a": [
+								"b"
+							],
+							"café": [
+								"c"
+							],
+							"café": [
+								"d"
+							],
+							"STRASSE": [
+								"e"
+							],
+							"straße": [
+								"f"
+							],
+							"ı": [
+								"g"
+							],
+							"I": [
+								"h"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"c": {
+						"kept": [
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"d": {
+						"kept": [
+							"527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"e": {
+						"kept": [
+							"b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"f": {
+						"kept": [
+							"a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"g": {
+						"kept": [
+							"e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"h": {
+						"kept": [
+							"ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"Doc": "Doc",
+							"doc": "doc.FINAL"
+						}
+					},
+					"x": {
+						"home": [
+							"r",
+							"Doc",
+							0
+						],
+						"file": "Doc.txt",
+						"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+					},
+					"y": {
+						"home": [
+							"r",
+							"doc",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"c": {
+						"home": [
+							"y",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+					},
+					"a": {
+						"home": [
+							"r",
+							"A",
+							0
+						],
+						"file": "A.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"away": true
+					},
+					"h": {
+						"home": [
+							"r",
+							"I",
+							0
+						],
+						"file": "I.txt",
+						"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+						"away": true
+					},
+					"e": {
+						"home": [
+							"r",
+							"STRASSE",
+							0
+						],
+						"file": "STRASSE.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+						"away": true
+					},
+					"b": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"file": "a.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+						"away": true
+					},
+					"d": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.txt",
+						"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+						"away": true
+					},
+					"f": {
+						"home": [
+							"r",
+							"straße",
+							0
+						],
+						"file": "straße.FINAL.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+						"away": true
+					},
+					"g": {
+						"home": [
+							"r",
+							"ı",
+							0
+						],
+						"file": "ı.txt",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+						"away": true
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"Doc": "Doc",
+							"doc": "doc.FINAL"
+						}
+					},
+					"x": {
+						"home": [
+							"r",
+							"Doc",
+							0
+						],
+						"file": "Doc.txt",
+						"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+					},
+					"y": {
+						"home": [
+							"r",
+							"doc",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"c": {
+						"home": [
+							"y",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+					},
+					"a": {
+						"home": [
+							"r",
+							"A",
+							0
+						],
+						"file": "A.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"away": true
+					},
+					"h": {
+						"home": [
+							"r",
+							"I",
+							0
+						],
+						"file": "I.txt",
+						"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+						"away": true
+					},
+					"e": {
+						"home": [
+							"r",
+							"STRASSE",
+							0
+						],
+						"file": "STRASSE.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+						"away": true
+					},
+					"b": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"file": "a.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+						"away": true
+					},
+					"d": {
+						"home": [
+							"r",
+							"café",
+							0
+						],
+						"file": "café.txt",
+						"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+						"away": true
+					},
+					"f": {
+						"home": [
+							"r",
+							"straße",
+							0
+						],
+						"file": "straße.FINAL.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+						"away": true
+					},
+					"g": {
+						"home": [
+							"r",
+							"ı",
+							0
+						],
+						"file": "ı.txt",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+						"away": true
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "remove",
+						"from": "A.txt",
+						"before": {
+							"file": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+						},
+						"after": null,
+						"id": "a",
+						"form": "txt"
+					},
+					{
+						"number": 2,
+						"what": "remove",
+						"from": "I.txt",
+						"before": {
+							"file": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d"
+						},
+						"after": null,
+						"id": "h",
+						"form": "txt"
+					},
+					{
+						"number": 3,
+						"what": "remove",
+						"from": "STRASSE.txt",
+						"before": {
+							"file": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+						},
+						"after": null,
+						"id": "e",
+						"form": "txt"
+					},
+					{
+						"number": 4,
+						"what": "remove",
+						"from": "a.FINAL.txt",
+						"before": {
+							"file": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+						},
+						"after": null,
+						"id": "b",
+						"form": "txt"
+					},
+					{
+						"number": 5,
+						"what": "remove",
+						"from": "café.txt",
+						"before": {
+							"file": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638"
+						},
+						"after": null,
+						"id": "d",
+						"form": "txt"
+					},
+					{
+						"number": 6,
+						"what": "remove",
+						"from": "straße.FINAL.txt",
+						"before": {
+							"file": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+						},
+						"after": null,
+						"id": "f",
+						"form": "txt"
+					},
+					{
+						"number": 7,
+						"what": "remove",
+						"from": "ı.txt",
+						"before": {
+							"file": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+						},
+						"after": null,
+						"id": "g",
+						"form": "txt"
+					},
+					{
+						"number": 8,
+						"what": "file",
+						"to": "Doc.txt",
+						"before": null,
+						"after": {
+							"file": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+						},
+						"id": "x",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 9,
+						"what": "folder",
+						"to": "doc.FINAL",
+						"before": null,
+						"after": {
+							"folder": null
+						},
+						"id": "y",
+						"info": []
+					},
+					{
+						"number": 10,
+						"what": "rename",
+						"from": "café.FINAL.txt",
+						"to": "doc.FINAL/k.txt",
+						"before": {
+							"file": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+						},
+						"after": {
+							"file": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+						},
+						"id": "c",
+						"form": "txt"
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"Doc": [
+								"x"
+							],
+							"doc": [
+								"y"
+							]
+						}
+					},
+					"x": {
+						"kept": [
+							"ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"y": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"c"
+							]
+						}
+					},
+					"c": {
+						"kept": [
+							"4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"Doc": "Doc",
+						"doc": "doc.FINAL"
+					}
+				},
+				"x": {
+					"home": [
+						"r",
+						"Doc",
+						0
+					],
+					"file": "Doc.txt",
+					"laid": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067"
+				},
+				"y": {
+					"home": [
+						"r",
+						"doc",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"c": {
+					"home": [
+						"y",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb"
+				},
+				"a": {
+					"home": [
+						"r",
+						"A",
+						0
+					],
+					"file": "A.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"away": true
+				},
+				"h": {
+					"home": [
+						"r",
+						"I",
+						0
+					],
+					"file": "I.txt",
+					"laid": "ddd907582c01c7ca50a306d6d31195ac78fc3fdc16d315a429a4f5f2fad9a36d",
+					"away": true
+				},
+				"e": {
+					"home": [
+						"r",
+						"STRASSE",
+						0
+					],
+					"file": "STRASSE.txt",
+					"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+					"away": true
+				},
+				"b": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.FINAL.txt",
+					"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+					"away": true
+				},
+				"d": {
+					"home": [
+						"r",
+						"café",
+						0
+					],
+					"file": "café.txt",
+					"laid": "527a06a5afcf88b465c0fbba04f87364ab003caad73b58778258654d0bb8d638",
+					"away": true
+				},
+				"f": {
+					"home": [
+						"r",
+						"straße",
+						0
+					],
+					"file": "straße.FINAL.txt",
+					"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+					"away": true
+				},
+				"g": {
+					"home": [
+						"r",
+						"ı",
+						0
+					],
+					"file": "ı.txt",
+					"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+					"away": true
+				}
+			},
+			"expect": {
+				"laid": {
+					"Doc.txt": {
+						"kind": "file",
+						"id": "x",
+						"home": [
+							"r",
+							"Doc",
+							0
+						],
+						"form": "txt",
+						"hash": "ab881244dc82de4195399e22f6e74edee7b1a543cf8f799bbba10ade7cfa6067",
+						"info": []
+					},
+					"doc.FINAL": {
+						"kind": "folder",
+						"id": "y",
+						"home": [
+							"r",
+							"doc",
+							0
+						],
+						"info": []
+					},
+					"doc.FINAL/k.txt": {
+						"kind": "file",
+						"id": "c",
+						"home": [
+							"y",
+							"k",
+							0
+						],
+						"form": "txt",
+						"hash": "4c0d05aab37ae964ce922552a23afec473b72e18006b1c29ef1ef89c514a76bb",
+						"info": []
+					}
+				}
+			}
+		}
+	]
+}

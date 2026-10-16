@@ -1,0 +1,277 @@
+diff -ruN -x .unpacked a/egl/wayland-egl-symbols-check wayland-1.26.0/egl/wayland-egl-symbols-check
+--- a/egl/wayland-egl-symbols-check	2026-07-16 16:24:51
++++ b/egl/wayland-egl-symbols-check	2026-10-10 14:17:14
+@@ -14,7 +14,13 @@
+ 	exit 99
+ fi
+ 
+-AVAIL_FUNCS="$($NM -D --format=bsd --defined-only $LIB | awk '{print $3}')"
++if test "$(uname)" = Darwin; then
++	# Mach-O has no dynamic symbol table to ask for: take the external
++	# defined symbols, without the leading underscore C names get.
++	AVAIL_FUNCS="$($NM -gU $LIB | awk '{print $3}' | sed 's/^_//')"
++else
++	AVAIL_FUNCS="$($NM -D --format=bsd --defined-only $LIB | awk '{print $3}')"
++fi
+ 
+ # Official ABI, taken from the header.
+ REQ_FUNCS="wl_egl_window_resize
+diff -ruN -x .unpacked a/meson.build wayland-1.26.0/meson.build
+--- a/meson.build	2026-07-16 16:24:51
++++ b/meson.build	2026-10-10 14:17:14
+@@ -23,6 +23,11 @@
+ if host_machine.system() not in ['freebsd', 'openbsd']
+ 	cc_args += ['-D_POSIX_C_SOURCE=200809L']
+ endif
++if host_machine.system() == 'darwin'
++	# _POSIX_C_SOURCE hides CMSG_LEN, MSG_DONTWAIT, MSG_NOSIGNAL and
++	# u_int on Darwin; _DARWIN_C_SOURCE brings them back.
++	cc_args += ['-D_DARWIN_C_SOURCE']
++endif
+ add_project_arguments(cc_args, language: 'c')
+ 
+ compiler_flags = [
+@@ -57,6 +62,10 @@
+ endforeach
+ config_h.set10('HAVE_XUCRED_CR_PID', cc.has_member('struct xucred', 'cr_pid', prefix : '#include <sys/ucred.h>'))
+ have_broken_msg_cmsg_cloexec = false
++if host_machine.system() == 'darwin'
++	# Darwin has no MSG_CMSG_CLOEXEC: always set FD_CLOEXEC after recvmsg.
++	have_broken_msg_cmsg_cloexec = true
++endif
+ if host_machine.system() == 'freebsd'
+ 	have_broken_msg_cmsg_cloexec = not cc.compiles('''
+ #include <sys/param.h> /* To get __FreeBSD_version. */
+@@ -74,7 +83,7 @@
+ config_h.set10('HAVE_BROKEN_MSG_CMSG_CLOEXEC', have_broken_msg_cmsg_cloexec)
+ 
+ if get_option('libraries')
+-	if host_machine.system() in ['freebsd', 'openbsd']
++	if host_machine.system() in ['freebsd', 'openbsd', 'darwin']
+ 		# When building for FreeBSD, epoll(7) is provided by a userspace
+ 		# wrapper around kqueue(2).
+ 		epoll_dep = dependency('epoll-shim')
+diff -ruN -x .unpacked a/src/connection.c wayland-1.26.0/src/connection.c
+--- a/src/connection.c	2026-07-16 16:24:51
++++ b/src/connection.c	2026-10-10 14:17:14
+@@ -329,6 +329,18 @@
+ 
+ 	connection->fd = fd;
+ 
++#ifdef __APPLE__
++	/* Darwin's sendmsg on a stream AF_UNIX socket blocks when the peer's
++	 * buffer is full, MSG_DONTWAIT or not; only O_NONBLOCK stops it.
++	 * Every read and write here is meant not to wait. */
++	{
++		int flags = fcntl(fd, F_GETFL);
++
++		if (flags != -1)
++			fcntl(fd, F_SETFL, flags | O_NONBLOCK);
++	}
++#endif
++
+ 	return connection;
+ }
+ 
+diff -ruN -x .unpacked a/src/event-loop.c wayland-1.26.0/src/event-loop.c
+--- a/src/event-loop.c	2026-07-16 16:24:51
++++ b/src/event-loop.c	2026-10-10 14:17:14
+@@ -38,6 +38,13 @@
+ #include <sys/signalfd.h>
+ #include <sys/timerfd.h>
+ #include <unistd.h>
++#ifdef __APPLE__
++/* epoll-shim's timerfd takes struct itimerspec, which Darwin lacks. */
++struct itimerspec {
++	struct timespec it_interval;
++	struct timespec it_value;
++};
++#endif
+ #include "timespec-util.h"
+ #include "wayland-util.h"
+ #include "wayland-private.h"
+diff -ruN -x .unpacked a/src/wayland-client.c wayland-1.26.0/src/wayland-client.c
+--- a/src/wayland-client.c	2026-07-16 16:24:51
++++ b/src/wayland-client.c	2026-10-10 14:17:14
+@@ -2056,7 +2056,15 @@
+ 			timespec_sub_saturate(&result, &deadline, &now);
+ 			remaining_timeout = &result;
+ 		}
++#ifdef __APPLE__
++		/* Darwin has no ppoll: poll, the timeout rounded up to a ms. */
++		ret = poll(pfd, 1, remaining_timeout ?
++			   (int)(remaining_timeout->tv_sec * 1000 +
++				 (remaining_timeout->tv_nsec + 999999) / 1000000) :
++			   -1);
++#else
+ 		ret = ppoll(pfd, 1, remaining_timeout, NULL);
++#endif
+ 	} while (ret == -1 && errno == EINTR);
+ 
+ 	return ret;
+diff -ruN -x .unpacked a/src/wayland-os.c wayland-1.26.0/src/wayland-os.c
+--- a/src/wayland-os.c	2026-07-16 16:24:51
++++ b/src/wayland-os.c	2026-10-10 14:17:14
+@@ -75,11 +75,13 @@
+ {
+ 	int fd;
+ 
++#ifdef SOCK_CLOEXEC
+ 	fd = wl_socket(domain, type | SOCK_CLOEXEC, protocol);
+ 	if (fd >= 0)
+ 		return fd;
+ 	if (errno != EINVAL)
+ 		return -1;
++#endif
+ 
+ 	fd = wl_socket(domain, type, protocol);
+ 	return set_cloexec_or_close(fd);
+@@ -104,6 +106,26 @@
+ #else
+ 	*pid = 0;
+ #endif
++	return 0;
++}
++#elif defined(__APPLE__)
++int
++wl_os_socket_peercred(int sockfd, uid_t *uid, gid_t *gid, pid_t *pid)
++{
++	socklen_t len;
++	struct xucred ucred;
++	pid_t peer;
++
++	len = sizeof(ucred);
++	if (getsockopt(sockfd, SOL_LOCAL, LOCAL_PEERCRED, &ucred, &len) < 0 ||
++	    ucred.cr_version != XUCRED_VERSION)
++		return -1;
++	*uid = ucred.cr_uid;
++	*gid = ucred.cr_ngroups > 0 ? ucred.cr_groups[0] : (gid_t)-1;
++	len = sizeof(peer);
++	if (getsockopt(sockfd, SOL_LOCAL, LOCAL_PEERPID, &peer, &len) < 0)
++		peer = 0;
++	*pid = peer;
+ 	return 0;
+ }
+ #elif defined(SO_PEERCRED)
+diff -ruN -x .unpacked a/src/wayland-server.c wayland-1.26.0/src/wayland-server.c
+--- a/src/wayland-server.c	2026-07-16 16:24:51
++++ b/src/wayland-server.c	2026-10-10 14:18:10
+@@ -401,6 +401,14 @@
+ 	len = 0;
+ 	if (mask & WL_EVENT_READABLE) {
+ 		len = wl_connection_read(connection);
++#ifdef __APPLE__
++		/* epoll-shim gives no HANGUP for a client that closed its
++		 * end: its EOF is the read of nothing, not an error. */
++		if (len == 0 && wl_connection_pending_input(connection) == 0) {
++			wl_client_destroy(client);
++			return 1;
++		}
++#endif
+ 		if (len == 0 || (len < 0 && errno != EAGAIN)) {
+ 			destroy_client_with_error(
+ 			    client, "failed to read client connection");
+diff -ruN -x .unpacked a/tests/meson.build wayland-1.26.0/tests/meson.build
+--- a/tests/meson.build	2026-07-16 16:24:51
++++ b/tests/meson.build	2026-10-10 14:17:14
+@@ -196,7 +196,17 @@
+ 	'enum-validator-test': {},
+ }
+ 
++if host_machine.system() == 'darwin'
++	# os-wrappers-test interposes socket(), recvmsg() and friends by
++	# defining them in the test binary, which two-level namespaces on
++	# Darwin do not allow; it also tests Linux's CLOEXEC flags.
++	tests += { 'os-wrappers-test': { 'skip': true } }
++endif
++
+ foreach test_name, test_extras : tests
++	if test_extras.get('skip', false)
++		continue
++	endif
+ 	test_extra_sources = test_extras.get('extra_sources', [])
+ 	test_runtime_deps = test_extras.get('runtime_deps', [])
+ 	test_sources = [ test_name + '.c' ] + test_extra_sources
+diff -ruN -x .unpacked a/tests/queue-test.c wayland-1.26.0/tests/queue-test.c
+--- a/tests/queue-test.c	2026-07-16 16:24:51
++++ b/tests/queue-test.c	2026-10-10 14:17:14
+@@ -330,6 +330,20 @@
+ 	return data;
+ }
+ 
++#ifdef __APPLE__
++/* Darwin's libc has no memrchr. */
++static void *
++memrchr(const void *m, int c, size_t n)
++{
++	const unsigned char *p = m;
++
++	while (n--)
++		if (p[n] == (unsigned char)c)
++			return (void *)(p + n);
++	return NULL;
++}
++#endif
++
+ static char *
+ last_line_of(char *s)
+ {
+diff -ruN -x .unpacked a/tests/test-runner.c wayland-1.26.0/tests/test-runner.c
+--- a/tests/test-runner.c	2026-07-16 16:24:51
++++ b/tests/test-runner.c	2026-10-10 14:17:14
+@@ -63,7 +63,14 @@
+ /* set to one if the output goes to the terminal */
+ static int is_atty = 0;
+ 
++#ifdef __APPLE__
++extern const struct test __start_test_section
++	__asm("section$start$__DATA$test_section");
++extern const struct test __stop_test_section
++	__asm("section$end$__DATA$test_section");
++#else
+ extern const struct test __start_test_section, __stop_test_section;
++#endif
+ 
+ static const struct test *
+ find_test(const char *name)
+diff -ruN -x .unpacked a/tests/test-runner.h wayland-1.26.0/tests/test-runner.h
+--- a/tests/test-runner.h	2026-07-16 16:24:51
++++ b/tests/test-runner.h	2026-10-10 14:17:14
+@@ -37,11 +37,27 @@
+ 	int must_fail;
+ } __attribute__ ((aligned (16)));
+ 
++#ifdef __APPLE__
++/* Darwin has no SOCK_CLOEXEC; the tests' socketpairs go without it. */
++#include <sys/socket.h>
++#ifndef SOCK_CLOEXEC
++#define SOCK_CLOEXEC 0
++#endif
++#endif
++
++#ifdef __APPLE__
++/* Mach-O sections are "segment,section"; the linker gives their bounds
++ * as section$start$segment$section. */
++#define TEST_SECTION "__DATA,test_section"
++#else
++#define TEST_SECTION "test_section"
++#endif
++
+ #define TEST(name)							\
+ 	static void name(void);						\
+ 									\
+ 	const struct test test##name					\
+-		 __attribute__ ((used, section ("test_section"))) = {	\
++		 __attribute__ ((used, section (TEST_SECTION))) = {	\
+ 		#name, name, 0						\
+ 	};								\
+ 									\
+@@ -51,7 +67,7 @@
+ 	static void name(void);						\
+ 									\
+ 	const struct test test##name					\
+-		 __attribute__ ((used, section ("test_section"))) = {	\
++		 __attribute__ ((used, section (TEST_SECTION))) = {	\
+ 		#name, name, 1						\
+ 	};								\
+ 									\

@@ -1,0 +1,19 @@
+{
+	"title": "keys in any order, as any text, and the key __proto__",
+	"steps": [
+		{
+			"op": "read",
+			"text": "{\"b\": 1, \"a\"_0: 2, (_ \"c\", \"d\"): 3, \"__proto__\": 4, \"\\u00e9\": 5, \"\": 6}",
+			"expect": {
+				"value": {
+					"b": 1,
+					"a": 2,
+					"cd": 3,
+					"__proto__": 4,
+					"é": 5,
+					"": 6
+				}
+			}
+		}
+	]
+}

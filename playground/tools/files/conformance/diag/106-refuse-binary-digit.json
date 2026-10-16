@@ -1,0 +1,15 @@
+{
+	"title": "0b with a digit past 1",
+	"steps": [
+		{
+			"op": "read",
+			"text": "0b12",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}

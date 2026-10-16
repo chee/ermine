@@ -1,0 +1,15 @@
+{
+	"title": "hex bytes with no end",
+	"steps": [
+		{
+			"op": "read",
+			"text": "h'ab",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

@@ -1,0 +1,1157 @@
+{
+	"title": "disk: every entry a layout puts on disk; left ones and what is in them are not",
+	"steps": [
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"file": "root.txt",
+					"laid": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"foo.swp": "_foo.swp_",
+						"p": "p",
+						"s": "s"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"folder": true,
+					"entries": {
+						"b": "b"
+					}
+				},
+				"b": {
+					"home": [
+						"a",
+						"b",
+						0
+					],
+					"file": "b.txt",
+					"laid": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703"
+				},
+				"s": {
+					"home": [
+						"r",
+						"s",
+						0
+					],
+					"file": "s.txt",
+					"laid": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+					"sides": [
+						"s.FINAL.txt",
+						"s.FINAL.FINAL.text"
+					]
+				}
+			},
+			"expect": {
+				"laid": {
+					".ermine/root.txt": {
+						"kind": "file",
+						"id": "r",
+						"form": "txt",
+						"hash": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"info": []
+					},
+					"a.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"a": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"a/b.txt": {
+						"kind": "file",
+						"id": "b",
+						"home": [
+							"a",
+							"b",
+							0
+						],
+						"form": "txt",
+						"hash": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703",
+						"info": []
+					},
+					"s.txt": {
+						"kind": "file",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"form": "txt",
+						"hash": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+						"info": []
+					},
+					"s.FINAL.txt": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 1,
+						"form": "txt",
+						"hash": "05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca"
+					},
+					"s.FINAL.FINAL.text": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 2,
+						"form": "cbor",
+						"hash": "c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356"
+					},
+					"_foo.swp_.txt": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a.txt",
+						"half": "file"
+					},
+					"_foo.swp_": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a",
+						"half": "folder"
+					},
+					"p": {
+						"kind": "link",
+						"id": "x.y",
+						"home": [
+							"r",
+							"p",
+							0
+						],
+						"target": ".ermine/id/x%2Ey",
+						"half": "pending"
+					}
+				}
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"file": "root.txt",
+					"laid": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"foo.swp": "_foo.swp_",
+						"p": "p",
+						"s": "s"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"folder": true,
+					"entries": {
+						"b": "b"
+					}
+				},
+				"b": {
+					"home": [
+						"a",
+						"b",
+						0
+					],
+					"file": "b.txt",
+					"laid": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703"
+				},
+				"s": {
+					"home": [
+						"r",
+						"s",
+						0
+					],
+					"file": "s.txt",
+					"laid": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+					"sides": [
+						"s.FINAL.txt",
+						"s.FINAL.FINAL.text"
+					]
+				}
+			},
+			"pass": [],
+			"expect": {
+				"laid": {
+					".ermine/root.txt": {
+						"kind": "file",
+						"id": "r",
+						"form": "txt",
+						"hash": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"info": []
+					},
+					"a.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"a": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"a/b.txt": {
+						"kind": "file",
+						"id": "b",
+						"home": [
+							"a",
+							"b",
+							0
+						],
+						"form": "txt",
+						"hash": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703",
+						"info": []
+					},
+					"s.txt": {
+						"kind": "file",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"form": "txt",
+						"hash": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+						"info": []
+					},
+					"s.FINAL.txt": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 1,
+						"form": "txt",
+						"hash": "05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca"
+					},
+					"s.FINAL.FINAL.text": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 2,
+						"form": "cbor",
+						"hash": "c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356"
+					},
+					"_foo.swp_.swp": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a.txt",
+						"half": "file"
+					},
+					"_foo.swp_": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a",
+						"half": "folder"
+					},
+					"p": {
+						"kind": "link",
+						"id": "x.y",
+						"home": [
+							"r",
+							"p",
+							0
+						],
+						"target": ".ermine/id/x%2Ey",
+						"half": "pending"
+					}
+				}
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"file": "root.txt",
+					"laid": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"foo.swp": "_foo.swp_",
+						"p": "p",
+						"s": "s"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"folder": true,
+					"entries": {
+						"b": "b"
+					},
+					"left": [
+						"a"
+					]
+				},
+				"b": {
+					"home": [
+						"a",
+						"b",
+						0
+					],
+					"file": "b.txt",
+					"laid": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703"
+				},
+				"s": {
+					"home": [
+						"r",
+						"s",
+						0
+					],
+					"file": "s.txt",
+					"laid": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+					"sides": [
+						"s.FINAL.txt",
+						"s.FINAL.FINAL.text"
+					]
+				}
+			},
+			"expect": {
+				"laid": {
+					".ermine/root.txt": {
+						"kind": "file",
+						"id": "r",
+						"form": "txt",
+						"hash": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"info": []
+					},
+					"a.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"s.txt": {
+						"kind": "file",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"form": "txt",
+						"hash": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+						"info": []
+					},
+					"s.FINAL.txt": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 1,
+						"form": "txt",
+						"hash": "05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca"
+					},
+					"s.FINAL.FINAL.text": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 2,
+						"form": "cbor",
+						"hash": "c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356"
+					},
+					"_foo.swp_.txt": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a.txt",
+						"half": "file"
+					},
+					"_foo.swp_": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a",
+						"half": "folder"
+					},
+					"p": {
+						"kind": "link",
+						"id": "x.y",
+						"home": [
+							"r",
+							"p",
+							0
+						],
+						"target": ".ermine/id/x%2Ey",
+						"half": "pending"
+					}
+				}
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"file": "root.txt",
+					"laid": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"foo.swp": "_foo.swp_",
+						"p": "p",
+						"s": "s"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"folder": true,
+					"entries": {
+						"b": "b"
+					}
+				},
+				"b": {
+					"home": [
+						"a",
+						"b",
+						0
+					],
+					"file": "b.txt",
+					"laid": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703"
+				},
+				"s": {
+					"home": [
+						"r",
+						"s",
+						0
+					],
+					"file": "s.txt",
+					"laid": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+					"sides": [
+						"s.FINAL.txt",
+						"s.FINAL.FINAL.text"
+					],
+					"left": [
+						"s.FINAL.txt"
+					]
+				}
+			},
+			"expect": {
+				"laid": {
+					".ermine/root.txt": {
+						"kind": "file",
+						"id": "r",
+						"form": "txt",
+						"hash": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"info": []
+					},
+					"a.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"a": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"a/b.txt": {
+						"kind": "file",
+						"id": "b",
+						"home": [
+							"a",
+							"b",
+							0
+						],
+						"form": "txt",
+						"hash": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703",
+						"info": []
+					},
+					"s.txt": {
+						"kind": "file",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"form": "txt",
+						"hash": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+						"info": []
+					},
+					"s.FINAL.FINAL.text": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 2,
+						"form": "cbor",
+						"hash": "c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356"
+					},
+					"_foo.swp_.txt": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a.txt",
+						"half": "file"
+					},
+					"_foo.swp_": {
+						"kind": "link",
+						"id": "a",
+						"home": [
+							"r",
+							"foo.swp",
+							0
+						],
+						"target": "a",
+						"half": "folder"
+					},
+					"p": {
+						"kind": "link",
+						"id": "x.y",
+						"home": [
+							"r",
+							"p",
+							0
+						],
+						"target": ".ermine/id/x%2Ey",
+						"half": "pending"
+					}
+				}
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"file": "root.txt",
+					"laid": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+					"folder": true,
+					"entries": {
+						"a": "a",
+						"foo.swp": "_foo.swp_",
+						"p": "p",
+						"s": "s"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"file": "a.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+					"folder": true,
+					"entries": {
+						"b": "b"
+					},
+					"away": true
+				},
+				"b": {
+					"home": [
+						"a",
+						"b",
+						0
+					],
+					"file": "b.txt",
+					"laid": "3147cfc3363b30923d259ca55063d6b18d96b12c119c1c6bdb7bd7de99010703"
+				},
+				"s": {
+					"home": [
+						"r",
+						"s",
+						0
+					],
+					"file": "s.txt",
+					"laid": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+					"sides": [
+						"s.FINAL.txt",
+						"s.FINAL.FINAL.text"
+					]
+				}
+			},
+			"expect": {
+				"laid": {
+					".ermine/root.txt": {
+						"kind": "file",
+						"id": "r",
+						"form": "txt",
+						"hash": "99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+						"info": []
+					},
+					"s.txt": {
+						"kind": "file",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"form": "txt",
+						"hash": "8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+						"info": []
+					},
+					"s.FINAL.txt": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 1,
+						"form": "txt",
+						"hash": "05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca"
+					},
+					"s.FINAL.FINAL.text": {
+						"kind": "side",
+						"id": "s",
+						"home": [
+							"r",
+							"s",
+							0
+						],
+						"side": 2,
+						"form": "cbor",
+						"hash": "c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356"
+					},
+					"p": {
+						"kind": "link",
+						"id": "x.y",
+						"home": [
+							"r",
+							"p",
+							0
+						],
+						"target": ".ermine/id/x%2Ey",
+						"half": "pending"
+					}
+				}
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"99a82a4fd49af0ed970db7e885bf273b4e617f2a1ee75e92e00d7c72ac8d3c0a",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							],
+							"foo.swp": [
+								"a"
+							],
+							"p": [
+								"x.y"
+							],
+							"s": [
+								"s"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"b"
+							]
+						}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"s": {
+						"kept": [
+							"8b1dd146d54274d75eaaccbbce2b7151f1b4432a86eaccd5bc6b5505d6cecbbc",
+							"txt"
+						],
+						"sides": [
+							[
+								"05d06d2ba58179f611abb86661a5645c8ac621e6287482c660fdc020009a7aca",
+								"txt"
+							],
+							[
+								"c594af857e73901fba6c3d1d17695a9f90c9edb27b89a88b592bb6c131cd0356",
+								"cbor"
+							]
+						],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {},
+			"expect": {
+				"laid": {}
+			}
+		}
+	]
+}

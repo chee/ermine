@@ -1,0 +1,39 @@
+{
+	"title": "a fold makes tmp/ when it is missing; no values/ is nothing to remove",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "fold",
+			"records": [],
+			"expect": {
+				"synced": [
+					"tmp/manifest",
+					"."
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"tmp"
+				],
+				"files": [
+					[
+						"manifest",
+						"00000001a0"
+					]
+				]
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": []
+			}
+		}
+	]
+}

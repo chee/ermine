@@ -1,0 +1,12 @@
+{
+	"title": "a value alone, spaced",
+	"steps": [
+		{
+			"op": "read",
+			"text": "  \n\t\"x\"  ",
+			"expect": {
+				"value": "x"
+			}
+		}
+	]
+}

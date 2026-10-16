@@ -1,0 +1,45 @@
+{
+	"title": "a string's file is its UTF-8, a byte order mark kept; bytes are as they are",
+	"steps": [
+		{
+			"op": "render",
+			"value": "﻿café 🐈\n",
+			"form": "txt",
+			"expect": {
+				"bytes": "efbbbf636166c3a920f09f90880a"
+			}
+		},
+		{
+			"op": "render",
+			"value": "",
+			"form": "txt",
+			"expect": {
+				"bytes": ""
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"bytes": "iVBORw0KGgoBAgMEBQY"
+				}
+			},
+			"form": "bin",
+			"expect": {
+				"bytes": "89504e470d0a1a0a010203040506"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"bytes": ""
+				}
+			},
+			"form": "bin",
+			"expect": {
+				"bytes": ""
+			}
+		}
+	]
+}

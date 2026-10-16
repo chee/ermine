@@ -1,0 +1,15 @@
+{
+	"title": "a space after -",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[- 1]",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

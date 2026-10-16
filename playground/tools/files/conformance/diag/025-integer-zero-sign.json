@@ -1,0 +1,18 @@
+{
+	"title": "an integer has no sign bit: -0 is 0; a decimal -0.0 is -0",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[-0, -0x0, -0.0, 0.0, -0e0]",
+			"expect": {
+				"value": [
+					0,
+					0,
+					-0,
+					0,
+					-0
+				]
+			}
+		}
+	]
+}

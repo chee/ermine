@@ -1,0 +1,420 @@
+{
+	"title": "a file reads back as the value in its form",
+	"steps": [
+		{
+			"op": "parse",
+			"bytes": "efbbbf636166c3a920f09f90880a",
+			"form": "txt",
+			"expect": {
+				"value": "﻿café 🐈\n"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "",
+			"form": "txt",
+			"expect": {
+				"value": ""
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "89504e470d0a1a0a010203040506",
+			"form": "bin",
+			"expect": {
+				"value": {
+					"/": {
+						"bytes": "iVBORw0KGgoBAgMEBQY"
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "",
+			"form": "bin",
+			"expect": {
+				"value": {
+					"/": {
+						"bytes": ""
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "ff7f",
+			"form": "int8",
+			"expect": {
+				"value": {
+					"/": {
+						"int8": [
+							-1,
+							127
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "feff",
+			"form": "int16",
+			"expect": {
+				"value": {
+					"/": {
+						"int16": [
+							-2
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "0201",
+			"form": "uint16",
+			"expect": {
+				"value": {
+					"/": {
+						"uint16": [
+							258
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "00000080",
+			"form": "int32",
+			"expect": {
+				"value": {
+					"/": {
+						"int32": [
+							-2147483648
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "ffffffff",
+			"form": "uint32",
+			"expect": {
+				"value": {
+					"/": {
+						"uint32": [
+							4294967295
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "fbffffffffffffff0000000000000040",
+			"form": "int64",
+			"expect": {
+				"value": {
+					"/": {
+						"int64": [
+							"-5",
+							"4611686018427387904"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "ffffffffffffffff",
+			"form": "uint64",
+			"expect": {
+				"value": {
+					"/": {
+						"uint64": [
+							"18446744073709551615"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "0000803f0000c07f",
+			"form": "float32",
+			"expect": {
+				"value": {
+					"/": {
+						"float32": [
+							1,
+							"NaN"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "0000000000000080000000000000f87f000000000000f07f9c7500883ce4377e",
+			"form": "float64",
+			"expect": {
+				"value": {
+					"/": {
+						"float64": [
+							-0,
+							"NaN",
+							"Infinity",
+							1e+300
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "0100c07f",
+			"form": "float32",
+			"expect": {
+				"value": {
+					"/": {
+						"float32": [
+							"NaN"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "",
+			"form": "int64",
+			"expect": {
+				"value": {
+					"/": {
+						"int64": []
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "6e756c6c",
+			"form": "cbor",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "74727565",
+			"form": "cbor",
+			"expect": {
+				"value": true
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "312e30",
+			"form": "cbor",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "2d302e30",
+			"form": "cbor",
+			"expect": {
+				"value": -0
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "302e31",
+			"form": "cbor",
+			"expect": {
+				"value": 0.1
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "31652b3231",
+			"form": "cbor",
+			"expect": {
+				"value": 1e+21
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "4e614e",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"/": {
+						"number": "NaN"
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "2d496e66696e697479",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"/": {
+						"number": "-Infinity"
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "5b0a202022615c225c5c5c6e5c745c7530303031c3a9220a5d",
+			"form": "cbor",
+			"expect": {
+				"value": [
+					"a\"\\\n\t\u0001é"
+				]
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "5b5d",
+			"form": "cbor",
+			"expect": {
+				"value": []
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b7d",
+			"form": "cbor",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "5b0a2020312e302c0a20202274776f222c0a20206e756c6c0a5d",
+			"form": "cbor",
+			"expect": {
+				"value": [
+					1,
+					"two",
+					null
+				]
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b0a20202262223a20682730303030272c0a2020226e223a202d302e302c0a2020227468656d65223a20226461726b220a7d",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"theme": "dark",
+					"n": -0,
+					"b": {
+						"/": {
+							"bytes": "AAA"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b0a20202261223a205b0a20202020312e302c0a202020207b0a2020202020202262223a205b5d0a202020207d0a20205d0a7d",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						{
+							"b": []
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b0a20202274223a203835286827303030303830336627290a7d",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"float32": [
+								1
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "5b0a202037322868273031303227290a5d",
+			"form": "cbor",
+			"expect": {
+				"value": [
+					{
+						"/": {
+							"int8": [
+								1,
+								2
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "3330353431393839362822636c6f636b2229",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"/": {
+						"live": "clock"
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b0a20202263223a20333035343139383936287b0a202020202277223a20312e300a20207d290a7d",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"c": {
+						"/": {
+							"live": {
+								"w": 1
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b202262223a20682730303030272c202f632f202261223a2031207d",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"a": 1,
+					"b": {
+						"/": {
+							"bytes": "AAA"
+						}
+					}
+				}
+			}
+		}
+	]
+}

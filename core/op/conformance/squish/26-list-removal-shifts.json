@@ -1,0 +1,47 @@
+{
+	"title": "a removal of a list element moves the ones after it: a later patch at the same place is at another element, and never kills it",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0] }, { "path": ["l", 0] }],
+			"expect": { "patches": [{ "path": ["l", 0] }, { "path": ["l", 0] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0] }, { "path": ["l", 0], "value": 9 }],
+			"expect": { "patches": [{ "path": ["l", 0] }, { "path": ["l", 0], "value": 9 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["m", "l", 2] }, { "path": ["m", "l", 2], "value": 9 }],
+			"expect": {
+				"patches": [{ "path": ["m", "l", 2] }, { "path": ["m", "l", 2], "value": 9 }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0], "value": 9 }, { "path": ["l", 0] }],
+			"expect": { "patches": [{ "path": ["l", 0] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0], "value": 8 }, { "path": ["l", 0], "value": 9 }],
+			"expect": { "patches": [{ "path": ["l", 0], "value": 9 }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0, "x"] }, { "path": ["l", 0] }],
+			"expect": { "patches": [{ "path": ["l", 0] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0] }, { "path": ["l"], "value": [] }],
+			"expect": { "patches": [{ "path": ["l"], "value": [] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["m", "a"] }, { "path": ["m", "a"], "value": 1 }],
+			"expect": { "patches": [{ "path": ["m", "a"], "value": 1 }] }
+		}
+	]
+}

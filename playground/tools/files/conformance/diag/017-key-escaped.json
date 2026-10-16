@@ -1,0 +1,23 @@
+{
+	"title": "keys are quoted as strings are",
+	"steps": [
+		{
+			"op": "write",
+			"value": {
+				"a\nb": 1
+			},
+			"expect": {
+				"text": "{\n  \"a\\nb\": 1.0\n}"
+			}
+		},
+		{
+			"op": "read",
+			"text": "{\n  \"a\\nb\": 1.0\n}",
+			"expect": {
+				"value": {
+					"a\nb": 1
+				}
+			}
+		}
+	]
+}

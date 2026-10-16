@@ -1,0 +1,1403 @@
+{
+	"title": "names as written: / as :, : as full-width, empty as untitled, passed names in _, clashes by case folding and NFD take .FINAL, long ones cut",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 28,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a/b",
+							[
+								{
+									"content": [
+										"n1"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"x:y",
+							[
+								{
+									"content": [
+										"n2"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"",
+							[
+								{
+									"content": [
+										"n3"
+									],
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							".DS_Store",
+							[
+								{
+									"content": [
+										"n4"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							".ermine",
+							[
+								{
+									"content": [
+										"n5"
+									],
+									"change": {
+										"time": 10,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"Case",
+							[
+								{
+									"content": [
+										"n6"
+									],
+									"change": {
+										"time": 12,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"case",
+							[
+								{
+									"content": [
+										"n7"
+									],
+									"change": {
+										"time": 14,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"café",
+							[
+								{
+									"content": [
+										"n8"
+									],
+									"change": {
+										"time": 16,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"café",
+							[
+								{
+									"content": [
+										"n9"
+									],
+									"change": {
+										"time": 18,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"nul\u0000name",
+							[
+								{
+									"content": [
+										"n10"
+									],
+									"change": {
+										"time": 20,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							[
+								{
+									"content": [
+										"n11"
+									],
+									"change": {
+										"time": 22,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							[
+								{
+									"content": [
+										"n12"
+									],
+									"change": {
+										"time": 24,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"ß",
+							[
+								{
+									"content": [
+										"n13"
+									],
+									"change": {
+										"time": 26,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"SS",
+							[
+								{
+									"content": [
+										"n14"
+									],
+									"change": {
+										"time": 28,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "n1",
+					"value": [
+						{
+							"content": "slash",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "n1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n2",
+					"value": [
+						{
+							"content": "colon",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "n2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n3",
+					"value": [
+						{
+							"content": "empty name",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "n3"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n4",
+					"value": [
+						{
+							"content": "a passed name",
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "n4"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n5",
+					"value": [
+						{
+							"content": "the store's own name",
+							"change": {
+								"time": 9,
+								"actor": "host",
+								"node": "n5"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n6",
+					"value": [
+						{
+							"content": "upper",
+							"change": {
+								"time": 11,
+								"actor": "host",
+								"node": "n6"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n7",
+					"value": [
+						{
+							"content": "lower",
+							"change": {
+								"time": 13,
+								"actor": "host",
+								"node": "n7"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n8",
+					"value": [
+						{
+							"content": "composed",
+							"change": {
+								"time": 15,
+								"actor": "host",
+								"node": "n8"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n9",
+					"value": [
+						{
+							"content": "decomposed",
+							"change": {
+								"time": 17,
+								"actor": "host",
+								"node": "n9"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n10",
+					"value": [
+						{
+							"content": "a NUL",
+							"change": {
+								"time": 19,
+								"actor": "host",
+								"node": "n10"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n11",
+					"value": [
+						{
+							"content": "cut",
+							"change": {
+								"time": 21,
+								"actor": "host",
+								"node": "n11"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n12",
+					"value": [
+						{
+							"content": "cut too",
+							"change": {
+								"time": 23,
+								"actor": "host",
+								"node": "n12"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n13",
+					"value": [
+						{
+							"content": "sharp s",
+							"change": {
+								"time": 25,
+								"actor": "host",
+								"node": "n13"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "n14",
+					"value": [
+						{
+							"content": "folded",
+							"change": {
+								"time": 27,
+								"actor": "host",
+								"node": "n14"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine.FINAL.txt",
+						"kind": "file",
+						"hex": "7468652073746f72652773206f776e206e616d65",
+						"attrs": {
+							"party.chee.ermine.id": "n5"
+						}
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94f00",
+									"plan": [
+										{
+											"id": "n5",
+											"to": ".ermine.FINAL.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "3wKpKGakvtycobHDYCY8rgdJjEHC/So5YPicTexCsa0"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "n6",
+											"to": "Case.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "BN0dZHCqFCbenbUBOgmSY+QK07bEjwq8O4FPazBLg7k"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "n14",
+											"to": "SS.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "AVqZ02o6sRb2YjjHMkzhWlvPg9/la1SXz8jsJL22OLs"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "n4",
+											"to": "_.DS_Store_.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "R6yBkC9AWm2xbgqv2LWWeFvBwshQr8A0p6BzxGl5phQ"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "n1",
+											"to": "a:b.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "0Iwz22pEMHFhJ/d/Cg1rV4YtKByBwdHkghW+9OCzhK4"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										},
+										{
+											"id": "n9",
+											"to": "café.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "T+prppiILYdxAcsYbcGUFqA8ynqx72ymGA5cwb+CYZs"
+													}
+												}
+											},
+											"before": null,
+											"number": 6
+										},
+										{
+											"id": "n8",
+											"to": "café.FINAL.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "SKr71qqc/7zKtUUm4gI9I6Dc2zPWr/DpQyn7HZ1zYOM"
+													}
+												}
+											},
+											"before": null,
+											"number": 7
+										},
+										{
+											"id": "n7",
+											"to": "case.FINAL.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "S+MqyLzXE2fK7KTdJVdyEfM6u11BlS6x9afiAV5epOw"
+													}
+												}
+											},
+											"before": null,
+											"number": 8
+										},
+										{
+											"id": "n11",
+											"to": "long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "PuCFDwC/e06LeRV/56hfefMRjhVND2pB9eAABD0zjyo"
+													}
+												}
+											},
+											"before": null,
+											"number": 9
+										},
+										{
+											"id": "n12",
+											"to": "long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "LGpeLqbQUC80/2Sk2zPkasaI3fdztmKwAEHlCbRA9QM"
+													}
+												}
+											},
+											"before": null,
+											"number": 10
+										},
+										{
+											"id": "n10",
+											"to": "nul�name.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "yj3Dx+gHWv289cTRFoaQv4rpZ0yQ5GFaC6oYVXU/GFo"
+													}
+												}
+											},
+											"before": null,
+											"number": 11
+										},
+										{
+											"id": "n3",
+											"to": "untitled.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "oEMLSzqKcSbdfoteKU/C6A+krl7vmVjOMRXTzxLmWqM"
+													}
+												}
+											},
+											"before": null,
+											"number": 12
+										},
+										{
+											"id": "n2",
+											"to": "x：y.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "zVema85q7iJMNDm7WwO5ShtsLIBPOcON6Z/ZEqmeZco"
+													}
+												}
+											},
+											"before": null,
+											"number": 13
+										},
+										{
+											"id": "n13",
+											"to": "ß.FINAL.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "Y3RMBwINJ9I4OWahQliforFSvkA2mWQyf0IjkLjSALA"
+													}
+												}
+											},
+											"before": null,
+											"number": 14
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8e8263612f6281a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481626e318263783a7981a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481626e32826081a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7481626e3382692e44535f53746f726581a2666368616e6765a3646e6f646561726474696d65f94800656163746f7264686f737467636f6e74656e7481626e3482672e65726d696e6581a2666368616e6765a3646e6f646561726474696d65f94900656163746f7264686f737467636f6e74656e7481626e3582644361736581a2666368616e6765a3646e6f646561726474696d65f94a00656163746f7264686f737467636f6e74656e7481626e3682646361736581a2666368616e6765a3646e6f646561726474696d65f94b00656163746f7264686f737467636f6e74656e7481626e378265636166c3a981a2666368616e6765a3646e6f646561726474696d65f94c00656163746f7264686f737467636f6e74656e7481626e38826663616665cc8181a2666368616e6765a3646e6f646561726474696d65f94c80656163746f7264686f737467636f6e74656e7481626e3982686e756c006e616d6581a2666368616e6765a3646e6f646561726474696d65f94d00656163746f7264686f737467636f6e74656e7481636e3130827901316c6f6e672078787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787881a2666368616e6765a3646e6f646561726474696d65f94d80656163746f7264686f737467636f6e74656e7481636e3131827901306c6f6e6720787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787881a2666368616e6765a3646e6f646561726474696d65f94e00656163746f7264686f737467636f6e74656e7481636e31328262c39f81a2666368616e6765a3646e6f646561726474696d65f94e80656163746f7264686f737467636f6e74656e7481636e31338262535381a2666368616e6765a3646e6f646561726474696d65f94f00656163746f7264686f737467636f6e74656e7481636e3134",
+									"node:n1": "a5626964626e3164696e666f806576616c756581a2646b657074825820d08c33db6a4430716127f77f0a0d6b57862d281c81c1d1e48215bef4e0b384ae63747874666368616e6765a3646e6f6465626e316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n2": "a5626964626e3264696e666f806576616c756581a2646b657074825820cd57a66bce6aee224c3439bb5b03b94a1b6c2c804f39c38de99fd912a99e65ca63747874666368616e6765a3646e6f6465626e326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n3": "a5626964626e3364696e666f806576616c756581a2646b657074825820a0430b4b3a8a7126dd7e8b5e294fc2e80fa4ae5eef9958ce3115d3cf12e65aa363747874666368616e6765a3646e6f6465626e336474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n4": "a5626964626e3464696e666f806576616c756581a2646b65707482582047ac81902f405a6db16e0aafd8b596785bc1c2c850afc034a7a073c46979a61463747874666368616e6765a3646e6f6465626e346474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n5": "a5626964626e3564696e666f806576616c756581a2646b657074825820df02a92866a4bedc9ca1b1c360263cae07498c41c2fd2a3960f89c4dec42b1ad63747874666368616e6765a3646e6f6465626e356474696d65f94880656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n6": "a5626964626e3664696e666f806576616c756581a2646b65707482582004dd1d6470aa1426de9db5013a099263e40ad3b6c48f0abc3b814f6b304b83b963747874666368616e6765a3646e6f6465626e366474696d65f94980656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n7": "a5626964626e3764696e666f806576616c756581a2646b6570748258204be32ac8bcd71367caeca4dd25577211f33abb5d41952eb1f5a7e2015e5ea4ec63747874666368616e6765a3646e6f6465626e376474696d65f94a80656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n8": "a5626964626e3864696e666f806576616c756581a2646b65707482582048aafbd6aa9cffbccab54526e2023d23a0dcdb33d6aff0e94329fb1d9d7360e363747874666368616e6765a3646e6f6465626e386474696d65f94b80656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n9": "a5626964626e3964696e666f806576616c756581a2646b6570748258204fea6ba698882d877101cb186dc19416a03cca7ab1ef6ca6180e5cc1bf82619b63747874666368616e6765a3646e6f6465626e396474696d65f94c40656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573ae6068756e7469746c656462535362535362c39f68c39f2e46494e414c63612f6263613a6263783a796578efbc9a796443617365644361736564636173656a636173652e46494e414c65636166c3a96b636166c3a92e46494e414c6663616665cc816663616665cc81672e65726d696e656d2e65726d696e652e46494e414c686e756c006e616d656a6e756cefbfbd6e616d65692e44535f53746f72656b5f2e44535f53746f72655f7901306c6f6e6720787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878dd6c6f6e67207878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787901316c6f6e672078787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878e36c6f6e67207878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878782e46494e414c",
+									"node:n10": "a5626964636e313064696e666f806576616c756581a2646b657074825820ca3dc3c7e8075afdbcf5c4d1168690bf8ae9674c90e4615a0baa1855753f185a63747874666368616e6765a3646e6f6465636e31306474696d65f94cc0656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n11": "a5626964636e313164696e666f806576616c756581a2646b6570748258203ee0850f00bf7b4e8b79157fe7a85f79f3118e154d0f6a41f5e000043d338f2a63747874666368616e6765a3646e6f6465636e31316474696d65f94d40656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n12": "a5626964636e313264696e666f806576616c756581a2646b6570748258202c6a5e2ea6d0502f34ff64a4db33e46ac688ddf773b662b00041e509b440f50363747874666368616e6765a3646e6f6465636e31326474696d65f94dc0656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n13": "a5626964636e313364696e666f806576616c756581a2646b65707482582063744c07020d27d2383966a142589fa2b152be40369964327f422390b8d200b063747874666368616e6765a3646e6f6465636e31336474696d65f94e40656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:n14": "a5626964636e313464696e666f806576616c756581a2646b657074825820015a99d36a3ab116f66238c7324ce15a5bcf83dfe56b5497cfc8ec24bdb638bb63747874666368616e6765a3646e6f6465636e31346474696d65f94ec0656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:n1": "a36466696c6567613a622e74787464686f6d6583617263612f62f90000646c6169645820d08c33db6a4430716127f77f0a0d6b57862d281c81c1d1e48215bef4e0b384ae",
+									"shown:n2": "a36466696c656978efbc9a792e74787464686f6d6583617263783a79f90000646c6169645820cd57a66bce6aee224c3439bb5b03b94a1b6c2c804f39c38de99fd912a99e65ca",
+									"shown:n3": "a36466696c656c756e7469746c65642e74787464686f6d6583617260f90000646c6169645820a0430b4b3a8a7126dd7e8b5e294fc2e80fa4ae5eef9958ce3115d3cf12e65aa3",
+									"shown:n4": "a36466696c656f5f2e44535f53746f72655f2e74787464686f6d65836172692e44535f53746f7265f90000646c616964582047ac81902f405a6db16e0aafd8b596785bc1c2c850afc034a7a073c46979a614",
+									"shown:n5": "a36466696c65712e65726d696e652e46494e414c2e74787464686f6d65836172672e65726d696e65f90000646c6169645820df02a92866a4bedc9ca1b1c360263cae07498c41c2fd2a3960f89c4dec42b1ad",
+									"shown:n6": "a36466696c6568436173652e74787464686f6d658361726443617365f90000646c616964582004dd1d6470aa1426de9db5013a099263e40ad3b6c48f0abc3b814f6b304b83b9",
+									"shown:n7": "a36466696c656e636173652e46494e414c2e74787464686f6d658361726463617365f90000646c61696458204be32ac8bcd71367caeca4dd25577211f33abb5d41952eb1f5a7e2015e5ea4ec",
+									"shown:n8": "a36466696c656f636166c3a92e46494e414c2e74787464686f6d6583617265636166c3a9f90000646c616964582048aafbd6aa9cffbccab54526e2023d23a0dcdb33d6aff0e94329fb1d9d7360e3",
+									"shown:n9": "a36466696c656a63616665cc812e74787464686f6d658361726663616665cc81f90000646c61696458204fea6ba698882d877101cb186dc19416a03cca7ab1ef6ca6180e5cc1bf82619b",
+									"shown:n10": "a36466696c656e6e756cefbfbd6e616d652e74787464686f6d65836172686e756c006e616d65f90000646c6169645820ca3dc3c7e8075afdbcf5c4d1168690bf8ae9674c90e4615a0baa1855753f185a",
+									"shown:n11": "a36466696c6578e76c6f6e67207878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878782e46494e414c2e74787464686f6d658361727901316c6f6e6720787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878f90000646c61696458203ee0850f00bf7b4e8b79157fe7a85f79f3118e154d0f6a41f5e000043d338f2a",
+									"shown:n12": "a36466696c6578e16c6f6e67207878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878782e74787464686f6d658361727901306c6f6e67207878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878f90000646c61696458202c6a5e2ea6d0502f34ff64a4db33e46ac688ddf773b662b00041e509b440f503",
+									"shown:n13": "a36466696c656cc39f2e46494e414c2e74787464686f6d6583617262c39ff90000646c616964582063744c07020d27d2383966a142589fa2b152be40369964327f422390b8d200b0",
+									"shown:n14": "a36466696c656653532e74787464686f6d65836172625353f90000646c6169645820015a99d36a3ab116f66238c7324ce15a5bcf83dfe56b5497cfc8ec24bdb638bb"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94f00647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/015a99d36a3ab116f66238c7324ce15a5bcf83dfe56b5497cfc8ec24bdb638bb",
+						"kind": "file",
+						"hex": "666f6c646564"
+					},
+					{
+						"path": ".ermine/values/04dd1d6470aa1426de9db5013a099263e40ad3b6c48f0abc3b814f6b304b83b9",
+						"kind": "file",
+						"hex": "7570706572"
+					},
+					{
+						"path": ".ermine/values/2c6a5e2ea6d0502f34ff64a4db33e46ac688ddf773b662b00041e509b440f503",
+						"kind": "file",
+						"hex": "63757420746f6f"
+					},
+					{
+						"path": ".ermine/values/3ee0850f00bf7b4e8b79157fe7a85f79f3118e154d0f6a41f5e000043d338f2a",
+						"kind": "file",
+						"hex": "637574"
+					},
+					{
+						"path": ".ermine/values/47ac81902f405a6db16e0aafd8b596785bc1c2c850afc034a7a073c46979a614",
+						"kind": "file",
+						"hex": "6120706173736564206e616d65"
+					},
+					{
+						"path": ".ermine/values/48aafbd6aa9cffbccab54526e2023d23a0dcdb33d6aff0e94329fb1d9d7360e3",
+						"kind": "file",
+						"hex": "636f6d706f736564"
+					},
+					{
+						"path": ".ermine/values/4be32ac8bcd71367caeca4dd25577211f33abb5d41952eb1f5a7e2015e5ea4ec",
+						"kind": "file",
+						"hex": "6c6f776572"
+					},
+					{
+						"path": ".ermine/values/4fea6ba698882d877101cb186dc19416a03cca7ab1ef6ca6180e5cc1bf82619b",
+						"kind": "file",
+						"hex": "6465636f6d706f736564"
+					},
+					{
+						"path": ".ermine/values/63744c07020d27d2383966a142589fa2b152be40369964327f422390b8d200b0",
+						"kind": "file",
+						"hex": "73686172702073"
+					},
+					{
+						"path": ".ermine/values/a0430b4b3a8a7126dd7e8b5e294fc2e80fa4ae5eef9958ce3115d3cf12e65aa3",
+						"kind": "file",
+						"hex": "656d707479206e616d65"
+					},
+					{
+						"path": ".ermine/values/ca3dc3c7e8075afdbcf5c4d1168690bf8ae9674c90e4615a0baa1855753f185a",
+						"kind": "file",
+						"hex": "61204e554c"
+					},
+					{
+						"path": ".ermine/values/cd57a66bce6aee224c3439bb5b03b94a1b6c2c804f39c38de99fd912a99e65ca",
+						"kind": "file",
+						"hex": "636f6c6f6e"
+					},
+					{
+						"path": ".ermine/values/d08c33db6a4430716127f77f0a0d6b57862d281c81c1d1e48215bef4e0b384ae",
+						"kind": "file",
+						"hex": "736c617368"
+					},
+					{
+						"path": ".ermine/values/df02a92866a4bedc9ca1b1c360263cae07498c41c2fd2a3960f89c4dec42b1ad",
+						"kind": "file",
+						"hex": "7468652073746f72652773206f776e206e616d65"
+					},
+					{
+						"path": "Case.txt",
+						"kind": "file",
+						"hex": "7570706572",
+						"attrs": {
+							"party.chee.ermine.id": "n6"
+						}
+					},
+					{
+						"path": "SS.txt",
+						"kind": "file",
+						"hex": "666f6c646564",
+						"attrs": {
+							"party.chee.ermine.id": "n14"
+						}
+					},
+					{
+						"path": "_.DS_Store_.txt",
+						"kind": "file",
+						"hex": "6120706173736564206e616d65",
+						"attrs": {
+							"party.chee.ermine.id": "n4"
+						}
+					},
+					{
+						"path": "a:b.txt",
+						"kind": "file",
+						"hex": "736c617368",
+						"attrs": {
+							"party.chee.ermine.id": "n1"
+						}
+					},
+					{
+						"path": "café.txt",
+						"kind": "file",
+						"hex": "6465636f6d706f736564",
+						"attrs": {
+							"party.chee.ermine.id": "n9"
+						}
+					},
+					{
+						"path": "café.FINAL.txt",
+						"kind": "file",
+						"hex": "636f6d706f736564",
+						"attrs": {
+							"party.chee.ermine.id": "n8"
+						}
+					},
+					{
+						"path": "case.FINAL.txt",
+						"kind": "file",
+						"hex": "6c6f776572",
+						"attrs": {
+							"party.chee.ermine.id": "n7"
+						}
+					},
+					{
+						"path": "long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+						"kind": "file",
+						"hex": "637574",
+						"attrs": {
+							"party.chee.ermine.id": "n11"
+						}
+					},
+					{
+						"path": "long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+						"kind": "file",
+						"hex": "63757420746f6f",
+						"attrs": {
+							"party.chee.ermine.id": "n12"
+						}
+					},
+					{
+						"path": "nul�name.txt",
+						"kind": "file",
+						"hex": "61204e554c",
+						"attrs": {
+							"party.chee.ermine.id": "n10"
+						}
+					},
+					{
+						"path": "untitled.txt",
+						"kind": "file",
+						"hex": "656d707479206e616d65",
+						"attrs": {
+							"party.chee.ermine.id": "n3"
+						}
+					},
+					{
+						"path": "x：y.txt",
+						"kind": "file",
+						"hex": "636f6c6f6e",
+						"attrs": {
+							"party.chee.ermine.id": "n2"
+						}
+					},
+					{
+						"path": "ß.FINAL.txt",
+						"kind": "file",
+						"hex": "73686172702073",
+						"attrs": {
+							"party.chee.ermine.id": "n13"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 28,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"a/b",
+									[
+										{
+											"content": [
+												"n1"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"x:y",
+									[
+										{
+											"content": [
+												"n2"
+											],
+											"change": {
+												"node": "r",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"",
+									[
+										{
+											"content": [
+												"n3"
+											],
+											"change": {
+												"node": "r",
+												"time": 6,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									".DS_Store",
+									[
+										{
+											"content": [
+												"n4"
+											],
+											"change": {
+												"node": "r",
+												"time": 8,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									".ermine",
+									[
+										{
+											"content": [
+												"n5"
+											],
+											"change": {
+												"node": "r",
+												"time": 10,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"Case",
+									[
+										{
+											"content": [
+												"n6"
+											],
+											"change": {
+												"node": "r",
+												"time": 12,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"case",
+									[
+										{
+											"content": [
+												"n7"
+											],
+											"change": {
+												"node": "r",
+												"time": 14,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"café",
+									[
+										{
+											"content": [
+												"n8"
+											],
+											"change": {
+												"node": "r",
+												"time": 16,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"café",
+									[
+										{
+											"content": [
+												"n9"
+											],
+											"change": {
+												"node": "r",
+												"time": 18,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"nul\u0000name",
+									[
+										{
+											"content": [
+												"n10"
+											],
+											"change": {
+												"node": "r",
+												"time": 20,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+									[
+										{
+											"content": [
+												"n11"
+											],
+											"change": {
+												"node": "r",
+												"time": 22,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"long xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+									[
+										{
+											"content": [
+												"n12"
+											],
+											"change": {
+												"node": "r",
+												"time": 24,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"ß",
+									[
+										{
+											"content": [
+												"n13"
+											],
+											"change": {
+												"node": "r",
+												"time": 26,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"SS",
+									[
+										{
+											"content": [
+												"n14"
+											],
+											"change": {
+												"node": "r",
+												"time": 28,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "n1",
+							"value": [
+								{
+									"content": "slash",
+									"change": {
+										"node": "n1",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n2",
+							"value": [
+								{
+									"content": "colon",
+									"change": {
+										"node": "n2",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n3",
+							"value": [
+								{
+									"content": "empty name",
+									"change": {
+										"node": "n3",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n4",
+							"value": [
+								{
+									"content": "a passed name",
+									"change": {
+										"node": "n4",
+										"time": 7,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n5",
+							"value": [
+								{
+									"content": "the store's own name",
+									"change": {
+										"node": "n5",
+										"time": 9,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n6",
+							"value": [
+								{
+									"content": "upper",
+									"change": {
+										"node": "n6",
+										"time": 11,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n7",
+							"value": [
+								{
+									"content": "lower",
+									"change": {
+										"node": "n7",
+										"time": 13,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n8",
+							"value": [
+								{
+									"content": "composed",
+									"change": {
+										"node": "n8",
+										"time": 15,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n9",
+							"value": [
+								{
+									"content": "decomposed",
+									"change": {
+										"node": "n9",
+										"time": 17,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n10",
+							"value": [
+								{
+									"content": "a NUL",
+									"change": {
+										"node": "n10",
+										"time": 19,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n11",
+							"value": [
+								{
+									"content": "cut",
+									"change": {
+										"node": "n11",
+										"time": 21,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n12",
+							"value": [
+								{
+									"content": "cut too",
+									"change": {
+										"node": "n12",
+										"time": 23,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n13",
+							"value": [
+								{
+									"content": "sharp s",
+									"change": {
+										"node": "n13",
+										"time": 25,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "n14",
+							"value": [
+								{
+									"content": "folded",
+									"change": {
+										"node": "n14",
+										"time": 27,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

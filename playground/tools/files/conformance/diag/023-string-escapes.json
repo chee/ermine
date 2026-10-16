@@ -1,0 +1,17 @@
+{
+	"title": "escapes: JSON's, \\' and \\u{...}; a surrogate pair of escapes is one character",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[\"\\u0041\\u{1f600}\\u{41}\\/\\'\\\"\\\\\", \"\\ud83d\\ude00\", \"\\u{000041}\\b\\f\\n\\r\\t\\u0000\", \"tab\traw\nnewline\"]",
+			"expect": {
+				"value": [
+					"A😀A/'\"\\",
+					"😀",
+					"A\b\f\n\r\t\u0000",
+					"tab\traw\nnewline"
+				]
+			}
+		}
+	]
+}

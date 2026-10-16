@@ -1,0 +1,53 @@
+{
+	"title": "a frame before the last that does not decode is a store error",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000005ff6162413200000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"d",
+					"34"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [],
+				"files": [
+					[
+						"manifest",
+						"00000005a16161413100000005ff6162413200000005a161634133"
+					]
+				]
+			}
+		}
+	]
+}

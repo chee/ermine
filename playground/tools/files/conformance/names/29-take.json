@@ -1,0 +1,166 @@
+{
+	"title": "a new file's name: its slot read back, less a .text or .kind extension that gives its form",
+	"steps": [
+		{
+			"op": "take",
+			"entry": "notes",
+			"expect": {
+				"result": {
+					"slot": "notes"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.md",
+			"expect": {
+				"result": {
+					"slot": "notes.md"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.txt",
+			"expect": {
+				"result": {
+					"slot": "notes.txt"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.text",
+			"expect": {
+				"result": {
+					"slot": "notes",
+					"form": "cbor"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.float32",
+			"expect": {
+				"result": {
+					"slot": "notes",
+					"form": "float32"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.int8",
+			"expect": {
+				"result": {
+					"slot": "notes",
+					"form": "int8"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.uint8",
+			"expect": {
+				"result": {
+					"slot": "notes.uint8"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.int64",
+			"expect": {
+				"result": {
+					"slot": "notes",
+					"form": "int64"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.Float32",
+			"expect": {
+				"result": {
+					"slot": "notes.Float32"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "notes.TEXT",
+			"expect": {
+				"result": {
+					"slot": "notes.TEXT"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "a:b.text",
+			"expect": {
+				"result": {
+					"slot": "a/b",
+					"form": "cbor"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "a：b.float64",
+			"expect": {
+				"result": {
+					"slot": "a:b",
+					"form": "float64"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": ".text",
+			"expect": {
+				"result": {
+					"slot": ".text"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "a.b.float32",
+			"expect": {
+				"result": {
+					"slot": "a.b",
+					"form": "float32"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "日本.text",
+			"expect": {
+				"result": {
+					"slot": "日本",
+					"form": "cbor"
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "",
+			"expect": {
+				"result": {
+					"slot": ""
+				}
+			}
+		},
+		{
+			"op": "take",
+			"entry": "x.float128",
+			"expect": {
+				"result": {
+					"slot": "x.float128"
+				}
+			}
+		}
+	]
+}

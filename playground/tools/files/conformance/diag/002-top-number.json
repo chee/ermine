@@ -1,0 +1,19 @@
+{
+	"title": "a number alone has its point",
+	"steps": [
+		{
+			"op": "write",
+			"value": 42,
+			"expect": {
+				"text": "42.0"
+			}
+		},
+		{
+			"op": "read",
+			"text": "42.0",
+			"expect": {
+				"value": 42
+			}
+		}
+	]
+}

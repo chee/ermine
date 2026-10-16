@@ -1,0 +1,29 @@
+{
+	"title": "null, booleans and text in a list, two-space indent, no final newline",
+	"steps": [
+		{
+			"op": "write",
+			"value": [
+				null,
+				true,
+				false,
+				"x"
+			],
+			"expect": {
+				"text": "[\n  null,\n  true,\n  false,\n  \"x\"\n]"
+			}
+		},
+		{
+			"op": "read",
+			"text": "[\n  null,\n  true,\n  false,\n  \"x\"\n]",
+			"expect": {
+				"value": [
+					null,
+					true,
+					false,
+					"x"
+				]
+			}
+		}
+	]
+}

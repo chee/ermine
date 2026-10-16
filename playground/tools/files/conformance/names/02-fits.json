@@ -1,0 +1,125 @@
+{
+	"title": "cbor only .text, a kind only its own, txt and bin any other",
+	"steps": [
+		{
+			"op": "fits",
+			"ext": "text",
+			"form": "cbor",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "json",
+			"form": "cbor",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "text",
+			"form": "txt",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "text",
+			"form": "bin",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "md",
+			"form": "txt",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "png",
+			"form": "bin",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "float32",
+			"form": "txt",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "int8",
+			"form": "bin",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "uint8",
+			"form": "bin",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "int64",
+			"form": "int64",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "float64",
+			"form": "float32",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "raw",
+			"form": "float32",
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "Float32",
+			"form": "txt",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "TEXT",
+			"form": "bin",
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "fits",
+			"ext": "TEXT",
+			"form": "cbor",
+			"expect": {
+				"result": false
+			}
+		}
+	]
+}

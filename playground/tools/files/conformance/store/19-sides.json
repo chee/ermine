@@ -1,0 +1,793 @@
+{
+	"title": "each later value version is a side beside the file, its stem with one more .FINAL each, with party.chee.ermine.side; one that goes is removed",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 3,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "c"
+							}
+						},
+						{
+							"content": "13:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						},
+						{
+							"content": {
+								"at": 14
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94200",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock.FINAL.FINAL.text",
+											"form": "cbor",
+											"side": 2,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "8Nqu1BQ4055NJi4wlOSQcmqgt7mJtllzV+Xa1aunXdo"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.FINAL.txt",
+											"form": "txt",
+											"side": 1,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "fUjEQcwnnZtrAd6lIOXyiadwGmdi9KLjw5DBXEYfwIA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756583a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f7374a2646b6570748258207d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc08063747874666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f7374a2646b657074825820f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda6463626f72666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a46466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92657369646573826f636c6f636b2e46494e414c2e74787476636c6f636b2e46494e414c2e46494e414c2e74657874",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94200647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/7d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc080",
+						"kind": "file",
+						"hex": "31333a3030"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": ".ermine/values/f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda",
+						"kind": "file",
+						"hex": "a1626174f94b00"
+					},
+					{
+						"path": "clock.FINAL.FINAL.text",
+						"kind": "file",
+						"hex": "7b0a2020226174223a2031342e300a7d",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.side": "2"
+						}
+					},
+					{
+						"path": "clock.FINAL.txt",
+						"kind": "file",
+						"hex": "31333a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.side": "1"
+						}
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 4,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "c"
+							}
+						},
+						{
+							"content": "13:30",
+							"change": {
+								"time": 4,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94200",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock.FINAL.FINAL.text",
+											"form": "cbor",
+											"side": 2,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "8Nqu1BQ4055NJi4wlOSQcmqgt7mJtllzV+Xa1aunXdo"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.FINAL.txt",
+											"form": "txt",
+											"side": 1,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "fUjEQcwnnZtrAd6lIOXyiadwGmdi9KLjw5DBXEYfwIA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756583a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f7374a2646b6570748258207d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc08063747874666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f7374a2646b657074825820f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda6463626f72666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a46466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92657369646573826f636c6f636b2e46494e414c2e74787476636c6f636b2e46494e414c2e46494e414c2e74657874",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94200647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "c",
+											"form": "cbor",
+											"from": "clock.FINAL.FINAL.text",
+											"side": 2,
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "8Nqu1BQ4055NJi4wlOSQcmqgt7mJtllzV+Xa1aunXdo"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.FINAL.txt",
+											"form": "txt",
+											"side": 1,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "qUBR66NYA4Fqxg64QKQE4AgHMRCdt29xTTsMKQrAYIg"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "fUjEQcwnnZtrAd6lIOXyiadwGmdi9KLjw5DBXEYfwIA"
+													}
+												}
+											},
+											"number": 2
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756582a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f7374a2646b657074825820a94051eba35803816ac60eb840a404e0080731109db76f714d3b0c290ac0608863747874666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:c": "a46466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92657369646573816f636c6f636b2e46494e414c2e747874"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/7d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc080",
+						"kind": "file",
+						"hex": "31333a3030"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": ".ermine/values/a94051eba35803816ac60eb840a404e0080731109db76f714d3b0c290ac06088",
+						"kind": "file",
+						"hex": "31333a3330"
+					},
+					{
+						"path": ".ermine/values/f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda",
+						"kind": "file",
+						"hex": "a1626174f94b00"
+					},
+					{
+						"path": "clock.FINAL.txt",
+						"kind": "file",
+						"hex": "31333a3330",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.side": "1"
+						}
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 5,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94200",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock.FINAL.FINAL.text",
+											"form": "cbor",
+											"side": 2,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "8Nqu1BQ4055NJi4wlOSQcmqgt7mJtllzV+Xa1aunXdo"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.FINAL.txt",
+											"form": "txt",
+											"side": 1,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "fUjEQcwnnZtrAd6lIOXyiadwGmdi9KLjw5DBXEYfwIA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756583a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f7374a2646b6570748258207d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc08063747874666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f7374a2646b657074825820f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda6463626f72666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a46466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92657369646573826f636c6f636b2e46494e414c2e74787476636c6f636b2e46494e414c2e46494e414c2e74657874",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94200647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "c",
+											"form": "cbor",
+											"from": "clock.FINAL.FINAL.text",
+											"side": 2,
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "8Nqu1BQ4055NJi4wlOSQcmqgt7mJtllzV+Xa1aunXdo"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.FINAL.txt",
+											"form": "txt",
+											"side": 1,
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "qUBR66NYA4Fqxg64QKQE4AgHMRCdt29xTTsMKQrAYIg"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "fUjEQcwnnZtrAd6lIOXyiadwGmdi9KLjw5DBXEYfwIA"
+													}
+												}
+											},
+											"number": 2
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756582a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f7374a2646b657074825820a94051eba35803816ac60eb840a404e0080731109db76f714d3b0c290ac0608863747874666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:c": "a46466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92657369646573816f636c6f636b2e46494e414c2e747874"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94500",
+									"plan": [
+										{
+											"id": "c",
+											"form": "txt",
+											"from": "clock.FINAL.txt",
+											"side": 1,
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "qUBR66NYA4Fqxg64QKQE4AgHMRCdt29xTTsMKQrAYIg"
+													}
+												}
+											},
+											"number": 1
+										}
+									],
+									"node:c": "a5626964616364696e666f806576616c756581a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:c": "a36466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94500647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/7d48c441cc279d9b6b01dea520e5f289a7701a6762f4a2e3c390c15c461fc080",
+						"kind": "file",
+						"hex": "31333a3030"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": ".ermine/values/a94051eba35803816ac60eb840a404e0080731109db76f714d3b0c290ac06088",
+						"kind": "file",
+						"hex": "31333a3330"
+					},
+					{
+						"path": ".ermine/values/f0daaed41438d39e4d262e3094e490726aa0b7b989b6597357e5dad5aba75dda",
+						"kind": "file",
+						"hex": "a1626174f94b00"
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 5,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"clock",
+									[
+										{
+											"content": [
+												"c"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "c",
+							"value": [
+								{
+									"content": "12:00",
+									"change": {
+										"node": "c",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

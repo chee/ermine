@@ -1,0 +1,15 @@
+{
+	"title": "an offset counts UTF-16 code units, an astral character as two",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[\"😀\", x]",
+			"expect": {
+				"code": "not-diag",
+				"at": 7,
+				"line": 1,
+				"column": 8
+			}
+		}
+	]
+}

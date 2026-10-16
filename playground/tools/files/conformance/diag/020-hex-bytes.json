@@ -1,0 +1,33 @@
+{
+	"title": "h'' bytes, any case, spacing and comments among the digits",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[h'00ff', h'0A Bc', h'0 /a comment/ 1\n02', h'']",
+			"expect": {
+				"value": [
+					{
+						"/": {
+							"bytes": "AP8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "Crw"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					{
+						"/": {
+							"bytes": ""
+						}
+					}
+				]
+			}
+		}
+	]
+}

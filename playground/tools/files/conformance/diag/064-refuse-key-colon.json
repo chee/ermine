@@ -1,0 +1,15 @@
+{
+	"title": "no colon after a key",
+	"steps": [
+		{
+			"op": "read",
+			"text": "{\"a\" 1}",
+			"expect": {
+				"code": "not-diag",
+				"at": 5,
+				"line": 1,
+				"column": 6
+			}
+		}
+	]
+}

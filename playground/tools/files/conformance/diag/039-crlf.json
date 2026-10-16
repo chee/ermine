@@ -1,0 +1,16 @@
+{
+	"title": "CR LF is spacing",
+	"steps": [
+		{
+			"op": "read",
+			"text": "{\r\n\t\"a\": [\r\n\t\t1\r\n\t]\r\n}\r\n",
+			"expect": {
+				"value": {
+					"a": [
+						1
+					]
+				}
+			}
+		}
+	]
+}

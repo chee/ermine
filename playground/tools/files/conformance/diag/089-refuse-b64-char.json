@@ -1,0 +1,15 @@
+{
+	"title": "a character that is no base64",
+	"steps": [
+		{
+			"op": "read",
+			"text": "b64'ab!'",
+			"expect": {
+				"code": "not-diag",
+				"at": 6,
+				"line": 1,
+				"column": 7
+			}
+		}
+	]
+}

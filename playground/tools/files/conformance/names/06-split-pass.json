@@ -1,0 +1,184 @@
+{
+	"title": "a name that would be passed over keeps its extension in the stem",
+	"steps": [
+		{
+			"op": "split",
+			"name": "foo.swp",
+			"form": "txt",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "foo.swp",
+					"ext": "txt",
+					"added": true
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "foo.swp",
+			"form": "txt",
+			"expect": {
+				"result": {
+					"stem": "foo",
+					"ext": "swp",
+					"added": false
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "foo.swp",
+			"form": "txt",
+			"pass": [],
+			"expect": {
+				"result": {
+					"stem": "foo",
+					"ext": "swp",
+					"added": false
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "foo.md",
+			"form": "txt",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "foo",
+					"ext": "md",
+					"added": false
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "._x.md",
+			"form": "txt",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "._x.md",
+					"ext": "txt",
+					"added": true
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "#x#",
+			"form": "txt",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "#x#",
+					"ext": "txt",
+					"added": true
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "x~",
+			"form": "bin",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "x~",
+					"ext": "bin",
+					"added": true
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": ".DS_Store",
+			"form": "txt",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": ".DS_Store",
+					"ext": "txt",
+					"added": true
+				}
+			}
+		},
+		{
+			"op": "split",
+			"name": "4913",
+			"form": "cbor",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": {
+					"stem": "4913",
+					"ext": "text",
+					"added": true
+				}
+			}
+		}
+	]
+}

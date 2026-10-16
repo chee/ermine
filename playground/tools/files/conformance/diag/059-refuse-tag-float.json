@@ -1,0 +1,15 @@
+{
+	"title": "a decimal takes no tag",
+	"steps": [
+		{
+			"op": "read",
+			"text": "1.0(h'00')",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}

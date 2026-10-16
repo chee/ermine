@@ -1,0 +1,1471 @@
+{
+	"title": "the paper's example loads back as the host had it, x9 missing; a second read gives the same",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 2,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 4,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "a"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 6,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"content": [
+										"d1"
+									],
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "a"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d1",
+					"value": [
+						{
+							"content": "hello",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "d1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 8,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"content": [
+										"d1",
+										"d2"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "a"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d1",
+					"value": [
+						{
+							"content": "hello",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "d1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "d2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 9,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"content": [
+										"d1",
+										"d2"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"pinned",
+							[
+								{
+									"content": [
+										"d1"
+									],
+									"change": {
+										"time": 9,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "a"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d1",
+					"value": [
+						{
+							"content": "hello",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "d1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "d2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 10,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"apps",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"content": [
+										"d1",
+										"d2"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"pinned",
+							[
+								{
+									"content": [
+										"d1"
+									],
+									"change": {
+										"time": 9,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"Notes",
+							[
+								{
+									"content": [
+										"x9"
+									],
+									"change": {
+										"time": 10,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": {
+								"theme": "dark"
+							},
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "a"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d1",
+					"value": [
+						{
+							"content": "hello",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "d1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "d2",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "d2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 10,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"apps",
+									[
+										{
+											"content": [
+												"a"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"docs",
+									[
+										{
+											"content": [
+												"d1",
+												"d2"
+											],
+											"change": {
+												"node": "r",
+												"time": 8,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"pinned",
+									[
+										{
+											"content": [
+												"d1"
+											],
+											"change": {
+												"node": "r",
+												"time": 9,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"Notes",
+									[
+										{
+											"content": [
+												"x9"
+											],
+											"change": {
+												"node": "r",
+												"time": 10,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "a",
+							"value": [
+								{
+									"content": {
+										"theme": "dark"
+									},
+									"change": {
+										"node": "a",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [
+								[
+									"clock",
+									[
+										{
+											"content": [
+												"c"
+											],
+											"change": {
+												"node": "a",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "d1",
+							"value": [
+								{
+									"content": "hello",
+									"change": {
+										"node": "d1",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "d2",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"bytes": "iVBORw0KGgo"
+										}
+									},
+									"change": {
+										"node": "d2",
+										"time": 7,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c",
+							"value": [
+								{
+									"content": "12:00",
+									"change": {
+										"node": "c",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": [
+						"x9"
+					]
+				}
+			}
+		},
+		{
+			"op": "graph",
+			"expect": {
+				"root": "r",
+				"nodes": [
+					{
+						"id": "a",
+						"kept": [
+							"3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": [
+							[
+								"clock",
+								[
+									"c"
+								]
+							]
+						]
+					},
+					{
+						"id": "c",
+						"kept": [
+							"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": []
+					},
+					{
+						"id": "d1",
+						"kept": [
+							"90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": []
+					},
+					{
+						"id": "d2",
+						"kept": [
+							"6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+							"bin"
+						],
+						"head": "89504e470d0a1a0a",
+						"sides": [],
+						"info": [],
+						"directory": []
+					},
+					{
+						"id": "r",
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": [
+							[
+								"apps",
+								[
+									"a"
+								]
+							],
+							[
+								"docs",
+								[
+									"d1",
+									"d2"
+								]
+							],
+							[
+								"pinned",
+								[
+									"d1"
+								]
+							],
+							[
+								"Notes",
+								[
+									"x9"
+								]
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 10,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"apps",
+									[
+										{
+											"content": [
+												"a"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"docs",
+									[
+										{
+											"content": [
+												"d1",
+												"d2"
+											],
+											"change": {
+												"node": "r",
+												"time": 8,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"pinned",
+									[
+										{
+											"content": [
+												"d1"
+											],
+											"change": {
+												"node": "r",
+												"time": 9,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"Notes",
+									[
+										{
+											"content": [
+												"x9"
+											],
+											"change": {
+												"node": "r",
+												"time": 10,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "a",
+							"value": [
+								{
+									"content": {
+										"theme": "dark"
+									},
+									"change": {
+										"node": "a",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [
+								[
+									"clock",
+									[
+										{
+											"content": [
+												"c"
+											],
+											"change": {
+												"node": "a",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "d1",
+							"value": [
+								{
+									"content": "hello",
+									"change": {
+										"node": "d1",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "d2",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"bytes": "iVBORw0KGgo"
+										}
+									},
+									"change": {
+										"node": "d2",
+										"time": 7,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c",
+							"value": [
+								{
+									"content": "12:00",
+									"change": {
+										"node": "c",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": [
+						"x9"
+					]
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94000",
+									"plan": [
+										{
+											"id": "a",
+											"to": "apps.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "Oh0uEHkQbMelHLJfIQZ+QzLc8ncMbmtxt/eykJp+UhQ"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										}
+									],
+									"node:a": "a5626964616164696e666f806576616c756581a2646b6570748258203a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e52146463626f72666368616e6765a3646e6f646561616474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8182646170707381a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816161",
+									"shown:a": "a36466696c6569617070732e7465787464686f6d658361726461707073f90000646c61696458203a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+									"shown:r": "a266666f6c646572f567656e7472696573a164617070736461707073"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94000647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "a",
+											"to": "apps",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "apps/clock.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										}
+									],
+									"node:a": "a5626964616164696e666f806576616c756581a2646b6570748258203a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e52146463626f72666368616e6765a3646e6f646561616474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561616474696d65f94400656163746f7264686f737467636f6e74656e74816163",
+									"node:c": "a5626964616364696e666f806576616c756581a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:a": "a56466696c6569617070732e7465787464686f6d658361726461707073f90000646c61696458203a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e521466666f6c646572f567656e7472696573a165636c6f636b65636c6f636b",
+									"shown:c": "a36466696c6569636c6f636b2e74787464686f6d6583616165636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "d1",
+											"to": "docs.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "kO63Hw1LdopdRJ4wA1vrf/zNddIo5bOOjpy/qgHd+uk"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646170707381a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264646f637381a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7481626431",
+									"node:d1": "a562696462643164696e666f806576616c756581a2646b65707482582090eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae963747874666368616e6765a3646e6f64656264316474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a26461707073646170707364646f637364646f6373",
+									"shown:d1": "a36466696c6568646f63732e74787464686f6d6583617264646f6373f90000646c616964582090eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94600647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94800",
+									"plan": [
+										{
+											"to": "docs",
+											"slot": [
+												"r",
+												"docs"
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "d1",
+											"to": "docs/1.txt",
+											"form": "txt",
+											"from": "docs.txt",
+											"what": "rename",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "kO63Hw1LdopdRJ4wA1vrf/zNddIo5bOOjpy/qgHd+uk"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "kO63Hw1LdopdRJ4wA1vrf/zNddIo5bOOjpy/qgHd+uk"
+													}
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "d2",
+											"to": "docs/2.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646170707381a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264646f637381a2666368616e6765a3646e6f646561726474696d65f94800656163746f7264686f737467636f6e74656e7482626431626432",
+									"node:d2": "a562696462643264696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f64656264326474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a26461707073646170707364646f63738364646f637361316132",
+									"shown:d1": "a36466696c6565312e74787464686f6d6583617264646f6373f90000646c616964582090eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+									"shown:d2": "a36466696c6565322e706e6764686f6d6583617264646f6373f93c00646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94800647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94880",
+									"plan": [
+										{
+											"id": "d1",
+											"to": "pinned.txt",
+											"what": "link",
+											"after": {
+												"link": "docs/1.txt"
+											},
+											"before": null,
+											"number": 1
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8382646170707381a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264646f637381a2666368616e6765a3646e6f646561726474696d65f94800656163746f7264686f737467636f6e74656e7482626431626432826670696e6e656481a2666368616e6765a3646e6f646561726474696d65f94880656163746f7264686f737467636f6e74656e7481626431",
+									"shown:r": "a266666f6c646572f567656e7472696573a36461707073646170707364646f63738364646f6373613161326670696e6e65646670696e6e6564"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94880647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94900",
+									"plan": [
+										{
+											"id": "x9",
+											"to": "Notes",
+											"what": "link",
+											"after": {
+												"link": ".ermine/id/x9"
+											},
+											"before": null,
+											"number": 1
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8482646170707381a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264646f637381a2666368616e6765a3646e6f646561726474696d65f94800656163746f7264686f737467636f6e74656e7482626431626432826670696e6e656481a2666368616e6765a3646e6f646561726474696d65f94880656163746f7264686f737467636f6e74656e748162643182654e6f74657381a2666368616e6765a3646e6f646561726474696d65f94900656163746f7264686f737467636f6e74656e7481627839",
+									"shown:r": "a266666f6c646572f567656e7472696573a46461707073646170707364646f63738364646f637361316132654e6f746573654e6f7465736670696e6e65646670696e6e6564"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94900647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+						"kind": "file",
+						"hex": "a1657468656d65646461726b"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/90eeb71f0d4b768a5d449e30035beb7ffccd75d228e5b38e8e9cbfaa01ddfae9",
+						"kind": "file",
+						"hex": "68656c6c6f"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": "Notes",
+						"kind": "link",
+						"target": ".ermine/id/x9",
+						"attrs": {
+							"party.chee.ermine.id": "x9"
+						}
+					},
+					{
+						"path": "apps",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					},
+					{
+						"path": "apps.text",
+						"kind": "file",
+						"hex": "7b0a2020227468656d65223a20226461726b220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					},
+					{
+						"path": "apps/clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c"
+						}
+					},
+					{
+						"path": "docs",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": {
+								"hex": "82617264646f6373"
+							}
+						}
+					},
+					{
+						"path": "docs/1.txt",
+						"kind": "file",
+						"hex": "68656c6c6f",
+						"attrs": {
+							"party.chee.ermine.id": "d1"
+						}
+					},
+					{
+						"path": "docs/2.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "d2"
+						}
+					},
+					{
+						"path": "pinned.txt",
+						"kind": "link",
+						"target": "docs/1.txt",
+						"attrs": {
+							"party.chee.ermine.id": "d1"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		}
+	]
+}

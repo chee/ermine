@@ -1,0 +1,52 @@
+{
+	"title": "a hash given is trusted; the file then does not hash to its name",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"value": "x",
+			"hash": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+			"expect": {
+				"kept": [
+					"a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+					"txt"
+				],
+				"synced": [
+					"tmp/a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": [
+					[
+						"values/a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+						"78"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "a1b4df527952b114e594d18478a2647d23ab44faefacea1dbdb7afd174cf257f",
+			"form": "txt",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

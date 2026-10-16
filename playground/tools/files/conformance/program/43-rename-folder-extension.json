@@ -1,0 +1,145 @@
+{
+	"title": "a folder renamed keeps the extension its slot's name had after its stem: README/ to DOCS/ is the slot DOCS.md",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {
+				"root": "r"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "README.md",
+			"value": "# hello",
+			"expect": {
+				"id": "id1"
+			}
+		},
+		{
+			"op": "place",
+			"path": [
+				"README.md"
+			],
+			"slot": "more",
+			"value": "x",
+			"expect": {
+				"id": "id2"
+			}
+		},
+		{
+			"op": "save",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"edit": "rename",
+			"from": "README",
+			"to": "DOCS"
+		},
+		{
+			"op": "pass",
+			"touched": [
+				""
+			],
+			"expect": {
+				"called": true,
+				"settled": true
+			}
+		},
+		{
+			"op": "graph",
+			"expect": {
+				"root": "r",
+				"nodes": {
+					"id": "r",
+					"value": [],
+					"slots": [
+						[
+							"DOCS.md",
+							[
+								{
+									"id": "id1",
+									"value": [
+										{
+											"content": "# hello",
+											"actor": "host"
+										}
+									],
+									"slots": [
+										[
+											"more",
+											[
+												{
+													"id": "id2",
+													"value": [
+														{
+															"content": "x",
+															"actor": "host"
+														}
+													],
+													"slots": []
+												}
+											]
+										]
+									]
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": "DOCS",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "DOCS.md",
+						"kind": "file",
+						"hex": "232068656c6c6f",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "DOCS/more.txt",
+						"kind": "file",
+						"hex": "78",
+						"attrs": {
+							"party.chee.ermine.id": "id2"
+						}
+					}
+				],
+				"trash": null,
+				"listed": []
+			}
+		}
+	]
+}

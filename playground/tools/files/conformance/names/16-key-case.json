@@ -1,0 +1,166 @@
+{
+	"title": "key folds case: ASCII, accents, Greek, Cyrillic, Armenian, Georgian, Cherokee",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "",
+			"expect": {
+				"result": ""
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Clock",
+			"expect": {
+				"result": "clock"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "CLOCK",
+			"expect": {
+				"result": "clock"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "cLoCk 2",
+			"expect": {
+				"result": "clock 2"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ÀÉÎÕÜ",
+			"expect": {
+				"result": "àéîõü"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ΑΒΓΔ",
+			"expect": {
+				"result": "αβγδ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ЖИВОТ",
+			"expect": {
+				"result": "живот"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ԱԲԳ",
+			"expect": {
+				"result": "աբգ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ᲐᲑᲒ",
+			"expect": {
+				"result": "აბგ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ა",
+			"expect": {
+				"result": "ა"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ა",
+			"expect": {
+				"result": "ა"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ꭰ",
+			"expect": {
+				"result": "ꭰ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ꭰ",
+			"expect": {
+				"result": "ꭰ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ᎠᎡᎢ",
+			"expect": {
+				"result": "ꭰꭱꭲ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǅ",
+			"expect": {
+				"result": "ǆ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǈ",
+			"expect": {
+				"result": "ǉ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ǲ",
+			"expect": {
+				"result": "ǳ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ⅷ",
+			"expect": {
+				"result": "ⅷ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ⅷ",
+			"expect": {
+				"result": "ⅷ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Ⓐ",
+			"expect": {
+				"result": "ⓐ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ａｂｃ",
+			"expect": {
+				"result": "ａｂｃ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ＡＢＣ",
+			"expect": {
+				"result": "ａｂｃ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "a-b_c.D",
+			"expect": {
+				"result": "a-b_c.d"
+			}
+		}
+	]
+}
