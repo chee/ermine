@@ -32,6 +32,8 @@ struct op_value {
 	// a big map's lookup table, made when first asked
 	size_t *index;
 	size_t slots;
+	// removals since the table was made: how many, then where (see value.c)
+	size_t *gaps;
 	unsigned char *data;
 	op_elements kind;
 	// holders past the first: op_ref adds one, op_free lets one go
@@ -61,8 +63,14 @@ size_t op_length(const op_value *typed);
 // takes v; a map's key set twice keeps its first place (the value there before let go of)
 void op_push(op_value *list, op_value *v);
 void op_set(op_value *map, const char *key, op_value *v);
-// NULL when absent
+// NULL when absent. A map of many keys builds its lookup table on the first call, so this writes
+// to the map: not safe on one map from two threads, whatever the const
 op_value *op_get(const op_value *map, const char *key);
+// where the key is in the map's items, or -1
+long op_find(const op_value *map, const char *key);
+// takes out the entry at position i (not its value: the caller has it); the later ones move down,
+// the lookup table is kept
+void op_unset(op_value *map, size_t i);
 // one more holder of v, and so of all it holds; v. NULL: NULL. not thread-safe
 op_value *op_ref(op_value *v);
 // lets one hold of v go: the last frees it, and lets go of what it holds. a tree never

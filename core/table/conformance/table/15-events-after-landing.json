@@ -1,0 +1,431 @@
+{
+	"title": "an event is told after it landed: the table at its id is as it is after; a node taken from many keys is told of once all are taken",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"value",
+						"a",
+						[
+							[
+								"value",
+								"n"
+							]
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"children",
+						"a"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"info",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "a",
+			"node": "k",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"value",
+						"a",
+						[
+							[
+								"children",
+								"n"
+							],
+							[
+								"value",
+								"k"
+							]
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"children",
+						"a",
+						[
+							[
+								"value",
+								"k"
+							]
+						]
+					],
+					[
+						"info",
+						"b",
+						[
+							[
+								"value",
+								"m"
+							]
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "c",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "c",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "i",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"value",
+						"c",
+						[
+							[
+								"value",
+								"j"
+							]
+						]
+					],
+					[
+						"children",
+						"c",
+						[
+							[
+								"value",
+								"j"
+							],
+							[
+								"children",
+								"j"
+							]
+						]
+					],
+					[
+						"info",
+						"c",
+						[
+							[
+								"value",
+								"j"
+							],
+							[
+								"children",
+								"j"
+							],
+							[
+								"info",
+								"i"
+							]
+						]
+					],
+					[
+						"value",
+						"c",
+						[
+							[
+								"children",
+								"j"
+							],
+							[
+								"info",
+								"i"
+							]
+						]
+					],
+					[
+						"info",
+						"c",
+						[
+							[
+								"children",
+								"j"
+							]
+						]
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"children",
+						"j"
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "d",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "j",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"info",
+						"c",
+						[
+							[
+								"children",
+								"j"
+							],
+							[
+								"info",
+								"j"
+							]
+						]
+					],
+					[
+						"value",
+						"d",
+						[
+							[
+								"value",
+								"j"
+							]
+						]
+					],
+					[
+						"children",
+						"c",
+						[]
+					],
+					[
+						"info",
+						"c",
+						[]
+					],
+					[
+						"value",
+						"d",
+						[]
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "p",
+			"id": "e",
+			"node": "h",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "e",
+			"node": "h",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "r",
+			"id": "e",
+			"node": "g",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "p",
+			"id": "e",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "q",
+			"node": "h",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"p",
+						"e",
+						[
+							[
+								"p",
+								"h"
+							]
+						]
+					],
+					[
+						"q",
+						"e",
+						[
+							[
+								"p",
+								"h"
+							],
+							[
+								"q",
+								"h"
+							]
+						]
+					],
+					[
+						"r",
+						"e",
+						[
+							[
+								"p",
+								"h"
+							],
+							[
+								"q",
+								"h"
+							],
+							[
+								"r",
+								"g"
+							]
+						]
+					],
+					[
+						"p",
+						"e",
+						[
+							[
+								"q",
+								"h"
+							],
+							[
+								"r",
+								"g"
+							]
+						]
+					],
+					[
+						"q",
+						"e",
+						[
+							[
+								"r",
+								"g"
+							]
+						]
+					]
+				]
+			}
+		}
+	]
+}

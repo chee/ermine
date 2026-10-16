@@ -1,15 +1,15 @@
 {
 	"title": "a run reads in order; reads in that order, readers in the order made",
 	"steps": [
-		{ "op": "begin", "from": "v" },
-		{ "op": "track", "from": "v", "to": "a" },
-		{ "op": "track", "from": "v", "to": "b" },
-		{ "op": "end", "from": "v" },
+		{ "op": "begin", "from": "v", "expect": {} },
+		{ "op": "track", "from": "v", "to": "a", "expect": {} },
+		{ "op": "track", "from": "v", "to": "b", "expect": {} },
+		{ "op": "end", "from": "v", "expect": {} },
 		{ "op": "reads", "of": "v", "expect": { "names": ["a", "b"] } },
 		{ "op": "readers", "of": "a", "expect": { "names": ["v"] } },
-		{ "op": "begin", "from": "w" },
-		{ "op": "track", "from": "w", "to": "a" },
-		{ "op": "end", "from": "w" },
+		{ "op": "begin", "from": "w", "expect": {} },
+		{ "op": "track", "from": "w", "to": "a", "expect": {} },
+		{ "op": "end", "from": "w", "expect": {} },
 		{ "op": "readers", "of": "a", "expect": { "names": ["v", "w"] } }
 	]
 }

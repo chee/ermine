@@ -1,0 +1,80 @@
+{
+	"title": "two calls, each with its undo: joined, the second call's first, they are the undo of one call of both and take its end back to the value given",
+	"steps": [
+		{
+			"op": "apply",
+			"value": { "s": "ab", "l": [1, 2, 3] },
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [2, 3] } },
+				{ "path": ["s"], "range": [2, 2], "value": "c" }
+			],
+			"expect": { "value": { "s": "abc", "l": [3, 1, 2] } }
+		},
+		{
+			"op": "invert",
+			"value": { "s": "ab", "l": [1, 2, 3] },
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [2, 3] } },
+				{ "path": ["s"], "range": [2, 2], "value": "c" }
+			],
+			"expect": {
+				"undo": [
+					{ "path": ["s"], "range": [2, 3] },
+					{ "path": ["l"], "range": [2, 2], "move": { "path": ["l"], "range": [0, 1] } }
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": { "s": "abc", "l": [3, 1, 2] },
+			"patches": [
+				{ "path": ["k"], "move": { "path": ["l"] } },
+				{ "path": ["s"], "range": [0, 1] }
+			],
+			"expect": { "value": { "s": "bc", "k": [3, 1, 2] } }
+		},
+		{
+			"op": "invert",
+			"value": { "s": "abc", "l": [3, 1, 2] },
+			"patches": [
+				{ "path": ["k"], "move": { "path": ["l"] } },
+				{ "path": ["s"], "range": [0, 1] }
+			],
+			"expect": {
+				"undo": [
+					{ "path": ["s"], "range": [0, 0], "value": "a" },
+					{ "path": ["l"], "move": { "path": ["k"] } }
+				]
+			}
+		},
+		{
+			"op": "invert",
+			"value": { "s": "ab", "l": [1, 2, 3] },
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [2, 3] } },
+				{ "path": ["s"], "range": [2, 2], "value": "c" },
+				{ "path": ["k"], "move": { "path": ["l"] } },
+				{ "path": ["s"], "range": [0, 1] }
+			],
+			"expect": {
+				"undo": [
+					{ "path": ["s"], "range": [0, 0], "value": "a" },
+					{ "path": ["l"], "move": { "path": ["k"] } },
+					{ "path": ["s"], "range": [2, 3] },
+					{ "path": ["l"], "range": [2, 2], "move": { "path": ["l"], "range": [0, 1] } }
+				]
+			}
+		},
+		{
+			"op": "apply",
+			"value": { "s": "bc", "k": [3, 1, 2] },
+			"patches": [
+				{ "path": ["s"], "range": [0, 0], "value": "a" },
+				{ "path": ["l"], "move": { "path": ["k"] } },
+				{ "path": ["s"], "range": [2, 3] },
+				{ "path": ["l"], "range": [2, 2], "move": { "path": ["l"], "range": [0, 1] } }
+			],
+			"expect": { "value": { "s": "ab", "l": [1, 2, 3] } }
+		}
+	]
+}

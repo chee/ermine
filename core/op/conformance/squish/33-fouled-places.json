@@ -1,0 +1,109 @@
+{
+	"title": "a lone surrogate fouls its place and what is under it, not what is above; a move from under a fouled place fouls where it lands",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t", "x"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": ["t"], "range": [0, 0], "value": ["a"] },
+				{ "path": ["t"], "range": [1, 1], "value": ["b"] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t", "x"], "range": [0, 0], "value": "\ud83d" },
+					{ "path": ["t"], "range": [0, 0], "value": ["a", "b"] }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": ["t", "u"], "range": [0, 0], "value": "a" },
+				{ "path": ["t", "u"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+					{ "path": ["t", "u"], "range": [0, 0], "value": "a" },
+					{ "path": ["t", "u"], "range": [1, 1], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": ["t"], "range": [0, 1] },
+				{ "path": ["t"], "range": [0, 1] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+					{ "path": ["t"], "range": [0, 1] },
+					{ "path": ["t"], "range": [0, 1] }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+				{ "path": ["u"], "move": { "path": ["t", "x"] } },
+				{ "path": ["u"], "range": [0, 0], "value": "a" },
+				{ "path": ["u"], "range": [1, 1], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "\ud83d" },
+					{ "path": ["u"], "move": { "path": ["t", "x"] } },
+					{ "path": ["u"], "range": [0, 0], "value": "a" },
+					{ "path": ["u"], "range": [1, 1], "value": "b" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [1, 1], "value": "\ude00" },
+				{ "path": ["t"], "range": [3, 3], "value": "c" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "ab" },
+					{ "path": ["t"], "range": [1, 1], "value": "\ude00" },
+					{ "path": ["t"], "range": [3, 3], "value": "c" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a😀" },
+				{ "path": ["t"], "range": [1, 2], "value": "\ud83d" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "a😀" },
+					{ "path": ["t"], "range": [1, 2], "value": "\ud83d" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["m", "x"], "range": [0, 0], "value": "a" },
+				{ "path": ["m", "x"], "range": [1, 1], "value": { "k": "\ud83d" } },
+				{ "path": ["m", "x"], "range": [2, 2], "value": "b" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["m", "x"], "range": [0, 0], "value": "a" },
+					{ "path": ["m", "x"], "range": [1, 1], "value": { "k": "\ud83d" } },
+					{ "path": ["m", "x"], "range": [2, 2], "value": "b" }
+				]
+			}
+		}
+	]
+}

@@ -9,7 +9,8 @@
 			"f": {
 				"do": [{ "cleanup": ["c", { "dispose": "c" }] }, { "log": ["c", { "read": "k" }] }]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "p"]], "expect": {} },
 		{
@@ -19,7 +20,8 @@
 			"f": {
 				"do": [{ "cleanup": ["d", { "dispose": "p" }] }, { "log": ["d", { "read": "k" }] }]
 			},
-			"to": "d"
+			"to": "d",
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -28,15 +30,16 @@
 			"f": { "read": "k" },
 			"act": {
 				"do": [{ "log": ["e", { "given": "value" }] }, { "cleanup": ["e", { "dispose": "e" }] }]
-			}
+			},
+			"expect": {}
 		},
-		{ "op": "write", "values": { "k": 1 } },
+		{ "op": "write", "values": { "k": 1 }, "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["c", 1], ["d", 1], ["e", 1]] } },
-		{ "op": "write", "values": { "k": 2 } },
+		{ "op": "write", "values": { "k": 2 }, "expect": { "tick": 7 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [] } },
-		{ "op": "write", "values": { "k": 3 } },
+		{ "op": "write", "values": { "k": 3 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [] } }
 	]

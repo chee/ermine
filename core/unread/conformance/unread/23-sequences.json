@@ -1,0 +1,277 @@
+{
+	"title": "strings splice by code points and typed arrays by elements; what a reader holds of either never changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"t": {
+					"/": {
+						"int16": [
+							1,
+							2,
+							3
+						]
+					}
+				},
+				"s": "a🦊b",
+				"l": [
+					1,
+					2
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": [
+								1,
+								2,
+								3
+							]
+						}
+					},
+					"s": "a🦊b",
+					"l": [
+						1,
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": {
+							"/": {
+								"int16": [
+									1
+								]
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"int16": [
+								9
+							]
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"t"
+						],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "x"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							1,
+							2
+						],
+						"value": "🦊"
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "🦊🦊"
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"s"
+						],
+						"range": [
+							2,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": [
+						3,
+						4
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							2,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						4
+					],
+					"value": []
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							1,
+							2,
+							3,
+							4
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": [
+								1,
+								2,
+								3
+							]
+						}
+					},
+					"s": "a🦊b",
+					"l": [
+						1,
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"t": {
+						"/": {
+							"int16": [
+								2,
+								9,
+								3
+							]
+						}
+					},
+					"s": "ax🦊🦊b",
+					"l": []
+				}
+			}
+		}
+	]
+}

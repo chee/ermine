@@ -8,7 +8,8 @@
 			"name": "c",
 			"scope": "o",
 			"f": { "sum": [{ "read": "a" }, { "read": "b" }] },
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "get", "key": "c", "expect": { "value": null } },
 		{ "op": "pulse", "expect": {} },

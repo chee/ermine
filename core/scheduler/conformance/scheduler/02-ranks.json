@@ -31,7 +31,8 @@
 					}
 				]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -45,7 +46,8 @@
 					1
 				]
 			},
-			"to": "b"
+			"to": "b",
+			"expect": {}
 		},
 		{
 			"op": "pulse",

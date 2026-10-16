@@ -3,23 +3,37 @@
 // entry. Another implementation joins by speaking this (HARNESS).
 //
 // { op: "start", value?, header?, cow? }  → {}   a fresh entry: the value (not given: none), the
-//    header its change (not given: an empty one); cow: false: an entry whose value update changes in
-//    place (createEntry's cow option). Everything it answers is the same as without it, a refused
-//    update included: the entry as it was (by content: a key put back goes last in its order).
+//    header its change (not given, or with no time: the time now added, whole seconds since 1970,
+//    as node's entry); cow: false: an entry whose value update changes in place (createEntry's
+//    cow option; any other cow, an ordinary entry). Everything it answers is the same as without
+//    it, a refused update included: the entry as it was (by content: a key put back goes last in
+//    its order).
 //    The values the patches put become the entry's value and change with it, so this harness gives
 //    such an entry copies of them and answers the patches as the request had them
+//    before any start: an entry with no value and a change of only the time now
 // { op: "update", patches, header? }
-//    patches: JSON patches as op's apply has them; header: the change's (default
-//    { time: 1, actor: "me" }, never an op)
+//    patches: a list (always given) of JSON patches as op's apply has them, applied in order, each
+//    on what the last left; header: the change's (default { time: 1, actor: "me" }, never an op),
+//    as given: no time added when it has none, {} a change of only the op
 //    → {}
-//    → { error: { code, patch } }   an ApplyError; nothing changes
+//    → { error: { code, patch } }   an ApplyError: code no-key, range, wrong-kind, into-itself or
+//      not-a-patch (a patch that is no map, or a path, range or move of the wrong shape), patch the
+//      index of the first refused; nothing changes, the change still the last good update's
 // { op: "entry" }                   → { entry: { value?, change } }
 //    no value key when none; change: the header of the latest update, with op: { patches, undo }
-//    (the patches as given, undo their inverse)
+//    (the patches as given, undo their inverse: in the order to apply, applied to the value
+//    after it gives the value before). an update's undo given as an update takes the value back;
+//    the undo of that makes it again
+//    the change's fields in the order time, actor, reader, external, metadata, op (C writes that
+//    order; this harness, the header's own order, and a start's time now last: give headers in
+//    that order, and a start's with a time or with nothing else)
+//    a map's keys in order: a key put over keeps its place; a key new, put back or moved within
+//    its map goes last
 //
 // Values are in the JSON form (conformance/typescript/form.ts: revive reads it, toJson writes it),
-// typed arrays and bytes too.
-// Anything not understood: { error: "text" }.
+// typed arrays and bytes too. the header's are plain JSON (node_harness.ts).
+// Errors as text, { error: "text" }, the harness going on with the entry as it was: an op not
+// understood or not given; a value whose JSON form stands for none, in a start or an update.
 import createEntry, { type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Patch } from "@ermine/op/apply"

@@ -1,61 +1,15 @@
 {
 	"title": "an append marks the list and a read of the index past the end, not the elements (from notify 02-append)",
 	"steps": [
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				3
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				5
-			]
-		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						5,
-						5
-					],
-					"value": [
-						"u"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						5
-					]
-				]
-			}
+			"patches": [{ "path": ["l"], "range": [5, 5], "value": ["u"] }],
+			"expect": { "spots": [["l"], ["l", 5]] }
 		}
 	]
 }

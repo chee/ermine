@@ -1,8 +1,8 @@
 {
 	"title": "a keys read of a map of arrays: not woken inside a key's array or deeper, woken by a key added, removed, renamed, the value replaced, or an event",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

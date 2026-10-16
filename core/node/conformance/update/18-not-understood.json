@@ -1,0 +1,90 @@
+{
+	"title": "anything not understood is an error, and the harness goes on with the entry as it was",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": 1
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "nope",
+			"fails": true
+		},
+		{
+			"fails": true
+		},
+		{
+			"op": "Update",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1,
+						"b": 2
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 2
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

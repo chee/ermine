@@ -1,0 +1,39 @@
+{
+	"title": "an edit that starts at the end of what was typed runs on past it: the range grows by what it takes",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [2, 4], "value": "X" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 2], "value": "abX" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "abc" },
+				{ "path": ["t"], "range": [3, 3], "value": "d" },
+				{ "path": ["t"], "range": [4, 6] },
+				{ "path": ["t"], "range": [4, 5] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 3], "value": "abcd" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5], "value": "xy" },
+				{ "path": ["t"], "range": [4, 4], "value": "z" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [2, 5], "value": "xyz" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5], "value": "xy" },
+				{ "path": ["t"], "range": [4, 6] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [2, 7], "value": "xy" }] }
+		}
+	]
+}

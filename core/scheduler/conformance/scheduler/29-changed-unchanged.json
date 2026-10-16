@@ -23,7 +23,8 @@
 			"f": {
 				"read": "k"
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -39,7 +40,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "pulse",
@@ -57,7 +59,45 @@
 			}
 		},
 		{
-			"op": "moments"
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
 		},
 		{
 			"op": "changed",

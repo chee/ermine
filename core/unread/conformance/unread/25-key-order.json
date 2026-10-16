@@ -1,0 +1,187 @@
+{
+	"title": "a key taken out and put back goes last, in place or copied, in one write or two",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": 1,
+				"b": 2,
+				"c": 3
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": 2,
+					"c": 3,
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					]
+				},
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						]
+					},
+					{
+						"path": [
+							"b"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"c": 3,
+					"a": 1,
+					"b": 2
+				}
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"value": {
+					"c": 3,
+					"a": 1,
+					"b": 2
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c"
+					]
+				},
+				{
+					"path": [
+						"c"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"c"
+						]
+					},
+					{
+						"path": [
+							"c"
+						],
+						"value": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 1,
+					"b": 2,
+					"c": 3
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"value": 4
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"c"
+						],
+						"value": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 1,
+					"b": 2,
+					"c": 4
+				}
+			}
+		}
+	]
+}

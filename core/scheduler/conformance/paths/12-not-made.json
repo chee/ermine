@@ -1,11 +1,11 @@
 {
 	"title": "spots by address: a read of nothing has a spot, and what is made there marks it",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "later", "path": [] },
-		{ "op": "spot", "source": "v", "id": "later", "path": ["x"] },
+		{ "op": "spot", "source": "v", "id": "later", "path": [], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "later", "path": ["x"], "expect": {} },
 		{ "op": "event", "source": "v", "id": "later", "expect": { "spots": [[], ["x"]] } },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["missing"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["missing"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

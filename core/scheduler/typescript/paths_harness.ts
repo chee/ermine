@@ -1,22 +1,59 @@
 // paths (paths.ts) on the line protocol (conformance/typescript/harness.ts). Another implementation
 // joins by speaking this (HARNESS).
 //
-//   source, id   a string, or {"symbol": name}: one symbol per name, never equal to a string
-//   path         a list of keys: numbers (list indices) and strings (map keys)
-//   a spot       in an answer: its path, {"keys": path} for a keys spot, or "change" for the change
-//                spot; spots in any order
+//   source, id   a string, or {"symbol": name}: one symbol per name, never equal to a string.
+//                strings equal by content, any string ("", NUL, lone surrogates). a key: (source, id)
+//   path         a list of keys: whole numbers 0 <= n < 1e15 (list indices; -0 is 0, written back
+//                as given: send 0) and strings (map keys, any string); 1 and "1" differ
+//   patch        op's, as apply takes it: {path, range?: [a, b], value?, move?: {path, range?}};
+//                trusted: what a malformed one marks is not stated
+//   keys         true: a keys read; anything else, a plain read
+//
+// the rule (marks; mark is it per spot). a patch's places: a move's take {path: move.path, range:
+// move.range, put: no, n: 0} then its landing {path, range, put: yes, n: the take's b - a, or 1};
+// else one {path, range, put: has value, n: value's length when a list, 0 when no value, else not
+// known}. a removal at an index: unranged, no put, its last key a number. a place Q reaches a
+// plain read of P when
+//   P is Q or a prefix of it (the change is inside what was read)
+//   Q is a removal at an index k, P runs beside it to Q's parent then a number > k, then anything
+//   Q is a proper prefix of P and Q unranged (what P read was replaced or removed)
+//   Q ranged [a, b), P = Q + [k, ...], k a number: k in [a, b) when n is b - a (the length kept),
+//     else k >= a (past the end too)
+// a keys read of P: when Q is no longer than P, as a plain read; else only when Q is P plus one
+// key and unranged (a key set, removed, taken or landed). a batch marks what any patch marks, each
+// patch in its own coordinates
+//
+// spots: kept by key, in a trie of path steps per key; a step is kept while a spot is at or under
+// it. a spot in an answer: its path, {"keys": path} for a keys spot, "change" for the change spot.
+// mark's order: the change spot, then each patch's places in turn; a spot already given is
+// skipped. a place walks from the key's top down its path: at each step above the place, its
+// spot; at the step just above an unranged place, its keys spot too; above a removal at index k,
+// the number kids past k in index order, wholly; then on into the next step (none kept: the place
+// is done). at the place's step: unranged, wholly; ranged [a, b), its spot, its keys spot, then
+// its number kids from a in index order, below b when n is b - a, each wholly. wholly: the
+// step's spot, its keys spot, then each kid wholly in the order the kid steps were made (a step
+// let go and made again comes last)
 //
 //   {"op":"spot","source","id","path","keys"?}  {}  a read's spot, made or found; keys: true, a read
-//                                                 of the keys at path only
+//                                                 of the keys at path only, a spot of its own
 //   {"op":"change","source","id"}            {}  the change spot, made or found
-//   {"op":"mark","source","id","patches"}    {"spots":[...]}  what the patches mark, each once
-//   {"op":"event","source","id"}             {"spots":[...]}  a whole-node event at that key
-//   {"op":"release","source","id","path","keys"?}  {}  lets the spot go (no path: the change spot);
-//                                                 not there: nothing
-//   {"op":"marks","patch","paths","keys"?}   {"marks":[...]}  the rule, a boolean per path (keys: for
-//                                                 a keys read)
-//   {"op":"kept"}                            {"keys","spots","steps"}  what is kept
-//   anything wrong                           {"error": why}
+//   {"op":"mark","source","id","patches"}    {"spots":[...]}  what the patches mark, each once; a key
+//                                                 with no spots: [] (nothing is made)
+//   {"op":"event","source","id"}             {"spots":[...]}  a whole-node event at that key: a mark
+//                                                 of [{"path":[]}]
+//   {"op":"release","source","id","path"?,"keys"?}  {}  lets the spot go (no path: the change spot);
+//                                                 not there: nothing. steps left with nothing go, then
+//                                                 the key
+//   {"op":"marks","patch","paths","keys"?}   {"marks":[...]}  the rule, a boolean per path in order
+//                                                 (keys: for a keys read); no key, nothing kept
+//   {"op":"kept"}                            {"keys","spots","steps"}  what is kept: keys with a spot,
+//                                                 spots, and steps (per key its top, and each other
+//                                                 prefix of its spots' paths, once)
+//   anything wrong                           {"error": why}; why is not compared. no op, an unknown
+//                                                 op, a source or id neither string nor symbol, spot
+//                                                 with no path, a path null, mark at a kept key with
+//                                                 no list of patches, marks with no patch or paths.
+//                                                 what is kept after one is not stated
 import { createPaths, type Key, marks, type Patch, type Spot } from "./paths.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 

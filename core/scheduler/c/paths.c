@@ -87,8 +87,8 @@ struct pt_step {
 	link link;
 	pt_step *up;
 	op_key key;
-	// the kids, and this one's siblings in up's
-	pt_step *first, *next, *prev;
+	// the kids, in the order made, and this one's siblings in up's
+	pt_step *first, *last, *next, *prev;
 	// the kids with number keys, by key
 	pt_step **nums;
 	size_t count, capacity;
@@ -167,9 +167,10 @@ static pt_step *make_kid(pt_paths *p, pt_step *up, const op_key *k) {
 	if (k->type == OP_NUM_KEY) s->key.n = k->n;
 	else s->key.s = copy(k->s);
 	add(&p->steps, &s->link);
-	s->next = up->first;
-	if (up->first != NULL) up->first->prev = s;
-	up->first = s;
+	s->prev = up->last;
+	if (up->last != NULL) up->last->next = s;
+	else up->first = s;
+	up->last = s;
 	if (k->type == OP_NUM_KEY) {
 		// in index order: at the end
 		size_t i = up->count && up->nums[up->count - 1]->key.n > k->n ? from(up, k->n) : up->count;
@@ -372,6 +373,7 @@ void pt_release(pt_paths *p, pt_spot *s) {
 			if (at->prev != NULL) at->prev->next = at->next;
 			else up->first = at->next;
 			if (at->next != NULL) at->next->prev = at->prev;
+			else up->last = at->prev;
 			if (at->key.type == OP_NUM_KEY) {
 				size_t i = from(up, at->key.n);
 				memmove(up->nums + i, up->nums + i + 1, (up->count - i - 1) * sizeof *up->nums);

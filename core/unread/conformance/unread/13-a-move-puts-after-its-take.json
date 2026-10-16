@@ -47,10 +47,26 @@
 					}
 				}
 			],
-			"expect": {},
-			"skip": [
-				"undo"
-			]
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"l",
+								0,
+								1
+							]
+						}
+					}
+				]
+			}
 		},
 		{
 			"op": "held",

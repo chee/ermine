@@ -1,0 +1,150 @@
+{
+	"title": "what a write took out and an unwrite put back is the undo's, not the entry's: the next write under it copies it",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"value": {
+							"x": 1
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "unwrite",
+			"hold": "u",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "u",
+			"expect": {
+				"value": [
+					{
+						"x": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					}
+				}
+			}
+		}
+	]
+}

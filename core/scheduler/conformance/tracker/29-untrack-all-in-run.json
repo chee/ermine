@@ -1,0 +1,24 @@
+{
+	"title": "untrack of all in a run: the reads start over, end keeps what was read after",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "untrack", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "untrack", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": [] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["c"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r"] } }
+	]
+}

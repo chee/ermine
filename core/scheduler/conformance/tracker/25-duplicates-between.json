@@ -1,0 +1,30 @@
+{
+	"title": "spots read again out of order after others read them: each linked again at the cursor, then a spot whose newest reader is this run is not linked a third time",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "begin", "from": "s", "expect": {} },
+		{ "op": "track", "from": "s", "to": "a", "expect": {} },
+		{ "op": "track", "from": "s", "to": "b", "expect": {} },
+		{ "op": "track", "from": "s", "to": "c", "expect": {} },
+		{ "op": "end", "from": "s", "expect": {} },
+		{ "op": "begin", "from": "u", "expect": {} },
+		{ "op": "track", "from": "u", "to": "c", "expect": {} },
+		{ "op": "track", "from": "u", "to": "b", "expect": {} },
+		{ "op": "track", "from": "u", "to": "a", "expect": {} },
+		{ "op": "end", "from": "u", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "b", "c", "b", "a", "c"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r", "s", "u", "r"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r", "s", "u", "r"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r", "s", "u", "r"] } },
+		{ "op": "reads", "of": "u", "expect": { "names": ["c", "b", "a"] } }
+	]
+}

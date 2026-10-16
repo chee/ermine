@@ -12,7 +12,8 @@
 					{ "log": ["act", { "given": "value" }] },
 					{ "cleanup": ["e", { "log": ["undo", { "given": "value" }] }] }
 				]
-			}
+			},
+			"expect": {}
 		},
 		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 2 } },
 		{ "op": "pulse", "expect": {} },
@@ -20,7 +21,51 @@
 		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["undo", 1], ["act", 2]] } },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 1
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
+				]
+			}
+		},
 		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
 		{

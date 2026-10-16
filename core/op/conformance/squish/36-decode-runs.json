@@ -1,0 +1,57 @@
+{
+	"title": "decode: a run of none gives nothing, and from steps carry over patches with no range",
+	"steps": [
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 0, 0, 2],
+				"shape": [1, 0, 1, 2],
+				"from": [3, 1, 1, 1],
+				"size": [1, 2],
+				"value": [],
+				"move": []
+			},
+			"expect": {
+				"patches": [{ "path": ["t"], "range": [3, 4] }, { "path": ["t"], "range": [4, 5] }]
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"], ["u"]],
+				"path": [0, 1, 1, 1, 0, 1],
+				"shape": [1, 1, 2, 1, 1, 1],
+				"from": [5, 1, -2, 1],
+				"size": [1, 1, 0, 1],
+				"value": [1],
+				"move": []
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [5, 6] },
+					{ "path": ["u"], "value": 1 },
+					{ "path": ["t"], "range": [3, 3] }
+				]
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 2],
+				"shape": [1, 2],
+				"from": [4294967296, 1, -4294967296, 1],
+				"size": [1, 2],
+				"value": [],
+				"move": []
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [4294967296, 4294967297] },
+					{ "path": ["t"], "range": [0, 1] }
+				]
+			}
+		}
+	]
+}

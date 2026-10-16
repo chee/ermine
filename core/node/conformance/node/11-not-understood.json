@@ -1,0 +1,50 @@
+{
+	"title": "anything not understood is an error, and the harness goes on",
+	"steps": [
+		{
+			"op": "nope",
+			"fails": true
+		},
+		{
+			"fails": true
+		},
+		{
+			"op": "Entry",
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": 1,
+			"expect": {
+				"entry": {
+					"value": 1,
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "node",
+			"values": {
+				"a": 1
+			},
+			"header": {
+				"time": 1
+			},
+			"expect": {
+				"node": {
+					"a": {
+						"value": 1,
+						"change": {
+							"time": 1
+						}
+					}
+				}
+			}
+		}
+	]
+}

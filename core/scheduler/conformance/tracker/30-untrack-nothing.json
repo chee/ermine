@@ -1,0 +1,19 @@
+{
+	"title": "untrack of what is not read does nothing: a reader with no reads, a spot it does not read, the wrong way round",
+	"steps": [
+		{ "op": "untrack", "from": "r", "expect": {} },
+		{ "op": "untrack", "from": "r", "to": "a", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "untrack", "from": "r", "to": "zzz", "expect": {} },
+		{ "op": "untrack", "from": "a", "to": "r", "expect": {} },
+		{ "op": "untrack", "from": "a", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "b"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "r", "expect": { "names": [] } }
+	]
+}

@@ -39,7 +39,8 @@
 						"dispose": "c"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -55,7 +56,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -69,7 +71,8 @@
 					100
 				]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{
 			"op": "write",

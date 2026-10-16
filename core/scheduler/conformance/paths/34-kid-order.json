@@ -1,0 +1,65 @@
+{
+	"title": "under an unranged place the kids come in the order their steps were made; under a range, the number kids in index order; a step made again comes last",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 9], "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "value": [] }],
+			"expect": { "spots": [["l", 5], ["l", 2], ["l", "x"], ["l", 9]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [0, 0], "value": [1] }],
+			"expect": { "spots": [["l", 2], ["l", 5], ["l", 9]] }
+		},
+		{ "op": "release", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "value": [] }],
+			"expect": { "spots": [["l", 2], ["l", "x"], ["l", 9], ["l", 5]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [0, 0], "value": [1] }],
+			"expect": { "spots": [["l", 2], ["l", 5], ["l", 9]] }
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "y"], "expect": {} },
+		{ "op": "release", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "value": [] }],
+			"expect": { "spots": [["l", 2, "y"], ["l", "x"], ["l", 9], ["l", 5]] }
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
+		{
+			"op": "event",
+			"source": "v",
+			"id": "n",
+			"expect": {
+				"spots": [{ "keys": [] }, ["l"], ["l", 2, "y"], ["l", "x"], ["l", 9], ["l", 5]]
+			}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 2] }],
+			"expect": { "spots": [["l"], ["l", 5], ["l", 9], ["l", 2, "y"]] }
+		}
+	]
+}

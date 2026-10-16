@@ -1,0 +1,75 @@
+{
+	"title": "unwrite before any write, or after only refused ones, is nothing-written; an empty write is a write, its undo empty",
+	"steps": [
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"error": "nothing-written"
+			}
+		},
+		{
+			"op": "value",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"value": {
+				"a": 1
+			},
+			"expect": {}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"error": "nothing-written"
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"nope",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"error": "nothing-written"
+			}
+		},
+		{
+			"op": "write",
+			"patches": [],
+			"expect": {
+				"undo": []
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"undo": []
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		}
+	]
+}

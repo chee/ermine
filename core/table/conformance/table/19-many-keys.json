@@ -1,0 +1,2527 @@
+{
+	"title": "many keys: sixty ids under one node, forty parts at one id; orders hold through takes, put-backs and subs",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id0",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id7",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id14",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id21",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id28",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id35",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id2",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id9",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id16",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id23",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id30",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id37",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id4",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id11",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id18",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id25",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id32",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id39",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id6",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id13",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id20",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id27",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id34",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id1",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id8",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id15",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id22",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id29",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id36",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id3",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id10",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id17",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id24",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id31",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id38",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id5",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id12",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id19",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id26",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id33",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part0",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part11",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part22",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part33",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part4",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part15",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part26",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part37",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part8",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part19",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part30",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part1",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part12",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part23",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part34",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part5",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part16",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part27",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part38",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part9",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part20",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part31",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part2",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part13",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part24",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part35",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part6",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part17",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part28",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part39",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part10",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part21",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part32",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part3",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part14",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part25",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part36",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part7",
+			"id": "x",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part18",
+			"id": "x",
+			"node": "m2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "part29",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n",
+			"expect": {
+				"ids": [
+					"id0",
+					"id7",
+					"id14",
+					"id21",
+					"id28",
+					"id35",
+					"id2",
+					"id9",
+					"id16",
+					"id23",
+					"id30",
+					"id37",
+					"id4",
+					"id11",
+					"id18",
+					"id25",
+					"id32",
+					"id39",
+					"id6",
+					"id13",
+					"id20",
+					"id27",
+					"id34",
+					"id1",
+					"id8",
+					"id15",
+					"id22",
+					"id29",
+					"id36",
+					"id3",
+					"id10",
+					"id17",
+					"id24",
+					"id31",
+					"id38",
+					"id5",
+					"id12",
+					"id19",
+					"id26",
+					"id33"
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "x",
+			"expect": {
+				"entries": [
+					[
+						"part0",
+						"m0"
+					],
+					[
+						"part11",
+						"m1"
+					],
+					[
+						"part22",
+						"m2"
+					],
+					[
+						"part33",
+						"m0"
+					],
+					[
+						"part4",
+						"m1"
+					],
+					[
+						"part15",
+						"m2"
+					],
+					[
+						"part26",
+						"m0"
+					],
+					[
+						"part37",
+						"m1"
+					],
+					[
+						"part8",
+						"m2"
+					],
+					[
+						"part19",
+						"m0"
+					],
+					[
+						"part30",
+						"m1"
+					],
+					[
+						"part1",
+						"m2"
+					],
+					[
+						"part12",
+						"m0"
+					],
+					[
+						"part23",
+						"m1"
+					],
+					[
+						"part34",
+						"m2"
+					],
+					[
+						"part5",
+						"m0"
+					],
+					[
+						"part16",
+						"m1"
+					],
+					[
+						"part27",
+						"m2"
+					],
+					[
+						"part38",
+						"m0"
+					],
+					[
+						"part9",
+						"m1"
+					],
+					[
+						"part20",
+						"m2"
+					],
+					[
+						"part31",
+						"m0"
+					],
+					[
+						"part2",
+						"m1"
+					],
+					[
+						"part13",
+						"m2"
+					],
+					[
+						"part24",
+						"m0"
+					],
+					[
+						"part35",
+						"m1"
+					],
+					[
+						"part6",
+						"m2"
+					],
+					[
+						"part17",
+						"m0"
+					],
+					[
+						"part28",
+						"m1"
+					],
+					[
+						"part39",
+						"m2"
+					],
+					[
+						"part10",
+						"m0"
+					],
+					[
+						"part21",
+						"m1"
+					],
+					[
+						"part32",
+						"m2"
+					],
+					[
+						"part3",
+						"m0"
+					],
+					[
+						"part14",
+						"m1"
+					],
+					[
+						"part25",
+						"m2"
+					],
+					[
+						"part36",
+						"m0"
+					],
+					[
+						"part7",
+						"m1"
+					],
+					[
+						"part18",
+						"m2"
+					],
+					[
+						"part29",
+						"m0"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m1",
+			"expect": {
+				"keys": [
+					[
+						"part11",
+						"x"
+					],
+					[
+						"part4",
+						"x"
+					],
+					[
+						"part37",
+						"x"
+					],
+					[
+						"part30",
+						"x"
+					],
+					[
+						"part23",
+						"x"
+					],
+					[
+						"part16",
+						"x"
+					],
+					[
+						"part9",
+						"x"
+					],
+					[
+						"part2",
+						"x"
+					],
+					[
+						"part35",
+						"x"
+					],
+					[
+						"part28",
+						"x"
+					],
+					[
+						"part21",
+						"x"
+					],
+					[
+						"part14",
+						"x"
+					],
+					[
+						"part7",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id0",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id6",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id9",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id12",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id15",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id18",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id21",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id24",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id27",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id30",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id33",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id36",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "id39",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part0",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part4",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part8",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part12",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part16",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part20",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part24",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part28",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part32",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "part36",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id40",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id41",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id42",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id43",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id44",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id45",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id46",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id47",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id48",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id49",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id50",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id51",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id52",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id53",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id54",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id55",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id56",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id57",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id58",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id59",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id0",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id6",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id12",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id18",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id24",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id30",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "id36",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "part0",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "part8",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "part16",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "part24",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "part32",
+			"id": "x",
+			"node": "m0",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n",
+			"expect": {
+				"ids": [
+					"id7",
+					"id14",
+					"id28",
+					"id35",
+					"id2",
+					"id16",
+					"id23",
+					"id37",
+					"id4",
+					"id11",
+					"id25",
+					"id32",
+					"id13",
+					"id20",
+					"id34",
+					"id1",
+					"id8",
+					"id22",
+					"id29",
+					"id10",
+					"id17",
+					"id31",
+					"id38",
+					"id5",
+					"id19",
+					"id26",
+					"id40",
+					"id41",
+					"id42",
+					"id43",
+					"id44",
+					"id45",
+					"id46",
+					"id47",
+					"id48",
+					"id49",
+					"id50",
+					"id51",
+					"id52",
+					"id53",
+					"id54",
+					"id55",
+					"id56",
+					"id57",
+					"id58",
+					"id59",
+					"id0",
+					"id6",
+					"id12",
+					"id18",
+					"id24",
+					"id30",
+					"id36"
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "x",
+			"expect": {
+				"entries": [
+					[
+						"part11",
+						"m1"
+					],
+					[
+						"part22",
+						"m2"
+					],
+					[
+						"part33",
+						"m0"
+					],
+					[
+						"part15",
+						"m2"
+					],
+					[
+						"part26",
+						"m0"
+					],
+					[
+						"part37",
+						"m1"
+					],
+					[
+						"part19",
+						"m0"
+					],
+					[
+						"part30",
+						"m1"
+					],
+					[
+						"part1",
+						"m2"
+					],
+					[
+						"part23",
+						"m1"
+					],
+					[
+						"part34",
+						"m2"
+					],
+					[
+						"part5",
+						"m0"
+					],
+					[
+						"part27",
+						"m2"
+					],
+					[
+						"part38",
+						"m0"
+					],
+					[
+						"part9",
+						"m1"
+					],
+					[
+						"part31",
+						"m0"
+					],
+					[
+						"part2",
+						"m1"
+					],
+					[
+						"part13",
+						"m2"
+					],
+					[
+						"part35",
+						"m1"
+					],
+					[
+						"part6",
+						"m2"
+					],
+					[
+						"part17",
+						"m0"
+					],
+					[
+						"part39",
+						"m2"
+					],
+					[
+						"part10",
+						"m0"
+					],
+					[
+						"part21",
+						"m1"
+					],
+					[
+						"part3",
+						"m0"
+					],
+					[
+						"part14",
+						"m1"
+					],
+					[
+						"part25",
+						"m2"
+					],
+					[
+						"part7",
+						"m1"
+					],
+					[
+						"part18",
+						"m2"
+					],
+					[
+						"part29",
+						"m0"
+					],
+					[
+						"part0",
+						"m0"
+					],
+					[
+						"part8",
+						"m0"
+					],
+					[
+						"part16",
+						"m0"
+					],
+					[
+						"part24",
+						"m0"
+					],
+					[
+						"part32",
+						"m0"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m0",
+			"expect": {
+				"keys": [
+					[
+						"part33",
+						"x"
+					],
+					[
+						"part26",
+						"x"
+					],
+					[
+						"part19",
+						"x"
+					],
+					[
+						"part5",
+						"x"
+					],
+					[
+						"part38",
+						"x"
+					],
+					[
+						"part31",
+						"x"
+					],
+					[
+						"part17",
+						"x"
+					],
+					[
+						"part10",
+						"x"
+					],
+					[
+						"part3",
+						"x"
+					],
+					[
+						"part29",
+						"x"
+					],
+					[
+						"part0",
+						"x"
+					],
+					[
+						"part8",
+						"x"
+					],
+					[
+						"part16",
+						"x"
+					],
+					[
+						"part24",
+						"x"
+					],
+					[
+						"part32",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m1",
+			"expect": {
+				"keys": [
+					[
+						"part11",
+						"x"
+					],
+					[
+						"part37",
+						"x"
+					],
+					[
+						"part30",
+						"x"
+					],
+					[
+						"part23",
+						"x"
+					],
+					[
+						"part9",
+						"x"
+					],
+					[
+						"part2",
+						"x"
+					],
+					[
+						"part35",
+						"x"
+					],
+					[
+						"part21",
+						"x"
+					],
+					[
+						"part14",
+						"x"
+					],
+					[
+						"part7",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m2",
+			"expect": {
+				"keys": [
+					[
+						"part22",
+						"x"
+					],
+					[
+						"part15",
+						"x"
+					],
+					[
+						"part1",
+						"x"
+					],
+					[
+						"part34",
+						"x"
+					],
+					[
+						"part27",
+						"x"
+					],
+					[
+						"part13",
+						"x"
+					],
+					[
+						"part6",
+						"x"
+					],
+					[
+						"part39",
+						"x"
+					],
+					[
+						"part25",
+						"x"
+					],
+					[
+						"part18",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"id0"
+					],
+					[
+						"value",
+						"id7"
+					],
+					[
+						"value",
+						"id14"
+					],
+					[
+						"value",
+						"id21"
+					],
+					[
+						"value",
+						"id28"
+					],
+					[
+						"value",
+						"id35"
+					],
+					[
+						"value",
+						"id2"
+					],
+					[
+						"value",
+						"id9"
+					],
+					[
+						"value",
+						"id16"
+					],
+					[
+						"value",
+						"id23"
+					],
+					[
+						"value",
+						"id30"
+					],
+					[
+						"value",
+						"id37"
+					],
+					[
+						"value",
+						"id4"
+					],
+					[
+						"value",
+						"id11"
+					],
+					[
+						"value",
+						"id18"
+					],
+					[
+						"value",
+						"id25"
+					],
+					[
+						"value",
+						"id32"
+					],
+					[
+						"value",
+						"id39"
+					],
+					[
+						"value",
+						"id6"
+					],
+					[
+						"value",
+						"id13"
+					],
+					[
+						"value",
+						"id20"
+					],
+					[
+						"value",
+						"id27"
+					],
+					[
+						"value",
+						"id34"
+					],
+					[
+						"value",
+						"id1"
+					],
+					[
+						"value",
+						"id8"
+					],
+					[
+						"value",
+						"id15"
+					],
+					[
+						"value",
+						"id22"
+					],
+					[
+						"value",
+						"id29"
+					],
+					[
+						"value",
+						"id36"
+					],
+					[
+						"value",
+						"id3"
+					],
+					[
+						"value",
+						"id10"
+					],
+					[
+						"value",
+						"id17"
+					],
+					[
+						"value",
+						"id24"
+					],
+					[
+						"value",
+						"id31"
+					],
+					[
+						"value",
+						"id38"
+					],
+					[
+						"value",
+						"id5"
+					],
+					[
+						"value",
+						"id12"
+					],
+					[
+						"value",
+						"id19"
+					],
+					[
+						"value",
+						"id26"
+					],
+					[
+						"value",
+						"id33"
+					],
+					[
+						"part0",
+						"x"
+					],
+					[
+						"part11",
+						"x"
+					],
+					[
+						"part22",
+						"x"
+					],
+					[
+						"part33",
+						"x"
+					],
+					[
+						"part4",
+						"x"
+					],
+					[
+						"part15",
+						"x"
+					],
+					[
+						"part26",
+						"x"
+					],
+					[
+						"part37",
+						"x"
+					],
+					[
+						"part8",
+						"x"
+					],
+					[
+						"part19",
+						"x"
+					],
+					[
+						"part30",
+						"x"
+					],
+					[
+						"part1",
+						"x"
+					],
+					[
+						"part12",
+						"x"
+					],
+					[
+						"part23",
+						"x"
+					],
+					[
+						"part34",
+						"x"
+					],
+					[
+						"part5",
+						"x"
+					],
+					[
+						"part16",
+						"x"
+					],
+					[
+						"part27",
+						"x"
+					],
+					[
+						"part38",
+						"x"
+					],
+					[
+						"part9",
+						"x"
+					],
+					[
+						"part20",
+						"x"
+					],
+					[
+						"part31",
+						"x"
+					],
+					[
+						"part2",
+						"x"
+					],
+					[
+						"part13",
+						"x"
+					],
+					[
+						"part24",
+						"x"
+					],
+					[
+						"part35",
+						"x"
+					],
+					[
+						"part6",
+						"x"
+					],
+					[
+						"part17",
+						"x"
+					],
+					[
+						"part28",
+						"x"
+					],
+					[
+						"part39",
+						"x"
+					],
+					[
+						"part10",
+						"x"
+					],
+					[
+						"part21",
+						"x"
+					],
+					[
+						"part32",
+						"x"
+					],
+					[
+						"part3",
+						"x"
+					],
+					[
+						"part14",
+						"x"
+					],
+					[
+						"part25",
+						"x"
+					],
+					[
+						"part36",
+						"x"
+					],
+					[
+						"part7",
+						"x"
+					],
+					[
+						"part18",
+						"x"
+					],
+					[
+						"part29",
+						"x"
+					],
+					[
+						"value",
+						"id0"
+					],
+					[
+						"value",
+						"id3"
+					],
+					[
+						"value",
+						"id6"
+					],
+					[
+						"value",
+						"id9"
+					],
+					[
+						"value",
+						"id12"
+					],
+					[
+						"value",
+						"id15"
+					],
+					[
+						"value",
+						"id18"
+					],
+					[
+						"value",
+						"id21"
+					],
+					[
+						"value",
+						"id24"
+					],
+					[
+						"value",
+						"id27"
+					],
+					[
+						"value",
+						"id30"
+					],
+					[
+						"value",
+						"id33"
+					],
+					[
+						"value",
+						"id36"
+					],
+					[
+						"value",
+						"id39"
+					],
+					[
+						"part0",
+						"x"
+					],
+					[
+						"part4",
+						"x"
+					],
+					[
+						"part8",
+						"x"
+					],
+					[
+						"part12",
+						"x"
+					],
+					[
+						"part16",
+						"x"
+					],
+					[
+						"part20",
+						"x"
+					],
+					[
+						"part24",
+						"x"
+					],
+					[
+						"part28",
+						"x"
+					],
+					[
+						"part32",
+						"x"
+					],
+					[
+						"part36",
+						"x"
+					],
+					[
+						"value",
+						"id40"
+					],
+					[
+						"value",
+						"id41"
+					],
+					[
+						"value",
+						"id42"
+					],
+					[
+						"value",
+						"id43"
+					],
+					[
+						"value",
+						"id44"
+					],
+					[
+						"value",
+						"id45"
+					],
+					[
+						"value",
+						"id46"
+					],
+					[
+						"value",
+						"id47"
+					],
+					[
+						"value",
+						"id48"
+					],
+					[
+						"value",
+						"id49"
+					],
+					[
+						"value",
+						"id50"
+					],
+					[
+						"value",
+						"id51"
+					],
+					[
+						"value",
+						"id52"
+					],
+					[
+						"value",
+						"id53"
+					],
+					[
+						"value",
+						"id54"
+					],
+					[
+						"value",
+						"id55"
+					],
+					[
+						"value",
+						"id56"
+					],
+					[
+						"value",
+						"id57"
+					],
+					[
+						"value",
+						"id58"
+					],
+					[
+						"value",
+						"id59"
+					],
+					[
+						"value",
+						"id0"
+					],
+					[
+						"value",
+						"id6"
+					],
+					[
+						"value",
+						"id12"
+					],
+					[
+						"value",
+						"id18"
+					],
+					[
+						"value",
+						"id24"
+					],
+					[
+						"value",
+						"id30"
+					],
+					[
+						"value",
+						"id36"
+					],
+					[
+						"part0",
+						"x"
+					],
+					[
+						"part8",
+						"x"
+					],
+					[
+						"part16",
+						"x"
+					],
+					[
+						"part24",
+						"x"
+					],
+					[
+						"part32",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"node": "m1",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"part11",
+						"x"
+					],
+					[
+						"part37",
+						"x"
+					],
+					[
+						"part30",
+						"x"
+					],
+					[
+						"part23",
+						"x"
+					],
+					[
+						"part9",
+						"x"
+					],
+					[
+						"part2",
+						"x"
+					],
+					[
+						"part35",
+						"x"
+					],
+					[
+						"part21",
+						"x"
+					],
+					[
+						"part14",
+						"x"
+					],
+					[
+						"part7",
+						"x"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "x",
+			"expect": {
+				"entries": [
+					[
+						"part22",
+						"m2"
+					],
+					[
+						"part33",
+						"m0"
+					],
+					[
+						"part15",
+						"m2"
+					],
+					[
+						"part26",
+						"m0"
+					],
+					[
+						"part19",
+						"m0"
+					],
+					[
+						"part1",
+						"m2"
+					],
+					[
+						"part34",
+						"m2"
+					],
+					[
+						"part5",
+						"m0"
+					],
+					[
+						"part27",
+						"m2"
+					],
+					[
+						"part38",
+						"m0"
+					],
+					[
+						"part31",
+						"m0"
+					],
+					[
+						"part13",
+						"m2"
+					],
+					[
+						"part6",
+						"m2"
+					],
+					[
+						"part17",
+						"m0"
+					],
+					[
+						"part39",
+						"m2"
+					],
+					[
+						"part10",
+						"m0"
+					],
+					[
+						"part3",
+						"m0"
+					],
+					[
+						"part25",
+						"m2"
+					],
+					[
+						"part18",
+						"m2"
+					],
+					[
+						"part29",
+						"m0"
+					],
+					[
+						"part0",
+						"m0"
+					],
+					[
+						"part8",
+						"m0"
+					],
+					[
+						"part16",
+						"m0"
+					],
+					[
+						"part24",
+						"m0"
+					],
+					[
+						"part32",
+						"m0"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"id7"
+					],
+					[
+						"value",
+						"id14"
+					],
+					[
+						"value",
+						"id28"
+					],
+					[
+						"value",
+						"id35"
+					],
+					[
+						"value",
+						"id2"
+					],
+					[
+						"value",
+						"id16"
+					],
+					[
+						"value",
+						"id23"
+					],
+					[
+						"value",
+						"id37"
+					],
+					[
+						"value",
+						"id4"
+					],
+					[
+						"value",
+						"id11"
+					],
+					[
+						"value",
+						"id25"
+					],
+					[
+						"value",
+						"id32"
+					],
+					[
+						"value",
+						"id13"
+					],
+					[
+						"value",
+						"id20"
+					],
+					[
+						"value",
+						"id34"
+					],
+					[
+						"value",
+						"id1"
+					],
+					[
+						"value",
+						"id8"
+					],
+					[
+						"value",
+						"id22"
+					],
+					[
+						"value",
+						"id29"
+					],
+					[
+						"value",
+						"id10"
+					],
+					[
+						"value",
+						"id17"
+					],
+					[
+						"value",
+						"id31"
+					],
+					[
+						"value",
+						"id38"
+					],
+					[
+						"value",
+						"id5"
+					],
+					[
+						"value",
+						"id19"
+					],
+					[
+						"value",
+						"id26"
+					],
+					[
+						"value",
+						"id40"
+					],
+					[
+						"value",
+						"id41"
+					],
+					[
+						"value",
+						"id42"
+					],
+					[
+						"value",
+						"id43"
+					],
+					[
+						"value",
+						"id44"
+					],
+					[
+						"value",
+						"id45"
+					],
+					[
+						"value",
+						"id46"
+					],
+					[
+						"value",
+						"id47"
+					],
+					[
+						"value",
+						"id48"
+					],
+					[
+						"value",
+						"id49"
+					],
+					[
+						"value",
+						"id50"
+					],
+					[
+						"value",
+						"id51"
+					],
+					[
+						"value",
+						"id52"
+					],
+					[
+						"value",
+						"id53"
+					],
+					[
+						"value",
+						"id54"
+					],
+					[
+						"value",
+						"id55"
+					],
+					[
+						"value",
+						"id56"
+					],
+					[
+						"value",
+						"id57"
+					],
+					[
+						"value",
+						"id58"
+					],
+					[
+						"value",
+						"id59"
+					],
+					[
+						"value",
+						"id0"
+					],
+					[
+						"value",
+						"id6"
+					],
+					[
+						"value",
+						"id12"
+					],
+					[
+						"value",
+						"id18"
+					],
+					[
+						"value",
+						"id24"
+					],
+					[
+						"value",
+						"id30"
+					],
+					[
+						"value",
+						"id36"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": []
+			}
+		}
+	]
+}

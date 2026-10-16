@@ -1,0 +1,393 @@
+{
+	"title": "indexes past what a list could hold, keys with NUL, the empty key and __proto__: no-key and range as for any other, the rest put and taken back",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3
+				],
+				"m": {}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						9007199254740991
+					],
+					"value": 9
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1e+300
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1e+300
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						9007199254740991,
+						9007199254740991
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": [
+						4
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3,
+							4
+						],
+						"m": {}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"value": [
+										4
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										4
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a\u0000b"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						""
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"m",
+						"__proto__"
+					],
+					"value": {
+						"x": 3
+					}
+				},
+				{
+					"path": [
+						"m",
+						"\u0000"
+					],
+					"value": 4
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3,
+							4
+						],
+						"m": {
+							"a\u0000b": 1,
+							"": 2,
+							"__proto__": {
+								"x": 3
+							},
+							"\u0000": 4
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a\u0000b"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"m",
+										""
+									],
+									"value": 2
+								},
+								{
+									"path": [
+										"m",
+										"__proto__"
+									],
+									"value": {
+										"x": 3
+									}
+								},
+								{
+									"path": [
+										"m",
+										"\u0000"
+									],
+									"value": 4
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"\u0000"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"__proto__"
+									]
+								},
+								{
+									"path": [
+										"m",
+										""
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a\u0000b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"__proto__",
+						"x"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a\u0000b"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3,
+							4
+						],
+						"m": {
+							"": 2,
+							"__proto__": {},
+							"\u0000": 4
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"__proto__",
+										"x"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a\u0000b"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a\u0000b"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"m",
+										"__proto__",
+										"x"
+									],
+									"value": 3
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

@@ -7,7 +7,8 @@
 			"name": "c",
 			"scope": "o",
 			"f": { "if": [{ "eq": [{ "read": "a" }, null] }, { "pending": null }, { "read": "a" }] },
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{

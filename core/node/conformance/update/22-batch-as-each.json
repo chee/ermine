@@ -1,0 +1,1214 @@
+{
+	"title": "one update of many patches ends where one update each does, each patch landing on what the last left; its one undo takes it all back",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3,
+					4
+				],
+				"s": "héllo",
+				"m": {
+					"a": 1,
+					"b": 2
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						3
+					],
+					"value": [
+						7
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							7,
+							4
+						],
+						"s": "héllo",
+						"m": {
+							"a": 1,
+							"b": 2
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										3
+									],
+									"value": [
+										7
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": [
+										2,
+										3
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"c"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							7,
+							4
+						],
+						"s": "héllo",
+						"m": {
+							"a": 1,
+							"b": 2,
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							7,
+							4
+						],
+						"s": "éllo",
+						"m": {
+							"a": 1,
+							"b": 2,
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "h"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							7,
+							4
+						],
+						"s": "éllo",
+						"m": {
+							"b": 2,
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							7,
+							4
+						],
+						"s": "lloé",
+						"m": {
+							"b": 2,
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											0,
+											1
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											3,
+											4
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						5,
+						6
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							5,
+							6,
+							7,
+							4
+						],
+						"s": "lloé",
+						"m": {
+							"b": 2,
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										5,
+										6
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										2
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": {
+						"n": [
+							1
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							5,
+							6,
+							7,
+							4
+						],
+						"s": "lloé",
+						"m": {
+							"b": {
+								"n": [
+									1
+								]
+							},
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": {
+										"n": [
+											1
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 2
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b",
+						"n",
+						0
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							5,
+							6,
+							7,
+							4
+						],
+						"s": "lloé",
+						"m": {
+							"b": {
+								"n": [
+									2
+								]
+							},
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 2
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3,
+					4
+				],
+				"s": "héllo",
+				"m": {
+					"a": 1,
+					"b": 2
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						3
+					],
+					"value": [
+						7
+					]
+				},
+				{
+					"path": [
+						"m",
+						"c"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						5,
+						6
+					]
+				},
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": {
+						"n": [
+							1
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"b",
+						"n",
+						0
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							5,
+							6,
+							7,
+							4
+						],
+						"s": "lloé",
+						"m": {
+							"b": {
+								"n": [
+									2
+								]
+							},
+							"c": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										3
+									],
+									"value": [
+										7
+									]
+								},
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										1
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											0,
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										5,
+										6
+									]
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": {
+										"n": [
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 2
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 2
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										2
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											3,
+											4
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "h"
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": [
+										2,
+										3
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b",
+						"n",
+						0
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"s"
+						],
+						"range": [
+							3,
+							4
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"c"
+						]
+					}
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3,
+							4
+						],
+						"s": "héllo",
+						"m": {
+							"b": 2,
+							"a": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 2
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										2
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											3,
+											4
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "h"
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": [
+										2,
+										3
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										1,
+										3
+									],
+									"value": [
+										7
+									]
+								},
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										1
+									]
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										],
+										"range": [
+											0,
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										5,
+										6
+									]
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": {
+										"n": [
+											1
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"b",
+										"n",
+										0
+									],
+									"value": 2
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

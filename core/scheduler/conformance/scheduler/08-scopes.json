@@ -4,7 +4,7 @@
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "p"]], "expect": {} },
 		{ "op": "cleanup", "scope": "o", "do": { "log": "o1" }, "expect": {} },
-		{ "op": "compute", "name": "c", "scope": "p", "f": { "read": "x" }, "to": "c" },
+		{ "op": "compute", "name": "c", "scope": "p", "f": { "read": "x" }, "to": "c", "expect": {} },
 		{ "op": "scope", "name": "g", "parent": "p", "info": [["why", "g"]], "expect": {} },
 		{ "op": "cleanup", "scope": "g", "do": { "log": "g" }, "expect": {} },
 		{
@@ -12,7 +12,8 @@
 			"name": "e",
 			"scope": "g",
 			"f": { "read": "x" },
-			"act": { "log": ["e", { "given": "value" }] }
+			"act": { "log": ["e", { "given": "value" }] },
+			"expect": {}
 		},
 		{ "op": "cleanup", "scope": "p", "do": { "log": "p" }, "expect": {} },
 		{ "op": "cleanup", "scope": "o", "do": { "log": "o2" }, "expect": {} },
@@ -21,7 +22,47 @@
 		{ "op": "write", "values": { "x": 1 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["e", 1]] } },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"due": "e",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
 		{ "op": "dispose", "scope": "o", "expect": {} },
 		{ "op": "log", "expect": { "log": ["q", "g", "p", "o2", "o1"] } },
 		{ "op": "write", "values": { "x": 2 }, "expect": { "tick": 5 } },

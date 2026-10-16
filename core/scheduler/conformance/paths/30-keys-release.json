@@ -1,20 +1,20 @@
 {
 	"title": "a keys spot is kept beside the plain spot at its path, counted, and released alone",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true, "expect": {} },
 		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true, "expect": {} },
 		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "expect": {} },
 		{ "op": "kept", "expect": { "keys": 1, "spots": 2, "steps": 3 } },
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["a", "b"], "value": 1 }],
-			"expect": { "spots": [{ "keys": ["a", "b"] }, ["a", "b"]] }
+			"expect": { "spots": [["a", "b"], { "keys": ["a", "b"] }] }
 		},
-		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b"] },
+		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b"], "expect": {} },
 		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 3 } },
 		{
 			"op": "mark",
@@ -23,11 +23,11 @@
 			"patches": [{ "path": ["a", "b"], "value": 1 }],
 			"expect": { "spots": [{ "keys": ["a", "b"] }] }
 		},
-		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b"], "keys": true },
+		{ "op": "release", "source": "v", "id": "n", "path": ["a", "b"], "keys": true, "expect": {} },
 		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
-		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
 		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 1 } },
-		{ "op": "release", "source": "v", "id": "n", "path": [], "keys": true },
+		{ "op": "release", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
 		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } }
 	]
 }

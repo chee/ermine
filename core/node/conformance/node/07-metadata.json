@@ -85,6 +85,7 @@
 			"expect": {
 				"entry": {
 					"change": {
+						"time": "now",
 						"metadata": [
 							[
 								"z",
@@ -112,8 +113,7 @@
 								"",
 								""
 							]
-						],
-						"time": "now"
+						]
 					}
 				}
 			}
@@ -126,8 +126,8 @@
 			"expect": {
 				"entry": {
 					"change": {
-						"metadata": [],
-						"time": "now"
+						"time": "now",
+						"metadata": []
 					}
 				}
 			}

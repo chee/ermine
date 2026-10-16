@@ -8,7 +8,7 @@
 			"expect": {
 				"entry": {
 					"value": 1,
-					"change": { "actor": "me", "metadata": [["why", "a test"]], "time": "now" }
+					"change": { "time": "now", "actor": "me", "metadata": [["why", "a test"]] }
 				}
 			}
 		},

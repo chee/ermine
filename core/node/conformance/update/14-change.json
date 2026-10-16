@@ -124,6 +124,31 @@
 							]
 						},
 						"reader": "pid3",
+						"external": [
+							{
+								"file": "x.c",
+								"line": 4
+							}
+						],
+						"metadata": [
+							[
+								"note",
+								"edit"
+							],
+							[
+								"tag",
+								{
+									"n": [
+										1,
+										2
+									]
+								}
+							],
+							[
+								"note",
+								"again"
+							]
+						],
 						"op": {
 							"patches": [
 								{
@@ -162,32 +187,7 @@
 									"value": 1
 								}
 							]
-						},
-						"external": [
-							{
-								"file": "x.c",
-								"line": 4
-							}
-						],
-						"metadata": [
-							[
-								"note",
-								"edit"
-							],
-							[
-								"tag",
-								{
-									"n": [
-										1,
-										2
-									]
-								}
-							],
-							[
-								"note",
-								"again"
-							]
-						]
+						}
 					}
 				}
 			}

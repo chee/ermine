@@ -2,20 +2,21 @@
 	"title": "forget: told each key the scheduler stops tracking, when its last reader's run reads it no more, or its last reader goes",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
-		{ "op": "write", "values": { "flag": false } },
+		{ "op": "write", "values": { "flag": false }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
 			"f": { "if": [{ "read": "flag" }, { "read": "b" }, { "read": "a" }] },
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "forgotten", "expect": { "keys": [] } },
-		{ "op": "write", "values": { "flag": true } },
+		{ "op": "write", "values": { "flag": true }, "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "forgotten", "expect": { "keys": ["a"] } },
-		{ "op": "compute", "name": "d", "scope": "o", "f": { "read": "b" }, "to": "d" },
+		{ "op": "compute", "name": "d", "scope": "o", "f": { "read": "b" }, "to": "d", "expect": {} },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "dispose", "scope": "c", "expect": {} },
 		{ "op": "forgotten", "expect": { "keys": ["flag"] } },

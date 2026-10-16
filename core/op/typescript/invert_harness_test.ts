@@ -248,13 +248,13 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 	const answers = (await ask(harness, requests)) as Answer[]
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) => {
-		assertEquals(a, expected[i], `${where[i]}: ${line(requests[i])}`)
+		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
 		if (a.undo) walksBack(requests[i], a.undo, where[i])
 	})
 	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) =>
-		assertEquals(a, expected[i], `${where[i]} (cow: false): ${line(requests[i])}`)
+		assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
 	)
 	assert(answers.some((a) => a.undo?.some((p: Patch) => p.move)), "some undo moves back")
 })

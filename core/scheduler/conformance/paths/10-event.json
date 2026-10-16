@@ -1,11 +1,11 @@
 {
 	"title": "a whole-node event (the table adding, replacing or removing the node) marks every spot of its key",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "a", "path": [] },
-		{ "op": "spot", "source": "v", "id": "a", "path": ["x", 0, "y"] },
-		{ "op": "change", "source": "v", "id": "a" },
-		{ "op": "spot", "source": "v", "id": "b", "path": ["x"] },
-		{ "op": "spot", "source": "w", "id": "a", "path": ["x"] },
+		{ "op": "spot", "source": "v", "id": "a", "path": [], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "a", "path": ["x", 0, "y"], "expect": {} },
+		{ "op": "change", "source": "v", "id": "a", "expect": {} },
+		{ "op": "spot", "source": "v", "id": "b", "path": ["x"], "expect": {} },
+		{ "op": "spot", "source": "w", "id": "a", "path": ["x"], "expect": {} },
 		{
 			"op": "event",
 			"source": "v",

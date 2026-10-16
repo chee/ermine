@@ -1,0 +1,98 @@
+{
+	"title": "columns carry any value as given, and shapes 0, 4 and 7; decode gives them back",
+	"steps": [
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"], "value": { "/": { "int16": [1, 2] } } },
+				{ "path": ["t"], "value": { "/": { "number": "NaN" } } },
+				{ "path": ["t"], "value": "\ud83d" },
+				{ "path": ["t"], "value": -0 }
+			],
+			"expect": {
+				"columns": {
+					"paths": [["t"]],
+					"path": [0, 4],
+					"shape": [2, 4],
+					"from": [],
+					"size": [],
+					"value": [
+						{ "/": { "int16": [1, 2] } },
+						{ "/": { "number": "NaN" } },
+						"\ud83d",
+						-0
+					],
+					"move": []
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 4],
+				"shape": [2, 4],
+				"from": [],
+				"size": [],
+				"value": [{ "/": { "int16": [1, 2] } }, { "/": { "number": "NaN" } }, "\ud83d", -0],
+				"move": []
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "value": { "/": { "int16": [1, 2] } } },
+					{ "path": ["t"], "value": { "/": { "number": "NaN" } } },
+					{ "path": ["t"], "value": "\ud83d" },
+					{ "path": ["t"], "value": -0 }
+				]
+			}
+		},
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"] },
+				{ "path": ["t"], "move": { "path": ["u"] } },
+				{
+					"path": ["t"],
+					"range": [1, 2],
+					"value": "x",
+					"move": { "path": ["u"], "range": [0, 1] }
+				}
+			],
+			"expect": {
+				"columns": {
+					"paths": [["t"]],
+					"path": [0, 3],
+					"shape": [0, 1, 4, 1, 7, 1],
+					"from": [1, 1],
+					"size": [1, 1],
+					"value": ["x"],
+					"move": [{ "path": ["u"] }, { "path": ["u"], "range": [0, 1] }]
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"columns": {
+				"paths": [["t"]],
+				"path": [0, 3],
+				"shape": [0, 1, 4, 1, 7, 1],
+				"from": [1, 1],
+				"size": [1, 1],
+				"value": ["x"],
+				"move": [{ "path": ["u"] }, { "path": ["u"], "range": [0, 1] }]
+			},
+			"expect": {
+				"patches": [
+					{ "path": ["t"] },
+					{ "path": ["t"], "move": { "path": ["u"] } },
+					{
+						"path": ["t"],
+						"range": [1, 2],
+						"value": "x",
+						"move": { "path": ["u"], "range": [0, 1] }
+					}
+				]
+			}
+		}
+	]
+}

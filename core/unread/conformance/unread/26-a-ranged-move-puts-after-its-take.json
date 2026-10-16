@@ -1,0 +1,215 @@
+{
+	"title": "a ranged move puts into the list after its take: what is copied there is the item the take shifted, never a reader's",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					[
+						"a"
+					],
+					[
+						"b"
+					],
+					[
+						"c"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"a"
+						],
+						[
+							"b"
+						],
+						[
+							"c"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							0
+						],
+						"move": {
+							"path": [
+								"l",
+								1
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"b"
+						],
+						[
+							[
+								"a"
+							],
+							"c"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"a"
+						],
+						[
+							"b"
+						],
+						[
+							"c"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "c",
+			"path": [
+				"l",
+				1
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": [
+						"d"
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"l",
+							1
+						],
+						"range": [
+							2,
+							3
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "c",
+			"path": [
+				"l",
+				1
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"b"
+						],
+						[
+							[
+								"a"
+							],
+							"c",
+							"d"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"a"
+						],
+						[
+							"b"
+						],
+						[
+							"c"
+						]
+					]
+				}
+			}
+		}
+	]
+}

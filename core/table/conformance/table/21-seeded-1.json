@@ -1,0 +1,2878 @@
+{
+	"title": "a seeded run (1) of three hundred operations over four parts, five ids and four nodes; every answer a plain list of triples gives",
+	"steps": [
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "a",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n4",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": "a",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "c",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "at",
+			"id": "d",
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n3",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": "a",
+			"expect": {
+				"node": "n1"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "d",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n1",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": "c",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "c",
+			"node": "n3",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"ids": [
+					"c"
+				]
+			}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "info",
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n4",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "c",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n1",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					],
+					[
+						"value",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"c"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"value",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "info",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n3",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"c"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"value",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					],
+					[
+						"value",
+						"n2"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"n3"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"c"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"value",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n1",
+			"expect": {
+				"ids": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "d",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n1",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "c",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n3",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "c",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"c"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"value",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "d",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					],
+					[
+						"value",
+						"n4"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n3",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "at",
+			"id": "d",
+			"expect": {
+				"entries": [
+					[
+						"value",
+						"n3"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n3",
+			"expect": {
+				"ids": [
+					"d"
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "get",
+			"part": "info",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "d",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"b"
+					],
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "at",
+			"id": "b",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "d",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "a",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "c",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": [
+					[
+						"children",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "d",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n4",
+			"expect": {
+				"ids": [
+					{
+						"symbol": "here"
+					},
+					"d"
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					],
+					[
+						"info",
+						"c"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"a"
+					],
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					],
+					[
+						"info",
+						"c"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"a"
+					],
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n1",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					],
+					[
+						"info",
+						"c"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"a"
+					],
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						"info",
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n3",
+			"expect": {
+				"ids": [
+					{
+						"symbol": "here"
+					}
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n1",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "at",
+			"id": "d",
+			"expect": {
+				"entries": [
+					[
+						"value",
+						"n3"
+					],
+					[
+						"info",
+						"n4"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n4"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n3",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						"d"
+					],
+					[
+						"value",
+						{
+							"symbol": "here"
+						}
+					],
+					[
+						"info",
+						"a"
+					],
+					[
+						"children",
+						{
+							"symbol": "here"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "d",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n3"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n4"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n4",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						"info",
+						"b"
+					],
+					[
+						"info",
+						"c"
+					],
+					[
+						"info",
+						"a"
+					],
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"entries": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"n4"
+					],
+					[
+						"value",
+						"n3"
+					],
+					[
+						"info",
+						"n4"
+					],
+					[
+						"children",
+						"n3"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "b",
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "d",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": "d",
+			"expect": {
+				"node": "n3"
+			}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n3",
+			"expect": {
+				"ids": [
+					"d",
+					{
+						"symbol": "here"
+					}
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"expect": {
+				"node": "n1"
+			}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n4",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n1",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "c",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "b",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "d",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n1",
+			"expect": {
+				"ids": [
+					{
+						"symbol": "here"
+					},
+					"d"
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n1"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "d",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n2",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": {
+				"symbol": "drag"
+			},
+			"node": "n2",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n2",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"c"
+					],
+					[
+						"children",
+						{
+							"symbol": "here"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": "a",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						{
+							"symbol": "here"
+						}
+					],
+					[
+						"info",
+						{
+							"symbol": "here"
+						}
+					],
+					[
+						"children",
+						"b"
+					],
+					[
+						"value",
+						"d"
+					],
+					[
+						"value",
+						{
+							"symbol": "here"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "d",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						{
+							"symbol": "here"
+						}
+					],
+					[
+						"children",
+						"b"
+					],
+					[
+						"value",
+						"d"
+					],
+					[
+						"value",
+						{
+							"symbol": "here"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n4"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "info",
+			"id": "d",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": "b",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n3",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"a"
+					],
+					[
+						"children",
+						"a"
+					],
+					[
+						"children",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n1",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"c"
+					],
+					[
+						"children",
+						"d"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "c",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "c",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "a",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "children",
+			"id": "a",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "c",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "d",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "c",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n4"
+			}
+		},
+		{
+			"op": "del",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n2",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "at",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"entries": [
+					[
+						"children",
+						"n1"
+					],
+					[
+						"value",
+						"n4"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"n1"
+					],
+					[
+						"value",
+						"n2"
+					],
+					[
+						"info",
+						"n3"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"node": "n4",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"id": "d",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n4",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n2",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"d"
+					],
+					[
+						"value",
+						"a"
+					],
+					[
+						"value",
+						"b"
+					],
+					[
+						"info",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "c",
+			"expect": {
+				"entries": [
+					[
+						{
+							"symbol": "drag"
+						},
+						"n1"
+					],
+					[
+						"info",
+						"n3"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "info",
+			"id": "a",
+			"expect": {
+				"node": "n2"
+			}
+		},
+		{
+			"op": "del",
+			"node": "n4",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n3"
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "c",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"ids": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "d",
+			"expect": {
+				"entries": [
+					[
+						"children",
+						"n1"
+					],
+					[
+						{
+							"symbol": "drag"
+						},
+						"n2"
+					]
+				]
+			}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n2",
+			"expect": {
+				"ids": [
+					"a"
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "b",
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "children",
+			"node": "n3",
+			"expect": {
+				"ids": []
+			}
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {
+				"node": "n1"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "c",
+			"node": "n3",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "b",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": {
+				"symbol": "here"
+			},
+			"node": "n1",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "children",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "n3",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": {
+				"symbol": "here"
+			},
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "info",
+			"node": "n1",
+			"expect": {
+				"ids": [
+					{
+						"symbol": "here"
+					}
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "c",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "info",
+			"id": "a",
+			"node": "n2",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n4",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"node": "n2",
+			"expect": {
+				"ids": [
+					"b"
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "a",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "d",
+			"node": "n1",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "c",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "drag"
+			},
+			"id": "b",
+			"node": "n4",
+			"expect": {
+				"error": "already-there"
+			}
+		}
+	]
+}

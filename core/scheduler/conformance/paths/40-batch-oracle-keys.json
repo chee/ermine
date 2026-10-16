@@ -1,0 +1,1010 @@
+{
+	"title": "the same batches read for keys: every keys read whose keys changed is marked, and mark is marks patch by patch",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "case 0", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["a"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["a", 0], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["a", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["a", 1], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["a", 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["a", 2], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["a", 2, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["b"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["b", 0], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["b", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["c"], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "x"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "x", 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "x", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "y"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "y", "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["a", 5], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 0", "path": ["b", 2], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "z"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 0",
+			"path": ["c", "x", 1],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "case 0",
+			"patches": [
+				{ "path": ["a"], "range": [0, 0], "move": { "path": ["a"], "range": [1, 3] } },
+				{ "path": ["b"], "range": [1, 1], "move": { "path": ["a", 2] } },
+				{ "path": ["c", "y"], "move": { "path": ["b", 0] } }
+			],
+			"expect": {
+				"spots": [
+					{ "keys": ["a"] },
+					{ "keys": ["a", 1] },
+					{ "keys": ["a", 1, "n"] },
+					{ "keys": ["a", 2] },
+					{ "keys": ["a", 2, "n"] },
+					{ "keys": ["a", 5] },
+					{ "keys": ["a", 0] },
+					{ "keys": ["a", 0, "n"] },
+					{ "keys": ["b"] },
+					{ "keys": ["b", 2] },
+					{ "keys": ["b", 0] },
+					{ "keys": ["b", 0, "n"] },
+					{ "keys": ["c"] },
+					{ "keys": ["c", "y"] },
+					{ "keys": ["c", "y", "n"] }
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a"], "range": [0, 0], "move": { "path": ["a"], "range": [1, 3] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["a", 2],
+				["a", 2, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["c"],
+				["c", "x"],
+				["c", "x", 0],
+				["c", "x", 0, "n"],
+				["c", "y"],
+				["c", "y", "n"],
+				["a", 5],
+				["b", 2],
+				["c", "z"],
+				["c", "x", 1]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["b"], "range": [1, 1], "move": { "path": ["a", 2] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["a", 2],
+				["a", 2, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["c"],
+				["c", "x"],
+				["c", "x", 0],
+				["c", "x", 0, "n"],
+				["c", "y"],
+				["c", "y", "n"],
+				["a", 5],
+				["b", 2],
+				["c", "z"],
+				["c", "x", 1]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["c", "y"], "move": { "path": ["b", 0] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["a", 2],
+				["a", 2, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["c"],
+				["c", "x"],
+				["c", "x", 0],
+				["c", "x", 0, "n"],
+				["c", "y"],
+				["c", "y", "n"],
+				["a", 5],
+				["b", 2],
+				["c", "z"],
+				["c", "x", 1]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					true,
+					true,
+					false,
+					true,
+					false,
+					false
+				]
+			}
+		},
+		{ "op": "spot", "source": "v", "id": "case 1", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 1", "path": ["a"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 1", "path": ["a", 0], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 0, 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 0, 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 0, 1],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 0, 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 1", "path": ["a", 1], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 1, 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 1, 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 1", "path": ["b"], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "k"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "k", 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "k", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "k", 1],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "k", 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 1", "path": ["a", 2], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["a", 0, 3],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 1",
+			"path": ["b", "j"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "case 1",
+			"patches": [
+				{ "path": ["a", 0], "range": [1, 2], "value": [{ "n": 9 }, { "n": 8 }] },
+				{ "path": ["a", 1] },
+				{ "path": ["b", "k"], "move": { "path": ["a", 0], "range": [0, 2] } }
+			],
+			"expect": {
+				"spots": [
+					{ "keys": ["a", 0] },
+					{ "keys": ["a", 0, 1] },
+					{ "keys": ["a", 0, 1, "n"] },
+					{ "keys": ["a", 0, 3] },
+					{ "keys": ["a"] },
+					{ "keys": ["a", 2] },
+					{ "keys": ["a", 1] },
+					{ "keys": ["a", 1, 0] },
+					{ "keys": ["a", 1, 0, "n"] },
+					{ "keys": ["a", 0, 0] },
+					{ "keys": ["a", 0, 0, "n"] },
+					{ "keys": ["b"] },
+					{ "keys": ["b", "k"] },
+					{ "keys": ["b", "k", 0] },
+					{ "keys": ["b", "k", 0, "n"] },
+					{ "keys": ["b", "k", 1] },
+					{ "keys": ["b", "k", 1, "n"] }
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a", 0], "range": [1, 2], "value": [{ "n": 9 }, { "n": 8 }] },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, 0],
+				["a", 0, 0, "n"],
+				["a", 0, 1],
+				["a", 0, 1, "n"],
+				["a", 1],
+				["a", 1, 0],
+				["a", 1, 0, "n"],
+				["b"],
+				["b", "k"],
+				["b", "k", 0],
+				["b", "k", 0, "n"],
+				["b", "k", 1],
+				["b", "k", 1, "n"],
+				["a", 2],
+				["a", 0, 3],
+				["b", "j"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					true,
+					false,
+					false,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a", 1] },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, 0],
+				["a", 0, 0, "n"],
+				["a", 0, 1],
+				["a", 0, 1, "n"],
+				["a", 1],
+				["a", 1, 0],
+				["a", 1, 0, "n"],
+				["b"],
+				["b", "k"],
+				["b", "k", 0],
+				["b", "k", 0, "n"],
+				["b", "k", 1],
+				["b", "k", 1, "n"],
+				["a", 2],
+				["a", 0, 3],
+				["b", "j"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["b", "k"], "move": { "path": ["a", 0], "range": [0, 2] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, 0],
+				["a", 0, 0, "n"],
+				["a", 0, 1],
+				["a", 0, 1, "n"],
+				["a", 1],
+				["a", 1, 0],
+				["a", 1, 0, "n"],
+				["b"],
+				["b", "k"],
+				["b", "k", 0],
+				["b", "k", 0, "n"],
+				["b", "k", 1],
+				["b", "k", 1, "n"],
+				["a", 2],
+				["a", 0, 3],
+				["b", "j"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					true,
+					false
+				]
+			}
+		},
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [0], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [0, "n"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [1], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [2], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [2, "l"], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [2, "l", 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [2, "l", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [2, "l", 1],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [2, "l", 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [1, "l"], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [1, "l", 0],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [1, "l", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 2", "path": [3], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 2",
+			"path": [1, "l", 1],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 2", "path": ["n"], "keys": true, "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "case 2",
+			"patches": [
+				{ "path": [2, "l", 0], "move": { "path": [2, "l", 1] } },
+				{ "path": [0] },
+				{ "path": [0], "range": [0, 1], "value": "q" }
+			],
+			"expect": {
+				"spots": [
+					{ "keys": [2, "l"] },
+					{ "keys": [2, "l", 1] },
+					{ "keys": [2, "l", 1, "n"] },
+					{ "keys": [2, "l", 0] },
+					{ "keys": [2, "l", 0, "n"] },
+					{ "keys": [] },
+					{ "keys": [1] },
+					{ "keys": [1, "l"] },
+					{ "keys": [1, "l", 0] },
+					{ "keys": [1, "l", 0, "n"] },
+					{ "keys": [1, "l", 1] },
+					{ "keys": [2] },
+					{ "keys": [3] },
+					{ "keys": [0] },
+					{ "keys": [0, "n"] }
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": [2, "l", 0], "move": { "path": [2, "l", 1] } },
+			"paths": [
+				[],
+				[0],
+				[0, "n"],
+				[1],
+				[2],
+				[2, "l"],
+				[2, "l", 0],
+				[2, "l", 0, "n"],
+				[2, "l", 1],
+				[2, "l", 1, "n"],
+				[1, "l"],
+				[1, "l", 0],
+				[1, "l", 0, "n"],
+				[3],
+				[1, "l", 1],
+				["n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": [0] },
+			"paths": [
+				[],
+				[0],
+				[0, "n"],
+				[1],
+				[2],
+				[2, "l"],
+				[2, "l", 0],
+				[2, "l", 0, "n"],
+				[2, "l", 1],
+				[2, "l", 1, "n"],
+				[1, "l"],
+				[1, "l", 0],
+				[1, "l", 0, "n"],
+				[3],
+				[1, "l", 1],
+				["n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": [0], "range": [0, 1], "value": "q" },
+			"paths": [
+				[],
+				[0],
+				[0, "n"],
+				[1],
+				[2],
+				[2, "l"],
+				[2, "l", 0],
+				[2, "l", 0, "n"],
+				[2, "l", 1],
+				[2, "l", 1, "n"],
+				[1, "l"],
+				[1, "l", 0],
+				[1, "l", 0, "n"],
+				[3],
+				[1, "l", 1],
+				["n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["a"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["a", 0], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["a", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["a", 1], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["a", 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["b"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["b", 0], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["b", 0, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["b", 1], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["b", 1, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["b", 2], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["b", 2, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{ "op": "spot", "source": "v", "id": "case 3", "path": ["b", 4], "keys": true, "expect": {} },
+		{
+			"op": "spot",
+			"source": "v",
+			"id": "case 3",
+			"path": ["b", 5, "n"],
+			"keys": true,
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "case 3",
+			"patches": [
+				{ "path": ["b"], "range": [0, 2], "move": { "path": ["a"], "range": [0, 2] } },
+				{ "path": ["a"], "range": [0, 0], "value": [{ "n": 6 }] },
+				{ "path": ["b", 0], "move": { "path": ["b", 2] } }
+			],
+			"expect": {
+				"spots": [
+					{ "keys": ["a"] },
+					{ "keys": ["a", 0] },
+					{ "keys": ["a", 0, "n"] },
+					{ "keys": ["a", 1] },
+					{ "keys": ["a", 1, "n"] },
+					{ "keys": ["b"] },
+					{ "keys": ["b", 0] },
+					{ "keys": ["b", 0, "n"] },
+					{ "keys": ["b", 1] },
+					{ "keys": ["b", 1, "n"] },
+					{ "keys": ["b", 4] },
+					{ "keys": ["b", 5, "n"] },
+					{ "keys": ["b", 2] },
+					{ "keys": ["b", 2, "n"] }
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["b"], "range": [0, 2], "move": { "path": ["a"], "range": [0, 2] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["b", 1],
+				["b", 1, "n"],
+				["b", 2],
+				["b", 2, "n"],
+				["b", 4],
+				["b", 5, "n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a"], "range": [0, 0], "value": [{ "n": 6 }] },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["b", 1],
+				["b", 1, "n"],
+				["b", 2],
+				["b", 2, "n"],
+				["b", 4],
+				["b", 5, "n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					true,
+					true,
+					true,
+					true,
+					true,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					false
+				]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["b", 0], "move": { "path": ["b", 2] } },
+			"paths": [
+				[],
+				["a"],
+				["a", 0],
+				["a", 0, "n"],
+				["a", 1],
+				["a", 1, "n"],
+				["b"],
+				["b", 0],
+				["b", 0, "n"],
+				["b", 1],
+				["b", 1, "n"],
+				["b", 2],
+				["b", 2, "n"],
+				["b", 4],
+				["b", 5, "n"]
+			],
+			"keys": true,
+			"expect": {
+				"marks": [
+					false,
+					false,
+					false,
+					false,
+					false,
+					false,
+					true,
+					true,
+					true,
+					false,
+					false,
+					true,
+					true,
+					true,
+					true
+				]
+			}
+		}
+	]
+}

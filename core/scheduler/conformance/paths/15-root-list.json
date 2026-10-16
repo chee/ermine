@@ -1,10 +1,10 @@
 {
 	"title": "a list at []: its index reads follow the same rows",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": [] },
-		{ "op": "spot", "source": "v", "id": "n", "path": [0] },
-		{ "op": "spot", "source": "v", "id": "n", "path": [1, "x"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": [2] },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [0], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [1, "x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [2], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
@@ -17,7 +17,7 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [1] }],
-			"expect": { "spots": [[], [1, "x"], [2]] }
+			"expect": { "spots": [[], [2], [1, "x"]] }
 		},
 		{
 			"op": "mark",

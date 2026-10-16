@@ -1,0 +1,58 @@
+{
+	"title": "big list indices (up to 999999999999) are numbers like any other: kept in index order, reached by ranges and shifts",
+	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 999999999999], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 4294967296], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2147483648], "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [6, 6], "value": [1] }],
+			"expect": { "spots": [["l", 2147483648], ["l", 4294967296], ["l", 999999999999]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [999999999999, 999999999999], "value": [1] }],
+			"expect": { "spots": [["l", 999999999999]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [4294967296, 4294967297], "value": [1] }],
+			"expect": { "spots": [["l", 4294967296]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 4294967296] }],
+			"expect": { "spots": [["l", 999999999999], ["l", 4294967296]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [0, 999999999999] }],
+			"expect": {
+				"spots": [["l", 5], ["l", 2147483648], ["l", 4294967296], ["l", 999999999999]]
+			}
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l", 2147483647] },
+			"paths": [["l", 2147483648], ["l", 2147483646], ["l", 999999999999, "x"]],
+			"expect": { "marks": [true, false, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l"], "range": [999999999998, 999999999999], "value": [1] },
+			"paths": [["l", 999999999998], ["l", 999999999999], ["l", 5]],
+			"expect": { "marks": [true, false, false] }
+		}
+	]
+}

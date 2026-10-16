@@ -1,9 +1,9 @@
 {
 	"title": "an unranged patch marks every read under its path",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body", 2, "text"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["docs"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body", 2, "text"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["docs"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

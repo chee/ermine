@@ -9,28 +9,32 @@
 			"scope": "o",
 			"f": [{ "read": "a" }, { "read": "b" }],
 			"to": "l",
-			"equal": "json"
+			"equal": "json",
+			"expect": {}
 		},
 		{
 			"op": "compute",
 			"name": "m",
 			"scope": "o",
 			"f": [{ "read": "a" }, { "read": "b" }],
-			"to": "m"
+			"to": "m",
+			"expect": {}
 		},
 		{
 			"op": "effect",
 			"name": "el",
 			"scope": "o",
 			"f": { "read": "l" },
-			"act": { "log": ["el", { "given": "value" }] }
+			"act": { "log": ["el", { "given": "value" }] },
+			"expect": {}
 		},
 		{
 			"op": "effect",
 			"name": "em",
 			"scope": "o",
 			"f": { "read": "m" },
-			"act": { "log": ["em", { "given": "value" }] }
+			"act": { "log": ["em", { "given": "value" }] },
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["el", [1, 2]], ["em", [1, 2]]] } },

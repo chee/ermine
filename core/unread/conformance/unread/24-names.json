@@ -1,0 +1,219 @@
+{
+	"title": "held and same by a name: a name never given stands for nothing; a name given again is replaced; nothing there, kept in a list, is null",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": {
+					"y": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"name": "never",
+			"expect": {}
+		},
+		{
+			"op": "same",
+			"name": "never",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "never",
+			"path": [
+				"zz"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "never",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "mark",
+			"name": "m",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "m",
+			"path": [
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "same",
+			"name": "m",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "m",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "mark",
+			"name": "gone",
+			"path": [
+				"zz"
+			],
+			"expect": {}
+		},
+		{
+			"op": "same",
+			"name": "gone",
+			"path": [
+				"qq"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "mark",
+			"name": "num",
+			"path": [
+				"a",
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "same",
+			"name": "num",
+			"path": [
+				"b",
+				"y"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"zz"
+			],
+			"wrap": true,
+			"hold": "w",
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"name": "w",
+			"expect": {
+				"value": [
+					null
+				]
+			}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"zz"
+			],
+			"hold": "nothing",
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"name": "nothing",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "r",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": {
+						"y": 0
+					}
+				}
+			}
+		},
+		{
+			"op": "read",
+			"hold": "r",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": {
+						"y": 0
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "r",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": {
+						"y": 0
+					}
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,105 @@
+{
+	"title": "what a move takes and where it lands: an empty span taken is an empty one of its kind; one element into a span must be of the span's kind; a target's fields beyond path and range are not read",
+	"steps": [
+		{
+			"op": "apply",
+			"value": { "s": "ab" },
+			"patches": [{ "path": ["w"], "move": { "path": ["s"], "range": [1, 1] } }],
+			"expect": { "value": { "s": "ab", "w": "" } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": [1] },
+			"patches": [{ "path": ["w"], "move": { "path": ["l"], "range": [0, 0] } }],
+			"expect": { "value": { "l": [1], "w": [] } }
+		},
+		{
+			"op": "apply",
+			"value": { "t": { "/": { "uint16": [1] } } },
+			"patches": [{ "path": ["w"], "move": { "path": ["t"], "range": [1, 1] } }],
+			"expect": { "value": { "t": { "/": { "uint16": [1] } }, "w": { "/": { "uint16": [] } } } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": ["x"], "s": "ab" },
+			"patches": [{ "path": ["s"], "range": [1, 1], "move": { "path": ["l", 0] } }],
+			"expect": { "value": { "l": [], "s": "axb" } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": [1], "s": "ab" },
+			"patches": [{ "path": ["s"], "range": [1, 1], "move": { "path": ["l", 0] } }],
+			"expect": { "error": { "code": "wrong-kind", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "t": { "/": { "int16": [1] } }, "u": { "/": { "int8": [2] } } },
+			"patches": [{ "path": ["u"], "range": [0, 0], "move": { "path": ["t"] } }],
+			"expect": { "error": { "code": "wrong-kind", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "t": { "/": { "int8": [1] } }, "u": { "/": { "int8": [2] } } },
+			"patches": [{ "path": ["u"], "range": [0, 1], "move": { "path": ["t"] } }],
+			"expect": { "value": { "u": { "/": { "int8": [1] } } } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": [[1, 2]], "k": [0] },
+			"patches": [{ "path": ["k"], "range": [1, 1], "move": { "path": ["l", 0] } }],
+			"expect": { "value": { "l": [], "k": [0, [1, 2]] } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": [[1, 2]], "k": [0] },
+			"patches": [
+				{ "path": ["k"], "range": [1, 1], "move": { "path": ["l", 0], "range": [0, 2] } }
+			],
+			"expect": { "value": { "l": [[]], "k": [0, 1, 2] } }
+		},
+		{
+			"op": "apply",
+			"value": { "a": 1 },
+			"patches": [{ "path": ["b"], "move": { "path": ["a"], "extra": 1 } }],
+			"expect": { "value": { "b": 1 } }
+		},
+		{
+			"op": "apply",
+			"value": { "a": 1 },
+			"patches": [{ "path": ["b"], "value": 2, "extra": { "path": [0] } }],
+			"expect": { "value": { "a": 1, "b": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "s": "abc" },
+			"patches": [
+				{ "path": ["s"], "range": [0, 0], "move": { "path": ["s"], "range": [3, 3] } }
+			],
+			"expect": { "value": { "s": "abc" } }
+		},
+		{
+			"op": "apply",
+			"value": { "s": "abc" },
+			"patches": [
+				{ "path": ["s"], "range": [3, 3], "move": { "path": ["s"], "range": [0, 3] } }
+			],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "s": "abc" },
+			"patches": [
+				{ "path": ["s"], "range": [0, 0], "move": { "path": ["s"], "range": [0, 3] } }
+			],
+			"expect": { "value": { "s": "abc" } }
+		},
+		{
+			"op": "apply",
+			"value": { "s": "abc" },
+			"patches": [
+				{ "path": ["s"], "range": [1, 1], "move": { "path": ["s"], "range": [0, 3] } }
+			],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		}
+	]
+}

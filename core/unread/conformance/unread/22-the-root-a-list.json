@@ -1,0 +1,248 @@
+{
+	"title": "a range at [] splices the root: the first write copies it, the next changes it in place; taken out whole and put back, it is copied again",
+	"steps": [
+		{
+			"op": "start",
+			"value": [
+				[
+					1
+				],
+				[
+					2
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": [
+					[
+						1
+					],
+					[
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							[
+								1
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						[
+							3
+						]
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							1,
+							2
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": [
+					[
+						2
+					],
+					[
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": []
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"value": [
+							[
+								2
+							],
+							[
+								3
+							]
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": [
+					[
+						2
+					],
+					[
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "back",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						[
+							0
+						]
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [],
+						"range": [
+							0,
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "back",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": [
+					[
+						0
+					],
+					[
+						2
+					],
+					[
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": [
+					[
+						1
+					],
+					[
+						2
+					]
+				]
+			}
+		}
+	]
+}

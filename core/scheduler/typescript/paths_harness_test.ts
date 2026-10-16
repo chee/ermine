@@ -1,5 +1,6 @@
 // paths on whichever harness HARNESS names (default: paths_harness.ts), by the fuzzers; the
-// scenarios are run by conformance/run.ts. Spots compare as sets.
+// scenarios are run by conformance/run.ts. Spots compare as sets with the rule; with HARNESS set,
+// the reference is asked too and every answer is the same, spots in the same order.
 //
 // The oracle fuzz needs no second implementation: on copy-on-write values (op's apply), a read
 // whose value is a new reference after the patches must be marked; and a single patch at a list
@@ -8,7 +9,7 @@
 import { assert, assertEquals } from "@std/assert"
 import apply from "@ermine/op/apply"
 import type { Key, Patch } from "@ermine/op/apply"
-import { ask as send, command } from "../../../conformance/typescript/ask.ts"
+import { ask as send, command, reference } from "../../../conformance/typescript/ask.ts"
 import { rand as seeded } from "../../../conformance/typescript/rand.ts"
 
 type Request = Record<string, unknown> & { op: string }
@@ -17,6 +18,12 @@ type Shown = readonly Key[] | { keys: readonly Key[] } | "change"
 async function ask(requests: Request[]): Promise<Record<string, unknown>[]> {
 	const answers = await send(command("paths"), requests)
 	assertEquals(answers.length, requests.length, "an answer per request")
+	if (Deno.env.get("HARNESS")) {
+		const want = await send(reference("paths"), requests)
+		answers.forEach((a, i) =>
+			assertEquals(JSON.stringify(a), JSON.stringify(want[i]), JSON.stringify(requests[i]))
+		)
+	}
 	return answers
 }
 

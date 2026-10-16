@@ -1,11 +1,11 @@
 {
 	"title": "neither path a prefix of the other: never; a number key and a string key differ",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "c"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "bb"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["b"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "0"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "c"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "bb"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["b"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "0"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

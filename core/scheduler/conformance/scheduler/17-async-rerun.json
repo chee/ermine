@@ -3,7 +3,14 @@
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "a": "p1" }, "expect": { "tick": 1 } },
-		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": [{ "read": "a" }] }, "to": "c" },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "wait": [{ "read": "a" }] },
+			"to": "c",
+			"expect": {}
+		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "write", "values": { "a": "p2" }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },

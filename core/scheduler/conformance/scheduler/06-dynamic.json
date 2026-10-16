@@ -8,25 +8,108 @@
 			"name": "c",
 			"scope": "o",
 			"f": { "if": [{ "read": "flag" }, { "read": "a" }, { "read": "b" }] },
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
 			"f": { "read": "c" },
-			"act": { "log": ["e", { "given": "value" }] }
+			"act": { "log": ["e", { "given": "value" }] },
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["e", 1]] } },
 		{ "op": "write", "values": { "b": 3 }, "expect": { "tick": 5 } },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "e",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "moments", "expect": { "moments": [] } },
 		{ "op": "write", "values": { "flag": false }, "expect": { "tick": 6 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["e", 3]] } },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 6
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "e",
+						"tick": 7,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2
+					}
+				]
+			}
+		},
 		{ "op": "write", "values": { "a": 5 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "moments", "expect": { "moments": [] } },

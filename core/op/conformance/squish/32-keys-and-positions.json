@@ -1,0 +1,89 @@
+{
+	"title": "paths are equal key by key, a NUL inside a key and the empty key included; positions past 2^32 join as any do",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a\u0000b"], "range": [0, 0], "value": "x" },
+				{ "path": ["a\u0000c"], "range": [1, 1], "value": "y" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["a\u0000b"], "range": [0, 0], "value": "x" },
+					{ "path": ["a\u0000c"], "range": [1, 1], "value": "y" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["a\u0000b"], "range": [0, 0], "value": "x" },
+				{ "path": ["a\u0000b"], "range": [1, 1], "value": "y" }
+			],
+			"expect": { "patches": [{ "path": ["a\u0000b"], "range": [0, 0], "value": "xy" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": [""], "range": [0, 0], "value": "a" },
+				{ "path": [""], "range": [1, 1], "value": "b" }
+			],
+			"expect": { "patches": [{ "path": [""], "range": [0, 0], "value": "ab" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [4294967296, 4294967296], "value": "a" },
+				{ "path": ["t"], "range": [4294967297, 4294967297], "value": "b" }
+			],
+			"expect": {
+				"patches": [{ "path": ["t"], "range": [4294967296, 4294967296], "value": "ab" }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [4294967297, 4294967298] },
+				{ "path": ["t"], "range": [4294967296, 4294967297] }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [4294967296, 4294967298] }] }
+		},
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["a\u0000b"], "value": 1 },
+				{ "path": ["a\u0000c"], "value": 2 },
+				{ "path": ["a"], "value": 3 }
+			],
+			"expect": {
+				"columns": {
+					"paths": [["a\u0000b"], ["a\u0000c"], ["a"]],
+					"path": [0, 1, 1, 1, 2, 1],
+					"shape": [2, 3],
+					"from": [],
+					"size": [],
+					"value": [1, 2, 3],
+					"move": []
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"], "range": [4294967296, 4294967297] },
+				{ "path": ["t"], "range": [0, 1] }
+			],
+			"expect": {
+				"columns": {
+					"paths": [["t"]],
+					"path": [0, 2],
+					"shape": [1, 2],
+					"from": [4294967296, 1, -4294967296, 1],
+					"size": [1, 2],
+					"value": [],
+					"move": []
+				}
+			}
+		}
+	]
+}

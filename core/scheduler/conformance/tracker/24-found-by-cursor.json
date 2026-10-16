@@ -1,0 +1,14 @@
+{
+	"title": "a spot read again while the cursor is on its link: one link, though another reader read it in between",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "begin", "from": "s", "expect": {} },
+		{ "op": "track", "from": "s", "to": "a", "expect": {} },
+		{ "op": "end", "from": "s", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r", "s"] } }
+	]
+}

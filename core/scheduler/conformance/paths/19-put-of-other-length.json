@@ -1,127 +1,24 @@
 {
 	"title": "a put of another length over a span marks from its start on (from notify 07-different-length-put)",
 	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
 		{
-			"op": "spot",
+			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"path": [
-				"l"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				1
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				2
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				3
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				5
-			]
+			"patches": [{ "path": ["l"], "range": [2, 4], "value": ["p"] }],
+			"expect": { "spots": [["l"], ["l", 2], ["l", 3], ["l", 5]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						2,
-						4
-					],
-					"value": [
-						"p"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						2
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						5
-					]
-				]
-			}
-		},
-		{
-			"op": "mark",
-			"source": "v",
-			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						2,
-						3
-					],
-					"value": [
-						"q",
-						"r",
-						"s"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						2
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						5
-					]
-				]
-			}
+			"patches": [{ "path": ["l"], "range": [2, 3], "value": ["q", "r", "s"] }],
+			"expect": { "spots": [["l"], ["l", 2], ["l", 3], ["l", 5]] }
 		}
 	]
 }

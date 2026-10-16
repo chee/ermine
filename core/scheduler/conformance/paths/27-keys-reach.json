@@ -1,16 +1,16 @@
 {
 	"title": "a keys spot is reached at a place at it or above it, and one unranged step below it; deeper it is not",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "keys": true },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["a"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a", "b"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["a", "b", "c"], "value": 1 }],
-			"expect": { "spots": [{ "keys": ["a", "b"] }, ["a"]] }
+			"expect": { "spots": [["a"], { "keys": ["a", "b"] }] }
 		},
 		{
 			"op": "mark",
@@ -24,7 +24,7 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["a", "x"], "value": 1 }],
-			"expect": { "spots": [{ "keys": ["a"] }, ["a"]] }
+			"expect": { "spots": [["a"], { "keys": ["a"] }] }
 		},
 		{
 			"op": "mark",
@@ -38,21 +38,21 @@
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["a"], "value": {} }],
-			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+			"expect": { "spots": [{ "keys": [] }, ["a"], { "keys": ["a"] }, { "keys": ["a", "b"] }] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": [], "value": {} }],
-			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+			"expect": { "spots": [{ "keys": [] }, ["a"], { "keys": ["a"] }, { "keys": ["a", "b"] }] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
 			"patches": [{ "path": ["q"], "move": { "path": ["a", "b"] } }],
-			"expect": { "spots": [{ "keys": [] }, { "keys": ["a"] }, { "keys": ["a", "b"] }, ["a"]] }
+			"expect": { "spots": [["a"], { "keys": ["a"] }, { "keys": ["a", "b"] }, { "keys": [] }] }
 		},
 		{
 			"op": "marks",

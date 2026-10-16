@@ -1,0 +1,466 @@
+{
+	"title": "the undo of moves that take a whole string, a list's span into a string's place, and a move onto itself",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"z": {
+					"k": "b"
+				},
+				"s": "xy"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z",
+						"k"
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"z": {
+							"k": "xy"
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"z",
+										"k"
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"z",
+											"k"
+										]
+									}
+								},
+								{
+									"path": [
+										"z",
+										"k"
+									],
+									"value": "b"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"k": [
+					"x",
+					1,
+					2,
+					"y"
+				],
+				"t": "ab😀!"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"t"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"k": [
+							"ab😀!",
+							"x",
+							1,
+							2,
+							"y"
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"k"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"t"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"t"
+									],
+									"move": {
+										"path": [
+											"k",
+											0
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"m": {
+					"a": {
+						"b": 1
+					}
+				},
+				"l": [
+					1,
+					2,
+					3
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"move": {
+						"path": [
+							"m",
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"a": {
+								"b": 1
+							}
+						},
+						"l": [
+							1,
+							2,
+							3
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"move": {
+										"path": [
+											"m",
+											"a"
+										]
+									}
+								}
+							],
+							"undo": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						1
+					],
+					"move": {
+						"path": [
+							"l",
+							1
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"a": {
+								"b": 1
+							}
+						},
+						"l": [
+							1,
+							2,
+							3
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l",
+										1
+									],
+									"move": {
+										"path": [
+											"l",
+											1
+										]
+									}
+								}
+							],
+							"undo": []
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"a": {
+								"b": 1
+							}
+						},
+						"l": [
+							1,
+							2,
+							3
+						]
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"l"
+										],
+										"range": [
+											0,
+											2
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"l"
+										],
+										"range": [
+											0,
+											2
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"s": ""
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "é"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"s": "é"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "é"
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										0,
+										1
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

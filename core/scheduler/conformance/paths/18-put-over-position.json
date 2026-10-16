@@ -1,187 +1,38 @@
 {
 	"title": "a put over an index marks that index; only a removal shifts the rest (from notify 06-put-keeps-chase, 08-put-above-keeps)",
 	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3, "x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 4], "expect": {} },
 		{
-			"op": "spot",
+			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"path": [
-				"l"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				2
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				3
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				3,
-				"x"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				4
-			]
+			"patches": [{ "path": ["l"], "range": [3, 4], "value": ["q"] }],
+			"expect": { "spots": [["l"], ["l", 3], ["l", 3, "x"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						3,
-						4
-					],
-					"value": [
-						"q"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						3,
-						"x"
-					]
-				]
-			}
+			"patches": [{ "path": ["l", 3], "value": "p" }],
+			"expect": { "spots": [["l"], ["l", 3], ["l", 3, "x"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l",
-						3
-					],
-					"value": "p"
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						3,
-						"x"
-					]
-				]
-			}
+			"patches": [{ "path": ["l", 3] }],
+			"expect": { "spots": [["l"], ["l", 4], ["l", 3], ["l", 3, "x"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l",
-						3
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						3,
-						"x"
-					],
-					[
-						"l",
-						4
-					]
-				]
-			}
-		},
-		{
-			"op": "mark",
-			"source": "v",
-			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"value": [
-						"a"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						2
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						3,
-						"x"
-					],
-					[
-						"l",
-						4
-					]
-				]
-			}
+			"patches": [{ "path": ["l"], "value": ["a"] }],
+			"expect": { "spots": [["l"], ["l", 2], ["l", 3], ["l", 3, "x"], ["l", 4]] }
 		}
 	]
 }

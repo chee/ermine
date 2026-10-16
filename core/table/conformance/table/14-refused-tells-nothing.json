@@ -1,0 +1,126 @@
+{
+	"title": "a refused add, a sub of the same node and a del with nothing there tell no event and change nothing",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "a",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"a"
+					],
+					[
+						"children",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "m",
+			"expect": {
+				"error": "already-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "b",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"part": "info",
+			"node": "n",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "del",
+			"node": "k",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": []
+			}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": [
+					[
+						"value",
+						"n"
+					],
+					[
+						"children",
+						"m"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m",
+			"expect": {
+				"keys": [
+					[
+						"children",
+						"a"
+					]
+				]
+			}
+		}
+	]
+}

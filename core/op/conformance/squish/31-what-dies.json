@@ -1,0 +1,50 @@
+{
+	"title": "a put or removal kills a ranged patch at its own list element and a removal of the same map key; a ranged patch, or a move at [], kills nothing",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0], "range": [0, 1] }, { "path": ["l", 0], "value": "x" }],
+			"expect": { "patches": [{ "path": ["l", 0], "value": "x" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0], "range": [0, 0], "value": "x" }, { "path": ["l", 0] }],
+			"expect": { "patches": [{ "path": ["l", 0] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0] }, { "path": ["l"] }],
+			"expect": { "patches": [{ "path": ["l"] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["l", 0] }, { "path": ["l", 0], "range": [0, 1] }],
+			"expect": { "patches": [{ "path": ["l", 0] }, { "path": ["l", 0], "range": [0, 1] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["m", "a"] }, { "path": ["m", "a"] }],
+			"expect": { "patches": [{ "path": ["m", "a"] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["a"], "value": {} }, { "path": ["a", "b"], "range": [0, 1] }],
+			"expect": {
+				"patches": [{ "path": ["a"], "value": {} }, { "path": ["a", "b"], "range": [0, 1] }]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "value": 1 },
+				{ "path": [], "range": [0, 0], "move": { "path": ["l"], "range": [0, 1] } }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "value": 1 },
+					{ "path": [], "range": [0, 0], "move": { "path": ["l"], "range": [0, 1] } }
+				]
+			}
+		}
+	]
+}

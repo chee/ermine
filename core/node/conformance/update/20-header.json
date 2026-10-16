@@ -1,0 +1,349 @@
+{
+	"title": "the change is the update's header as given, no time added when it has none, and the op; with no header, time 1 and actor me",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": 1
+			},
+			"header": {
+				"time": 3,
+				"actor": "x",
+				"reader": "r0",
+				"external": [
+					{
+						"file": "s.ts",
+						"line": 1
+					}
+				],
+				"metadata": [
+					[
+						"first",
+						true
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1
+					},
+					"change": {
+						"time": 3,
+						"actor": "x",
+						"reader": "r0",
+						"external": [
+							{
+								"file": "s.ts",
+								"line": 1
+							}
+						],
+						"metadata": [
+							[
+								"first",
+								true
+							]
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"header": {
+				"actor": "y"
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1,
+						"b": 2
+					},
+					"change": {
+						"actor": "y",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 2
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 3
+				}
+			],
+			"header": {},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1,
+						"b": 3
+					},
+					"change": {
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 3
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"b"
+									],
+									"value": 2
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					]
+				}
+			],
+			"header": {
+				"time": -1,
+				"actor": {
+					"person": "p",
+					"code": [
+						"c1"
+					]
+				},
+				"reader": "",
+				"external": [
+					{
+						"file": "a.c",
+						"line": 9,
+						"column": 2,
+						"function": "f"
+					},
+					{
+						"file": "b.c",
+						"line": 0
+					}
+				],
+				"metadata": [
+					[
+						"k",
+						1
+					],
+					[
+						"k",
+						1
+					],
+					[
+						"",
+						null
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"b": 3
+					},
+					"change": {
+						"time": -1,
+						"actor": {
+							"person": "p",
+							"code": [
+								"c1"
+							]
+						},
+						"reader": "",
+						"external": [
+							{
+								"file": "a.c",
+								"line": 9,
+								"column": 2,
+								"function": "f"
+							},
+							{
+								"file": "b.c",
+								"line": 0
+							}
+						],
+						"metadata": [
+							[
+								"k",
+								1
+							],
+							[
+								"k",
+								1
+							],
+							[
+								"",
+								null
+							]
+						],
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"a"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 0
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"b": 3,
+						"a": 0
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 0
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"a"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 5
+				}
+			],
+			"header": {
+				"time": 0,
+				"actor": null
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"b": 3,
+						"a": 5
+					},
+					"change": {
+						"time": 0,
+						"actor": null,
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 5
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"a"
+									],
+									"value": 0
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

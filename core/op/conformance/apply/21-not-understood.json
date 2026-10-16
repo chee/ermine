@@ -1,0 +1,34 @@
+{
+	"title": "not understood: an unknown op, patches missing or not a list, a value not in the JSON form; an error, a string; the next line still answered",
+	"steps": [
+		{ "op": "nope", "fails": true },
+		{ "op": "apply", "fails": true },
+		{ "op": "apply", "value": 1, "patches": 5, "fails": true },
+		{ "op": "apply", "value": 1, "patches": { "0": { "path": [] } }, "fails": true },
+		{ "op": "apply", "value": { "/": { "bytes": "A" } }, "patches": [], "fails": true },
+		{ "op": "apply", "value": { "/": { "int8": [300] } }, "patches": [], "fails": true },
+		{ "op": "apply", "value": { "/": { "nope": 1 } }, "patches": [], "fails": true },
+		{
+			"op": "apply",
+			"value": { "a": 1 },
+			"patches": [{ "path": ["a"], "value": { "/": { "uint64": ["-1"] } } }],
+			"fails": true
+		},
+		{ "op": "invert", "value": 1, "fails": true },
+		{ "op": "apply", "value": 1, "patches": [], "expect": { "value": 1 } },
+		{
+			"op": "apply",
+			"value": "x",
+			"patches": [{ "path": [], "range": [0, 1], "value": "y" }],
+			"cow": true,
+			"expect": { "value": "y" }
+		},
+		{
+			"op": "apply",
+			"value": "x",
+			"patches": [{ "path": [], "range": [0, 1], "value": "y" }],
+			"cow": "no",
+			"expect": { "value": "y" }
+		}
+	]
+}

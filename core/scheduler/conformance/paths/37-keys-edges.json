@@ -1,0 +1,81 @@
+{
+	"title": "keys reads: a ranged place one step below reaches none; a shift reaches the keys reads beside it and under them; the key spots go with the plain ones in a walk",
+	"steps": [
+		{
+			"op": "marks",
+			"patch": { "path": ["a", "s"], "range": [0, 1], "value": "x" },
+			"paths": [[], ["a"], ["a", "s"], ["a", "s", 0], ["a", "t"]],
+			"keys": true,
+			"expect": { "marks": [false, false, true, true, false] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["a", "s"], "value": "x" },
+			"paths": [[], ["a"], ["a", "s"], ["a", "s", 0]],
+			"keys": true,
+			"expect": { "marks": [false, true, true, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l", 0] },
+			"paths": [["l"], ["l", 0], ["l", 1], ["l", 1, "z"], ["l", 1, "z", "w"], []],
+			"keys": true,
+			"expect": { "marks": [true, true, true, true, true, false] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l"], "range": [1, 1], "value": [1] },
+			"paths": [[], ["l"], ["l", 0], ["l", 1], ["l", 1, "z"]],
+			"keys": true,
+			"expect": { "marks": [false, true, false, true, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["m"], "move": { "path": ["l", 0] } },
+			"paths": [[], ["l"], ["l", 1], ["m"], ["m", "q"]],
+			"keys": true,
+			"expect": { "marks": [true, true, true, true, true] }
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "keys": true, "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "keys": true, "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 0] }],
+			"expect": { "spots": [["l"], { "keys": ["l"] }, ["l", 1], { "keys": ["l", 1] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 1, "z"], "value": 1 }],
+			"expect": { "spots": [["l"], ["l", 1], { "keys": ["l", 1] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l"], "range": [0, 2], "value": [1] }],
+			"expect": { "spots": [["l"], { "keys": ["l"] }, ["l", 1], { "keys": ["l", 1] }] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["k"], "value": 1 }],
+			"expect": { "spots": [{ "keys": [] }] }
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["k"], "keys": false, "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["k", "j"], "value": 1 }],
+			"expect": { "spots": [["k"]] }
+		}
+	]
+}

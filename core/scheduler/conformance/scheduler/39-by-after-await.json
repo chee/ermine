@@ -14,7 +14,8 @@
 			"f": {
 				"read": "k"
 			},
-			"to": "b"
+			"to": "b",
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -38,14 +39,48 @@
 					}
 				]
 			},
-			"to": "a"
+			"to": "a",
+			"expect": {}
 		},
 		{
 			"op": "pulse",
 			"expect": {}
 		},
 		{
-			"op": "moments"
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 1
+					},
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
 		},
 		{
 			"op": "resolve",
@@ -179,7 +214,8 @@
 			"f": {
 				"read": "k2"
 			},
-			"to": "b2"
+			"to": "b2",
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -204,14 +240,48 @@
 					}
 				]
 			},
-			"to": "a2"
+			"to": "a2",
+			"expect": {}
 		},
 		{
 			"op": "pulse",
 			"expect": {}
 		},
 		{
-			"op": "moments"
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b2",
+						"tick": 7
+					},
+					{
+						"due": "a2",
+						"tick": 8
+					},
+					{
+						"starts": "b2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a2",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
 		},
 		{
 			"op": "resolve",

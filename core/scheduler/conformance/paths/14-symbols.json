@@ -1,10 +1,16 @@
 {
 	"title": "symbols as source and id: one per name, never equal to a string",
 	"steps": [
-		{ "op": "spot", "source": { "symbol": "v" }, "id": "n", "path": ["x"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["x", "y"] },
-		{ "op": "spot", "source": "v", "id": { "symbol": "n" }, "path": ["x", "z"] },
-		{ "op": "spot", "source": { "symbol": "w" }, "id": { "symbol": "n" }, "path": [] },
+		{ "op": "spot", "source": { "symbol": "v" }, "id": "n", "path": ["x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["x", "y"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": { "symbol": "n" }, "path": ["x", "z"], "expect": {} },
+		{
+			"op": "spot",
+			"source": { "symbol": "w" },
+			"id": { "symbol": "n" },
+			"path": [],
+			"expect": {}
+		},
 		{
 			"op": "mark",
 			"source": { "symbol": "v" },
@@ -34,7 +40,7 @@
 		},
 		{ "op": "event", "source": { "symbol": "w" }, "id": "n", "expect": { "spots": [] } },
 		{ "op": "kept", "expect": { "keys": 4, "spots": 4, "steps": 9 } },
-		{ "op": "release", "source": { "symbol": "v" }, "id": "n", "path": ["x"] },
+		{ "op": "release", "source": { "symbol": "v" }, "id": "n", "path": ["x"], "expect": {} },
 		{ "op": "kept", "expect": { "keys": 3, "spots": 3, "steps": 7 } }
 	]
 }

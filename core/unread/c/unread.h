@@ -47,7 +47,7 @@ void un_read(un_unread *u, const nd_entry *entry);
 // run was given; at a container in it, what is owned under it is let go (only owned ones are
 // walked) and no deeper. the rest walked (lists, maps, typed arrays), a container seen twice once:
 // the seen set is made at the first step into a nested container, so a flat value makes none.
-// unlike unread.ts, no map from a copy to its set: every entry's set is asked
+// a copy's set is found by the owner map, as in unread.ts
 void un_kept(un_unread *u, const op_value *value, const op_value *const *handed, size_t n);
 
 // a scheduler's run ends wired to u: what a run keeps past it (sc_more's kept: a compute's result

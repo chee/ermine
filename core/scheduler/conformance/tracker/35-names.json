@@ -1,0 +1,20 @@
+{
+	"title": "a name is any string, compared whole: empty, NUL inside, a lone surrogate, __proto__; a request's other fields are not read",
+	"steps": [
+		{ "op": "add", "from": "", "to": "a\u0000b", "expect": {} },
+		{ "op": "add", "from": "a\u0000c", "to": "__proto__", "expect": {} },
+		{ "op": "add", "from": "\ud800", "to": "\udc00", "expect": {} },
+		{ "op": "add", "from": "😀", "to": "constructor", "expect": {} },
+		{ "op": "reads", "of": "", "expect": { "names": ["a\u0000b"] } },
+		{ "op": "reads", "of": "a\u0000c", "expect": { "names": ["__proto__"] } },
+		{ "op": "reads", "of": "a", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a\u0000b", "expect": { "names": [""] } },
+		{ "op": "readers", "of": "__proto__", "expect": { "names": ["a\u0000c"] } },
+		{ "op": "reads", "of": "\ud800", "expect": { "names": ["\udc00"] } },
+		{ "op": "readers", "of": "\udc00", "expect": { "names": ["\ud800"] } },
+		{ "op": "reads", "of": "𐀀", "expect": { "names": [] } },
+		{ "op": "readers", "of": "constructor", "expect": { "names": ["😀"] } },
+		{ "op": "add", "from": "x", "to": "y", "also": [1], "expect": {} },
+		{ "op": "reads", "of": "x", "from": "z", "expect": { "names": ["y"] } }
+	]
+}

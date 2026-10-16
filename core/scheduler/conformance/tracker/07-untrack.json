@@ -1,13 +1,13 @@
 {
 	"title": "untrack one, then all",
 	"steps": [
-		{ "op": "add", "from": "v", "to": "a" },
-		{ "op": "add", "from": "v", "to": "b" },
-		{ "op": "add", "from": "v", "to": "c" },
-		{ "op": "untrack", "from": "v", "to": "b" },
+		{ "op": "add", "from": "v", "to": "a", "expect": {} },
+		{ "op": "add", "from": "v", "to": "b", "expect": {} },
+		{ "op": "add", "from": "v", "to": "c", "expect": {} },
+		{ "op": "untrack", "from": "v", "to": "b", "expect": {} },
 		{ "op": "reads", "of": "v", "expect": { "names": ["a", "c"] } },
 		{ "op": "readers", "of": "b", "expect": { "names": [] } },
-		{ "op": "untrack", "from": "v" },
+		{ "op": "untrack", "from": "v", "expect": {} },
 		{ "op": "reads", "of": "v", "expect": { "names": [] } },
 		{ "op": "readers", "of": "a", "expect": { "names": [] } }
 	]
