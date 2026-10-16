@@ -27,7 +27,7 @@ const cases: [string, Uint8Array][] = [
 	],
 	[
 		"a long varied text",
-		Deno.readFileSync(new URL("../../../extensions/subduction/plan.org", import.meta.url)),
+		Deno.readFileSync(new URL("../../../core/scheduler/typescript/scheduler.ts", import.meta.url)),
 	],
 ]
 
