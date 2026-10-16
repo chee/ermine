@@ -1,0 +1,628 @@
+{
+	"title": "values at their edges, given back whole: -0, the words, the largest and smallest numbers, NUL and lone surrogates, empty and full typed arrays, stand-ins, a map's key order",
+	"steps": [
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": [
+				-0,
+				{
+					"/": {
+						"number": "Infinity"
+					}
+				},
+				{
+					"/": {
+						"number": "-Infinity"
+					}
+				},
+				{
+					"/": {
+						"number": "NaN"
+					}
+				},
+				9007199254740991,
+				-9007199254740991,
+				5e-324,
+				1.7976931348623157e+308,
+				1e+21,
+				0.1
+			],
+			"expect": {
+				"entry": {
+					"value": [
+						-0,
+						{
+							"/": {
+								"number": "Infinity"
+							}
+						},
+						{
+							"/": {
+								"number": "-Infinity"
+							}
+						},
+						{
+							"/": {
+								"number": "NaN"
+							}
+						},
+						9007199254740991,
+						-9007199254740991,
+						5e-324,
+						1.7976931348623157e+308,
+						1e+21,
+						0.1
+					],
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": -0,
+			"expect": {
+				"entry": {
+					"value": -0,
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"a\u0000b": "c\u0000d",
+				"": "",
+				"\u0000": 0
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"a\u0000b": "c\u0000d",
+						"": "",
+						"\u0000": 0
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"\ud800": "x\udc00y",
+				"s": "􏿿"
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"\ud800": "x\udc00y",
+						"s": "􏿿"
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"z": 1,
+				"a": 2,
+				"m": {
+					"y": 0,
+					"b": 1
+				},
+				"__proto__": 3
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"z": 1,
+						"a": 2,
+						"m": {
+							"y": 0,
+							"b": 1
+						},
+						"__proto__": 3
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": ""
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"bytes": ""
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "////"
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"bytes": "////"
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "AQ"
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int16": []
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"int16": []
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int8": [
+						-128,
+						127,
+						-0
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"int8": [
+								-128,
+								127,
+								0
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"uint32": [
+						4294967295,
+						0
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"uint32": [
+								4294967295,
+								0
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int64": [
+						"-9223372036854775808",
+						"9223372036854775807",
+						"-0",
+						"007"
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"int64": [
+								"-9223372036854775808",
+								"9223372036854775807",
+								"0",
+								"7"
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"uint64": [
+						"18446744073709551615",
+						"0"
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"uint64": [
+								"18446744073709551615",
+								"0"
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"float32": [
+						0.1,
+						"NaN",
+						"-Infinity",
+						-0
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"float32": [
+								0.10000000149011612,
+								"NaN",
+								"-Infinity",
+								-0
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"float64": [
+						-0,
+						"Infinity",
+						1.5
+					]
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"float64": [
+								-0,
+								"Infinity",
+								1.5
+							]
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"live": "x"
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"live": "x"
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"live": {
+						"/": {
+							"bytes": "AQ"
+						}
+					}
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"live": {
+								"/": {
+									"bytes": "AQ"
+								}
+							}
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"map": {
+						"/": 1
+					}
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"map": {
+						"/": {
+							"/": {
+								"bytes": "AQ"
+							}
+						}
+					}
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"map": {
+								"/": {
+									"/": {
+										"bytes": "AQ"
+									}
+								}
+							}
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"number": "-Infinity"
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"number": "-Infinity"
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": [
+				{
+					"/": {
+						"bytes": "AQID"
+					}
+				},
+				[
+					{
+						"/": {
+							"float64": []
+						}
+					}
+				],
+				{
+					"k": {
+						"/": {
+							"live": 0
+						}
+					}
+				}
+			],
+			"expect": {
+				"entry": {
+					"value": [
+						{
+							"/": {
+								"bytes": "AQID"
+							}
+						},
+						[
+							{
+								"/": {
+									"float64": []
+								}
+							}
+						],
+						{
+							"k": {
+								"/": {
+									"live": 0
+								}
+							}
+						}
+					],
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		}
+	]
+}

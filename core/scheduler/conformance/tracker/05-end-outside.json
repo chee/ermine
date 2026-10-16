@@ -1,10 +1,10 @@
 {
 	"title": "end outside a run: nothing",
 	"steps": [
-		{ "op": "add", "from": "ui", "to": "a" },
-		{ "op": "end", "from": "ui" },
+		{ "op": "add", "from": "ui", "to": "a", "expect": {} },
+		{ "op": "end", "from": "ui", "expect": {} },
 		{ "op": "reads", "of": "ui", "expect": { "names": ["a"] } },
-		{ "op": "end", "from": "nobody" },
+		{ "op": "end", "from": "nobody", "expect": {} },
 		{ "op": "reads", "of": "nobody", "expect": { "names": [] } }
 	]
 }

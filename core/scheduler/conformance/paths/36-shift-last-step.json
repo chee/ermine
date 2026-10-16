@@ -1,0 +1,56 @@
+{
+	"title": "a removal shifts only the indices beside its own last step; indices beside a step above it, or a string last step, are not reached",
+	"steps": [
+		{
+			"op": "marks",
+			"patch": { "path": ["l", 1, 2] },
+			"paths": [
+				["l", 1, 3],
+				["l", 1, 3, "x"],
+				["l", 1, 1],
+				["l", 1, 2],
+				["l", 2],
+				["l", 2, 3],
+				["l", 1],
+				["l"],
+				[]
+			],
+			"expect": { "marks": [true, true, false, true, false, false, true, true, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l", 1, "k"] },
+			"paths": [["l", 1, "j"], ["l", 2], ["l", 1, "k", 0]],
+			"expect": { "marks": [false, false, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["x"], "move": { "path": ["l", 1, 2] } },
+			"paths": [["l", 1, 3], ["l", 2], ["x"], ["x", 0]],
+			"expect": { "marks": [true, false, true, true] }
+		},
+		{
+			"op": "marks",
+			"patch": { "path": ["l", 1], "move": { "path": ["x"] } },
+			"paths": [["l", 2], ["l", 1], ["l", 0], ["x", 0]],
+			"expect": { "marks": [false, true, false, true] }
+		},
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1, 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 1, 2] }],
+			"expect": { "spots": [["l", 1, 3]] }
+		},
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["l", 1] }],
+			"expect": { "spots": [["l", 2], ["l", 2, 3], ["l", 1, 3]] }
+		}
+	]
+}

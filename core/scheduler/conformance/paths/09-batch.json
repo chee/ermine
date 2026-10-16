@@ -1,10 +1,10 @@
 {
 	"title": "several patches in one update: each in its own coordinates, each spot once",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["side"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["side"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
@@ -16,9 +16,9 @@
 			],
 			"expect": { "spots": [["doc"], ["doc", "title"], ["doc", "body"]] }
 		},
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
@@ -27,7 +27,7 @@
 				{ "path": ["l"], "range": [1, 1], "value": ["x"] },
 				{ "path": ["l", 0], "value": "y" }
 			],
-			"expect": { "spots": [["l", 0], ["l", 1], ["l", 2]] }
+			"expect": { "spots": [["l", 1], ["l", 2], ["l", 0]] }
 		},
 		{ "op": "mark", "source": "v", "id": "n", "patches": [], "expect": { "spots": [] } }
 	]

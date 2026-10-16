@@ -1,0 +1,75 @@
+{
+	"title": "a delete joins one it touches from either side; a delete or replace that starts before what was typed stays apart",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [5, 6] }, { "path": ["t"], "range": [3, 5] }],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 6] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [{ "path": ["t"], "range": [3, 3] }, { "path": ["t"], "range": [3, 4] }],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 4] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3] },
+				{ "path": ["t"], "range": [3, 3], "value": "a" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [3, 3], "value": "a" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "ab" },
+				{ "path": ["t"], "range": [2, 4] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [3, 3], "value": "ab" },
+					{ "path": ["t"], "range": [2, 4] }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [3, 3], "value": "ab" },
+				{ "path": ["t"], "range": [2, 4], "value": "z" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [3, 3], "value": "ab" },
+					{ "path": ["t"], "range": [2, 4], "value": "z" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [2, 3], "value": "x" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [2, 5] },
+					{ "path": ["t"], "range": [2, 3], "value": "x" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [2, 5] },
+				{ "path": ["t"], "range": [1, 1], "value": "x" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [2, 5] },
+					{ "path": ["t"], "range": [1, 1], "value": "x" }
+				]
+			}
+		}
+	]
+}

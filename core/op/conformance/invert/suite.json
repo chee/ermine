@@ -1,4 +1,5 @@
 {
 	"harness": "apply",
-	"again": { "name": "cow: false", "has": "patches", "set": { "cow": false } }
+	"again": { "name": "cow: false", "has": "patches", "set": { "cow": false } },
+	"ordered": true
 }

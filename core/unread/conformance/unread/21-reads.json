@@ -1,0 +1,182 @@
+{
+	"title": "a read gives the value, or nothing when there is none; reads one after another let go as one; the write after copies",
+	"steps": [
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "none",
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"name": "none",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": {
+							"x": 0
+						}
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root2",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root2",
+			"expect": {
+				"same": true
+			}
+		}
+	]
+}

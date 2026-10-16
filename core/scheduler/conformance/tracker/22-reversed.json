@@ -1,0 +1,21 @@
+{
+	"title": "a rerun in the reverse order: the spots not next in order are linked anew in front, the one met in order is confirmed, the rest dropped",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["c", "b", "a", "b", "c"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r", "r"] } },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["c", "b", "a"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r"] } }
+	]
+}

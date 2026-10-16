@@ -1,0 +1,278 @@
+{
+	"title": "kept with no path lets go of all of it; a plain result kept holds nothing; handed alone holds what it names; nothing there, wrapped, holds nothing",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"hold": "k",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "k",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "a2",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a",
+				"x"
+			],
+			"scheduler": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "a2",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a"
+			],
+			"handed": true,
+			"hold": "ka",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 4
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "a2",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "ka",
+			"expect": {
+				"value": {
+					"x": 3
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "a3",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"zz"
+			],
+			"wrap": true,
+			"handed": true,
+			"scheduler": "effect",
+			"hold": "e",
+			"expect": {}
+		},
+		{
+			"op": "held",
+			"name": "e",
+			"expect": {
+				"value": [
+					null
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 5
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 4
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "a3",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 5
+					}
+				}
+			}
+		}
+	]
+}

@@ -30,7 +30,25 @@
 					],
 					"value": 1
 				}
-			]
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b",
+							"y"
+						],
+						"value": 0
+					},
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
 		},
 		{
 			"op": "mark",
@@ -79,7 +97,25 @@
 					],
 					"value": 2
 				}
-			]
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b",
+							"y"
+						],
+						"value": 1
+					},
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
 		},
 		{
 			"op": "same",

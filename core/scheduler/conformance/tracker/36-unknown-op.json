@@ -1,0 +1,10 @@
+{
+	"title": "an op not in the protocol is an error and changes nothing",
+	"steps": [
+		{ "op": "add", "from": "p", "to": "a", "expect": {} },
+		{ "op": "frob", "from": "p", "to": "b", "fails": true },
+		{ "op": "Add", "from": "p", "to": "b", "fails": true },
+		{ "op": "reads", "of": "p", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } }
+	]
+}

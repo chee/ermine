@@ -1,0 +1,511 @@
+{
+	"title": "values beyond JSON put, replaced and taken back whole: -0, the words, 64-bit elements, a map whose one key is \"/\"",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"n": 0,
+				"f": {
+					"/": {
+						"float64": [
+							1,
+							-0
+						]
+					}
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": -0
+				},
+				{
+					"path": [
+						"w"
+					],
+					"value": [
+						{
+							"/": {
+								"number": "NaN"
+							}
+						},
+						{
+							"/": {
+								"number": "-Infinity"
+							}
+						}
+					]
+				},
+				{
+					"path": [
+						"i"
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"-9223372036854775808"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"slash"
+					],
+					"value": {
+						"/": {
+							"map": {
+								"/": 1
+							}
+						}
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": -0,
+						"f": {
+							"/": {
+								"float64": [
+									1,
+									-0
+								]
+							}
+						},
+						"w": [
+							{
+								"/": {
+									"number": "NaN"
+								}
+							},
+							{
+								"/": {
+									"number": "-Infinity"
+								}
+							}
+						],
+						"i": {
+							"/": {
+								"int64": [
+									"-9223372036854775808"
+								]
+							}
+						},
+						"slash": {
+							"/": {
+								"map": {
+									"/": 1
+								}
+							}
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"n"
+									],
+									"value": -0
+								},
+								{
+									"path": [
+										"w"
+									],
+									"value": [
+										{
+											"/": {
+												"number": "NaN"
+											}
+										},
+										{
+											"/": {
+												"number": "-Infinity"
+											}
+										}
+									]
+								},
+								{
+									"path": [
+										"i"
+									],
+									"value": {
+										"/": {
+											"int64": [
+												"-9223372036854775808"
+											]
+										}
+									}
+								},
+								{
+									"path": [
+										"slash"
+									],
+									"value": {
+										"/": {
+											"map": {
+												"/": 1
+											}
+										}
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"slash"
+									]
+								},
+								{
+									"path": [
+										"i"
+									]
+								},
+								{
+									"path": [
+										"w"
+									]
+								},
+								{
+									"path": [
+										"n"
+									],
+									"value": 0
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 0
+				},
+				{
+					"path": [
+						"i"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": {
+						"/": {
+							"int64": [
+								"9223372036854775807"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"f"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": {
+						"/": {
+							"float64": [
+								"NaN",
+								"Infinity"
+							]
+						}
+					}
+				},
+				{
+					"path": [
+						"slash",
+						"/"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": 0,
+						"f": {
+							"/": {
+								"float64": [
+									"NaN",
+									"Infinity",
+									-0
+								]
+							}
+						},
+						"w": [
+							{
+								"/": {
+									"number": "NaN"
+								}
+							},
+							{
+								"/": {
+									"number": "-Infinity"
+								}
+							}
+						],
+						"i": {
+							"/": {
+								"int64": [
+									"-9223372036854775808",
+									"9223372036854775807"
+								]
+							}
+						},
+						"slash": {
+							"/": {
+								"map": {
+									"/": 2
+								}
+							}
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"n"
+									],
+									"value": 0
+								},
+								{
+									"path": [
+										"i"
+									],
+									"range": [
+										1,
+										1
+									],
+									"value": {
+										"/": {
+											"int64": [
+												"9223372036854775807"
+											]
+										}
+									}
+								},
+								{
+									"path": [
+										"f"
+									],
+									"range": [
+										0,
+										1
+									],
+									"value": {
+										"/": {
+											"float64": [
+												"NaN",
+												"Infinity"
+											]
+										}
+									}
+								},
+								{
+									"path": [
+										"slash",
+										"/"
+									],
+									"value": 2
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"slash",
+										"/"
+									],
+									"value": 1
+								},
+								{
+									"path": [
+										"f"
+									],
+									"range": [
+										0,
+										2
+									],
+									"value": {
+										"/": {
+											"float64": [
+												1
+											]
+										}
+									}
+								},
+								{
+									"path": [
+										"i"
+									],
+									"range": [
+										1,
+										2
+									]
+								},
+								{
+									"path": [
+										"n"
+									],
+									"value": -0
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"w",
+						0
+					]
+				},
+				{
+					"path": [
+						"slash"
+					],
+					"move": {
+						"path": [
+							"i"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": 0,
+						"f": {
+							"/": {
+								"float64": [
+									"NaN",
+									"Infinity",
+									-0
+								]
+							}
+						},
+						"w": [
+							{
+								"/": {
+									"number": "-Infinity"
+								}
+							}
+						],
+						"slash": {
+							"/": {
+								"int64": [
+									"-9223372036854775808",
+									"9223372036854775807"
+								]
+							}
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"w",
+										0
+									]
+								},
+								{
+									"path": [
+										"slash"
+									],
+									"move": {
+										"path": [
+											"i"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"i"
+									],
+									"move": {
+										"path": [
+											"slash"
+										]
+									}
+								},
+								{
+									"path": [
+										"slash"
+									],
+									"value": {
+										"/": {
+											"map": {
+												"/": 2
+											}
+										}
+									}
+								},
+								{
+									"path": [
+										"w"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": [
+										{
+											"/": {
+												"number": "NaN"
+											}
+										}
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

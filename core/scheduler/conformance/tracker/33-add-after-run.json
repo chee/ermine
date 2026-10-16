@@ -1,0 +1,33 @@
+{
+	"title": "add after a run appends; a spot already read, anywhere and however often, is left as it is; the next rerun confirms what add made",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "add", "from": "r", "to": "c", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "b", "c"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "b", "c"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a", "b"] } },
+		{ "op": "add", "from": "r", "to": "b", "expect": {} },
+		{ "op": "add", "from": "r", "to": "a", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a", "b"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r", "r"] } },
+		{ "op": "add", "from": "r", "to": "c", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a", "b", "c"] } },
+		{ "op": "untrack", "from": "r", "to": "c", "expect": {} },
+		{ "op": "add", "from": "r", "to": "d", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a", "b", "d"] } }
+	]
+}

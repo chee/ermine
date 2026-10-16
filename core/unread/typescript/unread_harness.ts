@@ -4,26 +4,42 @@
 // { time: 1, actor: "test" }. another implementation joins by speaking this (HARNESS)
 //
 // { op: "start", value? }          → {}   a new entry with value (none: nothing there), a new
-//    unread; what was held and marked let go
-// { op: "write", patches, hold? }  → { undo }   unread's update, its op's undo; an ApplyError
-//    answers { error: code, patch: index }. hold: a name for the values the patches put, as they
-//    went in, in order
-// { op: "unwrite", hold? }         → { undo }   the last write's undo written, its values as the
-//    undo holds them; hold: a name for those, in order. none: { error: "nothing-written" }
+//    unread; what was held and marked let go. the value is the caller's, owned by no one: the
+//    first write copies it. the entry's change has no op yet
+// { op: "write", patches, hold? }  → { undo }   unread's update, its op's undo (as node's update
+//    gives it: each patch's undo, the last patch's first). patches: [] is a write ({ undo: [] }).
+//    an ApplyError answers { error: code, patch: index }: code one of "not-a-patch", "no-key",
+//    "wrong-kind", "range", "into-itself" (op's apply), index the first patch that failed,
+//    counted from 0 in the whole write. a refused write changes nothing: the patches before it
+//    put back, the root the same one, the entry's change the last landed write's. hold: a name
+//    for the values the patches put (each that has a value), as they went in, in order; held
+//    whether or not the write lands
+// { op: "unwrite", hold? }         → { undo }   the last landed write's undo written (a write as
+//    above: unwrite twice writes the first again), its values as the undo holds them; hold: a
+//    name for those, in order. nothing landed since start: { error: "nothing-written" }
 // { op: "read", hold? }            → { value? }   the entry read (unread's read). hold: a name
 //    for its value as given
 // { op: "keep", path?, wrap?, handed?, scheduler?, hold? } → {}   what is at path in the entry's
-//    value kept (unread's kept), not a read; wrap: in a list made for it first. handed: what is at
-//    path was handed to the run (kept's handed; through a scheduler, the computation tracks a key
-//    keeping's handed names it by). scheduler: kept as a computation's result, at its run's end (a
-//    scheduler wired by keeping, a computation returning it, a pulse): true or "compute" a
-//    compute's, given to set; "fails" a compute's whose set throws; "effect" an effect's. hold: a
-//    name for what was kept
-// { op: "held", name }             → { value? }   what was held under name, as it is now
+//    value kept (unread's kept), not a read; wrap: in a list made for it first (nothing there:
+//    [null]). handed: what is at path was handed to the run (kept's handed; through a scheduler,
+//    the computation tracks a key keeping's handed names it by). scheduler: kept as a
+//    computation's result, at its run's end (a scheduler wired by keeping, a computation returning
+//    it, a pulse): true or "compute" a compute's, given to set; "fails" a compute's whose set
+//    throws; "effect" an effect's. hold: a name for what was kept
+// { op: "held", name }             → { value? }   what was held under name, as it is now; a name
+//    never held: {}
 // { op: "value" }                  → { value? }   the entry's value now; not a read
 // { op: "mark", name, path? }      → {}   what is at path in the entry's value now, by identity;
 //    not a read
-// { op: "same", name, path? }      → { same }   whether what is at path now is what was marked
+// { op: "same", name, path? }      → { same }   whether what is at path now is what was marked,
+//    as === has it: a container by identity, a number, string, boolean or null by content;
+//    nothing there is the same as nothing there, and a name never marked stands for nothing
+// anything else: { error: string } ("unknown op <op>"), and the harness goes on
+//
+// path (keep, mark, same): keys from the root, [] or none the whole value; a string into a map, a
+// whole number into a list; into anything else, or a key not there: nothing there. a name given
+// again (hold, mark) is replaced. answers' maps keep their keys in order (suite.json ordered): a
+// key taken out and put back goes last, in place or copied
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { ApplyError, type Key, type Patch } from "@ermine/op/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"

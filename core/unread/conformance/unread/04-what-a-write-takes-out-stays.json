@@ -36,7 +36,26 @@
 					],
 					"value": 5
 				}
-			]
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"list",
+							0,
+							"n"
+						],
+						"value": 0
+					},
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
 		},
 		{
 			"op": "write",
@@ -147,7 +166,26 @@
 					],
 					"value": 6
 				}
-			]
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"list",
+							0,
+							"n"
+						],
+						"value": 5
+					},
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
 		},
 		{
 			"op": "held",

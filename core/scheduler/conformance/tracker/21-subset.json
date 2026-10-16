@@ -1,0 +1,25 @@
+{
+	"title": "a rerun reading a subset out of its old places: each is linked anew, the old links dropped at end, so the reader goes last among the readers",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "track", "from": "r", "to": "d", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "begin", "from": "s", "expect": {} },
+		{ "op": "track", "from": "s", "to": "b", "expect": {} },
+		{ "op": "track", "from": "s", "to": "d", "expect": {} },
+		{ "op": "end", "from": "s", "expect": {} },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r", "s"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "d", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "d"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["s", "r"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": [] } },
+		{ "op": "readers", "of": "d", "expect": { "names": ["s", "r"] } }
+	]
+}

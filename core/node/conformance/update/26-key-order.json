@@ -1,0 +1,441 @@
+{
+	"title": "a map's keys in order: a key put over keeps its place, a new key or one put back goes last, a key moved within its map goes last",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"m": {
+					"a": 1,
+					"b": 2,
+					"c": 3
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"b": 2,
+							"c": 3
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"b": 2,
+							"c": 3,
+							"a": 1
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"b"
+					],
+					"value": 20
+				},
+				{
+					"path": [
+						"m",
+						"d"
+					],
+					"value": 4
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"b": 20,
+							"c": 3,
+							"a": 1,
+							"d": 4
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 20
+								},
+								{
+									"path": [
+										"m",
+										"d"
+									],
+									"value": 4
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"d"
+									]
+								},
+								{
+									"path": [
+										"m",
+										"b"
+									],
+									"value": 2
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"z"
+					],
+					"move": {
+						"path": [
+							"m",
+							"c"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"b": 20,
+							"a": 1,
+							"d": 4,
+							"z": 3
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"z"
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"m",
+											"z"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"c"
+					],
+					"move": {
+						"path": [
+							"m",
+							"z"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"b": 20,
+							"a": 1,
+							"d": 4,
+							"c": 3
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"c"
+									],
+									"move": {
+										"path": [
+											"m",
+											"z"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"z"
+									],
+									"move": {
+										"path": [
+											"m",
+											"c"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"value": {
+						"y": 1,
+						"x": 2
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"m": {
+							"y": 1,
+							"x": 2
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m"
+									],
+									"value": {
+										"y": 1,
+										"x": 2
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m"
+									],
+									"value": {
+										"b": 20,
+										"a": 1,
+										"d": 4,
+										"c": 3
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"move": {
+						"path": [
+							"m"
+						]
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"n": {
+							"y": 1,
+							"x": 2
+						}
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"n"
+									],
+									"move": {
+										"path": [
+											"m"
+										]
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m"
+									],
+									"move": {
+										"path": [
+											"n"
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

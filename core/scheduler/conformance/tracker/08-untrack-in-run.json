@@ -1,15 +1,15 @@
 {
 	"title": "untrack in a run keeps the cursor after what remains",
 	"steps": [
-		{ "op": "begin", "from": "v" },
-		{ "op": "track", "from": "v", "to": "a" },
-		{ "op": "track", "from": "v", "to": "b" },
-		{ "op": "end", "from": "v" },
-		{ "op": "begin", "from": "v" },
-		{ "op": "track", "from": "v", "to": "a" },
-		{ "op": "untrack", "from": "v", "to": "a" },
-		{ "op": "track", "from": "v", "to": "b" },
-		{ "op": "end", "from": "v" },
+		{ "op": "begin", "from": "v", "expect": {} },
+		{ "op": "track", "from": "v", "to": "a", "expect": {} },
+		{ "op": "track", "from": "v", "to": "b", "expect": {} },
+		{ "op": "end", "from": "v", "expect": {} },
+		{ "op": "begin", "from": "v", "expect": {} },
+		{ "op": "track", "from": "v", "to": "a", "expect": {} },
+		{ "op": "untrack", "from": "v", "to": "a", "expect": {} },
+		{ "op": "track", "from": "v", "to": "b", "expect": {} },
+		{ "op": "end", "from": "v", "expect": {} },
 		{ "op": "reads", "of": "v", "expect": { "names": ["b"] } },
 		{ "op": "readers", "of": "a", "expect": { "names": [] } }
 	]

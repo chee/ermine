@@ -1,0 +1,239 @@
+{
+	"title": "lone surrogates in an entry's strings: one position each, and their undo",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"s": "a\ud83d",
+				"t": "\ude00b"
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "\ude00"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"s": "a😀",
+						"t": "\ude00b"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										2,
+										2
+									],
+									"value": "\ude00"
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "\ud83d"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"t"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "\udbff"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"s": "a\udbff",
+						"t": "b"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										1
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "\udbff"
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "😀"
+								},
+								{
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "\ude00"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "range",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"s": "a\udbff",
+						"t": "b"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										1
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "\udbff"
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "😀"
+								},
+								{
+									"path": [
+										"t"
+									],
+									"range": [
+										0,
+										0
+									],
+									"value": "\ude00"
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

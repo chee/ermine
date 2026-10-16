@@ -1,0 +1,273 @@
+{
+	"title": "not-a-patch: a patch that is no map, a path, range or move that is null, at its index; nothing changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				1
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				null
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				[]
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				"x"
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"move": null
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						"0",
+						"1"
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						{
+							"/": {
+								"number": "Infinity"
+							}
+						}
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 3
+				},
+				{}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 2
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						null
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						[
+							"a"
+						]
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						{
+							"a": 1
+						}
+					]
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "not-a-patch",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		}
+	]
+}

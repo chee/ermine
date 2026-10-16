@@ -1,0 +1,33 @@
+{
+	"title": "a mark or event at a key with no spots answers none and keeps nothing; a key with only its change spot is kept as one step",
+	"steps": [
+		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{
+			"op": "mark",
+			"source": "x",
+			"id": "y",
+			"patches": [{ "path": [] }],
+			"expect": { "spots": [] }
+		},
+		{ "op": "event", "source": "x", "id": "y", "expect": { "spots": [] } },
+		{ "op": "mark", "source": "x", "id": "y", "patches": [], "expect": { "spots": [] } },
+		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "change", "source": "x", "id": "y", "expect": {} },
+		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 1 } },
+		{ "op": "event", "source": "x", "id": "y", "expect": { "spots": ["change"] } },
+		{ "op": "mark", "source": "x", "id": "y", "patches": [], "expect": { "spots": ["change"] } },
+		{
+			"op": "mark",
+			"source": "x",
+			"id": "y",
+			"patches": [{ "path": ["a"], "value": 1 }, { "path": [] }],
+			"expect": { "spots": ["change"] }
+		},
+		{ "op": "release", "source": "x", "id": "y", "path": [], "expect": {} },
+		{ "op": "kept", "expect": { "keys": 1, "spots": 1, "steps": 1 } },
+		{ "op": "release", "source": "x", "id": "y", "expect": {} },
+		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } },
+		{ "op": "release", "source": "x", "id": "y", "expect": {} },
+		{ "op": "kept", "expect": { "keys": 0, "spots": 0, "steps": 0 } }
+	]
+}

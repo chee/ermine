@@ -12,7 +12,8 @@
 					{ "log": ["e1", { "given": "value" }] },
 					{ "write": ["b", { "sum": [{ "given": "value" }, { "given": "value" }] }] }
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -20,7 +21,8 @@
 			"scope": "o",
 			"f": [{ "read": "a" }, { "read": "b" }],
 			"act": { "log": ["e2", { "given": "value" }] },
-			"equal": "json"
+			"equal": "json",
+			"expect": {}
 		},
 		{ "op": "write", "values": { "a": 2 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },

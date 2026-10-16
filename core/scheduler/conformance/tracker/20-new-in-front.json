@@ -1,0 +1,21 @@
+{
+	"title": "a rerun reading new spots first: they go in front, the old are confirmed after them and keep their place among the readers",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "begin", "from": "s", "expect": {} },
+		{ "op": "track", "from": "s", "to": "a", "expect": {} },
+		{ "op": "end", "from": "s", "expect": {} },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "x", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["x", "a", "b"] } },
+		{ "op": "readers", "of": "x", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r", "s"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r"] } }
+	]
+}

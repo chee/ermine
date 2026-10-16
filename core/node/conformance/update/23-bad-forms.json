@@ -1,0 +1,136 @@
+{
+	"title": "a value whose JSON form stands for none is an error, as text, in a start or an update; the entry stays as it was",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1
+				]
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": [
+						{
+							"/": {
+								"bytes": "A"
+							}
+						}
+					]
+				}
+			],
+			"fails": true
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"x"
+					],
+					"value": {
+						"/": {
+							"int8": [
+								999
+							]
+						}
+					}
+				}
+			],
+			"fails": true
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"x"
+					],
+					"value": {
+						"/": {
+							"nope": []
+						}
+					}
+				}
+			],
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"/": {
+					"bytes": "A"
+				}
+			},
+			"header": {
+				"time": 5
+			},
+			"fails": true
+		},
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"/": {
+						"number": "nan"
+					}
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1
+						]
+					},
+					"change": {
+						"time": 0,
+						"actor": "host"
+					}
+				}
+			}
+		}
+	]
+}

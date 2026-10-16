@@ -1,0 +1,30 @@
+{
+	"title": "a rerun reading fewer drops the tail and takes it out of the readers; reading more links the new at the end; reading nothing drops all",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "readers", "of": "c", "expect": { "names": [] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "b", "c"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": ["r"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a", "expect": { "names": [] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "readers", "of": "c", "expect": { "names": [] } }
+	]
+}

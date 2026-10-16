@@ -1,0 +1,16 @@
+{
+	"title": "a spot untracked in a run and read again is a new link: last among its readers",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "begin", "from": "s", "expect": {} },
+		{ "op": "track", "from": "s", "to": "a", "expect": {} },
+		{ "op": "end", "from": "s", "expect": {} },
+		{ "op": "untrack", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a"] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["s", "r"] } }
+	]
+}

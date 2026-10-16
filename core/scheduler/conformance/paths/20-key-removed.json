@@ -1,85 +1,29 @@
 {
 	"title": "a key removed or put marks its readers and the map's readers, not the other keys (from notify 04-key-removed)",
 	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["title"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["n"], "expect": {} },
 		{
-			"op": "spot",
+			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"path": [
-				"title"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": []
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"n"
-			]
+			"patches": [{ "path": ["title"] }],
+			"expect": { "spots": [[], ["title"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"title"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"title"
-					],
-					[]
-				]
-			}
+			"patches": [{ "path": ["title"], "value": "b" }],
+			"expect": { "spots": [[], ["title"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"title"
-					],
-					"value": "b"
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"title"
-					],
-					[]
-				]
-			}
-		},
-		{
-			"op": "mark",
-			"source": "v",
-			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"gone"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[]
-				]
-			}
+			"patches": [{ "path": ["gone"] }],
+			"expect": { "spots": [[]] }
 		}
 	]
 }

@@ -1,0 +1,24 @@
+{
+	"title": "an unknown op is an error, and the harness goes on",
+	"steps": [
+		{
+			"op": "nope",
+			"fails": true
+		},
+		{
+			"op": "start",
+			"value": {
+				"a": 1
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		}
+	]
+}

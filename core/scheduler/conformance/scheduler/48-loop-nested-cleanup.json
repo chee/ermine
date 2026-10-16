@@ -18,7 +18,8 @@
 					{ "read": "k" }
 				]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "get", "key": "c", "expect": { "value": null } },
@@ -42,12 +43,13 @@
 						}]
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
-		{ "op": "write", "values": { "m": 1 } },
+		{ "op": "write", "values": { "m": 1 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["act", 1]] } },
-		{ "op": "write", "values": { "m": 5 } },
+		{ "op": "write", "values": { "m": 5 }, "expect": { "tick": 9 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["act", 5]] } },
 		{ "op": "get", "key": "m", "expect": { "value": 2 } }

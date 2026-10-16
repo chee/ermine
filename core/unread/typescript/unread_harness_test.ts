@@ -117,5 +117,7 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} steps, as unread.ts`, async () => {
 	}
 	const answers = await ask(command("unread"), requests as never)
 	assertEquals(answers.length, requests.length, "one answer per request")
-	answers.forEach((a, i) => assertEquals(a, expected[i], `${where[i]}: ${line(requests[i])}`))
+	answers.forEach((a, i) =>
+		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+	)
 })

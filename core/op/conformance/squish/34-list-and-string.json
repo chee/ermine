@@ -1,0 +1,44 @@
+{
+	"title": "a list and a string never join, whichever comes first",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [1] },
+				{ "path": ["l"], "range": [1, 1], "value": "a" }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["l"], "range": [0, 0], "value": [1] },
+					{ "path": ["l"], "range": [1, 1], "value": "a" }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [1, 1], "value": [1] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": "ab" },
+					{ "path": ["t"], "range": [1, 1], "value": [1] }
+				]
+			}
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
+				{ "path": ["t"], "range": [0, 1] }
+			],
+			"expect": {
+				"patches": [
+					{ "path": ["t"], "range": [0, 0], "value": { "/": { "bytes": "AQ" } } },
+					{ "path": ["t"], "range": [0, 1] }
+				]
+			}
+		}
+	]
+}

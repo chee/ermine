@@ -1,0 +1,281 @@
+{
+	"title": "sub of a different node: the old node loses only that key, and its part from who if it was the last; the new node's part joins who last if new to it",
+	"steps": [
+		{
+			"op": "add",
+			"part": "p",
+			"id": "a",
+			"node": "old",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "a",
+			"node": "new",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "p",
+			"id": "b",
+			"node": "new",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "b",
+			"node": "old",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "old",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"a"
+					],
+					[
+						"q",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "new",
+			"expect": {
+				"keys": [
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "p",
+			"id": "a",
+			"node": "new",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "old",
+			"expect": {
+				"keys": [
+					[
+						"q",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "new",
+			"expect": {
+				"keys": [
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"b"
+					],
+					[
+						"p",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "ids",
+			"part": "p",
+			"node": "new",
+			"expect": {
+				"ids": [
+					"b",
+					"a"
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": [
+					[
+						"q",
+						"new"
+					],
+					[
+						"p",
+						"new"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "q",
+			"id": "a",
+			"node": "old",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": [
+					[
+						"p",
+						"new"
+					],
+					[
+						"q",
+						"old"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "old",
+			"expect": {
+				"keys": [
+					[
+						"q",
+						"b"
+					],
+					[
+						"q",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "new",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"b"
+					],
+					[
+						"p",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "sub",
+			"part": "p",
+			"id": "a",
+			"node": "old",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "p",
+			"id": "b",
+			"node": "old",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "old",
+			"expect": {
+				"keys": [
+					[
+						"q",
+						"b"
+					],
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"a"
+					],
+					[
+						"p",
+						"b"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "new",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "ids",
+			"part": "p",
+			"node": "old",
+			"expect": {
+				"ids": [
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"p",
+						"a"
+					],
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"b"
+					],
+					[
+						"q",
+						"b"
+					],
+					[
+						"p",
+						"a"
+					],
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"a"
+					],
+					[
+						"p",
+						"b"
+					]
+				]
+			}
+		}
+	]
+}

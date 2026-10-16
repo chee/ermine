@@ -21,7 +21,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -35,7 +36,8 @@
 					1
 				]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -49,7 +51,8 @@
 					1
 				]
 			},
-			"to": "d"
+			"to": "d",
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -65,7 +68,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "write",
@@ -96,7 +100,79 @@
 			}
 		},
 		{
-			"op": "moments"
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e1",
+						"tick": 1
+					},
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "d",
+						"tick": 3
+					},
+					{
+						"due": "e2",
+						"tick": 4
+					},
+					{
+						"starts": "e1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e1",
+						"run": 1
+					},
+					{
+						"acts": "e2",
+						"run": 1
+					}
+				]
+			}
 		},
 		{
 			"op": "write",

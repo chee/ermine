@@ -8,25 +8,83 @@
 			"name": "p",
 			"scope": "o",
 			"f": { "mod": [{ "read": "x" }, 2] },
-			"to": "p"
+			"to": "p",
+			"expect": {}
 		},
 		{
 			"op": "compute",
 			"name": "q",
 			"scope": "o",
 			"f": { "sum": [{ "read": "p" }, 10] },
-			"to": "q"
+			"to": "q",
+			"expect": {}
 		},
 		{
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
 			"f": { "read": "q" },
-			"act": { "log": ["e", { "given": "value" }] }
+			"act": { "log": ["e", { "given": "value" }] },
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["e", 11]] } },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 2
+					},
+					{
+						"due": "q",
+						"tick": 3
+					},
+					{
+						"due": "e",
+						"tick": 4
+					},
+					{
+						"starts": "p",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "p",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "q",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "q",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1
+					}
+				]
+			}
+		},
 		{ "op": "write", "values": { "x": 3 }, "expect": { "tick": 7 } },
 		{ "op": "pulse", "expect": {} },
 		{

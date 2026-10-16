@@ -8,20 +8,22 @@
 			"name": "a",
 			"scope": "o",
 			"f": { "do": [{ "read": "c" }, { "wait": ["pa"] }] },
-			"to": "a"
+			"to": "a",
+			"expect": {}
 		},
 		{
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
 			"f": { "sum": [{ "read": "x" }, { "if": [{ "read": "flag" }, { "read": "e" }, 0] }] },
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
-		{ "op": "compute", "name": "e", "scope": "o", "f": { "read": "a" }, "to": "e" },
+		{ "op": "compute", "name": "e", "scope": "o", "f": { "read": "a" }, "to": "e", "expect": {} },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "get", "key": "c", "expect": { "value": 1 } },
 		{ "op": "resolve", "promise": "pa", "value": 20, "expect": {} },
-		{ "op": "write", "values": { "x": 2, "flag": true } },
+		{ "op": "write", "values": { "x": 2, "flag": true }, "expect": { "tick": 7 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "get", "key": "e", "expect": { "value": 20 } },
 		{ "op": "get", "key": "c", "expect": { "value": 22 } }

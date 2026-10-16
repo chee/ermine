@@ -1,0 +1,201 @@
+{
+	"title": "a move carries what the write owned with it: written after, it changes in place; read, it is copied again",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"move": {
+							"path": [
+								"m"
+							]
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "m",
+			"path": [
+				"m"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"m",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "m",
+			"path": [
+				"m"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"m",
+							"x"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "m",
+			"path": [
+				"m"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 2
+					}
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 3
+					}
+				}
+			}
+		}
+	]
+}

@@ -1,12 +1,12 @@
 {
 	"title": "a splice that keeps the list's length marks only its span",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "x"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "n"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 1], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2, "x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "n"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

@@ -1,0 +1,313 @@
+{
+	"title": "a value whose JSON form stands for none is an error, at any depth, in a node's table too",
+	"steps": [
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "A"
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "AB"
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "AQ=="
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "A-B_"
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": 5
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int8": [
+						128
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int8": [
+						1.5
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int8": "x"
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int32": [
+						-2147483649
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"uint8": [
+						1
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"uint64": [
+						"-1"
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"uint64": [
+						"18446744073709551616"
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"int64": [
+						1
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"float64": [
+						"nan"
+					]
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"number": "nan"
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": 1
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": "x"
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "AQ",
+					"int8": []
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"map": 1
+				}
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"a": [
+					1,
+					{
+						"b": {
+							"/": {
+								"bytes": "A"
+							}
+						}
+					}
+				]
+			},
+			"fails": true
+		},
+		{
+			"op": "node",
+			"values": {
+				"ok": 1,
+				"x": {
+					"/": {
+						"bytes": "A"
+					}
+				}
+			},
+			"header": {
+				"time": 1
+			},
+			"fails": true
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1
+			},
+			"value": {
+				"/": {
+					"bytes": "AQ"
+				}
+			},
+			"expect": {
+				"entry": {
+					"value": {
+						"/": {
+							"bytes": "AQ"
+						}
+					},
+					"change": {
+						"time": 1
+					}
+				}
+			}
+		}
+	]
+}

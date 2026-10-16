@@ -1,0 +1,338 @@
+{
+	"title": "any string is a key and a node name: NUL, lone surrogates, __proto__; a symbol may have the empty name or a node's name",
+	"steps": [
+		{
+			"op": "add",
+			"part": "a\u0000b",
+			"id": "x",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "a",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "a\u0000b",
+			"id": "x",
+			"expect": {
+				"node": "n"
+			}
+		},
+		{
+			"op": "get",
+			"part": "a\u0000",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "\ud800",
+			"id": "\udc00",
+			"node": "n\u0000m",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"part": "\ud800",
+			"id": "\udc00",
+			"expect": {
+				"node": "n\u0000m"
+			}
+		},
+		{
+			"op": "get",
+			"part": "𐀀",
+			"id": "",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "𐀀",
+			"id": "\udc00",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "\udc00",
+			"expect": {
+				"entries": [
+					[
+						"\ud800",
+						"n\u0000m"
+					],
+					[
+						"𐀀",
+						"n"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n\u0000m",
+			"expect": {
+				"keys": [
+					[
+						"\ud800",
+						"\udc00"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": [
+					[
+						"a\u0000b",
+						"x"
+					],
+					[
+						"𐀀",
+						"\udc00"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n\u0000",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "add",
+			"part": "__proto__",
+			"id": "constructor",
+			"node": "__proto__",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "constructor",
+			"id": "__proto__",
+			"node": "toString",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "constructor",
+			"expect": {
+				"entries": [
+					[
+						"__proto__",
+						"__proto__"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "__proto__",
+			"expect": {
+				"entries": [
+					[
+						"constructor",
+						"toString"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "__proto__",
+			"expect": {
+				"keys": [
+					[
+						"__proto__",
+						"constructor"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": "toString",
+			"id": "__proto__",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": ""
+			},
+			"id": {
+				"symbol": ""
+			},
+			"node": "",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "",
+			"id": {
+				"symbol": ""
+			},
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": "n"
+			},
+			"id": "",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": {
+				"symbol": ""
+			},
+			"expect": {
+				"entries": [
+					[
+						{
+							"symbol": ""
+						},
+						""
+					],
+					[
+						"",
+						"n"
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"part": {
+				"symbol": ""
+			},
+			"id": "",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "",
+			"expect": {
+				"keys": [
+					[
+						{
+							"symbol": ""
+						},
+						{
+							"symbol": ""
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": [
+					[
+						"a\u0000b",
+						"x"
+					],
+					[
+						"𐀀",
+						"\udc00"
+					],
+					[
+						"",
+						{
+							"symbol": ""
+						}
+					],
+					[
+						{
+							"symbol": "n"
+						},
+						""
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "😀",
+			"id": "😀",
+			"node": "😀",
+			"expect": {}
+		},
+		{
+			"op": "at",
+			"id": "😀",
+			"expect": {
+				"entries": [
+					[
+						"😀",
+						"😀"
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"a\u0000b",
+						"x"
+					],
+					[
+						"\ud800",
+						"\udc00"
+					],
+					[
+						"𐀀",
+						"\udc00"
+					],
+					[
+						"__proto__",
+						"constructor"
+					],
+					[
+						"constructor",
+						"__proto__"
+					],
+					[
+						{
+							"symbol": ""
+						},
+						{
+							"symbol": ""
+						}
+					],
+					[
+						"",
+						{
+							"symbol": ""
+						}
+					],
+					[
+						{
+							"symbol": "n"
+						},
+						""
+					],
+					[
+						"😀",
+						"😀"
+					]
+				]
+			}
+		}
+	]
+}

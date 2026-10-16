@@ -145,8 +145,11 @@ s.onTrackingEnd((key) => void forgotten.push(key))
 let tick = 0
 s.onMark((_keys, _run, _due, t) => void (tick = t))
 
-function name(o: Scope, n: string) {
+// a name taken (by one not torn down: else taken over) is refused before anything is made
+function vacant(n: string) {
 	if (named.get(n)?.state === "alive") throw new Error(`name taken: ${n}`)
+}
+function name(o: Scope, n: string) {
 	named.set(n, o)
 	names.set(o, n)
 }
@@ -251,6 +254,7 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		case "in":
 			return s.runWithScope(scope(a[0]), () => evaluate(a[1], { ...ctx, run: undefined }))
 		case "scope":
+			vacant(a[0] as string)
 			name(
 				s.createScope(a[1] as Pair[], a[2] === undefined ? undefined : scope(a[2])),
 				a[0] as string,
@@ -282,6 +286,7 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			return null
 		case "effect": {
 			const [f, act] = [a[1], a[2]]
+			vacant(a[0] as string)
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
 			made = s.createEffect(
@@ -313,9 +318,11 @@ function program(r: Request, self: () => Scope) {
 async function run(r: Request): Promise<Json> {
 	switch (r.op) {
 		case "root":
+			vacant(r.name as string)
 			name(s.createRootScope((r.info ?? []) as Pair[]), r.name as string)
 			return {}
 		case "scope": {
+			vacant(r.name as string)
 			const info = (r.info ?? []) as Pair[]
 			name(
 				s.createScope(info, r.parent === undefined ? undefined : scope(r.parent)),
@@ -324,6 +331,7 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "compute": {
+			vacant(r.name as string)
 			const to = r.to as string | undefined
 			const c: Computer = s.runWithScope(scope(r.scope), () =>
 				s.createComputer(
@@ -340,6 +348,7 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "effect": {
+			vacant(r.name as string)
 			// an early one runs and acts before it is given back: itself, the scope open then
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!

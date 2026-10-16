@@ -1,11 +1,11 @@
 {
 	"title": "a patch marks the reads at its path and above it, never beside it",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": [] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["other"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": [], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "title"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["doc", "body"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["other"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

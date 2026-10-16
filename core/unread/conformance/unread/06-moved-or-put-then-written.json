@@ -57,7 +57,40 @@
 					"value": 2
 				}
 			],
-			"hold": "p"
+			"hold": "p",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"c",
+							"y"
+						],
+						"value": 1
+					},
+					{
+						"path": [
+							"c"
+						]
+					},
+					{
+						"path": [
+							"m",
+							"x"
+						],
+						"value": 1
+					},
+					{
+						"path": [
+							"a"
+						],
+						"move": {
+							"path": [
+								"m"
+							]
+						}
+					}
+				]
+			}
 		},
 		{
 			"op": "held",

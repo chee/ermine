@@ -15,7 +15,7 @@ import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Patch } from "@ermine/op/apply"
 import { ask, command, reference, suite } from "../../../conformance/typescript/ask.ts"
-import { revive, toJson } from "../../../conformance/typescript/form.ts"
+import { line, revive, toJson } from "../../../conformance/typescript/form.ts"
 import { rand } from "../../../conformance/typescript/rand.ts"
 
 // deno-lint-ignore no-explicit-any
@@ -179,12 +179,12 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, as the reference`, async ()
 		const { asked, check } = around(steps)
 		const mine: Answer[] = await ask(command("update"), asked)
 		if (Deno.env.get("HARNESS")) {
-			assertEquals(mine, await ask(reference("update"), asked), `seed ${seed}`)
+			assertEquals(line(mine), line(await ask(reference("update"), asked)), `seed ${seed}`)
 		}
 		check(mine)
 		// the same with the value changed in place
 		const placed: Answer[] = await ask(command("update"), around(inPlace(steps)).asked)
-		assertEquals(placed, mine, `seed ${seed}: in place`)
+		assertEquals(line(placed), line(mine), `seed ${seed}: in place`)
 		// the one change ends where the patches one by one did
 		assertEquals(
 			canon(mine[mine.length - 1].entry.value),

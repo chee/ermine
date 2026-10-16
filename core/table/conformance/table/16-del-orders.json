@@ -1,0 +1,297 @@
+{
+	"title": "a del of many keys tells one event per key, in who's order: a part's ids together, the parts in the order each was first taken",
+	"steps": [
+		{
+			"op": "add",
+			"part": "p",
+			"id": "z",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "y",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "p",
+			"id": "x",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "w",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "r",
+			"id": "z",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"z"
+					],
+					[
+						"p",
+						"x"
+					],
+					[
+						"q",
+						"y"
+					],
+					[
+						"q",
+						"w"
+					],
+					[
+						"r",
+						"z"
+					]
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"p",
+						"z"
+					],
+					[
+						"q",
+						"y"
+					],
+					[
+						"p",
+						"x"
+					],
+					[
+						"q",
+						"w"
+					],
+					[
+						"r",
+						"z"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"p",
+						"z"
+					],
+					[
+						"p",
+						"x"
+					],
+					[
+						"q",
+						"y"
+					],
+					[
+						"q",
+						"w"
+					],
+					[
+						"r",
+						"z"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "a",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "p",
+			"id": "c",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "b",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "p",
+			"id": "a",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "c",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "ids",
+			"part": "q",
+			"node": "m",
+			"expect": {
+				"ids": [
+					"a",
+					"b",
+					"c"
+				]
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"q",
+						"a"
+					],
+					[
+						"p",
+						"c"
+					],
+					[
+						"q",
+						"b"
+					],
+					[
+						"p",
+						"a"
+					],
+					[
+						"q",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "q",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"q",
+						"a"
+					],
+					[
+						"q",
+						"b"
+					],
+					[
+						"q",
+						"c"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"c"
+					],
+					[
+						"p",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "add",
+			"part": "q",
+			"id": "b",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "q",
+			"id": "b",
+			"node": "m",
+			"expect": {}
+		},
+		{
+			"op": "who",
+			"node": "m",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"c"
+					],
+					[
+						"p",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "del",
+			"part": "p",
+			"id": "a",
+			"node": "nobody",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "who",
+			"node": "m",
+			"expect": {
+				"keys": [
+					[
+						"p",
+						"c"
+					],
+					[
+						"p",
+						"a"
+					]
+				]
+			}
+		}
+	]
+}

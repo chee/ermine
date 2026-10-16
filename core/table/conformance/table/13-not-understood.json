@@ -1,0 +1,164 @@
+{
+	"title": "a request not understood is an error that is not a code; nothing changes and the next line is answered",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "a",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "nope",
+			"fails": true
+		},
+		{
+			"part": "value",
+			"id": "a",
+			"fails": true
+		},
+		{
+			"op": 7,
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": 1,
+			"id": "a",
+			"node": "m",
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": null,
+			"node": "m",
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "b",
+			"node": {
+				"symbol": "m"
+			},
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": {
+				"symbol": 1
+			},
+			"id": "b",
+			"node": "m",
+			"fails": true
+		},
+		{
+			"op": "add",
+			"part": {
+				"name": "x"
+			},
+			"id": "b",
+			"node": "m",
+			"fails": true
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "a",
+			"fails": true
+		},
+		{
+			"op": "get",
+			"part": "value",
+			"fails": true
+		},
+		{
+			"op": "get",
+			"id": "a",
+			"fails": true
+		},
+		{
+			"op": "ids",
+			"part": "value",
+			"fails": true
+		},
+		{
+			"op": "at",
+			"fails": true
+		},
+		{
+			"op": "who",
+			"fails": true
+		},
+		{
+			"op": "del",
+			"fails": true
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"fails": true
+		},
+		{
+			"op": "del",
+			"node": 3,
+			"fails": true
+		},
+		{
+			"op": "who",
+			"node": "n",
+			"expect": {
+				"keys": [
+					[
+						"value",
+						"a"
+					]
+				]
+			}
+		},
+		{
+			"op": "who",
+			"node": "m",
+			"expect": {
+				"keys": []
+			}
+		},
+		{
+			"op": "at",
+			"id": "a",
+			"expect": {
+				"entries": [
+					[
+						"value",
+						"n"
+					]
+				]
+			}
+		},
+		{
+			"op": "at",
+			"id": "b",
+			"expect": {
+				"entries": []
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"a"
+					]
+				]
+			}
+		}
+	]
+}

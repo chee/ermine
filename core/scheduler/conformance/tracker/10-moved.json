@@ -1,15 +1,15 @@
 {
 	"title": "a node read out of order is read anew: it moves to the end of the readers",
 	"steps": [
-		{ "op": "begin", "from": "p" },
-		{ "op": "track", "from": "p", "to": "a" },
-		{ "op": "track", "from": "p", "to": "b" },
-		{ "op": "end", "from": "p" },
-		{ "op": "add", "from": "q", "to": "b" },
-		{ "op": "begin", "from": "p" },
-		{ "op": "track", "from": "p", "to": "b" },
-		{ "op": "track", "from": "p", "to": "a" },
-		{ "op": "end", "from": "p" },
+		{ "op": "begin", "from": "p", "expect": {} },
+		{ "op": "track", "from": "p", "to": "a", "expect": {} },
+		{ "op": "track", "from": "p", "to": "b", "expect": {} },
+		{ "op": "end", "from": "p", "expect": {} },
+		{ "op": "add", "from": "q", "to": "b", "expect": {} },
+		{ "op": "begin", "from": "p", "expect": {} },
+		{ "op": "track", "from": "p", "to": "b", "expect": {} },
+		{ "op": "track", "from": "p", "to": "a", "expect": {} },
+		{ "op": "end", "from": "p", "expect": {} },
 		{ "op": "reads", "of": "p", "expect": { "names": ["b", "a"] } },
 		{ "op": "readers", "of": "b", "expect": { "names": ["q", "p"] } }
 	]

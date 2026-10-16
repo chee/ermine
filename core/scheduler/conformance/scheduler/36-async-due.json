@@ -3,19 +3,27 @@
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "x": "p1" }, "expect": { "tick": 1 } },
-		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": [{ "read": "x" }] }, "to": "c" },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "wait": [{ "read": "x" }] },
+			"to": "c",
+			"expect": {}
+		},
 		{
 			"op": "effect",
 			"name": "e",
 			"scope": "o",
 			"f": [{ "read": "c" }, { "read": "x" }],
 			"act": { "log": ["e", { "given": "value" }] },
-			"equal": "json"
+			"equal": "json",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["e", [null, "p1"]]] } },
 		{ "op": "resolve", "promise": "p1", "value": 10, "expect": {} },
-		{ "op": "write", "values": { "x": "p2" } },
+		{ "op": "write", "values": { "x": "p2" }, "expect": { "tick": 4 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "get", "key": "c", "expect": { "value": null } },
 		{ "op": "log", "expect": { "log": [["e", [null, "p2"]]] } },

@@ -9,7 +9,8 @@
 			"f": {
 				"do": [{ "cleanup": ["c", { "log": "undo" }] }, { "log": ["run", { "read": "a" }] }]
 			},
-			"to": "c"
+			"to": "c",
+			"expect": {}
 		},
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 2 } },
 		{ "op": "pulse", "expect": {} },

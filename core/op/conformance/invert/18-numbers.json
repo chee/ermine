@@ -1,0 +1,66 @@
+{
+	"title": "numbers put back as they were: -0, NaN, -0 in a typed array of floats; an index of 2^53 past the end; patches missing or a value not in the JSON form, an error, a string",
+	"steps": [
+		{
+			"op": "invert",
+			"value": { "a": -0 },
+			"patches": [{ "path": ["a"], "value": 0 }],
+			"expect": { "undo": [{ "path": ["a"], "value": -0 }] }
+		},
+		{
+			"op": "invert",
+			"value": { "a": 0 },
+			"patches": [{ "path": ["a"], "value": -0 }],
+			"expect": { "undo": [{ "path": ["a"], "value": 0 }] }
+		},
+		{
+			"op": "invert",
+			"value": { "a": [-0] },
+			"patches": [{ "path": ["a", 0] }],
+			"expect": { "undo": [{ "path": ["a"], "range": [0, 0], "value": [-0] }] }
+		},
+		{
+			"op": "invert",
+			"value": -0,
+			"patches": [{ "path": [] }],
+			"expect": { "undo": [{ "path": [], "value": -0 }] }
+		},
+		{
+			"op": "invert",
+			"value": { "/": { "float64": [-0, "NaN"] } },
+			"patches": [{ "path": [], "range": [0, 2], "value": { "/": { "float64": [1] } } }],
+			"expect": {
+				"undo": [{ "path": [], "range": [0, 1], "value": { "/": { "float64": [-0, "NaN"] } } }]
+			}
+		},
+		{
+			"op": "invert",
+			"value": { "/": { "float32": [1, -0] } },
+			"patches": [{ "path": [], "range": [1, 2] }],
+			"expect": {
+				"undo": [{ "path": [], "range": [1, 1], "value": { "/": { "float32": [-0] } } }]
+			}
+		},
+		{
+			"op": "invert",
+			"value": [1],
+			"patches": [{ "path": [9007199254740992] }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "invert",
+			"value": "a",
+			"patches": [{ "path": [], "range": [0, 1e+300] }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{ "op": "invert", "value": 1, "fails": true },
+		{ "op": "invert", "value": 1, "patches": "x", "fails": true },
+		{
+			"op": "invert",
+			"value": { "a": 1 },
+			"patches": [{ "path": ["a"], "value": { "/": { "bytes": "A" } } }],
+			"fails": true
+		},
+		{ "op": "invert", "value": { "a": 1 }, "patches": [], "expect": { "undo": [] } }
+	]
+}

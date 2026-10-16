@@ -1,0 +1,19 @@
+{
+	"title": "a reader reading itself: one link, in its reads and its readers; untrack takes it out of both",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "r", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "r", "expect": { "names": ["r"] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "r", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["r"] } },
+		{ "op": "readers", "of": "r", "expect": { "names": ["r"] } },
+		{ "op": "untrack", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": [] } },
+		{ "op": "readers", "of": "r", "expect": { "names": [] } }
+	]
+}

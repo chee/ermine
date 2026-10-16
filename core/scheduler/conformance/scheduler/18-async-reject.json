@@ -2,7 +2,14 @@
 	"title": "a promise rejected: the run failed, the error told",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
-		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": ["p"] }, "to": "c" },
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": { "wait": ["p"] },
+			"to": "c",
+			"expect": {}
+		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "reject", "promise": "p", "error": "nope", "expect": {} },
 		{ "op": "pulse", "expect": {} },

@@ -1,0 +1,88 @@
+{
+	"title": "a map's keys in order: a put keeps a key's place, a new key goes last, a key removed and put back goes last, a move onto a key keeps that key's place, a move to a new key goes last",
+	"steps": [
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["a"], "value": 9 }],
+			"expect": { "value": { "c": 1, "a": 9, "b": 3 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["aa"], "value": 9 }],
+			"expect": { "value": { "c": 1, "a": 2, "b": 3, "aa": 9 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["c"] }, { "path": ["c"], "value": 1 }],
+			"expect": { "value": { "a": 2, "b": 3, "c": 1 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["c"], "move": { "path": ["b"] } }],
+			"expect": { "value": { "c": 3, "a": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["b"], "move": { "path": ["c"] } }],
+			"expect": { "value": { "a": 2, "b": 1 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["z"], "move": { "path": ["c"] } }],
+			"expect": { "value": { "a": 2, "b": 3, "z": 1 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": ["c"], "move": { "path": ["c"] } }],
+			"expect": { "value": { "c": 1, "a": 2, "b": 3 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": "s", "a": 2, "b": 3 },
+			"patches": [{ "path": ["c"], "range": [1, 1], "value": "x" }],
+			"expect": { "value": { "c": "sx", "a": 2, "b": 3 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": { "y": 1, "x": 2 }, "a": 2 },
+			"patches": [
+				{ "path": ["c", "x"], "value": 3 },
+				{ "path": ["c", "w"], "value": 4 },
+				{ "path": ["c", "y"] }
+			],
+			"expect": { "value": { "c": { "x": 3, "w": 4 }, "a": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [
+				{ "path": ["__proto__"], "value": 0 },
+				{ "path": ["a"] },
+				{ "path": ["a"], "value": 2 }
+			],
+			"expect": { "value": { "c": 1, "b": 3, "__proto__": 0, "a": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [{ "path": [], "value": { "z": 1, "y": 2 } }],
+			"expect": { "value": { "z": 1, "y": 2 } }
+		},
+		{
+			"op": "apply",
+			"value": { "c": 1, "a": 2, "b": 3 },
+			"patches": [
+				{ "path": ["d"], "move": { "path": ["a"] } },
+				{ "path": ["a"], "move": { "path": ["d"] } }
+			],
+			"expect": { "value": { "c": 1, "b": 3, "a": 2 } }
+		}
+	]
+}

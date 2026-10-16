@@ -133,6 +133,7 @@ static void shell_free(op_value *v) {
 	free(v->items);
 	free(v->keys);
 	free(v->index);
+	free(v->gaps);
 	free(v->str);
 	free(v->data);
 	free(v);
@@ -362,11 +363,7 @@ static op_key *shift(const op_target *path, const op_target *at, long n) {
 }
 // where the key of a map is, or -1
 static long map_at(const op_value *m, const char *key) {
-	op_value *p = op_get(m, key);
-	if (p == NULL) return -1;
-	for (size_t i = 0; i < m->count; i++)
-		if (m->items[i] == p && strcmp(m->keys[i], key) == 0) return (long)i;
-	return -1;
+	return op_find(m, key);
 }
 // the child pointer at k in v, which must be there
 static op_value **slot(work *w, op_value *v, op_key k) {
@@ -418,7 +415,7 @@ static void list_splice(op_value *l, size_t a, size_t b, op_value *const *ws, si
 }
 
 // what is at path becomes v (NULL: removed, absent at []); what was there (NULL: nothing), let
-// go of when drop_old (then not for use)
+// go of when drop_old (then not for use): in place, at once, the container's reference with it
 static op_value *set(work *w, const op_key *path, size_t n, op_value *v, int drop_old) {
 	op_value *old;
 	if (n == 0) {
@@ -434,7 +431,7 @@ static op_value *set(work *w, const op_key *path, size_t n, op_value *v, int dro
 		if ((size_t)k.n >= at->count) fail(w, OP_NO_KEY);
 		old = at->items[k.n];
 		int kept = real(w, at);
-		if (kept) hold(w, v), orphan(w, old);
+		if (kept) hold(w, v), drop_old ? op_free(old) : orphan(w, old);
 		if (v == NULL) list_splice(at, (size_t)k.n, (size_t)k.n + 1, NULL, 0);
 		else at->items[k.n] = v;
 		if (drop_old && !kept && old != v) drop(w, old);
@@ -451,16 +448,10 @@ static op_value *set(work *w, const op_key *path, size_t n, op_value *v, int dro
 	}
 	old = at->items[i];
 	int kept = real(w, at);
-	if (kept) hold(w, v), orphan(w, old);
+	if (kept) hold(w, v), drop_old ? op_free(old) : orphan(w, old);
 	if (v != NULL) at->items[i] = v;
 	else {
-		free(at->keys[i]);
-		memmove(at->keys + i, at->keys + i + 1, (at->count - (size_t)i - 1) * sizeof *at->keys);
-		memmove(at->items + i, at->items + i + 1, (at->count - (size_t)i - 1) * sizeof *at->items);
-		at->count--;
-		free(at->index);
-		at->index = NULL;
-		at->slots = 0;
+		op_unset(at, (size_t)i);
 	}
 	if (drop_old && !kept && old != v) drop(w, old);
 	return old;
@@ -546,8 +537,7 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 				: w->taken;
 		}
 		out = made(w, op_str_take(buf, size));
-		set(w, path, n, out, 0);
-		drop(w, s);
+		set(w, path, n, out, 1);
 		if (v && !w->undo) drop(w, v);
 	} else if (s->type == OP_TYPED) {
 		size_t z = op_size(s->kind), x = (size_t)a * z, y = (size_t)b * z;
@@ -561,8 +551,7 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 		} else {
 			out = made_typed(w, s->kind, s->data, x, v ? v->data : NULL, v ? v->bytes : 0, s->data + y,
 				s->bytes - y);
-			set(w, path, n, out, 0);
-			drop(w, s);
+			set(w, path, n, out, 1);
 		}
 		if (v && !w->undo) drop(w, v);
 		end = a + (long)w->size;

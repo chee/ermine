@@ -3,7 +3,10 @@
 // Another implementation joins by speaking this (HARNESS).
 //
 // key: a string, or {"symbol": name}; a node: its name, a string; both are the request's "part",
-// "id" and "node" fields
+// "id" and "node" fields. strings are equal when the same text, whole: NUL, lone surrogates,
+// "__proto__", "" are keys like any other. a symbol is never equal to a string, even of its name;
+// two {"symbol": name} of one name are one symbol. node names and key names are apart: a node "n"
+// and a part "n" have nothing to do with each other
 //
 // { op: "add" | "sub", part, id, node }   → {}                         sub never fails
 //                                         → { error: "already-there" } add, a different node there
@@ -13,12 +16,33 @@
 // { op: "who", node }                     → { keys }                   [[part, id]], every key it is under
 // { op: "del", part, id }                 → {}                         the key
 // { op: "del", part, node }               → {}                         the node from every id under the part
+//                                                                      (an id given too is not read)
 // { op: "del", node }                     → {}                         the node from every key
 //                                         → { error: "nothing-there" } nothing to delete
 // { op: "events" }                        → { events }                 [[part, id]], every table event
 //                                                                      since last asked, in order
+// { op: "events", at: true }              → { events }                 [[part, id, entries]]: the same,
+//                                                                      each with every part at its id
+//                                                                      as it was when told ("at")
 //
-// Orders are the order added (table.ts). Anything not understood: { error: why }, not a code.
+// add of the node already there: {}, nothing changes, no event. sub of the node already there: the
+// same. sub of a different node: the old node loses that key only; one event. sub with nothing
+// there: an add. an error changes nothing and tells nothing. no answer ever lists a node's or an
+// id's empty leftovers: what has no keys is not there.
+//
+// events: one per key added, replaced or taken out, told after it landed. a del of many keys takes
+// them all, then tells one event per key, in who's order (del part node: the ids order).
+//
+// orders (lists in answers, never sorted):
+//   ids    the order each id was put under the node and part
+//   at     the order each part was put at the id; sub of a different node puts the key last
+//   who    grouped by part, the parts in the order each was first taken by the node; within a part,
+//          ids order. a part whose last id is gone leaves; taken again, it goes last
+//   a key taken out and put back is new: it goes last everywhere
+//
+// anything not understood (an unknown or missing op, a field missing, a key not a string or a
+// {"symbol": string}, a node not a string): { error: why }, why any text that is not a code; the
+// next line is answered as ever.
 import { createTable, type Event, type Id, TableError } from "./table.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import type { Entry } from "@ermine/node/entry"
@@ -45,9 +69,9 @@ const loose = (event?: (part: Id, id: Id) => void) =>
 // a node by name: an object the table never reads
 type N = Entry<unknown>
 
-// every table event, until asked
-const events: [Id, Id][] = []
-const table = loose((part, id) => events.push([part, id]))
+// every table event, until asked, with every part at its id as it was when told
+const events: [Id, Id, [Id, N][]][] = []
+const table: Loose = loose((part, id) => events.push([part, id, table.get(id)]))
 const nodes = new Map<string, N>()
 const names = new Map<object, string>()
 const symbols = new Map<string, symbol>()
@@ -95,7 +119,13 @@ function answer(r: Request): Answer {
 			case "who":
 				return { keys: table.who(node(r.node)).map(([p, i]) => [text(p), text(i)]) }
 			case "events":
-				return { events: events.splice(0).map(([p, i]) => [text(p), text(i)]) }
+				return {
+					events: events.splice(0).map(([p, i, at]) =>
+						r.at === true
+							? [text(p), text(i), at.map(([q, n]) => [text(q), names.get(n as object)])]
+							: [text(p), text(i)]
+					),
+				}
 			case "del":
 				if (r.part === undefined) table.del(node(r.node))
 				else if (r.node !== undefined) table.del(key(r.part), node(r.node))

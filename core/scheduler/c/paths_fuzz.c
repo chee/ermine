@@ -140,7 +140,7 @@ int LLVMFuzzerTestOneInput(const unsigned char *data, size_t size) {
 			m.s = m.change ? pt_change_of(p, key_of(m.key), key_of(m.key)) : pt_spot_of(p, key_of(m.key), key_of(m.key), m.path, m.length, 0);
 			for (int i = 0; i < nspots; i++) {
 				const mspot *o = &spots[i];
-				int is = o->alive && o->key == m.key && o->change == m.change && same_path(o->path, o->length, m.path, m.length, 0);
+				int is = o->alive && o->key == m.key && o->change == m.change && same_path(o->path, o->length, m.path, m.length);
 				if (is != (o->alive && o->s == m.s)) die(is ? "a spot asked for again is another" : "a new spot is one there", round);
 			}
 			if (m.s->change != m.change || !same_path(m.s->path, m.s->length, m.path, m.length) ||

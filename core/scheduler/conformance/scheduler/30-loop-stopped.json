@@ -7,14 +7,16 @@
 			"name": "x",
 			"scope": "o",
 			"f": { "sum": [{ "read": "k" }, 1, { "mod": [{ "read": "j" }, 1] }] },
-			"to": "k"
+			"to": "k",
+			"expect": {}
 		},
 		{
 			"op": "compute",
 			"name": "w",
 			"scope": "o",
 			"f": { "mod": [{ "read": "k" }, 1] },
-			"to": "j"
+			"to": "j",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
 		{ "op": "get", "key": "k", "expect": { "value": 2 } },

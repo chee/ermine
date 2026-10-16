@@ -98,11 +98,15 @@ static sc_scope *scope_named(const char *name) {
 	return NULL;
 }
 
-// names the scope; an error when the name is taken (by one not torn down: else taken over)
+// an error when the name is taken (by one not torn down: else taken over): asked before anything
+// is made, so a refused one makes nothing
+static char *taken(const char *name) {
+	sc_scope *was = scope_named(name ? name : "");
+	return was && sc_scope_alive(was) ? formatString("name taken: %s", name ? name : "") : NULL;
+}
+// names the scope
 static char *name_it(sc_scope *o, const char *name) {
-	sc_scope *was = scope_named(name);
-	if (was && sc_scope_alive(was)) return formatString("name taken: %s", name);
-	sc_scope_set(o, copyString(name));
+	sc_scope_set(o, copyString(name ? name : ""));
 	PUSH(named, nnamed, capnamed, o);
 	return NULL;
 }
@@ -554,6 +558,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 		const char *up = text(a2);
 		sc_scope *parent = up ? scope_named(up) : NULL;
 		if (up && parent == NULL) return thrown(formatString("no scope %s", up));
+		char *was = taken(name);
+		if (was) return thrown(was);
 		size_t n;
 		const sc_pair *info = info_of(a1, &n);
 		sc_scope *o = sc_create_scope(sch, info, n, parent);
@@ -736,6 +742,7 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	char *bad = NULL;
 	sc_scope *o = need_scope(op_get(r, "scope"), &bad);
 	if (!o) return answer_error(bad);
+	if ((bad = taken(text(op_get(r, "name"))))) return answer_error(bad);
 	prog *p = allocate(sizeof *p);
 	PUSH(progs, nprogs, capprogs, p);
 	p->f = op_get(r, "f");
@@ -767,6 +774,8 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	const op_value *arg) {
 	const char *name = text(a0);
 	if (name == NULL) return thrown(formatString("a %s with no name", form));
+	char *was = taken(name);
+	if (was) return thrown(was);
 	prog *p = allocate(sizeof *p);
 	PUSH(progs, nprogs, capprogs, p);
 	p->f = a1;
@@ -813,6 +822,7 @@ static op_value *answer(const op_value *r) {
 		const op_value *parent = op_get(r, "parent");
 		sc_scope *p = NULL;
 		if (parent && parent->type != OP_NULL && !(p = need_scope(parent, &bad))) return answer_error(bad);
+		if ((bad = taken(text(op_get(r, "name"))))) return answer_error(bad);
 		size_t n;
 		const sc_pair *info = info_of(op_get(r, "info"), &n);
 		sc_scope *o = op[0] == 'r' ? sc_create_root_scope(sch, info, n) : sc_create_scope(sch, info, n, p);

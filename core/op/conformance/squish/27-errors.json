@@ -1,0 +1,9 @@
+{
+	"title": "an op not named here, or none, is an error",
+	"steps": [
+		{ "op": "nope", "fails": true },
+		{ "fails": true },
+		{ "op": "Squish", "patches": [], "fails": true },
+		{ "op": "squish", "patches": [], "expect": { "patches": [] } }
+	]
+}

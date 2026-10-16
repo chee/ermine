@@ -1,0 +1,560 @@
+{
+	"title": "each refusal answers its code and the patch's index in the whole write; what landed before it is put back, and the root and what a reader holds stay as they were",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": [
+					1,
+					2,
+					3
+				],
+				"y": {
+					"/": {
+						"bytes": "AQI"
+					}
+				},
+				"n": 5
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 5
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						2
+					]
+				},
+				{
+					"path": [
+						"c"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				},
+				{
+					"path": [
+						"b",
+						9
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 3
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				null
+			],
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": "x"
+				}
+			],
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 1
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						-1
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						0
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						"0"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": "s"
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						4
+					]
+				}
+			],
+			"expect": {
+				"error": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						2,
+						1
+					]
+				}
+			],
+			"expect": {
+				"error": "range",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x",
+						"q"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": "into-itself",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"move": {
+						"path": [
+							"nope"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						3
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						1000000000000000
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"error": "nothing-written"
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "owned",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"a",
+						"z"
+					],
+					"value": 3
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					]
+				},
+				{
+					"path": [
+						"zz",
+						"q"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 3
+			}
+		},
+		{
+			"op": "same",
+			"name": "owned",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": [
+						1,
+						2,
+						3
+					],
+					"y": {
+						"/": {
+							"bytes": "AQI"
+						}
+					},
+					"n": 5
+				}
+			}
+		}
+	]
+}

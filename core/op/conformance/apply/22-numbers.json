@@ -1,0 +1,124 @@
+{
+	"title": "numbers in patches: -0 a value kept as -0; -0 as an index or a span's end is 0; an index or end of 2^53 or 1e300 past the end",
+	"steps": [
+		{ "op": "apply", "value": -0, "patches": [], "expect": { "value": -0 } },
+		{
+			"op": "apply",
+			"value": 0,
+			"patches": [{ "path": [], "value": -0 }],
+			"expect": { "value": -0 }
+		},
+		{
+			"op": "apply",
+			"value": { "a": 0 },
+			"patches": [{ "path": ["a"], "value": -0 }],
+			"expect": { "value": { "a": -0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "a": -0 },
+			"patches": [{ "path": ["b"], "move": { "path": ["a"] } }],
+			"expect": { "value": { "b": -0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1, 2],
+			"patches": [
+				{ "path": [0], "value": -0 },
+				{ "path": [], "range": [2, 2], "value": [-0, 0] }
+			],
+			"expect": { "value": [-0, 2, -0, 0] }
+		},
+		{
+			"op": "apply",
+			"value": { "/": { "float64": [-0, 1] } },
+			"patches": [{ "path": [], "range": [1, 2] }],
+			"expect": { "value": { "/": { "float64": [-0] } } }
+		},
+		{
+			"op": "apply",
+			"value": { "/": { "float32": [1] } },
+			"patches": [{ "path": [], "range": [0, 0], "value": { "/": { "float32": [-0, "NaN"] } } }],
+			"expect": { "value": { "/": { "float32": [-0, "NaN", 1] } } }
+		},
+		{
+			"op": "apply",
+			"value": { "/": { "float64": ["-Infinity", "NaN", -0] } },
+			"patches": [{ "path": [], "range": [0, 1] }],
+			"expect": { "value": { "/": { "float64": ["NaN", -0] } } }
+		},
+		{
+			"op": "apply",
+			"value": [1, 2],
+			"patches": [{ "path": [-0], "value": 9 }],
+			"expect": { "value": [9, 2] }
+		},
+		{ "op": "apply", "value": [1, 2], "patches": [{ "path": [-0] }], "expect": { "value": [2] } },
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [{ "path": [], "range": [-0, 1] }],
+			"expect": { "value": "bc" }
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [{ "path": [], "range": [1, -0] }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [9007199254740992] }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [9007199254740992], "value": 2 }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [1e+300] }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [], "range": [0, 9007199254740992] }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": "a",
+			"patches": [{ "path": [], "range": [1e+300, 1e+300], "value": "b" }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "/": { "int8": [1] } },
+			"patches": [{ "path": [], "range": [9007199254740992, 9007199254740992] }],
+			"expect": { "error": { "code": "range", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": { "l": [1] },
+			"patches": [{ "path": ["k"], "move": { "path": ["l", 9007199254740992] } }],
+			"expect": { "error": { "code": "no-key", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [1e-7] }],
+			"expect": { "error": { "code": "not-a-patch", "patch": 0 } }
+		},
+		{
+			"op": "apply",
+			"value": [1],
+			"patches": [{ "path": [], "range": [0, 0.5] }],
+			"expect": { "error": { "code": "not-a-patch", "patch": 0 } }
+		}
+	]
+}

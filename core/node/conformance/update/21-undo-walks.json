@@ -1,0 +1,866 @@
+{
+	"title": "every change's undo, given back as an update, takes the value back past it, change by change, and the undo of an undo makes it again",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					2,
+					3
+				],
+				"s": "a😀b",
+				"m": {
+					"a": 1,
+					"b": {
+						"c": 2
+					}
+				}
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": [
+						9,
+						8
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "é"
+				},
+				{
+					"path": [
+						"m",
+						"b",
+						"d"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"header": {
+				"time": 1,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				},
+				{
+					"path": [
+						"z"
+					],
+					"value": []
+				}
+			],
+			"header": {
+				"time": 2,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							8,
+							2,
+							3,
+							"aéb"
+						],
+						"m": {
+							"b": {
+								"c": 2,
+								"d": 9
+							}
+						},
+						"z": []
+					},
+					"change": {
+						"time": 2,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								},
+								{
+									"path": [
+										"z"
+									],
+									"value": []
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"z"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"l",
+											3
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z"
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"move": {
+						"path": [
+							"l",
+							3
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"header": {
+				"time": 3,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							8,
+							2,
+							3
+						],
+						"m": {
+							"b": {
+								"c": 2,
+								"d": 9
+							},
+							"a": 1
+						},
+						"s": "aéb"
+					},
+					"change": {
+						"time": 3,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"z"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"l",
+											3
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								},
+								{
+									"path": [
+										"z"
+									],
+									"value": []
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"m",
+							"b",
+							"d"
+						]
+					}
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "😀"
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						2
+					],
+					"value": [
+						1
+					]
+				}
+			],
+			"header": {
+				"time": 4,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							1,
+							2,
+							3
+						],
+						"m": {
+							"b": {
+								"c": 2
+							},
+							"a": 1
+						},
+						"s": "a😀b"
+					},
+					"change": {
+						"time": 4,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										0
+									],
+									"move": {
+										"path": [
+											"m",
+											"b",
+											"d"
+										]
+									}
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "😀"
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										2
+									],
+									"value": [
+										1
+									]
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										0,
+										1
+									],
+									"value": [
+										9,
+										8
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"range": [
+										1,
+										2
+									],
+									"value": "é"
+								},
+								{
+									"path": [
+										"m",
+										"b",
+										"d"
+									],
+									"move": {
+										"path": [
+											"l",
+											0
+										]
+									}
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						0,
+						1
+					],
+					"value": [
+						9,
+						8
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						1,
+						2
+					],
+					"value": "é"
+				},
+				{
+					"path": [
+						"m",
+						"b",
+						"d"
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"header": {
+				"time": 5,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				},
+				{
+					"path": [
+						"z"
+					],
+					"value": []
+				}
+			],
+			"header": {
+				"time": 6,
+				"actor": "me"
+			},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							8,
+							2,
+							3,
+							"aéb"
+						],
+						"m": {
+							"b": {
+								"c": 2,
+								"d": 9
+							}
+						},
+						"z": []
+					},
+					"change": {
+						"time": 6,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								},
+								{
+									"path": [
+										"z"
+									],
+									"value": []
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"z"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"l",
+											3
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					8,
+					2,
+					3,
+					"aéb"
+				],
+				"m": {
+					"b": {
+						"c": 2,
+						"d": 9
+					}
+				},
+				"z": []
+			},
+			"header": {
+				"time": 0,
+				"actor": "host"
+			},
+			"expect": {}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"z"
+					]
+				},
+				{
+					"path": [
+						"s"
+					],
+					"move": {
+						"path": [
+							"l",
+							3
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							8,
+							2,
+							3
+						],
+						"m": {
+							"b": {
+								"c": 2,
+								"d": 9
+							},
+							"a": 1
+						},
+						"s": "aéb"
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"z"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"l",
+											3
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								},
+								{
+									"path": [
+										"z"
+									],
+									"value": []
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"m",
+						"a"
+					]
+				},
+				{
+					"path": [
+						"l"
+					],
+					"range": [
+						3,
+						3
+					],
+					"move": {
+						"path": [
+							"s"
+						]
+					}
+				},
+				{
+					"path": [
+						"z"
+					],
+					"value": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"l": [
+							8,
+							2,
+							3,
+							"aéb"
+						],
+						"m": {
+							"b": {
+								"c": 2,
+								"d": 9
+							}
+						},
+						"z": []
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [
+										"m",
+										"a"
+									]
+								},
+								{
+									"path": [
+										"l"
+									],
+									"range": [
+										3,
+										3
+									],
+									"move": {
+										"path": [
+											"s"
+										]
+									}
+								},
+								{
+									"path": [
+										"z"
+									],
+									"value": []
+								}
+							],
+							"undo": [
+								{
+									"path": [
+										"z"
+									]
+								},
+								{
+									"path": [
+										"s"
+									],
+									"move": {
+										"path": [
+											"l",
+											3
+										]
+									}
+								},
+								{
+									"path": [
+										"m",
+										"a"
+									],
+									"value": 1
+								}
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

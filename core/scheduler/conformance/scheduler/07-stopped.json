@@ -8,17 +8,55 @@
 			"name": "q",
 			"scope": "o",
 			"f": { "if": [{ "read": "flag" }, { "read": "w" }, 0] },
-			"to": "q"
+			"to": "q",
+			"expect": {}
 		},
 		{
 			"op": "compute",
 			"name": "w",
 			"scope": "o",
 			"f": { "sum": [{ "read": "x" }, 1] },
-			"to": "w"
+			"to": "w",
+			"expect": {}
 		},
 		{ "op": "pulse", "expect": {} },
-		{ "op": "moments" },
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "q",
+						"tick": 2
+					},
+					{
+						"due": "w",
+						"tick": 3
+					},
+					{
+						"starts": "q",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "q",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "w",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "w",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
 		{ "op": "write", "values": { "flag": true, "x": 5 }, "expect": { "tick": 6 } },
 		{ "op": "pulse", "expect": {} },
 		{

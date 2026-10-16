@@ -59,9 +59,12 @@ static void result(FILE *out, int code) {
 
 static tb_table *table;
 
-// every table event until asked: the keys, strings copied
+// every table event until asked: the keys, strings copied, and every part at the id as it was
+// when told (tb_at), its parts copied
 typedef struct {
 	tb_key part, id;
+	tb_entry *at;
+	size_t nat;
 } event;
 static event *events;
 static size_t nevents, capevents;
@@ -75,6 +78,9 @@ static void forget_events(void) {
 	for (size_t i = 0; i < nevents; i++) {
 		if (!events[i].part.symbol) free((char *)events[i].part.string);
 		if (!events[i].id.symbol) free((char *)events[i].id.string);
+		for (size_t j = 0; j < events[i].nat; j++)
+			if (!events[i].at[j].part.symbol) free((char *)events[i].at[j].part.string);
+		free(events[i].at);
 	}
 	nevents = 0;
 }
@@ -85,7 +91,15 @@ static void told(void *ctx, tb_key part, tb_key id) {
 		events = realloc(events, capevents * sizeof *events);
 		if (!events) abort();
 	}
-	events[nevents++] = (event){copy_key(part), copy_key(id)};
+	size_t n;
+	const tb_entry *at = tb_at(table, id, &n);
+	tb_entry *copy = NULL;
+	if (n) {
+		copy = malloc(n * sizeof *copy);
+		if (!copy) abort();
+		for (size_t j = 0; j < n; j++) copy[j] = (tb_entry){copy_key(at[j].part), at[j].node};
+	}
+	events[nevents++] = (event){copy_key(part), copy_key(id), copy, n};
 }
 
 void hh_start(void) { table = tb_make(told, NULL); }
@@ -162,6 +176,8 @@ void hh_answer(const op_value *r, FILE *out) {
 		}
 		fputs("]}", out);
 	} else if (!strcmp(o, "events")) {
+		const op_value *vat = op_get(r, "at");
+		int with = vat && vat->type == OP_BOOL && vat->bool_;
 		fputs("{\"events\":[", out);
 		for (size_t i = 0; i < nevents; i++) {
 			if (i) putc(',', out);
@@ -169,6 +185,18 @@ void hh_answer(const op_value *r, FILE *out) {
 			put_key(out, events[i].part);
 			putc(',', out);
 			put_key(out, events[i].id);
+			if (with) {
+				fputs(",[", out);
+				for (size_t j = 0; j < events[i].nat; j++) {
+					if (j) putc(',', out);
+					putc('[', out);
+					put_key(out, events[i].at[j].part);
+					putc(',', out);
+					op_json_string(out, ((const named *)events[i].at[j].node)->name);
+					putc(']', out);
+				}
+				putc(']', out);
+			}
 			putc(']', out);
 		}
 		fputs("]}", out);

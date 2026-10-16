@@ -1,0 +1,22 @@
+{
+	"title": "untrack in a run of the link under the cursor: the cursor steps back and the run goes on; of a link not yet read again: gone, the run goes on",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "untrack", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "c", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "c"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "untrack", "from": "r", "to": "c", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a"] } },
+		{ "op": "track", "from": "r", "to": "d", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a", "d"] } },
+		{ "op": "readers", "of": "c", "expect": { "names": [] } },
+		{ "op": "readers", "of": "d", "expect": { "names": ["r"] } }
+	]
+}

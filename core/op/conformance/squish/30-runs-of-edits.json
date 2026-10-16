@@ -1,0 +1,51 @@
+{
+	"title": "typing, backspace and typing again at one place stay one patch, down to nothing typed",
+	"steps": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "ab" },
+				{ "path": ["t"], "range": [0, 2] },
+				{ "path": ["t"], "range": [0, 0], "value": "c" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "c" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 3] },
+				{ "path": ["t"], "range": [0, 0], "value": "x" },
+				{ "path": ["t"], "range": [1, 1], "value": "y" },
+				{ "path": ["t"], "range": [1, 2] },
+				{ "path": ["t"], "range": [1, 1], "value": "z" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 3], "value": "xz" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "" },
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "" }
+			],
+			"expect": { "patches": [{ "path": ["t"], "range": [0, 0], "value": "a" }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [] },
+				{ "path": ["l"], "range": [0, 0], "value": [1] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [0, 0], "value": [1] }] }
+		},
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["l"], "range": [0, 0], "value": [1, 2, 3] },
+				{ "path": ["l"], "range": [0, 3] },
+				{ "path": ["l"], "range": [0, 0], "value": ["x"] }
+			],
+			"expect": { "patches": [{ "path": ["l"], "range": [0, 0], "value": ["x"] }] }
+		}
+	]
+}

@@ -1,0 +1,120 @@
+{
+	"title": "a node's table names and values at their edges: NUL, lone surrogates, -0, forms; the time now for every table when the header has none",
+	"steps": [
+		{
+			"op": "node",
+			"values": {
+				"\u0000": 1,
+				"\ud800": 2,
+				"a\u0000b": {
+					"/": {
+						"bytes": "AQ"
+					}
+				},
+				"z": null,
+				"a": -0
+			},
+			"header": {
+				"time": 2
+			},
+			"expect": {
+				"node": {
+					"\u0000": {
+						"value": 1,
+						"change": {
+							"time": 2
+						}
+					},
+					"\ud800": {
+						"value": 2,
+						"change": {
+							"time": 2
+						}
+					},
+					"a\u0000b": {
+						"value": {
+							"/": {
+								"bytes": "AQ"
+							}
+						},
+						"change": {
+							"time": 2
+						}
+					},
+					"z": {
+						"value": null,
+						"change": {
+							"time": 2
+						}
+					},
+					"a": {
+						"value": -0,
+						"change": {
+							"time": 2
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "node",
+			"values": {
+				"b": [
+					1
+				],
+				"a": {
+					"/": {
+						"int8": [
+							1
+						]
+					}
+				}
+			},
+			"header": {
+				"actor": "me"
+			},
+			"expect": {
+				"node": {
+					"b": {
+						"value": [
+							1
+						],
+						"change": {
+							"time": "now",
+							"actor": "me"
+						}
+					},
+					"a": {
+						"value": {
+							"/": {
+								"int8": [
+									1
+								]
+							}
+						},
+						"change": {
+							"time": "now",
+							"actor": "me"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "node",
+			"values": {
+				"only": 0
+			},
+			"expect": {
+				"node": {
+					"only": {
+						"value": 0,
+						"change": {
+							"time": "now"
+						}
+					}
+				}
+			}
+		}
+	]
+}

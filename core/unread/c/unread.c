@@ -91,13 +91,15 @@ typedef struct wiring {
 
 typedef struct {
 	const nd_entry *entry;
-	set *owned; // its own allocation: the owner map points at it, and records move
+	set *owned; // its own allocation: the owner map points at it
+	size_t at; // where it is in records
 } record;
 
 struct un_unread {
-	record *records;
+	record **records; // each its own allocation: the by-entry map points at it
 	size_t count, capacity;
 	pm owner; // an owned container → the set it is in
+	pm by_entry; // an entry → its record
 	struct wiring *wirings;
 };
 
@@ -105,8 +107,11 @@ un_unread *un_new(void) { return calloc(1, sizeof(un_unread)); }
 
 void un_free(un_unread *u) {
 	if (u == NULL) return;
-	for (size_t i = 0; i < u->count; i++) clear(u->records[i].owned), free(u->records[i].owned);
+	for (size_t i = 0; i < u->count; i++) {
+		clear(u->records[i]->owned), free(u->records[i]->owned), free(u->records[i]);
+	}
 	pm_clear(&u->owner);
+	pm_clear(&u->by_entry);
 	while (u->wirings != NULL) {
 		struct wiring *next = u->wirings->next;
 		free(u->wirings);
@@ -116,18 +121,18 @@ void un_free(un_unread *u) {
 	free(u);
 }
 
-static record *find(const un_unread *u, const nd_entry *e) {
-	for (size_t i = 0; i < u->count; i++)
-		if (u->records[i].entry == e) return &u->records[i];
-	return NULL;
-}
+static record *find(const un_unread *u, const nd_entry *e) { return pm_get(&u->by_entry, e); }
 
 void un_read(un_unread *u, const nd_entry *entry) {
 	record *r = find(u, entry);
 	if (r == NULL) return;
 	clear(r->owned);
 	free(r->owned);
-	*r = u->records[--u->count];
+	pm_delete(&u->by_entry, entry);
+	record *last = u->records[--u->count];
+	u->records[r->at] = last;
+	last->at = r->at;
+	free(r);
 }
 
 size_t un_owned(const un_unread *u, const nd_entry *entry) {
@@ -163,12 +168,24 @@ static op_value *copy(const op_value *v) {
 	return c;
 }
 
+// the copies one write made owned, for a write that is refused to let go of
+typedef struct {
+	op_value **copies;
+	size_t count, capacity;
+} made;
+
 // v when it is not a container or is owned; else its copy, owned (one hold for the caller: the
 // tree's)
-static op_value *take(set *mine, op_value *v) {
+static op_value *take(set *mine, made *m, op_value *v) {
 	if (!container(v) || has(mine, v)) return v;
 	op_value *c = copy(v);
 	add(mine, c);
+	if (m->count == m->capacity) {
+		m->capacity = m->capacity ? 2 * m->capacity : 16;
+		m->copies = realloc(m->copies, m->capacity * sizeof *m->copies);
+		if (m->copies == NULL) abort();
+	}
+	m->copies[m->count++] = c;
 	return c;
 }
 
@@ -179,17 +196,14 @@ static op_value **slot(op_value *v, const op_key *k) {
 		return &v->items[k->n];
 	}
 	if (v->type != OP_MAP || k->type != OP_STR_KEY) return NULL;
-	const op_value *found = op_get(v, k->s);
-	if (found == NULL) return NULL;
-	for (size_t i = 0; i < v->count; i++)
-		if (v->items[i] == found) return &v->items[i];
-	return NULL;
+	long i = op_find(v, k->s);
+	return i < 0 ? NULL : &v->items[i];
 }
 
 // the containers a patch changes in place on its target's path: owned, copied where not
-static void own_target(op_value **root, const op_target *t, set *mine) {
+static void own_target(op_value **root, const op_target *t, set *mine, made *m) {
 	if (t->length == 0 && !t->has_range) return;
-	op_value *r = take(mine, *root);
+	op_value *r = take(mine, m, *root);
 	if (r != *root) op_free(*root), *root = r;
 	op_value *v = *root;
 	// the containers above the last key; a range's own container too
@@ -198,7 +212,7 @@ static void own_target(op_value **root, const op_target *t, set *mine) {
 		if (!container(v)) break;
 		op_value **at = slot(v, &t->path[i]);
 		if (at == NULL) break;
-		op_value *c = take(mine, *at);
+		op_value *c = take(mine, m, *at);
 		if (c != *at) op_free(*at), *at = c;
 		v = c;
 	}
@@ -319,31 +333,34 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 			u->records = realloc(u->records, u->capacity * sizeof *u->records);
 			if (u->records == NULL) abort();
 		}
-		r = &u->records[u->count++];
+		r = malloc(sizeof *r);
 		set *owned = calloc(1, sizeof *owned);
-		if (owned == NULL) abort();
+		if (r == NULL || owned == NULL) abort();
 		owned->owner = &u->owner;
-		*r = (record){.entry = entry, .owned = owned};
+		*r = (record){.entry = entry, .owned = owned, .at = u->count};
+		u->records[u->count++] = r;
+		pm_set(&u->by_entry, entry, r);
 	}
 	set *mine = r->owned;
 	op_undo *undos = calloc(n + 1, sizeof *undos);
 	if (undos == NULL) abort();
 	// one patch at a time: each owns what it changes in the tree the ones before it left (one may
 	// move a subtree, or put a value in, that the next writes under)
+	made made_here = {0};
 	op_value *after = op_ref(entry->value);
 	size_t i = 0;
 	int code = OP_OK;
 	for (; i < n; i++) {
 		op_value *out;
 		if (patches[i].has_move) {
-			own_target(&after, &patches[i].move, mine);
+			own_target(&after, &patches[i].move, mine, &made_here);
 			op_key *keys = malloc((patches[i].place.length + 1) * sizeof *keys);
 			if (keys == NULL) abort();
 			op_target put = before(&patches[i].place, &patches[i].move, keys);
-			own_target(&after, &put, mine);
+			own_target(&after, &put, mine, &made_here);
 			free(keys);
 		} else {
-			own_target(&after, &patches[i].place, mine);
+			own_target(&after, &patches[i].place, mine, &made_here);
 		}
 		op_apply_options options = {.undo = &undos[i], .in_place = 1};
 		code = op_apply(after, &patches[i], 1, &options, &out, NULL);
@@ -361,6 +378,9 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 			after = out;
 		}
 		op_free(after);
+		// the copies it made are no longer wanted: each let go of, now nothing holds it but the set
+		for (size_t j = 0; j < made_here.count; j++) del(mine, made_here.copies[j]);
+		free(made_here.copies);
 		for (size_t j = 0; j < i; j++) op_undo_free(&undos[j]);
 		free(undos);
 		if (failed) *failed = i;
@@ -380,6 +400,7 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 		free(undos[j].patches);
 	}
 	free(undos);
+	free(made_here.copies);
 	for (size_t k = 0; k < undo.n; k++)
 		if (undo.patches[k].has_value) let_go(mine, undo.patches[k].value, 1);
 	op_free(entry->value);

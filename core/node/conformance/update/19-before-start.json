@@ -1,0 +1,104 @@
+{
+	"title": "before any start the entry has no value and a change of only the time now; a start with no header, or an empty one, gets the time now",
+	"steps": [
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "update",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": {
+						"a": 1
+					},
+					"change": {
+						"time": 1,
+						"actor": "me",
+						"op": {
+							"patches": [
+								{
+									"path": [],
+									"value": {
+										"a": 1
+									}
+								}
+							],
+							"undo": [
+								{
+									"path": []
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": null,
+			"header": {},
+			"expect": {}
+		},
+		{
+			"op": "entry",
+			"expect": {
+				"entry": {
+					"value": null,
+					"change": {
+						"time": "now"
+					}
+				}
+			}
+		}
+	]
+}

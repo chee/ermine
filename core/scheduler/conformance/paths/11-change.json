@@ -1,8 +1,8 @@
 {
 	"title": "the change spot, reads of the change itself: every patch and event at its key marks it",
 	"steps": [
-		{ "op": "change", "source": "v", "id": "n" },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["x"] },
+		{ "op": "change", "source": "v", "id": "n", "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["x"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
@@ -25,7 +25,7 @@
 			"patches": [{ "path": ["x"], "value": 1 }],
 			"expect": { "spots": [] }
 		},
-		{ "op": "change", "source": "v", "id": "n" },
+		{ "op": "change", "source": "v", "id": "n", "expect": {} },
 		{ "op": "event", "source": "v", "id": "n", "expect": { "spots": ["change", ["x"]] } }
 	]
 }

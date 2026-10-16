@@ -1,12 +1,12 @@
 {
 	"title": "any other splice marks from its start on; the number kids are found in order",
 	"steps": [
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 9, "x"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 7] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "name"] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 5], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 2], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 9, "x"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 7], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", "name"], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",
@@ -42,8 +42,8 @@
 			"patches": [{ "path": ["l"], "range": [0, 0], "value": ["front"] }],
 			"expect": { "spots": [["l", 0], ["l", 2], ["l", 5], ["l", 7], ["l", 9, "x"]] }
 		},
-		{ "op": "spot", "source": "v", "id": "n", "path": ["s"] },
-		{ "op": "spot", "source": "v", "id": "n", "path": ["s", 1] },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["s"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["s", 1], "expect": {} },
 		{
 			"op": "mark",
 			"source": "v",

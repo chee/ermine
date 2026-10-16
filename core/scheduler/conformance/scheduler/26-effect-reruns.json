@@ -21,7 +21,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "effect",
@@ -52,7 +53,8 @@
 						"given": "value"
 					}
 				]
-			}
+			},
+			"expect": {}
 		},
 		{
 			"op": "compute",
@@ -66,7 +68,8 @@
 					1
 				]
 			},
-			"to": "w"
+			"to": "w",
+			"expect": {}
 		},
 		{
 			"op": "write",

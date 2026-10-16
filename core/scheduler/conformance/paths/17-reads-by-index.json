@@ -1,159 +1,37 @@
 {
 	"title": "reads by index (notify chased/position reads, 03-insert-first, 16-span-by-position): a keeping splice marks its span, a put its index, a front insert every index",
 	"steps": [
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l"], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 0], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 3], "expect": {} },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["l", 4], "expect": {} },
 		{
-			"op": "spot",
+			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"path": [
-				"l"
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				0
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				3
-			]
-		},
-		{
-			"op": "spot",
-			"source": "v",
-			"id": "n",
-			"path": [
-				"l",
-				4
-			]
+			"patches": [{ "path": ["l"], "range": [0, 1], "value": ["q"] }],
+			"expect": { "spots": [["l"], ["l", 0]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						0,
-						1
-					],
-					"value": [
-						"q"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						0
-					]
-				]
-			}
+			"patches": [{ "path": ["l"], "range": [5, 5], "value": ["q"] }],
+			"expect": { "spots": [["l"]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						5,
-						5
-					],
-					"value": [
-						"q"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					]
-				]
-			}
+			"patches": [{ "path": ["l", 4], "value": "p" }],
+			"expect": { "spots": [["l"], ["l", 4]] }
 		},
 		{
 			"op": "mark",
 			"source": "v",
 			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l",
-						4
-					],
-					"value": "p"
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						4
-					]
-				]
-			}
-		},
-		{
-			"op": "mark",
-			"source": "v",
-			"id": "n",
-			"patches": [
-				{
-					"path": [
-						"l"
-					],
-					"range": [
-						0,
-						0
-					],
-					"value": [
-						"t"
-					]
-				}
-			],
-			"expect": {
-				"spots": [
-					[
-						"l"
-					],
-					[
-						"l",
-						0
-					],
-					[
-						"l",
-						3
-					],
-					[
-						"l",
-						4
-					]
-				]
-			}
+			"patches": [{ "path": ["l"], "range": [0, 0], "value": ["t"] }],
+			"expect": { "spots": [["l"], ["l", 0], ["l", 3], ["l", 4]] }
 		}
 	]
 }

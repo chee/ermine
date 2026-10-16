@@ -7,14 +7,16 @@
 			"name": "e1",
 			"scope": "o",
 			"f": { "read": "a" },
-			"act": { "do": [{ "log": ["e1", { "given": "value" }] }, { "throw": "bad" }] }
+			"act": { "do": [{ "log": ["e1", { "given": "value" }] }, { "throw": "bad" }] },
+			"expect": {}
 		},
 		{
 			"op": "effect",
 			"name": "e2",
 			"scope": "o",
 			"f": { "read": "a" },
-			"act": { "log": ["e2", { "given": "value" }] }
+			"act": { "log": ["e2", { "given": "value" }] },
+			"expect": {}
 		},
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },

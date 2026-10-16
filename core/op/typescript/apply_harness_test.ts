@@ -282,11 +282,13 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 	})
 	const answers = (await ask(harness, requests)) as Answer[]
 	assertEquals(answers.length, requests.length, "one answer per request")
-	answers.forEach((a, i) => assertEquals(a, expected[i], `${where[i]}: ${line(requests[i])}`))
+	answers.forEach((a, i) =>
+		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+	)
 	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) =>
-		assertEquals(a, expected[i], `${where[i]} (cow: false): ${line(requests[i])}`)
+		assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
 	)
 	// one call, as one call each: the end, an invalid patch's index
 	let at = 0

@@ -1,0 +1,20 @@
+{
+	"title": "untrack of one spot drops every link to it, duplicates too; the rest stay in order",
+	"steps": [
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "begin", "from": "r", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "track", "from": "r", "to": "a", "expect": {} },
+		{ "op": "track", "from": "r", "to": "b", "expect": {} },
+		{ "op": "end", "from": "r", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["b", "a", "b"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": ["r", "r"] } },
+		{ "op": "untrack", "from": "r", "to": "b", "expect": {} },
+		{ "op": "reads", "of": "r", "expect": { "names": ["a"] } },
+		{ "op": "readers", "of": "b", "expect": { "names": [] } },
+		{ "op": "readers", "of": "a", "expect": { "names": ["r"] } }
+	]
+}
