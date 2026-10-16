@@ -1,9 +1,8 @@
-# the demos site: playground/demos/build.ts builds its index, slaygrounds (its own vite build) and the
-# cat clock into playground/demos/dist. node_modules for @yowasp/clang: the cat clock's wasm-clang,
-# copied beside its worker and kept whole in its function
+# the demos site, built static by vite: playground/demos' `deno task build` (vite.config.ts) builds
+# its index and the cat clock, and runs slaygrounds' own build into /slaygrounds/
 [build]
   base = "."
-  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && export PATH=$HOME/.deno/bin:$PATH && deno install --quiet --node-modules-dir=auto && deno run -A playground/demos/build.ts"
+  command = "curl -fsSL https://deno.land/install.sh | sh -s -- -y && export PATH=$HOME/.deno/bin:$PATH && cd playground/demos && deno task build"
   publish = "playground/demos/dist"
 
 [[headers]]

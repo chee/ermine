@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<meta name="description"
+	content="one world, two shapes: the places tree beside the graph the scheduler holds — who waits on whom by rank, what each computer reads and writes, who made whom">
+<title>shape</title>
+<link rel="stylesheet" href="./lib/style.css">
+<style>
+body {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+main {
+	flex: 1;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	min-height: 0;
+}
+main > div {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+	border-left: 1px solid var(--line);
+}
+main h2 {
+	margin: 0;
+	padding: 0 8px;
+	font: bold 11px/20px var(--mono);
+	border-bottom: 1px solid var(--line);
+	background: var(--cream);
+}
+#places {
+	flex: 1;
+	min-height: 0;
+}
+#shape {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+}
+@media (max-width: 760px) {
+	main {
+		grid-template-columns: 1fr;
+		grid-template-rows: 1fr 1fr;
+	}
+}
+</style>
+<header
+	class="bar"><a href="/"><b>ermine</b></a><span>shape — places and the scheduler's graph</span><span
+		class="grow"></span>
+	<button id="bump">a + 1</button><button id="more">add a reader of a</button><button id="less">kill the newest reader</button></header>
+<div
+	class="try">pick a box on the right: blue is what it waits on, cherry what waits on it<button class="more">?</button></div>
+<div class="try-more" hidden></div>
+<main>
+	<div>
+		<h2>places (the host's tree)</h2>
+		<div id="places"></div>
+	</div>
+	<div>
+		<h2>the scheduler (its own state)</h2>
+		<div id="shape"></div>
+	</div>
+</main>
+<script type="module" src="main.ts"></script>

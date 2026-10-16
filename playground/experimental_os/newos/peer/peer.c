@@ -31,6 +31,7 @@
 #include "../../../../extensions/subduction/c/wiring.h"
 
 #include <errno.h>
+#include <openssl/evp.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -837,8 +838,17 @@ int64_t peerTurn(Peer *p) {
 	return wait;
 }
 
+/** the signer: Ed25519 by libcrypto (linked for the transport's TLS), the same 64 bytes as ed25519.c's
+ * in a thirtieth of the time (ed25519.c is small and slow on purpose; a fresh card seals some 1,300
+ * commits at boot). ed25519.c when libcrypto will not */
 static size_t sign(void *context, const uint8_t *message, size_t length, uint8_t signature[64]) {
-	ermEd25519Sign(context, message, length, signature);
+	size_t n = 64;
+	EVP_PKEY *key = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, context, 32);
+	EVP_MD_CTX *c = key ? EVP_MD_CTX_new() : NULL;
+	bool signed_ = c && EVP_DigestSignInit(c, NULL, NULL, NULL, key) == 1 && EVP_DigestSign(c, signature, &n, message, length) == 1 && n == 64;
+	EVP_MD_CTX_free(c);
+	EVP_PKEY_free(key);
+	if (!signed_) ermEd25519Sign(context, message, length, signature);
 	return 64;
 }
 

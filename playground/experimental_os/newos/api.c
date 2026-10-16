@@ -74,6 +74,9 @@ struct ap_os {
 	sc_pair info;
 	ap_api *host;
 	Temp *temp;
+	// values made for the turn (sites, statuses): op_free'd at ap_sweep
+	op_value **held;
+	size_t nheld, heldroom;
 	Live *lives;
 	size_t nlives, lives_room;
 	Here *here;
@@ -130,7 +133,19 @@ char *ap_dup(ap_os *os, const char *text) {
 	return memcpy(ap_temp(os, n), text, n);
 }
 
+/** a value the turn made for an answer: let go at ap_sweep */
+static void hold_for_turn(ap_os *os, op_value *v) {
+	if (os->nheld == os->heldroom) {
+		os->heldroom = os->heldroom ? os->heldroom * 2 : 256;
+		os->held = realloc(os->held, sizeof *os->held * os->heldroom);
+		if (!os->held) abort();
+	}
+	os->held[os->nheld++] = v;
+}
+
 void ap_sweep(ap_os *os) {
+	for (size_t i = 0; i < os->nheld; i++) op_free(os->held[i]);
+	os->nheld = 0;
 	while (os->temp) {
 		Temp *t = os->temp;
 		os->temp = t->next;
@@ -210,6 +225,7 @@ void ap_free(ap_os *os) {
 	for (size_t i = 0; i < os->nkept; i++) free(os->kept[i]);
 	free(os->kept);
 	free(os->lives), free(os->here), free(os->in_front);
+	free(os->held);
 	free(os);
 }
 
@@ -366,9 +382,7 @@ static ap_change change_of(ap_os *os, const ch_header *h) {
 	c.reader = h->reader;
 	if (h->external_length) {
 		op_value *site = site_value(&h->external[0]);
-		// the turn's: let go at the sweep with the rest
-		op_value **slot = ap_temp(os, sizeof *slot);
-		*slot = site;
+		hold_for_turn(os, site); // the turn's: let go at the sweep
 		c.site = site;
 	}
 	for (size_t i = 0; i < h->metadata_length; i++)
@@ -389,9 +403,7 @@ static const op_value *status_value(ap_os *os, const op_value *st) {
 		op_set(e, "code", op_str("thrown"));
 		op_set(m, "error", e);
 	}
-	// kept for the turn: a value the table does not hold
-	op_value **slot = ap_temp(os, sizeof *slot);
-	*slot = m;
+	hold_for_turn(os, m); // the turn's: a value the table does not hold
 	return m;
 }
 

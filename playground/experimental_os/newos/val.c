@@ -204,5 +204,6 @@ int valEqual(const op_value *a, const op_value *b) {
 char *valPrint(const op_value *v) {
 	Json *j = jsonOfVal(v);
 	char *text = j ? jsonPrint(j) : strdup("(none)");
+	jsonFree(j);
 	return text;
 }
