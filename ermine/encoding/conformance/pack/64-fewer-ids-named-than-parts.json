@@ -1,0 +1,7 @@
+{
+	"title": "fewer ids named than parts",
+	"bytes": "a167636f6c756d6e7358501dc9cb0d80200c00d0864dd8c383b2492d3590a8188a9f2b9dc615b9f9b9be77534071d652f4a28838fa121776c6305249b92a5ead075e93677100bc612e52950f9c77fee60c91c200d30fa2ad83571f",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

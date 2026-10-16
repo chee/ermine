@@ -1,0 +1,75 @@
+{
+	"title": "time, nonce and lamport: the first, then each difference, zigzag, seven bits a byte; exact to 2^53 - 1 either way",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 5,
+			"nonce": 9007199254740991,
+			"lamport": 1,
+			"patches": []
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 3,
+			"nonce": 0,
+			"lamport": 2,
+			"parents": ["a"],
+			"patches": []
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 9007199254740991,
+			"nonce": 9007199254740990,
+			"lamport": 9007199254740991,
+			"parents": ["b"],
+			"patches": []
+		},
+		{
+			"op": "make",
+			"name": "d",
+			"time": 0,
+			"nonce": 1,
+			"parents": ["c"],
+			"lamport": 9007199254740991,
+			"patches": []
+		},
+		{
+			"op": "pack",
+			"commits": ["a", "b", "c", "d"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9440064626173658182f6f944006474696d65520a03f8ffffffffffff1ffdffffffffffff1f656163746f728182f6f94400656e6f6e63655820feffffffffffff1ffdffffffffffff1ffcffffffffffff1ff9ffffffffffff1f657461626c6581826576616c7565f94400667265616465728182f6f94400667369676e6572818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94400676c616d706f72744b0202faffffffffffff1f0067706172656e74738480f6f6f6677061746368657384808080806865787465726e616c8182f6f94400686d657461646174618182f6f944006a7369676e6174757265735901009076d809a2745fcf97f1e741fe3cd73d324f87aeb6c92d9fbc2bf8cacd1617cef0dc996959ed34da6a59f971f0472854bf8dc6c40dc0cdcd7714e6f97532b308790bae43d7d5fef8a5ba4d1309084a8f3ce1d26d417e33230c0d1e2edec2b45f93d456335b0cf28b8bfc423e7ed6e38e0c4e10956943a7ed6d02e7b068eab8080a6dc360382889a425cd7fead17f8b83e79322a6c4ef691a6ce7b648c1f5759930b7f4fbaf6fef44452aa4dd0e9863851b1200d2fa8044827d529b4c59ce8d0c0abc52639bba9a51e9373709c369067fd4be7e78da7f023484604b33dcdfa3621f4200f1cde28a69ee1c0dcc2a526fdee9a26c592f46cfea1779d3f27c42370c"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 4,
+					"base": [[null, 4]],
+					"time": { "/": { "bytes": "CgP4////////H/3///////8f" } },
+					"actor": [[null, 4]],
+					"nonce": { "/": { "bytes": "/v///////x/9////////H/z///////8f+f///////x8" } },
+					"table": [["value", 4]],
+					"reader": [[null, 4]],
+					"signer": [[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 4]],
+					"lamport": { "/": { "bytes": "AgL6////////HwA" } },
+					"parents": [[], null, null, null],
+					"patches": [[], [], [], []],
+					"external": [[null, 4]],
+					"metadata": [[null, 4]],
+					"signatures": {
+						"/": {
+							"bytes": "kHbYCaJ0X8+X8edB/jzXPTJPh662yS2fvCv4ys0WF87w3JlpWe002mpZ+XHwRyhUv43GxA3Azc13FOb5dTKzCHkLrkPX1f74pbpNEwkISo884dJtQX4zIwwNHi7ewrRfk9RWM1sM8ouL/EI+ftbjjgxOEJVpQ6ftbQLnsGjquAgKbcNgOCiJpCXNf+rRf4uD55MipsTvaRps57ZIwfV1mTC39Puvb+9ERSqk3Q6YY4UbEgDS+oBEgn1Sm0xZzo0MCrxSY5u6mlHpNzcJw2kGf9S+fnjafwI0hGBLM9zfo2IfQgDxzeKKae4cDcwqUm/e6aJsWS9Gz+oXedPyfEI3DA"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d"] } }
+	]
+}

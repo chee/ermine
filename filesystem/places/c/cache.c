@@ -2,6 +2,7 @@
 #include "cache.h"
 
 #include "../../../core/scheduler/c/selector.h"
+#include "../../../ermine/clingy/c/clingy.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -20,22 +21,24 @@ static char *xdup(const char *s) { return strcpy(xalloc(strlen(s) + 1), s); }
 
 typedef enum { AT, LIST, MEMBERS } kind;
 
-// an answer: the array of its kind, n long
+// an answer: the array of its kind, n long. gone (at): the contributors gone under the path
+// (places' pl_answers), what an entry under it walks on with
 typedef struct {
 	size_t n;
 	pc_answer *a;
 	char **names;
 	pc_member *m;
+	uint32_t gone;
 } answer;
 
 typedef struct entry entry;
 
-// a key readers track: one part of an entry's answer, compared on its own. whole: all of it, else
-// the first answer's (at). runs: a run tracks it now
+// a key readers track: one part of an entry's answer, compared on its own. whole: all of it; gone:
+// the gone under the path (at); else the first answer's (at)
 typedef struct {
 	entry *e;
 	int whole;
-	int runs;
+	int gone;
 } mark;
 
 struct entry {
@@ -44,7 +47,7 @@ struct entry {
 	char **path;
 	size_t npath;
 	answer answer;
-	mark *keys[2];
+	mark *keys[3];
 	size_t nkeys;
 	// every key read working it out: places' spots, contributors' keys, other entries' keys
 	pl_set reads;
@@ -70,8 +73,11 @@ struct pc_cache {
 	sx_index *index;
 	sx_holder holder;
 	// the entries by name; each key read to the entries reading it; the keys (but this cache's own)
-	// some run tracks now; this cache's marks by address
-	tb_table *entries, *readers, *tracked, *marks;
+	// some run tracks now
+	tb_table *entries, *readers, *tracked;
+	// this cache's marks, by address: whether a run tracks one now (clingy.h); the last tracker
+	// gone, its entry may go
+	cl_clingy *marks;
 	// the spots this cache took itself: only these it lets go
 	tb_table *took;
 	size_t nentries, nreaders;
@@ -83,7 +89,7 @@ struct pc_cache {
 	uint64_t now;
 };
 
-static const char entry_tag, readers_tag, tracked_tag, marks_tag, took_tag;
+static const char entry_tag, readers_tag, tracked_tag, took_tag;
 
 // freeing -------------------------------------------------------------------------------------
 
@@ -112,7 +118,7 @@ static void free_dead(pc_cache *c) {
 		entry *e = c->dead;
 		c->dead = e->next;
 		for (size_t i = 0; i < e->nkeys; i++) {
-			tb_del(c->marks, tb_symbol(&marks_tag), tb_symbol(e->keys[i]));
+			cl_drop(c->marks, e->keys[i]);
 		}
 		entry_free(e);
 	}
@@ -161,7 +167,7 @@ static rd *readers_of(pc_cache *c, const void *key) {
 }
 
 static mark *ours(pc_cache *c, const void *key) {
-	return tb_get(c->marks, tb_symbol(&marks_tag), tb_symbol(key));
+	return cl_has(c->marks, key) ? (mark *)key : NULL;
 }
 
 static void settle(pc_cache *c, entry *e);
@@ -219,7 +225,7 @@ static void reads_del(pc_cache *c, const void *k, entry *e) {
 static void settle(pc_cache *c, entry *e) {
 	if (!e->live) return;
 	for (size_t i = 0; i < e->nkeys; i++) {
-		if (e->keys[i]->runs || readers_of(c, e->keys[i]) != NULL) return;
+		if (cl_tracked(c->marks, e->keys[i]) || readers_of(c, e->keys[i]) != NULL) return;
 	}
 	e->live = 0;
 	tb_del(c->entries, tb_symbol(&entry_tag), tb_string(e->name));
@@ -237,8 +243,12 @@ static void settle(pc_cache *c, entry *e) {
 
 static entry *entry_of(pc_cache *c, kind k, const char *const *path, size_t n);
 
-// the id at a path, read through its entry's first key (the root: itself). 1 and *id; 0: nothing
-static int id_at(pc_cache *c, const char *const *path, size_t n, pl_set *reads, tb_key *id) {
+// where a path is: its id, read through its entry's first key, and the gone under it, through its
+// gone key (the root: itself, none gone; children alone: never any gone, so not read). 1, *id and
+// *gone; 0: nothing
+static int here_at(pc_cache *c, const char *const *path, size_t n, pl_set *reads, tb_key *id,
+	uint32_t *gone) {
+	*gone = 0;
 	if (n == 0) {
 		*id = pl_root(c->places);
 		return 1;
@@ -248,6 +258,10 @@ static int id_at(pc_cache *c, const char *const *path, size_t n, pl_set *reads, 
 	if (up->answer.n == 0) return 0;
 	// no id: a level (places' pl_level)
 	*id = up->answer.a[0].id != NULL ? tb_string(up->answer.a[0].id) : pl_level();
+	size_t given;
+	if (pl_contributors(c->places, &given) == NULL) return 1;
+	pl_set_add(reads, up->keys[2]);
+	*gone = up->answer.gone;
 	return 1;
 }
 
@@ -265,11 +279,13 @@ static void compute(void *ctx) {
 	const char *const *path = (const char *const *)e->path;
 	size_t folder = e->kind == AT ? e->npath - 1 : e->npath;
 	tb_key id;
+	uint32_t gone;
 	// a level (no id) is a folder to list, as pl_list and pl_members_at have it
-	if (!id_at(c, path, folder, j->reads, &id)) return;
-	pl_here here = {.id = id, .has_path = 1, .path = path, .length = folder};
+	if (!here_at(c, path, folder, j->reads, &id, &gone)) return;
+	pl_here here = {.id = id, .has_path = 1, .path = path, .length = folder, .gone = gone};
 	if (e->kind == AT) {
 		pl_answers got = pl_answers_at(c->places, &here, path[e->npath - 1]);
+		j->out.gone = got.gone;
 		j->out.a = xalloc((got.n + 1) * sizeof *j->out.a);
 		for (size_t i = 0; i < got.n; i++) {
 			int level = got.items[i].id.symbol == pl_level().symbol;
@@ -285,6 +301,8 @@ static void compute(void *ctx) {
 		for (size_t i = 0; i < names.n; i++) j->out.names[i] = xdup(names.items[i].name);
 		j->out.n = names.n;
 	} else {
+		// those whose names said none: gone for each name's walk too
+		here.gone = names.gone;
 		j->out.m = xalloc((names.n + 1) * sizeof *j->out.m);
 		for (size_t i = 0; i < names.n; i++) {
 			pl_member m;
@@ -328,12 +346,13 @@ static entry *make(pc_cache *c, kind k, const char *const *path, size_t n, char 
 	for (size_t i = 0; i < n; i++) e->path[i] = xdup(path[i]);
 	e->worked = c->now;
 	e->live = 1;
-	e->nkeys = k == AT ? 2 : 1;
+	e->nkeys = k == AT ? 3 : 1;
 	for (size_t i = 0; i < e->nkeys; i++) {
 		mark *m = e->keys[i] = xalloc(sizeof *m);
 		m->e = e;
-		m->whole = k == AT ? (int)i : 1;
-		tb_add(c->marks, tb_symbol(&marks_tag), tb_symbol(m), m);
+		m->whole = k == AT ? i == 1 : 1;
+		m->gone = k == AT && i == 2;
+		cl_add(c->marks, m);
 	}
 	work(c, e, &e->answer, &e->reads);
 	tb_add(c->entries, tb_symbol(&entry_tag), tb_string(e->name), e);
@@ -369,10 +388,11 @@ static void rework(pc_cache *c, entry *e, uint64_t tick, sc_run *run) {
 	for (size_t i = 0; i < old.n; i++) {
 		if (!pl_set_has(&reads, old.items[i])) reads_del(c, old.items[i], e);
 	}
-	const void *changed[2];
+	const void *changed[3];
 	size_t n = 0;
 	for (size_t i = 0; i < e->nkeys; i++) {
-		if (!same(e->kind, e->keys[i]->whole, &was, &fresh)) changed[n++] = e->keys[i];
+		const mark *m = e->keys[i];
+		if (m->gone ? was.gone != fresh.gone : !same(e->kind, m->whole, &was, &fresh)) changed[n++] = m;
 	}
 	answer_free(&was);
 	pl_set_free(&old);
@@ -423,29 +443,27 @@ static void heard_mark(void *data, const void *const *keys, size_t nkeys, sc_run
 	leave(c);
 }
 
+// the other keys (spots): tracked by a run or not
 static void heard_track(const void *key, sc_run *run, void *data) {
 	(void)run;
 	pc_cache *c = data;
-	mark *m = ours(c, key);
-	if (m != NULL) m->runs = 1;
-	else tb_add(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key), (void *)&tracked_tag);
+	if (ours(c, key) == NULL) tb_add(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key), (void *)&tracked_tag);
 }
 
 static void heard_untrack(const void *key, void *data) {
 	pc_cache *c = data;
-	mark *m = ours(c, key);
-	if (m == NULL) {
-		// no run tracks it now: if an entry reads it, its release was held back by us, so the spot
-		// is ours to let go
-		tb_del(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key));
-		if (readers_of(c, key) != NULL) {
-			tb_add(c->took, tb_symbol(&took_tag), tb_symbol(key), (void *)&took_tag);
-		}
-		return;
-	}
+	if (ours(c, key) != NULL) return;
+	// no run tracks it now: if an entry reads it, its release was held back by us, so the spot is
+	// ours to let go
+	tb_del(c->tracked, tb_symbol(&tracked_tag), tb_symbol(key));
+	if (readers_of(c, key) != NULL) tb_add(c->took, tb_symbol(&took_tag), tb_symbol(key), (void *)&took_tag);
+}
+
+// a mark's last tracker gone (clingy.h): its entry may go
+static void untracked(const void *key, void *data) {
+	pc_cache *c = data;
 	enter(c);
-	m->runs = 0;
-	settle(c, m->e);
+	settle(c, ((const mark *)key)->e);
 	leave(c);
 }
 
@@ -472,7 +490,7 @@ pc_cache *pc_new(pl *places, sc_scheduler *scheduler) {
 	c->entries = tb_new();
 	c->readers = tb_new();
 	c->tracked = tb_new();
-	c->marks = tb_new();
+	c->marks = cl_new(scheduler, untracked, c);
 	c->took = tb_new();
 	c->index = sx_index_get(scheduler);
 	c->holder = (sx_holder){.marked = heard_mark, .data = c};
@@ -501,7 +519,7 @@ void pc_free(pc_cache *c) {
 	tb_free(c->entries);
 	tb_free(c->readers);
 	tb_free(c->tracked);
-	tb_free(c->marks);
+	cl_free(c->marks);
 	tb_free(c->took);
 	sx_index_put(c->index);
 	free(c);

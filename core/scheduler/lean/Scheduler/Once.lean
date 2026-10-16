@@ -25,7 +25,10 @@
 -- - A2: no writes in runs. so the run phase's changes are sets, and (L)'s "names W(k)" is "W does
 --   not move". no make in a round: the model's make is the host's
 -- - the rank is ranked over the current edges (Theorem 4, why; Rank.lean)
--- - s is reached (Reach) and in a run phase (Theorem 4, settles, exactly, why)
+-- - s is reached (Reach) and in a run phase (Theorem 4, settles, exactly, why), and nothing is
+--   asleep at the round's start (hz): a wake in the round makes one due mid-round, a run more
+-- - an early effect's make runs it at once: make_kept holds for the others (he); for an early one
+--   its run takes the kept (a fresh make: none)
 -- - (L), (D): Learned's and Fresh's fields, each commented
 --
 -- §6 as written is false on the model (and the TS), so two conditions are stronger here:
@@ -222,7 +225,7 @@ theorem came_ran_reads (s : State K V) (x : Nat → Option (Run K V)) (y : Nat �
 -- stopped or went through each read of a due writer
 theorem exec_run (cs : Nat → Comp K V) (c : Nat) :
     ∀ (p : Prog K V), nowrites p → ∀ (s : State K V) (r : Run K V), s.ran c = some r →
-    r.stopped = none →
+    r.stopped = none → (∀ x, s.asleep x = false) →
     ∃ (seen : List (K × Option V)) (vals : List Nat) (st : Option Nat),
       (exec cs c s p).1 = { s with
         ran := put s.ran c (some { r with seen := r.seen ++ seen, values := vals, stopped := st }),
@@ -235,29 +238,29 @@ theorem exec_run (cs : Nat → Comp K V) (c : Nat) :
         ∃ q ∈ seen, s.writers q.1 = some w) ∧
       (st = none → ∀ q ∈ seen, ∀ w, s.writers q.1 = some w → w ≠ c → (s.due w).isSome →
         waits s w c = true ∨ came s w c = true)
-  | .value v, _, s, r, hr, hs => by
+  | .value v, _, s, r, hr, hs, _ => by
     refine ⟨[], r.values, none, ?_, by simp, by simp, by simp [follow, exec], by simp, by simp,
       by simp⟩
     have : { r with seen := r.seen ++ [], values := r.values, stopped := none } = r := by
       cases r; simp_all
     rw [this, put_self hr]
     simp only [exec, List.map_nil, List.append_nil, put_self (rfl : s.reads c = _)]
-  | .error, _, s, r, hr, hs => by
+  | .error, _, s, r, hr, hs, _ => by
     refine ⟨[], r.values, none, ?_, by simp, by simp, by simp [follow, exec], by simp, by simp,
       by simp⟩
     have : { r with seen := r.seen ++ [], values := r.values, stopped := none } = r := by
       cases r; simp_all
     rw [this, put_self hr]
     simp only [exec, List.map_nil, List.append_nil, put_self (rfl : s.reads c = _)]
-  | .pending, _, s, r, hr, hs => by
+  | .pending, _, s, r, hr, hs, _ => by
     refine ⟨[], r.values, none, ?_, by simp, by simp, by simp [follow, exec], by simp, by simp,
       by simp⟩
     have : { r with seen := r.seen ++ [], values := r.values, stopped := none } = r := by
       cases r; simp_all
     rw [this, put_self hr]
     simp only [exec, List.map_nil, List.append_nil, put_self (rfl : s.reads c = _)]
-  | .write .., hp, _, _, _, _ => absurd hp (by simp [nowrites])
-  | .read k next, hp, s, r, hr, hs => by
+  | .write .., hp, _, _, _, _, _ => absurd hp (by simp [nowrites])
+  | .read k next, hp, s, r, hr, hs, hz => by
     have hp' := fun x => (show nowrites (Prog.read k next) from hp) x
     -- the rest of the run, from s with the read recorded and the values vs
     have rest : ∀ (vs : List Nat) (s2 : State K V),
@@ -283,6 +286,7 @@ theorem exec_run (cs : Nat → Comp K V) (c : Nat) :
         rw [hs2]; simp
       obtain ⟨seen, vals, st, heq, hstore, hev, hfollow, hvals, hstop, hgo⟩ :=
         exec_run cs c (next (s.store k)) (hp' _) s2 _ h2 (by simpa using hs)
+          (by rw [hs2]; exact hz)
       have e1 : s2.writers = s.writers := by rw [hs2]
       have e2 : s2.due = s.due := by rw [hs2]
       have e5 : s2.store = s.store := by rw [hs2]
@@ -331,6 +335,9 @@ theorem exec_run (cs : Nat → Comp K V) (c : Nat) :
                  reads := put s.reads c (s.reads c ++ [k]) } := by
       simp [edit, hr]
     simp only [exec]
+    have hwk : ∀ t : State K V, t.asleep = s.asleep → wake cs t k = t :=
+      fun t ht => wake_awake cs t k (fun x => by rw [ht]; exact hz x)
+    rw [hwk _ (by simp [edit]), ite_self]
     rw [hs1]
     generalize hd : ({ s with
         ran := put s.ran c (some { r with seen := r.seen ++ [(k, s.store k)], values := r.values }),
@@ -405,20 +412,22 @@ theorem exec_run (cs : Nat → Comp K V) (c : Nat) :
 
 -- c's run at f's end: started, f read along (A2)
 def mid (s : State K V) (c rk : Nat) (seen : List (K × Option V)) (vals : List Nat)
-    (st : Option Nat) : State K V :=
+    (st : Option Nat) (dy : List Nat) : State K V :=
   { s with
     due := put s.due c none, after := put s.after c none, runs := put s.runs c (s.runs c + 1),
     kept := put s.kept c [], went := put s.went c true, loop := put s.loop c none,
     ran := put s.ran c (some (begun s c vals st seen)),
     cause := put s.cause c (.mk (c, s.runs c + 1) (s.kept c)), when := put s.when c s.pulses,
     cut := put s.cut c false, acts := s.acts.filter (fun a => a.1 ≠ c),
-    reads := put s.reads c (seen.map (·.1)),
+    earlies := s.earlies.filter (fun a => a.1 ≠ c),
+    reads := put s.reads c (seen.map (·.1)), dying := dy,
     log := s.log ++ [⟨s.pulses, s.round, .starts c (s.runs c + 1) rk⟩] }
 
 -- a run, A2: start, f read along the store, then its end from mid
-theorem first_mid (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f) :
-    ∃ (seen : List (K × Option V)) (vals : List Nat) (st : Option Nat) (o : Out V),
-      first cs s c rk = ending cs (mid s c rk seen vals st) c o ∧
+theorem first_mid (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f)
+    (hz : ∀ x, s.asleep x = false) :
+    ∃ (seen : List (K × Option V)) (vals : List Nat) (st : Option Nat) (o : Out V) (dy : List Nat),
+      first cs s c rk = ending cs (mid s c rk seen vals st dy) c o ∧
       (∀ q ∈ seen, s.store q.1 = q.2) ∧
       (∀ q ∈ seen, q ∈ (eval s.store (cs c).f).2) ∧
       (st = none → follow (cs c).f seen = some o) ∧
@@ -429,7 +438,7 @@ theorem first_mid (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : now
         waits (start s c rk) w c = true ∨ came (start s c rk) w c = true) := by
   have h0 : (start s c rk).ran c = some (begun s c [] none []) := by simp [start, say, begun]
   obtain ⟨seen, vals, st, heq, hst, hev, hfo, hvals, hstop, hgo⟩ :=
-    exec_run cs c (cs c).f hp (start s c rk) _ h0 rfl
+    exec_run cs c (cs c).f hp (start s c rk) _ h0 rfl (by simpa [start, say] using hz)
   have e1 : (start s c rk).store = s.store := rfl
   have e2 : (start s c rk).writers = s.writers := rfl
   have e3 : ∀ w, w ≠ c → (start s c rk).due w = s.due w := by
@@ -439,7 +448,9 @@ theorem first_mid (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : now
   obtain ⟨s2, o⟩ := x
   simp only at heq hfo
   subst heq
-  refine ⟨seen, vals, st, o, ?_, hst, hev, hfo, ?_, ?_, ?_⟩
+  rw [untrack_eq]
+  generalize (untrack cs _ _).dying = dy
+  refine ⟨seen, vals, st, o, dy, ?_, hst, hev, hfo, ?_, ?_, ?_⟩
   · congr 1
     simp [mid, start, say, put_put, begun]
   · intro w; rw [hvals w, e2]; simp [begun]
@@ -458,6 +469,7 @@ structure Ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (F : State K
   round : F.round = s.round
   phase : F.phase = s.phase
   made : F.made = s.made
+  asleep : F.asleep = s.asleep
   ran : ∀ d, d ≠ c → F.ran d = s.ran d
   reads : F.reads = put s.reads c (seen.map (·.1))
   values : ∀ d, d ≠ c → F.values d = s.values d
@@ -497,7 +509,7 @@ structure Pre (cs : Nat → Comp K V) (c : Nat) (M X : State K V) (setv : Option
   eq : X = { M with
     store := X.store, writers := X.writers, tick := X.tick, log := X.log, due := X.due,
     kept := X.kept, loop := X.loop, looping := X.looping, cut := X.cut, last := X.last,
-    acts := X.acts }
+    earlies := X.earlies, acts := X.acts }
   due : ∀ d m, M.due d = some m → X.due d = some m
   fresh : ∀ d, (X.due d).isSome → (M.due d).isSome ∨
     ∃ k v, setv = some v ∧ (cs c).kind = .compute (some k) ∧ k ∈ M.reads d ∧ d < M.made
@@ -518,8 +530,8 @@ theorem Pre.refl (cs : Nat → Comp K V) (c : Nat) (M : State K V) : Pre cs c M 
   kept _ _ h := Or.inl h
   log := ⟨[], by simp, by simp⟩
 
-theorem Pre.acts (cs : Nat → Comp K V) (c : Nat) (M : State K V) (a : List (Nat × V)) :
-    Pre cs c M { M with acts := a } none where
+theorem Pre.acts (cs : Nat → Comp K V) (c : Nat) (M : State K V) (es a : List (Nat × V)) :
+    Pre cs c M { M with earlies := es, acts := a } none where
   eq := rfl
   due _ _ h := h
   fresh _ h := Or.inl h
@@ -600,12 +612,12 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     (h5 : ∀ q ∈ seen, ∀ w, s.writers q.1 = some w → w ≠ c → (s.due w).isSome →
       waits (start s c rk) w c = true ∨ came (start s c rk) w c = true)
     (X : State K V) (setv : Option V) (e : Ended) (eq : Option Bool) (th : Option (List Nat))
-    (hpre : Pre cs c (edit (mid s c rk seen vals none) c fun r => { r with out := some o }) X setv)
+    (hpre : Pre cs c (edit (mid s c rk seen vals none dy) c fun r => { r with out := some o }) X setv)
     (he : e ≠ .stopped)
     (hset : ∀ v, setv = some v → e = .done ∧ o = .value v ∧ iseffect (cs c) = false) :
     Ran1 cs s c rk (finish X c e eq none th) seen vals none setv := by
-  generalize hM : edit (mid s c rk seen vals none) c (fun r => { r with out := some o }) = M at hpre
-  have eM : M = { mid s c rk seen vals none with
+  generalize hM : edit (mid s c rk seen vals none dy) c (fun r => { r with out := some o }) = M at hpre
+  have eM : M = { mid s c rk seen vals none dy with
       ran := put s.ran c (some { begun s c vals none seen with out := some o }) } := by
     rw [← hM]; simp [edit, mid, put_put]
   have eX := hpre.eq
@@ -622,10 +634,12 @@ theorem pre_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
   clear he' hset he
   have hev : (eval s.store (cs c).f) = (o, seen) := eval_follow _ _ _ h3 h1
   obtain ⟨dues, hl, hdues⟩ := hpre.log
-  refine { pulses := ?_, round := ?_, phase := ?_, made := ?_, ran := ?_, reads := ?_, values := ?_,
+  refine { pulses := ?_, round := ?_, phase := ?_, made := ?_, asleep := ?_, ran := ?_, reads := ?_,
+           values := ?_,
            after := ?_, cause := ?_, when := ?_, run := ?_, store_seen := h1, eval_seen := h2,
            eval_all := ?_, known := h4, stop := ?_, go := ?_, due := ?_, fresh := ?_, writers := ?_,
            named := ?_, kept := ?_ }
+  · simp only; rw [eX, eM]; rfl
   · simp only; rw [eX, eM]; rfl
   · simp only; rw [eX, eM]; rfl
   · simp only; rw [eX, eM]; rfl
@@ -707,13 +721,14 @@ theorem stop_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     (h4 : ∀ w, w ∈ vals ↔ ∃ q ∈ seen, s.writers q.1 = some w ∧ w ≠ c)
     (h6 : ∀ w', some w = some w' → (s.due w').isSome ∧ waits (start s c rk) w' c = false ∧
         came (start s c rk) w' c = false ∧ w' ≠ c ∧ ∃ q ∈ seen, s.writers q.1 = some w') :
-    Ran1 cs s c rk (stop (mid s c rk seen vals (some w)) c) seen vals (some w) none := by
-  have hr : (mid s c rk seen vals (some w)).ran c = some (begun s c vals (some w) seen) := by
+    Ran1 cs s c rk (stop (mid s c rk seen vals (some w) dy) c) seen vals (some w) none := by
+  have hr : (mid s c rk seen vals (some w) dy).ran c = some (begun s c vals (some w) seen) := by
     simp [mid]
-  have hd : (mid s c rk seen vals (some w)).due c = none := by simp [mid]
+  have hd : (mid s c rk seen vals (some w) dy).due c = none := by simp [mid]
   rw [stop_eq _ c _ hr hd]
   obtain ⟨a1, a2, a3, a4, a5⟩ := h6 w rfl
-  refine { pulses := rfl, round := rfl, phase := rfl, made := rfl, ran := ?_, reads := rfl,
+  refine { pulses := rfl, round := rfl, phase := rfl, made := rfl, asleep := rfl, ran := ?_,
+           reads := rfl,
            values := fun _ _ => rfl, after := ?_, cause := rfl, when := rfl, run := ?_,
            store_seen := h1, eval_seen := h2, eval_all := (fun h => by cases h), known := h4,
            stop := ?_, go := (fun h => by cases h), due := ?_, fresh := ?_, writers := Or.inl rfl,
@@ -742,24 +757,25 @@ theorem stop_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat)
     · simpa [mid, put_ne _ _ hxc] using hy
 
 -- every run, A2
-theorem first_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f) :
+theorem first_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f)
+    (hz : ∀ x, s.asleep x = false) :
     ∃ seen vals st setv, Ran1 cs s c rk (first cs s c rk) seen vals st setv := by
-  obtain ⟨seen, vals, st, o, hf, h1, h2, h3, h4, h6, h7⟩ := first_mid cs s c rk hp
+  obtain ⟨seen, vals, st, o, dy, hf, h1, h2, h3, h4, h6, h7⟩ := first_mid cs s c rk hp hz
   rw [hf]
   cases st with
   | some w =>
-    have hr : (mid s c rk seen vals (some w)).ran c = some (begun s c vals (some w) seen) := by
+    have hr : (mid s c rk seen vals (some w) dy).ran c = some (begun s c vals (some w) seen) := by
       simp [mid]
     refine ⟨seen, vals, some w, none, ?_⟩
     simp only [ending, hr, begun, Option.bind_some, Option.isSome_some, ite_true]
     exact stop_ran1 cs s c rk seen vals w h1 h2 h4 h6
   | none =>
-    have hr : (mid s c rk seen vals none).ran c = some (begun s c vals none seen) := by
+    have hr : (mid s c rk seen vals none dy).ran c = some (begun s c vals none seen) := by
       simp [mid]
     have hfo := h3 rfl
     have h5 := h7 rfl
     simp only [ending, hr, begun, Option.bind_some, Option.isSome_none, Bool.false_eq_true, ite_false]
-    have pr := pre_ran1 cs s c rk seen vals o h1 h2 hfo h4 h5
+    have pr := pre_ran1 (dy := dy) cs s c rk seen vals o h1 h2 hfo h4 h5
     cases o with
     | error =>
       exact ⟨seen, vals, none, none, pr _ none .failed none none (Pre.refl cs c _) (by simp)
@@ -769,7 +785,7 @@ theorem first_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : no
         (by simp)⟩
     | value v =>
       simp only [result]
-      generalize hM : (edit (mid s c rk seen vals none) c fun r => { r with out := some (Out.value v) }) = M
+      generalize hM : (edit (mid s c rk seen vals none dy) c fun r => { r with out := some (Out.value v) }) = M
       rw [hM] at pr
       have hMr : M.ran c = some { begun s c vals none seen with out := some (.value v) } := by
         rw [← hM]; simp [edit, mid]
@@ -785,8 +801,12 @@ theorem first_ran1 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : no
           | effect a =>
             simp only
             cases e
-            · exact ⟨seen, vals, none, none, pr _ none .done _ _ (Pre.acts cs c _ _) (by simp)
-                (by simp)⟩
+            · simp only [Bool.false_eq_true, ite_false]
+              split
+              · exact ⟨seen, vals, none, none, pr _ none .done _ _ (Pre.acts cs c _ _ _) (by simp)
+                  (by simp)⟩
+              · exact ⟨seen, vals, none, none, pr _ none .done _ _ (Pre.acts cs c _ _ _) (by simp)
+                  (by simp)⟩
             · exact ⟨seen, vals, none, none, pr _ none .done _ _ (Pre.refl cs c _) (by simp)
                 (by simp)⟩
           | compute to =>
@@ -1004,44 +1024,60 @@ theorem trace_none {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
     (h : next rank (trace cs rank s i) = none) : trace cs rank s (i + 1) = trace cs rank s i := by
   simp [trace, h]
 
+-- nothing asleep at the round's start: nothing is, all through its run phase (a run wakes no one)
+theorem trace_awake {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) : ∀ i x, (trace cs rank s i).asleep x = false
+  | 0, x => hz x
+  | i + 1, x => by
+    cases hn : next rank (trace cs rank s i) with
+    | none => rw [trace_none hn]; exact trace_awake hA hz i x
+    | some c =>
+      rw [trace_some hn]
+      have h := first_hush cs (trace cs rank s i) c (rank (trace cs rank s i) c) (hA c)
+        (trace_awake hA hz i c)
+      cases e : (first cs (trace cs rank s i) c (rank (trace cs rank s i) c)).asleep x
+      · rfl
+      · have := h.asleep x e; rw [trace_awake hA hz i x] at this; cases this
+
 theorem trace_ran1 {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V} {i c : Nat}
-    (hA : A2 cs) (h : next rank (trace cs rank s i) = some c) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (h : next rank (trace cs rank s i) = some c) :
     ∃ seen vals st setv, Ran1 cs (trace cs rank s i) c (rank (trace cs rank s i) c)
       (trace cs rank s (i + 1)) seen vals st setv := by
-  rw [trace_some h]; exact first_ran1 cs _ c _ (hA c)
+  rw [trace_some h]; exact first_ran1 cs _ c _ (hA c) (trace_awake hA hz i)
 
 -- a run phase keeps the pulse, round, phase and computations
 theorem trace_frame {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) : ∀ i, (trace cs rank s i).pulses = s.pulses ∧ (trace cs rank s i).round = s.round ∧
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) : ∀ i, (trace cs rank s i).pulses = s.pulses ∧ (trace cs rank s i).round = s.round ∧
       (trace cs rank s i).phase = s.phase ∧ (trace cs rank s i).made = s.made
   | 0 => ⟨rfl, rfl, rfl, rfl⟩
   | i + 1 => by
-    obtain ⟨a, b, c, d⟩ := trace_frame hA i
+    obtain ⟨a, b, c, d⟩ := trace_frame hA hz i
     cases hn : next rank (trace cs rank s i) with
     | none => rw [trace_none hn]; exact ⟨a, b, c, d⟩
     | some x =>
-      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hz hn
       exact ⟨h.pulses.trans a, h.round.trans b, h.phase.trans c, h.made.trans d⟩
 
 -- and each state of it is one the host and the pulses reach
 theorem trace_reach {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) (hph : s.phase = .runs) : ∀ i, Reach cs rank (trace cs rank s i)
+    (hA : A2 cs) (h : Reach cs rank s) (hph : s.phase = .runs) (hz : ∀ x, s.asleep x = false) :
+    ∀ i, Reach cs rank (trace cs rank s i)
   | 0 => h
   | i + 1 => by
     cases hn : next rank (trace cs rank s i) with
-    | none => rw [trace_none hn]; exact trace_reach hA h hph i
+    | none => rw [trace_none hn]; exact trace_reach hA h hph hz i
     | some c =>
-      refine .step (trace_reach hA h hph i) ?_
-      have hp : (trace cs rank s i).phase = .runs := (trace_frame hA i).2.2.1.trans hph
+      refine .step (trace_reach hA h hph hz i) ?_
+      have hp : (trace cs rank s i).phase = .runs := (trace_frame hA hz i).2.2.1.trans hph
       simp only [Model.step, hp, hn, trace_some hn]
 
 -- the trace is the round's run phase: each step a run, until nothing is ready and the acts begin
 theorem trace_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hph : s.phase = .runs) (i : Nat) :
+    (hA : A2 cs) (hph : s.phase = .runs) (hz : ∀ x, s.asleep x = false) (i : Nat) :
     step cs rank (trace cs rank s i) = some (match next rank (trace cs rank s i) with
       | some _ => trace cs rank s (i + 1)
       | none => { trace cs rank s i with phase := .acts }) := by
-  have hp : (trace cs rank s i).phase = .runs := (trace_frame hA i).2.2.1.trans hph
+  have hp : (trace cs rank s i).phase = .runs := (trace_frame hA hz i).2.2.1.trans hph
   cases hn : next rank (trace cs rank s i) with
   | none => simp only [Model.step, hp, hn]
   | some c => simp only [Model.step, hp, hn, trace_some hn]
@@ -1095,9 +1131,9 @@ structure Steady (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) (s :
 
 -- the graph only shrinks
 theorem Steady.sub {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V} {i : Nat}
-    (hA : A2 cs) (st : Steady cs rank s i) : ∀ p q, graph (trace cs rank s i) p q → graph s p q := by
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (st : Steady cs rank s i) : ∀ p q, graph (trace cs rank s i) p q → graph s p q := by
   intro p q h
-  have hm := (trace_frame (rank := rank) (s := s) hA i).2.2.2
+  have hm := (trace_frame (rank := rank) (s := s) hA hz i).2.2.2
   simp only [graph, edges, List.mem_filter, List.mem_append, Option.mem_toList,
     Bool.and_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq] at h ⊢
   rw [hm] at h
@@ -1122,7 +1158,7 @@ theorem steady_zero (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) (
 
 -- a run under (L): it does not stop, and the invariant holds after it
 theorem steady_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) (hL : Learned cs rank s) {i : Nat} (st : Steady cs rank s i) :
     Steady cs rank s (i + 1) ∧ ∀ c, next rank (trace cs rank s i) = some c →
       ∃ seen vals setv, Ran1 cs (trace cs rank s i) c (rank (trace cs rank s i) c)
@@ -1135,12 +1171,12 @@ theorem steady_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {
             idle := fun d => by rw [e]; exact st.idle d, ran := fun d => by rw [e]; exact st.ran d,
             clear := fun d => by rw [e]; exact st.clear d }
   | some c =>
-    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA hn
+    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA hz hn
     generalize hS : trace cs rank s i = S at h hn st
     generalize hF : trace cs rank s (i + 1) = F at h
-    have hR : Reach cs rank S := hS ▸ trace_reach hA h0 hph i
+    have hR : Reach cs rank S := hS ▸ trace_reach hA h0 hph hz i
     have g := hR.good hA
-    have hfS := trace_frame (rank := rank) (s := s) hA i
+    have hfS := trace_frame (rank := rank) (s := s) hA hz i
     rw [hS] at hfS
     have hWS : S.writers = s.writers := hS ▸ hL.writers i
     have hWF : F.writers = s.writers := hF ▸ hL.writers (i + 1)
@@ -1157,7 +1193,7 @@ theorem steady_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {
     have hceq : completed S s.pulses s.round c = completed s s.pulses s.round c :=
       Nat.le_antisymm (Nat.le_of_not_lt hnd) (hS ▸ (st.count c).1)
     obtain ⟨hRc, hVc, hAc⟩ := hS ▸ st.idle c (hS ▸ hceq)
-    have hsub : ∀ p q, graph S p q → graph s p q := hS ▸ st.sub hA
+    have hsub : ∀ p q, graph S p q → graph s p q := hS ▸ st.sub hA hz
     have hacS : ∀ x, ¬TransGen (graph S) x x := fun x hx => hL.acyclic x (tg_mono hsub hx)
     -- what c reads: keys its run before read, with learned writers, not c
     have hlc := hL.learned c hpk
@@ -1315,18 +1351,18 @@ theorem steady_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {
           · exact h1 hpk
 
 theorem steady {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) (hL : Learned cs rank s) : ∀ i, Steady cs rank s i
   | 0 => steady_zero cs rank s
-  | i + 1 => (steady_step hA hr h0 hph hL (steady hA hr h0 hph hL i)).1
+  | i + 1 => (steady_step hA hz hr h0 hph hL (steady hA hz hr h0 hph hL i)).1
 
 -- Theorem 4, under (L): no run in the round stops
 theorem nostop {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) (hL : Learned cs rank s) {i c : Nat}
     (hn : next rank (trace cs rank s i) = some c) :
     ∃ r, (trace cs rank s (i + 1)).ran c = some r ∧ r.stopped = none ∧ r.ended ≠ some .stopped := by
-  obtain ⟨seen, vals, setv, h⟩ := (steady_step hA hr h0 hph hL (steady hA hr h0 hph hL i)).2 c hn
+  obtain ⟨seen, vals, setv, h⟩ := (steady_step hA hz hr h0 hph hL (steady hA hz hr h0 hph hL i)).2 c hn
   obtain ⟨rf, e, h1, _, h3, _, h5, h6, _⟩ := h.run
   refine ⟨rf, h1, h3, ?_⟩
   rw [h5]; intro he; cases he; simp at h6
@@ -1334,53 +1370,53 @@ theorem nostop {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : S
 -- Theorem 4, under (L): each computation completes at most one run in the round, and starts at
 -- most one
 theorem once {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) (hL : Learned cs rank s) (i d : Nat) :
     completed (trace cs rank s i) s.pulses s.round d ≤ completed s s.pulses s.round d + 1 ∧
     started (trace cs rank s i) s.pulses s.round d ≤ started s s.pulses s.round d + 1 := by
-  have st := steady hA hr h0 hph hL i
+  have st := steady hA hz hr h0 hph hL i
   have h1 := st.count d
   have h2 := st.went d
   exact ⟨h1.2, by omega⟩
 
 -- the log only grows, by what each run adds
 theorem trace_log {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) : ∀ n, ∃ l, (trace cs rank s n).log = s.log ++ l
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) : ∀ n, ∃ l, (trace cs rank s n).log = s.log ++ l
   | 0 => ⟨[], by simp [trace]⟩
   | n + 1 => by
-    obtain ⟨l, hl⟩ := trace_log hA n
+    obtain ⟨l, hl⟩ := trace_log hA hz n
     cases hn : next rank (trace cs rank s n) with
     | none => rw [trace_none hn]; exact ⟨l, hl⟩
     | some c =>
-      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hz hn
       obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, dues, hlog, _⟩ := h.run
       rw [hlog, hl]
       exact ⟨_, by simp only [List.append_assoc]; exact rfl⟩
 
 -- a set logged in the run phase: by the run of c at some i, which gave set v
 theorem trace_set {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {c : Nat} {v : V} {p r : Nat} : ∀ n, (⟨p, r, .set c v⟩ : Entry V) ∈
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {c : Nat} {v : V} {p r : Nat} : ∀ n, (⟨p, r, .set c v⟩ : Entry V) ∈
       (trace cs rank s n).log.drop s.log.length →
       ∃ i < n, next rank (trace cs rank s i) = some c ∧ ∃ seen vals st,
         Ran1 cs (trace cs rank s i) c (rank (trace cs rank s i) c) (trace cs rank s (i + 1))
           seen vals st (some v)
   | 0, h => by simp [trace] at h
   | n + 1, h => by
-    obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := s) hA n
+    obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := s) hA hz n
     cases hn : next rank (trace cs rank s n) with
     | none =>
       rw [trace_none hn] at h
-      obtain ⟨i, hi, h'⟩ := trace_set hA n h
+      obtain ⟨i, hi, h'⟩ := trace_set hA hz n h
       exact ⟨i, by omega, h'⟩
     | some c' =>
-      obtain ⟨seen, vals, st, setv, h1⟩ := trace_ran1 hA hn
+      obtain ⟨seen, vals, st, setv, h1⟩ := trace_ran1 hA hz hn
       obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, dues, hlog, hdues⟩ := h1.run
       rw [hlog, hl] at h
       simp only [List.append_assoc, List.drop_left] at h
       rcases List.mem_append.1 h with h | h
       · have : (⟨p, r, .set c v⟩ : Entry V) ∈ (trace cs rank s n).log.drop s.log.length := by
           rw [hl]; simpa using h
-        obtain ⟨i, hi, h'⟩ := trace_set hA n this
+        obtain ⟨i, hi, h'⟩ := trace_set hA hz n this
         exact ⟨i, by omega, h'⟩
       · simp only [List.mem_cons, List.mem_append, List.not_mem_nil, or_false] at h
         rcases h with h | h | h | h
@@ -1404,11 +1440,11 @@ theorem trace_add (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) (s 
 
 -- counts only grow along a run phase
 theorem trace_grows {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {i j : Nat} (hij : i ≤ j) (p r d : Nat) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {i j : Nat} (hij : i ≤ j) (p r d : Nat) :
     completed (trace cs rank s i) p r d ≤ completed (trace cs rank s j) p r d := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le hij
   rw [trace_add]
-  obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := trace cs rank s i) hA k
+  obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := trace cs rank s i) hA (trace_awake hA hz i) k
   simp only [completed_ends, hl, ends_append]
   omega
 
@@ -1424,12 +1460,12 @@ theorem idle_none {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
 -- Theorem 4, with Theorem 2: each set in the round is given the round's settled value: what its
 -- compute gives from scratch on the store when the run phase ends
 theorem settles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) (hL : Learned cs rank s) {n c p r : Nat} {v : V}
     (hend : next rank (trace cs rank s n) = none)
     (hset : (⟨p, r, .set c v⟩ : Entry V) ∈ (trace cs rank s n).log.drop s.log.length) :
     (eval (trace cs rank s n).store (cs c).f).1 = .value v := by
-  obtain ⟨i, hi, hn, seen, vals, so, h⟩ := trace_set hA n hset
+  obtain ⟨i, hi, hn, seen, vals, so, h⟩ := trace_set hA hz n hset
   obtain ⟨rf, e, hrf, _, _, _, hend', _, hsv, _⟩ := h.run
   obtain ⟨_, he, hout, _⟩ := hsv v rfl
   subst he
@@ -1439,10 +1475,10 @@ theorem settles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : 
       completed (trace cs rank s j) s.pulses s.round c := by
     intro j hj
     have h1 := h.completed s.pulses s.round c
-    have hf := trace_frame (rank := rank) (s := s) hA i
+    have hf := trace_frame (rank := rank) (s := s) hA hz i
     rw [hf.1, hf.2.1] at h1
-    have h2 := ((steady hA hr h0 hph hL i).count c).1
-    have h3 := trace_grows (rank := rank) (s := s) hA hj s.pulses s.round c
+    have h2 := ((steady hA hz hr h0 hph hL i).count c).1
+    have h3 := trace_grows (rank := rank) (s := s) hA hz hj s.pulses s.round c
     have : so = none := by
       have := (hsv v rfl).1; exact this
     subst this
@@ -1457,18 +1493,18 @@ theorem settles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : 
       cases hn' : next rank (trace cs rank s (i + 1 + k)) with
       | none => rw [trace_none hn']; exact ih
       | some c' =>
-        obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hn'
+        obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hz hn'
         have hcc : c' ≠ c := by
           intro hcc; subst hcc
           have hd := (picked_due hn').1
-          rcases (steady hA hr h0 hph hL (i + 1 + k)).clear c' (hc (i + 1 + k) (by omega)) c'
+          rcases (steady hA hz hr h0 hph hL (i + 1 + k)).clear c' (hc (i + 1 + k) (by omega)) c'
             (Or.inl rfl) with h1 | h1
           · rw [h1] at hd; cases hd
           · exact h1 hpk
         rw [h'.ran c (Ne.symm hcc)]; exact ih
   have hrn : (trace cs rank s n).ran c = some rf := by
     have := hstay (n - (i + 1)); rwa [show i + 1 + (n - (i + 1)) = n by omega] at this
-  have hRn := trace_reach hA h0 hph n
+  have hRn := trace_reach hA h0 hph hz n
   obtain ⟨o, ho, hev, _⟩ := quiescence hA hRn.wide hrn (idle_none hA hRn hend c) (Or.inl hend')
   rw [hout] at ho; cases ho
   rw [hev]
@@ -1477,7 +1513,7 @@ theorem settles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : 
 -- the same at the act itself)
 theorem queued {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
     (hA : A2 cs) (h : Reach cs rank s) (hn : next rank s = none) {e : Nat} {v : V}
-    (ha : (e, v) ∈ s.acts) : (eval s.store (cs e).f).1 = .value v := by
+    (ha : (e, v) ∈ queue s) : (eval s.store (cs e).f).1 = .value v := by
   obtain ⟨_, r, hr, _, hdone, ho⟩ := (h.good hA).acts e v ha
   obtain ⟨o, ho', hev, _⟩ := quiescence hA h.wide hr (idle_none hA h hn e) (Or.inl hdone)
   rw [ho] at ho'; cases ho'
@@ -1485,16 +1521,16 @@ theorem queued {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : S
 
 -- (L)'s writers, from a static condition: each compute that runs in the round is the writer of
 -- its key at the round's start (declared with make's key, or learned)
-theorem keyed {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V} (hA : A2 cs)
+theorem keyed {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V} (hA : A2 cs) (hz : ∀ x, s.asleep x = false)
     (hk : ∀ c k, picked cs rank s c → (cs c).kind = .compute (some k) → s.writers k = some c) :
     ∀ i, (trace cs rank s i).writers = s.writers
   | 0 => rfl
   | i + 1 => by
-    have ih := keyed hA hk i
+    have ih := keyed hA hz hk i
     cases hn : next rank (trace cs rank s i) with
     | none => rw [trace_none hn]; exact ih
     | some c =>
-      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hz hn
       rcases h.writers with h1 | ⟨k, v, _, hkk, h1⟩
       · rw [h1, ih]
       · rw [h1, ih]; exact put_self (hk c k ⟨i, hn⟩ hkk)
@@ -1607,9 +1643,19 @@ theorem outside_kept (cs : Nat → Comp K V) :
   intro x y h
   exact fold keys { s with tick := t } x y h
 
-theorem make_kept (cs : Nat → Comp K V) (s : State K V) (x : Nat) : (make cs s).kept x = s.kept x := by
-  simp only [make]
-  split <;> simp [mark, settle, Model.due, say] <;> split <;> rfl
+theorem make_kept (cs : Nat → Comp K V) (s : State K V) (x : Nat) (y : Why)
+    (he : isearly (cs s.made) = false) (h : y ∈ (make cs s).kept x) : y ∈ s.kept x := by
+  have hg : y ∈ (grow cs s).kept x := by
+    simp only [make, he, Bool.false_eq_true, ite_false] at h
+    split at h
+    · exact h
+    · obtain ⟨_, _, _, _, _, e⟩ := settle_form (grow cs s) s.made (grow cs s).tick none none false
+      simp only [mark] at h; rw [e] at h; exact h
+  have e : (grow cs s).kept = put s.kept s.made [] := by simp only [Model.grow]; split <;> rfl
+  rw [e] at hg
+  by_cases hx : x = s.made
+  · subst hx; simp at hg
+  · rwa [put_ne _ _ hx] at hg
 
 theorem write_kept (cs : Nat → Comp K V) (s : State K V) (kvs : List (K × V)) (x : Nat) (y : Why)
     (h : y ∈ (write cs s kvs).kept x) : y ∈ s.kept x := by
@@ -1631,19 +1677,19 @@ theorem waits_start {s : State K V} {c rk w : Nat} (h : waits (start s c rk) w c
   · rwa [put_ne _ _ hac] at hab
 
 theorem trace_starts {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {i j : Nat} (hij : i ≤ j) (p r d : Nat) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {i j : Nat} (hij : i ≤ j) (p r d : Nat) :
     started (trace cs rank s i) p r d ≤ started (trace cs rank s j) p r d := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le hij
   rw [trace_add]
-  obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := trace cs rank s i) hA k
+  obtain ⟨l, hl⟩ := trace_log (rank := rank) (s := trace cs rank s i) hA (trace_awake hA hz i) k
   simp only [started_starts, hl, starts_append]
   omega
 
 -- a run under (D) keeps the invariant
 theorem calm_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hD : Fresh cs rank s) {i : Nat}
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hD : Fresh cs rank s) {i : Nat}
     (st : Calm cs rank s i) : Calm cs rank s (i + 1) := by
-  have hs0 := trace_starts (rank := rank) (s := s) hA (Nat.zero_le i) s.pulses s.round
+  have hs0 := trace_starts (rank := rank) (s := s) hA hz (Nat.zero_le i) s.pulses s.round
   simp only [trace] at hs0
   cases hn : next rank (trace cs rank s i) with
   | none =>
@@ -1653,7 +1699,7 @@ theorem calm_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
             waits := fun d => by rw [e]; exact st.waits d, after := fun d => by rw [e]; exact st.after d,
             causes := fun d => by rw [e]; exact st.causes d, cause := fun d => by rw [e]; exact st.cause d }
   | some c =>
-    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA hn
+    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA hz hn
     have hpk : picked cs rank s c := ⟨i, hn⟩
     have hs0c := hD.due c hpk
     have hWF0 := hD.writers (i + 1)
@@ -1693,7 +1739,7 @@ theorem calm_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
           exact hnd (stcs w y this c hyc)
     have hc1 := h.completed
     have hs1 := h.started
-    have hfS := trace_frame (rank := rank) (s := s) hA i
+    have hfS := trace_frame (rank := rank) (s := s) hA hz i
     rw [hS] at hfS
     rw [hfS.1, hfS.2.1] at hc1 hs1
     have sF : ∀ d, started F s.pulses s.round d =
@@ -1863,43 +1909,43 @@ theorem calm_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
         · exact Or.inr (hdone z h2)
 
 theorem calm {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hD : Fresh cs rank s) : ∀ i, Calm cs rank s i
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hD : Fresh cs rank s) : ∀ i, Calm cs rank s i
   | 0 => calm_zero cs rank s hD
-  | i + 1 => calm_step hA hD (calm hA hD i)
+  | i + 1 => calm_step hA hz hD (calm hA hz hD i)
 
 -- Theorem 4.1, under (D): each computation completes at most one run in the round
 theorem fresh {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hD : Fresh cs rank s) (i d : Nat) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hD : Fresh cs rank s) (i d : Nat) :
     completed (trace cs rank s i) s.pulses s.round d ≤ completed s s.pulses s.round d + 1 :=
-  ((calm hA hD i).count d).2
+  ((calm hA hz hD i).count d).2
 
 -- what never runs in the round completes nothing in it
 theorem unpicked {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {d : Nat} (hd : ¬picked cs rank s d) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {d : Nat} (hd : ¬picked cs rank s d) :
     ∀ i, completed (trace cs rank s i) s.pulses s.round d = completed s s.pulses s.round d
   | 0 => rfl
   | i + 1 => by
     cases hn : next rank (trace cs rank s i) with
-    | none => rw [trace_none hn]; exact unpicked hA hd i
+    | none => rw [trace_none hn]; exact unpicked hA hz hd i
     | some c =>
-      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hz hn
       have hdc : d ≠ c := fun e => hd ⟨i, e ▸ hn⟩
-      rw [h.completed, unpicked hA hd i]
+      rw [h.completed, unpicked hA hz hd i]
       simp [hdc]
 
 -- Theorem 4.1, under (D): when the run phase ends, each computation due at the round's start has
 -- completed exactly one run in it, and the others none
 theorem exactly {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h0 : Reach cs rank s) (hph : s.phase = .runs) (hD : Fresh cs rank s) {n : Nat}
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (h0 : Reach cs rank s) (hph : s.phase = .runs) (hD : Fresh cs rank s) {n : Nat}
     (hend : next rank (trace cs rank s n) = none) (d : Nat) :
     completed (trace cs rank s n) s.pulses s.round d =
       completed s s.pulses s.round d + if (s.due d).isSome then 1 else 0 := by
-  have st := calm hA hD n
-  have hidle := idle_none hA (trace_reach hA h0 hph n) hend
+  have st := calm hA hz hD n
+  have hidle := idle_none hA (trace_reach hA h0 hph hz n) hend
   cases hd : s.due d with
   | none =>
     simp only [Option.isSome_none, Bool.false_eq_true, ite_false, Nat.add_zero]
-    exact unpicked hA (fun hp => by have := hD.due d hp; rw [hd] at this; cases this) n
+    exact unpicked hA hz (fun hp => by have := hD.due d hp; rw [hd] at this; cases this) n
   | some m =>
     simp only [Option.isSome_some, ite_true]
     have hb : started s s.pulses s.round d < started (trace cs rank s n) s.pulses s.round d := by
@@ -1934,10 +1980,10 @@ def links (G : Nat → Nat → Prop) : List Nat → Prop
 
 -- a newly due one: reported by the run there (A2)
 theorem trace_report {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {j y c : Nat} (hn : next rank (trace cs rank s j) = some c)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {j y c : Nat} (hn : next rank (trace cs rank s j) = some c)
     (h1 : (trace cs rank s j).due y = none) (h2 : ((trace cs rank s (j + 1)).due y).isSome) :
     y ≠ c ∧ report cs rank s j y c := by
-  obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hn
+  obtain ⟨_, _, _, _, h⟩ := trace_ran1 hA hz hn
   have hyc : y ≠ c := by
     intro e; subst e
     have := (picked_due hn).1; rw [h1] at this; cases this
@@ -1964,7 +2010,7 @@ theorem trace_became {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
 
 -- every one due at τ has reporters back to t
 theorem back_exists {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (t : Nat) : ∀ n τ, τ ≤ n → t ≤ τ → ∀ y, ((trace cs rank s τ).due y).isSome →
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (t : Nat) : ∀ n τ, τ ≤ n → t ≤ τ → ∀ y, ((trace cs rank s τ).due y).isSome →
       ∃ ys, Back cs rank s t τ y ys
   | 0, τ, hτ, ht, y, hy => by
     have : τ = t := by omega
@@ -1979,8 +2025,8 @@ theorem back_exists {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {
       cases hn : next rank (trace cs rank s j) with
       | none => rw [trace_none hn, hj3] at hj4; cases hj4
       | some c =>
-        obtain ⟨_, hrep⟩ := trace_report hA hn hj3 hj4
-        obtain ⟨ys, hys⟩ := back_exists hA t n j (by omega) hj1 c (picked_due hn).1
+        obtain ⟨_, hrep⟩ := trace_report hA hz hn hj3 hj4
+        obtain ⟨ys, hys⟩ := back_exists hA hz t n j (by omega) hj1 c (picked_due hn).1
         exact ⟨c :: ys, .made hj1 hj2 hrep hys⟩
 
 -- the end of a chain of reporters was due at t
@@ -2005,33 +2051,33 @@ theorem links_tg {G : Nat → Nat → Prop} :
 
 -- reads stay while a computation does not run
 theorem trace_reads {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {d j : Nat} :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {d j : Nat} :
     ∀ k, (∀ l, l < k → next rank (trace cs rank s (j + l)) ≠ some d) →
       (trace cs rank s (j + k)).reads d = (trace cs rank s j).reads d
   | 0, _ => rfl
   | k + 1, h => by
-    have ih := trace_reads hA k (fun l hl => h l (by omega))
+    have ih := trace_reads hA hz k (fun l hl => h l (by omega))
     rw [← Nat.add_assoc]
     cases hn : next rank (trace cs rank s (j + k)) with
     | none => rw [trace_none hn]; exact ih
     | some c =>
-      obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hz hn
       have hdc : d ≠ c := fun e => h k (by omega) (e ▸ hn)
       rw [h'.reads, put_ne _ _ hdc, ih]
 
 -- dues stay while a computation does not run
 theorem trace_due {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) {d j : Nat} (hd : ((trace cs rank s j).due d).isSome) :
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) {d j : Nat} (hd : ((trace cs rank s j).due d).isSome) :
     ∀ k, (∀ l, l < k → next rank (trace cs rank s (j + l)) ≠ some d) →
       ((trace cs rank s (j + k)).due d).isSome
   | 0, _ => hd
   | k + 1, h => by
-    have ih := trace_due hA hd k (fun l hl => h l (by omega))
+    have ih := trace_due hA hz hd k (fun l hl => h l (by omega))
     rw [← Nat.add_assoc]
     cases hn : next rank (trace cs rank s (j + k)) with
     | none => rw [trace_none hn]; exact ih
     | some c =>
-      obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hn
+      obtain ⟨_, _, _, _, h'⟩ := trace_ran1 hA hz hn
       have hdc : d ≠ c := fun e => h k (by omega) (e ▸ hn)
       obtain ⟨m, hm⟩ := Option.isSome_iff_exists.1 ih
       simp [h'.due d m hdc hm]
@@ -2043,7 +2089,7 @@ theorem trace_due {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
 -- a loop of reports), and, d on no cycle of the learned graph at t (ranked), the chain d, x, ...
 -- is not in the learned graph at t
 theorem why {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
+    (hA : A2 cs) (hz : ∀ x, s.asleep x = false) (hr : ∀ t : State K V, ranked (graph t) (rank t)) (h0 : Reach cs rank s)
     (hph : s.phase = .runs) {t i d x : Nat} (ht : next rank (trace cs rank s t) = some d)
     (hti : t < i) (hd : ∀ j, t < j → j ≤ i → next rank (trace cs rank s j) ≠ some d)
     (hi : next rank (trace cs rank s i) = some x) (hn : (trace cs rank s i).due d = none)
@@ -2054,22 +2100,22 @@ theorem why {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : Stat
         waits (start (trace cs rank s t) d (rank (trace cs rank s t) d)) x d = true ∨
         came (start (trace cs rank s t) d (rank (trace cs rank s t) d)) x d = true) ∧
       Back cs rank s t i x ys ∧ ¬links (graph (trace cs rank s t)) (d :: x :: ys) := by
-  obtain ⟨_, _, _, k, hk, hkd⟩ := (trace_report hA hi hn hm).2
+  obtain ⟨_, _, _, k, hk, hkd⟩ := (trace_report hA hz hi hn hm).2
   have hreads : (trace cs rank s i).reads d = (trace cs rank s (t + 1)).reads d := by
-    have := trace_reads (rank := rank) (s := s) hA (d := d) (j := t + 1) (i - (t + 1))
+    have := trace_reads (rank := rank) (s := s) hA hz (d := d) (j := t + 1) (i - (t + 1))
       (fun l hl => hd (t + 1 + l) (by omega) (by omega))
     rwa [show t + 1 + (i - (t + 1)) = i by omega] at this
-  obtain ⟨ys, hys⟩ := back_exists hA t i i (Nat.le_refl _) (by omega) x (picked_due hi).1
+  obtain ⟨ys, hys⟩ := back_exists hA hz t i i (Nat.le_refl _) (by omega) x (picked_due hi).1
   have hxd : x ≠ d := fun e => hd i hti (Nat.le_refl _) (e ▸ hi)
   refine ⟨k, ys, hk, hreads ▸ hkd, ?_, hys, ?_⟩
   · -- R went through: a stopped run stays due, and d was not due at i
     intro hkx hxt
-    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA ht
+    obtain ⟨seen, vals, so, setv, h⟩ := trace_ran1 hA hz ht
     cases so with
     | some w =>
       exfalso
       have h1 := (h.stop w rfl).2.2.2.2.2.2.1
-      have := trace_due (rank := rank) (s := s) hA (d := d) (j := t + 1) h1 (i - (t + 1))
+      have := trace_due (rank := rank) (s := s) hA hz (d := d) (j := t + 1) h1 (i - (t + 1))
         (fun l hl => hd (t + 1 + l) (by omega) (by omega))
       rw [show t + 1 + (i - (t + 1)) = i by omega, hn] at this
       cases this
@@ -2079,14 +2125,14 @@ theorem why {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : Stat
       obtain ⟨b, hb⟩ := hk'
       exact (h.go rfl).1 _ hb x hkx hxd hxt
   · intro hl
-    obtain ⟨z, hz⟩ : ∃ z, (x :: ys).getLast? = some z := by
+    obtain ⟨z, hzl⟩ : ∃ z, (x :: ys).getLast? = some z := by
       cases h : (x :: ys).getLast? with
       | none => simp at h
       | some z => exact ⟨z, rfl⟩
-    have hdz := links_tg d x ys hl z hz
-    have hR := trace_reach hA h0 hph t
+    have hdz := links_tg d x ys hl z hzl
+    have hR := trace_reach hA h0 hph hz t
     have h1 := ahead hA hR (hr _) ht hcyc hdz
-    have h2 := hys.last z hz
+    have h2 := hys.last z hzl
     rw [h1] at h2; cases h2
 
 end Model

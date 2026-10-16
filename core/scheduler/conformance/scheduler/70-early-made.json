@@ -1,0 +1,142 @@
+{
+	"title": "an early effect runs and acts as it is made, before the request answers, no pulse; a later change acts in the early queue",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"read": "a"
+			},
+			"act": {
+				"log": [
+					"x",
+					{
+						"given": "value"
+					},
+					{
+						"given": "previous"
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						1,
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 2
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 1,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 3
+					},
+					{
+						"starts": "x",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 2,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						2,
+						1
+					]
+				]
+			}
+		}
+	]
+}

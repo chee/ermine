@@ -1,0 +1,113 @@
+{
+	"title": "each table merged on its own; each one's change the latest commit's that names it",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"actor": "r",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "rc",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"x": "ermine://abababababababababababababababababababababababababababababababab"
+					}
+				}
+			],
+			"table": "children",
+			"actor": "r",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"rc"
+			],
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 2
+				}
+			],
+			"actor": "a",
+			"time": 10,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"rc"
+			],
+			"patches": [
+				{
+					"path": [
+						"y"
+					],
+					"value": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+				}
+			],
+			"table": "children",
+			"actor": "b",
+			"time": 20,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"a": 1,
+							"b": 2
+						},
+						"change": {
+							"time": 10,
+							"actor": "a"
+						}
+					},
+					"children": {
+						"value": {
+							"x": "ermine://abababababababababababababababababababababababababababababababab",
+							"y": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+						},
+						"change": {
+							"time": 20,
+							"actor": "b"
+						}
+					}
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,52 @@
+{
+	"title": "op: false: a change's op not written, the column left out",
+	"entries": [
+		[
+			"value",
+			"a",
+			0
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 5,
+				"op": {
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					],
+					"undo": [
+						{
+							"path": []
+						}
+					]
+				}
+			}
+		}
+	],
+	"options": {
+		"op": false
+	},
+	"expect": {
+		"bytes": "a167636f6c756d6e73583f5b9e9c9158eca8909c9952dc9898985292999beac8959a979f925aecc8905a90585452dcd8945a9698539afad38621b53c233339c391210d2c50dc08140200",
+		"entries": [
+			[
+				"value",
+				"a",
+				0
+			]
+		],
+		"nodes": [
+			{
+				"change": {
+					"time": 5
+				},
+				"value": 1
+			}
+		]
+	}
+}

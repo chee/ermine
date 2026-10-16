@@ -1,7 +1,7 @@
 {
 	"title": "the tick: each change and each new computation takes the next; due once, at the first",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "tick", "expect": { "tick": 0 } },
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
 		{ "op": "changed", "keys": ["nobody"], "expect": { "tick": 2 } },

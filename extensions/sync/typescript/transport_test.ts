@@ -369,3 +369,24 @@ Deno.test({
 		await device.close()
 	},
 })
+
+Deno.test({
+	name: "transport: an own take waiting on a parent goes out once its parent is taken, after it",
+	...opts,
+	async fn() {
+		const a = await party(1), b = await party(2)
+		await joined(a, b)
+		const c1 = await make(a.signer, [], 1)
+		const c2 = await make(a.signer, [c1], 2), c3 = await make(a.signer, [c2], 3)
+		assertEquals(a.device.take(DOC, c1.bytes, "stored"), "taken")
+		assertEquals(a.device.take(DOC, c3.bytes, "stored"), { waiting: [hex(c2.name)] })
+		assertEquals(a.device.take(DOC, c2.bytes, "stored"), "taken")
+		await quiet(a, b)
+		assertEquals(names(b.device.history(DOC).heads()), [hex(c3.name)])
+		assertEquals(
+			(await a.device.stored(DOC)).map(hex).sort(),
+			[c1, c2, c3].map((c) => hex(c.stored)).sort(),
+		)
+		await a.device.close(), await b.device.close()
+	},
+})

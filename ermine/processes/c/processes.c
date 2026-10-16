@@ -25,23 +25,33 @@ static op_key *keys_of(const char *const *path, size_t n, const char *extra) {
 	return keys;
 }
 
+// a leaf: 1 and *out; a level (a map with a name in it): 0; nothing, or under a leaf: PL_NONE, so
+// the walk asks it nothing more under there (a walk from an id alone: at once, it has no path)
 static int step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
 	const pr_processes *p = ctx;
-	if (!here->has_path) return 0;
+	if (!here->has_path) return PL_NONE;
 	op_key *keys = keys_of(here->path, here->length, name);
 	const op_value *v = pl_read(l, tb_string(p->part), p->root, keys, here->length + 1);
 	free(keys);
-	if (v == NULL || v->type != OP_STR) return 0;
-	*out = tb_string(v->str);
-	return 1;
+	if (v != NULL && v->type == OP_STR) {
+		*out = tb_string(v->str);
+		return 1;
+	}
+	return is_map(v) && v->count > 0 ? 0 : PL_NONE;
 }
 
+// no names under here's path: none
 static void names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
 	const pr_processes *p = ctx;
-	if (!here->has_path) return;
+	if (!here->has_path) {
+		out->none = 1;
+		return;
+	}
 	op_key *keys = keys_of(here->path, here->length, NULL);
+	size_t had = out->n;
 	pl_keys(l, tb_string(p->part), p->root, keys, here->length, 0, out);
 	free(keys);
+	if (out->n == had) out->none = 1;
 }
 
 // a level of the trie (processes deeper, no id of its own): a walk goes on through it

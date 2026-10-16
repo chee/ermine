@@ -7,7 +7,7 @@
 //   bx_box(b, path, n, node, header, block, &changed);    // a regular placement in it
 //   pl_get(bx_places(b), path, n, &id);                    // places' reads, unchanged
 //   ...
-//   bx_free(b);                                            // before the host's places go
+//   bx_free(b);                                            // before or after the host's places
 //
 // A box is its folder's id (root) and a view of the host's places rooted there (pl_view), asked
 // [processes(root), children]: the folder's saved names, and the processes started at root
@@ -56,7 +56,7 @@ int bx_create(const bx_host *host, const char *const *steps, size_t n, const bx 
 // the folder id (copied), as it is: 0 and *out. With a parent: PL_NOTHING_THERE (an id could be
 // anywhere, and a box in another is only ever narrower)
 int bx_create_id(const bx_host *host, const char *id, const bx *parent, bx **out);
-// let go, and its view: before the host's places (pl_free), and after any cache made on its places
+// let go, and its view (before or after the host's places: places.h), after any cache on its places
 void bx_free(bx *b);
 
 // its folder's id; the host's places viewed from it

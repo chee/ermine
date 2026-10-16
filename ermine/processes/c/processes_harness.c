@@ -22,6 +22,18 @@
 
 static pr_processes rows;
 static const pl_contributor *walk[2];
+
+// the rows' contributor, each ask counted (the asked request): its step and names
+static size_t steps_asked, names_asked;
+static int counted_step(void *ctx, const pl_here *here, const char *name, pl *l, tb_key *out) {
+	steps_asked++;
+	return rows.contributor.step(ctx, here, name, l, out);
+}
+static void counted_names(void *ctx, const pl_here *here, pl *l, pl_namelist *out) {
+	names_asked++;
+	rows.contributor.names(ctx, here, l, out);
+}
+static pl_contributor counted;
 static int begun;
 static sn *nodes;
 
@@ -257,6 +269,13 @@ static op_value *answer(const op_value *r) {
 		if (node != NULL && node->value != NULL) op_set(o, "value", world_snap(node->value));
 		return o;
 	}
+	if (strcmp(op, "asked") == 0) {
+		op_value *o = op_map();
+		op_set(o, "steps", op_num((double)steps_asked));
+		op_set(o, "names", op_num((double)names_asked));
+		steps_asked = names_asked = 0;
+		return o;
+	}
 	if (strcmp(op, "patches") == 0) {
 		const nd_entry *node = tb_get(world_table, tb_string(PR_PART), tb_string("R"));
 		op_value *o = op_map();
@@ -349,7 +368,10 @@ void hh_answer(const op_value *request, FILE *out) {
 	if (!begun) {
 		begun = 1;
 		pr_processes_init(&rows, tb_string("R"));
-		walk[0] = &rows.contributor;
+		counted = rows.contributor;
+		counted.step = counted_step;
+		counted.names = counted_names;
+		walk[0] = &counted;
 		walk[1] = &pl_children;
 		world_contribute(walk, 2);
 	}

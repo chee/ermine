@@ -1,0 +1,77 @@
+{
+	"title": "a ref: a place below the commit's own, or a name",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "body": "" } }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": ["b"],
+			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+		},
+		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], [1], null] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], [-1], null] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], [0.5], null] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], ["a"], null] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], [null], null] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "base": [[null, 2], [2, 1]] },
+			"expect": { "error": "ref" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "parents": [[], [{ "/": { "bytes": "AQID" } }], null] },
+			"expect": { "error": "commit" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "base": [[null, 2], [1, 1]] },
+			"expect": { "error": "commit" }
+		}
+	]
+}

@@ -1,7 +1,10 @@
 -- LLM generated working output
--- rank.ts in lean: tarjan's components, each ranked as it is popped. for edges that stay in all:
--- ranks_all: every node of all gets a rank, no `out.get(q)!` misses, and the fuel is enough;
--- rank_ranked: Basic.lean's ranked (lemma R); rank_cycle: mutually reachable nodes share a rank.
+-- rank.ts in lean: tarjan's components, each ranked as it is popped, at least the most floor of
+-- its members. for edges that stay in all: rankf_all: every node of all gets a rank, no
+-- `out.get(q)!` misses, and the fuel is enough; rankf_ranked: Basic.lean's ranked (lemma R);
+-- rankf_floor: each rank at least its node's floor; rankf_cycle: mutually reachable nodes share a
+-- rank. rank is rankf with no floor (the code's floor absent: a max with 0, the same), and
+-- ranks_all, rank_ranked, rank_cycle the same for it.
 --
 -- model, and where it departs from rank.ts:
 -- - all is a list (the code: any iterable; order.ts gives an array). duplicates are fine
@@ -22,7 +25,7 @@
 -- - order.ts reads the ranks with `?? 0`; the theorems with getD 0
 --
 -- the proof never shows the groups popped are the components: wf (between steps), post (what
--- visit q leaves) and inv (visit p's loop) carry just enough for 1-3. close, the one hypothesis:
+-- visit q leaves) and inv (visit p's loop) carry just enough for 1-4. close, the one hypothesis:
 -- an edge of a node of all goes into all (order.ts: all and every edge target are the alive).
 import Scheduler.Basic
 
@@ -76,16 +79,17 @@ def pop (p : α) : List α → List α × List α
   | [] => ([], [])
   | m :: rest => if m = p then ([m], rest) else (m :: (pop p rest).1, (pop p rest).2)
 
--- r: 1 + the most rank an edge leaving the members goes to, else 0; none where a rank is missing
--- (rank.ts, the loop over members)
-def score (edges : α → List α) (out : α → Option Nat) (members : List α) : Option Nat :=
+-- r: the most of the members' floors and 1 + each rank an edge leaving the members goes to, else
+-- 0; none where a rank is missing (rank.ts, the loop over members)
+def score (edges : α → List α) (floor : α → Nat) (out : α → Option Nat) (members : List α) :
+    Option Nat :=
   members.foldl (fun r x => (edges x).foldl (fun r q => if q ∈ members then r else
-    r.bind fun r => (out q).map fun o => max r (o + 1)) r) (some 0)
+    r.bind fun r => (out q).map fun o => max r (o + 1)) (r.map fun r => max r (floor x))) (some 0)
 
 -- if p is its component's root, pop the component and rank it (rank.ts, visit's last lines)
-def finish (edges : α → List α) (p : α) (t : state α) : state α :=
+def finish (edges : α → List α) (floor : α → Nat) (p : α) (t : state α) : state α :=
   if t.index p ≠ some (t.low p) then t else
-    match score edges t.out (pop p t.stack).1 with
+    match score edges floor t.out (pop p t.stack).1 with
     | none =>
       { t with
         stack := (pop p t.stack).2
@@ -98,22 +102,27 @@ def finish (edges : α → List α) (p : α) (t : state α) : state α :=
         out := fun x => if x ∈ (pop p t.stack).1 then some r else t.out x }
 
 -- rank.ts, visit, with fuel
-def visit (edges : α → List α) : Nat → α → state α → state α
+def visit (edges : α → List α) (floor : α → Nat) : Nat → α → state α → state α
   | 0, _, s => { s with cut := true }
-  | f + 1, p, s => finish edges p (loop (visit edges f) p (edges p) (push p s))
+  | f + 1, p, s => finish edges floor p (loop (visit edges floor f) p (edges p) (push p s))
 
 -- visit each node of all not yet indexed (rank.ts, rank's for)
-def run (all : List α) (edges : α → List α) : state α :=
-  all.foldl (fun s p => if s.index p = none then visit edges (all.length + 1) p s else s) init
+def run (all : List α) (edges : α → List α) (floor : α → Nat) : state α :=
+  all.foldl (fun s p => if s.index p = none then visit edges floor (all.length + 1) p s else s)
+    init
 
--- rank.ts, rank: the ranks
-def rank (all : List α) (edges : α → List α) : α → Option Nat := (run all edges).out
+-- rank.ts, rank: the ranks, floor given
+def rankf (all : List α) (edges : α → List α) (floor : α → Nat) : α → Option Nat :=
+  (run all edges floor).out
+
+-- rank.ts, rank with no floor (the code's `if (floor)` false: a max with 0, the same)
+def rank (all : List α) (edges : α → List α) : α → Option Nat := rankf all edges fun _ => 0
 
 /-! ## proofs -/
 
 section proofs
 
-variable (all : List α) (edges : α → List α)
+variable (all : List α) (edges : α → List α) (floor : α → Nat)
 
 -- an edge of the graph rank is given: Basic.lean's ranked is over it
 def edge (p q : α) : Prop := p ∈ all ∧ q ∈ edges p
@@ -121,7 +130,7 @@ def edge (p q : α) : Prop := p ∈ all ∧ q ∈ edges p
 -- a path of edges, maybe empty
 def reach (a b : α) : Prop := a = b ∨ Relation.TransGen (edge all edges) a b
 
-variable {all edges}
+variable {all edges floor}
 
 theorem reach_refl (a : α) : reach all edges a a := Or.inl rfl
 
@@ -229,27 +238,35 @@ theorem score_inner (out : α → Option Nat) (members : List α) :
 theorem score_outer (out : α → Option Nat) (members : List α) :
     ∀ (xs : List α) (r0 : Nat), (∀ x ∈ xs, ∀ q ∈ edges x, q ∉ members → out q ≠ none) →
     ∃ r, xs.foldl (fun r x => (edges x).foldl (fun r q => if q ∈ members then r else
-      r.bind fun r => (out q).map fun o => max r (o + 1)) r) (some r0) = some r ∧ r0 ≤ r ∧
+      r.bind fun r => (out q).map fun o => max r (o + 1)) (r.map fun r => max r (floor x)))
+      (some r0) = some r ∧ r0 ≤ r ∧ (∀ x ∈ xs, floor x ≤ r) ∧
       ∀ x ∈ xs, ∀ q ∈ edges x, q ∉ members → ∀ o, out q = some o → o + 1 ≤ r
-  | [], r0, _ => ⟨r0, rfl, Nat.le_refl _, by simp⟩
+  | [], r0, _ => ⟨r0, rfl, Nat.le_refl _, by simp, by simp⟩
   | x :: xs, r0, h => by
-    simp only [List.foldl_cons]
-    obtain ⟨r1, e1, le1, b1⟩ := score_inner out members (edges x) r0 (h x List.mem_cons_self)
+    simp only [List.foldl_cons, Option.map_some]
+    obtain ⟨r1, e1, le1, b1⟩ := score_inner out members (edges x) (max r0 (floor x))
+      (h x List.mem_cons_self)
     rw [e1]
-    obtain ⟨r, e, le, b⟩ := score_outer out members xs r1 (fun x' m => h x' (List.mem_cons_of_mem x m))
-    refine ⟨r, e, by omega, ?_⟩
-    intro x' m q hq hq' o ho
-    rcases List.mem_cons.1 m with rfl | m
-    · have := b1 q hq hq' o ho; omega
-    · exact b x' m q hq hq' o ho
+    obtain ⟨r, e, le, f, b⟩ := score_outer out members xs r1
+      (fun x' m => h x' (List.mem_cons_of_mem x m))
+    refine ⟨r, e, by omega, ?_, ?_⟩
+    · intro x' m
+      rcases List.mem_cons.1 m with rfl | m
+      · omega
+      · exact f x' m
+    · intro x' m q hq hq' o ho
+      rcases List.mem_cons.1 m with rfl | m
+      · have := b1 q hq hq' o ho; omega
+      · exact b x' m q hq hq' o ho
 
--- the `!` never fails when every edge leaving the members is ranked; then r is above each
+-- the `!` never fails when every edge leaving the members is ranked; then r is above each, and
+-- above each member's floor
 theorem score_some (out : α → Option Nat) (members : List α)
     (h : ∀ x ∈ members, ∀ q ∈ edges x, q ∉ members → out q ≠ none) :
-    ∃ r, score edges out members = some r ∧
+    ∃ r, score edges floor out members = some r ∧ (∀ x ∈ members, floor x ≤ r) ∧
       ∀ x ∈ members, ∀ q ∈ edges x, q ∉ members → ∀ o, out q = some o → o + 1 ≤ r := by
-  obtain ⟨r, e, _, b⟩ := score_outer out members members 0 h
-  exact ⟨r, e, b⟩
+  obtain ⟨r, e, _, f, b⟩ := score_outer (floor := floor) out members members 0 h
+  exact ⟨r, e, f, b⟩
 
 -- once NaN, always NaN
 theorem inner_none (out : α → Option Nat) (members : List α) : ∀ qs : List α,
@@ -274,18 +291,21 @@ theorem inner_hit (out : α → Option Nat) (members : List α) {q : α} (hqm : 
 
 theorem outer_none (out : α → Option Nat) (members : List α) : ∀ xs : List α,
     xs.foldl (fun r x => (edges x).foldl (fun r q => if q ∈ members then r else
-      r.bind fun r => (out q).map fun o => max r (o + 1)) r) none = none
+      r.bind fun r => (out q).map fun o => max r (o + 1)) (r.map fun r => max r (floor x)))
+      none = none
   | [] => rfl
   | x :: xs => by
-    simp only [List.foldl_cons]; rw [inner_none]; exact outer_none out members xs
+    simp only [List.foldl_cons, Option.map_none]; rw [inner_none]
+    exact outer_none out members xs
 
 -- a `!` on a missing rank makes score none: nan is set exactly when a `!` would fail
 theorem score_none (out : α → Option Nat) (members : List α) {x q : α} (hx : x ∈ members)
     (hq : q ∈ edges x) (hqm : q ∉ members) (ho : out q = none) :
-    score edges out members = none := by
+    score edges floor out members = none := by
   suffices ∀ (xs : List α) (r : Option Nat), x ∈ xs →
       xs.foldl (fun r x => (edges x).foldl (fun r q => if q ∈ members then r else
-        r.bind fun r => (out q).map fun o => max r (o + 1)) r) r = none from this members _ hx
+        r.bind fun r => (out q).map fun o => max r (o + 1)) (r.map fun r => max r (floor x)))
+        r = none from this members _ hx
   intro xs
   induction xs with
   | nil => intro _ m; cases m
@@ -293,10 +313,10 @@ theorem score_none (out : α → Option Nat) (members : List α) {x q : α} (hx 
     intro r m
     simp only [List.foldl_cons]
     rcases List.mem_cons.1 m with rfl | m
-    · rw [inner_hit out members hqm ho _ _ hq]; exact outer_none out members xs
+    · rw [inner_hit out members hqm ho _ _ hq]; exact outer_none (floor := floor) out members xs
     · exact ih _ m
 
-variable (all edges)
+variable (all edges floor)
 
 -- what holds between steps; G: the gray nodes, whose visits are running, innermost first
 structure wf (s : state α) (G : List α) : Prop where
@@ -318,10 +338,12 @@ structure wf (s : state α) (G : List α) : Prop where
   back : ∀ x, s.on x = true → ∃ g ∈ G, reach all edges x g
   nan : s.nan = false
   cut : s.cut = false
+  -- each rank at least its node's floor
+  floored : ∀ x r, s.out x = some r → floor x ≤ r
 
 -- what visit q leaves: t from s, under the gray G of its caller
 structure post (s t : state α) (q : α) (G : List α) : Prop where
-  good : wf all edges t G
+  good : wf all edges floor t G
   seen : t.index q = some s.next
   index : ∀ x i, s.index x = some i → t.index x = some i
   low : ∀ x, s.index x ≠ none → t.low x = s.low x
@@ -337,7 +359,7 @@ structure post (s t : state α) (q : α) (G : List α) : Prop where
 
 -- visit p's loop: s0 before p was pushed, s now, done the edges of p looked at; f the fuel left
 structure inv (f : Nat) (s0 : state α) (p : α) (G done : List α) (s : state α) : Prop where
-  good : wf all edges s (p :: G)
+  good : wf all edges floor s (p :: G)
   seen : s.index p = some s0.next
   index : ∀ x i, s0.index x = some i → s.index x = some i
   low : ∀ x, s0.index x ≠ none → s.low x = s0.low x
@@ -354,13 +376,13 @@ structure inv (f : Nat) (s0 : state α) (p : α) (G done : List α) (s : state �
   reached : ∀ x, s0.index x = none → s.index x ≠ none → reach all edges p x
   fuel : count s.index all < f
 
-variable {all edges}
+variable {all edges floor}
 
 
 -- after p is pushed
-theorem push_inv {f : Nat} {s0 : state α} {p : α} {G : List α} (w : wf all edges s0 G)
+theorem push_inv {f : Nat} {s0 : state α} {p : α} {G : List α} (w : wf all edges floor s0 G)
     (hp : s0.index p = none) (pa : p ∈ all) (hf : count s0.index all < f + 1) :
-    inv all edges f s0 p G [] (push p s0) := by
+    inv all edges floor f s0 p G [] (push p s0) := by
   have hpo : s0.on p = false := by
     cases h : s0.on p
     · rfl
@@ -432,7 +454,8 @@ theorem push_inv {f : Nat} {s0 : state α} {p : α} {G : List α} (w : wf all ed
           obtain ⟨g, hg, r⟩ := w.back x hx
           exact ⟨g, List.mem_cons_of_mem _ hg, r⟩
       nan := w.nan
-      cut := w.cut }
+      cut := w.cut
+      floored := w.floored }
   · intro x i hx
     simp only [push, put, ne x (by simp [hx]), ↓reduceIte]; exact hx
   · intro x hx
@@ -467,15 +490,15 @@ theorem keep' {s t : α → Option Nat} (h : ∀ x i, s x = some i → t x = som
   | some i => rw [h x i hs] at hx; cases hx
 
 -- wf does not look at low
-theorem wf_low {t : state α} {G : List α} (l : α → Nat) (w : wf all edges t G) :
-    wf all edges { t with low := l } G :=
-  ⟨w.1, w.2, w.3, w.4, w.5, w.6, w.7, w.8, w.9, w.10, w.11, w.12, w.13, w.14⟩
+theorem wf_low {t : state α} {G : List α} (l : α → Nat) (w : wf all edges floor t G) :
+    wf all edges floor { t with low := l } G :=
+  ⟨w.1, w.2, w.3, w.4, w.5, w.6, w.7, w.8, w.9, w.10, w.11, w.12, w.13, w.14, w.15⟩
 
 -- after visit q of an edge p → q, q not yet indexed
 theorem child_inv {f : Nat} {s0 s t : state α} {p q : α} {G done : List α}
-    (I : inv all edges f s0 p G done s) (P : post all edges s t q (p :: G))
+    (I : inv all edges floor f s0 p G done s) (P : post all edges floor s t q (p :: G))
     (hq : s.index q = none) (hqe : q ∈ edges p) (pa : p ∈ all) (hp0 : s0.index p = none) :
-    inv all edges f s0 p G (done ++ [q]) { t with low := put t.low p (min (t.low p) (t.low q)) } := by
+    inv all edges floor f s0 p G (done ++ [q]) { t with low := put t.low p (min (t.low p) (t.low q)) } := by
   have hps : s.index p ≠ none := by simp [I.seen]
   have hqp : q ≠ p := fun e => hps (e ▸ hq)
   have tlp : t.low p = s.low p := P.low p hps
@@ -561,9 +584,9 @@ theorem child_inv {f : Nat} {s0 s t : state α} {p q : α} {G done : List α}
 
 -- an edge p → q, q indexed and on the stack
 theorem onq_inv {f : Nat} {s0 s : state α} {p q : α} {G done : List α} {i : Nat}
-    (I : inv all edges f s0 p G done s) (hq : s.index q = some i) (hon : s.on q = true)
+    (I : inv all edges floor f s0 p G done s) (hq : s.index q = some i) (hon : s.on q = true)
     (hqe : q ∈ edges p) (pa : p ∈ all) (hp0 : s0.index p = none) :
-    inv all edges f s0 p G (done ++ [q]) { s with low := put s.low p (min (s.low p) i) } := by
+    inv all edges floor f s0 p G (done ++ [q]) { s with low := put s.low p (min (s.low p) i) } := by
   have lp : put s.low p (min (s.low p) i) p = min (s.low p) i := put_same _ _ _
   refine {
     good := wf_low _ I.good, seen := I.seen, index := I.index, low := ?_, out := I.out,
@@ -597,8 +620,8 @@ theorem onq_inv {f : Nat} {s0 s : state α} {p q : α} {G done : List α} {i : N
 
 -- an edge p → q, q indexed and off the stack: ranked already
 theorem offq_inv {f : Nat} {s0 s : state α} {p q : α} {G done : List α} {i : Nat}
-    (I : inv all edges f s0 p G done s) (hq : s.index q = some i) (hon : s.on q = false) :
-    inv all edges f s0 p G (done ++ [q]) s := by
+    (I : inv all edges floor f s0 p G done s) (hq : s.index q = some i) (hon : s.on q = false) :
+    inv all edges floor f s0 p G (done ++ [q]) s := by
   obtain ⟨M, hM, _⟩ := I.stack
   refine { I with xdone := ?_, done := ?_ }
   · intro y j hy hys hyj
@@ -614,12 +637,12 @@ theorem offq_inv {f : Nat} {s0 s : state α} {p q : α} {G done : List α} {i : 
 
 -- p's loop over its edges, given what visit does with less fuel
 theorem loop_inv {f : Nat} {s0 : state α} {p : α} {G : List α}
-    (IH : ∀ q s G, wf all edges s G → s.index q = none → q ∈ all → count s.index all < f →
-      post all edges s (visit edges f q s) q G)
+    (IH : ∀ q s G, wf all edges floor s G → s.index q = none → q ∈ all → count s.index all < f →
+      post all edges floor s (visit edges floor f q s) q G)
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) (pa : p ∈ all) (hp0 : s0.index p = none) :
     ∀ (rest done : List α) (s : state α), (∀ q ∈ rest, q ∈ edges p) →
-      inv all edges f s0 p G done s →
-      inv all edges f s0 p G (done ++ rest) (loop (visit edges f) p rest s)
+      inv all edges floor f s0 p G done s →
+      inv all edges floor f s0 p G (done ++ rest) (loop (visit edges floor f) p rest s)
   | [], done, s, _, I => by simpa [loop] using I
   | q :: qs, done, s, hr, I => by
     have hqe := hr q List.mem_cons_self
@@ -641,7 +664,7 @@ theorem loop_inv {f : Nat} {s0 : state α} {p : α} {G : List α}
 
 
 -- the ranked are closed under paths
-theorem closed {s : state α} {G : List α} (w : wf all edges s G) {a b : α} (ha : s.out a ≠ none)
+theorem closed {s : state α} {G : List α} (w : wf all edges floor s G) {a b : α} (ha : s.out a ≠ none)
     (r : reach all edges a b) : s.out b ≠ none := by
   rcases r with rfl | r
   · exact ha
@@ -654,9 +677,9 @@ theorem closed {s : state α} {G : List α} (w : wf all edges s G) {a b : α} (h
       obtain ⟨ry, hry, _⟩ := w.ranked _ _ ra hra e.2; simp [hry]
 
 -- p is not its component's root: it stays on the stack
-theorem stay_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges s0 G)
-    (hp0 : s0.index p = none) (I : inv all edges f s0 p G (edges p) t)
-    (h : t.index p ≠ some (t.low p)) : post all edges s0 t p G := by
+theorem stay_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges floor s0 G)
+    (hp0 : s0.index p = none) (I : inv all edges floor f s0 p G (edges p) t)
+    (h : t.index p ≠ some (t.low p)) : post all edges floor s0 t p G := by
   have hlt : t.low p < s0.next := by
     have := I.lowp; rw [I.seen] at h
     have : s0.next ≠ t.low p := fun e => h (by rw [e])
@@ -697,7 +720,7 @@ theorem stay_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf al
         rcases List.mem_cons.1 hg with rfl | hg
         · obtain ⟨g', hg', r'⟩ := up; exact ⟨g', hg', reach_trans r r'⟩
         · exact ⟨g, hg, r⟩
-      nan := w.nan, cut := w.cut }
+      nan := w.nan, cut := w.cut, floored := w.floored }
   · intro x hx
     simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
     rcases hx with hx | rfl
@@ -709,9 +732,9 @@ theorem stay_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf al
     · exact I.xedge x y j hx hx0 xp hy hys hyj
 
 -- p is its component's root: the component is popped and ranked
-theorem pop_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges s0 G)
-    (hp0 : s0.index p = none) (I : inv all edges f s0 p G (edges p) t)
-    (h : t.index p = some (t.low p)) : post all edges s0 (finish edges p t) p G := by
+theorem pop_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges floor s0 G)
+    (hp0 : s0.index p = none) (I : inv all edges floor f s0 p G (edges p) t)
+    (h : t.index p = some (t.low p)) : post all edges floor s0 (finish edges floor p t) p G := by
   have w := I.good
   have hlow : t.low p = s0.next := by rw [I.seen] at h; exact (Option.some.inj h).symm
   obtain ⟨M, hM, hM0⟩ := I.stack
@@ -774,8 +797,8 @@ theorem pop_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all
   -- and p reaches each member
   have K3 : ∀ x ∈ C, reach all edges p x :=
     fun x hx => I.reached x (hC0 x hx) (w.onseen x (hCon x hx))
-  obtain ⟨r, hr, hb⟩ := score_some t.out C K1
-  have hfin : finish edges p t =
+  obtain ⟨r, hr, hf, hb⟩ := score_some (floor := floor) t.out C K1
+  have hfin : finish edges floor p t =
       { t with
         stack := s0.stack
         on := fun x => if x ∈ C then false else t.on x
@@ -848,7 +871,14 @@ theorem pop_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all
       back := by
         intro x hx
         exact w0.back x ((w0.onstack x).2 ((uon x).1 hx))
-      nan := w.nan, cut := w.cut }
+      nan := w.nan, cut := w.cut
+      floored := by
+        intro x r' hx
+        dsimp only at hx
+        by_cases hxC : x ∈ C
+        · simp only [hxC, ↓reduceIte, Option.some.injEq] at hx
+          subst hx; exact hf x hxC
+        · simp only [hxC, ↓reduceIte] at hx; exact w.floored x r' hx }
   · intro x r' hx
     have := I.out x r' hx
     have hxC := outC x (by simp [this])
@@ -863,47 +893,47 @@ theorem pop_post {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all
 theorem visit_spec
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    ∀ (f : Nat) (q : α) (s : state α) (G : List α), wf all edges s G → s.index q = none →
-      q ∈ all → count s.index all < f → post all edges s (visit edges f q s) q G
+    ∀ (f : Nat) (q : α) (s : state α) (G : List α), wf all edges floor s G → s.index q = none →
+      q ∈ all → count s.index all < f → post all edges floor s (visit edges floor f q s) q G
   | 0, _, _, _, _, _, _, hf => absurd hf (Nat.not_lt_zero _)
   | f + 1, p, s, G, w, hp, pa, hf => by
     have I := loop_inv (visit_spec close f) close pa hp (edges p) [] (push p s) (fun _ h => h)
       (push_inv w hp pa hf)
     simp only [List.nil_append] at I
     simp only [visit]
-    generalize loop (visit edges f) p (edges p) (push p s) = t at I ⊢
+    generalize loop (visit edges floor f) p (edges p) (push p s) = t at I ⊢
     by_cases h : t.index p = some (t.low p)
     · exact pop_post w hp I h
-    · have e : finish edges p t = t := by simp [finish, h]
+    · have e : finish edges floor p t = t := by simp [finish, h]
       rw [e]; exact stay_post w hp I h
 
 -- rank's start
-theorem init_wf : wf all edges (init : state α) [] := {
+theorem init_wf : wf all edges floor (init : state α) [] := {
   inall := by simp [init], onstack := by simp [init], nodup := List.nodup_nil,
   onseen := by simp [init], outseen := by simp [init], onout := by simp [init],
   cover := by simp [init], black := by simp [init], gray := by simp,
   below := by simp [init], ranked := by simp [init], back := by simp [init],
-  nan := rfl, cut := rfl }
+  nan := rfl, cut := rfl, floored := by simp [init] }
 
 -- rank's for: each node visited or skipped, wf kept, all indexed
 theorem run_spec
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    ∀ (xs : List α) (s : state α), (∀ x ∈ xs, x ∈ all) → wf all edges s [] →
-      wf all edges (xs.foldl (fun s p => if s.index p = none then
-        visit edges (all.length + 1) p s else s) s) [] ∧
+    ∀ (xs : List α) (s : state α), (∀ x ∈ xs, x ∈ all) → wf all edges floor s [] →
+      wf all edges floor (xs.foldl (fun s p => if s.index p = none then
+        visit edges floor (all.length + 1) p s else s) s) [] ∧
       (∀ x, s.index x ≠ none → (xs.foldl (fun s p => if s.index p = none then
-        visit edges (all.length + 1) p s else s) s).index x ≠ none) ∧
+        visit edges floor (all.length + 1) p s else s) s).index x ≠ none) ∧
       ∀ x ∈ xs, (xs.foldl (fun s p => if s.index p = none then
-        visit edges (all.length + 1) p s else s) s).index x ≠ none
+        visit edges floor (all.length + 1) p s else s) s).index x ≠ none
   | [], s, _, w => ⟨w, fun _ h => h, by simp⟩
   | x :: xs, s, hxs, w => by
     simp only [List.foldl_cons]
     have hxs' : ∀ y ∈ xs, y ∈ all := fun y m => hxs y (List.mem_cons_of_mem _ m)
-    have step : wf all edges (if s.index x = none then visit edges (all.length + 1) x s else s) [] ∧
+    have step : wf all edges floor (if s.index x = none then visit edges floor (all.length + 1) x s else s) [] ∧
         (∀ y, s.index y ≠ none →
-          (if s.index x = none then visit edges (all.length + 1) x s else s).index y ≠ none) ∧
-        (if s.index x = none then visit edges (all.length + 1) x s else s).index x ≠ none := by
+          (if s.index x = none then visit edges floor (all.length + 1) x s else s).index y ≠ none) ∧
+        (if s.index x = none then visit edges floor (all.length + 1) x s else s).index x ≠ none := by
       by_cases hx : s.index x = none
       · simp only [hx, ↓reduceIte]
         have := count_length s.index all
@@ -923,19 +953,19 @@ theorem run_spec
 theorem run_wf
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    wf all edges (run all edges) [] ∧ ∀ x ∈ all, (run all edges).index x ≠ none := by
-  have := run_spec close all init (fun _ h => h) init_wf
+    wf all edges floor (run all edges floor) [] ∧ ∀ x ∈ all, (run all edges floor).index x ≠ none := by
+  have := run_spec (floor := floor) close all init (fun _ h => h) init_wf
   exact ⟨this.1, this.2.2⟩
 
 /-! ## the theorems -/
 
 -- 1. every node of all gets a rank; no `out.get(q)! + 1` found a node unranked; the fuel was enough
-theorem ranks_all
+theorem rankf_all
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    (∀ x ∈ all, rank all edges x ≠ none) ∧ (run all edges).nan = false ∧
-      (run all edges).cut = false := by
-  obtain ⟨w, hall⟩ := run_wf close
+    (∀ x ∈ all, rankf all edges floor x ≠ none) ∧ (run all edges floor).nan = false ∧
+      (run all edges floor).cut = false := by
+  obtain ⟨w, hall⟩ := run_wf (floor := floor) close
   refine ⟨?_, w.nan, w.cut⟩
   intro x hx
   rcases w.cover x (hall x hx) with h | h
@@ -943,29 +973,40 @@ theorem ranks_all
   · exact h
 
 -- 2. lemma R: along an edge the rank never rises; leaving a component it falls
-theorem rank_ranked
+theorem rankf_ranked
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    ranked (fun p q => p ∈ all ∧ q ∈ edges p) (fun x => (rank all edges x).getD 0) := by
-  obtain ⟨w, _⟩ := run_wf close
+    ranked (fun p q => p ∈ all ∧ q ∈ edges p) (fun x => (rankf all edges floor x).getD 0) := by
+  obtain ⟨w, _⟩ := run_wf (floor := floor) close
   intro p q ⟨pa, hq⟩
-  obtain ⟨rp, hrp⟩ := Option.ne_none_iff_exists'.1 ((ranks_all close).1 p pa)
+  obtain ⟨rp, hrp⟩ := Option.ne_none_iff_exists'.1 ((rankf_all (floor := floor) close).1 p pa)
   obtain ⟨rq, hrq, hor⟩ := w.ranked p q rp hrp hq
-  simp only [rank] at hrp ⊢
+  simp only [rankf] at hrp ⊢
   simp only [hrp, hrq, Option.getD_some]
   rcases hor with lt | ⟨eq, tr⟩
   · exact ⟨Nat.le_of_lt lt, fun _ => lt⟩
   · exact ⟨Nat.le_of_eq eq, fun n => absurd tr n⟩
 
+-- 3. each node of all ranked at least its floor
+theorem rankf_floor
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) {x : α} (hx : x ∈ all) :
+    floor x ≤ (rankf all edges floor x).getD 0 := by
+  obtain ⟨w, _⟩ := run_wf (floor := floor) close
+  obtain ⟨r, hr⟩ := Option.ne_none_iff_exists'.1 ((rankf_all (floor := floor) close).1 x hx)
+  have := w.floored x r hr
+  simp only [rankf] at hr ⊢
+  simp [hr, this]
+
 -- along a path the rank never rises
-theorem rank_path
+theorem rankf_path
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) {p q : α}
     (h : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) p q) :
-    (rank all edges q).getD 0 ≤ (rank all edges p).getD 0 := by
+    (rankf all edges floor q).getD 0 ≤ (rankf all edges floor p).getD 0 := by
   induction h with
-  | single e => exact (rank_ranked close _ _ e).1
-  | tail _ e ih => exact Nat.le_trans (rank_ranked close _ _ e).1 ih
+  | single e => exact (rankf_ranked (floor := floor) close _ _ e).1
+  | tail _ e ih => exact Nat.le_trans (rankf_ranked (floor := floor) close _ _ e).1 ih
 
 -- a path starts in all
 theorem path_start {p q : α} (h : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) p q) :
@@ -974,20 +1015,49 @@ theorem path_start {p q : α} (h : Relation.TransGen (fun p q => p ∈ all ∧ q
   | single e => exact e.1
   | tail _ _ ih => exact ih
 
--- 3. mutually reachable nodes share a rank
+-- 4. mutually reachable nodes share a rank
+theorem rankf_cycle
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) {p q : α}
+    (h1 : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) p q)
+    (h2 : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) q p) :
+    rankf all edges floor p = rankf all edges floor q := by
+  obtain ⟨rp, hrp⟩ := Option.ne_none_iff_exists'.1 ((rankf_all (floor := floor) close).1 p (path_start h1))
+  obtain ⟨rq, hrq⟩ := Option.ne_none_iff_exists'.1 ((rankf_all (floor := floor) close).1 q (path_start h2))
+  have a := rankf_path (floor := floor) close h1
+  have b := rankf_path (floor := floor) close h2
+  rw [hrp, hrq] at a b ⊢
+  simp only [Option.getD_some] at a b
+  congr 1; omega
+
+-- with no floor, as before
+theorem ranks_all
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
+    (∀ x ∈ all, rank all edges x ≠ none) ∧ (run all edges fun _ => 0).nan = false ∧
+      (run all edges fun _ => 0).cut = false :=
+  rankf_all close
+
+theorem rank_ranked
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
+    ranked (fun p q => p ∈ all ∧ q ∈ edges p) (fun x => (rank all edges x).getD 0) :=
+  rankf_ranked close
+
+theorem rank_path
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) {p q : α}
+    (h : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) p q) :
+    (rank all edges q).getD 0 ≤ (rank all edges p).getD 0 :=
+  rankf_path close h
+
 theorem rank_cycle
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) {p q : α}
     (h1 : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) p q)
     (h2 : Relation.TransGen (fun p q => p ∈ all ∧ q ∈ edges p) q p) :
-    rank all edges p = rank all edges q := by
-  obtain ⟨rp, hrp⟩ := Option.ne_none_iff_exists'.1 ((ranks_all close).1 p (path_start h1))
-  obtain ⟨rq, hrq⟩ := Option.ne_none_iff_exists'.1 ((ranks_all close).1 q (path_start h2))
-  have a := rank_path close h1
-  have b := rank_path close h2
-  rw [hrp, hrq] at a b ⊢
-  simp only [Option.getD_some] at a b
-  congr 1; omega
+    rank all edges p = rank all edges q :=
+  rankf_cycle close h1 h2
 
 end proofs
 

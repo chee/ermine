@@ -7,10 +7,14 @@
 // taking a commit in: its bytes decoded (a commit's shape, commit.ts), its parents all here and
 // taken (else it waits), its lamport above theirs, and check (the integration's: do its patches
 // apply to its parent's node) says yes. a commit taken in releases what waited on it, in order
+//
+// beside it, for merge rules: what a commit's tables follow from (follows), and the commits since a
+// set of heads' common ancestor, in causal order (since)
 import { type Commit, compare, decode, name as nameOf } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
 
-export type Refusal = "shape" | "lamport" | "patches" | "parent"
+// merge: a merge commit by a rule this device doesn't know
+export type Refusal = "shape" | "lamport" | "patches" | "parent" | "merge"
 
 export type Added =
 	| "taken"
@@ -24,7 +28,11 @@ export type Kept = {
 	bytes: Uint8Array
 	table: string
 	parents: Uint8Array[]
+	// the parent its patches are over: the only one, or the base of several; none for a root or a
+	// merge
 	base: Uint8Array | undefined
+	// a merge commit's rule: its patches are over the merge of its parents
+	merge: string | undefined
 	lamport: number
 }
 
@@ -44,9 +52,10 @@ export type History = {
 }
 
 // check: given a commit whose parents are all taken, whether its patches apply to its parent's
-// node (the integration's, which may apply them as it looks)
+// node (the integration's, which may apply them as it looks); false is refused "patches", a refusal
+// is refused so
 export function createHistory(
-	check: (kept: Kept, commit: Commit) => boolean = () => true,
+	check: (kept: Kept, commit: Commit) => boolean | Refusal = () => true,
 ): History {
 	const taken = new Map<string, Kept>()
 	const order: Kept[] = []
@@ -56,9 +65,6 @@ export function createHistory(
 	const waiters = new Map<string, Set<string>>()
 	const refusals = new Map<string, Refusal>()
 	const listeners = new Set<(kept: Kept) => void>()
-
-	const agreed = (a: Kept, b: Kept) =>
-		a.lamport !== b.lamport ? b.lamport - a.lamport : compare(b.name, a.name)
 
 	function refuse(n: string, why: Refusal) {
 		refusals.set(n, why)
@@ -80,9 +86,11 @@ export function createHistory(
 			refuse(n, "lamport")
 			return { refused: "lamport" }
 		}
-		if (!check(kept, commit)) {
-			refuse(n, "patches")
-			return { refused: "patches" }
+		const ok = check(kept, commit)
+		if (ok !== true) {
+			const why = ok === false ? "patches" : ok
+			refuse(n, why)
+			return { refused: why }
 		}
 		taken.set(n, kept)
 		order.push(kept)
@@ -123,7 +131,8 @@ export function createHistory(
 				bytes,
 				table: commit.table,
 				parents: commit.parents,
-				base: commit.base ?? commit.parents[0],
+				base: commit.merge === undefined ? commit.base ?? commit.parents[0] : undefined,
+				merge: commit.merge,
 				lamport: commit.lamport,
 			}
 			for (const p of commit.parents) {
@@ -153,5 +162,75 @@ export function createHistory(
 		waiting: () => [...waits].map(([name, w]) => ({ name, waiting: [...w.on] })),
 		refused: () => [...refusals].map(([name, refused]) => ({ name, refused })),
 		all: () => order.slice(),
+	}
+}
+
+// the agreed order: higher lamport first; equal, the greater name
+export const agreed = (a: Kept, b: Kept) =>
+	a.lamport !== b.lamport ? b.lamport - a.lamport : compare(b.name, a.name)
+
+// what a commit's tables follow from: a merge's parents, else its base (a commit with a base keeps
+// what that one held, whatever its other parents did), else nothing (a root)
+export function follows(k: Kept): Uint8Array[] {
+	if (k.merge !== undefined) return k.parents
+	return k.base === undefined ? [] : [k.base]
+}
+
+// the commits since heads' common ancestors, along follows. walked back from the heads in the
+// agreed order, a frontier of what is not walked yet; from: the first frontier that every commit
+// walked follows from, all of it (so nothing since is beside it), and known says its tables can be
+// had (one commit's, or several merged). a frontier of one commit is such once no root is walked;
+// none: from nothing (empty), every commit back to the roots. from in the agreed order; commits: the
+// ones walked, in causal
+// order, lower lamport first, equal lamport the lesser name first
+export function since(
+	history: History,
+	heads: readonly Kept[],
+	known: (from: readonly Kept[]) => boolean = () => true,
+): { from: Kept[]; commits: Kept[] } {
+	const frontier = new Map<string, Kept>()
+	for (const k of heads) frontier.set(hex(k.name), k)
+	const walked: Kept[] = [], seen = new Set<string>()
+	let root = false
+	// every commit walked follows from all of the frontier
+	const under = () => {
+		const reach = new Map<string, Set<string>>()
+		for (let i = walked.length - 1; i >= 0; i--) {
+			const got = new Set<string>()
+			for (const p of follows(walked[i])) {
+				const h = hex(p)
+				if (frontier.has(h)) got.add(h)
+				else for (const x of reach.get(h) ?? []) got.add(x)
+			}
+			if (got.size !== frontier.size) return false
+			reach.set(hex(walked[i].name), got)
+		}
+		return true
+	}
+	for (;;) {
+		if (frontier.size === 0) return { from: [], commits: walked.reverse() }
+		if (!root) {
+			const from = [...frontier.values()].sort(agreed)
+			if ((from.length === 1 || walked.length === 0) && known(from)) {
+				return { from, commits: walked.reverse() }
+			}
+			if (from.length > 1 && walked.length > 0 && known(from) && under()) {
+				return { from, commits: walked.reverse() }
+			}
+		}
+		let top: Kept | undefined
+		for (const k of frontier.values()) if (top === undefined || agreed(k, top) < 0) top = k
+		const n = hex(top!.name)
+		frontier.delete(n)
+		seen.add(n)
+		walked.push(top!)
+		const up = follows(top!)
+		if (up.length === 0) root = true
+		for (const p of up) {
+			const h = hex(p)
+			if (seen.has(h) || frontier.has(h)) continue
+			const k = history.get(p)
+			if (k !== undefined) frontier.set(h, k)
+		}
 	}
 }

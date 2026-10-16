@@ -1,7 +1,7 @@
 {
 	"title": "a compute runs at the next pulse, again when a key it read changes; its result goes to set",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "a": 1, "b": 2 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

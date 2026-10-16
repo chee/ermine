@@ -21,6 +21,12 @@
 		{
 			"op": "root",
 			"name": "o",
+			"info": [
+				[
+					"actor",
+					"o"
+				]
+			],
 			"expect": {}
 		},
 		{

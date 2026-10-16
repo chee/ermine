@@ -18,6 +18,8 @@ import {
 	type Compiler,
 	type Context,
 	createBuilds,
+	type Found,
+	TRACE,
 } from "./build.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -45,7 +47,7 @@ function world() {
 	const builds = () => hosted(() => createBuilds({ scheduler: s, table, places, cache: "CACHE" }))
 	// a computer, in a scope of its own: each run, f's result kept
 	function watch(f: () => unknown) {
-		const w = { runs: 0, last: undefined as unknown, o: s.createScope([], host) }
+		const w = { runs: 0, last: undefined as unknown, o: s.createScope([["watch", "w"]], host) }
 		s.runWithScope(
 			w.o,
 			() => s.createComputer(() => (w.runs++, { v: f() }), ({ v }) => void (w.last = v)),
@@ -320,4 +322,134 @@ Deno.test("stop: its steps torn down, a pending one's result landing nowhere", a
 	await settled()
 	w.s.pulse()
 	assertEquals(w.cached(), {})
+})
+
+// a step's node and its entries, by its key: [name, value, trace], newest first
+function entries(w: ReturnType<typeof world>, key: string) {
+	const folder = (w.table.get("children", "CACHE")?.value as Record<string, Id>)[key]
+	const kids = w.table.get("children", folder)!.value as Record<string, Id>
+	return Object.entries(kids).sort((a, b) => +b[0] - +a[0]).map(([n, id]) => [
+		n,
+		w.table.get("value", id)!.value,
+		(w.table.get("attributes", id)!.value as Record<string, unknown>)[TRACE],
+	])
+}
+
+Deno.test("a step: a miss runs it in its own computer and keeps its reads, in order, each [part, id, path, hash of what was there]; the step's node holds the output kept last", () => {
+	const w = world()
+	w.value("A", { n: 1 })
+	const b = w.builds()
+	let calls = 0
+	const run = () => (calls++, (w.places.readValue("value", "A", ["n"]) as number) + 1)
+	const r = w.watch(() => b.step("cell", "n + 1", run))
+	w.s.pulse()
+	assertEquals([r.last, r.runs, calls], [2, 2, 1])
+	const key = hex(hash(["cell", "n + 1"]))
+	assertEquals(entries(w, key), [["1", 2, [["value", "A", ["n"], hex(hash(1))]]]])
+	assertEquals(w.cached(), { [key]: 2 })
+	// a read of nothing there: its hash null
+	w.value("A", {})
+	w.s.pulse()
+	assertEquals(entries(w, key)[0][2], [["value", "A", ["n"], null]])
+})
+
+Deno.test("early cutoff: an output equal by bytes to one the step keeps is kept as that same value, so a reader comparing by identity stops there", () => {
+	const w = world()
+	w.value("N", 1)
+	const b = w.builds()
+	let sets = 0
+	const outs: unknown[] = []
+	w.s.runWithScope(
+		w.hosted(() => w.s.createScope([["watch", "parity"]])),
+		() =>
+			w.s.createComputer(
+				() =>
+					b.step(
+						"parity",
+						"",
+						() => ({ odd: (w.places.readValue("value", "N") as number) % 2 }),
+					),
+				(v) => (sets++, outs.push(v)),
+			),
+	)
+	w.s.pulse()
+	w.value("N", 3)
+	w.s.pulse()
+	assertEquals(sets, 1)
+	const key = hex(hash(["parity", ""]))
+	const [[, two], [, one]] = entries(w, key)
+	assertStrictEquals(two, one)
+	assertStrictEquals(outs[0], one)
+})
+
+Deno.test("a read builds can't name (a key tracked that is no places' spot): refused uncacheable; so is a step on a places with no describe", () => {
+	const w = world()
+	const b = w.builds()
+	const r = w.watch(() => b.step("odd", 1, () => (w.s.track({}), 1)))
+	w.s.pulse()
+	assertInstanceOf(r.last, BuildError)
+	assertEquals((r.last as BuildError).code, "uncacheable")
+	w.value("A", 1)
+	const bare = w.hosted(() =>
+		createBuilds({
+			scheduler: w.s,
+			table: w.table,
+			places: { readValue: w.places.readValue, commit: w.places.commit },
+			cache: "BARE",
+		})
+	)
+	const q = w.watch(() => bare.step("a", 1, () => w.places.readValue("value", "A")))
+	w.s.pulse()
+	assertEquals((q.last as BuildError).code, "uncacheable")
+	// reading nothing: kept
+	const z = w.watch(() => bare.step("z", 1, () => 7))
+	w.s.pulse()
+	assertEquals(z.last, 7)
+})
+
+Deno.test("onStep: told in the reader's run what each lookup found", () => {
+	const w = world()
+	w.value("A", 1)
+	const b = w.builds()
+	const said: [unknown, Found][] = []
+	b.onStep((f) => said.push([w.s.getRun()?.computer, f]))
+	const run = () => w.places.readValue("value", "A")
+	w.watch(() => b.step("a", 0, run))
+	w.watch(() => b.step("t", 0, run, { never: true }))
+	w.s.pulse()
+	const key = hex(hash(["a", 0]))
+	assertEquals(said.map(([c, f]) => [c !== undefined, f]), [
+		[true, { name: "a", key, found: "miss", checked: 0, entries: 0 }],
+		[true, { name: "t", found: "never", checked: 0, entries: 0 }],
+		[true, { name: "a", key, found: "hit", entry: "1", checked: 1, entries: 1 }],
+	])
+})
+
+Deno.test("a step out goes once no run reads it: a reader that hits instead lets it go, its landing kept nowhere", async () => {
+	const w = world()
+	w.value("A", "x")
+	const b = w.builds()
+	const waiting: (() => void)[] = []
+	let calls = 0
+	const run = () => {
+		calls++
+		const v = w.places.readValue("value", "A")
+		return new Promise((done) => waiting.push(() => done(v)))
+	}
+	const r = w.watch(() => b.step("slow", 0, run))
+	w.s.pulse()
+	waiting.shift()!()
+	await settled()
+	w.s.pulse()
+	assertEquals(r.last, "x")
+	w.value("A", "y")
+	w.s.pulse()
+	assertStrictEquals(r.last, PENDING)
+	w.value("A", "x")
+	w.s.pulse()
+	assertEquals([r.last, calls], ["x", 2])
+	for (const f of waiting.splice(0)) f()
+	await settled()
+	w.s.pulse()
+	assertEquals(entries(w, hex(hash(["slow", 0]))).length, 1)
 })

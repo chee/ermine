@@ -1,0 +1,37 @@
+{
+	"title": "the change a table has: the commit's time, actor, reader, external and metadata, never its other fields",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"time": 1760000000,
+			"actor": { "name": "juno", "id": 7 },
+			"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+			"external": [{ "file": "notes.ts", "line": 3, "column": 1, "function": "save" }],
+			"metadata": [["cause", { "why": "typing" }], ["tool", "pen"]],
+			"nonce": 9,
+			"patches": [{ "path": [], "value": { "/": { "bytes": "AQID" } } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "/": { "bytes": "AQID" } },
+						"change": {
+							"time": 1760000000,
+							"actor": { "id": 7, "name": "juno" },
+							"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+							"external": [
+								{ "file": "notes.ts", "line": 3, "column": 1, "function": "save" }
+							],
+							"metadata": [["cause", { "why": "typing" }], ["tool", "pen"]]
+						}
+					}
+				}
+			}
+		}
+	]
+}

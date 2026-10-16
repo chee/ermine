@@ -24,7 +24,7 @@
 // names above it, nothing beside. refused: a PlacesError, nothing changed
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
-import { asId, type Contributor, type Id, type Path, PlacesError } from "@ermine/places"
+import { asId, type Contributor, type Id, none, type Path, PlacesError } from "@ermine/places"
 import { upsert } from "@ermine/places/upsert"
 import type { Key, Table } from "@ermine/table"
 
@@ -35,21 +35,40 @@ export const PROCESS = "process" as string as Key
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v)
 
+// a map with a name in it: a level of a trie (one emptied is taken out, but the top)
+function filled(v: unknown): boolean {
+	if (!isMap(v)) return false
+	for (const _ in v) return true
+	return false
+}
+
 const bad = (name: string) => name === "" || name === "." || name === ".." || name === "/"
 
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
 // alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
 // level (processes deeper, no id: places' walk goes through it, list and members show it)
+//
+// pruning (places.ts): no level at here's path + the name (no leaf, nothing, or under a leaf):
+// none, so the walk asks it nothing more under there. the read that said so is of all under that
+// path, so a start anywhere under it marks the walk, and one elsewhere does not. no names under
+// here's path: none too. a walk from an id alone: none at once (it never has a path)
 export const processes = (root: Id): Contributor => trie(PROCESS, root, "process")
 
 // the walk of a trie of ids by path on root's part: processes' rows, and any other rows kept the
-// same way (ermine/boxes' boxed items). from: what its answers say
+// same way. from: what its answers say
 export function trie(part: Key, root: Id, from: string): Contributor {
 	return {
 		from,
-		step: ({ path }, name, r) =>
-			path === undefined ? undefined : asId(r.read(part, root, [...path, name])),
-		names: ({ path }, r) => path === undefined ? [] : r.keys(part, root, path),
+		step: ({ path }, name, r) => {
+			if (path === undefined) return none
+			const v = r.read(part, root, [...path, name])
+			return asId(v) ?? (filled(v) ? undefined : none)
+		},
+		names: ({ path }, r) => {
+			if (path === undefined) return none
+			const names = r.keys(part, root, path)
+			return names.length ? names : none
+		},
 		// a level of the trie (leaves deeper, no id of its own): a walk goes on through it
 		level: ({ path }, name, r) =>
 			path !== undefined && isMap(r.read(part, root, [...path, name])),

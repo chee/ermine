@@ -1,0 +1,39 @@
+{
+	"title": "one table packed: its entry under the table and the id \"\", and read back",
+	"steps": [
+		{
+			"op": "snapshot",
+			"tables": {
+				"value": {
+					"value": {
+						"title": "hi"
+					},
+					"change": {
+						"time": 1760000000,
+						"actor": "chee"
+					}
+				}
+			},
+			"expect": {
+				"snapshot": "a167636f6c756d6e7358575b919c9158eca8989c9952dc98905292999beadaf060771f6f6a6272497e5163534a72466aea4f1b86d4bcfc94d4624786d482c4a292e2c6a6d4b2c49c52b044794666728623431a58a0b871616a4966494e6a52462600"
+			}
+		},
+		{
+			"op": "tables",
+			"snapshot": "a2646b65797381836576616c756560f90000656e6f64657381a26576616c7565a1657469746c65626869666368616e6765a26474696d65fa4ed1cef0656163746f726463686565",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"title": "hi"
+						},
+						"change": {
+							"time": 1760000000,
+							"actor": "chee"
+						}
+					}
+				}
+			}
+		}
+	]
+}

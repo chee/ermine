@@ -1,0 +1,7 @@
+{
+	"title": "columns not deflate",
+	"bytes": "a167636f6c756d6e7343ffffff",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

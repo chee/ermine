@@ -1,0 +1,71 @@
+{
+	"title": "a write that throws changes nothing, and names the patch in the whole write",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"nope",
+						"deeper"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 1
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		}
+	]
+}

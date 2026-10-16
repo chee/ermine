@@ -1,0 +1,145 @@
+{
+	"title": "patch nodes: a patch node over another node, read through the overlay; its layers, front first; landed, its patches on the target for real",
+	"steps": [
+		{
+			"op": "world",
+			"overlay": true,
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./face",
+						{
+							"accent": "red",
+							"n": 1
+						}
+					],
+					"as": "face"
+				},
+				{
+					"do": [
+						"patch",
+						"cherry",
+						"$face",
+						[
+							{
+								"path": [
+									"accent"
+								],
+								"value": "cherry"
+							}
+						]
+					],
+					"as": "skin"
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$face"
+			],
+			"expect": {
+				"value": {
+					"accent": "cherry",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"value": {
+					"accent": "red",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"layers",
+				"$face",
+				[
+					"accent"
+				]
+			],
+			"expect": {
+				"value": [
+					{
+						"value": "cherry",
+						"from": "n2"
+					},
+					{
+						"value": "red",
+						"from": "table"
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"land",
+				"$skin"
+			],
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"value": {
+					"accent": "cherry",
+					"n": 1
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"layers",
+				"$face"
+			],
+			"expect": {
+				"value": [
+					{
+						"value": {
+							"accent": "cherry",
+							"n": 1
+						},
+						"from": "table"
+					}
+				]
+			}
+		}
+	]
+}

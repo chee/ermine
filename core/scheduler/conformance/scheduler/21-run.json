@@ -1,7 +1,7 @@
 {
 	"title": "run: once, untracked; its value and its throw are the caller's; refused on a disposed owner",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "a": 1, "b": 10 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

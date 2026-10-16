@@ -1,6 +1,7 @@
-// Nodes under keys (pack.h), in C. A node is built as a Json tree, and
-// written by cbor.c: the one canonical encoding, so the bytes are pack.ts's. Reading is the
-// reverse: cbor.c's tree is checked as pack.ts checks it, then made into nodes.
+// Nodes under keys (pack.h), in C. A node is built as a Json tree, and its pieces written by
+// cbor.c: the one canonical encoding, so the bytes are pack.ts's; the columns pack.ts's header
+// lists are made from them, and deflated (deflate.c, included here). Reading is the reverse:
+// cbor.c's tree is checked as pack.ts checks it, then made into nodes.
 #include "pack.h"
 
 #include "cbor.h"
@@ -9,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "deflate.c"
 
 _Static_assert(sizeof(long) == sizeof(int64_t), "a long holds a time");
 _Static_assert((int)JSON_FLOAT64 == (int)OP_FLOAT64 && (int)JSON_INT8 == (int)OP_INT8 &&
@@ -363,10 +366,8 @@ bad:
 	return NULL;
 }
 
-// a node's encoding, appended to out; 0 when it cannot be carried
-static int node_bytes(const nd_entry *n, const pk_options *o, pk_bytes *out) {
-	Json *j = json_node(n, o);
-	if (j == NULL) return 0;
+// a value's encoding, appended to out; 0 when it cannot be carried
+static int json_bytes(const Json *j, pk_bytes *out) {
 	size_t length = 0;
 	room(out, 1);
 	int ok = cborEncode(j, out->data + out->length, out->capacity - out->length, &length, NULL);
@@ -374,8 +375,16 @@ static int node_bytes(const nd_entry *n, const pk_options *o, pk_bytes *out) {
 		room(out, length);
 		ok = cborEncode(j, out->data + out->length, out->capacity - out->length, &length, NULL);
 	}
-	jsonFree(j);
 	if (ok) out->length += length;
+	return ok;
+}
+
+// a node's encoding, appended to out; 0 when it cannot be carried
+static int node_bytes(const nd_entry *n, const pk_options *o, pk_bytes *out) {
+	Json *j = json_node(n, o);
+	if (j == NULL) return 0;
+	int ok = json_bytes(j, out);
+	jsonFree(j);
 	return ok;
 }
 
@@ -418,13 +427,168 @@ typedef struct {
 	size_t number;
 } seat;
 
+// ids numbered: the same, on the text
+typedef struct {
+	const char *id;
+	size_t number;
+} id_seat;
+
+// a column of items: their encodings back to back, and where each starts
+typedef struct {
+	pk_bytes data;
+	size_t *start, n, capacity;
+} column;
+
+// a new item, written to c->data by the caller
+static void begin(column *c) {
+	GROW(c->start, c->n, c->capacity);
+	c->start[c->n++] = c->data.length;
+}
+
+static size_t item_length(const column *c, size_t i) {
+	return (i + 1 < c->n ? c->start[i + 1] : c->data.length) - c->start[i];
+}
+
+static int same_item(const column *c, size_t i, size_t j) {
+	return item_length(c, i) == item_length(c, j) &&
+		memcmp(c->data.data + c->start[i], c->data.data + c->start[j], item_length(c, i)) == 0;
+}
+
+static void free_column(column *c) {
+	free(c->data.data);
+	free(c->start);
+}
+
+// whole numbers, 7 bits a byte, the low first, the high bit on all but the last
+static void var(pk_bytes *b, uint64_t x) {
+	while (x >= 128) {
+		uint8_t byte = (uint8_t)((x & 127) | 128);
+		put(b, &byte, 1);
+		x >>= 7;
+	}
+	uint8_t byte = (uint8_t)x;
+	put(b, &byte, 1);
+}
+
+// everything a pack is made of
+typedef struct {
+	column ids, parts, actor, reader, external, metadata, op, values;
+	pk_bytes which, named, has, time;
+	int64_t before;
+} packing;
+
+static void free_packing(packing *p) {
+	free_column(&p->ids), free_column(&p->parts), free_column(&p->actor), free_column(&p->reader);
+	free_column(&p->external), free_column(&p->metadata), free_column(&p->op), free_column(&p->values);
+	free(p->which.data), free(p->named.data), free(p->has.data), free(p->time.data);
+}
+
+enum { HAS_ACTOR = 1, HAS_READER = 2, HAS_EXTERNAL = 4, HAS_METADATA = 8, HAS_OP = 16, HAS_VALUE = 32, HAS_COW = 64 };
+
+// a node's pieces, each in its column, and what it has and its time; 0 when it cannot be carried
+static int node_pieces(const nd_entry *n, const pk_options *o, packing *p) {
+	Json *node = json_node(n, o);
+	if (node == NULL) return 0;
+	const Json *change = jsonGet(node, "change"), *x;
+	unsigned has = 0;
+#define PIECE(from, field, bit, column) \
+	if ((x = jsonGet(from, field)) != NULL) { \
+		has |= (bit); \
+		begin(&p->column); \
+		if (!json_bytes(x, &p->column.data)) goto bad; \
+	}
+	PIECE(change, "actor", HAS_ACTOR, actor)
+	PIECE(change, "reader", HAS_READER, reader)
+	PIECE(change, "external", HAS_EXTERNAL, external)
+	PIECE(change, "metadata", HAS_METADATA, metadata)
+	PIECE(change, "op", HAS_OP, op)
+	PIECE(node, "value", HAS_VALUE, values)
+#undef PIECE
+	if (jsonGet(node, "cow") != NULL) has |= HAS_COW;
+	var(&p->has, has);
+	// the time, as its difference from the one before, zigzag
+	int64_t time = (int64_t)jsonGet(change, "time")->number, d = time - p->before;
+	var(&p->time, d >= 0 ? (uint64_t)d * 2 : (uint64_t)(-d) * 2 - 1);
+	p->before = time;
+	jsonFree(node);
+	return 1;
+bad:
+	jsonFree(node);
+	return 0;
+}
+
+// an ermine:// id: the scheme, then 64 lowercase hex digits
+static int ermine_id(const char *id, uint8_t *bytes) {
+	if (strlen(id) != 73 || memcmp(id, "ermine://", 9) != 0) return 0;
+	for (int i = 0; i < 32; i++) {
+		int v = 0;
+		for (int k = 0; k < 2; k++) {
+			char c = id[9 + 2 * i + k];
+			int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+			if (digit < 0) return 0;
+			v = v * 16 + digit;
+		}
+		bytes[i] = (uint8_t)v;
+	}
+	return 1;
+}
+
+static size_t text_hash(const char *s) {
+	size_t h = 1469598103934665603u;
+	for (; *s; s++) h = (h ^ (unsigned char)*s) * 1099511628211u;
+	return h;
+}
+
+// each stretch of equal items as [it, how many]: the list of them, written to out
+static void runs(const column *c, pk_bytes *out) {
+	size_t count = 0, j;
+	for (size_t i = 0; i < c->n; i = j) {
+		for (j = i + 1; j < c->n && same_item(c, j, i);) j++;
+		count++;
+	}
+	head(out, 4, count);
+	for (size_t i = 0; i < c->n; i = j) {
+		for (j = i + 1; j < c->n && same_item(c, j, i);) j++;
+		put(out, "\x82", 1);
+		put(out, c->data.data + c->start[i], item_length(c, i));
+		number(out, (double)(j - i));
+	}
+}
+
+// the items, a list
+static void list(const column *c, pk_bytes *out) {
+	head(out, 4, c->n);
+	put(out, c->data.data, c->data.length);
+}
+
+// a byte string
+static void byte_string(const pk_bytes *b, pk_bytes *out) {
+	head(out, 2, b->length);
+	put(out, b->data, b->length);
+}
+
+// the map of columns being made: a name and its value at a time, then v is spent
+typedef struct {
+	pk_bytes map;
+	size_t count;
+} fields;
+
+static void field(fields *f, const char *name, pk_bytes *v) {
+	text(&f->map, name);
+	put(&f->map, v->data, v->length);
+	f->count++;
+	v->length = 0;
+}
+
 pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *options, pk_bytes *out,
 	const pk_entry **at) {
 	pk_code code = PK_OK;
 	row *rows = xrealloc(NULL, (length ? length : 1) * sizeof *rows);
-	size_t n = 0, slots = 4, count = 0, written = 0;
-	pk_bytes keys = {0}, items = {0}, nodes = {0};
+	size_t n = 0, slots = 4, count = 0, id_count = 0;
+	pk_bytes keys = {0};
+	packing p = {0};
 	seat *seats = NULL;
+	id_seat *id_seats = NULL;
 	for (size_t i = 0; i < length; i++) {
 		const pk_entry *e = &entries[i];
 		size_t off = keys.length;
@@ -440,7 +604,9 @@ pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *option
 	sort(rows, n, keys.data);
 	while (slots < 2 * n + 2) slots *= 2;
 	seats = xrealloc(NULL, slots * sizeof *seats);
+	id_seats = xrealloc(NULL, slots * sizeof *id_seats);
 	memset(seats, 0, slots * sizeof *seats);
+	memset(id_seats, 0, slots * sizeof *id_seats);
 	const row *last = NULL;
 	for (size_t i = 0; i < n; i++) {
 		const row *r = &rows[i];
@@ -454,35 +620,65 @@ pk_code pk_pack(const pk_entry *entries, size_t length, const pk_options *option
 			continue;
 		}
 		last = r;
-		size_t s = (size_t)(((uintptr_t)e->node >> 4) * 0x9E3779B97F4A7C15u) & (slots - 1);
-		while (seats[s].node != NULL && seats[s].node != e->node) s = (s + 1) & (slots - 1);
-		if (seats[s].node == NULL) {
-			if (!node_bytes(e->node, options, &nodes)) {
-				if (at != NULL) *at = e;
-				code = PK_CANNOT_CARRY;
-				goto done;
-			}
-			seats[s] = (seat){e->node, count++};
+		begin(&p.parts);
+		text(&p.parts.data, e->part.string);
+		// its id's place in the ids, which are in the order the keys first name them
+		size_t s = text_hash(e->id.string) & (slots - 1);
+		while (id_seats[s].id != NULL && strcmp(id_seats[s].id, e->id.string) != 0) s = (s + 1) & (slots - 1);
+		if (id_seats[s].id == NULL) {
+			id_seats[s] = (id_seat){e->id.string, id_count++};
+			uint8_t raw[32];
+			begin(&p.ids);
+			if (ermine_id(e->id.string, raw)) head(&p.ids.data, 2, 32), put(&p.ids.data, raw, 32);
+			else text(&p.ids.data, e->id.string);
 		}
-		// the key's encoding with its list made one of three: [part, id, n]
-		put(&items, "\x83", 1);
-		put(&items, keys.data + r->off + 1, r->length - 1);
-		number(&items, (double)seats[s].number);
-		written++;
+		var(&p.which, id_seats[s].number);
+		s = (size_t)(((uintptr_t)e->node >> 4) * 0x9E3779B97F4A7C15u) & (slots - 1);
+		while (seats[s].node != NULL && seats[s].node != e->node) s = (s + 1) & (slots - 1);
+		if (seats[s].node != NULL) {
+			var(&p.named, seats[s].number + 1);
+			continue;
+		}
+		if (!node_pieces(e->node, options, &p)) {
+			if (at != NULL) *at = e;
+			code = PK_CANNOT_CARRY;
+			goto done;
+		}
+		seats[s] = (seat){e->node, count++};
+		var(&p.named, 0);
 	}
-	// "keys" sorts before "nodes": a map of two, the one way
-	put(out, "\xa2\x64keys", 6);
-	head(out, 4, written);
-	put(out, items.data, items.length);
-	put(out, "\x65nodes", 6);
-	head(out, 4, count);
-	put(out, nodes.data, nodes.length);
+	{
+		// the columns, each left out when empty, in the canonical order of their names
+		fields f = {0};
+		pk_bytes v = {0}, z = {0};
+		if (p.op.n) list(&p.op, &v), field(&f, "op", &v);
+		if (p.has.length) byte_string(&p.has, &v), field(&f, "has", &v);
+		if (p.ids.n) list(&p.ids, &v), field(&f, "ids", &v);
+		if (p.time.length) byte_string(&p.time, &v), field(&f, "time", &v);
+		if (p.actor.n) runs(&p.actor, &v), field(&f, "actor", &v);
+		if (p.named.length) byte_string(&p.named, &v), field(&f, "nodes", &v);
+		if (p.parts.n) runs(&p.parts, &v), field(&f, "parts", &v);
+		if (p.which.length) byte_string(&p.which, &v), field(&f, "which", &v);
+		if (p.reader.n) runs(&p.reader, &v), field(&f, "reader", &v);
+		if (p.values.n) list(&p.values, &v), field(&f, "values", &v);
+		if (p.external.n) runs(&p.external, &v), field(&f, "external", &v);
+		if (p.metadata.n) runs(&p.metadata, &v), field(&f, "metadata", &v);
+		head(&z, 5, f.count);
+		put(&z, f.map.data, f.map.length);
+		uint8_t *deflated;
+		size_t deflated_length;
+		df_deflate(z.data, z.length, &deflated, &deflated_length);
+		put(out, "\xa1\x67" "columns", 9);
+		head(out, 2, deflated_length);
+		put(out, deflated, deflated_length);
+		free(deflated), free(v.data), free(z.data), free(f.map.data);
+	}
 done:
 	free(seats);
+	free(id_seats);
 	free(rows);
 	free(keys.data);
-	free(items.data);
-	free(nodes.data);
+	free_packing(&p);
 	return code;
 }
 
@@ -620,14 +816,11 @@ static int read_site(arena *a, const Json *x, ch_site *s) {
 	return 1;
 }
 
-static int read_header(arena *a, const Json *x, ch_header *h) {
-	if (!only(a, x, KEYS("time"), KEYS("time", "actor", "reader", "external", "metadata", "op"))) return 0;
-	long time;
-	if (!whole(jsonGet(x, "time"), &time)) return 0;
+// a change's fields, each one NULL when not there
+static int read_fields(arena *a, long time, const Json *actor, const Json *reader, const Json *external,
+	const Json *metadata, const Json *op, ch_header *h) {
 	h->has_time = 1;
 	h->time = time;
-	const Json *actor = jsonGet(x, "actor"), *reader = jsonGet(x, "reader");
-	const Json *external = jsonGet(x, "external"), *metadata = jsonGet(x, "metadata"), *op = jsonGet(x, "op");
 	if (actor != NULL) h->actor = hold(a, pk_of_json(actor));
 	if (reader != NULL) {
 		if (!string(reader)) return 0;
@@ -663,17 +856,18 @@ static int read_header(arena *a, const Json *x, ch_header *h) {
 	return 1;
 }
 
-// a node as written, new; NULL when it is not one
-static nd_entry *read_node(arena *a, const Json *x) {
-	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
-	const Json *cow = jsonGet(x, "cow");
-	// nothing but false
-	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
-	nd_entry_options options = {.in_place = cow != NULL};
-	ch_header h = {0};
-	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
-	const Json *v = jsonGet(x, "value");
-	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, &h, &options);
+static int read_header(arena *a, const Json *x, ch_header *h) {
+	if (!only(a, x, KEYS("time"), KEYS("time", "actor", "reader", "external", "metadata", "op"))) return 0;
+	long time;
+	if (!whole(jsonGet(x, "time"), &time)) return 0;
+	return read_fields(a, time, jsonGet(x, "actor"), jsonGet(x, "reader"), jsonGet(x, "external"),
+		jsonGet(x, "metadata"), jsonGet(x, "op"), h);
+}
+
+// a node made of a header and a value (NULL: none)
+static nd_entry *make_node(arena *a, ch_header *h, const Json *v, int in_place) {
+	nd_entry_options options = {.in_place = in_place};
+	nd_entry *n = nd_make_entry(v != NULL ? hold(a, pk_of_json(v)) : NULL, h, &options);
 	if (n == NULL) {
 		fputs("pack: out of memory\n", stderr);
 		abort();
@@ -682,12 +876,20 @@ static nd_entry *read_node(arena *a, const Json *x) {
 	return n;
 }
 
-pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
-	*out = (pk_read){0};
-	Json *x = cborDecode(bytes, length, NULL, NULL);
-	if (x == NULL) return PK_NOT_A_PACK;
-	arena *a = xrealloc(NULL, sizeof *a);
-	*a = (arena){.loose = reading != NULL && reading->loosy};
+// a node as written, new; NULL when it is not one
+static nd_entry *read_node(arena *a, const Json *x) {
+	if (!only(a, x, KEYS("change"), KEYS("change", "value", "cow"))) return NULL;
+	const Json *cow = jsonGet(x, "cow");
+	// nothing but false
+	if (cow != NULL && !(cow->type == JSON_BOOLEAN && !cow->boolean)) return NULL;
+	ch_header h = {0};
+	if (!read_header(a, jsonGet(x, "change"), &h)) return NULL;
+	return make_node(a, &h, jsonGet(x, "value"), cow != NULL);
+}
+
+// the first form, {keys, nodes}
+static int read_first(arena *a, const Json *x, pk_entry **entries_out, size_t *kn_out, nd_entry ***made_out,
+	size_t *nn_out) {
 	pk_bytes key = {0}, last = {0};
 	nd_entry **made = NULL;
 	pk_entry *entries = NULL;
@@ -727,14 +929,235 @@ pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading
 	// every node under a key
 	if (next != nn) goto bad;
 	free(key.data), free(last.data);
-	jsonFree(x);
-	*out = (pk_read){entries, kn, made, nn, a};
-	return PK_OK;
+	*entries_out = entries, *kn_out = kn, *made_out = made, *nn_out = nn;
+	return 1;
 bad:
 	free(key.data), free(last.data);
+	return 0;
+}
+
+// --- the columns
+
+__extension__ typedef unsigned __int128 big;
+__extension__ typedef __int128 sbig;
+
+static void *scratch(pile *l, size_t n) {
+	void *p = xrealloc(NULL, n ? n : 1);
+	add(l, p);
+	return p;
+}
+
+// the items of a column that is a list; none when it is left out; 0: it is not a list (null included)
+static int items_of(const Json *c, const char *name, Json *const **items, size_t *n) {
+	const Json *v = jsonGet(c, name);
+	*items = NULL, *n = 0;
+	if (v == NULL) return 1;
+	if (!array(v)) return 0;
+	*items = v->array.items, *n = (size_t)v->array.count;
+	return 1;
+}
+
+// a column of whole numbers, 7 bits a byte, the low first, the high bit on all but a number's last
+// byte; none when it is left out; 0: it is not bytes, or a number never ends
+static int numbers_of(const Json *c, const char *name, pile *tmp, big **out, size_t *n) {
+	const Json *v = jsonGet(c, name);
+	*out = NULL, *n = 0;
+	if (v == NULL) return 1;
+	if (v->type != JSON_BYTES) return 0;
+	big *xs = scratch(tmp, (v->bytes.length + 1) * sizeof *xs);
+	size_t count = 0;
+	for (size_t at = 0; at < v->bytes.length;) {
+		big x = 0;
+		for (unsigned shift = 0;; shift += 7) {
+			if (at >= v->bytes.length || shift > 63) return 0;
+			unsigned char byte = v->bytes.data[at++];
+			x |= (big)(byte & 127) << shift;
+			if (byte < 128) break;
+		}
+		xs[count++] = x;
+	}
+	*out = xs, *n = count;
+	return 1;
+}
+
+// runs [[it, how many], ...] spread out, each how many whole and at least 1; more than bound
+// altogether: 0, as no pack has more
+static int spread(const Json *c, const char *name, pile *tmp, size_t bound, const Json ***out, size_t *n) {
+	Json *const *runs;
+	size_t nr, total = 0, at = 0;
+	*out = NULL, *n = 0;
+	if (!items_of(c, name, &runs, &nr)) return 0;
+	for (size_t i = 0; i < nr; i++) {
+		long m;
+		if (!array(runs[i]) || runs[i]->array.count != 2 || !whole(runs[i]->array.items[1], &m) || m < 1) return 0;
+		if ((size_t)m > bound - total) return 0;
+		total += (size_t)m;
+	}
+	const Json **xs = scratch(tmp, (total + 1) * sizeof *xs);
+	for (size_t i = 0; i < nr; i++) {
+		long m = 0;
+		whole(runs[i]->array.items[1], &m);
+		for (long k = 0; k < m; k++) xs[at++] = runs[i]->array.items[0];
+	}
+	*out = xs, *n = total;
+	return 1;
+}
+
+// an id as it is carried: the text, or an ermine:// id as its 32 bytes
+typedef struct {
+	const char *text;
+	size_t length;
+} carried;
+
+static int read_columns(arena *a, const Json *x, size_t limit, pk_entry **entries_out, size_t *kn_out,
+	nd_entry ***made_out, size_t *nn_out) {
+	static const char *const COLUMNS[] = {"ids", "parts", "which", "nodes", "has", "time", "actor", "reader",
+		"external", "metadata", "op", "values", NULL};
+	pile tmp = {0};
+	pk_bytes key = {0}, last = {0};
+	uint8_t *inner = NULL;
+	size_t inner_length = 0;
+	Json *c = NULL;
+	int ok = 0;
+	const Json *z = jsonGet(x, "columns");
+	if (z->type != JSON_BYTES) goto end;
+	if (df_inflate(z->bytes.data, z->bytes.length, limit, &inner, &inner_length) != DF_OK) goto end;
+	if ((c = cborDecode(inner, inner_length, NULL, NULL)) == NULL) goto end;
+	if (!only(a, c, (const char *const[]){NULL}, COLUMNS)) goto end;
+	{
+		Json *const *id_items, *const *op, *const *values;
+		size_t ni, nop, nv;
+		big *which, *named, *has, *times;
+		size_t nwhich, nnamed, m, ntimes;
+		const Json **parts, **actor, **reader, **external, **metadata;
+		size_t k, na, nr, ne, nm;
+		if (!items_of(c, "ids", &id_items, &ni) || !items_of(c, "op", &op, &nop) || !items_of(c, "values", &values, &nv))
+			goto end;
+		if (!numbers_of(c, "which", &tmp, &which, &nwhich) || !numbers_of(c, "nodes", &tmp, &named, &nnamed) ||
+			!numbers_of(c, "has", &tmp, &has, &m) || !numbers_of(c, "time", &tmp, &times, &ntimes))
+			goto end;
+		if (!spread(c, "parts", &tmp, nwhich, &parts, &k)) goto end;
+		if (nwhich != k || nnamed != k || ntimes != m) goto end;
+		if (!spread(c, "actor", &tmp, m, &actor, &na) || !spread(c, "reader", &tmp, m, &reader, &nr) ||
+			!spread(c, "external", &tmp, m, &external, &ne) || !spread(c, "metadata", &tmp, m, &metadata, &nm))
+			goto end;
+		// the ids
+		carried *ids = scratch(&tmp, (ni + 1) * sizeof *ids);
+		for (size_t i = 0; i < ni; i++) {
+			const Json *id = id_items[i];
+			uint8_t raw[32];
+			if (id->type == JSON_STRING && !ermine_id(id->string, raw)) ids[i] = (carried){id->string, id->stringLength};
+			else if (id->type == JSON_BYTES && id->bytes.length == 32) {
+				char *text = scratch(&tmp, 74);
+				memcpy(text, "ermine://", 9);
+				for (int b = 0; b < 32; b++) snprintf(text + 9 + 2 * b, 3, "%02x", id->bytes.data[b]);
+				ids[i] = (carried){text, 73};
+			} else goto end;
+		}
+		// ids in the order the keys first name them, each named
+		size_t seen = 0;
+		for (size_t i = 0; i < k; i++) {
+			if (which[i] > seen || which[i] >= ni) goto end;
+			if (which[i] == seen) seen++;
+		}
+		if (seen != ni) goto end;
+		// the nodes
+		nd_entry **made = grab(a, (m + 1) * sizeof *made);
+		size_t ia = 0, ir = 0, ie = 0, im = 0, io = 0, iv = 0;
+		sbig time = 0;
+		for (size_t i = 0; i < m; i++) {
+			if (has[i] > 127) goto end;
+			unsigned bits = (unsigned)has[i];
+			time += times[i] % 2 == 0 ? (sbig)(times[i] / 2) : -(sbig)((times[i] + 1) / 2);
+			if (time > 9007199254740991 || time < -9007199254740991) goto end;
+			const Json *fa = NULL, *fr = NULL, *fe = NULL, *fm = NULL, *fo = NULL, *fv = NULL;
+			if (bits & HAS_ACTOR) {
+				if (ia >= na) goto end;
+				fa = actor[ia++];
+			}
+			if (bits & HAS_READER) {
+				if (ir >= nr) goto end;
+				fr = reader[ir++];
+			}
+			if (bits & HAS_EXTERNAL) {
+				if (ie >= ne) goto end;
+				fe = external[ie++];
+			}
+			if (bits & HAS_METADATA) {
+				if (im >= nm) goto end;
+				fm = metadata[im++];
+			}
+			if (bits & HAS_OP) {
+				if (io >= nop) goto end;
+				fo = op[io++];
+			}
+			if (bits & HAS_VALUE) {
+				if (iv >= nv) goto end;
+				fv = values[iv++];
+			}
+			ch_header h = {0};
+			if (!read_fields(a, (long)time, fa, fr, fe, fm, fo, &h)) goto end;
+			made[i] = make_node(a, &h, fv, (bits & HAS_COW) != 0);
+		}
+		if (ia != na || ir != nr || ie != ne || im != nm || io != nop || iv != nv) goto end;
+		// the entries
+		pk_entry *entries = grab(a, (k + 1) * sizeof *entries);
+		size_t next = 0;
+		for (size_t i = 0; i < k; i++) {
+			const Json *part = parts[i];
+			if (!string(part)) goto end;
+			carried id = ids[which[i]];
+			size_t n;
+			if (named[i] == 0) n = next++;
+			else if (named[i] - 1 < next) n = (size_t)(named[i] - 1);
+			else goto end;
+			if (n >= m) goto end;
+			// sorted, none twice
+			key.length = 0;
+			if (!key_bytes(&key, part->string, id.text)) goto end;
+			if (i > 0) {
+				size_t len = key.length < last.length ? key.length : last.length;
+				int d = memcmp(last.data, key.data, len);
+				if (d > 0 || (d == 0 && last.length >= key.length)) goto end;
+			}
+			pk_bytes swap = last;
+			last = key;
+			key = swap;
+			entries[i] = (pk_entry){tb_string(dup(a, part->string, part->stringLength)),
+				tb_string(dup(a, id.text, id.length)), made[n]};
+		}
+		// every node under a key
+		if (next != m) goto end;
+		*entries_out = entries, *kn_out = k, *made_out = made, *nn_out = m;
+		ok = 1;
+	}
+end:
+	for (size_t i = 0; i < tmp.n; i++) free(tmp.p[i]);
+	free(tmp.p), free(key.data), free(last.data), free(inner);
+	jsonFree(c);
+	return ok;
+}
+
+pk_code pk_unpack(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {
+	*out = (pk_read){0};
+	Json *x = cborDecode(bytes, length, NULL, NULL);
+	if (x == NULL) return PK_NOT_A_PACK;
+	arena *a = xrealloc(NULL, sizeof *a);
+	*a = (arena){.loose = reading != NULL && reading->loosy};
+	nd_entry **made = NULL;
+	pk_entry *entries = NULL;
+	size_t nn = 0, kn = 0;
+	size_t limit = reading != NULL && reading->limit ? reading->limit : (size_t)1 << 30;
+	int ok = jsonGet(x, "columns") != NULL && only(a, x, KEYS("columns"), KEYS("columns"))
+		? read_columns(a, x, limit, &entries, &kn, &made, &nn)
+		: read_first(a, x, &entries, &kn, &made, &nn);
 	jsonFree(x);
-	pk_free(&(pk_read){.own = a});
-	return PK_NOT_A_PACK;
+	if (!ok) {
+		pk_free(&(pk_read){.own = a});
+		return PK_NOT_A_PACK;
+	}
+	*out = (pk_read){entries, kn, made, nn, a};
+	return PK_OK;
 }
 
 pk_code pk_decode(const uint8_t *bytes, size_t length, const pk_reading *reading, pk_read *out) {

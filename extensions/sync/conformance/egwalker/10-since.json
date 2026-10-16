@@ -1,0 +1,209 @@
+{
+	"title": "since: from the latest commit every head follows from and nothing since is beside, the commits since in causal order; none: from nothing",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": 0
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "x",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"x"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"x"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a2",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 4
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"a2",
+				"b"
+			],
+			"expect": {
+				"from": [
+					"x"
+				],
+				"commits": [
+					"a",
+					"b",
+					"a2"
+				]
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"a2"
+			],
+			"expect": {
+				"from": [
+					"a2"
+				],
+				"commits": []
+			}
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": [
+				"a2",
+				"b"
+			],
+			"patches": [],
+			"merge": "eg-walker",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "n",
+			"parents": [
+				"a2",
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"value": 5
+				}
+			],
+			"merge": "eg-walker",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"m",
+				"n"
+			],
+			"expect": {
+				"from": [
+					"x"
+				],
+				"commits": [
+					"a",
+					"b",
+					"a2",
+					"m",
+					"n"
+				]
+			}
+		},
+		{
+			"op": "add",
+			"name": "q",
+			"patches": [
+				{
+					"path": [],
+					"value": 9
+				}
+			],
+			"time": 5,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"q",
+				"b"
+			],
+			"expect": {
+				"from": [],
+				"commits": [
+					"q",
+					"r",
+					"x",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"q",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": 3,
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

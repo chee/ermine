@@ -1,7 +1,7 @@
 {
 	"title": "an effect is an owner: its cleanups run before its next act, and when it goes",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
 			"op": "effect",
 			"name": "e",

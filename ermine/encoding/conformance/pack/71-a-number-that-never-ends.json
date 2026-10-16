@@ -1,0 +1,7 @@
+{
+	"title": "a number that never ends",
+	"bytes": "a167636f6c756d6e7358501dc9c91180200c00c0580a7df8503a89210ecca838048fa7a41a5be4e7f1ddbdc9a35863283851441c5c0e33f71723e5988ae2593be0253a160bc02ba62c4579c769e36f0e1fc85b68c65f446b0b2f3f",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

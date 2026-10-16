@@ -1,0 +1,43 @@
+{
+	"title": "a merge's patches are checked against its base, not its other parents",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["list"], "value": [1] }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": ["b", "c"],
+			"base": "c",
+			"patches": [{ "path": ["list", 0], "value": 2 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{
+			"op": "add",
+			"name": "n",
+			"parents": ["b", "c"],
+			"base": "b",
+			"patches": [{ "path": ["list", 0], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "heads", "expect": { "heads": ["n"] } }
+	]
+}

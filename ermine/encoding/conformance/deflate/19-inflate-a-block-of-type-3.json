@@ -1,0 +1,12 @@
+{
+	"title": "inflate: a block of type 3",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "07",
+			"expect": {
+				"code": "not-deflate"
+			}
+		}
+	]
+}

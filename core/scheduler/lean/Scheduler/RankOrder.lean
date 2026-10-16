@@ -1,25 +1,26 @@
 -- LLM generated working output
--- rank.ts as Order.lean's rk, and Order.reach (start, gone) for it.
+-- rank.ts as Order.lean's rk (rkf: with a floor; rk: without), and Order.sound for it.
 --
 -- proved:
---   height_unique: two heights of the same edges agree. a height: ranked (Basic.lean), and each
---     rank 0 or one more than the rank of a node it reaches: the longest path in the condensation
---   rank_height: rank.ts's ranks (Rank.rank, getD 0) are a height of its edges. ranked is
---     Rank.lean's rank_ranked; the rest is tight, carried through visit as Rank.lean's wf is
---   rank_same: so rank.ts's ranks depend on the edges alone: not on all's order, its duplicates,
---     or the order of edges(p)
---   rk_reach: Order.reach (rk univ), for any univ
---   rk_tall: Order.tall (rk univ) on alive ones univ holds: with no link between equal ranks each
---     rank is one past the most of what it is after (mend's k); ranks that are so are rk's
---   Check: order.ts's ranks made whole, mended as they fall and rise, given up on a cycle
+--   heightf_unique: two heights above the same floor, each at least it, agree. a height above F:
+--     ranked (Basic.lean), and each rank 0, the floor of a node on its component, or one more than
+--     the rank of a node it reaches. height_unique: with no floor, the same (a height)
+--   rankf_height: rank.ts's ranks (Rank.rankf, getD 0) are a height of its edges above its floor.
+--     ranked is Rank.lean's rankf_ranked, the floor rankf_floor; the rest is tight, carried through
+--     visit as Rank.lean's wf is. rank_height: with no floor
+--   rankf_same, rank_same: so rank.ts's ranks depend on the nodes, the edges and the floor alone:
+--     not on all's order, its duplicates, or the order of edges(p)
+--   rkf_sound: Order.sound (rkf univ) on alive ones univ holds: on any part of them, ranked along
+--     its edges and at least its floor
+--   Check: order.ts's ranks made whole, kept when an edge goes, risen, a cycle made and ranked
+--     where it is (local), a member gone
 --
 -- model, and where it departs from order.ts:
---   - rk univ A L p: Rank.rank with all = univ.filter A, edges p = univ.filter (L p), getD 0 for
---     the code's `?? 0`. order.ts gives [...all()].filter(alive), and edges p as p.values then
---     p.after, each kept by edge: the same members in another order, maybe with duplicates.
---     rank_same makes the difference nothing
---   - Rank.lean's close (edges stay in all) comes from reach's own hypothesis: links go only to
---     the alive
+--   - rkf univ B L F p: Rank.rankf with all = univ.filter B, edges p = univ.filter (L p), floor F,
+--     getD 0 for the code's `?? 0`. order.ts gives [...all()].filter(alive) or the region, and
+--     edges p as p.values then p.after, each kept by edge (and in the region): the same members
+--     in another order, maybe with duplicates. rankf_same makes the difference nothing
+--   - Rank.lean's close (edges stay in all) comes from sound's own hypothesis: L goes only into B
 import Scheduler.Rank
 import Scheduler.Order
 
@@ -72,6 +73,44 @@ theorem height_unique {e : α → α → Prop} {r1 r2 : α → Nat} (h1 : height
     (h2 : height e r2) : r1 = r2 :=
   funext fun x => Nat.le_antisymm (height_le h1 h2.1 x) (height_le h2 h1.1 x)
 
+-- a height of e above F on D: ranked, and each rank 0, the floor of a node of D on its component,
+-- or one more than one it reaches. F 0: a height
+def heightf (D : α → Prop) (e : α → α → Prop) (F : α → Nat) (r : α → Nat) : Prop :=
+  ranked e r ∧ ∀ x, r x = 0 ∨
+    (∃ m, D m ∧ (m = x ∨ (Relation.TransGen e x m ∧ Relation.TransGen e m x)) ∧ r x = F m) ∨
+    ∃ y, Relation.TransGen e x y ∧ r x = r y + 1
+
+-- a height above F is below every ranked function above F on D
+theorem heightf_le {D : α → Prop} {e : α → α → Prop} {F r1 r2 : α → Nat} (h1 : heightf D e F r1)
+    (d2 : ranked e r2) (f2 : ∀ m, D m → F m ≤ r2 m) (x : α) : r1 x ≤ r2 x := by
+  rcases h1.2 x with h | ⟨m, hm, hmx, h⟩ | ⟨y, hxy, h⟩
+  · omega
+  · have := f2 m hm
+    rcases hmx with rfl | ⟨hxm, _⟩
+    · omega
+    · have := path_le d2 hxm; omega
+  · have ih := heightf_le h1 d2 f2 y
+    have n : ¬ Relation.TransGen e y x := fun yx => by have := path_le h1.1 yx; omega
+    have := fall d2 hxy n
+    omega
+termination_by r1 x
+decreasing_by omega
+
+-- the edges and the floors on D fix the height
+theorem heightf_unique {D : α → Prop} {e : α → α → Prop} {F r1 r2 : α → Nat}
+    (h1 : heightf D e F r1) (f1 : ∀ m, D m → F m ≤ r1 m) (h2 : heightf D e F r2)
+    (f2 : ∀ m, D m → F m ≤ r2 m) : r1 = r2 :=
+  funext fun x => Nat.le_antisymm (heightf_le h1 h2.1 f2 x) (heightf_le h2 h1.1 f1 x)
+
+-- with no floor, a height
+theorem height_of {D : α → Prop} {e : α → α → Prop} {r : α → Nat}
+    (h : heightf D e (fun _ => 0) r) : height e r := by
+  refine ⟨h.1, fun x => ?_⟩
+  rcases h.2 x with h0 | ⟨_, _, _, h0⟩ | h0
+  · exact .inl h0
+  · exact .inl h0
+  · exact .inr h0
+
 /-! ## rank.ts's ranks are a height -/
 
 -- score's inner loop: r stays or is one more than a rank it reads
@@ -99,43 +138,53 @@ theorem inner_max (out : α → Option Nat) (members : List α) : ∀ (qs : List
           · exact Or.inr ⟨q, List.mem_cons_self, hq, o, ho, by omega⟩
         · exact Or.inr ⟨q', List.mem_cons_of_mem _ m, h1, h2⟩
 
-theorem outer_max (edges : α → List α) (out : α → Option Nat) (members : List α) :
-    ∀ (xs : List α) (r0 r : Nat),
+theorem outer_max (edges : α → List α) (floor : α → Nat) (out : α → Option Nat)
+    (members : List α) : ∀ (xs : List α) (r0 r : Nat),
     xs.foldl (fun r x => (edges x).foldl (fun r q => if q ∈ members then r else
-      r.bind fun r => (out q).map fun o => max r (o + 1)) r) (some r0) = some r →
-    r = r0 ∨ ∃ x ∈ xs, ∃ q ∈ edges x, q ∉ members ∧ ∃ o, out q = some o ∧ r = o + 1
+      r.bind fun r => (out q).map fun o => max r (o + 1)) (r.map fun r => max r (floor x)))
+      (some r0) = some r →
+    r = r0 ∨ (∃ x ∈ xs, r = floor x) ∨
+      ∃ x ∈ xs, ∃ q ∈ edges x, q ∉ members ∧ ∃ o, out q = some o ∧ r = o + 1
   | [], r0, r, h => by simp at h; exact Or.inl h.symm
   | x :: xs, r0, r, h => by
-    simp only [List.foldl_cons] at h
+    simp only [List.foldl_cons, Option.map_some] at h
     cases h1 : (edges x).foldl (fun r q => if q ∈ members then r else
-        r.bind fun r => (out q).map fun o => max r (o + 1)) (some r0) with
+        r.bind fun r => (out q).map fun o => max r (o + 1)) (some (max r0 (floor x))) with
     | none => rw [h1, outer_none] at h; cases h
     | some r1 =>
       rw [h1] at h
-      rcases outer_max edges out members xs r1 r h with e | ⟨x', m, q, hq, h2⟩
-      · rcases inner_max out members (edges x) r0 r1 h1 with e' | ⟨q, hq, h3⟩
-        · exact Or.inl (by omega)
-        · exact Or.inr ⟨x, List.mem_cons_self, q, hq, by rw [e]; exact h3⟩
-      · exact Or.inr ⟨x', List.mem_cons_of_mem _ m, q, hq, h2⟩
+      rcases outer_max edges floor out members xs r1 r h with e | ⟨x', m, h2⟩ |
+          ⟨x', m, q, hq, h2⟩
+      · rcases inner_max out members (edges x) _ r1 h1 with e' | ⟨q, hq, h3⟩
+        · by_cases le : floor x ≤ r0
+          · exact Or.inl (by omega)
+          · exact Or.inr (Or.inl ⟨x, List.mem_cons_self, by omega⟩)
+        · exact Or.inr (Or.inr ⟨x, List.mem_cons_self, q, hq, by rw [e]; exact h3⟩)
+      · exact Or.inr (Or.inl ⟨x', List.mem_cons_of_mem _ m, h2⟩)
+      · exact Or.inr (Or.inr ⟨x', List.mem_cons_of_mem _ m, q, hq, h2⟩)
 
--- r is 0, or one more than the rank an edge leaving the members goes to (Math.max)
-theorem score_max (edges : α → List α) (out : α → Option Nat) (members : List α) {r : Nat}
-    (h : score edges out members = some r) :
-    r = 0 ∨ ∃ x ∈ members, ∃ q ∈ edges x, q ∉ members ∧ ∃ o, out q = some o ∧ r = o + 1 :=
-  outer_max edges out members members 0 r h
+-- r is 0, a member's floor, or one more than the rank an edge leaving the members goes to
+-- (Math.max)
+theorem score_max (edges : α → List α) (floor : α → Nat) (out : α → Option Nat)
+    (members : List α) {r : Nat} (h : score edges floor out members = some r) :
+    r = 0 ∨ (∃ x ∈ members, r = floor x) ∨
+      ∃ x ∈ members, ∃ q ∈ edges x, q ∉ members ∧ ∃ o, out q = some o ∧ r = o + 1 :=
+  outer_max edges floor out members members 0 r h
 
-variable {all : List α} {edges : α → List α}
+variable {all : List α} {edges : α → List α} {floor : α → Nat}
 
--- each rank set is 0, or one more than the rank of a node it reaches
-def tight (all : List α) (edges : α → List α) (s : state α) : Prop :=
+-- each rank set is 0, the floor of a node of all on its component, or one more than the rank of a
+-- node it reaches
+def tight (all : List α) (edges : α → List α) (floor : α → Nat) (s : state α) : Prop :=
   ∀ x r, s.out x = some r → r = 0 ∨
+    (∃ m, m ∈ all ∧ reach all edges x m ∧ reach all edges m x ∧ r = floor m) ∨
     ∃ y o, Relation.TransGen (edge all edges) x y ∧ s.out y = some o ∧ r = o + 1
 
 -- popping keeps it: Rank.lean's pop_post, again, for the score
-theorem pop_tight {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges s0 G)
-    (hp0 : s0.index p = none) (I : inv all edges f s0 p G (edges p) t)
-    (h : t.index p = some (t.low p)) (T : tight all edges t) :
-    tight all edges (finish edges p t) := by
+theorem pop_tight {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf all edges floor s0 G)
+    (hp0 : s0.index p = none) (I : inv all edges floor f s0 p G (edges p) t)
+    (h : t.index p = some (t.low p)) (T : tight all edges floor t) :
+    tight all edges floor (finish edges floor p t) := by
   have w := I.good
   obtain ⟨M, hM, hM0⟩ := I.stack
   have nd := w.nodup
@@ -194,8 +243,8 @@ theorem pop_tight {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf al
         exact closed w (K1 a ha b eab.2 hb) rb gout
   have K3 : ∀ x ∈ C, reach all edges p x :=
     fun x hx => I.reached x (hC0 x hx) (w.onseen x (hCon x hx))
-  obtain ⟨r, hr, -⟩ := score_some t.out C K1
-  have hfin : finish edges p t =
+  obtain ⟨r, hr, -, -⟩ := score_some (floor := floor) t.out C K1
+  have hfin : finish edges floor p t =
       { t with
         stack := s0.stack
         on := fun x => if x ∈ C then false else t.on x
@@ -209,27 +258,30 @@ theorem pop_tight {f : Nat} {s0 t : state α} {p : α} {G : List α} (w0 : wf al
   by_cases hxC : x ∈ C
   · simp only [hxC, ↓reduceIte, Option.some.injEq] at hx
     subst hx
-    rcases score_max edges t.out C hr with e | ⟨m, hm, y, hy, hyC, o, ho, e⟩
+    rcases score_max edges floor t.out C hr with e | ⟨m, hm, e⟩ | ⟨m, hm, y, hy, hyC, o, ho, e⟩
     · exact Or.inl e
-    · refine Or.inr ⟨y, o, ?_, by simp [hyC, ho], e⟩
+    · exact Or.inr (Or.inl ⟨m, w.inall m (w.onseen m (hCon m hm)),
+        reach_trans (K2 x hxC) (K3 m hm), reach_trans (K2 m hm) (K3 x hxC), e⟩)
+    · refine Or.inr (Or.inr ⟨y, o, ?_, by simp [hyC, ho], e⟩)
       have ma : m ∈ all := w.inall m (w.onseen m (hCon m hm))
       rcases reach_trans (K2 x hxC) (K3 m hm) with rfl | r
       · exact .single ⟨ma, hy⟩
       · exact .tail r ⟨ma, hy⟩
   · simp only [hxC, ↓reduceIte] at hx
-    rcases T x r' hx with e | ⟨y, o, hxy, ho, e⟩
+    rcases T x r' hx with e | e | ⟨y, o, hxy, ho, e⟩
     · exact Or.inl e
+    · exact Or.inr (Or.inl e)
     · have hyC := outC y (by simp [ho])
-      exact Or.inr ⟨y, o, hxy, by simp [hyC, ho], e⟩
+      exact Or.inr (Or.inr ⟨y, o, hxy, by simp [hyC, ho], e⟩)
 
 -- p's loop keeps it
 theorem loop_tight {f : Nat} {s0 : state α} {p : α} {G : List α}
-    (IH : ∀ q s G, wf all edges s G → s.index q = none → q ∈ all → count s.index all < f →
-      tight all edges s → tight all edges (visit edges f q s))
+    (IH : ∀ q s G, wf all edges floor s G → s.index q = none → q ∈ all → count s.index all < f →
+      tight all edges floor s → tight all edges floor (visit edges floor f q s))
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) (pa : p ∈ all) (hp0 : s0.index p = none) :
     ∀ (rest done : List α) (s : state α), (∀ q ∈ rest, q ∈ edges p) →
-      inv all edges f s0 p G done s → tight all edges s →
-      tight all edges (loop (visit edges f) p rest s)
+      inv all edges floor f s0 p G done s → tight all edges floor s →
+      tight all edges floor (loop (visit edges floor f) p rest s)
   | [], _, s, _, _, T => by simpa [loop] using T
   | q :: qs, done, s, hr, I, T => by
     have hqe := hr q List.mem_cons_self
@@ -251,29 +303,29 @@ theorem loop_tight {f : Nat} {s0 : state α} {p : α} {G : List α}
 
 -- visit keeps it
 theorem visit_tight (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    ∀ (f : Nat) (q : α) (s : state α) (G : List α), wf all edges s G → s.index q = none →
-      q ∈ all → count s.index all < f → tight all edges s → tight all edges (visit edges f q s)
+    ∀ (f : Nat) (q : α) (s : state α) (G : List α), wf all edges floor s G → s.index q = none →
+      q ∈ all → count s.index all < f → tight all edges floor s → tight all edges floor (visit edges floor f q s)
   | 0, _, _, _, _, _, _, hf, _ => absurd hf (Nat.not_lt_zero _)
   | f + 1, p, s, G, w, hp, pa, hf, T => by
     have I := loop_inv (visit_spec close f) close pa hp (edges p) [] (push p s) (fun _ h => h)
       (push_inv w hp pa hf)
     simp only [List.nil_append] at I
-    have T1 : tight all edges (push p s) := T
+    have T1 : tight all edges floor (push p s) := T
     have T2 := loop_tight (visit_tight close f) close pa hp (edges p) [] (push p s)
       (fun _ h => h) (push_inv w hp pa hf) T1
     simp only [visit]
-    generalize loop (visit edges f) p (edges p) (push p s) = t at I T2 ⊢
+    generalize loop (visit edges floor f) p (edges p) (push p s) = t at I T2 ⊢
     by_cases h : t.index p = some (t.low p)
     · exact pop_tight w hp I h T2
-    · have e : finish edges p t = t := by simp [finish, h]
+    · have e : finish edges floor p t = t := by simp [finish, h]
       rw [e]; exact T2
 
 -- rank's for keeps it
 theorem run_tight (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    ∀ (xs : List α) (s : state α), (∀ x ∈ xs, x ∈ all) → wf all edges s [] →
-      tight all edges s →
-      tight all edges (xs.foldl (fun s p => if s.index p = none then
-        visit edges (all.length + 1) p s else s) s)
+    ∀ (xs : List α) (s : state α), (∀ x ∈ xs, x ∈ all) → wf all edges floor s [] →
+      tight all edges floor s →
+      tight all edges floor (xs.foldl (fun s p => if s.index p = none then
+        visit edges floor (all.length + 1) p s else s) s)
   | [], _, _, _, T => T
   | x :: xs, s, hxs, w, T => by
     simp only [List.foldl_cons]
@@ -287,25 +339,55 @@ theorem run_tight (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
         (visit_tight close (all.length + 1) x s [] w hx xa (by omega) T)
     · simp only [hx, ↓reduceIte]; exact run_tight close xs s hxs' w T
 
--- rank.ts's ranks are a height of its edges
+-- rank.ts's ranks are a height of its edges above the floor
+theorem rankf_height
+    -- assumed: every edge of a node of all goes into all
+    (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
+    heightf (· ∈ all) (fun p q => p ∈ all ∧ q ∈ edges p) floor
+      (fun x => (rankf all edges floor x).getD 0) := by
+  refine ⟨rankf_ranked close, ?_⟩
+  have T : tight all edges floor (run all edges floor) :=
+    run_tight close all init (fun _ h => h) init_wf (by intro x r h; simp [init] at h)
+  intro x
+  simp only [rankf]
+  cases hx : (run all edges floor).out x with
+  | none => exact Or.inl rfl
+  | some r =>
+    rcases T x r hx with e | ⟨m, hm, rxm, rmx, e⟩ | ⟨y, o, hxy, ho, e⟩
+    · exact Or.inl (by simp [e])
+    · refine Or.inr (Or.inl ⟨m, hm, ?_, by simp [e]⟩)
+      rcases rxm with rfl | rxm
+      · exact .inl rfl
+      · rcases rmx with rfl | rmx
+        · exact .inl rfl
+        · exact .inr ⟨rxm, rmx⟩
+    · exact Or.inr (Or.inr ⟨y, hxy, by simp [ho, e]⟩)
+
+-- with no floor, a height
 theorem rank_height
     -- assumed: every edge of a node of all goes into all
     (close : ∀ p ∈ all, ∀ q ∈ edges p, q ∈ all) :
-    height (fun p q => p ∈ all ∧ q ∈ edges p) (fun x => (rank all edges x).getD 0) := by
-  refine ⟨rank_ranked close, ?_⟩
-  have T : tight all edges (run all edges) :=
-    run_tight close all init (fun _ h => h) init_wf (by intro x r h; simp [init] at h)
-  intro x
-  simp only [rank]
-  cases hx : (run all edges).out x with
-  | none => exact Or.inl rfl
-  | some r =>
-    rcases T x r hx with e | ⟨y, o, hxy, ho, e⟩
-    · exact Or.inl (by simp [e])
-    · exact Or.inr ⟨y, hxy, by simp [ho, e]⟩
+    height (fun p q => p ∈ all ∧ q ∈ edges p) (fun x => (rank all edges x).getD 0) :=
+  height_of (rankf_height close)
 
--- so rank.ts's ranks depend on the edges alone: not on all's order, its duplicates, or the
--- order of edges(p) (order.ts: [...all()] and p.values)
+-- so rank.ts's ranks depend on the edges, the nodes and the floor alone: not on all's order, its
+-- duplicates, or the order of edges(p) (order.ts: [...all()], the region's order, p.values)
+theorem rankf_same {all1 all2 : List α} {edges1 edges2 : α → List α}
+    (close1 : ∀ p ∈ all1, ∀ q ∈ edges1 p, q ∈ all1) (close2 : ∀ p ∈ all2, ∀ q ∈ edges2 p, q ∈ all2)
+    (ha : ∀ x, x ∈ all1 ↔ x ∈ all2)
+    (he : ∀ p q, (p ∈ all1 ∧ q ∈ edges1 p) ↔ (p ∈ all2 ∧ q ∈ edges2 p)) (x : α) :
+    (rankf all1 edges1 floor x).getD 0 = (rankf all2 edges2 floor x).getD 0 := by
+  have e : (fun p q => p ∈ all1 ∧ q ∈ edges1 p) = (fun p q => p ∈ all2 ∧ q ∈ edges2 p) :=
+    funext fun p => funext fun q => propext (he p q)
+  have d : (· ∈ all1) = (· ∈ all2) := funext fun x => propext (ha x)
+  have h1 := rankf_height (floor := floor) close1
+  rw [e, d] at h1
+  have f1 : ∀ m, m ∈ all2 → floor m ≤ (rankf all1 edges1 floor m).getD 0 :=
+    fun m hm => rankf_floor close1 ((ha m).2 hm)
+  exact congrFun (heightf_unique h1 f1 (rankf_height close2)
+    (fun m hm => rankf_floor close2 hm)) x
+
+-- with no floor the nodes do not matter: one with no edges is 0 either way
 theorem rank_same {all1 all2 : List α} {edges1 edges2 : α → List α}
     (close1 : ∀ p ∈ all1, ∀ q ∈ edges1 p, q ∈ all1) (close2 : ∀ p ∈ all2, ∀ q ∈ edges2 p, q ∈ all2)
     (he : ∀ p q, (p ∈ all1 ∧ q ∈ edges1 p) ↔ (p ∈ all2 ∧ q ∈ edges2 p)) (x : α) :
@@ -318,9 +400,16 @@ theorem rank_same {all1 all2 : List α} {edges1 edges2 : α → List α}
 
 /-! ## Order.lean's rk -/
 
--- order.ts's ranks: rank.ts over the alive, edges by link; univ lists the computations
+-- order.ts's ranks: rank.ts over the alive B, edges by L, floor F; univ lists the computations
+def rkf (univ : List α) (B : α → Bool) (L : α → α → Bool) (F : α → Nat) (p : α) : Nat :=
+  (rankf (univ.filter B) (fun p => univ.filter (L p)) F p).getD 0
+
+-- with no floor (ranks made whole)
 def rk (univ : List α) (A : α → Bool) (L : α → α → Bool) (p : α) : Nat :=
   (rank (univ.filter A) (fun p => univ.filter (L p)) p).getD 0
+
+theorem rk_eq (univ : List α) (A : α → Bool) (L : α → α → Bool) :
+    rk univ A L = rkf univ A L (fun _ => 0) := rfl
 
 theorem rk_close {univ : List α} {A : α → Bool} {L : α → α → Bool}
     (hc : ∀ x y, L x y = true → A y = true) :
@@ -333,6 +422,12 @@ theorem rk_height {univ : List α} {A : α → Bool} {L : α → α → Bool}
     (hc : ∀ x y, L x y = true → A y = true) :
     height (fun p q => p ∈ univ.filter A ∧ q ∈ univ.filter (L p)) (rk univ A L) :=
   rank_height (rk_close hc)
+
+theorem rkf_height {univ : List α} {B : α → Bool} {L : α → α → Bool} {F : α → Nat}
+    (hc : ∀ x y, L x y = true → B y = true) :
+    heightf (· ∈ univ.filter B) (fun p q => p ∈ univ.filter B ∧ q ∈ univ.filter (L p)) F
+      (rkf univ B L F) :=
+  rankf_height (rk_close hc)
 
 theorem first {e : α → α → Prop} {a b : α} (h : Relation.TransGen e a b) : ∃ c, e a c := by
   induction h with
@@ -351,77 +446,6 @@ theorem height_zero {e : α → α → Prop} {r : α → Nat} (h : height e r) {
   · exact h
   · obtain ⟨c, hc⟩ := first hy; exact absurd hc (hp c)
 
--- what Order.lean assumes of rk
-theorem rk_reach (univ : List α) : Order.reach (rk univ) where
-  start := by
-    intro A L p hA hin hout hc
-    have hc' : ∀ x y, L x y = true → Order.update A p true y = true := by
-      intro x y h; simp only [Order.update]; split
-      · rfl
-      · exact hc x y h
-    -- p has no edges, so making it alive changes no edge
-    have he : (fun x y => x ∈ univ.filter (Order.update A p true) ∧ y ∈ univ.filter (L x)) =
-        (fun x y => x ∈ univ.filter A ∧ y ∈ univ.filter (L x)) := by
-      funext x y
-      apply propext
-      simp only [List.mem_filter, Order.update]
-      by_cases hx : x = p
-      · subst hx; simp [hout]
-      · simp [hx]
-    have h1 := rk_height (univ := univ) hc'
-    rw [he] at h1
-    have eq := height_unique h1 (rk_height (univ := univ) hc)
-    refine ⟨?_, fun q _ => congrFun eq q⟩
-    rw [congrFun eq p]
-    apply height_zero (rk_height (univ := univ) hc)
-    intro y ⟨hp, _⟩
-    simp [List.mem_filter, hA] at hp
-  gone := by
-    intro A L L' p hin hL' hL'p hc q hqp _
-    have hc' : ∀ x y, L' x y = true → Order.update A p false y = true := by
-      intro x y h
-      by_cases hx : x = p
-      · subst hx; rw [hL'p] at h; cases h
-      · rw [hL' x y hx] at h
-        have yp : y ≠ p := by rintro rfl; rw [hin] at h; cases h
-        simp only [Order.update, yp, ↓reduceIte]; exact hc x y h
-    let e := fun x y => x ∈ univ.filter A ∧ y ∈ univ.filter (L x)
-    let e' := fun x y => x ∈ univ.filter (Order.update A p false) ∧ y ∈ univ.filter (L' x)
-    have ee : ∀ x y, e' x y ↔ x ≠ p ∧ e x y := by
-      intro x y
-      simp only [e, e', List.mem_filter, Order.update]
-      by_cases hx : x = p
-      · subst hx; simp [hL'p]
-      · simp [hx, hL' x y hx]
-    have nop : ∀ x, ¬ e x p := by
-      intro x ⟨_, h⟩; simp [List.mem_filter, hin] at h
-    have endp : ∀ {a b}, Relation.TransGen e a b → b ≠ p := by
-      intro a b h hb; subst hb; obtain ⟨c, hc⟩ := last h; exact nop c hc
-    -- a path of e from a node other than p is one of e'
-    have lift : ∀ {a b}, Relation.TransGen e a b → a ≠ p → Relation.TransGen e' a b := by
-      intro a b h ha
-      induction h with
-      | single h => exact .single ((ee _ _).2 ⟨ha, h⟩)
-      | tail h1 h2 ih => exact .tail ih ((ee _ _).2 ⟨endp h1, h2⟩)
-    have H := rk_height (univ := univ) hc
-    let r := fun x => if x = p then 0 else rk univ A L x
-    have hr : height e' r := by
-      refine ⟨?_, ?_⟩
-      · intro x y exy
-        obtain ⟨xp, exy⟩ := (ee x y).1 exy
-        have yp : y ≠ p := fun yp => nop x (yp ▸ exy)
-        simp only [r, xp, yp, ↓reduceIte]
-        exact ⟨(H.1 x y exy).1, fun n => (H.1 x y exy).2 (fun t => n (lift t yp))⟩
-      · intro x
-        by_cases xp : x = p
-        · exact Or.inl (by simp [r, xp])
-        · rcases H.2 x with h | ⟨y, hxy, h⟩
-          · exact Or.inl (by simp [r, xp, h])
-          · exact Or.inr ⟨y, lift hxy xp, by simp [r, xp, endp hxy, h]⟩
-    have eq := height_unique (rk_height (univ := univ) hc') hr
-    rw [congrFun eq q]
-    simp [r, hqp]
-
 -- a path's first step, and the rest
 theorem head {e : α → α → Prop} {a b : α} (h : Relation.TransGen e a b) :
     ∃ c, e a c ∧ (c = b ∨ Relation.TransGen e c b) := by
@@ -434,57 +458,21 @@ theorem head {e : α → α → Prop} {a b : α} (h : Relation.TransGen e a b) :
     · exact .single h2
     · exact .tail h3 h2
 
--- what Order.lean's mend needs of rk, on alive ones univ holds: with no link between equal ranks,
--- each is one past the most of what it is after; and ranks that are so are rk's (height_unique)
-theorem rk_tall (univ : List α) {A : α → Bool} (hu : ∀ x, A x = true → x ∈ univ) :
-    Order.tall (rk univ) A where
-  fix := by
-    intro L hc hne x hx
-    have H := rk_height (univ := univ) hc
-    have e_of : ∀ y z, A y = true → L y z = true →
-        y ∈ univ.filter A ∧ z ∈ univ.filter (L y) := by
-      intro y z hy hz
-      exact ⟨List.mem_filter.2 ⟨hu y hy, hy⟩, List.mem_filter.2 ⟨hu z (hc y z hz), hz⟩⟩
-    have lt : ∀ y, L x y = true → rk univ A L y < rk univ A L x := by
-      intro y hy
-      have := (H.1 x y (e_of x y hx hy)).1
-      have := hne x y hx hy
-      omega
-    refine ⟨lt, ?_⟩
-    rcases H.2 x with h0 | ⟨y, hxy, e⟩
-    · exact .inl h0
-    · obtain ⟨c, hc1, hc2⟩ := head hxy
-      have hLc : L x c = true := (List.mem_filter.1 hc1.2).2
-      have h1 := lt c hLc
-      have h2 : rk univ A L y ≤ rk univ A L c := by
-        rcases hc2 with rfl | hc2
-        · exact Nat.le_refl _
-        · exact path_le H.1 hc2
-      exact .inr ⟨c, hLc, by omega⟩
-  unique := by
-    intro L r hc ht x hx
-    let r' := fun y => if A y = true then r y else 0
-    have hr : height (fun p q => p ∈ univ.filter A ∧ q ∈ univ.filter (L p)) r' := by
-      refine ⟨?_, ?_⟩
-      · intro p q ⟨hp, hq⟩
-        have hpa : A p = true := (List.mem_filter.1 hp).2
-        have hLq : L p q = true := (List.mem_filter.1 hq).2
-        have hqa : A q = true := hc p q hLq
-        have := (ht p hpa).1 q hLq
-        simp only [r', hpa, hqa, ↓reduceIte]
-        exact ⟨Nat.le_of_lt this, fun _ => this⟩
-      · intro y
-        by_cases hy : A y = true
-        · rcases (ht y hy).2 with h0 | ⟨z, hz, e⟩
-          · exact .inl (by simp [r', hy, h0])
-          · have hza : A z = true := hc y z hz
-            refine .inr ⟨z, .single ⟨List.mem_filter.2 ⟨hu y hy, hy⟩,
-              List.mem_filter.2 ⟨hu z hza, hz⟩⟩, ?_⟩
-            simp [r', hy, hza, e]
-        · exact .inl (by simp [r', hy])
-    have eq := height_unique (rk_height (univ := univ) hc) hr
-    rw [congrFun eq x]
-    simp [r', hx]
+-- what Order.lean assumes of rkf, on alive ones univ holds: ranked along L on any B of them,
+-- and at least the floor
+theorem rkf_sound (univ : List α) {A : α → Bool} (hu : ∀ x, A x = true → x ∈ univ) :
+    Order.sound (rkf univ) A where
+  ranked := by
+    intro B L F hB hc x y hx hl
+    have H := rankf_ranked (floor := F) (rk_close (univ := univ) hc)
+    have mx : x ∈ univ.filter B := List.mem_filter.2 ⟨hu x (hB x hx), hx⟩
+    have my : y ∈ univ.filter (L x) := List.mem_filter.2 ⟨hu y (hB y (hc x y hl)), hl⟩
+    obtain ⟨h1, h2⟩ := H x y ⟨mx, my⟩
+    refine ⟨h1, fun n => h2 fun t => n ?_⟩
+    exact Order.tg_mono (fun a b h => (List.mem_filter.1 h.2).2) t
+  floor := by
+    intro B L F hB hc x hx
+    exact rankf_floor (rk_close (univ := univ) hc) (List.mem_filter.2 ⟨hu x (hB x hx), hx⟩)
 
 /-! ## Check: order.ts's ranks mended, run on three computations -/
 
@@ -492,26 +480,28 @@ namespace Check
 
 open Order
 
+def rk3 := rkf (List.range 3)
+def u := List.range 3
 -- 2 after 1 after 0
-def rk3 := rk (List.range 3)
 def s0 : State Nat := started (started (started init 0) 1) 2
-def s1 := sees id (sees id s0 1 [0]) 2 [1]
+def s1 := sees id rk3 u (sees id rk3 u s0 1 [0]) 2 [1]
 -- made whole at the first next
-def s2 := (next id rk3 (List.range 3) (set id s1 0 1)).2
+def s2 := (next id rk3 u (set id s1 0 1)).2
 #guard (s2.making, rankOf s2 0, rankOf s2 1, rankOf s2 2) == (1, 0, 1, 2)
--- 1 after nothing: 1 and 2 fall, mended to rank.ts's (54-rank-falls's shape)
-def s3 := sees id s2 1 []
-#guard (s3.making, rankOf s3 1, rankOf s3 2) == (1, 0, 1)
-#guard (List.range 3).all fun p => rankOf s3 p == rk3 s3.alive (link s3) p
--- 0 after 2: 0 rises
-def s4 := sees id s3 0 [2]
-#guard (s4.making, rankOf s4 0) == (1, 2)
-#guard (List.range 3).all fun p => rankOf s4 p == rk3 s4.alive (link s4) p
--- 1 after 0: a cycle; mending gives up, the next makes the ranks whole and sees the cycle
-def s5 := sees id s4 1 [0]
-#guard s5.making == 0
-def s6 := (next id rk3 (List.range 3) (set id s5 1 2)).2
-#guard s6.cyclic && (List.range 3).all fun p => rankOf s6 p == rk3 s6.alive (link s6) p
+-- 1 after nothing: the ranks stay (only ever rising), still ranked
+def s3 := sees id rk3 u s2 1 []
+#guard (s3.making, rankOf s3 0, rankOf s3 1, rankOf s3 2) == (1, 0, 1, 2)
+-- 0 after 2: 0 rises past 2
+def s4 := sees id rk3 u s3 0 [2]
+#guard (s4.making, rankOf s4 0, rankOf s4 1, rankOf s4 2) == (1, 3, 1, 2)
+-- 1 after 0: a cycle 0, 2, 1. the mend from 1 comes back round to 1: ranked again from there
+-- (local), one rank for the three, all members; no whole making
+def s5 := sees id rk3 u s4 1 [0]
+#guard (s5.making, rankOf s5 0, rankOf s5 1, rankOf s5 2) == (1, 0, 0, 0)
+#guard s5.members 0 && s5.members 1 && s5.members 2
+-- 2 goes, a member: what was after it ranked again (local): 0 after nothing, 1 after 0
+def s6 := gone id rk3 u s5 2
+#guard (s6.making, rankOf s6 0, rankOf s6 1, s6.members 0, s6.members 1) == (1, 0, 1, false, false)
 
 end Check
 

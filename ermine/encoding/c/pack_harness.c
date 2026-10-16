@@ -293,15 +293,16 @@ static tb_key key_of(const Json *j) {
 	return tb_symbol(jsonText(jsonGet(j, "symbol")));
 }
 
-// {"options": {"op": false}} and {"reading": {"loosyGoosy": true}}
+// {"options": {"op": false}} and {"reading": {"loosyGoosy": true, "limit": 1000}}
 static pk_options options_of(Json *r) {
 	Json **o = at(r, "options"), **op = o ? at(*o, "op") : NULL;
 	return (pk_options){.no_op = op != NULL && (*op)->type == JSON_BOOLEAN && !(*op)->boolean};
 }
 
 static pk_reading reading_of(Json *r) {
-	Json **o = at(r, "reading"), **l = o ? at(*o, "loosyGoosy") : NULL;
-	return (pk_reading){.loosy = l != NULL && (*l)->type == JSON_BOOLEAN && (*l)->boolean};
+	Json **o = at(r, "reading"), **l = o ? at(*o, "loosyGoosy") : NULL, **n = o ? at(*o, "limit") : NULL;
+	return (pk_reading){.loosy = l != NULL && (*l)->type == JSON_BOOLEAN && (*l)->boolean,
+		.limit = n != NULL && jsonIsNumber(*n) ? (size_t)(*n)->number : 0};
 }
 
 static void do_pack(Json *r) {

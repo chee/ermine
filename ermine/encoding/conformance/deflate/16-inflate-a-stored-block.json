@@ -1,0 +1,12 @@
+{
+	"title": "inflate: a stored block",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "010500faff68656c6c6f",
+			"expect": {
+				"input": "68656c6c6f"
+			}
+		}
+	]
+}

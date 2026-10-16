@@ -1,0 +1,90 @@
+{
+	"title": "a field holding what has no encoding (a symbol, a string with a lone surrogate) cannot be carried, and is named",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": { "/": { "symbol": "me" } },
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "cannot-carry", "field": "actor" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": [["who", { "/": { "symbol": "me" } }]]
+			},
+			"expect": { "error": "cannot-carry", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "\ud800" }]
+			},
+			"expect": { "error": "cannot-carry", "field": "patches" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": { "\udfff": 1 } }]
+			},
+			"expect": { "error": "cannot-carry", "field": "patches" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "\ud800",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "cannot-carry", "field": "table" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": { "/": { "symbol": "me" } },
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": [], "value": "\ud800" }]
+			},
+			"expect": { "error": "cannot-carry", "field": "actor" }
+		}
+	]
+}

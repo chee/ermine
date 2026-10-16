@@ -19,16 +19,16 @@ Deno.test("scope nodes: give makes one id, the same after; given or a uuid", () 
 	assertEquals(nodes.give(p, "P"), "P")
 	assertEquals(nodes.give(p, "other"), "P")
 	assertEquals(nodes.nodeOf(p), "P")
-	const q = s.createScope([], host)
+	const q = s.createScope([["test", "q"]], host)
 	assertMatch(String(nodes.give(q)), /^scope:/)
-	assertEquals(nodes.nodeOf(s.createScope([], host)), undefined)
+	assertEquals(nodes.nodeOf(s.createScope([["test", "none"]], host)), undefined)
 })
 
 Deno.test("scope nodes: nearest is the scope's own, or the nearest above with one; a computer's is its process's", () => {
 	const { s, nodes, host } = world()
-	const p = s.createScope([], host)
+	const p = s.createScope([["process", ["p"]]], host)
 	nodes.give(p, "P")
-	const inner = s.createScope([], p)
+	const inner = s.createScope([["test", "inner"]], p)
 	const c = s.runWithScope(inner, () => s.createComputer(() => 0, () => {}))
 	assertEquals(nodes.nearest(inner), "P")
 	assertEquals(nodes.nearest(c), "P")
@@ -39,7 +39,7 @@ Deno.test("scope nodes: nearest is the scope's own, or the nearest above with on
 
 Deno.test("scope nodes: at the scope's teardown its node's entries go, as table events", () => {
 	const { s, table, nodes, host, events } = world()
-	const p = s.createScope([], host)
+	const p = s.createScope([["process", ["p"]]], host)
 	const id = nodes.give(p)
 	s.runWithScope(host, () => {
 		table.add("value", id, createEntry<unknown>({ title: "clock" }, { time: 0, actor: "host" }))

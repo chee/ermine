@@ -1,0 +1,34 @@
+{
+	"title": "a commit not taken in has no tables: made only, waiting, or refused",
+	"steps": [
+		{ "op": "make", "name": "a", "patches": [{ "path": [], "value": 1 }] },
+		{ "op": "replay", "commit": "a", "expect": {} },
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": [], "value": 2 }],
+			"expect": { "added": { "waiting": ["a"] } }
+		},
+		{ "op": "replay", "commit": "b", "expect": {} },
+		{ "op": "add", "name": "a", "expect": { "added": "taken" } },
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": { "tables": { "value": { "value": 2, "change": { "time": 0, "actor": null } } } }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"patches": [{ "path": ["no", "such"], "value": 1 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{ "op": "replay", "commit": "c", "expect": {} },
+		{
+			"op": "replay",
+			"commit": "abababababababababababababababababababababababababababababababab",
+			"expect": {}
+		}
+	]
+}

@@ -1,0 +1,13 @@
+{
+	"title": "inflate: over the limit",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "edc0010d000000c2a0da8f6f0f0705bc1b",
+			"limit": 100,
+			"expect": {
+				"code": "over-the-limit"
+			}
+		}
+	]
+}

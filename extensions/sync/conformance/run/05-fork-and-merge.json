@@ -1,0 +1,75 @@
+{
+	"title": "a fork and a merge: parents and base by their place in the run",
+	"steps": [
+		{ "op": "make", "name": "a", "nonce": 1, "patches": [{ "path": [], "value": { "n": 0 } }] },
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"nonce": 1,
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 2 }]
+		},
+		{
+			"op": "make",
+			"name": "m",
+			"nonce": 3,
+			"parents": ["b", "c"],
+			"base": "c",
+			"patches": [{ "path": ["n"], "value": 2 }]
+		},
+		{ "op": "make", "name": "n", "nonce": 4, "parents": ["m"], "patches": [] },
+		{
+			"op": "pack",
+			"commits": ["a", "b", "c", "m", "n"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9450064626173658382f6f9420082f94000f93c0082f6f93c006474696d65450000000000656163746f728182f6f94500656e6f6e6365450202010402657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e6572838258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf940008258208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f93c008258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000676c616d706f727445020200020267706172656e74738580f681f9000082f93c00f94000f667706174636865738581a26470617468806576616c7565a1616ef9000081a2647061746881616e6576616c7565f93c0081a2647061746881616e6576616c7565f9400081a2647061746881616e6576616c7565f94000806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e6174757265735901400d7d6b30cae7d60c1125ce19cf7645adce0a8bcd4e3eca791b592a352e6513642c1a2581308d6b9c44e0b4a239803375b708c00e9c2f43fde2ae75185c2699002491a16ade955b00109cdb70baec74e36c96d04998699a9d26fcb50ac3a1136ce9a4879b505844b4c042921948c9ae1d7ec1fb532054908cd3d23f83b2b9e10228c3e5bdf95f3b0b5639edae97a791a202dce091baa7cab092b5bb9b729cb350749694b6d198d9fa527c3787c438dd3282dbdaff998cbb0cbe88768b7f8101021532a483b927d3e92db9e764caa31a275a0fe8e06937e1df35e9a746028c3fd7d47d2375086487e180cd57fdca2f5e4f2d69723a08c7d43d611dffd6e98d890a504e6004c677f028f203ad95a33cff377b74985e2f61f63fc9d4f1a7822f618bad54e3d60ae17e86c2b04d72bea866eb7f23b1072db2df14cf15becb9c563e02"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 5,
+					"base": [[null, 3], [2, 1], [null, 1]],
+					"time": { "/": { "bytes": "AAAAAAA" } },
+					"actor": [[null, 5]],
+					"nonce": { "/": { "bytes": "AgIBBAI" } },
+					"table": [["value", 5]],
+					"reader": [[null, 5]],
+					"signer": [
+						[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 2],
+						[{ "/": { "bytes": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q" } }, 1],
+						[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 2]
+					],
+					"lamport": { "/": { "bytes": "AgIAAgI" } },
+					"parents": [[], null, [0], [1, 2], null],
+					"patches": [
+						[{ "path": [], "value": { "n": 0 } }],
+						[{ "path": ["n"], "value": 1 }],
+						[{ "path": ["n"], "value": 2 }],
+						[{ "path": ["n"], "value": 2 }],
+						[]
+					],
+					"external": [[null, 5]],
+					"metadata": [[null, 5]],
+					"signatures": {
+						"/": {
+							"bytes": "DX1rMMrn1gwRJc4Zz3ZFrc4Ki81OPsp5G1kqNS5lE2QsGiWBMI1rnETgtKI5gDN1twjADpwvQ/3irnUYXCaZACSRoWrelVsAEJzbcLrsdONsltBJmGmanSb8tQrDoRNs6aSHm1BYRLTAQpIZSMmuHX7B+1MgVJCM09I/g7K54QIow+W9+V87C1Y57a6Xp5GiAtzgkbqnyrCStbubcpyzUHSWlLbRmNn6Unw3h8Q43TKC29r/mYy7DL6Idot/gQECFTKkg7kn0+ktuedkyqMaJ1oP6OBpN+HfNemnRgKMP9fUfSN1CGSH4YDNV/3KL15PLWlyOgjH1D1hHf/W6Y2JClBOYATGd/Ao8gOtlaM8/zd7dJheL2H2P8nU8aeCL2GLrVTj1grhfobCsE1yvqhm638jsQctst8UzxW+y5xWPgI"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "m", "n"] } }
+	]
+}

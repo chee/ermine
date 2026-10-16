@@ -30,12 +30,17 @@ export type Options = {
 	now?: boolean
 	// the scenarios run again, a request that has the field (or this op) given more fields
 	again?: { name: string; has?: string; op?: string; set: Record<string, unknown> }
+	// the suite runs only against the TypeScript harness: --c, --check and --leaks skip it (a loader
+	// importing JavaScript or instantiating wasm, which C has no way to)
+	typescript?: boolean
+	// what the TypeScript harness is allowed beyond reading: deno's flags (native: --allow-ffi, ...)
+	allow?: string[]
 }
 
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
-	for (const group of ["core", "filesystem", "ermine", "playground"]) {
+	for (const group of ["core", "filesystem", "ermine", "extensions", "playground"]) {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
 			const dir = `${root}${group}/${p.name}/conformance`
 			let names: Deno.DirEntry[]
@@ -78,9 +83,11 @@ export function suite(name: string): Suite {
 	return s
 }
 
-// the suite's TypeScript harness
+// the suite's TypeScript harness. reading allowed: an npm package may read its own files as it
+// loads (Subduction its wasm); the rest its suite.json allows
 export function reference(name: string): string[] {
-	return ["deno", "run", "--quiet", suite(name).typescript]
+	const s = suite(name)
+	return ["deno", "run", "--quiet", "--allow-read", ...(s.options.allow ?? []), s.typescript]
 }
 
 // the harness to ask: HARNESS, else the suite's TypeScript one

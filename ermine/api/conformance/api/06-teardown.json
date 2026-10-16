@@ -1,0 +1,81 @@
+{
+	"title": "teardown is told why: the host's stop says replaced or ended (none: ended)",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"teardown",
+						"why"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "p",
+			"why": "replaced",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "why",
+			"expect": {
+				"values": [
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "start",
+			"name": "q",
+			"at": [
+				"w",
+				"q"
+			],
+			"program": [
+				{
+					"do": [
+						"teardown",
+						"why"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:q"
+			}
+		},
+		{
+			"op": "stop",
+			"name": "q",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "why",
+			"expect": {
+				"values": [
+					"replaced",
+					"ended"
+				]
+			}
+		}
+	]
+}

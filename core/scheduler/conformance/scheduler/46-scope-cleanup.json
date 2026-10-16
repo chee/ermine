@@ -83,16 +83,21 @@
 						"scope": "c",
 						"pairs": [
 							[
-								"actor",
-								"notes"
-							],
-							[
 								"run",
 								1
 							],
 							[
 								"mark",
 								1
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"notes"
+									]
+								]
 							]
 						],
 						"writer": "c"
@@ -113,12 +118,17 @@
 						"scope": "p",
 						"pairs": [
 							[
-								"actor",
-								"notes"
-							],
-							[
 								"why",
 								"plain"
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"notes"
+									]
+								]
 							]
 						]
 					}

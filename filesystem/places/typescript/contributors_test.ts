@@ -6,7 +6,7 @@ import createEntry from "@ermine/node/entry"
 import { createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
-import { asId, children, type Contributor, createPlaces } from "./places.ts"
+import { asId, children, type Contributor, createPlaces, none } from "./places.ts"
 import { get, gets, list, lookup, members } from "./lib.ts"
 import { createChangeHeader } from "./header.ts"
 
@@ -100,4 +100,41 @@ Deno.test("contributors: a walk from an id alone knows no path; one from a here 
 		{ name: "work", id: "W", from: "children" },
 		{ name: "timer", id: "T", from: "rows" },
 	])
+})
+
+// rows that prune: nothing on the path (no level there): none; no names: none
+const pruning: Contributor = {
+	from: "rows",
+	step: ({ path }, name, r) => {
+		if (path === undefined) return none
+		const v = r.read("value", "rows", [...path, name])
+		return asId(v) ?? (v !== null && typeof v === "object" ? undefined : none)
+	},
+	names: ({ path }, r) => {
+		if (path === undefined) return none
+		const names = r.keys("value", "rows", path, true)
+		return names.length ? names : none
+	},
+}
+
+Deno.test("contributors: pruning, the walk's return is the here it got to, with the contributors that said none gone", () => {
+	const w = world([pruning, children])
+	w.put("value", "rows", { work: { timer: "T" } })
+	const walk = w.places.walk(["work", "clock", "on"])
+	let r = walk.next()
+	const steps = []
+	while (!r.done) steps.push(r.value), r = walk.next()
+	assertEquals(steps.map((m) => m.id), ["W", "C0", "ON0"])
+	// rows said none at /work/clock: gone (its bit, the first) under it
+	assertEquals(r.value, { id: "ON0", path: ["work", "clock", "on"], gone: 1 })
+	assertEquals([...w.places.walk(["nope"])], [])
+	assertEquals(w.places.walk(["nope"]).next(), { done: true, value: undefined })
+	// gone given: not asked, its answers not given; names under it: children's alone
+	const here = { id: "W", path: ["work"], gone: 1 }
+	assertEquals([...w.places.walk(["timer"], here)], [])
+	assertEquals([...w.places.answers(here, "clock")], [{ id: "C0", from: "children" }])
+	assertEquals(w.places.names(here).map((n) => n.name), ["junk", "clock", "notes"])
+	// names saying none: gone in what names gives back
+	assertEquals(w.places.names({ id: "C0", path: ["work", "clock"] }).gone, 1)
+	assertEquals(w.places.names({ id: "W", path: ["work"] }).gone, 0)
 })

@@ -1,0 +1,12 @@
+{
+	"title": "inflate: a distance before the start",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "0302",
+			"expect": {
+				"code": "not-deflate"
+			}
+		}
+	]
+}

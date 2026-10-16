@@ -12,14 +12,16 @@
 // the keys its readers track and every key it read working it out.
 //   - worked out when first asked, there and then, places' reads recorded into the entry (pl_record)
 //     and told to no one, so the reader's run tracks only the entry's key. An entry at a path reads
-//     its folder's entry, one step at a time, so a path's walk is shared by every path under it
+//     its folder's entry, one step at a time, so a path's walk is shared by every path under it.
+//     Pruning (places.h): at has a third key, the contributors gone under the path, read by the
+//     entries under it (given contributors), so one that said none at a folder is not asked under it
 //   - a key it read marked (the scheduler's mark listener, inside the write): worked out again, there
 //     and then, so a read right after a write is fresh. Its key is marked, by the writer's run, only
-//     when its answer changed (the equal cut); at has two keys, the first answer (pc_get) and all of
-//     them (pc_gets), so a change to what is shadowed reruns no get
-//   - kept while a run tracks one of its keys or another entry reads one (the scheduler's track and
-//     untrack listeners, and a count of the entries reading each key); then it goes, and what it read
-//     with it. A read outside any run keeps nothing: the entry is worked out, answered, and goes
+//     when its answer changed (the equal cut); at has three keys, the first answer (pc_get), all of
+//     them (pc_gets) and the gone under it, so a change to what is shadowed reruns no get
+//   - kept while a run tracks one of its keys or another entry reads one (ermine/clingy's clingy.h,
+//     and a count of the entries reading each key); then it goes, and what it read with it. A read
+//     outside any run keeps nothing: the entry is worked out, answered, and goes
 //   - places' spots it reads are kept (pl_keep), so a run that stops reading a spot an entry reads
 //     lets nothing go; the cache lets a spot go (pl_forget) once no entry reads it and no run tracks it
 //   - it lets go only what it took itself: a spot it made (pl_record, fresh) is its own, one that was a

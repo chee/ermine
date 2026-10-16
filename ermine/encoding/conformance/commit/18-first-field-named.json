@@ -1,0 +1,65 @@
+{
+	"title": "of several fields that say no, the first in the commit's order is named: table, actor, reader, external, metadata, time, signer, nonce, parents, base, lamport, patches",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 0,
+				"patches": 5
+			},
+			"expect": { "error": "not-a-commit", "field": "lamport" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "",
+				"actor": "chee",
+				"time": -1,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "table" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "",
+				"nonce": -1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"reader": 5
+			},
+			"expect": { "error": "not-a-commit", "field": "reader" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": [
+					"2222222222222222222222222222222222222222222222222222222222222222",
+					"3333333333333333333333333333333333333333333333333333333333333333"
+				],
+				"lamport": 0,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "base" }
+		}
+	]
+}

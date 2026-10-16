@@ -1,6 +1,11 @@
 // rank: strongly connected components (Tarjan), each ranked after the ones its members are after.
-// members of one component share a rank; a component with nothing after it is 0.
-export function rank<T>(all: Iterable<T>, edges: (t: T) => T[]): Map<T, number> {
+// members of one component share a rank; a component with nothing after it is 0, or the most
+// floor gives its members (what they are after outside these, for a part of a graph)
+export function rank<T>(
+	all: Iterable<T>,
+	edges: (t: T) => T[],
+	floor?: (t: T) => number,
+): Map<T, number> {
 	const out = new Map<T, number>()
 	const index = new Map<T, number>()
 	const low = new Map<T, number>()
@@ -29,6 +34,7 @@ export function rank<T>(all: Iterable<T>, edges: (t: T) => T[]): Map<T, number> 
 		let r = 0
 		const inside = new Set(members)
 		for (const x of members) {
+			if (floor) r = Math.max(r, floor(x))
 			for (const q of edges(x)) if (!inside.has(q)) r = Math.max(r, out.get(q)! + 1)
 		}
 		for (const x of members) out.set(x, r)

@@ -1,0 +1,58 @@
+{
+	"title": "an ermine:// id (lowercase hex) written as its 32 bytes, read back as its text; one in upper case stays text",
+	"entries": [
+		[
+			"value",
+			"ermine://25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a",
+			0
+		],
+		[
+			"value",
+			"ermine://25303B46515C67727D88939EA9B4BFCAD5E0EBF6010C17222D38434E59646F7A",
+			1
+		]
+	],
+	"nodes": [
+		{
+			"value": 1,
+			"change": {
+				"time": 1
+			}
+		},
+		{
+			"value": 2,
+			"change": {
+				"time": 1
+			}
+		}
+	],
+	"expect": {
+		"bytes": "a167636f6c756d6e7358b25b9e9c9158eca4a0909c9952dc54e1995a949b99976aa5af6f646a6c60ec6462666a68ea6c666e6e64ee626161696ce9ea68e964e2e4e6ece862ea6ae0eae466666068e06c686e6464e4626c61626ce26a6a696662e666ee18a1a06a60ed1618935e54db3179deca2dfb4f5d7df0fa1b238fb892ae85b35f644a7e554a49666eaa1313436a5e7e4a6ab11303436a416251497163536a59624e69ea4f0786d4f28ccce40c2706c634b048711350eca70d0300",
+		"entries": [
+			[
+				"value",
+				"ermine://25303B46515C67727D88939EA9B4BFCAD5E0EBF6010C17222D38434E59646F7A",
+				0
+			],
+			[
+				"value",
+				"ermine://25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a",
+				1
+			]
+		],
+		"nodes": [
+			{
+				"change": {
+					"time": 1
+				},
+				"value": 2
+			},
+			{
+				"change": {
+					"time": 1
+				},
+				"value": 1
+			}
+		]
+	}
+}

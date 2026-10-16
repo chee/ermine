@@ -1,0 +1,115 @@
+{
+	"title": "three heads at once",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": "abc"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "1"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						3
+					]
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b",
+				"c"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "1a2b",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"c",
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "1a2b",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

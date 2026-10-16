@@ -1,7 +1,7 @@
 {
 	"title": "a promise settling while its compute is due again: the result is not landed; the compute's next run is (proof C8)",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "x": "p1" }, "expect": { "tick": 1 } },
 		{ "op": "compute", "name": "c", "scope": "o", "f": { "wait": [{ "read": "x" }] }, "to": "c" },
 		{

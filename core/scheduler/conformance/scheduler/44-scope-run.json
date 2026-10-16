@@ -55,16 +55,21 @@
 					"scope": "c",
 					"pairs": [
 						[
-							"actor",
-							"notes"
-						],
-						[
 							"run",
 							1
 						],
 						[
 							"mark",
 							1
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"notes"
+								]
+							]
 						]
 					],
 					"writer": "c"
@@ -79,16 +84,21 @@
 						"scope": "e",
 						"pairs": [
 							[
-								"actor",
-								"notes"
-							],
-							[
 								"run",
 								1
 							],
 							[
 								"mark",
 								2
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"notes"
+									]
+								]
 							]
 						],
 						"writer": "e"
@@ -117,16 +127,21 @@
 					"scope": "c",
 					"pairs": [
 						[
-							"actor",
-							"notes"
-						],
-						[
 							"run",
 							2
 						],
 						[
 							"mark",
 							4
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"notes"
+								]
+							]
 						]
 					],
 					"writer": "c"
@@ -141,16 +156,21 @@
 						"scope": "e",
 						"pairs": [
 							[
-								"actor",
-								"notes"
-							],
-							[
 								"run",
 								2
 							],
 							[
 								"mark",
 								4
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"notes"
+									]
+								]
 							]
 						],
 						"writer": "e"

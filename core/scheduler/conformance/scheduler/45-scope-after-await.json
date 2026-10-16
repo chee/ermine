@@ -6,7 +6,12 @@
 			"op": "compute",
 			"name": "c",
 			"scope": "o",
-			"f": { "wait": ["p", { "do": [{ "log": { "current": null } }, { "scope": ["k", []] }] }] },
+			"f": {
+				"wait": [
+					"p",
+					{ "do": [{ "log": { "current": null } }, { "scope": ["k", [["why", "late"]]] }] }
+				]
+			},
 			"to": "c",
 			"expect": {}
 		},

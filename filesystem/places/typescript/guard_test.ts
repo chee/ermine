@@ -98,9 +98,12 @@ Deno.test("guard: reads and writes are asked of the policy: who is the scope ope
 		["read", "value", path],
 		["edit", "value", path],
 	])
-	assertEquals(asks.map((a) => a.who), [{ actor: "notes" }, { actor: "notes" }, {
-		actor: "notes",
-	}])
+	const info = [["actor", "notes"]]
+	assertEquals(asks.map((a) => a.who), [
+		{ actor: "notes", metadata: info },
+		{ actor: "notes", metadata: info },
+		{ actor: "notes", metadata: info },
+	])
 	assertEquals(asks[0].from?.path, ["apps", "notes"])
 	// an id alone: no path
 	asks.length = 0
@@ -108,16 +111,20 @@ Deno.test("guard: reads and writes are asked of the policy: who is the scope ope
 	assertEquals([asks[0].target.id, asks[0].target.path], ["T", undefined])
 })
 
-Deno.test("guard: a write can't name another actor: it is asked as the scope's", () => {
+Deno.test("guard: a write is asked as the nearest actor: one under a scope naming another is that one", () => {
 	const w = world()
 	w.value("A", 1)
 	w.value("rules", [{ actor: "chee", op: "edit" }])
 	const g = w.guard({ may: rules })
 	const juno = w.s.createRootScope([["actor", "juno"]])
-	// a scope under juno's naming chee only adds a pair
-	const forged = w.s.createScope([["actor", "chee"]], juno)
-	assertEquals(tryout(() => w.s.runWithScope(forged, () => w.write(g, "A", 2))), "refused")
+	// a scope under juno's with no actor is juno's
+	const quiet = w.s.createScope([["why", "save"]], juno)
+	assertEquals(tryout(() => w.s.runWithScope(quiet, () => w.write(g, "A", 2))), "refused")
 	assertEquals(w.table.get("value", "A")?.value, 1)
+	// one naming chee is chee's, the nearest
+	const named = w.s.createScope([["actor", "chee"]], juno)
+	w.s.runWithScope(named, () => w.write(g, "A", 3))
+	assertEquals(w.table.get("value", "A")?.value, 3)
 	w.s.runWithScope(w.s.createRootScope([["actor", "chee"]]), () => w.write(g, "A", 2))
 	assertEquals(w.table.get("value", "A")?.value, 2)
 })

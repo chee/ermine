@@ -1,0 +1,7 @@
+{
+	"title": "a column written as null: not left out, refused (a pack leaves an empty column out)",
+	"bytes": "a167636f6c756d6e7358501dc9b90d80300c05d0884dd88326a358f18f120908b2c3d13adbb020121dc76bdf1912a9ef43663522ae7982ef40a116b146c73d38cc85a1de6121a96a0d1b8d2bbed8530ec9bb2820865cf10fb5b71e",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

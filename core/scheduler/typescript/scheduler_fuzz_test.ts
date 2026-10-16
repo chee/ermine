@@ -126,9 +126,9 @@ function seeded(seed: number, reach: Reach) {
 		for (const k of keys) changedAt.set(k, t)
 	}
 	const problems: string[] = []
-	const root = s.createRootScope()
+	const root = s.createRootScope([["actor", "test"]])
 	const scopes: Scope[] = [root]
-	for (let i = 0; i < 3; i++) scopes.push(s.createScope([], r.one(scopes)))
+	for (let i = 0; i < 3; i++) scopes.push(s.createScope([["why", "test"]], r.one(scopes)))
 	const made: Made[] = []
 	const byComputation = new Map<Computer, Made>()
 	const alive = (m: Made) => m.c.state === "alive"
@@ -395,7 +395,7 @@ async function loops(seed: number, reach: Loops) {
 		if (c.state !== "alive") problems.push(`${what} of ${c.n}, gone`)
 	}
 	const effects: Computer[] = []
-	const scopes: Scope[] = [s.createRootScope()]
+	const scopes: Scope[] = [s.createRootScope([["actor", "test"]])]
 	const living: Computer[] = []
 	// the settling of each pending promise
 	const pending: (() => void)[] = []
@@ -483,7 +483,7 @@ async function loops(seed: number, reach: Loops) {
 			c = s.createEffect(() => {
 				const writer = s.getRun()
 				called(c, "f")
-				s.createScope()
+				s.createScope([["why", "test"]])
 				return sum(s.track, ins)
 			}, (v) => {
 				called(c, "act")
@@ -519,7 +519,7 @@ async function loops(seed: number, reach: Loops) {
 			})
 		} else {
 			// a scope, with one under it
-			const under = s.createScope()
+			const under = s.createScope([["why", "test"]])
 			scopes.push(under)
 			return make(under, p.makes!)
 		}

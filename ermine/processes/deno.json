@@ -4,6 +4,7 @@
 	"license": "AGPL-3.0-or-later",
 	"exports": {
 		".": "./typescript/processes.ts",
-		"./scopes": "./typescript/scopes.ts"
+		"./scopes": "./typescript/scopes.ts",
+		"./start": "./typescript/start.ts"
 	}
 }

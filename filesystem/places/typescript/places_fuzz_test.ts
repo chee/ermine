@@ -51,7 +51,7 @@ function seeded(seed: number, reach: Reach) {
 	const paths = createPaths<unknown>()
 	const l = createPlaces({ root: "R", table, paths, scheduler: s })
 	const places = l
-	const o = s.createRootScope()
+	const o = s.createRootScope([["actor", "fuzz"]])
 	// the host's writes, in its scope
 	const host = s.createRootScope([["actor", "fuzz"]])
 	const h = () => createChangeHeader(s)

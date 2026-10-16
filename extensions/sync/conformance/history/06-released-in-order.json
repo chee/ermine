@@ -1,0 +1,40 @@
+{
+	"title": "what waits on a commit is taken in after it, in the order it came; a line that waited comes in whole",
+	"steps": [
+		{ "op": "make", "name": "a", "patches": [{ "path": [], "value": { "n": 0 } }] },
+		{ "op": "make", "name": "b", "parents": ["a"], "patches": [{ "path": ["n"], "value": 1 }] },
+		{ "op": "make", "name": "c", "parents": ["b"], "patches": [{ "path": ["n"], "value": 2 }] },
+		{
+			"op": "make",
+			"name": "x",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["n"], "value": 3 }]
+		},
+		{
+			"op": "make",
+			"name": "y",
+			"parents": ["a"],
+			"nonce": 2,
+			"patches": [{ "path": ["n"], "value": 4 }]
+		},
+		{ "op": "add", "name": "c", "expect": { "added": { "waiting": ["b"] } } },
+		{ "op": "add", "name": "y", "expect": { "added": { "waiting": ["a"] } } },
+		{ "op": "add", "name": "b", "expect": { "added": { "waiting": ["a"] } } },
+		{ "op": "add", "name": "x", "expect": { "added": { "waiting": ["a"] } } },
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": [
+					{ "name": "c", "waiting": ["b"] },
+					{ "name": "y", "waiting": ["a"] },
+					{ "name": "b", "waiting": ["a"] },
+					{ "name": "x", "waiting": ["a"] }
+				]
+			}
+		},
+		{ "op": "add", "name": "a", "expect": { "added": "taken" } },
+		{ "op": "all", "expect": { "all": ["a", "y", "b", "c", "x"] } },
+		{ "op": "waiting", "expect": { "waiting": [] } }
+	]
+}

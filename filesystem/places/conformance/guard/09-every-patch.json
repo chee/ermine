@@ -109,6 +109,12 @@
 			"expect": {
 				"value": {
 					"actor": "chee",
+					"metadata": [
+						[
+							"actor",
+							"chee"
+						]
+					],
 					"timely": true,
 					"sites": 1
 				}

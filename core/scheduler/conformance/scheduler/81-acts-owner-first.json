@@ -1,0 +1,294 @@
+{
+	"title": "owners act first (E2): an early effect made in another's act, whose run ended first (its owner's stopped), does not act while its owner's act is due in the same queue; the owner's act tears it down and makes a new one, and the old one never acts",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1,
+				"b": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "p",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"eq": [
+							{
+								"read": "a"
+							},
+							1
+						]
+					},
+					{
+						"read": "a"
+					},
+					[
+						{
+							"read": "a"
+						},
+						{
+							"read": "B"
+						}
+					]
+				]
+			},
+			"act": {
+				"do": [
+					{
+						"log": [
+							"p acts",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"effect": [
+							"k",
+							{
+								"read": "a"
+							},
+							{
+								"log": [
+									"k acts",
+									{
+										"given": "value"
+									}
+								]
+							},
+							true
+						]
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "B",
+			"scope": "o",
+			"f": {
+				"read": "b"
+			},
+			"to": "B",
+			"declared": true,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"p acts",
+						1
+					],
+					[
+						"k acts",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 2
+					},
+					{
+						"starts": "p",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "p",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "k",
+						"tick": 3,
+						"writer": "p"
+					},
+					{
+						"starts": "k",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "k",
+						"run": 1,
+						"early": true
+					},
+					{
+						"acts": "p",
+						"run": 1,
+						"early": true
+					},
+					{
+						"due": "B",
+						"tick": 4
+					},
+					{
+						"starts": "B",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "B",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2,
+				"b": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p",
+						"tick": 6
+					},
+					{
+						"due": "k",
+						"tick": 6
+					},
+					{
+						"due": "B",
+						"tick": 6
+					},
+					{
+						"starts": "p",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "p",
+						"run": 2,
+						"ended": "stopped",
+						"waits": "B"
+					},
+					{
+						"starts": "k",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "B",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "B",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "p",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "p",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "k",
+						"tick": 8,
+						"writer": "p"
+					},
+					{
+						"starts": "k",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "k",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "k",
+						"run": 1,
+						"early": true
+					},
+					{
+						"acts": "p",
+						"run": 3,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"p acts",
+						[
+							2,
+							2
+						]
+					],
+					[
+						"k acts",
+						2
+					]
+				]
+			}
+		}
+	]
+}

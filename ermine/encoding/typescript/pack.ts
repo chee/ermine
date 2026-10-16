@@ -5,17 +5,36 @@
 // a symbol anywhere, in a key or in a node, cannot be carried: getting rid of them first is the
 // caller's.
 //
-// written: {keys: [[part, id, n], …], nodes: [node, …]}. keys: sorted by their encodings, none
-// twice; n: the node's place in nodes, numbered in the order the keys first name them, so a node
-// under several keys is one node again when read. a node: {change, value?, cow?}, cow only ever
-// false, as the node has it (changed in place, not copied on write). a change: {time,
-// actor?, reader?, external?, metadata?, op?}; external: sites {file, line, column?, function?};
-// metadata: [name, value] lists; op: {patches, undo}, each patch {path, range?, value?, move?},
-// move {path, range?}. time, a site's line and column, a path's numbers and a range's ends are
-// whole: safe integers, never -0. a field not there is left out, never written as nothing; no
-// other key.
-// reading takes exactly what writing gives; loosyGoosy, a key it does not know is passed over
+// the keys: sorted by their encodings, none twice; each names a node, numbered in the order the
+// keys first name them, so a node under several keys is one node again when read. a node: {change,
+// value?, cow?}, cow only ever false, as the node has it (changed in place, not copied on write). a
+// change: {time, actor?, reader?, external?, metadata?, op?}; external: sites {file, line, column?,
+// function?}; metadata: [name, value] lists; op: {patches, undo}, each patch {path, range?,
+// value?, move?}, move {path, range?}. time, a site's line and column, a path's numbers and a
+// range's ends are whole: safe integers, never -0. a field not there is left out, never written as
+// nothing.
+//
+// written: {columns: bytes}, the bytes deflate.ts's deflate (the same bytes on any device) of a map
+// of columns, each left out when empty:
+//   ids       every id the keys name, in the order they first name them: an ermine:// id (lowercase
+//             hex) as its 32 bytes, any other as its text
+//   parts     the keys' parts as runs, [[part, how many], …]
+//   which     per key, its id's place in ids
+//   nodes     per key, 0: a new node (the next number); k + 1: node k again
+//   has       per node, what it has, bits: 1 actor, 2 reader, 4 external, 8 metadata, 16 op,
+//             32 value, 64 cow (false)
+//   time      per node, its change's time: the first, then each one's difference from the one
+//             before, zigzag (0, -1, 1, -2 … as 0, 1, 2, 3 …)
+//   actor, reader, external, metadata   runs over the nodes that have one, [[it, how many], …],
+//             equal: the same encoding
+//   op        per node with an op, {patches, undo}
+//   values    per node with a value, the value
+// which, nodes, has and time are bytes: whole numbers 7 bits a byte, the low first, the high bit
+// on all but a number's last byte. reading takes exactly what writing gives, and also the first
+// form, {keys: [[part, id, n], …], nodes: [{change, value?, cow?}, …]} (packs from before 10-15);
+// loosyGoosy, a key it does not know is passed over
 import * as cbor from "./cbor.ts"
+import { deflate, DeflateError, inflate } from "./deflate.ts"
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
 import type { Patch, Target } from "@ermine/op/apply"
 import type { FileLocation } from "@ermine/util/stacktrace"
@@ -33,6 +52,8 @@ export type Options = {
 export type Reading = {
 	// a key no map of a pack has is passed over, in every map, not refused. default false
 	loosyGoosy?: boolean
+	// the most bytes the columns may inflate to; more: not-a-pack. default 1 GiB
+	limit?: number
 }
 
 export type Code = "not-a-pack" | "not-a-node" | "cannot-carry" | "already-there"
@@ -236,14 +257,17 @@ function keyed(part: string, id: string): Uint8Array {
 	}
 }
 
-const LIST = (n: number): Uint8Array =>
-	n < 24
-		? Uint8Array.of(0x80 | n)
+// a head: major type, a count
+function head(major: number, n: number): Uint8Array {
+	const m = major << 5
+	return n < 24
+		? Uint8Array.of(m | n)
 		: n < 0x100
-		? Uint8Array.of(0x98, n)
+		? Uint8Array.of(m | 24, n)
 		: n < 0x10000
-		? Uint8Array.of(0x99, n >> 8, n & 0xff)
-		: Uint8Array.of(0x9a, n >>> 24, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff)
+		? Uint8Array.of(m | 25, n >> 8, n & 0xff)
+		: Uint8Array.of(m | 26, n >>> 24, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff)
+}
 
 function cat(xs: Uint8Array[]): Uint8Array {
 	const out = new Uint8Array(xs.reduce((n, x) => n + x.length, 0))
@@ -252,9 +276,78 @@ function cat(xs: Uint8Array[]): Uint8Array {
 	return out
 }
 
-// "keys" sorts before "nodes": a map of two, the one way
-const HEAD = cat([Uint8Array.of(0xa2), cbor.encode("keys")])
-const NODES = cbor.encode("nodes")
+const list = (items: Uint8Array[]) => cat([head(4, items.length), ...items])
+const bytesOf = (b: Uint8Array) => cat([head(2, b.length), b])
+
+// whole numbers, 7 bits a byte, the low first, the high bit on all but the last; exact past 2^53
+// (a zigzag of a safe integer's difference is under 2^56)
+class Varints {
+	out: number[] = []
+	put(x: number | bigint) {
+		if (typeof x === "number" && x < 2 ** 31) {
+			while (x >= 128) this.out.push((x & 127) | 128), x >>>= 7
+			this.out.push(x)
+			return
+		}
+		let b = BigInt(x)
+		while (b >= 128n) this.out.push(Number(b & 127n) | 128), b >>= 7n
+		this.out.push(Number(b))
+	}
+	// a difference, zigzag
+	diff(a: number, before: number) {
+		const d = BigInt(a) - BigInt(before)
+		this.put(d >= 0n ? d * 2n : -d * 2n - 1n)
+	}
+	bytes() {
+		return Uint8Array.from(this.out)
+	}
+}
+function* varints(b: Uint8Array): Generator<bigint> {
+	for (let at = 0; at < b.length;) {
+		let x = 0n, shift = 0n
+		for (;;) {
+			if (at >= b.length || shift > 63n) throw new PackError("not-a-pack")
+			const byte = b[at++]
+			x |= BigInt(byte & 127) << shift
+			if (byte < 128) break
+			shift += 7n
+		}
+		yield x
+	}
+}
+const unzig = (z: bigint) => z % 2n === 0n ? z / 2n : -(z + 1n) / 2n
+
+// [it, how many] for each stretch of equal encodings
+function runs(items: Uint8Array[]): Uint8Array {
+	const out: Uint8Array[] = []
+	for (let i = 0; i < items.length;) {
+		let j = i + 1
+		while (j < items.length && compare(items[j], items[i]) === 0) j++
+		out.push(cat([head(4, 2), items[i], cbor.encode(j - i)]))
+		i = j
+	}
+	return list(out)
+}
+
+// a map of what is given, its keys in the canonical order
+function map(fields: [string, Uint8Array][]): Uint8Array {
+	const ks = fields.map(([k, v]) => [cbor.encode(k), v] as const)
+	ks.sort((a, b) => compare(a[0], b[0]))
+	return cat([head(5, ks.length), ...ks.flatMap(([k, v]) => [k, v])])
+}
+
+const ERMINE = /^ermine:\/\/[0-9a-f]{64}$/
+const HAS = { actor: 1, reader: 2, external: 4, metadata: 8, op: 16, value: 32, cow: 64 }
+
+// a value's encoding; one that cannot be carried: cannot-carry at the key given
+function carried(x: unknown, part?: string, id?: string): Uint8Array {
+	try {
+		return cbor.encode(x as cbor.Value)
+	} catch (e) {
+		if (e instanceof cbor.CborError) throw new PackError("cannot-carry", part, id)
+		throw e
+	}
+}
 
 // the nodes under their keys, as one item; the same key twice with two nodes: already-there; a
 // key with a symbol: cannot-carry, that key, the first given; a node that cannot be carried:
@@ -269,23 +362,67 @@ export function pack(entries: Iterable<Entry>, options: Options = {}): Uint8Arra
 		rows.push({ part, id, node, key: keyed(part, id) })
 	}
 	rows.sort((a, b) => compare(a.key, b.key))
-	const numbers = new Map<NodeEntry<unknown>, number>()
-	const nodes: Uint8Array[] = [], keys: cbor.Value[] = []
-	let last: Row | undefined
+	const numbers = new Map<NodeEntry<unknown>, number>(), ids = new Map<string, number>()
+	const idItems: Uint8Array[] = [], partItems: Uint8Array[] = []
+	const which = new Varints(), named = new Varints(), has = new Varints(), time = new Varints()
+	const actor: Uint8Array[] = [], reader: Uint8Array[] = [], external: Uint8Array[] = []
+	const metadata: Uint8Array[] = [], op: Uint8Array[] = [], values: Uint8Array[] = []
+	let last: Row | undefined, before = 0
 	for (const r of rows) {
 		if (last !== undefined && compare(last.key, r.key) === 0) {
 			if (last.node !== r.node) throw new PackError("already-there", r.part, r.id)
 			continue
 		}
 		last = r
-		let n = numbers.get(r.node)
-		if (n === undefined) {
-			numbers.set(r.node, n = nodes.length)
-			nodes.push(bytes(r.node, options, r.part, r.id))
+		partItems.push(cbor.encode(r.part))
+		let i = ids.get(r.id)
+		if (i === undefined) {
+			ids.set(r.id, i = idItems.length)
+			idItems.push(
+				ERMINE.test(r.id)
+					? bytesOf(Uint8Array.from(r.id.slice(9).match(/../g)!, (h) => parseInt(h, 16)))
+					: cbor.encode(r.id),
+			)
 		}
-		keys.push([r.part, r.id, n])
+		which.put(i)
+		const n = numbers.get(r.node)
+		if (n !== undefined) {
+			named.put(n + 1)
+			continue
+		}
+		numbers.set(r.node, numbers.size)
+		named.put(0)
+		// the node as the first form writes it, checked as it would be
+		const w = written(r.node, options)
+		if (STRICT.header(w.change) === undefined) throw new PackError("cannot-carry", r.part, r.id)
+		const c = w.change as Fields
+		let bits = 0
+		if ("actor" in c) bits |= HAS.actor, actor.push(carried(c.actor, r.part, r.id))
+		if ("reader" in c) bits |= HAS.reader, reader.push(carried(c.reader, r.part, r.id))
+		if ("external" in c) bits |= HAS.external, external.push(carried(c.external, r.part, r.id))
+		if ("metadata" in c) bits |= HAS.metadata, metadata.push(carried(c.metadata, r.part, r.id))
+		if ("op" in c) bits |= HAS.op, op.push(carried(c.op, r.part, r.id))
+		if ("value" in w) bits |= HAS.value, values.push(carried(w.value, r.part, r.id))
+		if ("cow" in w) bits |= HAS.cow
+		has.put(bits)
+		time.diff(c.time as number, before)
+		before = c.time as number
 	}
-	return cat([HEAD, cbor.encode(keys), NODES, LIST(nodes.length), ...nodes])
+	const fields: [string, Uint8Array][] = []
+	const bytesColumn = (name: string, v: Varints) => {
+		if (v.out.length) fields.push([name, bytesOf(v.bytes())])
+	}
+	if (idItems.length) fields.push(["ids", list(idItems)])
+	if (partItems.length) fields.push(["parts", runs(partItems)])
+	bytesColumn("which", which), bytesColumn("nodes", named), bytesColumn("has", has)
+	bytesColumn("time", time)
+	if (actor.length) fields.push(["actor", runs(actor)])
+	if (reader.length) fields.push(["reader", runs(reader)])
+	if (external.length) fields.push(["external", runs(external)])
+	if (metadata.length) fields.push(["metadata", runs(metadata)])
+	if (op.length) fields.push(["op", list(op)])
+	if (values.length) fields.push(["values", list(values)])
+	return cat([head(5, 1), cbor.encode("columns"), bytesOf(deflate(map(fields)))])
 }
 
 // one node alone, as a pack writes each node
@@ -306,8 +443,143 @@ function decoded(b: Uint8Array, code: Code): unknown {
 // each written, under every key that names it. putting them in a table is the caller's
 export function unpack(b: Uint8Array, reading: Reading = {}): Entry[] {
 	const r = reader(reading)
-	const no = () => new PackError("not-a-pack")
 	const x = decoded(b, "not-a-pack")
+	if (isFields(x) && "columns" in x && r.only(x, ["columns"], ["columns"])) {
+		return columns(x.columns, r, reading.limit ?? 2 ** 30)
+	}
+	return first(x, r)
+}
+
+const COLUMNS = [
+	"ids",
+	"parts",
+	"which",
+	"nodes",
+	"has",
+	"time",
+	"actor",
+	"reader",
+	"external",
+	"metadata",
+	"op",
+	"values",
+]
+
+function columns(z: unknown, r: Reader, limit: number): Entry[] {
+	const no = () => new PackError("not-a-pack")
+	if (!(z instanceof Uint8Array)) throw no()
+	let inner: Uint8Array
+	try {
+		inner = inflate(z, limit)
+	} catch (e) {
+		if (e instanceof DeflateError) throw no()
+		throw e
+	}
+	const c = decoded(inner, "not-a-pack")
+	if (!isFields(c) || !r.only(c, [], COLUMNS)) throw no()
+	const listOf = (k: string): unknown[] => {
+		const v = k in c ? c[k] : []
+		if (!Array.isArray(v)) throw no()
+		return v
+	}
+	const numbers = (k: string): bigint[] => {
+		const v = k in c ? c[k] : new Uint8Array(0)
+		if (!(v instanceof Uint8Array)) throw no()
+		return [...varints(v)]
+	}
+	// runs spread out: each [it, how many], how many whole and at least 1
+	const spread = (k: string): unknown[] => {
+		const out: unknown[] = []
+		for (const run of listOf(k)) {
+			if (!Array.isArray(run) || run.length !== 2 || !whole(run[1]) || run[1] < 1) throw no()
+			if (out.length + (run[1] as number) > 2 ** 32) throw no()
+			for (let i = 0; i < (run[1] as number); i++) out.push(run[0])
+		}
+		return out
+	}
+	const ids = listOf("ids").map((i) => {
+		if (typeof i === "string" && !ERMINE.test(i)) return i
+		if (i instanceof Uint8Array && i.length === 32) {
+			return "ermine://" + Array.from(i, (b) => b.toString(16).padStart(2, "0")).join("")
+		}
+		throw no()
+	})
+	const parts = spread("parts"), which = numbers("which"), named = numbers("nodes")
+	const k = parts.length
+	if (which.length !== k || named.length !== k) throw no()
+	// ids in the order the keys first name them, each named
+	let seen = 0
+	for (const i of which) {
+		if (i > BigInt(seen) || i >= BigInt(ids.length)) throw no()
+		if (i === BigInt(seen)) seen++
+	}
+	if (seen !== ids.length) throw no()
+	const has = numbers("has"), times = numbers("time")
+	const m = has.length
+	if (times.length !== m) throw no()
+	const fields: Record<string, unknown[]> = {
+		actor: spread("actor"),
+		reader: spread("reader"),
+		external: spread("external"),
+		metadata: spread("metadata"),
+		op: listOf("op"),
+		values: listOf("values"),
+	}
+	const taken: Record<string, number> = {}
+	const take = (name: string) => {
+		const at = taken[name] ?? 0
+		if (at >= fields[name].length) throw no()
+		taken[name] = at + 1
+		return fields[name][at]
+	}
+	const nodes: NodeEntry<unknown>[] = []
+	let time = 0n
+	for (let i = 0; i < m; i++) {
+		const bits = has[i]
+		if (bits > 127n) throw no()
+		const b = Number(bits)
+		time += unzig(times[i])
+		const change: Fields = { time: Number(time) }
+		if (b & HAS.actor) change.actor = take("actor") as cbor.Value
+		if (b & HAS.reader) change.reader = take("reader") as cbor.Value
+		if (b & HAS.external) change.external = take("external") as cbor.Value
+		if (b & HAS.metadata) change.metadata = take("metadata") as cbor.Value
+		if (b & HAS.op) change.op = take("op") as cbor.Value
+		const w: Fields = { change }
+		if (b & HAS.value) w.value = take("values") as cbor.Value
+		if (b & HAS.cow) w.cow = false
+		const n = r.node(w)
+		if (n === undefined) throw no()
+		nodes.push(n)
+	}
+	for (const name of Object.keys(fields)) {
+		if ((taken[name] ?? 0) !== fields[name].length) throw no()
+	}
+	const out: Entry[] = []
+	let next = 0, last: Uint8Array | undefined
+	for (let i = 0; i < k; i++) {
+		const part = parts[i], id = ids[Number(which[i])]
+		if (typeof part !== "string") throw no()
+		const v = named[i]
+		let n: number
+		if (v === 0n) n = next++
+		else if (v - 1n < BigInt(next)) n = Number(v - 1n)
+		else throw no()
+		if (n >= nodes.length) throw no()
+		// sorted, none twice
+		const key = cbor.encode([part, id])
+		if (last !== undefined && compare(last, key) >= 0) throw no()
+		last = key
+		out.push([part, id, nodes[n]])
+	}
+	// every node under a key
+	if (next !== nodes.length) throw no()
+	return out
+}
+
+// the first form, {keys, nodes}
+function first(x: unknown, r: Reader): Entry[] {
+	const no = () => new PackError("not-a-pack")
 	if (!isFields(x) || !r.only(x, ["keys", "nodes"], ["keys", "nodes"])) throw no()
 	if (!Array.isArray(x.keys) || !Array.isArray(x.nodes)) throw no()
 	const nodes: NodeEntry<unknown>[] = []

@@ -1,0 +1,12 @@
+{
+	"title": "one byte",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "2a",
+			"expect": {
+				"bytes": "d30200"
+			}
+		}
+	]
+}

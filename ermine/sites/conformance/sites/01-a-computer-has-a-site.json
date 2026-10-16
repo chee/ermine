@@ -1,0 +1,30 @@
+{
+	"title": "a computer made through the sites has a site of its own, and a chain of itself and its parent",
+	"steps": [
+		{
+			"op": "root",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "computer",
+			"name": "c",
+			"parent": "r",
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"name": "c",
+			"expect": {
+				"site": true
+			}
+		},
+		{
+			"op": "chain",
+			"name": "c",
+			"expect": {
+				"length": 2
+			}
+		}
+	]
+}

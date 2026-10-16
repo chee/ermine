@@ -1,5 +1,5 @@
 {
-	"title": "a write can't name another actor: the scope decides who; a scope under it naming another only adds a pair",
+	"title": "a write is asked as the nearest actor: a scope under one with no actor of its own is the one's, refused; one naming another is that other",
 	"steps": [
 		{
 			"op": "value",
@@ -42,12 +42,12 @@
 		},
 		{
 			"op": "scope",
-			"name": "forged",
+			"name": "quiet",
 			"parent": "juno",
 			"info": [
 				[
-					"actor",
-					"chee"
+					"why",
+					"save"
 				]
 			],
 			"expect": {}
@@ -55,7 +55,7 @@
 		{
 			"op": "eval",
 			"guard": "g",
-			"scope": "forged",
+			"scope": "quiet",
 			"e": {
 				"edit": [
 					"A",
@@ -112,6 +112,63 @@
 			"expect": {
 				"value": {
 					"actor": "chee",
+					"metadata": [
+						[
+							"actor",
+							"chee"
+						]
+					],
+					"timely": true,
+					"sites": 1
+				}
+			}
+		},
+		{
+			"op": "scope",
+			"name": "named",
+			"parent": "juno",
+			"info": [
+				[
+					"actor",
+					"chee"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "eval",
+			"guard": "g",
+			"scope": "named",
+			"e": {
+				"edit": [
+					"A",
+					"value",
+					[
+						{
+							"path": [],
+							"value": 3
+						}
+					]
+				]
+			},
+			"expect": {
+				"value": {
+					"actor": "chee",
+					"metadata": [
+						[
+							"actor",
+							"chee"
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"juno"
+								]
+							]
+						]
+					],
 					"timely": true,
 					"sites": 1
 				}
@@ -122,7 +179,7 @@
 			"part": "value",
 			"id": "A",
 			"expect": {
-				"value": 2
+				"value": 3
 			}
 		}
 	]

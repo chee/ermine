@@ -1,0 +1,158 @@
+{
+	"title": "an early effect's teardowns: what its act registered runs before its next act, and when it is disposed",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"read": "a"
+			},
+			"act": {
+				"do": [
+					{
+						"cleanup": [
+							null,
+							{
+								"log": "down"
+							}
+						]
+					},
+					{
+						"log": [
+							"x",
+							{
+								"given": "value"
+							}
+						]
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 2
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						1
+					],
+					"down",
+					[
+						"x",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "x",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"down"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 3
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 2
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 1,
+						"early": true
+					},
+					{
+						"due": "x",
+						"tick": 3
+					},
+					{
+						"starts": "x",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 2,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		}
+	]
+}

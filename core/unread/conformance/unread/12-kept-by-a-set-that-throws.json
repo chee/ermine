@@ -1,0 +1,134 @@
+{
+	"title": "a compute's result given to a set that throws is kept all the same: it may have stored it",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": {
+					"y": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"b",
+						"y"
+					],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a"
+			],
+			"hold": "k",
+			"expect": {},
+			"scheduler": "fails"
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"b",
+						"y"
+					],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "held",
+			"name": "k",
+			"expect": {
+				"value": {
+					"x": 1
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					},
+					"b": {
+						"y": 2
+					}
+				}
+			}
+		}
+	]
+}

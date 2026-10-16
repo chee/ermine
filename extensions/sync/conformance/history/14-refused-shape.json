@@ -1,0 +1,24 @@
+{
+	"title": "bytes that are not a commit are refused shape, under the name of the bytes",
+	"steps": [
+		{ "op": "add", "bytes": "010203", "expect": { "added": { "refused": "shape" } } },
+		{ "op": "add", "bytes": "010203", "expect": { "added": { "refused": "shape" } } },
+		{ "op": "add", "bytes": "a0", "expect": { "added": { "refused": "shape" } } },
+		{
+			"op": "refused",
+			"expect": {
+				"refused": [
+					{
+						"name": "b177ec1bf26dfb3b7010d473e6d44713b29b765b99c6e60ecbfae742de496543",
+						"refused": "shape"
+					},
+					{
+						"name": "1f94cbf313b3ce23257a7251ea0fc95a24556ea611e4f8f475e549971baedb02",
+						"refused": "shape"
+					}
+				]
+			}
+		},
+		{ "op": "heads", "expect": { "heads": [] } }
+	]
+}

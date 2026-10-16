@@ -1,0 +1,78 @@
+{
+	"title": "each table its own: a commit changes its own table, and each table's change is the one that last touched it",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"time": 1,
+			"patches": [{ "path": [], "value": "body" }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"time": 2,
+			"table": "attributes",
+			"patches": [{ "path": [], "value": { "color": "cherry" } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"time": 3,
+			"table": "children",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"notes": "ermine://abababababababababababababababababababababababababababababababab"
+					}
+				}
+			],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["c"],
+			"time": 4,
+			"table": "attributes",
+			"patches": [{ "path": ["color"], "value": "lemon" }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": {
+				"tables": {
+					"value": { "value": "body", "change": { "time": 1, "actor": null } },
+					"attributes": {
+						"value": { "color": "cherry" },
+						"change": { "time": 2, "actor": null }
+					}
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "d",
+			"expect": {
+				"tables": {
+					"value": { "value": "body", "change": { "time": 1, "actor": null } },
+					"attributes": {
+						"value": { "color": "lemon" },
+						"change": { "time": 4, "actor": null }
+					},
+					"children": {
+						"value": {
+							"notes": "ermine://abababababababababababababababababababababababababababababababab"
+						},
+						"change": { "time": 3, "actor": null }
+					}
+				}
+			}
+		}
+	]
+}

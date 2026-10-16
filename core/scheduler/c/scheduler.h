@@ -4,12 +4,24 @@
 // scopes tree holds them: tearing a scope down takes everything under it.
 //
 // a scope is two things, one tree: an owner (what is made in it is put under it) and the info of
-// the changes made in it: pairs, in order, opaque. a write's pairs: the info of each scope from
-// the root down to the one open (sc_get_info). a scope is open only while sc_run_with_scope or the
-// scheduler runs code in it: a computer's runs, sets and acts open it, written by itself; a
-// teardown opens its scope, and what is under a scope goes with it open: a teardown on a plain
-// scope under a computer, run by the computer's clean or teardown, is written by it. nothing open:
-// making a scope or a computer fails (unscoped).
+// the changes made in it: pairs, in order, opaque, as keys are, then "owner" and the info of the
+// scope it is under (a root: none). so the info nests, innermost first. a write's pairs: the info
+// of the scope open (sc_get_info). sc_create_scope makes one under a parent, else under the one
+// open; sc_create_root_scope one with no parent. no pairs given: it fails (empty). a scope is
+// open only while sc_run_with_scope or the scheduler runs code in it: a computer's runs, sets and
+// acts open it, written by itself. its info is its latest run's, set as the run starts: "run", its
+// number, "mark", the tick of the mark that made it due, then "owner"; before its first run, the
+// mark alone. a scope's info is made once, with it: under a computer, it is that run's, as what a
+// run made goes before the next (what an act made, before the next act). a teardown opens its
+// scope, and what is under a scope goes with it open: a teardown on a plain scope under a
+// computer, run by the computer's clean or teardown, is written by it. nothing open: making a
+// scope or a computer fails (unscoped).
+//
+// early effects: the reference's rules (typescript/scheduler.ts), the same here: sc_def's early
+// ("acts at once and is in an earlier queue so it goes compute, early, effect"): made, it is due,
+// runs and acts in sc_create_effect; after, a round is three queues: the runs by rank, the early
+// acts, the other acts, each owners first (an act waits while one above it is due in the same
+// queue).
 //
 // keys are opaque: const void *, compared by identity, never NULL. values are opaque: void *,
 // compared by the computer's equal, else by pointer.
@@ -23,7 +35,9 @@
 //
 // no exceptions in C, so:
 //   - a failure is an error string (malloc'd; whoever is handed one frees it), NULL for none.
-//     the scheduler's own are "disposed" and "unscoped" (SC_DISPOSED, SC_UNSCOPED)
+//     the scheduler's own are "disposed", "unscoped" and "empty" (SC_DISPOSED, SC_UNSCOPED,
+//     SC_EMPTY). a create answers NULL for any: with nothing open and no parent, unscoped; a
+//     parent gone (or the one open), disposed; else no pairs, empty
 //   - a track answers SC_OK or SC_STOP (its writer is due: the run must end now, returning
 //     anything). a track outside a run, or after it returned, counts for nothing
 //   - async: a run may return a promise (sc_promise_new) to be settled later by the host
@@ -40,8 +54,10 @@
 // go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
 // set and act are lent them for the call. scopes and computers are the scheduler's until
 // sc_free, torn down or not (a host may keep a torn-down scope's pointer). a scope's info is
-// borrowed: the caller keeps the pairs, and each key and value, alive as long as the scope. free
-// promises first.
+// the scheduler's: the pairs given are copied, but each key and value is borrowed, the caller
+// keeps them alive as long as the scope. a plain scope's info lasts to sc_free; a computer's
+// until its next run, unless a scope made under that run: it then lasts to sc_free, as that
+// scope's owner. free promises first.
 // single threaded.
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
@@ -52,6 +68,7 @@
 
 #define SC_DISPOSED "disposed"
 #define SC_UNSCOPED "unscoped"
+#define SC_EMPTY "empty"
 
 typedef struct sc_scheduler sc_scheduler;
 typedef struct sc_scope sc_scope;
@@ -71,6 +88,14 @@ typedef struct {
 	const char *key;
 	const void *value;
 } sc_pair;
+
+// a scope's info: n pairs, in order. the last of a scope under another is "owner", its value a
+// const sc_info *, the owner's. a computer's others: "run" and "mark", each value a const
+// uint64_t * (the run's number; the tick of the mark that made it due)
+typedef struct {
+	const sc_pair *pairs;
+	size_t n;
+} sc_info;
 
 typedef enum {
 	// a value (maybe NULL): the result
@@ -108,18 +133,24 @@ typedef struct sc_def {
 	// a compute's: where set's results land, when known (NULL: learned from the writer of marks)
 	const void *key;
 	void *data;
+	// an effect's: acted on in the round's early queue; its first run and act in sc_create_effect
+	bool early;
 } sc_def;
 
 typedef enum { SC_DONE, SC_PENDED, SC_FAIL, SC_STOPPED_RUN, SC_LOOPING } sc_ended;
 
 // what more a run's end says. equal: -1 none, else 0 or 1. error: NULL for none. waits (stopped):
-// the computer it waits after. through (looping): the computers on the loop, in the order made
+// the computer it waits after. through (looping): the computers on the loop, in the order made.
+// kept (has_kept): its result, when held past the run (a compute's given to set, even one that
+// failed; an effect's to be acted on): only when not equal to the last. borrowed for the call
 typedef struct sc_more {
 	int equal;
 	const char *error;
 	sc_computer *waits;
 	sc_computer *const *through;
 	size_t nthrough;
+	bool has_kept;
+	const void *kept;
 } sc_more;
 
 typedef struct sc_options {
@@ -166,28 +197,28 @@ typedef void (*sc_tracking_end_fn)(const void *key, void *data);
 sc_listener *sc_on_tracking_end(sc_scheduler *s, sc_tracking_end_fn f, void *data);
 void sc_remove_listener(sc_listener *l);
 
-// scopes: n pairs of info, borrowed. a new one with no parent
+// scopes: n pairs of info, copied (not their keys or values). a new one with no parent. NULL: n 0
 sc_scope *sc_create_root_scope(sc_scheduler *s, const sc_pair *info, size_t n);
-// a new one under parent, else under the one open. NULL: none open, or the parent is gone
+// a new one under parent, else under the one open. NULL: none open, the parent is gone, or n 0
 sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_scope *parent);
 // the host's own pointer on a scope or computer
 void sc_scope_set(sc_scope *o, void *user);
 void *sc_scope_user(const sc_scope *o);
 bool sc_scope_alive(const sc_scope *o);
+// an early effect
+bool sc_scope_early(const sc_scope *o);
 sc_scope *sc_scope_parent(const sc_scope *o);
-// its info, *n pairs. a computer's: its latest run's, two pairs: "run" and "mark", each value
-// a const uint64_t * it keeps (the run's number; the tick of the mark that made it due), good
-// until its next run; none before its first
-const sc_pair *sc_scope_info(const sc_scope *o, size_t *n);
+// its info. a computer's: its latest run's, good until its next run (if no scope was made under
+// that run)
+const sc_info *sc_scope_info(const sc_scope *o);
 
 // the scope open (NULL: none)
 sc_scope *sc_get_current_scope(const sc_scheduler *s);
 // the run open (NULL: from outside)
 sc_run *sc_get_run(const sc_scheduler *s);
-// the pairs of a write made now: the info of each scope from the root down to the one open, into
-// out, up to cap of them; how many there are. borrowed: good while the scopes are, and a
-// computer's until its next run
-size_t sc_get_info(const sc_scheduler *s, sc_pair *out, size_t cap);
+// the pairs of a write made now: the info of the scope open (NULL: none), as is: not copied,
+// good while the scope is, and a computer's until its next run
+const sc_info *sc_get_info(const sc_scheduler *s);
 
 // on scope o; it gone already, f runs now (its error, if it ran)
 char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *data), void *data);
@@ -199,7 +230,8 @@ char *sc_teardown(sc_scope *o);
 // SC_DISPOSED (and f not called) when o is gone, else 0
 const char *sc_run_with_scope(sc_scope *o, void (*f)(void *data), void *data);
 
-// tracked, under the scope open; first runs at the next pulse. NULL: none open, or it is gone
+// tracked, under the scope open; first runs at the next pulse (early: now). NULL: none open, or
+// it is gone
 sc_computer *sc_create_computer(sc_scheduler *s, sc_def def);
 sc_computer *sc_create_effect(sc_scheduler *s, sc_def def);
 

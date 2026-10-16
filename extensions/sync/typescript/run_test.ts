@@ -126,3 +126,49 @@ Deno.test("run: what isn't a run is refused", () => {
 	assertThrows(() => unpack(cbor.encode({ n: 1 })), RunError)
 	assertEquals(unpack(pack([])), [])
 })
+
+Deno.test("run: differences exact to 2^53 - 1 either way; a commit before its parent names it", async () => {
+	const s = signers[0]
+	const sealed: Uint8Array[] = []
+	const names: Uint8Array[] = []
+	const add = async (nonce: number, time: number, parents: Uint8Array[] = []) => {
+		const b = encode({
+			table: "value",
+			actor: null,
+			time,
+			signer: s.key,
+			nonce,
+			parents,
+			lamport: parents.length + 1,
+			patches: [],
+		})
+		names.push(name(b))
+		sealed.push(await seal(b, s))
+	}
+	await add(2 ** 53 - 1, 0)
+	await add(0, 2 ** 53 - 1)
+	await add(1, 5, [names[0]])
+	assertEquals(unpack(pack(sealed)), sealed)
+	// the child first: its parent by name, never by a place after its own
+	const backwards = [sealed[2], sealed[0]]
+	assertEquals(unpack(pack(backwards)), backwards)
+})
+
+Deno.test("run: refused with a code, and the column", () => {
+	const e = assertThrows(() => unpack(cbor.encode({ ...cbor.decode(pack([])) as object, x: 1 })))
+	assert(e instanceof RunError)
+	assertEquals([e.code, e.column], ["not-a-run", "x"])
+	// a run's count past n is refused before it is spread
+	const big = assertThrows(() =>
+		unpack(
+			cbor.encode({
+				...cbor.decode(pack([])) as object,
+				n: 1,
+				signatures: new Uint8Array(64),
+				table: [["value", 2 ** 50]],
+			}),
+		)
+	)
+	assert(big instanceof RunError)
+	assertEquals([big.code, big.column], ["runs", "table"])
+})

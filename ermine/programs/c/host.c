@@ -35,6 +35,9 @@ void hf_add_compiler(hf *fs, const char *name, hf_compiler fn, void *data) {
 void hf_add_runner(hf *fs, const char *name, hf_runner fn, void *data) {
 	add(fs, name, (hf_entry){.runner = fn, .data = data});
 }
+void hf_add_loader(hf *fs, const char *name, hf_runner fn, hf_loader load, void *data) {
+	add(fs, name, (hf_entry){.runner = fn, .load = load, .data = data});
+}
 
 op_value *hf_value(const char *name) {
 	op_value *kind = op_map();

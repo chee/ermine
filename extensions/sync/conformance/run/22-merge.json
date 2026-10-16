@@ -1,0 +1,281 @@
+{
+	"title": "a merge by a rule: its name in the merge column, there only when a commit in the run has one; the column dropped, or a name on commits with fewer than two parents, says no commit",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": "ab"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "1"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"nonce": 1,
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "2"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "m",
+			"nonce": 3,
+			"parents": [
+				"b",
+				"c"
+			],
+			"merge": "eg-walker",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": ">"
+				}
+			]
+		},
+		{
+			"op": "make",
+			"name": "n",
+			"nonce": 4,
+			"parents": [
+				"m"
+			],
+			"patches": []
+		},
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"m",
+				"n"
+			],
+			"name": "r",
+			"expect": {
+				"run": "af616ef9450064626173658182f6f945006474696d65450000000000656163746f728182f6f94500656d657267658382f6f94200826965672d77616c6b6572f93c0082f6f93c00656e6f6e6365450202010402657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e6572838258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf940008258208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f93c008258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000676c616d706f727445020200020267706172656e74738580f681f9000082f93c00f94000f667706174636865738581a26470617468806576616c756562616281a36470617468806572616e676582f93c00f93c006576616c75656131613281a36470617468806572616e676582f90000f900006576616c7565613e806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573590140d2dfd0597df81c07f33bae3076f8861441d0b35bc154620cf75b373d53c32e21fdd2b1291b838ffe9a95134af093cf0a7a31ae945b4ababb04dc537a1e36a303f5a5bee29df28d0dc213ba291a67a62cd86429e7b970ffb63baf7cdae3e0e6115286d111a529f78b9ff0dba21d7f9655790e0963e2a48b0832f225e603845d035d188f0f876961c631179741ba3143d5227e933640ea30e8639f674ebf6ce93db6abd40ce47be10dac813019158d7bbb9cf7276b116f99231dab285ac576f1013ad52f4e9e46983e6bf09a018c0739b74ec6836ede8e0d9119d2a9c86083c8ebc510c9ca62fbdb487609aeb8c1e0af41cf1b600eed0b5f1e9ec8d51cf2a8b7045709cd3716e0b85c4ef9b9355fc0f94e596d693c1ffafe44e16f5e01c03f7680fb15b5e68d4f76525df0e21679f32bab7e8ca57fcc022c177c2a3872f9eb8603"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 5,
+					"base": [
+						[
+							null,
+							5
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							5
+						]
+					],
+					"merge": [
+						[
+							null,
+							3
+						],
+						[
+							"eg-walker",
+							1
+						],
+						[
+							null,
+							1
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgIBBAI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							5
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+								}
+							},
+							2
+						],
+						[
+							{
+								"/": {
+									"bytes": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q"
+								}
+							},
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w"
+								}
+							},
+							2
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgIAAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						[
+							0
+						],
+						[
+							1,
+							2
+						],
+						null
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": "ab"
+							}
+						],
+						[
+							{
+								"path": [],
+								"range": [
+									1,
+									1
+								],
+								"value": "1"
+							}
+						],
+						"2",
+						[
+							{
+								"path": [],
+								"range": [
+									0,
+									0
+								],
+								"value": ">"
+							}
+						],
+						[]
+					],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
+					"signatures": {
+						"/": {
+							"bytes": "0t/QWX34HAfzO64wdviGFEHQs1vBVGIM91s3PVPDLiH90rEpG4OP/pqVE0rwk88KejGulFtKursE3FN6HjajA/WlvuKd8o0NwhO6KRpnpizYZCnnuXD/tjuvfNrj4OYRUobREaUp94uf8NuiHX+WVXkOCWPipIsIMvIl5gOEXQNdGI8Ph2lhxjEXl0G6MUPVIn6TNkDqMOhjn2dOv2zpPbar1Azke+ENrIEwGRWNe7uc9ydrEW+ZIx2rKFrFdvEBOtUvTp5GmD5r8JoBjAc5t07Gg27ejg2RGdKpyGCDyOvFEMnKYvvbSHYJrrjB4K9BzxtgDu0LXx6eyNUc8qi3BFcJzTcW4LhcTvm5NV/A+U5ZbWk8H/r+ROFvXgHAP3aA+xW15o1PdlJd8OIWefMrq36MpX/MAiwXfCo4cvnrhgM"
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					"a",
+					"b",
+					"c",
+					"m",
+					"n"
+				]
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"drop": [
+				"merge"
+			],
+			"expect": {
+				"error": "commit"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"merge": [
+					[
+						"eg-walker",
+						5
+					]
+				]
+			},
+			"expect": {
+				"error": "commit"
+			}
+		}
+	]
+}

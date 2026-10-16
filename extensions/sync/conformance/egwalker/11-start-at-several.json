@@ -1,0 +1,250 @@
+{
+	"title": "a start at several commits, kept as their merge: merge commits made on it concurrently merge from it, the same as from their common ancestor",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": "ab"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "1"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "m1",
+			"parents": [
+				"a",
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "<"
+				}
+			],
+			"merge": "eg-walker",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "m2",
+			"parents": [
+				"a",
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						4,
+						4
+					],
+					"value": ">"
+				}
+			],
+			"merge": "eg-walker",
+			"nonce": 1,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"m1",
+				"m2"
+			],
+			"expect": {
+				"from": [
+					"r"
+				],
+				"commits": [
+					"a",
+					"b",
+					"m2",
+					"m1"
+				]
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"m1",
+				"m2"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "<a1b2>",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "keep",
+			"commits": [
+				"b",
+				"a"
+			],
+			"tables": {
+				"value": {
+					"value": "a1b2",
+					"change": {
+						"time": 0,
+						"actor": null
+					}
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"m1",
+				"m2"
+			],
+			"expect": {
+				"from": [
+					"b",
+					"a"
+				],
+				"commits": [
+					"m2",
+					"m1"
+				]
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"m1",
+				"m2"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "<a1b2>",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "C"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"m1",
+				"m2",
+				"c"
+			],
+			"expect": {
+				"from": [
+					"r"
+				],
+				"commits": [
+					"a",
+					"b",
+					"c",
+					"m2",
+					"m1"
+				]
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"m1",
+				"m2",
+				"c"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "<Ca1b2>",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

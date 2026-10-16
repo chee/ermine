@@ -1,0 +1,144 @@
+{
+	"title": "protect: a policy's no refuses an edit and a read; entries keeps a refused item in its place, refused, no value",
+	"steps": [
+		{
+			"op": "world",
+			"deny": [
+				{
+					"op": "edit",
+					"path": "w/secret"
+				},
+				{
+					"op": "read",
+					"path": "w/hidden"
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./secret",
+						1
+					]
+				},
+				{
+					"do": [
+						"open",
+						"./hidden",
+						2
+					]
+				},
+				{
+					"do": [
+						"open",
+						"./open",
+						3
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"./secret",
+				[
+					{
+						"path": [],
+						"value": 9
+					}
+				]
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"./secret"
+			],
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"./hidden"
+			],
+			"fails": true,
+			"expect": {
+				"error": "refused"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"entries",
+				"./hidden"
+			],
+			"expect": {
+				"value": [
+					{
+						"from": "children",
+						"refused": true
+					}
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"./open",
+				[
+					{
+						"path": [],
+						"value": 4
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"./open"
+			],
+			"expect": {
+				"value": 4
+			}
+		}
+	]
+}

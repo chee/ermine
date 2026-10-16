@@ -1,0 +1,172 @@
+{
+	"title": "a seal is a map of exactly commit (a commit's bytes) and signature (64 bytes); anything else is refused shape",
+	"steps": [
+		{ "op": "unseal", "sealed": "ff", "expect": { "error": "shape" } },
+		{ "op": "unseal", "sealed": "", "expect": { "error": "shape" } },
+		{
+			"op": "unseal",
+			"value": [
+				{
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				{
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			],
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				},
+				"key": "x"
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1D"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				"signature": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": "x",
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": { "/": { "bytes": "oA" } },
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": { "/": { "bytes": "AQID" } },
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"Commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": { "error": "shape" }
+		},
+		{
+			"op": "unseal",
+			"value": {
+				"commit": {
+					"/": {
+						"bytes": "qGR0aW1l+k7RzvBlYWN0b3JkY2hlZWVub25jZfk8AGV0YWJsZWV2YWx1ZWZzaWduZXJYIIqI4910CfGV/VLbLTy6XXLKZwm/HZQSG/N0iAG0D29cZ2xhbXBvcnT5PABncGFyZW50c4BncGF0Y2hlc4GiZHBhdGiAZXZhbHVloWV0aXRsZWJoaQ"
+					}
+				},
+				"signature": {
+					"/": {
+						"bytes": "hVKjgAvsvFALVa/Qg4+xT9Jh1x8tcXVMQUNfU/guw/OPhUQsuwcm1pPbzqwCO/WU94BMTBAz7N6y2Z4lGu1DDA"
+					}
+				}
+			},
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "chee",
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 1,
+					"parents": [],
+					"lamport": 1,
+					"patches": [{ "path": [], "value": { "title": "hi" } }]
+				},
+				"bytes": "a86474696d65fa4ed1cef0656163746f726463686565656e6f6e6365f93c00657461626c656576616c7565667369676e657258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869",
+				"name": "9b9623f981af626cd160c02314c7239cec020cad41d436913ea66f80b62a3804",
+				"stored": "420c5424255dc5e1647940d0f90a7df7402a85939d9de60df9507843eb42b015"
+			}
+		}
+	]
+}

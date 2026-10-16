@@ -1,0 +1,97 @@
+{
+	"title": "an early effect whose first run is pending (awaiting) does not act as it is made; its result lands at a pulse and acts in the early queue",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"p"
+				]
+			},
+			"act": {
+				"log": [
+					"x",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 1
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "p",
+			"value": 5,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 1,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						5
+					]
+				]
+			}
+		}
+	]
+}

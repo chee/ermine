@@ -19,9 +19,27 @@
 --   against the last kept never skips a different cause. at a close no run holds a given
 --   (Core.given)
 --
--- assumed (hypotheses where used): Theorem 1: H acyclic among the made (among s.made (feeds cs));
--- Theorem 1′: A2 (no f writes in its run). both: the host's changes name no computation (Reach),
--- and Model.lean's departures (no make in a pulse: A6; sync: A8; f, set, act return: A1)
+-- attended computes and goings: a pulse's `.goes` phase (bury the dying, then the acts phase
+-- again) is a loop of its own. Theorem 1 holds with them (wakes, sleeps, goings), given Quiet (no
+-- going writes): idle (the asleep and the dying) and gm (goings left) make the measure
+-- lexicographic, steps_end. termination_bound, cycles and cycles_bound are proved with no
+-- attended computes (Unattended): Causal does not survive a going (bury drops a run whose cause
+-- may be kept on others), and the bound's count of steps has no term for wakes
+--
+-- what loops: going writes. Model.Check, endless: two attended computes a, b; r reads x, then a if
+-- x is even, else b; a's going writes x := 2, b's x := 1. A2 holds and H is acyclic (no feeds edge
+-- goes back: a and b read nothing, r writes r), yet each going's write moves r to the other key,
+-- waking the other, which goes at the next pulse end: the pulse never ends (the model at fuel
+-- 3000; the TS the same, scratch: 200 runs). causes miss it: a wake is from outside, and a
+-- going's write is named by the going one, whose cause does not reach back to r's run. so the
+-- scheduler needs a guard: e.g. one gone this pulse is not woken again until the next, or a cap
+-- on goings or wakes per pulse; carrying the reader's cause into the wake is not enough (gone's
+-- and teardowns' writes are from outside the reader's run)
+--
+-- assumed (hypotheses where used): Theorem 1: H acyclic among the made (among s.made (feeds cs))
+-- and Quiet; Theorem 1′ and the bounds: A2 (no f writes in its run, Quiet) and Unattended. all:
+-- the host's changes name no computation (Reach), and Model.lean's departures (no make in a pulse:
+-- A6; sync: A8; f, set, act return: A1)
 --
 -- §7.2's step 1 against the code now: under A2 every mark comes from a set or an act, each inside
 -- a step of its own, so a cause marked on y is still kept at y's next run (which takes it as its
@@ -127,13 +145,7 @@ theorem sum_filter {α : Type} (f : α → Nat) (p : α → Bool) : ∀ (l : Lis
 
 -- H, from the code: what may be read and written
 
--- the keys f may read, on some path
-def Prog.reads : Prog K V → K → Prop
-  | .value _, _ => False
-  | .error, _ => False
-  | .pending, _ => False
-  | .read k next, x => k = x ∨ ∃ v, (next v).reads x
-  | .write _ _ next, x => next.reads x
+-- the keys f may read, on some path: Prog.reads (Model.lean)
 
 -- the keys f may write in its run, on some path
 def Prog.writes : Prog K V → K → Prop
@@ -205,13 +217,15 @@ structure Same (s s' : State K V) : Prop where
   last : s'.last = s.last
   pulses : s'.pulses = s.pulses
   phase : s'.phase = s.phase
+  earlies : s'.earlies = s.earlies
+  asleep : s'.asleep = s.asleep
 
 theorem Same.refl (s : State K V) : Same s s :=
-  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem Same.trans {s s' s'' : State K V} (a : Same s s') (b : Same s' s'') : Same s s'' :=
   ⟨b.1.trans a.1, b.2.trans a.2, b.3.trans a.3, b.4.trans a.4, b.5.trans a.5, b.6.trans a.6,
-    b.7.trans a.7, b.8.trans a.8, b.9.trans a.9, b.10.trans a.10⟩
+    b.7.trans a.7, b.8.trans a.8, b.9.trans a.9, b.10.trans a.10, b.11.trans a.11, b.12.trans a.12⟩
 
 -- dues only grow, the new ones F; a writer learned, w of k, is G k w
 structure Moved (F : Nat → Prop) (G : K → Nat → Prop) (s s' : State K V) : Prop where
@@ -255,7 +269,7 @@ theorem due_same (s : State K V) (d t : Nat) (who : Option Nat) :
   unfold due
   split
   · exact ⟨Same.refl s, rfl, Moved.refl _ _ s⟩
-  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, ?_, ?_, ?_⟩
+  · refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, ?_, ?_, ?_⟩
     · intro x m h
       by_cases hx : x = d
       · subst hx; rename_i h'; simp [h] at h'
@@ -272,15 +286,15 @@ theorem settle_same (s : State K V) (d t : Nat) (who : Option Nat) (l : Option (
   unfold settle
   split
   · split
-    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
+    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
     · exact ⟨Same.refl s, rfl, Moved.refl _ _ s⟩
   · dsimp only
     split
-    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
+    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
     · obtain ⟨a, b, c⟩ := due_same { s with loop := put s.loop d l, looping := put s.looping d false }
         d t who
       exact ⟨Same.trans (s' := { s with loop := put s.loop d l, looping := put s.looping d false })
-        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ a, b,
+        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ a, b,
         Moved.trans (s' := { s with loop := put s.loop d l, looping := put s.looping d false })
           (Moved.of_eq rfl rfl) c⟩
 
@@ -299,7 +313,7 @@ theorem mark_same (s : State K V) (d t : Nat) (who : Option Nat) :
       (some c) (loopof { s with cause := a, when := b, went := g, kept := kp } k d)
       (((s.ran c).bind (·.loop)).isSome)
     exact ⟨Same.trans (s' := { s with cause := a, when := b, went := g, kept := kp })
-      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ h1, h2,
+      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ h1, h2,
       ⟨fun x m h => h3.due x m h, fun x h => h3.fresh x h, fun k w h => h3.writers k w h⟩⟩
 
 theorem marks_same (t : Nat) (r : Option Nat) : ∀ (ds : List Nat) (s : State K V),
@@ -324,7 +338,7 @@ theorem changed_same (cs : Nat → Comp K V) (s : State K V) (keys : List K) (wh
   simp only [changed]
   generalize ht : s.tick + 1 = t
   generalize hs0 : ({ s with tick := t } : State K V) = s0
-  have m0 : Same s s0 := by subst hs0; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  have m0 : Same s s0 := by subst hs0; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
   have m0' : Moved (fun d => d < s.made ∧ ∃ k ∈ keys, k ∈ s.reads d)
       (fun k c => k ∈ keys ∧ who = some c ∧ ∃ to, (cs c).kind = .compute to) s s0 := by
     subst hs0; exact Moved.of_eq rfl rfl
@@ -353,7 +367,7 @@ theorem changed_same (cs : Nat → Comp K V) (s : State K V) (keys : List K) (wh
       simp only [List.foldl_cons]
       -- learn
       have l1 : Same s1 (learn s1 k w) := by
-        cases w <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        cases w <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       have l2 : ∀ k' x, (learn s1 k w).writers k' = some x →
           s1.writers k' = some x ∨ (k' = k ∧ w = some x) := by
         intro k' x h
@@ -394,7 +408,11 @@ structure Base (cs : Nat → Comp K V) (s : State K V) : Prop where
   due_made : ∀ x, (s.due x).isSome → x < s.made
   tracked : ∀ d k, k ∈ s.reads d → (cs d).f.reads k
   learned : ∀ k w, s.writers k = some w → (cs w).writes k
-  acts_made : ∀ a ∈ s.acts, a.1 < s.made
+  acts_made : ∀ a ∈ queue s, a.1 < s.made
+  -- the asleep: not due, reading nothing (Quiet: no going writes)
+  asleep_due : ∀ c, s.asleep c = true → s.due c = none
+  asleep_reads : ∀ c, s.asleep c = true → s.reads c = []
+  reads_made : ∀ c, s.reads c ≠ [] → c < s.made
 
 -- what a run leaves as it was
 structure Fixed (s s' : State K V) : Prop where
@@ -403,14 +421,15 @@ structure Fixed (s s' : State K V) : Prop where
   acts : s'.acts = s.acts
   phase : s'.phase = s.phase
   last : s'.last = s.last
+  earlies : s'.earlies = s.earlies
 
-theorem Fixed.refl (s : State K V) : Fixed s s := ⟨rfl, rfl, rfl, rfl, rfl⟩
+theorem Fixed.refl (s : State K V) : Fixed s s := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem Fixed.trans {s s' s'' : State K V} (a : Fixed s s') (b : Fixed s' s'') : Fixed s s'' :=
-  ⟨b.1.trans a.1, b.2.trans a.2, b.3.trans a.3, b.4.trans a.4, b.5.trans a.5⟩
+  ⟨b.1.trans a.1, b.2.trans a.2, b.3.trans a.3, b.4.trans a.4, b.5.trans a.5, b.6.trans a.6⟩
 
 theorem Same.fixed {s s' : State K V} (a : Same s s') : Fixed s s' :=
-  ⟨a.made, a.after, a.acts, a.phase, a.last⟩
+  ⟨a.made, a.after, a.acts, a.phase, a.last, a.earlies⟩
 
 -- a change of keys c may write, said by c: what it marks is fed by c; what it learns, c may write
 theorem changed_feeds (cs : Nat → Comp K V) (s : State K V) (keys : List K) (c : Nat)
@@ -426,41 +445,98 @@ theorem changed_feeds (cs : Nat → Comp K V) (s : State K V) (keys : List K) (c
     cases hw
     exact ⟨rfl, hk k hk1⟩
 
--- a run, writes in it or not: what it marks is fed by c; a stop is on a due writer fed into c,
--- c not on its after-chain; what it read, f may read
+-- a wake: the attended compute of k, asleep, is due from outside and k's writer; the asleep reading
+-- nothing, so no mark of a run's reaches them
+theorem wake_base (cs : Nat → Comp K V) (s : State K V) (k : K) :
+    Fixed s (wake cs s k) ∧ (wake cs s k).ran = s.ran ∧ (wake cs s k).reads = s.reads ∧
+    Moved (fun d => d < s.made ∧ s.asleep d = true) (fun k w => (cs w).writes k ∧ s.asleep w = true)
+      s (wake cs s k) ∧
+    (∀ d, (wake cs s k).asleep d = true → s.asleep d = true ∧ (wake cs s k).due d = s.due d) := by
+  unfold wake
+  cases ha : attending cs s.made k with
+  | none => exact ⟨Fixed.refl s, rfl, rfl, Moved.refl _ _ s, fun d h => ⟨h, rfl⟩⟩
+  | some a =>
+    simp only
+    split
+    · rename_i hasl
+      have hlt := attending_lt ha
+      have hka : (cs a).key = some k := by
+        have := List.mem_of_getLast? ha
+        simp at this; exact this.2.2
+      generalize hs2 : ({ s with
+        asleep := put s.asleep a false, writers := put s.writers k (some a),
+        tick := s.tick + 1 } : State K V) = s2
+      obtain ⟨a1, wr, m⟩ := mark_same s2 a (s.tick + 1) none
+      refine ⟨by rw [← hs2] at a1 ⊢; exact ⟨a1.made, a1.after, a1.acts, a1.phase, a1.last, a1.earlies⟩,
+        by rw [a1.ran, ← hs2], by rw [a1.reads, ← hs2], ⟨fun d n h => ?_, fun d h => ?_, fun k' w h => ?_⟩,
+        fun d h => ?_⟩
+      · exact m.due d n (by rw [← hs2]; exact h)
+      · rcases m.fresh d h with h | h
+        · exact Or.inl (by rw [← hs2] at h; exact h)
+        · subst h; exact Or.inr ⟨hlt, hasl⟩
+      · rw [wr, ← hs2] at h
+        by_cases hk : k' = k
+        · subst hk; simp at h; subst h; exact Or.inr ⟨Or.inr (Or.inl hka), hasl⟩
+        · simp [put_ne _ _ hk] at h; exact Or.inl h
+      · rw [a1.asleep, ← hs2] at h
+        have hda : d ≠ a := by intro e; subst e; simp at h
+        simp [put_ne _ _ hda] at h
+        refine ⟨h, ?_⟩
+        have := m.fresh d
+        cases e : (mark s2 a (s.tick + 1) none).due d with
+        | none =>
+          cases e2 : s.due d with
+          | none => rfl
+          | some x => have := m.due d x (by rw [← hs2]; exact e2); rw [e] at this; cases this
+        | some x =>
+          rcases m.fresh d (by simp [e]) with h2 | h2
+          · obtain ⟨y, hy⟩ := Option.isSome_iff_exists.1 h2
+            have := m.due d y hy; rw [e] at this
+            rw [← hs2] at hy; rw [hy, this]
+          · exact absurd h2 hda
+    · exact ⟨Fixed.refl s, rfl, rfl, Moved.refl _ _ s, fun d h => ⟨h, rfl⟩⟩
+
+-- a run, writes in it or not: what it marks is fed by c, or was asleep (woken); a stop is on a due
+-- writer fed into c, c not on its after-chain; what it read, f may read. c awake, the asleep
+-- reading nothing: what stays asleep is as due as before, and only c's reads move
 theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : State K V),
     (∀ k, p.reads k → (cs c).f.reads k) → (∀ k, p.writes k → (cs c).f.writes k) →
     (∀ d k, k ∈ s.reads d → (cs d).f.reads k) → (∀ k w, s.writers k = some w → (cs w).writes k) →
     (∀ r, s.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1) →
+    (∀ d, s.asleep d = true → s.reads d = []) → s.asleep c = false →
     Fixed s (exec cs c s p).1 ∧
     (∀ d, d ≠ c → (exec cs c s p).1.ran d = s.ran d) ∧
     ((s.ran c).isSome → ((exec cs c s p).1.ran c).isSome) ∧
-    Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
+    Moved (fun d => d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))
+      (fun k w => (w = c ∧ (cs c).writes k) ∨ ((cs w).writes k ∧ s.asleep w = true)) s
       (exec cs c s p).1 ∧
     (∀ d k, k ∈ (exec cs c s p).1.reads d → (cs d).f.reads k) ∧
     (∀ k w, (exec cs c s p).1.writers k = some w → (cs w).writes k) ∧
     (∀ w, ((exec cs c s p).1.ran c).bind (·.stopped) = some w →
       ((exec cs c s p).1.due w).isSome ∧ waits s w c = false ∧ w ≠ c ∧ feeds cs w c) ∧
-    (∀ r, (exec cs c s p).1.ran c = some r → ∀ q ∈ r.seen, (cs c).f.reads q.1)
-  | .value _, s, _, _, ht, hl, hs => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
+    (∀ r, (exec cs c s p).1.ran c = some r → ∀ q ∈ r.seen, (cs c).f.reads q.1) ∧
+    (∀ d, (exec cs c s p).1.asleep d = true → s.asleep d = true ∧
+      (exec cs c s p).1.due d = s.due d) ∧
+    (∀ d, d ≠ c → (exec cs c s p).1.reads d = s.reads d)
+  | .value _, s, _, _, ht, hl, hs, _, _ => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
       fun w h => by
         cases e : s.ran c with
         | none => simp [exec, e] at h
         | some r => simp [exec, e, (hs r e).1] at h,
-      fun r h => (hs r h).2⟩
-  | .error, s, _, _, ht, hl, hs => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
+      fun r h => (hs r h).2, fun _ h => ⟨h, rfl⟩, fun _ _ => rfl⟩
+  | .error, s, _, _, ht, hl, hs, _, _ => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
       fun w h => by
         cases e : s.ran c with
         | none => simp [exec, e] at h
         | some r => simp [exec, e, (hs r e).1] at h,
-      fun r h => (hs r h).2⟩
-  | .pending, s, _, _, ht, hl, hs => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
+      fun r h => (hs r h).2, fun _ h => ⟨h, rfl⟩, fun _ _ => rfl⟩
+  | .pending, s, _, _, ht, hl, hs, _, _ => ⟨Fixed.refl s, fun _ _ => rfl, id, Moved.refl _ _ s, ht, hl,
       fun w h => by
         cases e : s.ran c with
         | none => simp [exec, e] at h
         | some r => simp [exec, e, (hs r e).1] at h,
-      fun r h => (hs r h).2⟩
-  | .write k v next, s, hr, hw, ht, hl, hs => by
+      fun r h => (hs r h).2, fun _ h => ⟨h, rfl⟩, fun _ _ => rfl⟩
+  | .write k v next, s, hr, hw, ht, hl, hs, hsr, hzc => by
     have hk : (cs c).writes k := Or.inl (hw k (by simp [Prog.writes]))
     obtain ⟨a, m⟩ := changed_feeds cs (store s k v) [k] c (by simpa using hk) ht
     generalize hs1 : changed cs (store s k v) [k] (some c) = s1 at a m
@@ -472,23 +548,51 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
       · exact h
     have hs1' : ∀ r, s1.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1 := by
       rw [a.ran]; exact hs
-    obtain ⟨f2, r2, i2, m2, t2, l2, st2, sn2⟩ := exec_base cs c next s1
+    have hsr1 : ∀ d, s1.asleep d = true → s1.reads d = [] := by
+      rw [a.asleep, a.reads]; exact hsr
+    obtain ⟨f2, r2, i2, m2, t2, l2, st2, sn2, z2, q2⟩ := exec_base cs c next s1
       (fun k h => hr k (by simp [Prog.reads, h])) (fun k h => hw k (by simp [Prog.writes, h]))
-      ht1 hl1 hs1'
+      ht1 hl1 hs1' hsr1 (by rw [a.asleep]; exact hzc)
     simp only [exec, hs1]
     have em : s1.made = s.made := a.made
     have ea : s1.after = s.after := a.after
     have er : s1.ran = s.ran := a.ran
-    have f1 : Fixed s s1 := ⟨a.made, a.after, a.acts, a.phase, a.last⟩
+    have f1 : Fixed s s1 := ⟨a.made, a.after, a.acts, a.phase, a.last, a.earlies⟩
     refine ⟨f1.trans f2, fun d hd => (r2 d hd).trans (by rw [er]),
-      fun h => i2 (by rw [er]; exact h), ?_, t2, l2, ?_, sn2⟩
-    · refine Moved.trans (s' := store s k v) (Moved.of_eq rfl rfl) (Moved.trans (s' := s1) m
-        (m2.mono (fun d h => ⟨by rw [← em]; exact h.1, h.2⟩) (fun _ _ h => h)))
+      fun h => i2 (by rw [er]; exact h), ?_, t2, l2, ?_, sn2, ?_, ?_⟩
+    · refine Moved.trans (s' := store s k v) (Moved.of_eq rfl rfl) (Moved.trans (s' := s1)
+        (m.mono (fun d h => ⟨h.1, Or.inl h.2⟩) (fun _ _ h => Or.inl h))
+        (m2.mono (fun d h => ⟨by rw [← em]; exact h.1, by
+            rcases h.2 with h | h
+            · exact Or.inl h
+            · exact Or.inr (by rw [a.asleep] at h; exact h)⟩)
+          (fun _ _ h => by
+            rcases h with h | ⟨h1, h2⟩
+            · exact Or.inl h
+            · exact Or.inr ⟨h1, by rw [a.asleep] at h2; exact h2⟩)))
     · intro w h
       obtain ⟨h1, h2, h3, h4⟩ := st2 w h
       refine ⟨h1, ?_, h3, h4⟩
       rw [← h2]; exact (waits_congr ea em w c).symm
-  | .read k next, s, hr, hw, ht, hl, hs => by
+    · intro d h
+      obtain ⟨h1, h2⟩ := z2 d h
+      rw [a.asleep] at h1
+      refine ⟨h1, h2.trans ?_⟩
+      -- asleep, it reads nothing: no mark of the write reaches it
+      obtain ⟨_, m0⟩ := changed_same cs (store s k v) [k] (some c)
+      rw [hs1] at m0
+      cases e : s.due d with
+      | none =>
+        cases e1 : s1.due d with
+        | none => rfl
+        | some x =>
+          rcases m0.fresh d (by simp [e1]) with h3 | ⟨_, k', _, hk2⟩
+          · simp [store, e] at h3
+          · have : (store s k v).reads d = [] := hsr d h1
+            rw [this] at hk2; cases hk2
+      | some x => exact m.due d x (by simp [store, e])
+    · intro d hd; rw [q2 d hd, a.reads]; rfl
+  | .read k next, s, hr, hw, ht, hl, hs, hsr, hzc => by
     have hkr : (cs c).f.reads k := hr k (by simp [Prog.reads])
     -- after the read: tracked, seen
     have e0 : ∀ (s : State K V) (g : Run K V → Run K V), Fixed s (edit s c g) ∧
@@ -496,16 +600,16 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
         (∀ d, d ≠ c → (edit s c g).ran d = s.ran d) ∧
         ((s.ran c).isSome → ((edit s c g).ran c).isSome) ∧
         (edit s c g).ran c = (s.ran c).map g ∧ (edit s c g).made = s.made ∧
-        (edit s c g).after = s.after := by
+        (edit s c g).after = s.after ∧ (edit s c g).asleep = s.asleep := by
       intro s g
-      refine ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, fun d hd => by simp [edit, put_ne _ _ hd],
-        fun h => by simpa [edit] using h, by simp [edit], rfl, rfl⟩
+      refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, fun d hd => by simp [edit, put_ne _ _ hd],
+        fun h => by simpa [edit] using h, by simp [edit], rfl, rfl, rfl⟩
     generalize hs1 : edit { s with reads := put s.reads c (s.reads c ++ [k]) } c
       (fun r => { r with seen := r.seen ++ [(k, s.store k)] }) = s1
-    obtain ⟨f1, d1, w1, rd1, r1, i1, c1, mk1, a1⟩ := e0 { s with reads := put s.reads c (s.reads c ++ [k]) }
+    obtain ⟨f1, d1, w1, rd1, r1, i1, c1, mk1, a1, z1⟩ := e0 { s with reads := put s.reads c (s.reads c ++ [k]) }
       (fun r => { r with seen := r.seen ++ [(k, s.store k)] })
-    rw [hs1] at f1 d1 w1 rd1 r1 i1 c1 mk1 a1
-    replace f1 : Fixed s s1 := ⟨f1.1, f1.2, f1.3, f1.4, f1.5⟩
+    rw [hs1] at f1 d1 w1 rd1 r1 i1 c1 mk1 a1 z1
+    replace f1 : Fixed s s1 := ⟨f1.1, f1.2, f1.3, f1.4, f1.5, f1.6⟩
     have ht1 : ∀ d k', k' ∈ s1.reads d → (cs d).f.reads k' := by
       intro d k' h
       rw [rd1] at h
@@ -515,7 +619,6 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
         · exact ht _ _ h
         · exact hkr
       · simp [put_ne _ _ hd] at h; exact ht d k' h
-    have hl1 : ∀ k w, s1.writers k = some w → (cs w).writes k := by rw [w1]; exact hl
     have hs1' : ∀ r, s1.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1 := by
       intro r h; rw [c1] at h
       cases e : s.ran c with
@@ -527,20 +630,66 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
         rcases hq with hq | rfl
         · exact (hs r0 e).2 q hq
         · exact hkr
+    -- the wake, when nobody tracked k
+    generalize hS1 : (if (!tracked s k) = true then wake cs s1 k else s1) = S1
+    obtain ⟨fW, rW, qW, mW, zW⟩ : Fixed s1 S1 ∧ S1.ran = s1.ran ∧ S1.reads = s1.reads ∧
+        Moved (fun d => d < s1.made ∧ s1.asleep d = true) (fun k w => (cs w).writes k ∧ s1.asleep w = true)
+          s1 S1 ∧
+        (∀ d, S1.asleep d = true → s1.asleep d = true ∧ S1.due d = s1.due d) := by
+      rw [← hS1]; split
+      · exact wake_base cs s1 k
+      · exact ⟨Fixed.refl s1, rfl, rfl, Moved.refl _ _ s1, fun d h => ⟨h, rfl⟩⟩
     have hrn : ∀ x, ∀ k, (next x).reads k → (cs c).f.reads k :=
       fun x k h => hr k (Or.inr ⟨x, h⟩)
     have hwn : ∀ x, ∀ k, (next x).writes k → (cs c).f.writes k :=
       fun x k h => hw k ⟨x, h⟩
-    -- the rest of the run from any state like s1
-    have go : ∀ s2 : State K V, Fixed s s2 → s2.due = s.due → s2.writers = s.writers →
+    -- from s to S1
+    have M1 : Moved (fun d => d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))
+        (fun k w => (w = c ∧ (cs c).writes k) ∨ ((cs w).writes k ∧ s.asleep w = true)) s S1 :=
+      Moved.trans (Moved.of_eq (s' := s1) d1 w1)
+        (mW.mono (fun d h => ⟨by rw [← mk1]; exact h.1, Or.inr (by rw [← z1]; exact h.2)⟩)
+          (fun _ _ h => Or.inr ⟨h.1, by rw [← z1]; exact h.2⟩))
+    have FS : Fixed s S1 := f1.trans fW
+    have l1 : ∀ k' w, S1.writers k' = some w → (cs w).writes k' := by
+      intro k' w h
+      rcases M1.writers k' w h with h | (⟨rfl, h⟩ | ⟨h, _⟩)
+      · exact hl k' w h
+      · exact h
+      · exact h
+    have tS : ∀ d k', k' ∈ S1.reads d → (cs d).f.reads k' := by rw [qW]; exact ht1
+    have sS : ∀ r, S1.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1 := by
+      rw [rW]; exact hs1'
+    have zS : ∀ d, S1.asleep d = true → s.asleep d = true ∧ S1.due d = s.due d := by
+      intro d h
+      obtain ⟨h1, h2⟩ := zW d h
+      rw [z1] at h1
+      exact ⟨h1, by rw [h2, d1]⟩
+    have qS : ∀ d, d ≠ c → S1.reads d = s.reads d := by
+      intro d hd; rw [qW, rd1]; simp [put_ne _ _ hd]
+    have hzS : S1.asleep c = false := by
+      cases h : S1.asleep c
+      · rfl
+      · rw [(zS c h).1] at hzc; cases hzc
+    have srS : ∀ d, S1.asleep d = true → S1.reads d = [] := by
+      intro d h
+      have hdc : d ≠ c := by intro e; subst e; rw [hzS] at h; cases h
+      rw [qS d hdc]; exact hsr d (zS d h).1
+    -- the rest of the run from any state like S1
+    have go : ∀ s2 : State K V, Fixed s s2 →
+        Moved (fun d => d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))
+          (fun k w => (w = c ∧ (cs c).writes k) ∨ ((cs w).writes k ∧ s.asleep w = true)) s s2 →
         s2.made = s.made → s2.after = s.after → (∀ d, d ≠ c → s2.ran d = s.ran d) →
         ((s.ran c).isSome → (s2.ran c).isSome) →
         (∀ d k, k ∈ s2.reads d → (cs d).f.reads k) →
+        (∀ k w, s2.writers k = some w → (cs w).writes k) →
         (∀ r, s2.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1) →
+        (∀ d, s2.asleep d = true → s.asleep d = true ∧ s2.due d = s.due d) →
+        (∀ d, d ≠ c → s2.reads d = s.reads d) →
         Fixed s (exec cs c s2 (next (s.store k))).1 ∧
         (∀ d, d ≠ c → (exec cs c s2 (next (s.store k))).1.ran d = s.ran d) ∧
         ((s.ran c).isSome → ((exec cs c s2 (next (s.store k))).1.ran c).isSome) ∧
-        Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
+        Moved (fun d => d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))
+          (fun k w => (w = c ∧ (cs c).writes k) ∨ ((cs w).writes k ∧ s.asleep w = true)) s
           (exec cs c s2 (next (s.store k))).1 ∧
         (∀ d k', k' ∈ (exec cs c s2 (next (s.store k))).1.reads d → (cs d).f.reads k') ∧
         (∀ k' w, (exec cs c s2 (next (s.store k))).1.writers k' = some w → (cs w).writes k') ∧
@@ -548,46 +697,71 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
           ((exec cs c s2 (next (s.store k))).1.due w).isSome ∧ waits s w c = false ∧ w ≠ c ∧
             feeds cs w c) ∧
         (∀ r, (exec cs c s2 (next (s.store k))).1.ran c = some r →
-          ∀ q ∈ r.seen, (cs c).f.reads q.1) := by
-      intro s2 f2 d2 w2 mk2 a2 r2 i2 t2 s2s
-      obtain ⟨f3, r3, i3, m3, t3, l3, st3, sn3⟩ := exec_base cs c (next (s.store k)) s2
-        (hrn _) (hwn _) t2 (by rw [w2]; exact hl) s2s
+          ∀ q ∈ r.seen, (cs c).f.reads q.1) ∧
+        (∀ d, (exec cs c s2 (next (s.store k))).1.asleep d = true → s.asleep d = true ∧
+          (exec cs c s2 (next (s.store k))).1.due d = s.due d) ∧
+        (∀ d, d ≠ c → (exec cs c s2 (next (s.store k))).1.reads d = s.reads d) := by
+      intro s2 f2 m2 mk2 a2 r2 i2 t2 l2 s2s z2 q2
+      have hz2 : s2.asleep c = false := by
+        cases h : s2.asleep c
+        · rfl
+        · rw [(z2 c h).1] at hzc; cases hzc
+      have sr2 : ∀ d, s2.asleep d = true → s2.reads d = [] := by
+        intro d h
+        have hdc : d ≠ c := by intro e; subst e; rw [hz2] at h; cases h
+        rw [q2 d hdc]; exact hsr d (z2 d h).1
+      obtain ⟨f3, r3, i3, m3, t3, l3, st3, sn3, z3, q3⟩ := exec_base cs c (next (s.store k)) s2
+        (hrn _) (hwn _) t2 l2 s2s sr2 hz2
       refine ⟨f2.trans f3, fun d hd => (r3 d hd).trans (r2 d hd), fun h => i3 (i2 h), ?_, t3, l3,
-        ?_, sn3⟩
-      · refine Moved.trans (s' := s2) (Moved.of_eq d2 w2) (m3.mono ?_ (fun _ _ h => h))
-        intro d h; exact ⟨mk2 ▸ h.1, h.2⟩
+        ?_, sn3, ?_, fun d hd => (q3 d hd).trans (q2 d hd)⟩
+      · refine Moved.trans m2 (m3.mono ?_ ?_)
+        · intro d h
+          refine ⟨mk2 ▸ h.1, ?_⟩
+          rcases h.2 with h | h
+          · exact Or.inl h
+          · exact Or.inr (z2 d h).1
+        · intro k' w h
+          rcases h with h | ⟨h1, h2⟩
+          · exact Or.inl h
+          · exact Or.inr ⟨h1, (z2 w h2).1⟩
       · intro w h
         obtain ⟨h1, h2, h3, h4⟩ := st3 w h
         exact ⟨h1, by rw [← h2]; exact (waits_congr a2 mk2 w c).symm, h3, h4⟩
+      · intro d h
+        obtain ⟨h1, h2⟩ := z3 d h
+        obtain ⟨h3, h4⟩ := z2 d h1
+        exact ⟨h3, h2.trans h4⟩
+    have mS : S1.made = s.made := FS.made
+    have aS : S1.after = s.after := FS.after
+    have rS : ∀ d, d ≠ c → S1.ran d = s.ran d := by intro d hd; rw [rW, r1 d hd]
+    have iS : (s.ran c).isSome → (S1.ran c).isSome := by intro h; rw [rW]; exact i1 h
     simp only [exec]
-    rw [hs1]
-    have hw1 : s1.writers k = s.writers k := by rw [w1]
-    cases hwk : s.writers k with
+    rw [hs1, hS1]
+    cases hwk : S1.writers k with
     | none =>
-      rw [hw1, hwk]
-      exact go s1 f1 d1 w1 mk1 a1 (fun d hd => by rw [r1 d hd]) i1 ht1 hs1'
+      exact go S1 FS M1 mS aS rS iS tS l1 sS zS qS
     | some w =>
-      rw [hw1, hwk]
       simp only []
       by_cases hwc : w = c
       · simp only [hwc, ite_true]
-        exact go s1 f1 d1 w1 mk1 a1 (fun d hd => by rw [r1 d hd]) i1 ht1 hs1'
+        exact go S1 FS M1 mS aS rS iS tS l1 sS zS qS
       · simp only [hwc, ite_false]
-        generalize hs2 : edit s1 c (fun r => { r with values := ins w r.values }) = s2
-        obtain ⟨f2, d2, w2, rd2, r2, i2, c2, mk2, a2⟩ := e0 s1 (fun r => { r with values := ins w r.values })
-        rw [hs2] at f2 d2 w2 rd2 r2 i2 c2 mk2 a2
+        generalize hs2 : edit S1 c (fun r => { r with values := ins w r.values }) = s2
+        obtain ⟨f2, d2, w2, rd2, r2, i2, c2, mk2, a2, z2⟩ := e0 S1 (fun r => { r with values := ins w r.values })
+        rw [hs2] at f2 d2 w2 rd2 r2 i2 c2 mk2 a2 z2
         have hs2' : ∀ r, s2.ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1 := by
           intro r h; rw [c2] at h
-          cases e : s1.ran c with
+          cases e : S1.ran c with
           | none => simp [e] at h
-          | some r0 => simp [e] at h; subst h; exact hs1' r0 e
+          | some r0 => simp [e] at h; subst h; exact sS r0 e
+        have M2 := Moved.trans M1 (Moved.of_eq (s' := s2) d2 w2)
         split
         · rename_i hcond
           simp only [Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true] at hcond
-          obtain ⟨f4, d4, w4, rd4, r4, i4, c4, mk4, a4⟩ := e0 s2 (fun r => { r with stopped := some w })
-          refine ⟨(f1.trans f2).trans f4, fun d hd => by rw [r4 d hd, r2 d hd, r1 d hd], fun h => i4 (i2 (i1 h)),
-            Moved.of_eq (by rw [d4, d2, d1]) (by rw [w4, w2, w1]),
-            by rw [rd4, rd2]; exact ht1, by rw [w4, w2, w1]; exact hl, ?_, ?_⟩
+          obtain ⟨f4, d4, w4, rd4, r4, i4, c4, mk4, a4, z4⟩ := e0 s2 (fun r => { r with stopped := some w })
+          refine ⟨(FS.trans f2).trans f4, fun d hd => by rw [r4 d hd, r2 d hd, rS d hd],
+            fun h => i4 (i2 (iS h)), Moved.trans M2 (Moved.of_eq d4 w4),
+            by rw [rd4, rd2]; exact tS, by rw [w4, w2]; exact l1, ?_, ?_, ?_, ?_⟩
           · intro w' h
             rw [c4] at h
             cases e : s2.ran c with
@@ -595,16 +769,24 @@ theorem exec_base (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s : St
             | some r0 =>
               simp [e] at h
               subst h
-              refine ⟨by rw [d4]; exact hcond.1.1, ?_, hwc, k, hl k w hwk, hkr⟩
+              refine ⟨by rw [d4]; exact hcond.1.1, ?_, hwc, k, l1 k w hwk, hkr⟩
               rw [← hcond.1.2]
-              exact waits_congr (by rw [a2, a1]) (by rw [mk2, mk1]) w c
+              exact waits_congr (by rw [a2, aS]) (by rw [mk2, mS]) w c
           · intro r h
             rw [c4] at h
             cases e : s2.ran c with
             | none => simp [e] at h
             | some r0 => simp [e] at h; subst h; exact (hs2' r0 e).2
-        · exact go s2 (f1.trans f2) (by rw [d2, d1]) (by rw [w2, w1]) (by rw [mk2, mk1]) (by rw [a2, a1])
-            (fun d hd => by rw [r2 d hd, r1 d hd]) (fun h => i2 (i1 h)) (by rw [rd2]; exact ht1) hs2'
+          · intro d h
+            rw [z4, z2] at h
+            obtain ⟨h1, h2⟩ := zS d h
+            exact ⟨h1, by rw [d4, d2, h2]⟩
+          · intro d hd; rw [rd4, rd2]; exact qS d hd
+        · exact go s2 (FS.trans f2) M2 (by rw [mk2, mS]) (by rw [a2, aS])
+            (fun d hd => by rw [r2 d hd, rS d hd]) (fun h => i2 (iS h)) (by rw [rd2]; exact tS)
+            (by rw [w2]; exact l1) hs2'
+            (fun d h => by rw [z2] at h; obtain ⟨h1, h2⟩ := zS d h; exact ⟨h1, by rw [d2, h2]⟩)
+            (fun d hd => by rw [rd2]; exact qS d hd)
 
 -- the due sum: each due d weighs a d, and b d for each of the n that does not wait after it (a
 -- stop on d spends one)
@@ -761,7 +943,7 @@ theorem finish_fix (s : State K V) (c : Nat) (e : Ended) (eq : Option Bool) (w :
     rw [e]; exact ⟨Fixed.refl s, rfl, rfl, rfl⟩
   | some r =>
     obtain ⟨_, _, -, hfin⟩ := finish_any s c r h e eq w th
-    rw [hfin]; exact ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl⟩
+    rw [hfin]; exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl⟩
 
 theorem set_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V)
     (ht : ∀ d k, k ∈ s.reads d → (cs d).f.reads k) :
@@ -773,55 +955,92 @@ theorem set_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V)
   · rename_i k heq
     have hk : (cs c).writes k := Or.inr (Or.inr (by simp [heq]))
     obtain ⟨a, m⟩ := changed_feeds cs (store (say s (.set c v)) k v) [k] c (by simpa using hk) ht
-    exact ⟨⟨a.made, a.after, a.acts, a.phase, a.last⟩, a.reads,
+    exact ⟨⟨a.made, a.after, a.acts, a.phase, a.last, a.earlies⟩, a.reads,
       Moved.trans (s' := store (say s (.set c v)) k v) (Moved.of_eq rfl rfl) m⟩
-  · exact ⟨⟨rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
+  · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, Moved.of_eq rfl rfl⟩
+
+-- the queue of s' is s's, with at most one act of c more: any sum by computation grows by c's at
+-- most, and what is there was there or is c's
+def QAdd (s s' : State K V) (c : Nat) : Prop :=
+  (∀ g : Nat → Nat, ((queue s').map (fun a => g a.1)).sum ≤ ((queue s).map (fun a => g a.1)).sum + g c) ∧
+  (∀ a ∈ queue s', a ∈ queue s ∨ a.1 = c)
+
+theorem QAdd.of_eq {s s' : State K V} {c : Nat} (h : queue s' = queue s) : QAdd s s' c :=
+  ⟨fun g => by rw [h]; omega, fun a ha => Or.inl (h ▸ ha)⟩
+
+theorem QAdd.trans_eq {s s' s'' : State K V} {c : Nat} (a : QAdd s s' c) (h : queue s'' = queue s') :
+    QAdd s s'' c := ⟨fun g => by rw [h]; exact a.1 g, fun x hx => a.2 x (h ▸ hx)⟩
+
+theorem qadd_early (s : State K V) (c : Nat) (v : V) :
+    QAdd s { s with earlies := s.earlies ++ [(c, v)] } c := by
+  refine ⟨fun g => ?_, fun a ha => ?_⟩
+  · simp [queue, List.map_append, List.sum_append]; omega
+  · simp only [queue, List.mem_append, List.mem_singleton] at ha ⊢
+    rcases ha with (h | h) | h
+    · exact Or.inl (Or.inl h)
+    · subst h; exact Or.inr rfl
+    · exact Or.inl (Or.inr h)
+
+theorem qadd_late (s : State K V) (c : Nat) (v : V) :
+    QAdd s { s with acts := s.acts ++ [(c, v)] } c := by
+  refine ⟨fun g => ?_, fun a ha => ?_⟩
+  · simp [queue, List.map_append, List.sum_append]; omega
+  · simp only [queue, List.mem_append, List.mem_singleton] at ha ⊢
+    rcases ha with h | h | h
+    · exact Or.inl (Or.inl h)
+    · exact Or.inl (Or.inr h)
+    · subst h; exact Or.inr rfl
 
 theorem result_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V)
     (ht : ∀ d k, k ∈ s.reads d → (cs d).f.reads k) :
     (result cs s c v).made = s.made ∧ (result cs s c v).after = s.after ∧
     (result cs s c v).phase = s.phase ∧ (result cs s c v).reads = s.reads ∧
-    ((result cs s c v).acts = s.acts ∨ (result cs s c v).acts = s.acts ++ [(c, v)]) ∧
+    QAdd s (result cs s c v) c ∧
     Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
-      (result cs s c v) := by
+      (result cs s c v) ∧ (result cs s c v).asleep = s.asleep := by
   have fin : ∀ (s' : State K V) e eq w th, s'.made = s.made → s'.after = s.after →
       s'.phase = s.phase → s'.reads = s.reads →
       Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s s' →
-      (s'.acts = s.acts ∨ s'.acts = s.acts ++ [(c, v)]) →
+      QAdd s s' c → s'.asleep = s.asleep →
       (finish s' c e eq w th).made = s.made ∧ (finish s' c e eq w th).after = s.after ∧
       (finish s' c e eq w th).phase = s.phase ∧ (finish s' c e eq w th).reads = s.reads ∧
-      ((finish s' c e eq w th).acts = s.acts ∨ (finish s' c e eq w th).acts = s.acts ++ [(c, v)]) ∧
+      QAdd s (finish s' c e eq w th) c ∧
       Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
-        (finish s' c e eq w th) := by
-    intro s' e eq w th e1 e2 e3 r m a
+        (finish s' c e eq w th) ∧ (finish s' c e eq w th).asleep = s.asleep := by
+    intro s' e eq w th e1 e2 e3 r m a z
     obtain ⟨f1, d1, w1, r1⟩ := finish_fix s' c e eq w th
-    exact ⟨f1.1.trans e1, f1.2.trans e2, f1.4.trans e3, r1.trans r, by rw [f1.3]; exact a,
-      Moved.trans m (Moved.of_eq d1 w1)⟩
+    exact ⟨f1.1.trans e1, f1.2.trans e2, f1.4.trans e3, r1.trans r,
+      a.trans_eq (by simp [queue, f1.3, f1.6]),
+      Moved.trans m (Moved.of_eq d1 w1), by simp [z]⟩
   simp only [result]
   split
-  · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (Or.inl rfl)
+  · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (QAdd.of_eq rfl) rfl
   · rename_i e _
     split
-    · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (Or.inl rfl)
+    · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (QAdd.of_eq rfl) rfl
     · split
       · split
-        · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (Or.inl rfl)
-        · exact fin _ _ _ _ _ rfl rfl rfl rfl (Moved.of_eq rfl rfl) (Or.inr rfl)
+        · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (QAdd.of_eq rfl) rfl
+        · split
+          · exact fin _ _ _ _ _ rfl rfl rfl rfl (Moved.of_eq rfl rfl) (qadd_early s c v) rfl
+          · exact fin _ _ _ _ _ rfl rfl rfl rfl (Moved.of_eq rfl rfl) (qadd_late s c v) rfl
       · split
-        · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (Or.inl rfl)
+        · exact fin s _ _ _ _ rfl rfl rfl rfl (Moved.refl _ _ s) (QAdd.of_eq rfl) rfl
         · obtain ⟨f1, r1, m1⟩ := set_base cs s c v ht
-          exact fin _ _ _ _ _ f1.1 f1.2 f1.4 r1 (Moved.trans m1 (Moved.of_eq rfl rfl)) (Or.inl f1.3)
+          exact fin _ _ _ _ _ f1.1 f1.2 f1.4 r1 (Moved.trans m1 (Moved.of_eq rfl rfl))
+            (QAdd.of_eq (by simp [queue, f1.3, f1.6]))
+            (by simp only [Model.set]; split <;> simp [say, store])
 
 theorem ending_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (o : Out V)
     (ht : ∀ d k, k ∈ s.reads d → (cs d).f.reads k) :
     (ending cs s c o).made = s.made ∧ (ending cs s c o).phase = s.phase ∧
-    (ending cs s c o).reads = s.reads ∧
+    (ending cs s c o).reads = s.reads ∧ (ending cs s c o).asleep = s.asleep ∧
     ((∃ r w, s.ran c = some r ∧ r.stopped = some w ∧
         (ending cs s c o).after = put s.after c (some w) ∧
-        (ending cs s c o).due = put s.due c (some r.mark) ∧ (ending cs s c o).acts = s.acts ∧
+        (ending cs s c o).due = put s.due c (some r.mark) ∧ queue (ending cs s c o) = queue s ∧
         (ending cs s c o).writers = s.writers) ∨
       ((s.ran c).bind (·.stopped) = none ∧ (ending cs s c o).after = s.after ∧
-        ((ending cs s c o).acts = s.acts ∨ ∃ v, (ending cs s c o).acts = s.acts ++ [(c, v)]) ∧
+        QAdd s (ending cs s c o) c ∧
         Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
           (ending cs s c o))) := by
   unfold ending
@@ -833,33 +1052,36 @@ theorem ending_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (o : Out V
       simp only [hr, Option.bind_some] at hst
       obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hst
       have key : ∀ X : State K V, X.made = s.made → X.phase = s.phase → X.reads = s.reads →
-          X.after = put s.after c r.stopped → X.due = put s.due c (some r.mark) → X.acts = s.acts →
-          X.writers = s.writers →
+          X.after = put s.after c r.stopped → X.due = put s.due c (some r.mark) →
+          queue X = queue s → X.writers = s.writers → X.asleep = s.asleep →
           (finish X c .stopped none r.stopped none).made = s.made ∧
           (finish X c .stopped none r.stopped none).phase = s.phase ∧
           (finish X c .stopped none r.stopped none).reads = s.reads ∧
+          (finish X c .stopped none r.stopped none).asleep = s.asleep ∧
           (finish X c .stopped none r.stopped none).after = put s.after c (some w) ∧
           (finish X c .stopped none r.stopped none).due = put s.due c (some r.mark) ∧
-          (finish X c .stopped none r.stopped none).acts = s.acts ∧
+          queue (finish X c .stopped none r.stopped none) = queue s ∧
           (finish X c .stopped none r.stopped none).writers = s.writers := by
-        intro X e1 e2 e3 e4 e5 e6 e7
+        intro X e1 e2 e3 e4 e5 e6 e7 e8
         obtain ⟨f, d, wr, rd⟩ := finish_fix X c .stopped none r.stopped none
-        refine ⟨f.1.trans e1, f.4.trans e2, rd.trans e3, ?_, ?_, f.3.trans e6, wr.trans e7⟩
+        refine ⟨f.1.trans e1, f.4.trans e2, rd.trans e3, by simp [e8], ?_, ?_,
+          by simp [queue, f.3, f.6]; exact e6, wr.trans e7⟩
         · rw [f.2, e4, hw]
         · rw [d, e5]
       have hs : (stop s c).made = s.made ∧ (stop s c).phase = s.phase ∧
-          (stop s c).reads = s.reads ∧ (stop s c).after = put s.after c (some w) ∧
-          (stop s c).due = put s.due c (some r.mark) ∧ (stop s c).acts = s.acts ∧
+          (stop s c).reads = s.reads ∧ (stop s c).asleep = s.asleep ∧
+          (stop s c).after = put s.after c (some w) ∧
+          (stop s c).due = put s.due c (some r.mark) ∧ queue (stop s c) = queue s ∧
           (stop s c).writers = s.writers := by
         simp only [stop, hr]
         split
         · exact key
             { s with loop := put s.loop c r.loop, after := put s.after c r.stopped,
-                     due := put s.due c (some r.mark) } rfl rfl rfl rfl rfl rfl rfl
+                     due := put s.due c (some r.mark) } rfl rfl rfl rfl rfl rfl rfl rfl
         · exact key { s with after := put s.after c r.stopped, due := put s.due c (some r.mark) }
-            rfl rfl rfl rfl rfl rfl rfl
-      obtain ⟨a1, a2, a3, a4, a5, a6, a7⟩ := hs
-      exact ⟨a1, a2, a3, Or.inl ⟨r, w, rfl, hw, a4, a5, a6, a7⟩⟩
+            rfl rfl rfl rfl rfl rfl rfl rfl
+      obtain ⟨a1, a2, a3, a0, a4, a5, a6, a7⟩ := hs
+      exact ⟨a1, a2, a3, a0, Or.inl ⟨r, w, rfl, hw, a4, a5, a6, a7⟩⟩
   · rename_i hst
     have hst' : (s.ran c).bind (·.stopped) = none := by simpa using hst
     generalize hs1 : edit s c (fun r => { r with out := some o }) = s1
@@ -867,70 +1089,84 @@ theorem ending_base (cs : Nat → Comp K V) (s : State K V) (c : Nat) (o : Out V
     have e2 : s1.after = s.after := by rw [← hs1]; rfl
     have e3 : s1.phase = s.phase := by rw [← hs1]; rfl
     have e4 : s1.reads = s.reads := by rw [← hs1]; rfl
-    have e5 : s1.acts = s.acts := by rw [← hs1]; rfl
+    have e5 : queue s1 = queue s := by rw [← hs1]; rfl
+    have e6 : s1.asleep = s.asleep := by rw [← hs1]; rfl
     have m1 : Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s s1 :=
       Moved.of_eq (by rw [← hs1]; rfl) (by rw [← hs1]; rfl)
     have plain : ∀ e, (finish s1 c e none none none).made = s.made ∧
         (finish s1 c e none none none).phase = s.phase ∧
         (finish s1 c e none none none).reads = s.reads ∧
+        (finish s1 c e none none none).asleep = s.asleep ∧
         ((∃ r w, s.ran c = some r ∧ r.stopped = some w ∧
           (finish s1 c e none none none).after = put s.after c (some w) ∧
           (finish s1 c e none none none).due = put s.due c (some r.mark) ∧
-          (finish s1 c e none none none).acts = s.acts ∧
+          queue (finish s1 c e none none none) = queue s ∧
           (finish s1 c e none none none).writers = s.writers) ∨
         ((s.ran c).bind (·.stopped) = none ∧ (finish s1 c e none none none).after = s.after ∧
-          ((finish s1 c e none none none).acts = s.acts ∨
-            ∃ v, (finish s1 c e none none none).acts = s.acts ++ [(c, v)]) ∧
+          QAdd s (finish s1 c e none none none) c ∧
           Moved (fun d => d < s.made ∧ feeds cs c d) (fun k w => w = c ∧ (cs c).writes k) s
             (finish s1 c e none none none))) := by
       intro e
       obtain ⟨f, d, wr, rd⟩ := finish_fix s1 c e none none none
-      exact ⟨f.1.trans e1, f.4.trans e3, rd.trans e4, Or.inr ⟨hst', f.2.trans e2,
-        Or.inl (f.3.trans e5), Moved.trans m1 (Moved.of_eq d wr)⟩⟩
+      exact ⟨f.1.trans e1, f.4.trans e3, rd.trans e4, by simp [e6], Or.inr ⟨hst', f.2.trans e2,
+        QAdd.of_eq (by rw [← e5]; simp [queue, f.3, f.6]), Moved.trans m1 (Moved.of_eq d wr)⟩⟩
     split
     · exact plain _
     · exact plain _
     · rename_i v
-      obtain ⟨a1, a2, a3, a4, a5, a6⟩ := result_base cs s1 c v (by rw [e4]; exact ht)
-      refine ⟨a1.trans e1, a3.trans e3, a4.trans e4, Or.inr ⟨hst', a2.trans e2, ?_,
+      obtain ⟨a1, a2, a3, a4, a5, a6, a7⟩ := result_base cs s1 c v (by rw [e4]; exact ht)
+      refine ⟨a1.trans e1, a3.trans e3, a4.trans e4, a7.trans e6, Or.inr ⟨hst', a2.trans e2, ?_,
         Moved.trans m1 (a6.mono (fun d h => ⟨e1 ▸ h.1, h.2⟩) (fun _ _ h => h))⟩⟩
-      rcases a5 with h | h
-      · exact Or.inl (h.trans e5)
-      · exact Or.inr ⟨v, by rw [h, e5]⟩
+      refine ⟨fun g => ?_, fun a h => ?_⟩
+      · have := a5.1 g; rw [e5] at this; exact this
+      · rcases a5.2 a h with h | h
+        · exact Or.inl (e5 ▸ h)
+        · exact Or.inr h
 
 -- a run step, writes in it or not: c is done with, or due again after a due writer fed into it;
--- what else became due is fed by c
+-- what else became due is fed by c, or was asleep (and is woken: up now); what is asleep after was
+-- before, as due as it was
 theorem first_base (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (g : Base cs s)
     (hc : (s.due c).isSome) :
     (first cs s c rk).made = s.made ∧ (first cs s c rk).phase = s.phase ∧
     (∀ d m, d ≠ c → s.due d = some m → (first cs s c rk).due d = some m) ∧
     (((first cs s c rk).after = put s.after c none ∧
-      ∀ d, ((first cs s c rk).due d).isSome → (d ≠ c ∧ (s.due d).isSome) ∨ (d < s.made ∧ feeds cs c d)) ∨
+      ∀ d, ((first cs s c rk).due d).isSome → (d ≠ c ∧ (s.due d).isSome) ∨
+        (d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))) ∨
      ∃ w, (first cs s c rk).after = put s.after c (some w) ∧ w ≠ c ∧ w < s.made ∧
       ((first cs s c rk).due w).isSome ∧ ((first cs s c rk).due c).isSome ∧ feeds cs w c ∧
       waits (start s c rk) w c = false ∧
-      ∀ d, ((first cs s c rk).due d).isSome → d = c ∨ (s.due d).isSome ∨ (d < s.made ∧ feeds cs c d)) ∧
-    ((first cs s c rk).acts = s.acts.filter (fun a => a.1 ≠ c) ∨
-      ∃ v, (first cs s c rk).acts = s.acts.filter (fun a => a.1 ≠ c) ++ [(c, v)]) ∧
+      ∀ d, ((first cs s c rk).due d).isSome → d = c ∨ (s.due d).isSome ∨
+        (d < s.made ∧ (feeds cs c d ∨ s.asleep d = true))) ∧
+    QAdd (start s c rk) (first cs s c rk) c ∧
+    (∀ d, (first cs s c rk).asleep d = true → s.asleep d = true) ∧
     Base cs (first cs s c rk) := by
   have hcm : c < s.made := g.due_made c hc
+  have hzc : s.asleep c = false := by
+    cases h : s.asleep c
+    · rfl
+    · rw [g.asleep_due c h] at hc; cases hc
   -- start
   have s1 : (start s c rk).made = s.made ∧ (start s c rk).phase = s.phase ∧
       (start s c rk).reads = s.reads ∧ (start s c rk).writers = s.writers ∧
       (start s c rk).due = put s.due c none ∧ (start s c rk).after = put s.after c none ∧
-      (start s c rk).acts = s.acts.filter (fun a => a.1 ≠ c) ∧
+      queue (start s c rk) = (queue s).filter (fun a => a.1 ≠ c) ∧
       (∀ r, (start s c rk).ran c = some r → r.stopped = none ∧ ∀ q ∈ r.seen, (cs c).f.reads q.1) ∧
-      ((start s c rk).ran c).isSome := by
-    refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_, by simp [start, say]⟩
+      ((start s c rk).ran c).isSome ∧ (start s c rk).asleep = s.asleep := by
+    refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, by simp [start, say, queue, List.filter_append], ?_,
+      by simp [start, say], rfl⟩
     intro r h; simp [start, say] at h; subst h; simp
-  obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9⟩ := s1
-  obtain ⟨f2, r2, i2, m2, t2, l2, st2, sn2⟩ := exec_base cs c (cs c).f (start s c rk) (fun _ h => h)
+  obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e0⟩ := s1
+  obtain ⟨f2, r2, i2, m2, t2, l2, st2, sn2, z2, q2⟩ := exec_base cs c (cs c).f (start s c rk) (fun _ h => h)
     (fun _ h => h) (by rw [e3]; exact g.tracked) (by rw [e4]; exact g.learned) e8
+    (by rw [e0, e3]; exact g.asleep_reads) (by rw [e0]; exact hzc)
   simp only [first]
-  generalize hx : exec cs c (start s c rk) (cs c).f = x at f2 r2 i2 m2 t2 l2 st2 sn2
+  generalize hx : exec cs c (start s c rk) (cs c).f = x at f2 r2 i2 m2 t2 l2 st2 sn2 z2 q2
   obtain ⟨s2, o⟩ := x
-  simp only at f2 r2 i2 m2 t2 l2 st2 sn2 ⊢
-  generalize hs3 : ({ s2 with reads := put s2.reads c (((s2.ran c).map fun r => r.seen.map (·.1)).getD []) } : State K V) = s3
+  simp only at f2 r2 i2 m2 t2 l2 st2 sn2 z2 q2 ⊢
+  rw [untrack_eq]
+  generalize hs3 : ({ ({ s2 with reads := put s2.reads c (((s2.ran c).map fun r => r.seen.map (·.1)).getD []) } :
+      State K V) with dying := _ } : State K V) = s3
   have t3 : ∀ d k, k ∈ s3.reads d → (cs d).f.reads k := by
     intro d k h
     rw [← hs3] at h
@@ -944,27 +1180,36 @@ theorem first_base (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (g : Bas
         obtain ⟨q, hq, rfl⟩ := h
         exact sn2 r e q hq
     · simp only [put_ne _ _ hd] at h; exact t2 d k h
-  obtain ⟨a1, a2, a3, a4⟩ := ending_base cs s3 c o t3
+  obtain ⟨a1, a2, a3, a0, a4⟩ := ending_base cs s3 c o t3
   have h3 : s3.made = s.made ∧ s3.phase = s.phase ∧ s3.due = s2.due ∧ s3.after = s2.after ∧
-      s3.acts = s2.acts ∧ s3.writers = s2.writers ∧ s3.ran = s2.ran := by
-    rw [← hs3]; exact ⟨f2.1.trans e1, f2.4.trans e2, rfl, rfl, rfl, rfl, rfl⟩
-  obtain ⟨b1, b2, b3, b4, b5, b6, b7⟩ := h3
+      queue s3 = queue s2 ∧ s3.writers = s2.writers ∧ s3.ran = s2.ran ∧ s3.asleep = s2.asleep := by
+    rw [← hs3]; exact ⟨f2.1.trans e1, f2.4.trans e2, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  obtain ⟨b1, b2, b3, b4, b5, b6, b7, b8⟩ := h3
+  have hz3 : s3.asleep c = false := by
+    cases h : s3.asleep c
+    · rfl
+    · rw [b8] at h; have := (z2 c h).1; rw [e0, hzc] at this; cases this
+  have hush := ending_hush cs s3 c o hz3
   have ea : s2.after = put s.after c none := f2.2.trans e6
-  have eacts : s2.acts = s.acts.filter (fun a => a.1 ≠ c) := f2.3.trans e7
-  -- dues before ending: c's gone, the rest grew, the new ones fed by c
+  have eacts : queue s2 = (queue s).filter (fun a => a.1 ≠ c) := by
+    rw [← e7]; simp [queue, f2.3, f2.6]
+  -- dues before ending: c's gone, the rest grew, the new ones fed by c or woken
   have hd2 : ∀ d m, d ≠ c → s.due d = some m → s2.due d = some m := by
     intro d m hd h
     exact m2.due d m (by rw [e5, put_ne _ _ hd]; exact h)
-  have hf2 : ∀ d, (s2.due d).isSome → (d ≠ c ∧ (s.due d).isSome) ∨ (d < s.made ∧ feeds cs c d) := by
+  have hf2 : ∀ d, (s2.due d).isSome → (d ≠ c ∧ (s.due d).isSome) ∨
+      (d < s.made ∧ (feeds cs c d ∨ s.asleep d = true)) := by
     intro d h
     rcases m2.fresh d h with h | h
     · rw [e5] at h
       by_cases hd : d = c
       · subst hd; simp at h
       · rw [put_ne _ _ hd] at h; exact Or.inl ⟨hd, h⟩
-    · exact Or.inr ⟨by rw [← e1]; exact h.1, h.2⟩
-  generalize hF : ending cs s3 c o = F at a1 a2 a3 a4
+    · exact Or.inr ⟨by rw [← e1]; exact h.1, by rw [← e0]; exact h.2⟩
+  generalize hF : ending cs s3 c o = F at a1 a2 a3 a0 a4 hush
   have hFm : F.made = s.made := a1.trans b1
+  have hFz : ∀ d, F.asleep d = true → s.asleep d = true := by
+    intro d h; rw [a0, b8] at h; rw [← e0]; exact (z2 d h).1
   -- the afters with c's cleared: s's, less one
   have sub : ∀ a b, TransGen (fun x y => put s.after c none x = some y) a b → TransGen (aft s) a b := by
     intro a b h
@@ -992,7 +1237,7 @@ theorem first_base (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (g : Bas
     · rcases m4.fresh x h with h | h
       · rw [b3] at h; exact key x h
       · rw [← b1]; exact h.1
-  refine ⟨a1.trans b1, a2.trans b2, hdue, ?_, ?_, ?_⟩
+  refine ⟨a1.trans b1, a2.trans b2, hdue, ?_, ?_, hFz, ?_⟩
   · rcases a4 with ⟨r, w, hr, hw, ha, hdd, hac, hwr⟩ | ⟨hst, ha, hac, m4⟩
     · right
       obtain ⟨h1, h2, h3, h4⟩ := st2 w (by rw [← b7, hr]; exact hw)
@@ -1013,13 +1258,12 @@ theorem first_base (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (g : Bas
       refine ⟨by rw [ha, b4, ea], fun d h => ?_⟩
       rcases m4.fresh d h with h | h
       · rw [b3] at h; exact hf2 d h
-      · exact Or.inr ⟨by rw [← b1]; exact h.1, h.2⟩
-  · rcases a4 with ⟨r, w, hr, hw, ha, hdd, hac, hwr⟩ | ⟨hst, ha, hac, m4⟩
-    · exact Or.inl (by rw [hac, b5, eacts])
-    · rcases hac with h | ⟨v, h⟩
-      · exact Or.inl (by rw [h, b5, eacts])
-      · exact Or.inr ⟨v, by rw [h, b5, eacts]⟩
-  · refine ⟨?_, ?_, fun x h => hFm ▸ hdm x h, by rw [a3]; exact t3, ?_, ?_⟩
+      · exact Or.inr ⟨by rw [← b1]; exact h.1, Or.inl h.2⟩
+  · have hq3 : queue s3 = queue (start s c rk) := by rw [b5, eacts, e7]
+    rcases a4 with ⟨r, w, hr, hw, ha, hdd, hac, hwr⟩ | ⟨hst, ha, hac, m4⟩
+    · exact QAdd.of_eq (by rw [hac, hq3])
+    · exact ⟨fun gg => by rw [← hq3]; exact hac.1 gg, fun a h => by rw [← hq3]; exact hac.2 a h⟩
+  · refine ⟨?_, ?_, fun x h => hFm ▸ hdm x h, by rw [a3]; exact t3, ?_, ?_, ?_, ?_, ?_⟩
     · intro x w h
       rw [hFm]
       have hx : x ≠ c → s.after x = some w := by
@@ -1082,16 +1326,42 @@ theorem first_base (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (g : Bas
         · exact h
     · intro a h
       rw [hFm]
-      have hf : ∀ a ∈ s.acts.filter (fun a => a.1 ≠ c), a.1 < s.made := by
-        intro a h; exact g.acts_made a (List.mem_filter.1 h).1
+      have hf : ∀ a ∈ queue s3, a.1 < s.made := by
+        intro a h
+        rw [b5, eacts] at h
+        exact g.acts_made a (List.mem_filter.1 h).1
       rcases a4 with ⟨r, w', hr, hw, ha, hdd, hac, hwr⟩ | ⟨hst, ha, hac, m4⟩
-      · rw [hac, b5, eacts] at h; exact hf a h
-      · rcases hac with e | ⟨v, e⟩
-        · rw [e, b5, eacts] at h; exact hf a h
-        · rw [e, b5, eacts] at h
-          rcases List.mem_append.1 h with h | h
-          · exact hf a h
-          · simp at h; subst h; exact hcm
+      · rw [hac] at h; exact hf a h
+      · rcases hac.2 a h with h | h
+        · exact hf a h
+        · rw [h]; exact hcm
+    · intro d h
+      have h' : s3.asleep d = true := by rw [← a0]; exact h
+      have hs := (z2 d (b8 ▸ h')).1
+      rw [e0] at hs
+      by_cases e : F.due d = s3.due d
+      · rw [e, b3, (z2 d (b8 ▸ h')).2, e5]
+        have hdc : d ≠ c := by intro e'; subst e'; rw [hzc] at hs; cases hs
+        rw [put_ne _ _ hdc]; exact g.asleep_due d hs
+      · rcases hush.due d e with h2 | h2
+        · rw [h] at h2; cases h2
+        · exfalso; apply h2
+          have hdc : d ≠ c := by intro e'; subst e'; rw [hzc] at hs; cases hs
+          rw [← hs3]; simp only [put_ne _ _ hdc]
+          rw [q2 d hdc, e3]; exact g.asleep_reads d hs
+    · intro d h
+      have h' : s3.asleep d = true := by rw [← a0]; exact h
+      have hs := (z2 d (b8 ▸ h')).1
+      rw [e0] at hs
+      have hdc : d ≠ c := by intro e'; subst e'; rw [hzc] at hs; cases hs
+      rw [a3, ← hs3]; simp only [put_ne _ _ hdc]
+      rw [q2 d hdc, e3]; exact g.asleep_reads d hs
+    · intro d h
+      rw [hFm]
+      by_cases hdc : d = c
+      · subst hdc; exact hcm
+      · rw [a3, ← hs3] at h; simp only [put_ne _ _ hdc] at h
+        rw [q2 d hdc, e3] at h; exact g.reads_made d h
 
 -- an act's writes, each said changed by e
 theorem writes_base (cs : Nat → Comp K V) (e : Nat) : ∀ (ws : List (K × V)) (s : State K V),
@@ -1107,27 +1377,32 @@ theorem writes_base (cs : Nat → Comp K V) (e : Nat) : ∀ (ws : List (K × V))
     have em : (changed cs (store s kv.1 kv.2) [kv.1] (some e)).made = s.made := a.made
     obtain ⟨f2, r2, m2⟩ := writes_base cs e ws _ (fun x hx => hw x (by simp [hx]))
       (by rw [a.reads]; exact ht)
-    refine ⟨Fixed.trans ⟨a.made, a.after, a.acts, a.phase, a.last⟩ f2, r2.trans a.reads, ?_⟩
+    refine ⟨Fixed.trans ⟨a.made, a.after, a.acts, a.phase, a.last, a.earlies⟩ f2, r2.trans a.reads, ?_⟩
     refine Moved.trans (s' := store s kv.1 kv.2) (Moved.of_eq rfl rfl) (Moved.trans m ?_)
     exact m2.mono (fun d h => ⟨em ▸ h.1, h.2⟩) (fun _ _ h => h)
 
--- an act step, writes in runs or not: what it marks is fed by e
-theorem act_base (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V)
-    (rest : List (Nat × V)) (g : Base cs s) (hrest : ∀ a ∈ rest, a ∈ s.acts) :
-    (act cs { s with acts := rest } e v).made = s.made ∧
-    (act cs { s with acts := rest } e v).phase = s.phase ∧
-    (act cs { s with acts := rest } e v).after = s.after ∧
-    (act cs { s with acts := rest } e v).acts = rest ∧
+-- an act step, writes in runs or not: what it marks is fed by e. s0 is s with its act out of the
+-- queue, what else is queued as it was
+theorem act_base (cs : Nat → Comp K V) (s s0 : State K V) (e : Nat) (v : V)
+    (es as : List (Nat × V)) (h0 : s0 = { s with earlies := es, acts := as }) (g : Base cs s)
+    (hrest : ∀ a ∈ es ++ as, a ∈ queue s) :
+    (act cs s0 e v).made = s.made ∧
+    (act cs s0 e v).phase = s.phase ∧
+    (act cs s0 e v).after = s.after ∧
+    (act cs s0 e v).earlies = es ∧ (act cs s0 e v).acts = as ∧
     Moved (fun d => d < s.made ∧ feeds cs e d) (fun k w => w = e ∧ (cs e).writes k) s
-      (act cs { s with acts := rest } e v) ∧
-    Base cs (act cs { s with acts := rest } e v) := by
+      (act cs s0 e v) ∧
+    (act cs s0 e v).asleep = s.asleep ∧
+    Base cs (act cs s0 e v) := by
+  subst h0
   have fin : ∀ A : State K V, A.made = s.made → A.after = s.after → A.reads = s.reads →
-      A.acts = rest →
+      A.earlies = es → A.acts = as → A.phase = s.phase → A.asleep = s.asleep →
+      (∀ d, A.asleep d = true → A.due d = s.due d) →
       Moved (fun d => d < s.made ∧ feeds cs e d) (fun k w => w = e ∧ (cs e).writes k) s A →
       Base cs A := by
-    intro A e1 e2 e3 e4 m
+    intro A e1 e2 e3 e4 e5 e6 e7 e8 m
     refine ⟨fun x w h => ?_, fun x h => ?_, fun x h => ?_, by rw [e3]; exact g.tracked, ?_,
-      fun a h => by rw [e4] at h; rw [e1]; exact g.acts_made a (hrest a h)⟩
+      fun a h => ?_, fun x h => ?_, fun x h => ?_, fun x h => ?_⟩
     · rw [e2] at h
       obtain ⟨h1, h2⟩ := g.after_due x w h
       exact ⟨m.isSome h1, e1 ▸ h2⟩
@@ -1140,22 +1415,61 @@ theorem act_base (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V)
       rcases m.writers k w h with h | ⟨rfl, h⟩
       · exact g.learned k w h
       · exact h
-  simp only [act]
-  split
-  · exact ⟨rfl, rfl, rfl, rfl, Moved.of_eq rfl rfl, fin _ rfl rfl rfl rfl (Moved.of_eq rfl rfl)⟩
-  · split
-    · exact ⟨rfl, rfl, rfl, rfl, Moved.of_eq rfl rfl, fin _ rfl rfl rfl rfl (Moved.of_eq rfl rfl)⟩
-    · rename_i act' hk
-      obtain ⟨f, r, m⟩ := writes_base cs e (act' v (s.last e)) (say { s with acts := rest } (.act e v (s.last e)))
-        (fun kv hkv => Or.inr (Or.inr (by simp [hk]; exact ⟨v, s.last e, kv.2, hkv⟩)))
-        (by exact g.tracked)
-      generalize hX : (act' v (s.last e)).foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1]
-        (some e)) (say { s with acts := rest } (.act e v (s.last e))) = X at f r m ⊢
-      have m1 : Moved (fun d => d < s.made ∧ feeds cs e d) (fun k w => w = e ∧ (cs e).writes k) s X :=
-        Moved.trans (s' := say { s with acts := rest } (.act e v (s.last e)))
-          (Moved.of_eq (s := s) rfl rfl) (m.mono (fun d h => h) (fun _ _ h => h))
-      exact ⟨f.1, f.4, f.2, f.3, Moved.trans m1 (Moved.of_eq rfl rfl),
-        fin _ f.1 f.2 r f.3 (Moved.trans m1 (Moved.of_eq rfl rfl))⟩
+    · rw [queue, e4, e5] at h; rw [e1]; exact g.acts_made a (hrest a h)
+    · rw [e8 x h]; exact g.asleep_due x (e7 ▸ h)
+    · rw [e3]; exact g.asleep_reads x (e7 ▸ h)
+    · rw [e1]; rw [e3] at h; exact g.reads_made x h
+  have hush := act_hush cs { s with earlies := es, acts := as } e v
+  have ez : (act cs { s with earlies := es, acts := as } e v).asleep = s.asleep := by
+    unfold act
+    split
+    · rfl
+    · split
+      · rfl
+      · dsimp only
+        simp only [say]
+        have : ∀ (ws : List (K × V)) (s1 : State K V),
+            (ws.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) s1).asleep =
+              s1.asleep := by
+          intro ws; induction ws with
+          | nil => intro s1; rfl
+          | cons kv ws ih => intro s1; simp only [List.foldl_cons]; rw [ih]; simp [store]
+        rw [this]
+  have keep : ∀ d, (act cs { s with earlies := es, acts := as } e v).asleep d = true →
+      (act cs { s with earlies := es, acts := as } e v).due d = s.due d := by
+    intro d h
+    by_cases e' : (act cs { s with earlies := es, acts := as } e v).due d =
+      ({ s with earlies := es, acts := as } : State K V).due d
+    · exact e'
+    · rcases hush.due d e' with h2 | h2
+      · rw [h] at h2; cases h2
+      · exact absurd (g.asleep_reads d (by rw [ez] at h; exact h)) h2
+  have hfr : (act cs { s with earlies := es, acts := as } e v).made = s.made ∧
+      (act cs { s with earlies := es, acts := as } e v).phase = s.phase ∧
+      (act cs { s with earlies := es, acts := as } e v).after = s.after ∧
+      (act cs { s with earlies := es, acts := as } e v).earlies = es ∧
+      (act cs { s with earlies := es, acts := as } e v).acts = as ∧
+      (act cs { s with earlies := es, acts := as } e v).reads = s.reads ∧
+      Moved (fun d => d < s.made ∧ feeds cs e d) (fun k w => w = e ∧ (cs e).writes k) s
+        (act cs { s with earlies := es, acts := as } e v) := by
+    simp only [act]
+    split
+    · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, Moved.of_eq rfl rfl⟩
+    · split
+      · exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, Moved.of_eq rfl rfl⟩
+      · rename_i act' hk
+        obtain ⟨f, r, m⟩ := writes_base cs e (act' v (s.last e))
+          (say { s with earlies := es, acts := as } (.act e v (s.last e)))
+          (fun kv hkv => Or.inr (Or.inr (by simp [hk]; exact ⟨v, s.last e, kv.2, hkv⟩)))
+          (by exact g.tracked)
+        generalize hX : (act' v (s.last e)).foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1]
+          (some e)) (say { s with earlies := es, acts := as } (.act e v (s.last e))) = X at f r m ⊢
+        have m1 : Moved (fun d => d < s.made ∧ feeds cs e d) (fun k w => w = e ∧ (cs e).writes k) s X :=
+          Moved.trans (s' := say { s with earlies := es, acts := as } (.act e v (s.last e)))
+            (Moved.of_eq (s := s) rfl rfl) (m.mono (fun d h => h) (fun _ _ h => h))
+        exact ⟨f.1, f.4, f.2, f.6, f.3, r, Moved.trans m1 (Moved.of_eq rfl rfl)⟩
+  obtain ⟨a1, a2, a3, a4, a5, a6, a7⟩ := hfr
+  exact ⟨a1, a2, a3, a4, a5, a7, ez, fin _ a1 a3 a6 a4 a5 a2 ez keep a7⟩
 
 -- Base over every reachable state
 
@@ -1167,15 +1481,18 @@ theorem Base.empty (cs : Nat → Comp K V) : Base cs (empty : State K V) where
   due_made x h := by simp [Model.empty] at h
   tracked d k h := by simp [Model.empty] at h
   learned k w h := by simp [Model.empty] at h
-  acts_made a h := by simp [Model.empty] at h
+  acts_made a h := by simp [Model.empty, queue] at h
+  asleep_due c h := by simp [Model.empty] at h
+  asleep_reads c h := by simp [Model.empty] at h
+  reads_made c h := by simp [Model.empty] at h
 
--- what keeps the afters, reads and made, grows the dues at made ones, learns writers of keys they
--- may write
-theorem Base.grow {cs : Nat → Comp K V} {s s' : State K V} (g : Base cs s) (e1 : s'.made = s.made)
-    (e2 : s'.after = s.after) (e3 : s'.reads = s.reads) (e4 : s'.acts = s.acts) (F : Nat → Prop)
-    (G : K → Nat → Prop)
-    (m : Moved F G s s') (hF : ∀ d, F d → d < s.made) (hG : ∀ k w, G k w → (cs w).writes k) :
-    Base cs s' where
+-- what keeps the afters, reads, asleep, queue and made, grows the dues at made ones (awake, or
+-- reading nothing... a reader), learns writers of keys they may write
+theorem Base.extend {cs : Nat → Comp K V} {s s' : State K V} (g : Base cs s) (e1 : s'.made = s.made)
+    (e2 : s'.after = s.after) (e3 : s'.reads = s.reads) (e4 : queue s' = queue s)
+    (e5 : s'.asleep = s.asleep) (F : Nat → Prop) (G : K → Nat → Prop)
+    (m : Moved F G s s') (hF : ∀ d, F d → d < s.made ∧ s.reads d ≠ [])
+    (hG : ∀ k w, G k w → (cs w).writes k) : Base cs s' where
   after_due x w h := by
     rw [e2] at h
     obtain ⟨h1, h2⟩ := g.after_due x w h
@@ -1186,66 +1503,185 @@ theorem Base.grow {cs : Nat → Comp K V} {s s' : State K V} (g : Base cs s) (e1
   due_made x h := by
     rcases m.fresh x h with h | h
     · exact e1 ▸ g.due_made x h
-    · exact e1 ▸ hF x h
+    · exact e1 ▸ (hF x h).1
   tracked := by rw [e3]; exact g.tracked
   learned k w h := by
     rcases m.writers k w h with h | h
     · exact g.learned k w h
     · exact hG k w h
   acts_made a h := by rw [e4] at h; rw [e1]; exact g.acts_made a h
+  asleep_due x h := by
+    rw [e5] at h
+    cases e : s'.due x with
+    | none => rfl
+    | some y =>
+      rcases m.fresh x (by simp [e]) with h2 | h2
+      · rw [g.asleep_due x h] at h2; cases h2
+      · exact absurd (g.asleep_reads x h) (hF x h2).2
+  asleep_reads x h := by rw [e3]; rw [e5] at h; exact g.asleep_reads x h
+  reads_made x h := by rw [e1]; rw [e3] at h; exact g.reads_made x h
 
 theorem Base.tell {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) (keys : List K) :
     Base cs (changed cs s keys none) := by
   obtain ⟨a, m⟩ := changed_same cs s keys none
-  exact g.grow a.made a.after a.reads a.acts _ _ m (fun d h => h.1) (fun k w h => by simp at h)
+  refine g.extend a.made a.after a.reads (by simp [queue, a.acts, a.earlies]) a.asleep _ _ m
+    (fun d h => ⟨h.1, ?_⟩) (fun k w h => by simp at h)
+  obtain ⟨_, k, _, hk⟩ := h
+  intro e; rw [e] at hk; cases hk
 
 theorem Base.write {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) (kvs : List (K × V)) :
     Base cs (write cs s kvs) := by
   obtain ⟨st, h1, _⟩ := stores_shape s kvs
   simp only [Model.write, h1]
-  have g' : Base cs { s with store := st } := ⟨g.1, g.2, g.3, g.4, g.5, g.6⟩
+  have g' : Base cs { s with store := st } := ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
   exact g'.tell _
 
-theorem Base.make {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) : Base cs (make cs s) := by
-  have key : ∀ M : State K V, M.made = s.made + 1 → M.after = s.after → M.due = s.due →
-      M.reads = s.reads → (∀ k w, M.writers k = some w → (cs w).writes k) → M.acts = s.acts →
-      Base cs (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none) := by
-    intro M e1 e2 e3 e4 e5 e6
-    obtain ⟨a, wr, m⟩ := mark_same { M with tick := M.tick + 1 } s.made (M.tick + 1) none
-    have ea : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).after = s.after := a.after.trans e2
-    have em : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).made = s.made + 1 := a.made.trans e1
-    refine ⟨fun x w h => ?_, fun x h => ?_, fun x h => ?_, ?_, fun k w h => ?_, fun a' h => ?_⟩
-    · rw [ea] at h
-      obtain ⟨h1, h2⟩ := g.after_due x w h
-      refine ⟨m.isSome (by simp [e3, h1]), ?_⟩
-      rw [em]; omega
-    · have : aft (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none) = aft s := by
-        funext a' b; simp [aft, ea]
-      exact g.acyclic x (this ▸ h)
-    · rw [em]
-      rcases m.fresh x h with h | h
-      · simp only [e3] at h; have := g.due_made x h; omega
-      · have : x = s.made := h
-        omega
-    · rw [a.reads]; simp only [e4]; exact g.tracked
-    · rw [wr] at h; exact e5 k w h
-    · rw [a.acts] at h; rw [em]
-      have : a' ∈ s.acts := by simpa [e6] using h
-      have := g.acts_made a' this; omega
-  cases hk : (cs s.made).key with
-  | none =>
-    simp only [Model.make, hk]
-    exact key { s with made := s.made + 1 } rfl rfl rfl rfl g.learned rfl
+-- a going (Quiet): d asleep, not due, reading nothing, after nothing
+theorem Base.bury {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) (hQ : Quiet cs) (d : Nat) :
+    Base cs (bury cs s d) := by
+  unfold Model.bury
+  cases (cs d).key with
+  | none => exact g
   | some k =>
-    simp only [Model.make, hk]
-    refine key { s with made := s.made + 1, writers := put s.writers k (some s.made) } rfl rfl rfl rfl ?_ rfl
-    intro k' w h
-    by_cases e : k' = k
-    · subst e; simp at h; subst h; exact Or.inr (Or.inl hk)
-    · simp [put_ne _ _ e] at h; exact g.learned k' w h
+    simp only
+    split
+    · exact g
+    · rw [hQ d]
+      simp only [List.foldl_nil]
+      obtain ⟨dy, hU⟩ := untrack_shape cs (s.reads d) { s with
+        due := put s.due d none, asleep := put s.asleep d true, reads := put s.reads d [],
+        values := put s.values d [], after := put s.after d none, last := put s.last d none,
+        kept := put s.kept d [], loop := put s.loop d none, looping := put s.looping d false,
+        ran := put s.ran d none, cut := put s.cut d false, store := put s.store k none }
+      rw [hU]
+      refine ⟨fun x w h => ?_, fun x h => ?_, fun x h => ?_, fun x k' h => ?_, g.learned,
+        fun a h => g.acts_made a h, fun x h => ?_, fun x h => ?_, fun x h => ?_⟩
+      · by_cases hx : x = d
+        · subst hx; simp at h
+        · simp only [put_ne _ _ hx] at h ⊢; exact g.after_due x w h
+      · refine g.acyclic x (tg_mono (fun a b hab => ?_) h)
+        by_cases ha : a = d
+        · subst ha; simp [aft] at hab
+        · simpa [aft, put_ne _ _ ha] using hab
+      · by_cases hx : x = d
+        · subst hx; simp at h
+        · simp only [put_ne _ _ hx] at h; exact g.due_made x h
+      · by_cases hx : x = d
+        · subst hx; simp at h
+        · simp only [put_ne _ _ hx] at h; exact g.tracked x k' h
+      · by_cases hx : x = d
+        · subst hx; simp
+        · simp only [put_ne _ _ hx] at h ⊢; exact g.asleep_due x h
+      · by_cases hx : x = d
+        · subst hx; simp
+        · simp only [put_ne _ _ hx] at h ⊢; exact g.asleep_reads x h
+      · by_cases hx : x = d
+        · subst hx; simp at h
+        · simp only [put_ne _ _ hx] at h; exact g.reads_made x h
 
+theorem Base.make {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) : Base cs (make cs s) := by
+  -- grown: made one more, the new one awake, maybe its key's writer
+  have g1 : Base cs (Model.grow cs s) := by
+    have key : ∀ M : State K V, M.made = s.made + 1 → M.after = s.after → M.due = s.due →
+        M.reads = s.reads → (∀ k w, M.writers k = some w → (cs w).writes k) → queue M = queue s →
+        M.asleep = put s.asleep s.made false → Base cs M := by
+      intro M e1 e2 e3 e4 e5 e6 e7
+      refine ⟨fun x w h => ?_, fun x h => ?_, fun x h => ?_, by rw [e4]; exact g.tracked, e5,
+        fun a h => ?_, fun x h => ?_, fun x h => ?_, fun x h => ?_⟩
+      · rw [e2] at h; obtain ⟨h1, h2⟩ := g.after_due x w h; exact ⟨e3 ▸ h1, by omega⟩
+      · have : aft M = aft s := by funext a b; simp [aft, e2]
+        exact g.acyclic x (this ▸ h)
+      · have := g.due_made x (e3 ▸ h); omega
+      · rw [e6] at h; have := g.acts_made a h; omega
+      · rw [e7] at h
+        by_cases hx : x = s.made
+        · subst hx; simp at h
+        · simp [put_ne _ _ hx] at h; rw [e3]; exact g.asleep_due x h
+      · rw [e7] at h
+        by_cases hx : x = s.made
+        · subst hx; simp at h
+        · simp [put_ne _ _ hx] at h; rw [e4]; exact g.asleep_reads x h
+      · rw [e4] at h; have := g.reads_made x h; omega
+    simp only [Model.grow]
+    split
+    · rename_i k hk
+      refine key _ rfl rfl rfl rfl ?_ rfl rfl
+      intro k' w h
+      by_cases e : k' = k
+      · subst e; simp at h; subst h; exact Or.inr (Or.inl hk)
+      · simp [put_ne _ _ e] at h; exact g.learned k' w h
+    · exact key _ rfl rfl rfl rfl g.learned rfl rfl
+  have hm1 : (Model.grow cs s).made = s.made + 1 := by simp only [Model.grow]; split <;> rfl
+  have hz1 : (Model.grow cs s).asleep s.made = false := by simp only [Model.grow]; split <;> simp
+  simp only [Model.make]
+  split
+  · refine ⟨g1.1, g1.2, g1.3, g1.4, g1.5, g1.6, fun x h => ?_, fun x h => ?_, g1.9⟩
+    · by_cases hx : x = s.made
+      · subst hx
+        show (Model.grow cs s).due s.made = none
+        cases e : (Model.grow cs s).due s.made with
+        | none => rfl
+        | some _ =>
+          have ed : (Model.grow cs s).due = s.due := by simp only [Model.grow]; split <;> rfl
+          rw [ed] at e; have := g.due_made s.made (by simp [e]); omega
+      · simp only [put_ne _ _ hx] at h; exact g1.asleep_due x h
+    · by_cases hx : x = s.made
+      · subst hx
+        show (Model.grow cs s).reads s.made = []
+        cases e : (Model.grow cs s).reads s.made with
+        | nil => rfl
+        | cons _ _ =>
+          have ed : (Model.grow cs s).reads = s.reads := by simp only [Model.grow]; split <;> rfl
+          rw [ed] at e; have := g.reads_made s.made (by simp [e]); omega
+      · simp only [put_ne _ _ hx] at h; exact g1.asleep_reads x h
+  · obtain ⟨a, wr, m⟩ := mark_same (Model.grow cs s) s.made (Model.grow cs s).tick none
+    have g2 : Base cs (mark (Model.grow cs s) s.made (Model.grow cs s).tick none) := by
+      refine ⟨fun x w h => ?_, fun x h => ?_, fun x h => ?_, by rw [a.reads]; exact g1.tracked,
+        by rw [wr]; exact g1.learned, by rw [show queue _ = queue (Model.grow cs s) by
+          simp [queue, a.acts, a.earlies]]; rw [a.made]; exact g1.acts_made, fun x h => ?_,
+        fun x h => ?_, by rw [a.reads, a.made]; exact g1.reads_made⟩
+      · rw [a.after] at h
+        obtain ⟨h1, h2⟩ := g1.after_due x w h
+        exact ⟨m.isSome h1, a.made ▸ h2⟩
+      · have : aft (mark (Model.grow cs s) s.made (Model.grow cs s).tick none) = aft (Model.grow cs s) := by
+          funext a' b; simp [aft, a.after]
+        exact g1.acyclic x (this ▸ h)
+      · rw [a.made]
+        rcases m.fresh x h with h | h
+        · exact g1.due_made x h
+        · subst h; rw [hm1]; omega
+      · rw [a.asleep] at h
+        have hx : x ≠ s.made := by intro e; subst e; rw [hz1] at h; cases h
+        cases e : (mark (Model.grow cs s) s.made (Model.grow cs s).tick none).due x with
+        | none => rfl
+        | some _ =>
+          rcases m.fresh x (by simp [e]) with h2 | h2
+          · rw [g1.asleep_due x h] at h2; cases h2
+          · exact absurd h2 hx
+      · rw [a.asleep] at h; rw [a.reads]; exact g1.asleep_reads x h
+    split
+    · have hdue : ((mark (Model.grow cs s) s.made (Model.grow cs s).tick none).due s.made).isSome := by
+        simp only [mark, settle, Option.isSome_none, Bool.and_false, Bool.false_eq_true, ite_false,
+          Model.due]
+        split
+        · assumption
+        · simp [say]
+      obtain ⟨_, _, _, _, _, _, g3⟩ := first_base cs _ s.made 0 g2 hdue
+      simp only [actnow]
+      split
+      · rename_i a' ha
+        exact (act_base cs _ _ s.made a'.2 _ _ rfl g3 (fun x hx => by
+          simp only [List.mem_append, List.mem_filter] at hx
+          simp only [queue, List.mem_append]
+          rcases hx with h | h
+          · exact Or.inl h.1
+          · exact Or.inr h)).2.2.2.2.2.2.2
+      · exact g3
+    · exact g2
+
+-- a step, Quiet
 theorem Base.step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
-    (g : Base cs s) (h : step cs rank s = some s') : Base cs s' := by
+    (g : Base cs s) (hQ : Quiet cs) (h : step cs rank s = some s') : Base cs s' := by
   simp only [Model.step] at h
   split at h
   · split at h
@@ -1253,26 +1689,46 @@ theorem Base.step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s 
       cases h
       have := (next_ready hc).1
       simp only [ready, Bool.and_eq_true] at this
-      exact (first_base cs s c (rank s c) g this.1).2.2.2.2.2
-    · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6⟩
+      exact (first_base cs s c (rank s c) g this.1).2.2.2.2.2.2
+    · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
   · split at h
     · rename_i a rest ha
       cases h
-      exact (act_base cs s a.1 a.2 rest g (fun x hx => by simp [ha, hx])).2.2.2.2.2
-    · split at h
-      · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6⟩
-      · cases h
+      exact (act_base cs s _ a.1 a.2 rest s.acts rfl g (fun x hx => by
+        simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+        rcases hx with h | h
+        · exact Or.inl (Or.inr h)
+        · exact Or.inr h)).2.2.2.2.2.2.2
+    · rename_i he
+      split at h
+      · rename_i a rest ha
+        cases h
+        exact (act_base cs s _ a.1 a.2 s.earlies rest rfl g (fun x hx => by
+          simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+          rcases hx with h | h
+          · exact Or.inl h
+          · exact Or.inr (Or.inr h))).2.2.2.2.2.2.2
+      · split at h
+        · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
+        · split at h
+          · cases h
+          · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
+  · split at h
+    · rename_i d rest _
+      cases h
+      exact Base.bury (s := { s with dying := rest }) ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩ hQ d
+    · cases h; exact ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
 
 theorem Reach.base {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (h : Reach cs rank s) : Base cs s := by
+    (hQ : Quiet cs) (h : Reach cs rank s) : Base cs s := by
   induction h with
   | empty => exact Base.empty cs
   | make _ ih => exact ih.make
   | write kvs _ ih => exact ih.write kvs
   | tell keys _ ih => exact ih.tell keys
-  | begin _ ih => exact ⟨ih.1, ih.2, ih.3, ih.4, ih.5, ih.6⟩
-  | step _ h ih => exact ih.step h
-  | close _ _ ih => exact ⟨ih.1, ih.2, ih.3, ih.4, ih.5, ih.6⟩
+  | begin _ ih => exact ⟨ih.1, ih.2, ih.3, ih.4, ih.5, ih.6, ih.7, ih.8, ih.9⟩
+  | step _ h ih => exact ih.step hQ h
+  | close _ _ ih => exact ⟨ih.1, ih.2, ih.3, ih.4, ih.5, ih.6, ih.7, ih.8, ih.9⟩
 
 -- Lemma N, writes in runs or not: next is total
 theorem Base.short {cs : Nat → Comp K V} {s : State K V} (g : Base cs s) {x : Nat}
@@ -1370,16 +1826,18 @@ theorem under_le (n h : Nat) : under n h ≤ cost n h := by
 theorem under_lt (n : Nat) {h h' : Nat} (hh : h < h') : under n h ≤ under n h' :=
   Nat.le_trans (under_le n h) (cost_lt n hh)
 
--- the phase: a run phase, or an act phase with something due, has a step of its own left
+-- the phase: a run phase, or an act phase with something due, has a step of its own left (the
+-- going phase is counted apart: idle)
 def stage (s : State K V) : Nat :=
   match s.phase with
   | .runs => 1
   | .acts => if (List.range s.made).any fun p => (s.due p).isSome then 2 else 0
+  | .goes => 0
 
 -- Theorem 1's measure: the due sum by heights, the queued acts, the phase
 noncomputable def measure (cs : Nat → Comp K V) (n : Nat) (s : State K V) : Nat :=
   dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-    (s.acts.map fun a => owed n (height cs n a.1)).sum + stage s
+    ((queue s).map fun a => owed n (height cs n a.1)).sum + stage s
 
 -- what new dues fed by c weigh, at most
 theorem fresh_feeds {cs : Nat → Comp K V} {n c : Nat} {s s' : State K V}
@@ -1395,19 +1853,179 @@ theorem fresh_feeds {cs : Nat → Comp K V} {n c : Nat} {s s' : State K V}
   have : n * under n (height cs n d) ≤ n * under n (height cs n c) := Nat.mul_le_mul_left _ h2
   rw [Nat.succ_mul]; omega
 
-theorem acts_sum (f : Nat × V → Nat) (l : List (Nat × V)) (c : Nat) :
-    ((l.filter (fun a => a.1 ≠ c)).map f).sum ≤ (l.map f).sum :=
-  sum_filter f _ l
+-- the asleep among the first n: a wake spends one, nothing in a run or an act puts one to sleep
+def sleepers (n : Nat) (s : State K V) : Nat := tot n fun c => if s.asleep c then 1 else 0
 
--- Theorem 1, the step: with H acyclic, every step lowers the measure
+theorem tot_lt {n : Nat} {f g : Nat → Nat} (h : ∀ d, d < n → f d ≤ g d) {c : Nat} (hc : c < n)
+    (hlt : f c < g c) : tot n f < tot n g := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    simp only [tot]
+    by_cases e : c = n
+    · subst e
+      have := tot_le (n := c) (fun d hd => h d (by omega))
+      omega
+    · have := ih (fun d hd => h d (by omega)) (by omega)
+      have := h n (by omega)
+      omega
+
+theorem sleepers_le {n : Nat} {s s' : State K V} (h : ∀ d, s'.asleep d = true → s.asleep d = true) :
+    sleepers n s' ≤ sleepers n s := by
+  apply tot_le
+  intro d _
+  cases e : s'.asleep d
+  · simp
+  · simp [h d e]
+
+-- none less: as asleep as before
+theorem sleepers_eq {n : Nat} {s s' : State K V} (h : ∀ d, s'.asleep d = true → s.asleep d = true)
+    (he : ¬ sleepers n s' < sleepers n s) : ∀ d, d < n → s'.asleep d = s.asleep d := by
+  intro d hd
+  cases e : s'.asleep d
+  · cases e2 : s.asleep d
+    · rfl
+    · exfalso; apply he
+      refine tot_lt (fun x _ => ?_) hd (by simp [e, e2])
+      cases e3 : s'.asleep x
+      · simp
+      · simp [h x e3]
+  · exact (h d e).symm
+
+-- idle: nothing due, nothing queued, at the acts' end or going. what is left is the goings
+def idle (s : State K V) : Prop :=
+  (∀ d, s.due d = none) ∧ queue s = [] ∧ (s.phase = .acts ∨ s.phase = .goes)
+
+-- the goings' measure: the reads (a going lets go of its own), the dying, the phase
+def rsum (n : Nat) (s : State K V) : Nat := tot n fun c => (s.reads c).length
+
+def gm (n : Nat) (s : State K V) : Nat :=
+  3 * rsum n s + 2 * s.dying.length + (if s.phase = .acts ∧ s.dying ≠ [] then 1 else 0) +
+    (if s.phase = .goes ∧ s.dying = [] then 1 else 0)
+
+theorem untrack_len (cs : Nat → Comp K V) : ∀ (ks : List K) (s : State K V),
+    (untrack cs s ks).dying.length ≤ s.dying.length + ks.length
+  | [], s => by simp [untrack]
+  | k :: ks, s => by
+    simp only [untrack, List.foldl_cons]
+    have h1 := untrack_len cs ks (untrack1 cs s k)
+    simp only [untrack] at h1
+    have h2 : (untrack1 cs s k).dying.length ≤ s.dying.length + 1 := by
+      unfold untrack1
+      split
+      · omega
+      · split
+        · split <;> simp
+        · omega
+    simp only [List.length_cons]; omega
+
+-- an idle step (Quiet): still idle, the goings' measure falls
+theorem idle_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
+    (hQ : Quiet cs) (g : Base cs s) (hi : idle s) (h : step cs rank s = some s') :
+    idle s' ∧ gm s.made s' < gm s.made s ∧ s'.made = s.made := by
+  obtain ⟨hd, hq, hph⟩ := hi
+  have he : s.earlies = [] := by simp [queue] at hq; exact hq.1
+  have ha : s.acts = [] := by simp [queue] at hq; exact hq.2
+  simp only [Model.step] at h
+  rcases hph with hph | hph
+  · rw [hph] at h
+    simp only [he, ha] at h
+    have hny : ((List.range s.made).any fun p => (s.due p).isSome) = false := by
+      rw [List.any_eq_false]; intro p _; simp [hd p]
+    simp only [hny, Bool.false_eq_true, ite_false] at h
+    split at h
+    · cases h
+    · rename_i hdy
+      cases h
+      have hdy' : s.dying ≠ [] := by intro e; simp [e] at hdy
+      refine ⟨⟨hd, by simp [queue, he, ha], Or.inr rfl⟩, ?_, rfl⟩
+      simp [gm, rsum, hph, hdy']
+  · rw [hph] at h
+    simp only at h
+    split at h
+    · rename_i d rest hdr
+      cases h
+      -- the going of d, from s with d out of the dying
+      have key : ∀ T : State K V, T = { s with dying := rest } → idle (bury cs T d) ∧
+          gm s.made (bury cs T d) < gm s.made s ∧ (bury cs T d).made = s.made := by
+        intro T hT
+        have hT1 : idle T ∧ gm s.made T < gm s.made s ∧ T.made = s.made := by
+          subst hT
+          refine ⟨⟨hd, by simp [queue, he, ha], Or.inr hph⟩, ?_, rfl⟩
+          simp only [gm, hph, hdr, rsum, List.length_cons]
+          simp
+          split <;> omega
+        unfold Model.bury
+        cases hk : (cs d).key with
+        | none => exact hT1
+        | some k =>
+          simp only
+          split
+          · exact hT1
+          · rw [hQ d]
+            simp only [List.foldl_nil]
+            subst hT
+            generalize hX : ({ ({ s with dying := rest } : State K V) with
+              due := put s.due d none, asleep := put s.asleep d true, reads := put s.reads d [],
+              values := put s.values d [], after := put s.after d none, last := put s.last d none,
+              kept := put s.kept d [], loop := put s.loop d none, looping := put s.looping d false,
+              ran := put s.ran d none, cut := put s.cut d false, store := put s.store k none } : State K V) = X
+            obtain ⟨dy, hU⟩ := untrack_shape cs (s.reads d) X
+            have hlen := untrack_len cs (s.reads d) X
+            rw [hU] at hlen ⊢
+            have hXd : X.dying = rest := by rw [← hX]
+            have hXph : X.phase = .goes := by rw [← hX]; exact hph
+            refine ⟨⟨fun x => ?_, by rw [← hX]; simp [queue, he, ha], Or.inr hXph⟩, ?_, by rw [← hX]⟩
+            · rw [← hX]; by_cases hx : x = d
+              · subst hx; simp
+              · simp [put_ne _ _ hx, hd x]
+            · -- the reads fall by d's, the dying grow by at most as many
+              have hr : rsum s.made X + (s.reads d).length = rsum s.made s := by
+                unfold rsum
+                by_cases hdm : d < s.made
+                · rw [← tot_one (n := s.made) (s.reads d).length hdm, ← tot_add]
+                  apply tot_cong; intro x _
+                  rw [← hX]; by_cases hx : x = d
+                  · subst hx; simp
+                  · simp [put_ne _ _ hx, hx]
+                · have h0 : s.reads d = [] := by
+                    cases e : s.reads d with
+                    | nil => rfl
+                    | cons _ _ => exact absurd (g.reads_made d (by simp [e])) hdm
+                  rw [h0]; simp only [List.length_nil, Nat.add_zero]
+                  apply tot_cong; intro x hx
+                  rw [← hX]; have : x ≠ d := by omega
+                  simp [put_ne _ _ this]
+              have h5 : gm s.made { X with dying := dy } ≤ 3 * rsum s.made X + 2 * dy.length + 1 := by
+                simp only [gm, hXph, rsum]
+                simp
+                split <;> omega
+              have h3 : gm s.made s = 3 * rsum s.made s + 2 * (rest.length + 1) := by
+                simp [gm, hph, hdr]
+              simp only [hXd] at hlen
+              omega
+      exact key _ (by simp only [hph])
+    · cases h
+      refine ⟨⟨hd, by simp [queue, he, ha], Or.inl rfl⟩, ?_, rfl⟩
+      rename_i hdr
+      simp [gm, rsum, hph, hdr]
+
+-- a queue's sum, its head out: what the head weighs less
+theorem qsum_filter (f : Nat → Nat) (l : List (Nat × V)) (c : Nat) :
+    ((l.filter (fun a => a.1 ≠ c)).map fun a => f a.1).sum ≤ (l.map fun a => f a.1).sum :=
+  sum_filter _ _ l
+
+-- Theorem 1, a step that is not idle (the goings apart): what is asleep only wakes, and unless the
+-- step ends idle or wakes one, the measure falls (H acyclic)
 theorem measure_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
-    (hac : ∀ x, ¬TransGen (among s.made (feeds cs)) x x) (g : Base cs s)
-    (h : step cs rank s = some s') :
-    s'.made = s.made ∧ measure cs s.made s' < measure cs s.made s := by
-  generalize hn : s.made = n at hac
+    {n : Nat} (hn : s.made = n)
+    (hac : ∀ x, ¬TransGen (among n (feeds cs)) x x) (g : Base cs s)
+    (hph : s.phase ≠ .goes) (hni : ¬ idle s) (h : step cs rank s = some s') :
+    s'.made = n ∧ sleepers n s' ≤ sleepers n s ∧
+    (idle s' ∨ sleepers n s' < sleepers n s ∨ measure cs n s' < measure cs n s) := by
   simp only [Model.step] at h
   split at h
-  · rename_i hph
+  · rename_i hph'
     split at h
     · rename_i c hc
       cases h
@@ -1418,27 +2036,38 @@ theorem measure_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
         intro w hw; have := hrd.2; simp [hw] at this; exact this
       have hcc : s.after c ≠ some c := by
         intro e; have := hr c e; simp [this] at hcd
-      obtain ⟨b1, b2, b3, b4, b5, b6⟩ := first_base cs s c (rank s c) g hcd
+      obtain ⟨b1, b2, b3, b4, b5, b6, b7⟩ := first_base cs s c (rank s c) g hcd
       rw [hn] at hcn
-      refine ⟨b1.trans hn, ?_⟩
-      rw [hn] at b4
-      have hst : stage (first cs s c (rank s c)) = stage s := by simp [stage, b2, hph]
-      have hacts : ((first cs s c (rank s c)).acts.map fun a => owed n (height cs n a.1)).sum ≤
-          (s.acts.map fun a => owed n (height cs n a.1)).sum + owed n (height cs n c) := by
-        rcases b5 with e | ⟨v, e⟩
-        · rw [e]; have := acts_sum (fun a => owed n (height cs n a.1)) s.acts c; omega
-        · rw [e, List.map_append, List.sum_append]
-          have := acts_sum (fun a => owed n (height cs n a.1)) s.acts c
-          simp; omega
+      have hsl : sleepers n (first cs s c (rank s c)) ≤ sleepers n s := sleepers_le b6
+      refine ⟨b1.trans hn, hsl, ?_⟩
+      by_cases hlt : sleepers n (first cs s c (rank s c)) < sleepers n s
+      · exact Or.inr (Or.inl hlt)
+      right; right
+      have heq := sleepers_eq b6 hlt
+      -- no wake: what became due is fed by c
+      have nofresh : ∀ d, ((first cs s c (rank s c)).due d).isSome → s.due d = none →
+          d < s.made → s.asleep d = true → False := by
+        intro d h1 h2 hdm hs
+        have : (first cs s c (rank s c)).asleep d = true := by rw [heq d (hn ▸ hdm)]; exact hs
+        rw [b7.asleep_due d this] at h1; cases h1
+      have hst : stage (first cs s c (rank s c)) = stage s := by simp [stage, b2, hph']
+      have hacts : ((queue (first cs s c (rank s c))).map fun a => owed n (height cs n a.1)).sum ≤
+          ((queue s).map fun a => owed n (height cs n a.1)).sum + owed n (height cs n c) := by
+        have h1 := b5.1 (fun x => owed n (height cs n x))
+        have h2 : queue (start s c (rank s c)) = (queue s).filter (fun a => a.1 ≠ c) := by
+          simp [start, say, queue, List.filter_append]
+        rw [h2] at h1
+        have := qsum_filter (fun x => owed n (height cs n x)) (queue s) c
+        omega
       have hce := cost_eq n (height cs n c)
       have e1 : measure cs n (first cs s c (rank s c)) =
           dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d))
             (first cs s c (rank s c)) +
-          ((first cs s c (rank s c)).acts.map fun a => owed n (height cs n a.1)).sum + stage s := by
+          ((queue (first cs s c (rank s c))).map fun a => owed n (height cs n a.1)).sum + stage s := by
         unfold measure; rw [hst]
       have e2 : measure cs n s =
           dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-          (s.acts.map fun a => owed n (height cs n a.1)).sum + stage s := rfl
+          ((queue s).map fun a => owed n (height cs n a.1)).sum + stage s := rfl
       have e3 : owed n (height cs n c) = 3 + (n + 1) * (n + 1) * under n (height cs n c) := rfl
       rw [e1, e2]
       have hsq : n * ((n + 1) * under n (height cs n c)) ≤
@@ -1454,70 +2083,97 @@ theorem measure_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
           rcases hd d h with ⟨h1, _⟩ | ⟨_, h1⟩
           · exact ⟨h1, by cases s.due d <;> simp⟩
           · refine ⟨fun e => ?_, by cases s.due d <;> simp⟩
-            subst e; exact hac _ (.single ⟨hcn, hcn, h1⟩)
+            subst e
+            rcases h1 with h1 | h1
+            · exact hac _ (.single ⟨hcn, hcn, h1⟩)
+            · rw [g.asleep_due d h1] at hcd; cases hcd
         have k1 := dues_go (a := fun d => cost n (height cs n d)) (b := fun d => under n (height cs n d))
           hcn hcd hr ha hd'
         have k2 := fresh_feeds (n := n) (c := c) (s := s) (s' := first cs s c (rank s c)) hac hcn
-          (fun d _ h1 h2 => by
-            rcases hd d h1 with ⟨_, h⟩ | ⟨_, h⟩
+          (fun d hdn h1 h2 => by
+            rcases hd d h1 with ⟨_, h⟩ | ⟨hdm, h⟩
             · simp [h2] at h
-            · exact h)
+            · rcases h with h | h
+              · exact h
+              · exact (nofresh d h1 h2 hdm h).elim)
         omega
       · have hwd : (s.due w).isSome := by
-          rcases hd w hw' with h | h | ⟨_, h⟩
+          rcases hd w hw' with h | h | ⟨hwm', h⟩
           · exact absurd h hwc
           · exact h
-          · exact absurd (TransGen.trans (.single ⟨hcn, hn ▸ hwm, h⟩) (.single ⟨hn ▸ hwm, hcn, hf⟩)) (hac c)
+          · rcases h with h | h
+            · exact absurd (TransGen.trans (.single ⟨hcn, hn ▸ hwm, h⟩) (.single ⟨hn ▸ hwm, hcn, hf⟩)) (hac c)
+            · exfalso
+              cases e : s.due w with
+              | none => exact nofresh w hw' e hwm' h
+              | some _ => rw [g.asleep_due w h] at e; cases e
         have k1 := dues_stop (a := fun d => cost n (height cs n d)) (b := fun d => under n (height cs n d))
           hcn hcd hr hcc hwc (hn ▸ hwm) hwd ha
         have k2 := fresh_feeds (n := n) (c := c) (s := s) (s' := first cs s c (rank s c)) hac hcn
-          (fun d _ h1 h2 => by
-            rcases hd d h1 with rfl | h | ⟨_, h⟩
+          (fun d hdn h1 h2 => by
+            rcases hd d h1 with rfl | h | ⟨hdm, h⟩
             · simp [h2] at hcd
             · simp [h2] at h
-            · exact h)
+            · rcases h with h | h
+              · exact h
+              · exact (nofresh d h1 h2 hdm h).elim)
         have k3 : cost n (height cs n c) ≤ under n (height cs n w) :=
           cost_lt n (height_lt hac hf (hn ▸ hwm) hcn)
         omega
     · rename_i hnx
       cases h
-      refine ⟨hn, ?_⟩
       have hnd : ∀ p, p < s.made → (s.due p).isSome = false := by
         intro p _
         cases e : (s.due p).isSome
         · rfl
         · have := g.total rank e
           rw [hnx] at this; cases this
+      refine ⟨hn, Nat.le_refl _, ?_⟩
+      by_cases hq : queue s = []
+      · left
+        refine ⟨fun d => ?_, hq, Or.inl rfl⟩
+        cases e : s.due d with
+        | none => rfl
+        | some _ =>
+          have := hnd d (g.due_made d (by simp [e])); simp [e] at this
+      right; right
       have : stage { s with phase := .acts } = 0 := by
         simp only [stage]
         have : ((List.range s.made).any fun p => (s.due p).isSome) = false := by
           rw [List.any_eq_false]; intro p hp; simp [hnd p (List.mem_range.1 hp)]
         simp [this]
       show dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-          (s.acts.map fun a => owed n (height cs n a.1)).sum + stage { s with phase := .acts } <
+          ((queue s).map fun a => owed n (height cs n a.1)).sum + stage { s with phase := .acts } <
         dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-          (s.acts.map fun a => owed n (height cs n a.1)).sum + stage s
-      rw [this, show stage s = 1 by simp [stage, hph]]
+          ((queue s).map fun a => owed n (height cs n a.1)).sum + stage s
+      rw [this, show stage s = 1 by simp [stage, hph']]
       omega
-  · rename_i hph
-    split at h
-    · rename_i a rest ha
-      cases h
-      obtain ⟨b1, b2, b3, b4, m, _⟩ := act_base cs s a.1 a.2 rest g (fun x hx => by simp [ha, hx])
-      have han : a.1 < n := hn ▸ g.acts_made a (by simp [ha])
-      refine ⟨b1.trans hn, ?_⟩
+  · rename_i hph'
+    -- an act: the early queue's head, or the other's with the early empty
+    have actstep : ∀ (a : Nat × V) (es as : List (Nat × V)),
+        (∀ x ∈ es ++ as, x ∈ queue s) →
+        ((queue s).map fun x => owed n (height cs n x.1)).sum =
+          owed n (height cs n a.1) + ((es ++ as).map fun x => owed n (height cs n x.1)).sum →
+        a ∈ queue s →
+        (act cs { s with earlies := es, acts := as } a.1 a.2).made = n ∧
+          sleepers n (act cs { s with earlies := es, acts := as } a.1 a.2) ≤ sleepers n s ∧
+          (idle (act cs { s with earlies := es, acts := as } a.1 a.2) ∨
+            sleepers n (act cs { s with earlies := es, acts := as } a.1 a.2) < sleepers n s ∨
+            measure cs n (act cs { s with earlies := es, acts := as } a.1 a.2) < measure cs n s) := by
+      intro a es as hrest hsum hain
+      obtain ⟨b1, b2, b3, b4, b5, m, bz, _⟩ := act_base cs s _ a.1 a.2 es as rfl g hrest
+      have han : a.1 < n := hn ▸ g.acts_made a hain
+      refine ⟨b1.trans hn, by rw [sleepers, sleepers, bz]; exact Nat.le_refl _, Or.inr (Or.inr ?_)⟩
       have k1 := dues_grow (n := n) (a := fun d => cost n (height cs n d))
         (b := fun d => under n (height cs n d)) b3 m.due
-      have k2 := fresh_feeds (n := n) (c := a.1) (s := s) (s' := act cs { s with acts := rest } a.1 a.2) hac han
+      have k2 := fresh_feeds (n := n) (c := a.1) (s := s)
+        (s' := act cs { s with earlies := es, acts := as } a.1 a.2) hac han
         (fun d _ h1 h2 => by
           rcases m.fresh d h1 with h | h
           · simp [h2] at h
           · exact h.2)
-      have hacts : (s.acts.map fun a => owed n (height cs n a.1)).sum =
-          owed n (height cs n a.1) + (rest.map fun a => owed n (height cs n a.1)).sum := by
-        rw [ha]; simp
-      have hst : stage (act cs { s with acts := rest } a.1 a.2) ≤ 2 := by
-        unfold stage; rw [b2, hph]
+      have hst : stage (act cs { s with earlies := es, acts := as } a.1 a.2) ≤ 2 := by
+        unfold stage; rw [b2, hph']
         dsimp only
         split
         · exact Nat.le_refl _
@@ -1525,53 +2181,186 @@ theorem measure_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
       have hsq : n * ((n + 1) * under n (height cs n a.1)) ≤
           (n + 1) * (n + 1) * under n (height cs n a.1) := by
         rw [← Nat.mul_assoc]; exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (by omega))
-      have e1 : measure cs n (act cs { s with acts := rest } a.1 a.2) =
+      have e1 : measure cs n (act cs { s with earlies := es, acts := as } a.1 a.2) =
           dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d))
-            (act cs { s with acts := rest } a.1 a.2) +
-          (rest.map fun a => owed n (height cs n a.1)).sum +
-          stage (act cs { s with acts := rest } a.1 a.2) := by
-        unfold measure; rw [b4]
+            (act cs { s with earlies := es, acts := as } a.1 a.2) +
+          ((es ++ as).map fun a => owed n (height cs n a.1)).sum +
+          stage (act cs { s with earlies := es, acts := as } a.1 a.2) := by
+        unfold measure; rw [queue, b4, b5]
       have e2 : measure cs n s =
           dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-          (owed n (height cs n a.1) + (rest.map fun a => owed n (height cs n a.1)).sum) + stage s := by
-        unfold measure; rw [hacts]
+          (owed n (height cs n a.1) + ((es ++ as).map fun a => owed n (height cs n a.1)).sum) +
+            stage s := by
+        unfold measure; rw [hsum]
       have e3 : owed n (height cs n a.1) = 3 + (n + 1) * (n + 1) * under n (height cs n a.1) := rfl
       rw [e1, e2]
       omega
-    · split at h
-      · rename_i hany
+    split at h
+    · rename_i a rest ha
+      cases h
+      exact actstep a rest s.acts
+        (fun x hx => by
+          simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+          rcases hx with h | h
+          · exact Or.inl (Or.inr h)
+          · exact Or.inr h)
+        (by simp [queue, ha, List.map_append, List.sum_append]) (by simp [queue, ha])
+    · rename_i he
+      split at h
+      · rename_i a rest ha
         cases h
-        refine ⟨hn, ?_⟩
-        have : stage s = 2 := by simp [stage, hph, hany]
-        show dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-            (s.acts.map fun a => owed n (height cs n a.1)).sum +
-            stage { s with phase := .runs, round := s.round + 1 } <
-          dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
-            (s.acts.map fun a => owed n (height cs n a.1)).sum + stage s
-        rw [this, show stage { s with phase := .runs, round := s.round + 1 } = 1 by simp [stage]]
-        omega
-      · cases h
+        have he' : s.earlies = [] := he
+        exact actstep a s.earlies rest
+          (fun x hx => by
+            simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+            rcases hx with h | h
+            · exact Or.inl h
+            · exact Or.inr (Or.inr h))
+          (by simp [queue, ha, he']) (by simp [queue, ha])
+      · split at h
+        · rename_i hany
+          cases h
+          refine ⟨hn, Nat.le_refl _, Or.inr (Or.inr ?_)⟩
+          have : stage s = 2 := by simp [stage, hph', hany]
+          show dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
+              ((queue s).map fun a => owed n (height cs n a.1)).sum +
+              stage { s with phase := .runs, round := s.round + 1 } <
+            dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) s +
+              ((queue s).map fun a => owed n (height cs n a.1)).sum + stage s
+          rw [this, show stage { s with phase := .runs, round := s.round + 1 } = 1 by simp [stage]]
+          omega
+        · rename_i ha2 hany
+          exfalso; apply hni
+          have he' : s.earlies = [] := he
+          have ha' : s.acts = [] := ha2
+          refine ⟨fun d => ?_, by simp [queue, he', ha'], Or.inl hph'⟩
+          cases e : s.due d with
+          | none => rfl
+          | some _ =>
+            have hdm := g.due_made d (by simp [e])
+            simp only [Bool.not_eq_true] at hany
+            rw [List.any_eq_false] at hany
+            have := hany d (List.mem_range.2 hdm); simp [e] at this
+  · rename_i hph'; exact absurd hph' hph
 
--- Theorem 1 (proof.md §3): when H is acyclic, every pulse from a reachable state ends, within
--- its measure's steps: fuel past the measure at its start always does
-theorem steps_end {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} (n : Nat)
-    (hac : ∀ x, ¬TransGen (among n (feeds cs)) x x) :
-    ∀ (f : Nat) (s : State K V), Base cs s → s.made = n → measure cs n s < f →
-      (steps cs rank f s).isSome
+-- more fuel: the same end
+theorem steps_more {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} :
+    ∀ (f k : Nat) (s : State K V), (steps cs rank f s).isSome → (steps cs rank (f + k) s).isSome
+  | 0, _, _, h => by simp [steps] at h
+  | f + 1, k, s, h => by
+    rw [show f + 1 + k = (f + k) + 1 by omega]
+    simp only [steps] at h ⊢
+    split
+    · rename_i s' h1
+      rw [h1] at h; exact steps_more f k s' h
+    · rfl
+
+-- the goings end: an idle state's steps, within its goings' measure
+theorem idle_end {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} (hQ : Quiet cs) :
+    ∀ (f : Nat) (s : State K V), Base cs s → idle s → gm s.made s < f → (steps cs rank f s).isSome
   | 0, _, _, _, h => absurd h (Nat.not_lt_zero _)
-  | f + 1, s, g, hn, hf => by
+  | f + 1, s, g, hi, hf => by
     simp only [steps]
     split
     · rename_i s' h
-      obtain ⟨h1, h2⟩ := measure_step (hn ▸ hac) g h
-      rw [hn] at h1 h2
-      exact steps_end n hac f s' (g.step h) h1 (by omega)
+      obtain ⟨h1, h2, h3⟩ := idle_step hQ g hi h
+      exact idle_end hQ f s' (g.step hQ h) h1 (by rw [h3]; omega)
     · rfl
 
+-- the going phase comes only from an idle acts phase, and stays idle (Quiet)
+theorem step_goes {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
+    (hQ : Quiet cs) (g : Base cs s) (hP : s.phase = .goes → idle s) (h : step cs rank s = some s') :
+    s'.phase = .goes → idle s' := by
+  by_cases hi : idle s
+  · intro _; exact (idle_step hQ g hi h).1
+  have hph : s.phase ≠ .goes := fun e => hi (hP e)
+  intro e
+  simp only [Model.step] at h
+  split at h
+  · rename_i hph'
+    split at h
+    · rename_i c hc
+      cases h
+      have := (next_ready hc).1
+      simp only [ready, Bool.and_eq_true] at this
+      rw [(first_base cs s c _ g this.1).2.1, hph'] at e; cases e
+    · cases h; simp at e
+  · rename_i hph'
+    split at h
+    · rename_i a rest ha
+      cases h
+      rw [(act_base cs s _ a.1 a.2 rest s.acts rfl g (fun x hx => by
+        simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+        rcases hx with h | h
+        · exact Or.inl (Or.inr h)
+        · exact Or.inr h)).2.1, hph'] at e; cases e
+    · rename_i he
+      split at h
+      · rename_i a rest ha
+        cases h
+        rw [(act_base cs s _ a.1 a.2 s.earlies rest rfl g (fun x hx => by
+          simp only [queue, ha, List.mem_append, List.mem_cons] at hx ⊢
+          rcases hx with h | h
+          · exact Or.inl h
+          · exact Or.inr (Or.inr h))).2.1, hph'] at e; cases e
+      · rename_i ha2
+        split at h
+        · cases h; simp at e
+        · rename_i hany
+          split at h
+          · cases h
+          · cases h
+            refine ⟨fun d => ?_, by simp [queue, he, ha2], Or.inr rfl⟩
+            cases ed : s.due d with
+            | none => rfl
+            | some _ =>
+              have hdm := g.due_made d (by simp [ed])
+              simp only [Bool.not_eq_true] at hany
+              rw [List.any_eq_false] at hany
+              have := hany d (List.mem_range.2 hdm); simp [ed] at this
+  · rename_i hph'; exact absurd hph' hph
+
+-- Theorem 1 (proof.md §3), the pulse: from a state the pulse can be in (the going phase only
+-- idle), with H acyclic and Quiet, the steps end: by the asleep left (a wake spends one), then
+-- the measure, then the goings
+theorem steps_end {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} (hQ : Quiet cs) (n : Nat)
+    (hac : ∀ x, ¬TransGen (among n (feeds cs)) x x) :
+    ∀ (w m : Nat) (s : State K V), Base cs s → (s.phase = .goes → idle s) → s.made = n →
+      sleepers n s ≤ w → measure cs n s ≤ m → ∃ f, (steps cs rank f s).isSome := by
+  intro w
+  induction w using Nat.strongRecOn with
+  | ind w ihw =>
+    intro m
+    induction m using Nat.strongRecOn with
+    | ind m ihm =>
+      intro s g hP hn hw hm
+      by_cases hi : idle s
+      · exact ⟨gm s.made s + 1, idle_end hQ _ s g hi (by omega)⟩
+      have hph : s.phase ≠ .goes := fun e => hi (hP e)
+      cases h : step cs rank s with
+      | none => exact ⟨1, by simp [steps, h]⟩
+      | some s' =>
+        obtain ⟨h1, h2, h3⟩ := measure_step hn hac g hph hi h
+        have g' := g.step hQ h
+        have hP' := step_goes hQ g hP h
+        rcases h3 with h3 | h3 | h3
+        · obtain ⟨f, hf⟩ : ∃ f, (steps cs rank f s').isSome :=
+            ⟨_, idle_end hQ _ s' g' h3 (Nat.lt_succ_self _)⟩
+          exact ⟨f + 1, by simp only [steps, h]; exact hf⟩
+        · obtain ⟨f, hf⟩ := ihw (sleepers n s') (by omega) _ s' g' hP' h1 (Nat.le_refl _)
+            (Nat.le_refl _)
+          exact ⟨f + 1, by simp only [steps, h]; exact hf⟩
+        · obtain ⟨f, hf⟩ := ihm (measure cs n s') (by omega) s' g' hP' h1 (by omega) (Nat.le_refl _)
+          exact ⟨f + 1, by simp only [steps, h]; exact hf⟩
+
+-- Theorem 1: when H is acyclic and no going writes (Quiet), every pulse from a reachable state
+-- ends. a pulse with attended computes whose goings write can loop for ever (Model.Check, endless)
 theorem termination {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hac : ∀ x, ¬TransGen (among s.made (feeds cs)) x x) (h : Reach cs rank s) :
-    (pulse cs rank (measure cs s.made (begin s) + 1) s).isSome :=
-  steps_end s.made hac _ (begin s) ⟨h.base.1, h.base.2, h.base.3, h.base.4, h.base.5, h.base.6⟩ rfl (by omega)
+    (hQ : Quiet cs) (hac : ∀ x, ¬TransGen (among s.made (feeds cs)) x x) (h : Reach cs rank s) :
+    ∃ f, (pulse cs rank f s).isSome := by
+  have g := h.base hQ
+  exact steps_end hQ s.made hac _ _ (begin s) ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩
+    (fun e => by simp [begin] at e) rfl (Nat.le_refl _) (Nat.le_refl _)
 
 -- the bound: n made, a acts queued at the start. cost n n is about 4 (2 (n + 1)²)^n
 def bound (n a : Nat) : Nat := n * ((n + 1) * cost n n) + a * owed n n + 2
@@ -1585,7 +2374,7 @@ theorem under_mono (n : Nat) {h h' : Nat} (hh : h ≤ h') : under n h ≤ under 
     | succ h' => exact cost_mono n (by omega)
 
 theorem measure_le (cs : Nat → Comp K V) (s : State K V) :
-    measure cs s.made (begin s) < bound s.made s.acts.length := by
+    measure cs s.made (begin s) < bound s.made (queue s).length := by
   generalize hn : s.made = n
   have h1 : dues n (fun d => cost n (height cs n d)) (fun d => under n (height cs n d)) (begin s) ≤
       n * ((n + 1) * cost n n) := by
@@ -1601,8 +2390,9 @@ theorem measure_le (cs : Nat → Comp K V) (s : State K V) :
         Nat.mul_le_mul (by omega) (by omega)
       rw [Nat.succ_mul]; omega
     · exact Nat.zero_le _
-  have h2 : ((begin s).acts.map fun a => owed n (height cs n a.1)).sum ≤ s.acts.length * owed n n := by
-    show (s.acts.map fun a => owed n (height cs n a.1)).sum ≤ s.acts.length * owed n n
+  have h2 : ((queue (begin s)).map fun a => owed n (height cs n a.1)).sum ≤
+      (queue s).length * owed n n := by
+    show ((queue s).map fun a => owed n (height cs n a.1)).sum ≤ (queue s).length * owed n n
     have : ∀ l : List (Nat × V), (l.map fun a => owed n (height cs n a.1)).sum ≤ l.length * owed n n := by
       intro l
       induction l with
@@ -1614,17 +2404,10 @@ theorem measure_le (cs : Nat → Comp K V) (s : State K V) :
           have := Nat.mul_le_mul_left ((n + 1) * (n + 1)) this
           omega
         omega
-    exact this s.acts
+    exact this (queue s)
   have h3 : stage (begin s) = 1 := rfl
   unfold measure bound
   omega
-
--- Theorem 1 with its bound: within bound made acts steps
-theorem termination_bound {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hac : ∀ x, ¬TransGen (among s.made (feeds cs)) x x) (h : Reach cs rank s) :
-    (pulse cs rank (bound s.made s.acts.length) s).isSome :=
-  steps_end s.made hac _ (begin s) ⟨h.base.1, h.base.2, h.base.3, h.base.4, h.base.5, h.base.6⟩ rfl
-    (measure_le cs s)
 
 -- Theorem 1′: cycles, A2 (proof.md §7.2)
 
@@ -1726,7 +2509,7 @@ def term (n : Nat) (s : State K V) (z : Nat) : Nat :=
 
 -- Ψ: what free runs may still come: the due unflagged ones, and the queued acts
 def budget (n : Nat) (s : State K V) : Nat :=
-  tot n (term n s) + (s.acts.map fun a => deed n (later n s a.1)).sum
+  tot n (term n s) + ((queue s).map fun a => deed n (later n s a.1)).sum
 
 -- the most a free mark from a cause at level j weighs
 def top (n j : Nat) : Nat := if j = 0 then 0 else worth n (j - 1)
@@ -1850,7 +2633,7 @@ theorem causeof_went (s : State K V) (c : Nat) :
   unfold causeof
   split
   · exact ⟨fun _ h => h, Same.refl s, rfl, rfl, rfl, fun _ _ => ⟨rfl, rfl⟩⟩
-  · refine ⟨fun y h => ?_, ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl,
+  · refine ⟨fun y h => ?_, ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl,
       fun e he => by simp [put_ne _ _ he]⟩
     by_cases e : y = c
     · subst e; simp
@@ -1963,7 +2746,7 @@ theorem mark_budget {s : State K V} (h : Causal s) (c d t n : Nat) (hd : d < n) 
   have hwent : ∀ y, s.went y = true → s'.went y = true := fun y hy => by rw [e2]; exact w1 y hy
   have hkept : ∀ z, ∀ x ∈ s.kept z, x ∈ s'.kept z := fun z x hx => by rw [e1]; exact k2 z x (c6 ▸ hx)
   have hsame : Same s s' := w2.trans (Same.trans (s' := { s1 with kept := kp })
-    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ sa)
+    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ sa)
   have hother : ∀ z, z ≠ d → s'.due z = s.due z ∧ s'.loop z = s.loop z := by
     intro z hz; obtain ⟨a, b⟩ := e5 z hz; exact ⟨a.trans (by rw [w3]), b.trans (by rw [w4])⟩
   have hcaus : Causal s' := by
@@ -2121,7 +2904,7 @@ theorem changed_budget (cs : Nat → Comp K V) (s : State K V) (keys : List K) (
   generalize hwr : ((some c).filter fun c => match (cs c).kind with
     | .compute _ => true | .effect _ => false) = w
   have s0 : Spent s.made B c s { s with tick := t } :=
-    Spent.plain h ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl rfl rfl rfl
+    Spent.plain h ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl rfl rfl rfl
   have fold : ∀ (ks : List K) (s1 : State K V), Spent s.made B c s s1 →
       Spent s.made B c s (ks.foldl (fun s k => tell (learn s k w) k t (some c)) s1) := by
     intro ks
@@ -2135,7 +2918,7 @@ theorem changed_budget (cs : Nat → Comp K V) (s : State K V) (keys : List K) (
         cases w with
         | none => exact Spent.refl h1.causal
         | some x =>
-          exact Spent.plain h1.causal ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl
+          exact Spent.plain h1.causal ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl
             rfl rfl rfl
       have hm : (learn s1 k w).made = s.made := by
         have := (h1.trans l1).same.made; exact this
@@ -2156,7 +2939,7 @@ theorem writes_budget (cs : Nat → Comp K V) (e B : Nat) : ∀ (ws : List (K ×
   | kv :: ws, s, s0, h, hr, hB => by
     simp only [List.foldl_cons]
     have st : Spent s0.made B e s (store s kv.1 kv.2) :=
-      Spent.plain h.causal ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl rfl rfl rfl
+      Spent.plain h.causal ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ rfl rfl rfl rfl rfl rfl
     have hm : (store s kv.1 kv.2).made = s0.made := h.same.made
     have ch := changed_budget cs (store s kv.1 kv.2) [kv.1] e B st.causal (by simpa [store] using hr)
       (fun j hj => by
@@ -2169,15 +2952,51 @@ theorem writes_budget (cs : Nat → Comp K V) (e B : Nat) : ∀ (ws : List (K ×
     exact writes_budget cs e B ws _ s0 h2 (by rw [hr2]; exact hr) hB
 
 -- a run under A2: start, f read along the store, then its end. its record rr, its start's fields
-theorem first_a2 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f) :
+-- no attended computes: nothing wakes, nothing goes
+def Unattended (cs : Nat → Comp K V) : Prop := ∀ c, attends (cs c) = false
+
+theorem attending_un {cs : Nat → Comp K V} (hU : Unattended cs) (n : Nat) (k : K) :
+    attending cs n k = none := by
+  unfold attending
+  have : ((List.range n).filter fun c => attends (cs c) && decide ((cs c).key = some k)) = [] := by
+    rw [List.filter_eq_nil_iff]; intro c _; simp [hU c]
+  rw [this]; rfl
+
+theorem wakes_un {cs : Nat → Comp K V} (hU : Unattended cs) :
+    ∀ (ws : List K) (s : State K V), wakes cs s ws = s
+  | [], _ => rfl
+  | k :: ws, s => by
+    simp only [wakes, List.foldl_cons]
+    have : wake cs s k = s := by unfold wake; rw [attending_un hU]
+    rw [this]; exact wakes_un hU ws s
+
+theorem untrack_un {cs : Nat → Comp K V} (hU : Unattended cs) :
+    ∀ (ks : List K) (s : State K V), untrack cs s ks = s
+  | [], _ => rfl
+  | k :: ks, s => by
+    simp only [untrack, List.foldl_cons]
+    have : untrack1 cs s k = s := by unfold untrack1; rw [attending_un hU]; split <;> rfl
+    rw [this]; exact untrack_un hU ks s
+
+theorem bury_un {cs : Nat → Comp K V} (hU : Unattended cs) (s : State K V) (d : Nat) :
+    bury cs s d = s := by
+  unfold Model.bury
+  cases (cs d).key with
+  | none => rfl
+  | some k => simp [hU d]
+
+theorem first_a2 (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hp : nowrites (cs c).f)
+    (hU : Unattended cs) :
     ∃ (rr : Run K V) (R : Nat → List K) (o : Out V),
       first cs s c rk = ending cs { start s c rk with ran := put s.ran c (some rr), reads := R } c o ∧
       rr.n = s.runs c + 1 ∧ rr.mark = (s.due c).getD 0 ∧ rr.loop = s.loop c ∧
       rr.given = s.kept c ∧ (∀ w, rr.stopped = some w → (s.due w).isSome ∧ w ≠ c) := by
   have h0 : (start s c rk).ran c = some (begun s c [] none []) := by simp [start, say, begun]
-  obtain ⟨seen, vals, st, heq, _, hfo, hstop⟩ := exec_spec cs c (cs c).f hp (start s c rk) _ h0 rfl
+  obtain ⟨seen, vals, st, ws, heq, _, hfo, hstop⟩ := exec_spec cs c (cs c).f hp (start s c rk) _ h0 rfl
   clear hfo
   simp only [first]
+  rw [untrack_un hU]
+  rw [wakes_un hU] at heq hstop
   generalize hx : exec cs c (start s c rk) (cs c).f = x at heq
   obtain ⟨s2, o⟩ := x
   simp only at heq
@@ -2219,7 +3038,8 @@ theorem start_budget (n : Nat) (s : State K V) (c rk : Nat) (R : Nat → List K)
   have f2 : s3.loop = put s.loop c none := by rw [← hs3]; rfl
   have f3 : s3.kept = put s.kept c [] := by rw [← hs3]; rfl
   have f4 : s3.went = put s.went c true := by rw [← hs3]; rfl
-  have f5 : s3.acts = s.acts.filter (fun a => a.1 ≠ c) := by rw [← hs3]; rfl
+  have f5 : queue s3 = (queue s).filter (fun a => a.1 ≠ c) := by
+    rw [← hs3]; simp [start, say, queue, List.filter_append]
   have f6 : ∀ e, e ≠ c → s3.when e = s.when e ∧ s3.cause e = s.cause e ∧ s3.ran e = s.ran e := by
     intro e he; rw [← hs3]; simp [start, say, put_ne _ _ he]
   have f7 : s3.pulses = s.pulses := by rw [← hs3]; rfl
@@ -2242,8 +3062,8 @@ theorem start_budget (n : Nat) (s : State K V) (c rk : Nat) (R : Nat → List K)
     have := tot_le key
     rw [tot_add, tot_one _ hcn] at this
     exact this
-  have h2 : (s3.acts.map fun a => deed n (later n s3 a.1)).sum ≤
-      (s.acts.map fun a => deed n (later n s a.1)).sum := by
+  have h2 : ((queue s3).map fun a => deed n (later n s3 a.1)).sum ≤
+      ((queue s).map fun a => deed n (later n s a.1)).sum := by
     rw [f5]
     refine Nat.le_trans (sum_le (g := fun a => deed n (later n s a.1)) ?_) (sum_filter _ _ _)
     intro a ha
@@ -2264,7 +3084,7 @@ theorem start_budget (n : Nat) (s : State K V) (c rk : Nat) (R : Nat → List K)
 
 -- the budget reads the dues, flags, kept causes, ran, the queued acts and the causes' fields
 theorem budget_congr {n : Nat} {s s' : State K V} (e1 : s'.due = s.due) (e2 : s'.loop = s.loop)
-    (e3 : s'.kept = s.kept) (e4 : s'.went = s.went) (e5 : s'.acts = s.acts) (e6 : s'.when = s.when)
+    (e3 : s'.kept = s.kept) (e4 : s'.went = s.went) (e5 : queue s' = queue s) (e6 : s'.when = s.when)
     (e7 : s'.cause = s.cause) (e8 : s'.pulses = s.pulses)
     (e9 : ∀ c, (s'.ran c).map (·.n) = (s.ran c).map (·.n)) : budget n s' = budget n s := by
   have ht : term n s' = term n s := by funext z; unfold term level; rw [e1, e2, e3, e4]
@@ -2352,6 +3172,7 @@ theorem finish_keeps {n : Nat} (X : State K V) (c : Nat) (e : Ended) (eq : Optio
         unfold budget
         simp only [hl]
         have := tot_le ht
+        simp only [queue] at this ⊢
         omega
     · refine ⟨hc.when_le, fun d => by rw [e9]; exact hc.runs d, hc.cause, fun d x hx => ?_,
         fun d r' hr' x hx => ?_⟩
@@ -2432,9 +3253,9 @@ theorem spent_budget {n B c : Nat} {s s' : State K V} (h : Spent n B c s s') :
     rw [tot_add] at this
     have h2 := tot_const (n := n) (x := B) (f := fun _ => B) (fun _ _ => Nat.le_refl _)
     omega
-  have h2 : (s'.acts.map fun a => deed n (later n s' a.1)).sum ≤
-      (s.acts.map fun a => deed n (later n s a.1)).sum := by
-    rw [h.same.acts]
+  have h2 : ((queue s').map fun a => deed n (later n s' a.1)).sum ≤
+      ((queue s).map fun a => deed n (later n s a.1)).sum := by
+    rw [queue, queue, h.same.acts, h.same.earlies]
     exact sum_le (fun a _ => deed_mono n (h.laters a.1))
   unfold budget; omega
 
@@ -2452,14 +3273,14 @@ theorem top_mono (n : Nat) {j j' : Nat} (h : j ≤ j') : top n j ≤ top n j' :=
     · exact worth_mono n (by omega)
 
 -- Theorem 1′, a run step (A2): the gauge falls
-theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 cs)
-    (hca : Causal s) (hph : s.phase = .runs) (hc : (s.due c).isSome)
+theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 cs) (hU : Unattended cs)
+    (hca : Causal s) (hc : (s.due c).isSome)
     (hr : ∀ w, s.after c = some w → s.due w = none) (hcn : c < s.made)
     (hdm : ∀ x, (s.due x).isSome → x < s.made) :
     Causal (first cs s c rk) ∧ (first cs s c rk).made = s.made ∧
-    gauge s.made (first cs s c rk) < gauge s.made s := by
+    (s.phase = .runs → gauge s.made (first cs s c rk) < gauge s.made s) := by
   generalize hn : s.made = n at hcn
-  obtain ⟨rr, R, o, hfirst, hrn, hrm, hrl, hrg, hrs⟩ := first_a2 cs s c rk (hA c)
+  obtain ⟨rr, R, o, hfirst, hrn, hrm, hrl, hrg, hrs⟩ := first_a2 cs s c rk (hA c) hU
   rw [hfirst]
   have hb3 := start_budget n s c rk R rr hcn hc
   have hc3 := start_causal s c rk R rr hrn hrg hca
@@ -2482,16 +3303,16 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
     rw [f_when, f_pulses, f_went, f_cause]
     simp only [put_same, ite_true]
     exact room_level n s c (s.runs c + 1)
-  have hstage : ∀ X : State K V, X.phase = s.phase → stage X = stage s := by
-    intro X hX; simp [stage, hX, hph]
+  have hstage : s.phase = .runs → ∀ X : State K V, X.phase = s.phase → stage X = stage s := by
+    intro hph X hX; simp [stage, hX, hph]
   -- a plain end: no free run left of c, nothing marked
   have plain : ∀ X : State K V, Causal X → X.due = put s.due c none →
       X.after = put s.after c none → X.made = s.made → X.phase = s.phase → budget n X ≤ budget n s →
       ∀ e eq w th, Causal (finish X c e eq w th) ∧ (finish X c e eq w th).made = s.made ∧
-        gauge n (finish X c e eq w th) < gauge n s := by
+        (s.phase = .runs → gauge n (finish X c e eq w th) < gauge n s) := by
     intro X hX e1 e2 e3 e4 e5 e eq w th
     obtain ⟨k1, k2, k3, k4⟩ := finish_keeps (n := n) X c e eq w th hX
-    refine ⟨k3, k4.trans e3, gauge_lt_calm (Nat.le_trans k1 e5) ?_⟩
+    refine ⟨k3, k4.trans e3, fun hph => gauge_lt_calm (Nat.le_trans k1 e5) ?_⟩
     rw [k2]
     have hd := dues_go (n := n) (a := fun _ => 2) (b := fun _ => 1) (s := s) (s' := X) hcn hc hr e2
       (fun d h => by
@@ -2507,7 +3328,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
           · rw [e1, put_ne _ _ hdc]; cases s.due d <;> simp)]
       exact tot_zero n
     unfold quiet
-    rw [hstage X e4]
+    rw [hstage hph X e4]
     omega
   have hcterm : s.loop c = none → term n s c = worth n (level n s c) := by
     intro hl; simp [term, hc, hl]
@@ -2588,7 +3409,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
         by_cases hd : d = c
         · subst hd; simp at hr'; rw [← hr'] at hx; cases hx
         · rw [put_ne _ _ hd] at hr'; exact ⟨r', hr', hx⟩)
-    refine ⟨hcs', by rw [g8, ← hn, f_made], ?_⟩
+    refine ⟨hcs', by rw [g8, ← hn, f_made], fun hph => ?_⟩
     apply gauge_lt_calm
     · -- c's term as it was before the run, the rest as at s3
       have ht : ∀ z, z < n → term n s' z ≤ term n s3 z + (if z = c then term n s c else 0) := by
@@ -2618,8 +3439,9 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
       rw [tot_add, tot_one _ hcn] at this
       have hl : ∀ e, later n s' e = later n s3 e := by
         intro e; unfold later; rw [g2, g3, g4, g5, e9]
+      have g7e : s'.earlies = s3.earlies := by rw [← hs']
       unfold budget at hb3 ⊢
-      simp only [hl, g7]
+      simp only [hl, queue, g7, g7e] at hb3 ⊢
       omega
     · have hwn : w < n := hn ▸ hdm w hwd
       have hcc : s.after c ≠ some c := by intro e; have := hr c e; simp [this] at hc
@@ -2634,7 +3456,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
           · simp only [put_ne _ _ hdc]; cases s.due d <;> simp)]
         exact tot_zero n
       unfold quiet
-      rw [hstage _ (g9.trans f_phase)]
+      rw [hstage hph _ (g9.trans f_phase)]
       omega
   · rename_i hst
     obtain ⟨x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13⟩ :=
@@ -2671,25 +3493,36 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
             · obtain ⟨a, b, c'⟩ := pl .done (some e) none none; exact ⟨a, b.trans hn, c'⟩
             · rename_i he
               have he' : e = false := by simpa using he
-              have hX' : Causal { X with acts := X.acts ++ [(c, v)] } :=
-                x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
-              obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n) { X with acts := X.acts ++ [(c, v)] } c .done
-                (some e) none none hX'
-              refine ⟨k3, k4.trans hXm, gauge_lt_budget ?_⟩
-              refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
-              have hb : budget n { X with acts := X.acts ++ [(c, v)] } =
-                  budget n X + deed n (later n X c) := by
+              have hgen : ∀ Y : State K V, Causal Y → Y.made = X.made →
+                  budget n Y = budget n X + deed n (later n X c) →
+                  Causal (finish Y c .done (some e) none none) ∧
+                  (finish Y c .done (some e) none none).made = n ∧
+                  (s.phase = .runs → gauge n (finish Y c .done (some e) none none) < gauge n s) := by
+                intro Y hY hYm hb
+                obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n) Y c .done (some e) none none hY
+                refine ⟨k3, k4.trans (hYm.trans hXm), fun _ => gauge_lt_budget ?_⟩
+                refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
+                rw [hb, x2, x12 c]
+                have := deed_mono n hlat
+                have := worth_deed n (level n s c)
+                have := hcterm (hfl he')
+                omega
+              split
+              · refine hgen _ (x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)) rfl ?_
                 unfold budget
-                simp only [List.map_append, List.sum_append, List.map_cons, List.map_nil, List.sum_cons,
-                  List.sum_nil, Nat.add_zero]
+                simp only [queue, List.map_append, List.sum_append, List.map_cons, List.map_nil,
+                  List.sum_cons, List.sum_nil, Nat.add_zero]
+                have : ∀ d, later n { X with earlies := X.earlies ++ [(c, v)] } d = later n X d :=
+                  fun d => rfl
+                have ht : term n { X with earlies := X.earlies ++ [(c, v)] } = term n X := rfl
+                rw [ht]; simp only [this]; omega
+              · refine hgen _ (x1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)) rfl ?_
+                unfold budget
+                simp only [queue, List.map_append, List.sum_append, List.map_cons, List.map_nil,
+                  List.sum_cons, List.sum_nil, Nat.add_zero]
                 have : ∀ d, later n { X with acts := X.acts ++ [(c, v)] } d = later n X d := fun d => rfl
                 have ht : term n { X with acts := X.acts ++ [(c, v)] } = term n X := rfl
                 rw [ht]; simp only [this]; omega
-              rw [hb, x2, x12 c]
-              have := deed_mono n hlat
-              have := worth_deed n (level n s c)
-              have := hcterm (hfl he')
-              omega
           · -- a compute: its set called, unless equal
             split
             · obtain ⟨a, b, c'⟩ := pl .done (some e) none none; exact ⟨a, b.trans hn, c'⟩
@@ -2715,7 +3548,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
                   sp.causal.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
                 obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n) { Z with last := put Z.last c (some v) } c .done
                   (some e) none none hZ'
-                refine ⟨k3, k4.trans (sp.same.made.trans y2), gauge_lt_budget ?_⟩
+                refine ⟨k3, k4.trans (sp.same.made.trans y2), fun _ => gauge_lt_budget ?_⟩
                 refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
                 have hb : budget n { Z with last := put Z.last c (some v) } = budget n Z := rfl
                 rw [hb]
@@ -2730,7 +3563,7 @@ theorem run_gauge (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) (hA : A2 
                 obtain ⟨k1, _, k3, k4⟩ := finish_keeps (n := n)
                   { say X (.set c v) with last := put (say X (.set c v)).last c (some v) } c .done
                   (some e) none none hS
-                refine ⟨k3, k4.trans hXm, gauge_lt_budget ?_⟩
+                refine ⟨k3, k4.trans hXm, fun _ => gauge_lt_budget ?_⟩
                 refine Nat.le_trans (Nat.add_le_add_right k1 1) ?_
                 have hb : budget n { say X (.set c v) with last := put (say X (.set c v)).last c (some v) } =
                     budget n X := rfl
@@ -2742,29 +3575,37 @@ theorem deed_top (n j : Nat) : deed n j = 1 + n * top n j := by
   cases j <;> simp [deed, top]
 
 -- Theorem 1′, an act step: the gauge falls
-theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (rest : List (Nat × V))
-    (n : Nat) (hn : s.made = n) (hs : s.acts = (e, v) :: rest) (hca : Causal s) (hre : (s.ran e).isSome) :
-    Causal (act cs { s with acts := rest } e v) ∧ (act cs { s with acts := rest } e v).made = n ∧
-    gauge n (act cs { s with acts := rest } e v) < gauge n s := by
-  have hb : budget n s = budget n { s with acts := rest } + deed n (later n s e) := by
-    unfold budget; rw [hs]; simp only [List.map_cons, List.sum_cons]
-    have : later n { s with acts := rest } = later n s := rfl
-    have ht : term n { s with acts := rest } = term n s := rfl
-    rw [this, ht]; omega
-  have hc0 : Causal { s with acts := rest } := hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+-- the budget with the queue's head out: that act's deed less
+theorem budget_head (n : Nat) (s : State K V) (e : Nat) (v : V) (es as : List (Nat × V))
+    (hs : queue s = (e, v) :: (es ++ as)) :
+    budget n s = budget n { s with earlies := es, acts := as } + deed n (later n s e) := by
+  unfold budget; rw [hs]; simp only [List.map_cons, List.sum_cons]
+  have : later n { s with earlies := es, acts := as } = later n s := rfl
+  have ht : term n { s with earlies := es, acts := as } = term n s := rfl
+  rw [this, ht]; simp [queue]; omega
+
+theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (es as : List (Nat × V))
+    (n : Nat) (hn : s.made = n) (hca : Causal s)
+    (hre : (s.ran e).isSome) :
+    Causal (act cs { s with earlies := es, acts := as } e v) ∧
+    (act cs { s with earlies := es, acts := as } e v).made = n ∧
+    (budget n s = budget n { s with earlies := es, acts := as } + deed n (later n s e) →
+      gauge n (act cs { s with earlies := es, acts := as } e v) < gauge n s) := by
+  have hc0 : Causal { s with earlies := es, acts := as } :=
+    hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
   have hdd := deed_top n (later n s e)
   unfold act
   split
-  · exact ⟨hc0, hn, gauge_lt_budget (by omega)⟩
+  · exact ⟨hc0, hn, fun hb => gauge_lt_budget (by omega)⟩
   · split
-    · exact ⟨hc0, hn, gauge_lt_budget (by omega)⟩
+    · exact ⟨hc0, hn, fun hb => gauge_lt_budget (by omega)⟩
     · rename_i g _
       dsimp only
-      generalize hS : say { s with acts := rest } (.act e v (s.last e)) = S0
+      generalize hS : say { s with earlies := es, acts := as } (.act e v (s.last e)) = S0
       have s1 : Causal S0 := by
         rw [← hS]; exact hc0.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
       have s2 : S0.made = n := by rw [← hS]; exact hn
-      have s3 : budget n S0 = budget n { s with acts := rest } := by rw [← hS]; rfl
+      have s3 : budget n S0 = budget n { s with earlies := es, acts := as } := by rw [← hS]; rfl
       have s4 : later n S0 e = later n s e := by rw [← hS]; rfl
       have s5 : (S0.ran e).isSome := by rw [← hS]; exact hre
       have sp := writes_budget cs e (top n (later n s e)) (g v (s.last e)) S0 S0 (Spent.refl s1) s5
@@ -2774,7 +3615,7 @@ theorem act_gauge (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) (res
         at sp
       have h1 := spent_budget sp
       refine ⟨sp.causal.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx),
-        sp.same.made.trans s2, gauge_lt_budget ?_⟩
+        sp.same.made.trans s2, fun hb => gauge_lt_budget ?_⟩
       have : budget n (say { Z with last := put Z.last e (some v) } (.acts e (((Z.ran e).map (·.n)).getD 0))) =
           budget n Z := rfl
       rw [this]
@@ -2817,23 +3658,128 @@ theorem Causal.told {cs : Nat → Comp K V} {s : State K V} (h : Causal s) (keys
   simp only [changed, hr] at a ⊢
   exact h.ofr k2 a.pulses a.ran a.runs k3 (fun d x hx => Or.inl (k1 ▸ hx))
 
-theorem Causal.make {cs : Nat → Comp K V} {s : State K V} (h : Causal s) : Causal (make cs s) := by
-  have key : ∀ M : State K V, Causal M → Causal (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none) := by
+theorem exec_ran_some (cs : Nat → Comp K V) (c : Nat) :
+    ∀ (p : Prog K V) (s : State K V), (s.ran c).isSome → ((exec cs c s p).1.ran c).isSome
+  | .value _, _, h => h
+  | .error, _, h => h
+  | .pending, _, h => h
+  | .write k v next, s, h => by
+    simp only [exec]
+    exact exec_ran_some cs c next _ (by simpa [store] using h)
+  | .read k next, s, h => by
+    simp only [exec]
+    generalize hX : edit { s with reads := put s.reads c (s.reads c ++ [k]) } c
+      (fun r => { r with seen := r.seen ++ [(k, s.store k)] }) = X
+    have hXr : (X.ran c).isSome := by rw [← hX]; simpa [edit] using h
+    generalize hY : (if (!tracked s k) = true then wake cs X k else X) = Y
+    have hYr : (Y.ran c).isSome := by
+      rw [← hY]; split
+      · have : wake cs X k = wakes cs X [k] := rfl
+        rw [this, wakes_ran]; exact hXr
+      · exact hXr
+    split
+    · exact exec_ran_some cs c _ _ hYr
+    · split
+      · exact exec_ran_some cs c _ _ hYr
+      · split
+        · simpa [edit] using hYr
+        · exact exec_ran_some cs c _ _ (by simpa [edit] using hYr)
+
+-- a run leaves its computation a latest run
+theorem first_ran (cs : Nat → Comp K V) (s : State K V) (c rk : Nat) :
+    ((first cs s c rk).ran c).isSome := by
+  have fin : ∀ (X : State K V) e eq w th, (X.ran c).isSome →
+      ((finish X c e eq w th).ran c).isSome := by
+    intro X e eq w th h
+    unfold finish
+    split
+    · rename_i hn; rw [hn] at h; cases h
+    · simp [say]
+  have hX : ∀ X : State K V, (X.ran c).isSome → ((ending cs X c (Out.error)).ran c).isSome ∧
+      ∀ o, ((ending cs X c o).ran c).isSome := by
+    intro X hX
+    have key : ∀ o, ((ending cs X c o).ran c).isSome := by
+      intro o
+      unfold ending
+      split
+      · unfold stop
+        split
+        · exact hX
+        · exact fin _ _ _ _ _ (by split <;> simpa using hX)
+      · have hE : ((edit X c fun r => { r with out := some o }).ran c).isSome := by
+          simpa [edit] using hX
+        split
+        · exact fin _ _ _ _ _ hE
+        · exact fin _ _ _ _ _ hE
+        · simp only [result]
+          split
+          · exact fin _ _ _ _ _ hE
+          · split
+            · exact fin _ _ _ _ _ hE
+            · split
+              · split
+                · exact fin _ _ _ _ _ hE
+                · split <;> exact fin _ _ _ _ _ hE
+              · split
+                · exact fin _ _ _ _ _ hE
+                · refine fin _ _ _ _ _ ?_
+                  simp only [Model.set]
+                  split <;> simpa [say, store] using hE
+    exact ⟨key _, key⟩
+  simp only [first]
+  refine (hX _ ?_).2 _
+  simp only [untrack_ran]
+  exact exec_ran_some cs c _ _ (by simp [start, say])
+
+theorem Causal.make {cs : Nat → Comp K V} {s : State K V} (h : Causal s) (g : Base cs s) (hA : A2 cs)
+    (hU : Unattended cs) : Causal (make cs s) := by
+  have key : ∀ M : State K V, Causal M → Causal (mark M s.made M.tick none) := by
     intro M hM
-    obtain ⟨e1, _, e3, e4, _⟩ := settle_eq { M with tick := M.tick + 1 } s.made (M.tick + 1) none none false
-    obtain ⟨a, _, _⟩ := mark_same { M with tick := M.tick + 1 } s.made (M.tick + 1) none
-    have e1' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).kept = M.kept := e1
-    have e3' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).when = M.when := e3
-    have e4' : (mark { M with tick := M.tick + 1 } s.made (M.tick + 1) none).cause = M.cause := e4
+    obtain ⟨e1, _, e3, e4, _⟩ := settle_eq M s.made M.tick none none false
+    obtain ⟨a, _, _⟩ := mark_same M s.made M.tick none
+    have e1' : (mark M s.made M.tick none).kept = M.kept := e1
+    have e3' : (mark M s.made M.tick none).when = M.when := e3
+    have e4' : (mark M s.made M.tick none).cause = M.cause := e4
     exact hM.ofr e3' a.pulses a.ran a.runs e4' (fun d x hx => Or.inl (e1' ▸ hx))
-  cases hk : (cs s.made).key with
-  | none =>
-    simp only [Model.make, hk]
-    exact key { s with made := s.made + 1 } (h.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx))
-  | some k =>
-    simp only [Model.make, hk]
-    exact key { s with made := s.made + 1, writers := put s.writers k (some s.made) }
-      (h.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx))
+  have g1 : Causal (Model.grow cs s) := by
+    have e : ∀ d, ∀ x ∈ (put s.kept s.made [] : Nat → List Why) d, x ∈ s.kept d := by
+      intro d x hx
+      by_cases hd : d = s.made
+      · subst hd; simp at hx
+      · rwa [put_ne _ _ hd] at hx
+    simp only [Model.grow]; split <;> exact h.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl (e d x hx))
+  simp only [Model.make]
+  split
+  · exact g1.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+  · have h2 := key _ g1
+    split
+    · -- an early effect: its first run, then its act
+      obtain ⟨am, _, mm⟩ := mark_same (Model.grow cs s) s.made (Model.grow cs s).tick none
+      have hgm : (Model.grow cs s).made = s.made + 1 := by simp only [Model.grow]; split <;> rfl
+      have hga : (Model.grow cs s).after = s.after := by simp only [Model.grow]; split <;> rfl
+      have hgd : (Model.grow cs s).due = s.due := by simp only [Model.grow]; split <;> rfl
+      have hdue : ((mark (Model.grow cs s) s.made (Model.grow cs s).tick none).due s.made).isSome := by
+        simp only [mark, settle, Option.isSome_none, Bool.and_false, Bool.false_eq_true, ite_false,
+          Model.due]
+        split
+        · assumption
+        · simp [say]
+      obtain ⟨c1, _, _⟩ := run_gauge cs _ s.made 0 hA hU h2 hdue
+        (fun w hw => by
+          rw [am.after, hga] at hw
+          have := g.due_made s.made (g.after_due s.made w hw).1; omega)
+        (by rw [am.made, hgm]; omega)
+        (fun x hx => by
+          rw [am.made, hgm]
+          rcases mm.fresh x hx with h3 | h3
+          · rw [hgd] at h3; have := g.due_made x h3; omega
+          · rw [h3]; omega)
+      simp only [actnow]
+      split
+      · rename_i a ha
+        exact (act_gauge cs _ s.made a.2 _ _ _ rfl c1 (first_ran cs _ s.made 0)).1
+      · exact c1
+    · exact h2
 
 theorem Causal.empty : Causal (empty : State K V) where
   when_le c := by simp [Model.empty]
@@ -2854,14 +3800,17 @@ theorem Causal.close {s : State K V} (h : Causal s) (hg : ∀ c r, s.ran c = som
   given d r hr x hx := by rw [hg d r hr] at hx; cases hx
 
 -- Theorem 1′, a step (A2): the causes' invariant kept, the gauge falls
+-- Theorem 1′, a step that is not idle (no attended computes, A2): the causes' invariant kept, and
+-- the step ends idle or the gauge falls
 theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) (hca : Causal s) (hs : step cs rank s = some s') :
-    Causal s' ∧ s'.made = s.made ∧ gauge s.made s' < gauge s.made s := by
+    (hA : A2 cs) (hU : Unattended cs) (h : Reach cs rank s) (hca : Causal s) (hph : s.phase ≠ .goes)
+    (hni : ¬ idle s) (hs : step cs rank s = some s') :
+    Causal s' ∧ s'.made = s.made ∧ (idle s' ∨ gauge s.made s' < gauge s.made s) := by
   have g := h.good hA
-  have b := h.base
+  have b := h.base hA.goes
   simp only [Model.step] at hs
   split at hs
-  · rename_i hph
+  · rename_i hph'
     split at hs
     · rename_i c hc
       cases hs
@@ -2869,7 +3818,8 @@ theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
       simp only [ready, Bool.and_eq_true] at hrd
       have hr : ∀ w, s.after c = some w → s.due w = none := by
         intro w hw; have := hrd.2; simp [hw] at this; exact this
-      exact run_gauge cs s c (rank s c) hA hca hph hrd.1 hr hcn b.due_made
+      obtain ⟨h1, h2, h3⟩ := run_gauge cs s c (rank s c) hA hU hca hrd.1 hr hcn b.due_made
+      exact ⟨h1, h2, Or.inr (h3 hph')⟩
     · rename_i hnx
       cases hs
       refine ⟨hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
@@ -2878,38 +3828,88 @@ theorem gauge_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s
         intro p _ hp
         have := b.total rank hp
         rw [hnx] at this; cases this
+      by_cases hq : queue s = []
+      · left
+        refine ⟨fun d => ?_, hq, Or.inl rfl⟩
+        cases e : s.due d with
+        | none => rfl
+        | some _ =>
+          rw [List.any_eq_false] at hnd
+          have := hnd d (List.mem_range.2 (b.due_made d (by simp [e]))); simp [e] at this
+      right
       refine gauge_lt_calm ?_ ?_
       · exact Nat.le_refl _
       show dues s.made (fun _ => 2) (fun _ => 1) s + stage { s with phase := .acts } <
         dues s.made (fun _ => 2) (fun _ => 1) s + stage s
       have : stage { s with phase := .acts } = 0 := by simp [stage, hnd]
-      rw [this, show stage s = 1 by simp [stage, hph]]
+      rw [this, show stage s = 1 by simp [stage, hph']]
       omega
-  · rename_i hph
+  · rename_i hph'
     split at hs
     · rename_i a rest ha
       cases hs
-      obtain ⟨_, r, hr, _⟩ := g.acts a.1 a.2 (by simp [ha])
-      exact act_gauge cs s a.1 a.2 rest s.made rfl ha hca (by simp [hr])
-    · split at hs
-      · rename_i hany
+      obtain ⟨_, r, hr, _⟩ := g.acts a.1 a.2 (by simp [queue, ha])
+      obtain ⟨h1, h2, h3⟩ := act_gauge cs s a.1 a.2 rest s.acts s.made rfl hca (by simp [hr])
+      exact ⟨h1, h2, Or.inr (h3 (budget_head _ s a.1 a.2 rest s.acts (by simp [queue, ha])))⟩
+    · rename_i he
+      split at hs
+      · rename_i a rest ha
         cases hs
-        refine ⟨hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx), rfl, ?_⟩
-        refine gauge_lt_calm ?_ ?_
-        · exact Nat.le_refl _
-        show dues s.made (fun _ => 2) (fun _ => 1) s + stage { s with phase := .runs, round := s.round + 1 } <
-          dues s.made (fun _ => 2) (fun _ => 1) s + stage s
-        have e1 : stage s = 2 := by simp [stage, hph, hany]
-        have e2 : stage { s with phase := .runs, round := s.round + 1 } = 1 := by simp [stage]
-        rw [e1, e2]
-        omega
+        obtain ⟨_, r, hr, _⟩ := g.acts a.1 a.2 (by simp [queue, ha])
+        obtain ⟨h1, h2, h3⟩ := act_gauge cs s a.1 a.2 s.earlies rest s.made rfl hca (by simp [hr])
+        exact ⟨h1, h2, Or.inr (h3 (budget_head _ s a.1 a.2 s.earlies rest (by simp [queue, ha, he])))⟩
+      · rename_i ha2
+        split at hs
+        · rename_i hany
+          cases hs
+          refine ⟨hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx), rfl, Or.inr ?_⟩
+          refine gauge_lt_calm ?_ ?_
+          · exact Nat.le_refl _
+          show dues s.made (fun _ => 2) (fun _ => 1) s + stage { s with phase := .runs, round := s.round + 1 } <
+            dues s.made (fun _ => 2) (fun _ => 1) s + stage s
+          have e1 : stage s = 2 := by simp [stage, hph', hany]
+          have e2 : stage { s with phase := .runs, round := s.round + 1 } = 1 := by simp [stage]
+          rw [e1, e2]
+          omega
+        · rename_i hany
+          exfalso; apply hni
+          refine ⟨fun d => ?_, by simp [queue, he, ha2], Or.inl hph'⟩
+          cases e : s.due d with
+          | none => rfl
+          | some _ =>
+            have hdm := b.due_made d (by simp [e])
+            simp only [Bool.not_eq_true] at hany
+            rw [List.any_eq_false] at hany
+            have := hany d (List.mem_range.2 hdm); simp [e] at this
+  · rename_i hph'; exact absurd hph' hph
+
+-- any step (no attended computes, A2) keeps the causes' invariant
+theorem causal_step {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
+    (hA : A2 cs) (hU : Unattended cs) (h : Reach cs rank s) (hca : Causal s)
+    (hs : step cs rank s = some s') : Causal s' := by
+  by_cases hph : s.phase = .goes
+  · simp only [Model.step, hph] at hs
+    split at hs
+    · cases hs; rw [bury_un hU]; exact hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+    · cases hs; exact hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+  by_cases hi : idle s
+  · obtain ⟨hd, hq, hph'⟩ := hi
+    have hph' : s.phase = .acts := by rcases hph' with e | e; exact e; exact absurd e hph
+    have he : s.earlies = [] := by simp [queue] at hq; exact hq.1
+    have ha : s.acts = [] := by simp [queue] at hq; exact hq.2
+    simp only [Model.step, hph', he, ha] at hs
+    split at hs
+    · cases hs; exact hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+    · split at hs
       · cases hs
+      · cases hs; exact hca.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
+  · exact (gauge_step hA hU h hca hph hi hs).1
 
 theorem Reach.causal {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) : Causal s := by
+    (hA : A2 cs) (hU : Unattended cs) (h : Reach cs rank s) : Causal s := by
   induction h with
   | empty => exact Causal.empty
-  | make _ ih => exact ih.make
+  | make h1 ih => exact ih.make (h1.base hA.goes) hA hU
   | @write s kvs _ ih =>
     obtain ⟨st, h1, _⟩ := stores_shape s kvs
     simp only [Model.write, h1]
@@ -2917,28 +3917,41 @@ theorem Reach.causal {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} 
       (fun d x hx => Or.inl hx)).told _
   | tell keys _ ih => exact ih.told keys
   | begin _ ih => exact ih.ofr rfl rfl rfl rfl rfl (fun d x hx => Or.inl hx)
-  | step h1 h2 ih => exact (gauge_step hA h1 ih h2).1
+  | step h1 h2 ih => exact causal_step hA hU h1 ih h2
   | close h1 _ ih => exact ih.close (h1.good hA).given
 
--- Theorem 1′ (proof.md §7.2): with cycles, under A2 and with the host's changes from outside,
--- every pulse from a reachable state ends, within its gauge's steps
-theorem steps_close {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} (hA : A2 cs) (n : Nat) :
-    ∀ (f : Nat) (s : State K V), Reach cs rank s → s.made = n → gauge n s < f →
-      (steps cs rank f s).isSome
-  | 0, _, _, _, h => absurd h (Nat.not_lt_zero _)
-  | f + 1, s, hr, hn, hf => by
-    simp only [steps]
-    split
-    · rename_i s' h
-      obtain ⟨_, h1, h2⟩ := gauge_step hA hr (hr.causal hA) h
-      rw [hn] at h1 h2
-      exact steps_close hA n f s' (.step hr h) h1 (by omega)
-    · rfl
+-- Theorem 1′ (proof.md §7.2): with cycles, under A2, with no attended computes and the host's
+-- changes from outside, every pulse from a reachable state ends: the gauge falls until idle,
+-- then the goings
+theorem steps_close {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} (hA : A2 cs)
+    (hU : Unattended cs) (n : Nat) :
+    ∀ (m : Nat) (s : State K V), Reach cs rank s → (s.phase = .goes → idle s) → s.made = n →
+      gauge n s ≤ m → ∃ f, (steps cs rank f s).isSome := by
+  intro m
+  induction m using Nat.strongRecOn with
+  | ind m ihm =>
+    intro s hr hP hn hm
+    have g := hr.base hA.goes
+    by_cases hi : idle s
+    · exact ⟨gm s.made s + 1, idle_end hA.goes _ s g hi (by omega)⟩
+    have hph : s.phase ≠ .goes := fun e => hi (hP e)
+    cases h : step cs rank s with
+    | none => exact ⟨1, by simp [steps, h]⟩
+    | some s' =>
+      obtain ⟨_, h1, h2⟩ := gauge_step hA hU hr (hr.causal hA hU) hph hi h
+      have hP' := step_goes hA.goes g hP h
+      rcases h2 with h2 | h2
+      · obtain ⟨f, hf⟩ : ∃ f, (steps cs rank f s').isSome :=
+          ⟨_, idle_end hA.goes _ s' ((Reach.step hr h).base hA.goes) h2 (Nat.lt_succ_self _)⟩
+        exact ⟨f + 1, by simp only [steps, h]; exact hf⟩
+      · rw [hn] at h1 h2
+        obtain ⟨f, hf⟩ := ihm (gauge n s') (by omega) s' (.step hr h) hP' h1 (Nat.le_refl _)
+        exact ⟨f + 1, by simp only [steps, h]; exact hf⟩
 
 theorem cycles {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) :
-    (pulse cs rank (gauge s.made (begin s) + 1) s).isSome :=
-  steps_close hA s.made _ (begin s) (.begin h) rfl (by omega)
+    (hA : A2 cs) (hU : Unattended cs) (h : Reach cs rank s) :
+    ∃ f, (pulse cs rank f s).isSome :=
+  steps_close hA hU s.made _ (begin s) (.begin h) (fun e => by simp [begin] at e) rfl (Nat.le_refl _)
 
 -- Theorem 1′'s bound: n made, a acts queued at the start. worth n n is about 2 n^n
 def limit (n a : Nat) : Nat := (n * worth n n + a * deed n n + 1) * big n
@@ -2956,32 +3969,261 @@ theorem room_le (n : Nat) (w : Nat → Bool) (xs : List Why) : room n w xs ≤ n
 theorem later_le (n : Nat) (s : State K V) (e : Nat) : later n s e ≤ n := by
   unfold later; split <;> exact room_le _ _ _
 
-theorem gauge_le (n : Nat) (s : State K V) : gauge n s < limit n s.acts.length := by
+theorem gauge_le (n : Nat) (s : State K V) : gauge n s < limit n (queue s).length := by
   have h1 : tot n (term n s) ≤ n * worth n n := by
     apply tot_const; intro z _; unfold term; split
     · exact worth_mono n (level_le n s z)
     · exact Nat.zero_le _
-  have h2 : (s.acts.map fun a => deed n (later n s a.1)).sum ≤ s.acts.length * deed n n := by
+  have h2 : ((queue s).map fun a => deed n (later n s a.1)).sum ≤ (queue s).length * deed n n := by
     have : ∀ l : List (Nat × V), (l.map fun a => deed n (later n s a.1)).sum ≤ l.length * deed n n := by
       intro l; induction l with
       | nil => simp
       | cons a l ih =>
         simp only [List.map_cons, List.sum_cons, List.length_cons, Nat.succ_mul]
         have := deed_mono n (later_le n s a.1); omega
-    exact this s.acts
+    exact this (queue s)
   have h3 := quiet_lt n s
-  have h4 : budget n s ≤ n * worth n n + s.acts.length * deed n n := by unfold budget; omega
-  have h5 : budget n s * big n ≤ (n * worth n n + s.acts.length * deed n n) * big n :=
+  have h4 : budget n s ≤ n * worth n n + (queue s).length * deed n n := by unfold budget; omega
+  have h5 : budget n s * big n ≤ (n * worth n n + (queue s).length * deed n n) * big n :=
     Nat.mul_le_mul_right _ h4
   unfold gauge limit
   rw [Nat.succ_mul]
   omega
 
 -- Theorem 1′ with its bound
+-- with no attended computes, nothing is asleep and nothing dying, ever
+
+theorem exec_un {cs : Nat → Comp K V} (hU : Unattended cs) (c : Nat) :
+    ∀ (p : Prog K V) (s : State K V),
+      (exec cs c s p).1.dying = s.dying ∧ (exec cs c s p).1.asleep = s.asleep
+  | .value _, _ => ⟨rfl, rfl⟩
+  | .error, _ => ⟨rfl, rfl⟩
+  | .pending, _ => ⟨rfl, rfl⟩
+  | .write k v next, s => by
+    simp only [exec]
+    obtain ⟨h1, h2⟩ := exec_un hU c next (changed cs (store s k v) [k] (some c))
+    rw [h1, h2]; simp [store]
+  | .read k next, s => by
+    simp only [exec]
+    have hw : ∀ X : State K V, wake cs X k = X := fun X => by unfold wake; rw [attending_un hU]
+    simp only [hw, ite_self]
+    generalize hX : edit { s with reads := put s.reads c (s.reads c ++ [k]) } c
+      (fun r => { r with seen := r.seen ++ [(k, s.store k)] }) = X
+    have e1 : X.dying = s.dying ∧ X.asleep = s.asleep := by rw [← hX]; exact ⟨rfl, rfl⟩
+    split
+    · obtain ⟨h1, h2⟩ := exec_un hU c _ X; exact ⟨h1.trans e1.1, h2.trans e1.2⟩
+    · split
+      · obtain ⟨h1, h2⟩ := exec_un hU c _ X; exact ⟨h1.trans e1.1, h2.trans e1.2⟩
+      · split
+        · exact e1
+        · obtain ⟨h1, h2⟩ := exec_un hU c _ (edit X c fun r => { r with values := ins _ r.values })
+          exact ⟨h1.trans e1.1, h2.trans e1.2⟩
+
+theorem ending_un (cs : Nat → Comp K V) (s : State K V) (c : Nat) (o : Out V) :
+    (ending cs s c o).dying = s.dying ∧ (ending cs s c o).asleep = s.asleep := by
+  have fin : ∀ (X : State K V) e eq w th, X.dying = s.dying → X.asleep = s.asleep →
+      (finish X c e eq w th).dying = s.dying ∧ (finish X c e eq w th).asleep = s.asleep :=
+    fun X e eq w th h1 h2 => ⟨by simp [h1], by simp [h2]⟩
+  unfold ending
+  split
+  · unfold stop
+    split
+    · exact ⟨rfl, rfl⟩
+    · exact fin _ _ _ _ _ (by split <;> rfl) (by split <;> rfl)
+  · split
+    · exact fin _ _ _ _ _ rfl rfl
+    · exact fin _ _ _ _ _ rfl rfl
+    · simp only [result]
+      split
+      · exact fin _ _ _ _ _ rfl rfl
+      · split
+        · exact fin _ _ _ _ _ rfl rfl
+        · split
+          · split
+            · exact fin _ _ _ _ _ rfl rfl
+            · split <;> exact fin _ _ _ _ _ rfl rfl
+          · split
+            · exact fin _ _ _ _ _ rfl rfl
+            · refine fin _ _ _ _ _ ?_ ?_ <;> (simp only [Model.set]; split <;> simp [say, store, edit])
+
+theorem first_un {cs : Nat → Comp K V} (hU : Unattended cs) (s : State K V) (c rk : Nat) :
+    (first cs s c rk).dying = s.dying ∧ (first cs s c rk).asleep = s.asleep := by
+  simp only [first]
+  rw [untrack_un hU]
+  obtain ⟨h3, h4⟩ := exec_un hU c (cs c).f (start s c rk)
+  generalize exec cs c (start s c rk) (cs c).f = x at h3 h4 ⊢
+  obtain ⟨E, o⟩ := x
+  simp only at h3 h4 ⊢
+  refine ⟨(ending_un cs _ c o).1.trans ?_, (ending_un cs _ c o).2.trans ?_⟩
+  · exact h3
+  · exact h4
+
+theorem act_un (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) :
+    (act cs s e v).dying = s.dying ∧ (act cs s e v).asleep = s.asleep := by
+  unfold act
+  split
+  · exact ⟨rfl, rfl⟩
+  · split
+    · exact ⟨rfl, rfl⟩
+    · dsimp only
+      simp only [say]
+      have : ∀ (ws : List (K × V)) (s1 : State K V),
+          (ws.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) s1).dying = s1.dying ∧
+          (ws.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) s1).asleep =
+            s1.asleep := by
+        intro ws; induction ws with
+        | nil => intro s1; exact ⟨rfl, rfl⟩
+        | cons kv ws ih =>
+          intro s1; simp only [List.foldl_cons]
+          obtain ⟨h1, h2⟩ := ih _
+          exact ⟨h1.trans (by simp [store]), h2.trans (by simp [store])⟩
+      obtain ⟨h1, h2⟩ := this _ _
+      exact ⟨h1, h2⟩
+
+-- a step, and the host's calls, with no attended computes: still nothing dying, nothing asleep
+theorem step_un {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s s' : State K V}
+    (hU : Unattended cs) (h : step cs rank s = some s') (hd : s.dying = []) :
+    s'.dying = [] ∧ s'.asleep = s.asleep := by
+  simp only [Model.step] at h
+  split at h
+  · split at h
+    · cases h; obtain ⟨h1, h2⟩ := first_un hU s _ _; exact ⟨h1.trans hd, h2⟩
+    · cases h; exact ⟨hd, rfl⟩
+  · split at h
+    · cases h; obtain ⟨h1, h2⟩ := act_un cs _ _ _; exact ⟨h1.trans hd, h2⟩
+    · split at h
+      · cases h; obtain ⟨h1, h2⟩ := act_un cs _ _ _; exact ⟨h1.trans hd, h2⟩
+      · split at h
+        · cases h; exact ⟨hd, rfl⟩
+        · split at h
+          · cases h
+          · cases h; exact ⟨hd, rfl⟩
+  · split at h
+    · rename_i d rest hdr; rw [hd] at hdr; cases hdr
+    · cases h; exact ⟨hd, rfl⟩
+
+theorem Reach.un {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (hU : Unattended cs) (h : Reach cs rank s) : s.dying = [] ∧ ∀ c, s.asleep c = false := by
+  induction h with
+  | empty => exact ⟨rfl, fun _ => rfl⟩
+  | @make s _ ih =>
+    have g1 : (Model.grow cs s).dying = [] ∧ ∀ c, (Model.grow cs s).asleep c = false := by
+      simp only [Model.grow]
+      split <;> exact ⟨ih.1, fun c => by by_cases e : c = s.made <;> simp [e, ih.2 c]⟩
+    simp only [Model.make, hU s.made, Bool.false_and, Bool.false_eq_true, ite_false]
+    have g2 : (mark (Model.grow cs s) s.made (Model.grow cs s).tick none).dying = [] ∧
+        ∀ c, (mark (Model.grow cs s) s.made (Model.grow cs s).tick none).asleep c = false := by
+      simp only [mark_dying, mark_asleep]; exact g1
+    split
+    · simp only [actnow]
+      obtain ⟨h1, h2⟩ := first_un hU (mark (Model.grow cs s) s.made (Model.grow cs s).tick none) s.made 0
+      split
+      · obtain ⟨h3, h4⟩ := act_un cs _ s.made _
+        refine ⟨?_, fun c => ?_⟩
+        · rw [h3]; exact h1.trans g2.1
+        · rw [h4]; show (first cs _ s.made 0).asleep c = false; rw [h2]; exact g2.2 c
+      · exact ⟨h1.trans g2.1, fun c => by rw [h2]; exact g2.2 c⟩
+    · exact g2
+  | @write s kvs _ ih =>
+    obtain ⟨st, h1, _⟩ := stores_shape s kvs
+    simp only [Model.write, h1]
+    exact ⟨by simp [ih.1], fun c => by simp [ih.2 c]⟩
+  | tell keys _ ih => exact ⟨by simp [ih.1], fun c => by simp [ih.2 c]⟩
+  | begin _ ih => exact ih
+  | step _ h ih =>
+    obtain ⟨h1, h2⟩ := step_un hU h ih.1
+    exact ⟨h1, fun c => by rw [h2]; exact ih.2 c⟩
+  | close _ _ ih => exact ih
+
+-- idle, nothing dying: the pulse ends within two steps
+theorem idle_quick {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (hi : idle s) (hd : s.dying = []) : (steps cs rank 2 s).isSome := by
+  obtain ⟨hdue, hq, hph⟩ := hi
+  have he : s.earlies = [] := by simp [queue] at hq; exact hq.1
+  have ha : s.acts = [] := by simp [queue] at hq; exact hq.2
+  have hny : ((List.range s.made).any fun p => (s.due p).isSome) = false := by
+    rw [List.any_eq_false]; intro p _; simp [hdue p]
+  rcases hph with hph | hph
+  · simp [steps, Model.step, hph, he, ha, hny, hd]
+  · simp [steps, Model.step, hph, hd, he, ha, hny]
+
+-- Theorem 1′ with its bound (no attended computes)
 theorem cycles_bound {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
-    (hA : A2 cs) (h : Reach cs rank s) :
-    (pulse cs rank (limit s.made s.acts.length) s).isSome :=
-  steps_close hA s.made _ (begin s) (.begin h) rfl (gauge_le s.made (begin s))
+    (hA : A2 cs) (hU : Unattended cs) (h : Reach cs rank s) :
+    (pulse cs rank (limit s.made (queue s).length + 2) s).isSome := by
+  have key : ∀ (f : Nat) (t : State K V), Reach cs rank t → t.made = s.made → t.phase ≠ .goes →
+      gauge s.made t + 2 < f → (steps cs rank f t).isSome := by
+    intro f
+    induction f with
+    | zero => intro t _ _ _ h; omega
+    | succ f ih =>
+      intro t ht hm hph hf
+      by_cases hi : idle t
+      · have := idle_quick (cs := cs) (rank := rank) hi (ht.un hU).1
+        exact steps_more 2 (f - 1) t this |> fun h => by
+          rw [show 2 + (f - 1) = f + 1 by omega] at h; exact h
+      simp only [steps]
+      cases hs : step cs rank t with
+      | none => rfl
+      | some t' =>
+        simp only
+        obtain ⟨_, h1, h2⟩ := gauge_step hA hU ht (ht.causal hA hU) hph hi hs
+        rcases h2 with h2 | h2
+        · have := idle_quick (cs := cs) (rank := rank) h2 ((Reach.step ht hs).un hU).1
+          exact steps_more 2 (f - 2) t' this |> fun h => by
+            rw [show 2 + (f - 2) = f by omega] at h; exact h
+        · by_cases hi' : idle t'
+          · have := idle_quick (cs := cs) (rank := rank) hi' ((Reach.step ht hs).un hU).1
+            exact steps_more 2 (f - 2) t' this |> fun h => by
+              rw [show 2 + (f - 2) = f by omega] at h; exact h
+          have hph' : t'.phase ≠ .goes := fun e =>
+            hi' (step_goes hA.goes (ht.base hA.goes) (fun e' => absurd e' hph) hs e)
+          exact ih t' (.step ht hs) (h1.trans hm) hph' (by rw [hm] at h2; omega)
+  exact key _ (begin s) (.begin h) rfl (by simp [begin]) (by
+    have := gauge_le s.made (begin s); simp [begin, queue] at this ⊢; omega)
+
+-- Theorem 1 with its bound, no attended computes: within bound made (acts queued) steps, two more
+theorem termination_bound {cs : Nat → Comp K V} {rank : State K V → Nat → Nat} {s : State K V}
+    (hQ : Quiet cs) (hU : Unattended cs) (hac : ∀ x, ¬TransGen (among s.made (feeds cs)) x x)
+    (h : Reach cs rank s) : (pulse cs rank (bound s.made (queue s).length + 2) s).isSome := by
+  have key : ∀ (f : Nat) (t : State K V), Base cs t → t.dying = [] → (∀ c, t.asleep c = false) →
+      t.made = s.made → t.phase ≠ .goes → measure cs s.made t + 2 < f → (steps cs rank f t).isSome := by
+    intro f
+    induction f with
+    | zero => intro t _ _ _ _ _ h; omega
+    | succ f ih =>
+      intro t g hd hz hm hph hf
+      by_cases hi : idle t
+      · have := idle_quick (cs := cs) (rank := rank) hi hd
+        exact steps_more 2 (f - 1) t this |> fun h => by
+          rw [show 2 + (f - 1) = f + 1 by omega] at h; exact h
+      simp only [steps]
+      cases hs : step cs rank t with
+      | none => rfl
+      | some t' =>
+        simp only
+        obtain ⟨hd', hz'⟩ := step_un hU hs hd
+        obtain ⟨h1, _, h3⟩ := measure_step hm hac g hph hi hs
+        have hz0 : sleepers s.made t = 0 := by
+          unfold sleepers
+          rw [tot_cong (g := fun _ => 0) (fun c _ => by simp [hz c])]
+          exact tot_zero _
+        rcases h3 with h3 | h3 | h3
+        · have := idle_quick (cs := cs) (rank := rank) h3 hd'
+          exact steps_more 2 (f - 2) t' this |> fun h => by
+            rw [show 2 + (f - 2) = f by omega] at h; exact h
+        · omega
+        · by_cases hi' : idle t'
+          · have := idle_quick (cs := cs) (rank := rank) hi' hd'
+            exact steps_more 2 (f - 2) t' this |> fun h => by
+              rw [show 2 + (f - 2) = f by omega] at h; exact h
+          have hph' : t'.phase ≠ .goes := fun e =>
+            hi' (step_goes hQ g (fun e' => absurd e' hph) hs e)
+          exact ih t' (g.step hQ hs) hd' (fun c => by rw [hz']; exact hz c) h1 hph' (by omega)
+  have g := h.base hQ
+  obtain ⟨hd, hz⟩ := h.un hU
+  exact key _ (begin s) ⟨g.1, g.2, g.3, g.4, g.5, g.6, g.7, g.8, g.9⟩ hd hz rfl (by simp [begin])
+    (by have := measure_le cs s; omega)
 
 -- H, checked: a height for the made ones, falling along H, makes H acyclic among them
 theorem acyclic_of_height {cs : Nat → Comp K V} {n : Nat} (ht : Nat → Nat)

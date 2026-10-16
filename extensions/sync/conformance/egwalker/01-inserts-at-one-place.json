@@ -1,0 +1,266 @@
+{
+	"title": "concurrent inserts at one place: the later commit's run first (lamport, then name), each run whole; typed one code point a commit, the same",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": "hello"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "AB"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						5,
+						5
+					],
+					"value": "xy"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "a",
+			"expect": {
+				"name": "e48bf0b370d2c41eb0f4022dc79670df4c937045f75ebb0a5804165dd21a3f31"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "b",
+			"expect": {
+				"name": "406ed4b8f35ec9a544bbc1ae53dc18b9865f41ae414bf08d6fa135a869f9f907"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "helloABxy",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "a1",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "1"
+				}
+			],
+			"time": 1,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a2",
+			"parents": [
+				"a1"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "2"
+				}
+			],
+			"time": 1,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a3",
+			"parents": [
+				"a2"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "3"
+				}
+			],
+			"time": 1,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b1",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "7"
+				}
+			],
+			"time": 2,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b2",
+			"parents": [
+				"b1"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "8"
+				}
+			],
+			"time": 2,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b3",
+			"parents": [
+				"b2"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "9"
+				}
+			],
+			"time": 2,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "a3",
+			"expect": {
+				"name": "fef78d1cb8a262ccc15acc56c709138c43a0f2a6111b0bb878d7450a057492ed"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "b3",
+			"expect": {
+				"name": "caf91111d865d2a8793825e678fd901e133b09662dfc38e6bb32ad6dc511bb04"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a3",
+				"b3"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "123789hello",
+						"change": {
+							"time": 1,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"b3",
+				"a3"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "123789hello",
+						"change": {
+							"time": 1,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

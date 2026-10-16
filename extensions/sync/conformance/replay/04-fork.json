@@ -1,0 +1,56 @@
+{
+	"title": "two lines from one commit: each head's tables are its own line's",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["x"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["c"],
+			"patches": [{ "path": ["x"], "value": 3 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": {
+				"tables": { "value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } } }
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "d",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 0, "x": 3 }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": { "value": { "value": { "n": 0 }, "change": { "time": 0, "actor": null } } }
+			}
+		}
+	]
+}

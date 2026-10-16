@@ -1,7 +1,7 @@
 {
 	"title": "an act that throws: the error told; the other effects act, and it acts again on the next value",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
 			"op": "effect",
 			"name": "e1",

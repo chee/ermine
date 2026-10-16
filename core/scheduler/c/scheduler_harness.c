@@ -91,15 +91,17 @@ static void keep(const char *key, op_value *v) {
 static sc_scope **named;
 static size_t nnamed, capnamed;
 
+// the latest named so
 static sc_scope *scope_named(const char *name) {
-	for (size_t i = 0; i < nnamed; i++)
-		if (strcmp((char *)sc_scope_user(named[i]), name) == 0) return named[i];
+	for (size_t i = nnamed; i > 0; i--)
+		if (strcmp((char *)sc_scope_user(named[i - 1]), name) == 0) return named[i - 1];
 	return NULL;
 }
 
-// names the scope; an error when the name is taken
+// names the scope; an error when the name is taken (by one not torn down: else taken over)
 static char *name_it(sc_scope *o, const char *name) {
-	if (scope_named(name)) return formatString("name taken: %s", name);
+	sc_scope *was = scope_named(name);
+	if (was && sc_scope_alive(was)) return formatString("name taken: %s", name);
 	sc_scope_set(o, copyString(name));
 	PUSH(named, nnamed, capnamed, o);
 	return NULL;
@@ -260,6 +262,9 @@ static closure **closures;
 static size_t nclosures, capclosures;
 
 static val evaluate(const op_value *e, const ctx *c);
+// the effect form
+static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
+	const op_value *arg);
 
 // the pair lists made from requests: kept to the end
 static sc_pair **infos;
@@ -279,46 +284,44 @@ static const sc_pair *info_of(const op_value *list, size_t *n) {
 	return out;
 }
 
-// what is open: {scope, pairs, writer?}, by the computer of the run; nothing: null. a
-// computer's info is the scheduler's, its values numbers; any other's is a request's
+// an info as [[key, value]..], nested: a computer's run and mark are the scheduler's numbers, any
+// other value a request's; "owner" is the owner's info
+static op_value *pairs_of(const sc_info *info) {
+	op_value *pairs = op_list();
+	for (size_t j = 0; j < info->n; j++) {
+		const sc_pair *q = &info->pairs[j];
+		op_value *p = op_list();
+		op_push(p, op_str(q->key));
+		if (strcmp(q->key, "owner") == 0 && j == info->n - 1) op_push(p, pairs_of(q->value));
+		else if (strcmp(q->key, "run") == 0 || strcmp(q->key, "mark") == 0)
+			op_push(p, integer((int64_t)*(const uint64_t *)q->value));
+		else op_push(p, op_ref((op_value *)q->value));
+		op_push(pairs, p);
+	}
+	return pairs;
+}
+
+// what is open: {scope, pairs, writer?}, by the computer of the run; nothing: null
 static op_value *current(void) {
 	sc_scope *open = sc_get_current_scope(sch);
 	if (open == NULL) return op_null();
-	size_t depth = 0;
-	for (sc_scope *o = open; o; o = sc_scope_parent(o)) depth++;
-	sc_scope **chain = allocate(depth * sizeof *chain);
-	size_t k = depth;
-	for (sc_scope *o = open; o; o = sc_scope_parent(o)) chain[--k] = o;
-	op_value *pairs = op_list();
-	size_t total = 0;
-	for (size_t i = 0; i < depth; i++) {
-		size_t n;
-		const sc_pair *info = sc_scope_info(chain[i], &n);
-		bool ours = sc_latest(chain[i]) != NULL;
-		for (size_t j = 0; j < n; j++) {
-			op_value *p = op_list();
-			op_push(p, op_str(info[j].key));
-			op_push(p, ours ? integer((int64_t)*(const uint64_t *)info[j].value) : op_ref((op_value *)info[j].value));
-			op_push(pairs, p);
-		}
-		total += n;
-	}
-	free(chain);
-	// the scheduler's own list agrees
-	sc_pair *flat = allocate((total + 1) * sizeof *flat);
-	if (sc_get_info(sch, flat, total) != total) abort();
-	free(flat);
+	// the scheduler's own answers agree
+	if (sc_get_info(sch) != sc_scope_info(open)) abort();
 	op_value *out = op_map();
 	const char *name = sc_scope_user(open);
 	op_set(out, "scope", name ? op_str(name) : op_null());
-	op_set(out, "pairs", pairs);
+	op_set(out, "pairs", pairs_of(sc_get_info(sch)));
 	sc_run *writer = sc_get_run(sch);
 	if (writer) op_set(out, "writer", op_str(sc_scope_user(sc_run_computer(writer))));
 	return out;
 }
 
-// why nothing could be made in the scope open: none open, or it is gone
-static char *unmade(void) { return copyString(sc_get_current_scope(sch) ? SC_DISPOSED : SC_UNSCOPED); }
+// why nothing could be made under parent (NULL: the scope open): none open, it is gone, or no pairs
+static char *unmade(const sc_scope *parent) {
+	if (parent == NULL) parent = sc_get_current_scope(sch);
+	if (parent == NULL) return copyString(SC_UNSCOPED);
+	return copyString(sc_scope_alive(parent) ? SC_EMPTY : SC_DISPOSED);
+}
 
 // who a change in this code is by: the run, else the computer's latest
 static sc_run *writer_of(const ctx *c) {
@@ -554,7 +557,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		size_t n;
 		const sc_pair *info = info_of(a1, &n);
 		sc_scope *o = sc_create_scope(sch, info, n, parent);
-		if (o == NULL) return thrown(parent ? copyString(SC_DISPOSED) : unmade());
+		if (o == NULL) return thrown(unmade(parent));
 		char *bad = name_it(o, name ? name : "");
 		if (bad) return thrown(bad);
 		return ok(op_null());
@@ -563,7 +566,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		size_t n;
 		const sc_pair *info = info_of(a0, &n);
 		sc_scope *o = sc_create_scope(sch, info, n, NULL);
-		if (o == NULL) return thrown(unmade());
+		if (o == NULL) return thrown(unmade(NULL));
 		struct inrun r = {a1, c, ok(NULL)};
 		const char *bad = sc_run_with_scope(o, in_run, &r);
 		if (bad) return thrown(copyString(bad));
@@ -594,6 +597,7 @@ static val evaluate(const op_value *e, const ctx *c) {
 		if (bad) return thrown(bad);
 		return ok(op_null());
 	}
+	if (strcmp(form, "effect") == 0) return made_in(form, a0, a1, a2, arg);
 	if (strcmp(form, "quote") == 0) return ok(op_ref((op_value *)arg));
 	return thrown(formatString("unknown form %s", form));
 }
@@ -609,9 +613,12 @@ typedef struct prog {
 static prog **progs;
 static size_t nprogs, capprogs;
 
+// itself: an early effect runs and acts before it is given back, the scope open then
+static sc_scope *self_of(prog *p) { return p->self ? p->self : sc_get_current_scope(sch); }
+
 static sc_out program_f(void *previous, void *data) {
 	prog *p = data;
-	ctx c = {sc_get_run(sch), p->self, NULL, previous};
+	ctx c = {sc_get_run(sch), self_of(p), NULL, previous};
 	val v = evaluate(p->f, &c);
 	switch (v.k) {
 	case V_OK: return (sc_out){.kind = SC_VALUE, .value = v.j};
@@ -631,7 +638,7 @@ static char *program_set(void *value, void *data) {
 
 static char *program_effect(void *value, void *previous, void *data) {
 	prog *p = data;
-	ctx c = {NULL, p->self, value, previous};
+	ctx c = {NULL, self_of(p), value, previous};
 	return error_of(evaluate(p->act, &c));
 }
 
@@ -682,6 +689,7 @@ static op_value *moment_json(const moment *x, bool reads) {
 	case SC_T_ACTS:
 		op_set(o, "acts", name_json(m->c));
 		op_set(o, "run", integer(m->run));
+		if (m->early) op_set(o, "early", op_bool(true));
 		if (m->error) op_set(o, "error", op_str(m->error));
 		break;
 	case SC_T_ENDS:
@@ -736,10 +744,12 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	p->to = to ? entry_of(to)->key : NULL;
 	const char *eq = text(op_get(r, "equal"));
 	const op_value *declared = op_get(r, "declared");
+	const op_value *early = op_get(r, "early");
 	sc_def def = {.f = program_f,
 		.equal = eq && strcmp(eq, "json") == 0 ? json_equal : object_is,
-		.key = !effect && p->to && declared && declared->type == OP_BOOL && declared->bool_ ? p->to : NULL,
-		.data = p};
+		.key = !effect && p->to && is(declared, OP_BOOL) && declared->bool_ ? p->to : NULL,
+		.data = p,
+		.early = effect && is(early, OP_BOOL) && early->bool_};
 	if (effect) def.effect = program_effect;
 	else def.set = program_set;
 	struct making m = {def, effect, NULL};
@@ -750,6 +760,27 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	p->self = c;
 	bad = name_it(c, text(op_get(r, "name")));
 	return bad ? answer_error(bad) : op_map();
+}
+
+// {"effect":[c,f,act,early?]}: an effect under the scope open. c taken by one torn down: taken over
+static val made_in(const char *form, const op_value *a0, const op_value *a1, const op_value *a2,
+	const op_value *arg) {
+	const char *name = text(a0);
+	if (name == NULL) return thrown(formatString("a %s with no name", form));
+	prog *p = allocate(sizeof *p);
+	PUSH(progs, nprogs, capprogs, p);
+	p->f = a1;
+	p->act = a2;
+	const op_value *early = is(arg, OP_LIST) && arg->count > 3 ? arg->items[3] : NULL;
+	sc_def def = {.f = program_f, .equal = object_is, .data = p, .effect = program_effect};
+	def.early = is(early, OP_BOOL) && early->bool_;
+	// an early one runs and acts before it is given back: itself, the scope open then (self_of)
+	sc_computer *c = sc_create_effect(sch, def);
+	if (c == NULL) return thrown(unmade(NULL));
+	p->self = c;
+	char *bad = name_it(c, name);
+	if (bad) return thrown(bad);
+	return ok(op_null());
 }
 
 static op_value *settle(const op_value *r, bool resolve) {
@@ -785,7 +816,7 @@ static op_value *answer(const op_value *r) {
 		size_t n;
 		const sc_pair *info = info_of(op_get(r, "info"), &n);
 		sc_scope *o = op[0] == 'r' ? sc_create_root_scope(sch, info, n) : sc_create_scope(sch, info, n, p);
-		if (o == NULL) return answer_error(p ? copyString(SC_DISPOSED) : unmade());
+		if (o == NULL) return answer_error(op[0] == 'r' ? copyString(SC_EMPTY) : unmade(p));
 		bad = name_it(o, text(op_get(r, "name")));
 		return bad ? answer_error(bad) : op_map();
 	}
@@ -810,6 +841,7 @@ static op_value *answer(const op_value *r) {
 		const char *why = sc_run_with_scope(o, in_run, &in);
 		if (why) return answer_error(copyString(why));
 		if (in.v.k == V_THROW) return answer_error(in.v.err);
+		if (in.v.k == V_PENDS) return answer_error(copyString("pending"));
 		op_value *out = op_map();
 		op_set(out, "value", in.v.j ? in.v.j : op_null());
 		return out;

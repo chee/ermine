@@ -78,8 +78,8 @@ function generate(seed: number) {
 		scopes.set(`o${i}`, { parent, alive: true })
 		send(
 			parent === undefined
-				? { op: "root", name: `o${i}` }
-				: { op: "scope", name: `o${i}`, parent },
+				? { op: "root", name: `o${i}`, info: [["actor", `o${i}`]] }
+				: { op: "scope", name: `o${i}`, parent, info: [["why", `o${i}`]] },
 		)
 	}
 	const values: Record<string, number> = {}

@@ -1,0 +1,62 @@
+{
+	"title": "sealing refuses a commit whose signer is not the seal's key, bytes that are not a commit, a seed not 32 bytes",
+	"steps": [
+		{
+			"op": "seal",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+				"nonce": 1,
+				"parents": [],
+				"lamport": 1,
+				"patches": [{ "path": [], "value": { "title": "hi" } }]
+			},
+			"expect": { "error": "signature" }
+		},
+		{
+			"op": "seal",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"nonce": 1,
+				"parents": [],
+				"lamport": 1,
+				"patches": [{ "path": [], "value": { "title": "hi" } }]
+			},
+			"expect": { "error": "signature" }
+		},
+		{
+			"op": "seal",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"commit": "a0",
+			"expect": { "error": "not-a-commit", "field": "table" }
+		},
+		{
+			"op": "seal",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"commit": "ff",
+			"expect": { "error": "not-a-commit" }
+		},
+		{
+			"op": "seal",
+			"seed": "01010101010101010101010101010101",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+				"nonce": 1,
+				"parents": [],
+				"lamport": 1,
+				"patches": [{ "path": [], "value": { "title": "hi" } }]
+			},
+			"expect": { "error": "shape" }
+		}
+	]
+}

@@ -10,7 +10,7 @@ type Key = { name: string }
 function world() {
 	const s = createScheduler()
 	const store = new Map<Key, unknown>()
-	const root = s.createRootScope()
+	const root = s.createRootScope([["actor", "bench"]])
 	const key = (name: string): Key => ({ name })
 	const read = <T>(k: Key) => (s.track(k), store.get(k) as T)
 	const write = (k: Key, v: unknown) => (store.set(k, v), s.mark([k]))
@@ -149,7 +149,7 @@ for (const n of [1000]) {
 		const is = w.select()
 		w.s.pulse()
 		return [n, 20, () => {
-			const o = w.s.runWithScope(w.root, () => w.s.createScope())
+			const o = w.s.runWithScope(w.root, () => w.s.createScope([["why", "bench"]]))
 			for (let k = 0; k < n; k++) w.reader(() => is(k), o)
 			w.s.pulse()
 			w.s.teardown(o)
@@ -158,7 +158,7 @@ for (const n of [1000]) {
 	bench(`make, run, tear down ${n} readers, comparing`, () => {
 		const w = world()
 		return [n, 20, () => {
-			const o = w.s.runWithScope(w.root, () => w.s.createScope())
+			const o = w.s.runWithScope(w.root, () => w.s.createScope([["why", "bench"]]))
 			for (let k = 0; k < n; k++) w.reader(() => w.read(w.src) === k, o)
 			w.s.pulse()
 			w.s.teardown(o)

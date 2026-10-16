@@ -1,0 +1,36 @@
+{
+	"title": "no commits: a run of none, and back",
+	"steps": [
+		{
+			"op": "pack",
+			"commits": [],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef900006462617365806474696d6540656163746f7280656e6f6e636540657461626c65806672656164657280667369676e657280676c616d706f72744067706172656e7473806770617463686573806865787465726e616c80686d65746164617461806a7369676e61747572657340"
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": [] } },
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 0,
+					"base": [],
+					"time": { "/": { "bytes": "" } },
+					"actor": [],
+					"nonce": { "/": { "bytes": "" } },
+					"table": [],
+					"reader": [],
+					"signer": [],
+					"lamport": { "/": { "bytes": "" } },
+					"parents": [],
+					"patches": [],
+					"external": [],
+					"metadata": [],
+					"signatures": { "/": { "bytes": "" } }
+				}
+			}
+		}
+	]
+}

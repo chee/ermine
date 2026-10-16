@@ -1,0 +1,323 @@
+{
+	"title": "a write on the merge: every head its parents, the rule named, no base, its patches against the merge; it crosses, and one head is left",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"merge": "eg-walker",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"merge": "eg-walker",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": "hello"
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "w0"
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 5,
+			"text": " world",
+			"name": "ta",
+			"expect": {
+				"commits": 6
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "oh, ",
+			"name": "tb",
+			"expect": {
+				"commits": 4
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 9,
+			"text": "!",
+			"name": "tb2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "hello world"
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "oh, hello!"
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": ">",
+			"name": "m",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "commit",
+			"host": "a",
+			"id": "x",
+			"commit": "m",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457408,
+					"parents": [
+						"tb2",
+						"ta"
+					],
+					"merge": "eg-walker",
+					"lamport": 8,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								0,
+								0
+							],
+							"value": ">"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": ">oh, hello! world"
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"m"
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"m"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": ">oh, hello! world"
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "m",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "a",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457408,
+					"parents": [
+						"tb2",
+						"ta"
+					],
+					"merge": "eg-walker",
+					"lamport": 8,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								0,
+								0
+							],
+							"value": ">"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 1,
+			"text": " ",
+			"name": "after",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "after",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "b",
+					"external": [
+						{
+							"file": "scenario",
+							"line": 1
+						}
+					],
+					"time": 1760000000,
+					"signer": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+					"nonce": 4207839831,
+					"parents": [
+						"m"
+					],
+					"lamport": 9,
+					"patches": [
+						{
+							"path": [],
+							"range": [
+								1,
+								1
+							],
+							"value": " "
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "> oh, hello! world"
+			}
+		},
+		{
+			"op": "settle",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"commits": 0
+			}
+		}
+	]
+}

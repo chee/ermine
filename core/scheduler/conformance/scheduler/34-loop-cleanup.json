@@ -1,7 +1,7 @@
 {
 	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's and an effect's (proof C5)",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",

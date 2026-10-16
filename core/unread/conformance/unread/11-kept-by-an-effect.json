@@ -1,0 +1,134 @@
+{
+	"title": "an effect's result, to be acted on, is kept at its run's end: it lets go of what it holds, and only that",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": {
+					"y": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"b",
+						"y"
+					],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a"
+			],
+			"hold": "k",
+			"expect": {},
+			"scheduler": "effect"
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"b",
+						"y"
+					],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "held",
+			"name": "k",
+			"expect": {
+				"value": {
+					"x": 1
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					},
+					"b": {
+						"y": 2
+					}
+				}
+			}
+		}
+	]
+}

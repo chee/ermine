@@ -1,0 +1,7 @@
+{
+	"title": "a key twice",
+	"bytes": "a167636f6c756d6e7358501dc9cb0d80200c00d0ca26ece1c17493a6d440a262287eae308d2b7253b9bef7b027456b39382d442e8755d01821ce31954a779b40b6e8441106d929652d554e5a0ef9e7f2813d02cc5db4b6113e7e01",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

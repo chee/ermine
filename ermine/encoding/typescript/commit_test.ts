@@ -53,6 +53,11 @@ Deno.test("commit: a move, a range, several parents with base", () => {
 	assertEquals(decode(encode(c)), c)
 })
 
+Deno.test("commit: a merge, several parents and a rule's name, no base", () => {
+	const c = commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: "eg-walker" })
+	assertEquals(decode(encode(c)), c)
+})
+
 Deno.test("commit: refused, naming the first field that says no", () => {
 	const no = (c: unknown, field?: string) => {
 		const e = assertThrows(() => encode(c as Commit), CommitError)
@@ -67,6 +72,11 @@ Deno.test("commit: refused, naming the first field that says no", () => {
 	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], base: bytes(32, 4) }), "base")
 	// one parent: no base
 	no(commit({ base: bytes(32, 2) }), "base")
+	// merge: a rule's name, with several parents and no base
+	no(commit({ merge: "eg-walker" }), "merge")
+	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], base: bytes(32, 3), merge: "x" }), "merge")
+	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: 1 as never }), "merge")
+	no(commit({ parents: [bytes(32, 2), bytes(32, 3)], merge: "" }), "merge")
 	no(commit({ lamport: 0 }), "lamport")
 	no(commit({ patches: [{ path: ["a"], value: 1, move: { path: ["b"] } }] }), "patches")
 	no(commit({ metadata: [["a"]] as never }), "metadata")

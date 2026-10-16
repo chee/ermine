@@ -4,6 +4,7 @@
 		{
 			"op": "root",
 			"name": "o",
+			"info": [["actor", "test"]],
 			"expect": {}
 		},
 		{

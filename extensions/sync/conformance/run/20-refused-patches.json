@@ -1,0 +1,66 @@
+{
+	"title": "patches: a list of n, each a list of patches, or a string going on from an insert before",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "body": "" } }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": ["b"],
+			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+		},
+		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "patches": [[], []] },
+			"expect": { "error": "patches" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "patches": [[], 5, "i"] },
+			"expect": { "error": "patches" }
+		},
+		{ "op": "unpack", "run": "r", "drop": ["patches"], "expect": { "error": "patches" } },
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "patches": ["x", [], "i"] },
+			"expect": { "error": "insert" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": { "patches": [[{ "path": [], "value": { "body": "" } }], "h", "i"] },
+			"expect": { "error": "insert" }
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"patches": [
+					[{ "path": [], "value": { "body": "" } }],
+					[{ "path": ["body"], "range": [0, 0], "value": "h" }],
+					[{ "path": ["body"], "value": "i", "x": 1 }]
+				]
+			},
+			"expect": { "error": "commit" }
+		}
+	]
+}

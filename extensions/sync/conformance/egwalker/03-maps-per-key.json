@@ -1,0 +1,156 @@
+{
+	"title": "maps merge per key; one key set by both: the later commit's (lamport, then name); a removal is a write",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"title": "hi",
+						"n": 1,
+						"gone": true,
+						"keep": "k"
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"x"
+					],
+					"value": "from a"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 3
+				},
+				{
+					"path": [
+						"y"
+					],
+					"value": "from b"
+				},
+				{
+					"path": [
+						"gone"
+					]
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "a",
+			"expect": {
+				"name": "e4a8998c1a6c9d865f308dc3909e096f1b5fae50ea863b2697fc20357c402515"
+			}
+		},
+		{
+			"op": "name",
+			"commit": "b",
+			"expect": {
+				"name": "a07956470b7c872d04d5898805ea126f693f37ed9e8b24e2650d30e6be2e99e2"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"n": 2,
+							"x": "from a",
+							"y": "from b",
+							"keep": "k",
+							"title": "hi"
+						},
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "b2",
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 4
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b2"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"n": 4,
+							"x": "from a",
+							"y": "from b",
+							"keep": "k",
+							"title": "hi"
+						},
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

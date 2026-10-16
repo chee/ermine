@@ -10,15 +10,17 @@
 //   - worked out when first asked, there and then, places' reads recorded into the entry (places'
 //     record) and told to no one, so the reader's run tracks only the entry's key. an entry at a
 //     path reads its folder's entry, one step at a time, so a path's walk is shared by every path
-//     under it
+//     under it. pruning (places.ts): at has a third key, the contributors gone under the path, read
+//     by the entries under it, so a contributor that said none at a folder is not asked under it, and
+//     what is under it is worked out again when that changes (and only it: get's key is the first)
 //   - a key it read marked (the scheduler's onMark, inside the write): worked out again, there and
 //     then, so a read right after a write is fresh. its key is marked, by the writer's run, only
-//     when its answer changed (the equal cut); at has two keys, the first answer (get) and all of
-//     them (gets), so a change to what is shadowed reruns no get
-//   - kept while a run tracks one of its keys or another entry reads one (onTrackingStart,
-//     onTrackingEnd, and a count of the entries reading each key); then it goes, and what it read
-//     with it. one read outside any run (a host's, an effect's act, runWithScope) keeps nothing:
-//     the entry is worked out, answered, and goes
+//     when its answer changed (the equal cut); at has three keys, the first answer (get), all of
+//     them (gets) and the gone under it (above), so a change to what is shadowed reruns no get
+//   - kept while a run tracks one of its keys or another entry reads one (@ermine/clingy, and a
+//     count of the entries reading each key); then it goes, and what it read with it. one read
+//     outside any run (a host's, an effect's act, runWithScope) keeps nothing: the entry is worked
+//     out, answered, and goes
 //   - places' spots it reads are held (places' hold), so a run that stops reading a spot an entry
 //     reads lets nothing go; the cache lets a spot go once no entry reads it and no run tracks it
 //   - it lets go only what it took itself: a spot it made (places' record, fresh) is its own, one
@@ -33,10 +35,12 @@
 //     scheduler (keyed, core/scheduler selector.ts) tells each cache the marks of its own keys
 //   - a reader whose path a write marks runs once before a due writer of a spot under the path, and
 //     again after (the key's writer is whoever marked it last)
+import { createClingy } from "@ermine/clingy"
 import type { Run, Scheduler } from "@ermine/scheduler"
 import { type Holder, keyed } from "@ermine/scheduler/selector"
 import {
 	type Answer,
+	type Answers,
 	type Here,
 	type Id,
 	level,
@@ -52,8 +56,6 @@ type Mark = {
 	readonly owner: object
 	readonly entry: Entry
 	readonly pick: (answer: unknown) => unknown
-	// a run tracks it now
-	runs: boolean
 }
 
 type Entry = {
@@ -82,6 +84,8 @@ const none: readonly never[] = []
 const whole = (a: unknown) => a
 // the first answer: an id, never a level
 const firstOf = (a: unknown) => (a as Answer[])[0]
+// the contributors gone under the path (places' Answers): what an entry under it walks on with
+const goneOf = (a: unknown) => (a as Partial<Answers>).gone ?? 0
 const idsOf = (a: readonly Answer[]) => a.filter((x) => x.id !== level)
 
 // two answers the same: lists of plain fields, or plain fields
@@ -121,36 +125,46 @@ export function createPathCache(setup: {
 	const ours = (k: unknown): k is Mark =>
 		typeof k === "object" && k !== null && (k as Mark).owner === me
 
+	// its keys: whether a run tracks one now; the last tracker gone, it may go
+	const clingy = createClingy<Mark>(s, (k) => settle(k.entry))
+
 	const nameOf = (kind: Kind, path: Path) => kind + JSON.stringify(path)
 
 	function entryOf(kind: Kind, path: Path): Entry {
 		return entries.get(nameOf(kind, path)) ?? make(kind, path)
 	}
 
-	// the id at a path (or level), read through its entry's first key
-	function idAt(path: Path, reads: Set<unknown>): Id | undefined {
-		if (path.length === 0) return places.root
+	// where a path is: its id (or level) and the gone under it, read through its entry's first and
+	// gone keys (the root: itself, none gone; children alone: never any gone, so not read); nothing
+	// there: undefined
+	function hereAt(path: Path, reads: Set<unknown>): Here | undefined {
+		if (path.length === 0) return { id: places.root, path }
 		const up = entryOf("at", path)
 		reads.add(up.keys[0])
-		return (up.answer as Answer[])[0]?.id
+		const id = (up.answer as Answer[])[0]?.id
+		if (id === undefined) return undefined
+		if (places.contributors === undefined) return { id, path }
+		reads.add(up.keys[2])
+		return { id, path, gone: goneOf(up.answer) }
 	}
 
 	// an entry's answer, its reads put into reads
 	function compute(e: Entry, reads: Set<unknown>): unknown {
 		const { kind, path } = e
 		if (kind === "at") {
-			const up = path.slice(0, -1)
-			const id = idAt(up, reads)
-			return id === undefined ? none : places.answers({ id, path: up }, path[path.length - 1])
+			const here = hereAt(path.slice(0, -1), reads)
+			return here === undefined ? none : places.answers(here, path[path.length - 1])
 		}
 		// a level (no id) is a folder to list, as lib's list and members have it
-		const id = idAt(path, reads)
-		if (id === undefined) return none
-		const here: Here = { id, path }
+		const here = hereAt(path, reads)
+		if (here === undefined) return none
 		if (kind === "list") return places.names(here).map((n) => n.name)
+		const named = places.names(here)
+		// those whose names said none: gone for each name's walk too
+		const under = named.gone === (here.gone ?? 0) ? here : { ...here, gone: named.gone }
 		const out: Member[] = []
-		for (const { name } of places.names(here)) {
-			for (const m of places.walk([name], here)) out.push(m)
+		for (const { name } of named) {
+			for (const m of places.walk([name], under)) out.push(m)
 		}
 		return out
 	}
@@ -184,8 +198,9 @@ export function createPathCache(setup: {
 			worked: now,
 			live: true,
 		}
-		const key = (pick: Mark["pick"]): Mark => ({ owner: me, entry: e, pick, runs: false })
-		e.keys.push(...(kind === "at" ? [key(firstOf), key(whole)] : [key(whole)]))
+		const key = (pick: Mark["pick"]): Mark => ({ owner: me, entry: e, pick })
+		e.keys.push(...(kind === "at" ? [key(firstOf), key(whole), key(goneOf)] : [key(whole)]))
+		for (const k of e.keys) clingy.add(k)
 		const [answer, reads] = work(e)
 		e.answer = answer
 		e.reads = reads
@@ -225,9 +240,10 @@ export function createPathCache(setup: {
 	// an entry goes when no run tracks its keys and no entry reads them
 	function settle(e: Entry) {
 		if (!e.live) return
-		for (const k of e.keys) if (k.runs || readers.has(k)) return
+		for (const k of e.keys) if (clingy.tracked(k) || readers.has(k)) return
 		e.live = false
 		entries.delete(e.name)
+		for (const k of e.keys) clingy.drop(k)
 		for (const k of e.reads) unlink(k, e)
 	}
 
@@ -241,6 +257,7 @@ export function createPathCache(setup: {
 			// it cannot be worked out: it goes, and its readers run again to see why
 			e.live = false
 			entries.delete(e.name)
+			for (const k of e.keys) clingy.drop(k)
 			for (const k of old) unlink(k, e)
 			s.mark(e.keys, run)
 			return
@@ -270,21 +287,17 @@ export function createPathCache(setup: {
 		},
 	}
 
+	// the other keys (spots): tracked by a run or not
 	s.onTrackingStart((k) => {
-		if (ours(k)) k.runs = true
-		else tracked.add(k)
+		if (!ours(k)) tracked.add(k)
 	})
 
 	s.onTrackingEnd((k) => {
-		if (!ours(k)) {
-			// no run tracks it now: if an entry reads it, its release was held back by us, so the
-			// spot is ours to let go
-			tracked.delete(k)
-			if (readers.has(k)) took.add(k)
-			return
-		}
-		k.runs = false
-		settle(k.entry)
+		if (ours(k)) return
+		// no run tracks it now: if an entry reads it, its release was held back by us, so the
+		// spot is ours to let go
+		tracked.delete(k)
+		if (readers.has(k)) took.add(k)
 	})
 
 	// the answer at a path, its key told to the run open (outside one: the entry goes at once)

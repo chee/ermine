@@ -1,7 +1,7 @@
 {
 	"title": "a compute is an owner: its cleanups run before its next run, and when it goes",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",

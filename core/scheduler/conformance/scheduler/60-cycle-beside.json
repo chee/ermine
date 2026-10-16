@@ -1,0 +1,510 @@
+{
+	"title": "a cycle beside reads that change: a and b read each other; d1 reads d0 or src by flag. d1's rank rises past d0's and stays (ranks never fall); a and b keep theirs",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"src": 0,
+				"flag": false
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"mod": [
+							{
+								"read": "kb"
+							},
+							1
+						]
+					},
+					{
+						"read": "src"
+					}
+				]
+			},
+			"to": "ka",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"mod": [
+							{
+								"read": "ka"
+							},
+							1
+						]
+					},
+					{
+						"read": "src"
+					}
+				]
+			},
+			"to": "kb",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d0",
+			"scope": "o",
+			"f": {
+				"read": "src"
+			},
+			"to": "k0",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d1",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": "flag"
+					},
+					{
+						"read": "k0"
+					},
+					{
+						"read": "src"
+					}
+				]
+			},
+			"to": "k1",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "d0",
+						"tick": 4
+					},
+					{
+						"due": "d1",
+						"tick": 5
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 7,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d0",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d0",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": true,
+				"src": 1
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "d1",
+						"tick": 10
+					},
+					{
+						"due": "a",
+						"tick": 10
+					},
+					{
+						"due": "b",
+						"tick": 10
+					},
+					{
+						"due": "d0",
+						"tick": 10
+					},
+					{
+						"starts": "a",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 3,
+						"ended": "stopped",
+						"waits": "b"
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 12,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d0",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "d0",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d1",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "d1",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": false,
+				"src": 2
+			},
+			"expect": {
+				"tick": 15
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "d1",
+						"tick": 15
+					},
+					{
+						"due": "b",
+						"tick": 15
+					},
+					{
+						"due": "d0",
+						"tick": 15
+					},
+					{
+						"due": "a",
+						"tick": 15
+					},
+					{
+						"starts": "a",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 5,
+						"ended": "stopped",
+						"waits": "b"
+					},
+					{
+						"starts": "b",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 6,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 17,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 6,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d0",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "d0",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 5,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 5,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "d1",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "d1",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"src": 3
+			},
+			"expect": {
+				"tick": 20
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 20
+					},
+					{
+						"due": "d0",
+						"tick": 20
+					},
+					{
+						"due": "a",
+						"tick": 20
+					},
+					{
+						"due": "d1",
+						"tick": 20
+					},
+					{
+						"starts": "a",
+						"run": 7,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 7,
+						"ended": "stopped",
+						"waits": "b"
+					},
+					{
+						"starts": "b",
+						"run": 6,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 6,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 8,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 22,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 8,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d0",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "d0",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 7,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 7,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "d1",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "d1",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,128 @@
+{
+	"title": "a value put or taken out wins over concurrent edits inside it, whatever the order",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"o": {
+							"x": 1
+						},
+						"l": [
+							{
+								"v": "a"
+							},
+							{
+								"v": "b"
+							}
+						],
+						"s": "text"
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"o"
+					],
+					"value": {
+						"fresh": true
+					}
+				},
+				{
+					"path": [
+						"l",
+						0
+					]
+				},
+				{
+					"path": [
+						"s"
+					]
+				}
+			],
+			"lamport": 2,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"o",
+						"y"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"l",
+						0,
+						"v"
+					],
+					"value": "A"
+				},
+				{
+					"path": [
+						"s"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "!"
+				}
+			],
+			"lamport": 3,
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"l": [
+								{
+									"v": "b"
+								}
+							],
+							"o": {
+								"fresh": true
+							}
+						},
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

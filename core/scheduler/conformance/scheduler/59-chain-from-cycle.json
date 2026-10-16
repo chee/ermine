@@ -1,0 +1,324 @@
+{
+	"title": "a chain after a cycle: a and b read each other, d reads a, e reads d. a and b share a rank, d one past it, e one past d; h changed: a runs again, and the chain after it at those ranks",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"mod": [
+							{
+								"read": "kb"
+							},
+							1
+						]
+					},
+					{
+						"mod": [
+							{
+								"read": "h"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "ka",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"mod": [
+					{
+						"read": "ka"
+					},
+					1
+				]
+			},
+			"to": "kb",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "ka"
+					},
+					{
+						"read": "h"
+					}
+				]
+			},
+			"to": "kd",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"read": "kd"
+			},
+			"to": "ke",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"h": 1
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 1
+					},
+					{
+						"due": "b",
+						"tick": 2
+					},
+					{
+						"due": "d",
+						"tick": 3
+					},
+					{
+						"due": "e",
+						"tick": 4
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "a",
+						"tick": 6,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "stopped",
+						"waits": "a"
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "d",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"due": "e",
+						"tick": 8,
+						"writer": "d"
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "a",
+						"tick": 10
+					},
+					{
+						"due": "d",
+						"tick": 10
+					},
+					{
+						"starts": "a",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "d",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"due": "e",
+						"tick": 11,
+						"writer": "d"
+					},
+					{
+						"ends": "d",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 3,
+						"rank": 2
+					},
+					{
+						"ends": "e",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"h": 2
+			},
+			"expect": {
+				"tick": 13
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 13
+					},
+					{
+						"due": "d",
+						"tick": 13
+					},
+					{
+						"starts": "a",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "d",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"due": "e",
+						"tick": 14,
+						"writer": "d"
+					},
+					{
+						"ends": "d",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 4,
+						"rank": 2
+					},
+					{
+						"ends": "e",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

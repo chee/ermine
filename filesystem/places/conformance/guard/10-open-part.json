@@ -70,7 +70,13 @@
 							]
 						},
 						"who": {
-							"actor": "notes"
+							"actor": "notes",
+							"metadata": [
+								[
+									"actor",
+									"notes"
+								]
+							]
 						}
 					}
 				]
@@ -129,6 +135,12 @@
 			"expect": {
 				"value": {
 					"actor": "notes",
+					"metadata": [
+						[
+							"actor",
+							"notes"
+						]
+					],
 					"timely": true,
 					"sites": 1
 				}
@@ -148,7 +160,13 @@
 							]
 						},
 						"who": {
-							"actor": "notes"
+							"actor": "notes",
+							"metadata": [
+								[
+									"actor",
+									"notes"
+								]
+							]
 						}
 					}
 				]

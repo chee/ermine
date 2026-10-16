@@ -1,0 +1,275 @@
+{
+	"title": "pruning: list, members and entries under a pruned path ask the rows neither their names nor a step under it; where the rows have no names (an empty trie at the root, or under a leaf) their names say none once, and members walks each name without them; lookup asks them once on its way and once from each place not pruned",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W",
+				"top": "T"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"a": "A",
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "B",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "T",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"apps",
+				"x"
+			],
+			"id": "X",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"apps",
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {
+				"value": {}
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "list",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"names": [
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "members",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "a",
+						"id": "A",
+						"from": "children"
+					},
+					{
+						"name": "b",
+						"id": "B",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "A",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "members",
+			"at": [],
+			"expect": {
+				"members": [
+					{
+						"name": "top",
+						"id": "T",
+						"from": "children"
+					},
+					{
+						"name": "work",
+						"id": "W",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 1
+			}
+		},
+		{
+			"op": "list",
+			"at": [],
+			"expect": {
+				"names": [
+					"top",
+					"work"
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 1
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"top"
+			],
+			"from": [
+				"work",
+				"a"
+			],
+			"expect": {
+				"path": [
+					"top"
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 2,
+				"names": 0
+			}
+		},
+		{
+			"op": "kids",
+			"id": "PC",
+			"value": {
+				"k": "K"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"c"
+			],
+			"id": "PC",
+			"expect": {}
+		},
+		{
+			"op": "members",
+			"at": [
+				"work"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "a",
+						"id": "A",
+						"from": "children"
+					},
+					{
+						"name": "b",
+						"id": "B",
+						"from": "children"
+					},
+					{
+						"name": "c",
+						"id": "PC",
+						"from": "process"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 4,
+				"names": 1
+			}
+		},
+		{
+			"op": "members",
+			"at": [
+				"work",
+				"c"
+			],
+			"expect": {
+				"members": [
+					{
+						"name": "k",
+						"id": "K",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 2,
+				"names": 1
+			}
+		}
+	]
+}

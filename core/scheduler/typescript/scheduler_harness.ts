@@ -13,7 +13,8 @@
 //        made with s open
 //        declared: to is also given to the scheduler as the compute's key, its writer from the
 //        start (compute's key argument)
-//   {"op":"effect","name":c,"scope":s,"f":e,"act":e,"equal"?:"json"}                → {}
+//   {"op":"effect","name":c,"scope":s,"f":e,"act":e,"equal"?:"json","early"?:true}  → {}
+//        early: made early (it runs and acts in the request)
 //        f: evaluated in each run. act: evaluated in each act, given value and previous.
 //        equal "json": results compared by their JSON; else Object.is
 //   {"op":"cleanup","scope":s,"do":e}                e when s is cleaned up    → {}
@@ -35,7 +36,8 @@
 //   {"op":"current"}   what is open, as the form current shows it              → {"value":v}
 //
 // a moment, computations by name, an error as below:
-//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n,"rank":r}  {"acts":c,"run":n,"error"?:s}
+//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n,"rank":r}
+//   {"acts":c,"run":n,"early"?:true,"error"?:s}
 //   {"ends":c,"run":n,"ended":"done"|"pending"|"failed"|"stopped"|"looping","equal"?:b,
 //    "error"?:s,"waits"?:c,"through"?:[c..],"reads"?:[k..]}   reads: when asked for
 // an error: a scheduler error's code ("stopped", "disposed"), "pending" for a thrown PENDING,
@@ -68,6 +70,9 @@
 //   {"current":null}    what is open: {"scope":s,"pairs":[[k,v]..],"writer"?:c}, the computation
 //                       of the writer; nothing: null
 //   {"cleanup":[s,e]}   e when s is cleaned up; s null: the scope open; null
+//   {"effect":[c,f,act,early?]}  an effect c made under the scope open (in an act: its effect),
+//                       as the effect request's; early true: early. null. c taken by one gone: taken
+//                       over
 //   {"dispose":s}       s disposed; null
 //   {"quote":x}         x as it is
 import {
@@ -114,6 +119,7 @@ function moment(m: Told, reads: boolean): Json {
 	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run, rank: m.rank }
 	if ("acts" in m) {
 		const out: Record<string, Json> = { acts: nameOf(m.acts), run: m.run }
+		if (m.early) out.early = true
 		if ("error" in m) out.error = errorOf(m.error)
 		return out
 	}
@@ -140,7 +146,7 @@ let tick = 0
 s.onMark((_keys, _run, _due, t) => void (tick = t))
 
 function name(o: Scope, n: string) {
-	if (named.has(n)) throw new Error(`name taken: ${n}`)
+	if (named.get(n)?.state === "alive") throw new Error(`name taken: ${n}`)
 	named.set(n, o)
 	names.set(o, n)
 }
@@ -274,6 +280,20 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 		case "dispose":
 			s.teardown(scope(arg))
 			return null
+		case "effect": {
+			const [f, act] = [a[1], a[2]]
+			let made: Computer | undefined
+			const self = () => made ?? s.getCurrentScope()!
+			made = s.createEffect(
+				(previous) =>
+					evaluate(f, { run: s.getRun(), self: self(), previous: previous as Json }),
+				(value, previous) => void evaluate(act, { self: self(), value, previous }),
+				undefined,
+				a[3] === true ? { early: true } : undefined,
+			)
+			name(made, a[0] as string)
+			return null
+		}
 		case "quote":
 			return arg
 		default:
@@ -293,10 +313,10 @@ function program(r: Request, self: () => Scope) {
 async function run(r: Request): Promise<Json> {
 	switch (r.op) {
 		case "root":
-			name(s.createRootScope(r.info as Pair[] | undefined), r.name as string)
+			name(s.createRootScope((r.info ?? []) as Pair[]), r.name as string)
 			return {}
 		case "scope": {
-			const info = r.info as Pair[] | undefined
+			const info = (r.info ?? []) as Pair[]
 			name(
 				s.createScope(info, r.parent === undefined ? undefined : scope(r.parent)),
 				r.name as string,
@@ -320,11 +340,15 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "effect": {
-			const c: Computer = s.runWithScope(scope(r.scope), () =>
+			// an early one runs and acts before it is given back: itself, the scope open then
+			let made: Computer | undefined
+			const self = () => made ?? s.getCurrentScope()!
+			const c: Computer = made = s.runWithScope(scope(r.scope), () =>
 				s.createEffect(
-					program(r, () => c),
-					(value, previous) => void evaluate(r.act, { self: c, value, previous }),
+					program(r, self),
+					(value, previous) => void evaluate(r.act, { self: self(), value, previous }),
 					r.equal === "json" ? json : undefined,
+					r.early === true ? { early: true } : undefined,
 				))
 			name(c, r.name as string)
 			return {}

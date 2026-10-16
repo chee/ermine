@@ -4,7 +4,7 @@
 // host writes with its scope open, its info [["actor","test"]]. a PlacesError answers { error: code }
 //
 // the world:
-// { op: "root", name }                     → {}   a scope with no parent
+// { op: "root", name, info }               → {}   a scope with no parent, its info the pairs given
 // { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
 // { op: "place", at, name, id }            → {}   places' place, at the parent's id
 // { op: "rename", at, name, to }           → {}
@@ -13,6 +13,8 @@
 // { op: "rows" }                           → { value? }   the root's process trie as the table has it
 //    (told to no one); none: {}
 // { op: "patches" }                        → { patches? }   the patches of the trie's latest change
+// { op: "asked" }                        → { steps, names }   how many times the rows' contributor
+//    was asked a step and its names since last asked (pruning: places.ts); its level not counted
 // reads, outside any run (lib.ts):
 // { op: "get", path }                      → { id? }
 // { op: "entries", path }                  → { entries }   each { id, from }
@@ -20,7 +22,7 @@
 // { op: "members", at }                    → { members }   each { name, id?, from } (a level: no id)
 // { op: "lookup", names, from }            → { path? }
 // scope nodes (scopes.ts):
-// { op: "scope", name, parent }            → {}   a scope under the named one
+// { op: "scope", name, parent, info }      → {}   a scope under the named one, its info the pairs given
 // { op: "give", scope, id? }               → { id }   the scope's node id, made the first time
 // { op: "nodeOf", scope }                  → { id? }
 // { op: "nearest", scope }                 → { id? }   its own, or the nearest above with one
@@ -38,7 +40,14 @@ import createEntry from "@ermine/node/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Key } from "@ermine/table"
-import { children, createPlaces, place, PlacesError, rename } from "@ermine/places"
+import {
+	children,
+	type Contributor,
+	createPlaces,
+	place,
+	PlacesError,
+	rename,
+} from "@ermine/places"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
@@ -50,12 +59,20 @@ type Json = unknown
 const s = createScheduler()
 const table = createTable((part, id) => places.onTableChange(part as Key, id))
 const paths = createPaths<unknown>()
+// the rows' contributor, each ask counted
+const asked = { steps: 0, names: 0 }
+const rows = processes("R")
+const counted: Contributor = {
+	...rows,
+	step: (here, name, r) => (asked.steps++, rows.step(here, name, r)),
+	names: (here, r) => (asked.names++, rows.names(here, r)),
+}
 const places = createPlaces({
 	root: "R",
 	table,
 	paths,
 	scheduler: s,
-	contributors: [processes("R"), children],
+	contributors: [counted, children],
 })
 s.onTrackingEnd((key) => places.release(key))
 const host = s.createRootScope([["actor", "test"]])
@@ -120,6 +137,11 @@ function answer(r: Request): Json {
 			const p = table.get(PROCESS, "R")?.change.op?.patches
 			return p === undefined ? {} : { patches: p }
 		}
+		case "asked": {
+			const was = { ...asked }
+			asked.steps = asked.names = 0
+			return was
+		}
 		case "get": {
 			const id = get(places, r.path)
 			return id === undefined ? {} : { id }
@@ -151,7 +173,7 @@ function answer(r: Request): Json {
 		case "scope": {
 			const up = scopes.get(r.parent)
 			if (up === undefined) throw new Error(`no scope ${r.parent}`)
-			scopes.set(r.name, s.createScope([], up))
+			scopes.set(r.name, s.createScope(r.info, up))
 			return {}
 		}
 		case "give":

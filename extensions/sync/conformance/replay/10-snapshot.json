@@ -1,0 +1,56 @@
+{
+	"title": "a snapshot kept at a commit is where replay starts, taken as given: after it, its tables and the patches since; at it, its tables; before it, the commits",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"patches": [{ "path": ["m"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "keep",
+			"commit": "b",
+			"tables": { "value": { "value": { "n": 100 }, "change": { "time": 7, "actor": "kept" } } },
+			"expect": {}
+		},
+		{
+			"op": "replay",
+			"commit": "c",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 100, "m": 2 }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 100 }, "change": { "time": 7, "actor": "kept" } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": { "value": { "value": { "n": 0 }, "change": { "time": 0, "actor": null } } }
+			}
+		}
+	]
+}

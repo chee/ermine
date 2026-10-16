@@ -1,0 +1,177 @@
+{
+	"title": "a burst of writes copies what it changes once, then changes its copies in place; what it never touched stays shared",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": 1,
+				"c": {
+					"z": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "start",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": 1,
+					"c": {
+						"z": 0
+					}
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "c",
+			"path": [
+				"c"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "c",
+			"path": [
+				"c"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					},
+					"b": 3,
+					"c": {
+						"z": 0
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "start",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 0
+					},
+					"b": 1,
+					"c": {
+						"z": 0
+					}
+				}
+			}
+		}
+	]
+}

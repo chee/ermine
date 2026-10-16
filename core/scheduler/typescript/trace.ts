@@ -17,7 +17,8 @@ export type Told =
 		waits?: Computer
 		through?: Computer[]
 	}
-	| { acts: Computer; run: number; error?: unknown }
+	// early: an early effect's act (its round's early queue)
+	| { acts: Computer; run: number; early?: true; error?: unknown }
 
 // f told each, in order; gives back the remove
 export function trace(
@@ -37,9 +38,12 @@ export function trace(
 			if (more.through) t.through = more.through
 			f(t)
 		}),
-		s.onEffect((c, n, more) =>
-			f("error" in more ? { acts: c, run: n, error: more.error } : { acts: c, run: n })
-		),
+		s.onEffect((c, n, more) => {
+			const t: Told = { acts: c, run: n }
+			if (c.early) t.early = true
+			if ("error" in more) t.error = more.error
+			f(t)
+		}),
 	]
 	return () => {
 		for (const off of offs) off()

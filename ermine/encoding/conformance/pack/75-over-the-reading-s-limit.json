@@ -1,0 +1,10 @@
+{
+	"title": "over the reading's limit",
+	"bytes": "a167636f6c756d6e735855edc8b90d80301004408b0668814248ae9493bdc896f8c4f186a612326a2443a209929d706e1fd5a4f22958560d73ea2005fa21c0c461d469b67c62d576c1533b6c31f928aef9c2f2515e3b11111111111111fdee05",
+	"reading": {
+		"limit": 1000
+	},
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

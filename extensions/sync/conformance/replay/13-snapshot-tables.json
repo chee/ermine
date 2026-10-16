@@ -1,0 +1,45 @@
+{
+	"title": "a snapshot holds every table, and a table it lacks is none",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"table": "attributes",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"table": "children",
+			"patches": [{ "path": [], "value": {} }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "keep",
+			"commit": "b",
+			"tables": {
+				"attributes": { "value": { "k": 2 }, "change": { "time": 3, "actor": null } }
+			},
+			"expect": {}
+		},
+		{
+			"op": "replay",
+			"commit": "c",
+			"expect": {
+				"tables": {
+					"attributes": { "value": { "k": 2 }, "change": { "time": 3, "actor": null } },
+					"children": { "value": {}, "change": { "time": 0, "actor": null } }
+				}
+			}
+		}
+	]
+}

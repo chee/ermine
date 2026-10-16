@@ -28,13 +28,29 @@
 --   assume Basic.lean's `ranked` over the current `edges` (Rank.lean proves rank.ts is)
 -- - moments: a log of events, each tagged with its pulse and round, with two more: set and act,
 --   when they are called (the observations)
+-- - attended computes (attends: attended, a compute, with a key): made asleep unless its key is
+--   tracked; a read of a key nobody tracked wakes its attended compute (wake: due at the next
+--   tick, from outside, its key's writer again); one whose key a run's end leaves untracked is
+--   dying (untrack). a pulse's acts phase, nothing due and the dying not empty, goes to `.goes`:
+--   each dying one, still up and untracked, goes (bury: not due, its teardowns' writes `goes`,
+--   named by it, then asleep with no run, reads, values, after, last, kept, loop or cut, and its
+--   key's value forgotten; what it read untracked in turn), then the acts phase again. it stays its
+--   key's writer. attending: the latest made per key
+-- - early effects (isearly): made, due, they run at once (rank 0) and act at once (actnow); their
+--   later acts go in `earlies`, acted before `acts`: a round is runs, early acts, acts (queue)
+--
+-- not modelled here, and why: info (Scopes.lean); scope trees and teardowns' code (Scopes.lean:
+-- the going path there); `gone`'s call (Scopes.lean, bury); order.rank at an early run (rank 0)
 --
 -- departures from scheduler.ts:
 -- - no scopes, cleanups, dispose, clean, run(), current (Scopes.lean): nothing is under a
---   computation, no computation goes, and a computation's state is always alive
+--   computation, no computation is disposed, and a computation's state is always alive. a going's
+--   teardowns are their writes (`goes`) alone
+-- - wake leaves a woken one in dying (the TS takes it out): bury passes it over while its key is
+--   tracked, so only the order goings happen in can differ
 -- - no async (A8): no promises, landed, land, awaiting; a run's Run is never used after it
 -- - make only by the host, in order of n; never in a run, set or act. `running` and the cut in
---   make are then never used
+--   make are then never used (so a memo made and read inside its reader's run is not modelled)
 -- - a change by a run names its computation (its latest run): the same in a synchronous run
 -- - the tracker's readers are listed in the order made (n), not the order the links were made: the
 --   due moments of one change can come in another order. nothing else depends on that order
@@ -114,6 +130,13 @@ structure Comp (K V : Type) where
   equal : V → V → Option Bool
   -- make's key: where its results land, its writer from the start
   key : Option K := none
+  -- an effect's: its acts go in the round's early queue, and it runs and acts when made
+  early : Bool := false
+  -- a compute's: made attended, it runs only while its key is tracked
+  attended : Bool := false
+  -- what its going writes (its teardowns', named by it), as an attended compute goes at a pulse's
+  -- end: the model has no other teardowns
+  goes : List (K × V) := []
 
 -- what f gave
 inductive Out (V : Type) where
@@ -173,7 +196,7 @@ def Event.moment {V : Type} : Event V → Bool
   | _ => true
 
 inductive Phase where
-  | runs | acts
+  | runs | acts | goes
   deriving DecidableEq, Repr
 
 -- the scheduler's state, and the host's store
@@ -207,8 +230,13 @@ structure State (K V : Type) where
   -- c.loop: the loop of the latest mark; c.looping
   loop : Nat → Option (List Nat)
   looping : Nat → Bool
-  -- the effects to act, in the order their runs ended
+  -- the effects to act, in the order their runs ended: the early ones, the others
+  earlies : List (Nat × V)
   acts : List (Nat × V)
+  -- an attended compute: asleep (made with its key untracked, or gone since)
+  asleep : Nat → Bool
+  -- the attended up whose key nobody tracks: going at the pulse's end, in the order they came
+  dying : List Nat
   -- a compute's last result given to set; an effect's last acted on
   last : Nat → Option V
   -- pulses ended
@@ -239,7 +267,10 @@ def empty : State K V where
   runs := fun _ => 0
   loop := fun _ => none
   looping := fun _ => false
+  earlies := []
   acts := []
+  asleep := fun _ => false
+  dying := []
   last := fun _ => none
   pulses := 0
   pulsing := false
@@ -356,6 +387,55 @@ def changed (cs : Nat → Comp K V) (s : State K V) (keys : List K) (who : Optio
   let w := r.filter fun c => match (cs c).kind with | .compute _ => true | .effect _ => false
   keys.foldl (fun s k => tell (learn s k w) k t r) s
 
+-- attended computes, early effects
+
+-- made early: an effect (scheduler.ts make: a compute is never early)
+def isearly (c : Comp K V) : Bool :=
+  c.early && match c.kind with
+    | .compute _ => false
+    | .effect _ => true
+
+-- someone tracks k (scheduler.ts tracked: its node has a link)
+def tracked (s : State K V) (k : K) : Bool := !(readers s k).isEmpty
+
+-- made attended: a compute (scheduler.ts make: an effect is never attended)
+def attends (c : Comp K V) : Bool :=
+  c.attended && match c.kind with
+    | .compute _ => true
+    | .effect _ => false
+
+-- scheduler.ts attending: k's attended compute, the latest made
+def attending (cs : Nat → Comp K V) (n : Nat) (k : K) : Option Nat :=
+  ((List.range n).filter fun c => attends (cs c) && decide ((cs c).key = some k)).getLast?
+
+-- scheduler.ts wake: k tracked again, its attended compute kept; asleep, it is woken: due at the
+-- next tick, from outside, and k's writer again. the TS also takes a kept one out of dying; here
+-- it stays there, and bury passes it over while its key is tracked (only the order of goings can
+-- differ)
+def wake (cs : Nat → Comp K V) (s : State K V) (k : K) : State K V :=
+  match attending cs s.made k with
+  | none => s
+  | some a =>
+    if s.asleep a then
+      let t := s.tick + 1
+      mark { s with asleep := put s.asleep a false, writers := put s.writers k (some a), tick := t }
+        a t none
+    else s
+
+-- wake, for each of these keys in turn
+def wakes (cs : Nat → Comp K V) (s : State K V) (ws : List K) : State K V := ws.foldl (wake cs) s
+
+-- scheduler.ts unread, for these keys: each nobody tracks now, its attended compute, up, going at
+-- the pulse's end
+def untrack1 (cs : Nat → Comp K V) (s : State K V) (k : K) : State K V :=
+  if tracked s k then s
+  else match attending cs s.made k with
+    | some a => if !s.asleep a && !s.dying.contains a then { s with dying := s.dying ++ [a] } else s
+    | none => s
+
+def untrack (cs : Nat → Comp K V) (s : State K V) (ks : List K) : State K V :=
+  ks.foldl (untrack1 cs) s
+
 -- reads
 
 -- the afters from w, at most f of them
@@ -375,9 +455,11 @@ def exec (cs : Nat → Comp K V) (c : Nat) : State K V → Prog K V → State K 
   | s, .pending => (s, .pending)
   | s, .read k next =>
     let x := s.store k
-    -- tracked
+    -- tracked; by nobody before: its attended compute woken
+    let fresh := !tracked s k
     let s := { s with reads := put s.reads c (s.reads c ++ [k]) }
     let s := edit s c fun r => { r with seen := r.seen ++ [(k, x)] }
+    let s := if fresh then wake cs s k else s
     match s.writers k with
     | none => exec cs c s (next x)
     | some w =>
@@ -445,7 +527,9 @@ def result (cs : Nat → Comp K V) (s : State K V) (c : Nat) (v : V) : State K V
     if flag.isSome && (!e || s.cut c) then finish s c .looping (some e) none flag
     else match (cs c).kind with
       | .effect _ =>
-        let s := if e then s else { s with acts := s.acts ++ [(c, v)] }
+        let s := if e then s
+          else if isearly (cs c) then { s with earlies := s.earlies ++ [(c, v)] }
+          else { s with acts := s.acts ++ [(c, v)] }
         finish s c .done (some e) none none
       | .compute _ =>
         if e then finish s c .done (some e) none none
@@ -466,7 +550,7 @@ def start (s : State K V) (c rank : Nat) : State K V :=
     went := put s.went c true, loop := put s.loop c none, ran := put s.ran c (some r),
     cause := put s.cause c (.mk (c, n) g), when := put s.when c s.pulses, cut := put s.cut c false,
     -- an effect acts on its latest run's value only
-    acts := s.acts.filter fun a => a.1 ≠ c }
+    earlies := s.earlies.filter fun a => a.1 ≠ c, acts := s.acts.filter fun a => a.1 ≠ c }
   say s (.starts c n rank)
 
 -- scheduler.ts first, after f gave o: stopped, failed, pending, or a result
@@ -482,8 +566,11 @@ def ending (cs : Nat → Comp K V) (s : State K V) (c : Nat) (o : Out V) : State
 -- scheduler.ts first: c's run, from its start to its end
 def first (cs : Nat → Comp K V) (s : State K V) (c rank : Nat) : State K V :=
   let (s, o) := exec cs c (start s c rank) (cs c).f
-  -- the run's end: the links it did not read again are dropped
+  -- the run's end: the links it did not read again are dropped; the keys nobody tracks now are
+  -- untracked
+  let old := s.reads c
   let s := { s with reads := put s.reads c (((s.ran c).map fun r => r.seen.map (·.1)).getD []) }
+  let s := untrack cs s old
   ending cs s c o
 
 -- acts
@@ -500,6 +587,29 @@ def act (cs : Nat → Comp K V) (s : State K V) (e : Nat) (v : V) : State K V :=
       let s := (g v p).foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) s
       let s := { s with last := put s.last e (some v) }
       say s (.acts e (((s.ran e).map (·.n)).getD 0))
+
+-- going
+
+-- scheduler.ts bury, for one: d (attended: the dying are), up, its key nobody's tracked, goes. not due; its teardowns' writes,
+-- named by it (so one that writes what d read makes d due again, asleep); asleep, it lets go of
+-- what it read (keys nobody tracks now are untracked: attended ones under them go too); its result
+-- forgotten, its latest run none (with its cut: scheduler.ts keeps cut on the run), and the
+-- harness's value at its key forgotten (no change said). it stays its key's writer
+def bury (cs : Nat → Comp K V) (s : State K V) (d : Nat) : State K V :=
+  match (cs d).key with
+  | none => s
+  | some k =>
+    if !attends (cs d) || s.asleep d || tracked s k then s
+    else
+      let s := { s with due := put s.due d none }
+      let s := (cs d).goes.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some d)) s
+      let old := s.reads d
+      let s := { s with
+        asleep := put s.asleep d true, reads := put s.reads d [], values := put s.values d [],
+        after := put s.after d none, last := put s.last d none, kept := put s.kept d [],
+        loop := put s.loop d none, looping := put s.looping d false, ran := put s.ran d none,
+        cut := put s.cut d false, store := put s.store k none }
+      untrack cs s old
 
 -- order
 
@@ -524,20 +634,31 @@ def next (rank : State K V → Nat → Nat) (s : State K V) : Option Nat :=
 
 -- pulses
 
--- one step of a pulse: a run (the run phase), an act (the act phase), or the next round. none:
--- nothing is due and no act is left, the pulse ends (scheduler.ts pulse's loop)
+-- the acts queued: the early ones, then the others
+def queue (s : State K V) : List (Nat × V) := s.earlies ++ s.acts
+
+-- one step of a pulse: a run (the run phase), an act (the act phase: the early ones first), a
+-- going (the going phase), or the next phase. none: nothing is due, no act is left and nothing is
+-- going, the pulse ends (scheduler.ts pulse's loop)
 def step (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) (s : State K V) :
     Option (State K V) :=
   match s.phase with
   | .runs => match next rank s with
     | some c => some (first cs s c (rank s c))
     | none => some { s with phase := .acts }
-  | .acts => match s.acts with
-    | a :: rest => some (act cs { s with acts := rest } a.1 a.2)
-    | [] =>
-      if (List.range s.made).any fun p => (s.due p).isSome then
-        some { s with phase := .runs, round := s.round + 1 }
-      else none
+  | .acts => match s.earlies with
+    | a :: rest => some (act cs { s with earlies := rest } a.1 a.2)
+    | [] => match s.acts with
+      | a :: rest => some (act cs { s with acts := rest } a.1 a.2)
+      | [] =>
+        if (List.range s.made).any fun p => (s.due p).isSome then
+          some { s with phase := .runs, round := s.round + 1 }
+        else if s.dying.isEmpty then none
+        else some { s with phase := .goes }
+  -- nothing due: the attended whose key nobody tracks go (scheduler.ts bury), then a check again
+  | .goes => match s.dying with
+    | d :: rest => some (bury cs { s with dying := rest } d)
+    | [] => some { s with phase := .acts }
 
 -- a pulse begins
 def begin (s : State K V) : State K V :=
@@ -562,21 +683,50 @@ def pulse (cs : Nat → Comp K V) (rank : State K V → Nat → Nat) (fuel : Nat
 
 -- the host
 
--- scheduler.ts make (compute, effect): the next computation, due at the next tick
-def make (cs : Nat → Comp K V) (s : State K V) : State K V :=
+-- an early effect's first act at its making, when its run queued one (scheduler.ts make: unact,
+-- then act)
+def actnow (cs : Nat → Comp K V) (s : State K V) (c : Nat) : State K V :=
+  match s.earlies.find? (·.1 == c) with
+  | some a => act cs { s with earlies := s.earlies.filter (·.1 ≠ c) } c a.2
+  | none => s
+
+-- scheduler.ts make (compute, effect): the next computation (grow: made, its key's writer, the
+-- tick), due at the next tick. attended, with
+-- its key nobody's tracked (or no key): asleep, not due. early: its first run now (at rank 0: it
+-- is after nothing yet), and its act
+def grow (cs : Nat → Comp K V) (s : State K V) : State K V :=
   let c := s.made
-  let s := { s with made := c + 1 }
+  let s := { s with made := c + 1, asleep := put s.asleep c false, kept := put s.kept c [] }
   let s := match (cs c).key with
     | some k => { s with writers := put s.writers k (some c) }
     | none => s
-  let t := s.tick + 1
-  mark { s with tick := t } c t none
+  { s with tick := s.tick + 1 }
+
+def make (cs : Nat → Comp K V) (s : State K V) : State K V :=
+  let c := s.made
+  let s := grow cs s
+  if attends (cs c) && !((cs c).key.any (tracked s ·)) then { s with asleep := put s.asleep c true }
+  else
+    let s := mark s c s.tick none
+    if isearly (cs c) then actnow cs (first cs s c 0) c else s
 
 -- the harness's write: each kept at its key, then mark(keys), from outside
 def write (cs : Nat → Comp K V) (s : State K V) (kvs : List (K × V)) : State K V :=
   changed cs (kvs.foldl (fun s kv => store s kv.1 kv.2) s) (kvs.map (·.1)) none
 
 -- what the theorems read
+
+-- the keys f may read, on some path
+def Prog.reads : Prog K V → K → Prop
+  | .value _, _ => False
+  | .error, _ => False
+  | .pending, _ => False
+  | .read k next, x => k = x ∨ ∃ v, (next v).reads x
+  | .write _ _ next, x => next.reads x
+
+-- no going writes (an attended compute's teardowns, as it goes at a pulse's end): see Quiescence's
+-- A2, and Model.Check's selfgo and endless for what such writes do
+def Quiet (cs : Nat → Comp K V) : Prop := ∀ c, (cs c).goes = []
 
 -- a run from scratch on a store: what f gives, and each key read with what was there (A2: a
 -- write in it is passed over)
@@ -775,5 +925,120 @@ def u3 := go hostcut u2
 #guard ((u3.ran 0).bind (·.ended), (u3.ran 0).map (·.seen), u3.store "c") ==
   (some .pending, some [("c", some (.num 1)), ("c", some (.num 1))], some (.num 7))
 #guard (eval u3.store (hostcut 0).f).1 == .value (.num 7)
+
+-- 63-attended-wakes: b attended is asleep till c tracks its key; then due, c waits for it
+def att (f : Prog String J) (k : String) : Comp String J :=
+  { cmp f k with key := some k, attended := true }
+def wakes : Nat → Comp String J
+  | 0 => att (.read "a" fun a => .value (.num (J.int a + 1))) "b"
+  | _ => cmp (.read "b" fun b => .value (.num (J.int b + 10))) "c"
+def w1 := go wakes (makes wakes 2 (write wakes empty [("a", .num 1)]))
+def w2 := go wakes (write wakes w1 [("a", .num 5)])
+#guard moments w1 0 == [.due 1 3 none, .starts 1 1 0, .due 0 4 none,
+  .ends 1 1 .stopped none (some 0) none, .starts 0 1 0, .ends 0 1 .done (some false) none none,
+  .starts 1 2 1, .ends 1 2 .done (some false) none none]
+#guard w1.store "c" == some (.num 12)
+#guard moments w2 1 == [.due 0 7 none, .starts 0 2 0, .due 1 8 (some 0),
+  .ends 0 2 .done (some false) none none, .starts 1 3 1, .ends 1 3 .done (some false) none none]
+#guard w2.store "c" == some (.num 16)
+
+-- 62-attended-asleep: nobody tracks its key, nothing runs
+def asl : Nat → Comp String J
+  | _ => att (.read "a" fun a => .value (.num (J.int a + 1))) "b"
+def z1 := go asl (write asl (go asl (make asl (write asl empty [("a", .num 1)]))) [("a", .num 2)])
+#guard z1.tick == 3 && z1.log == [] && z1.store "b" == none
+
+-- 64-attended-dies, 66-attended-from-scratch: its last reader drops it; it goes at the pulse's
+-- end, its value forgotten; tracked again, it runs from scratch
+def dies : Nat → Comp String J
+  | 0 => att (.read "a" fun a => .value (.num (J.int a + 1))) "b"
+  | _ => cmp (.read "flag" fun f => if f = some (.num 1) then .read "b" fun b => .value (b.getD .null)
+      else .value (.num 0)) "c"
+def y1 := go dies (makes dies 2 (write dies empty [("a", .num 1), ("flag", .num 1)]))
+def y2 := go dies (write dies y1 [("flag", .num 0)])
+def y3 := go dies (write dies y2 [("a", .num 2)])
+def y4 := go dies (write dies y3 [("flag", .num 1)])
+#guard moments y2 1 == [.due 1 7 none, .starts 1 3 1, .ends 1 3 .done (some false) none none]
+#guard (y2.asleep 0, y2.store "b", (y2.ran 0).isNone, y2.reads 0, y2.dying) == (true, none, true, [], [])
+#guard moments y3 2 == []
+-- c's start at rank 0: rk is rank.ts's of the edges now (the TS's ranks only rise: 1 there)
+#guard moments y4 3 == [.due 1 10 none, .starts 1 4 0, .due 0 11 none,
+  .ends 1 4 .stopped none (some 0) none, .starts 0 2 0, .ends 0 2 .done (some false) none none,
+  .starts 1 5 1, .ends 1 5 .done (some false) none none]
+#guard y4.store "c" == some (.num 3)
+
+-- 69-early-queue: an early effect runs and acts when made; after, a round's acts are the early
+-- ones', then the others'
+def queue : Nat → Comp String J
+  | 0 => eff (.read "a" fun a => .value (a.getD .null)) (fun _ _ => [])
+  | 1 => cmp (.read "a" fun a => .value (.num (J.int a + 1))) "c"
+  | 2 => { eff (.read "a" fun a => .value (a.getD .null)) (fun _ _ => []) with early := true }
+  | 3 => cmp (.read "c" fun c => .value (.num (J.int c + 1))) "d"
+  | _ => eff (.read "d" fun d => .value (d.getD .null)) (fun _ _ => [])
+def q1 := go queue (makes queue 5 (write queue empty [("a", .num 1)]))
+def q2 := go queue (write queue q1 [("a", .num 2)])
+def actsof (s : State String J) : List (Event J) :=
+  ((observations s).filter fun e => match e.event with | .act .. => true | _ => false).map (·.event)
+#guard actsof q1 == [.act 2 (.num 1) none, .act 0 (.num 1) none,
+  .act 4 (.num 3) none]
+#guard moments q1 0 == [.due 0 2 none, .due 1 3 none, .due 2 4 none, .starts 2 1 0,
+  .ends 2 1 .done (some false) none none, .acts 2 1, .due 3 5 none, .due 4 6 none,
+  .starts 0 1 0, .ends 0 1 .done (some false) none none, .starts 1 1 0,
+  .ends 1 1 .done (some false) none none, .starts 3 1 0, .ends 3 1 .done (some false) none none,
+  .starts 4 1 0, .ends 4 1 .done (some false) none none, .acts 0 1, .acts 4 1]
+#guard (actsof q2).drop 3 == [.act 2 (.num 2) (some (.num 1)),
+  .act 0 (.num 2) (some (.num 1)), .act 4 (.num 4) (some (.num 3))]
+
+-- 71-early-writes: an early act's write marks at once; what it makes due runs next round, and an
+-- effect it makes due does not act in this one
+def ew : Nat → Comp String J
+  | 0 => cmp (.read "w" fun w => .value (.num (J.int w + 1))) "cw"
+  | 1 => eff (.read "a" fun a => .value (a.getD .null)) (fun _ _ => [])
+  | 2 => eff (.read "a" fun a => .read "w" fun w => .value (.pair (a.getD .null) (w.getD .null)))
+      (fun _ _ => [])
+  | _ => { eff (.read "a" fun a => .value (a.getD .null))
+      (fun v _ => [("w", .num (2 * J.int (some v)))]) with early := true }
+def e1 := go ew (make ew (go ew (makes ew 3 (write ew empty [("a", .num 1), ("w", .num 0)]))))
+def e2 := go ew (write ew e1 [("a", .num 2)])
+#guard ((observations e1).filter fun e => match e.event with
+  | .act c .. => c == 1 || c == 2 | _ => false).map (·.event) ==
+  [.act 1 (.num 1) none, .act 2 (.pair (.num 1) (.num 0)) none,
+   .act 2 (.pair (.num 1) (.num 2)) (some (.pair (.num 1) (.num 0)))]
+#guard moments e2 2 == [.due 1 9 none, .due 2 9 none, .due 3 9 none, .starts 1 2 0,
+  .ends 1 2 .done (some false) none none, .starts 2 3 0, .ends 2 3 .done (some false) none none,
+  .starts 3 2 0, .ends 3 2 .done (some false) none none, .due 0 10 (some 3), .due 2 10 (some 3),
+  .acts 3 2, .acts 1 2, .starts 0 3 0, .ends 0 3 .done (some false) none none, .starts 2 4 0,
+  .ends 2 4 .done (some false) none none, .acts 2 4]
+#guard e2.store "cw" == some (.num 5)
+
+-- a pulse that never ends (termination fails with going's writes; the TS the same, scratch). a and
+-- b attended; r reads x, then a if x is even, else b. a's going writes x := 2, b's x := 1. x odd:
+-- r drops a, tracks b (b wakes, r waits). nothing due: a goes, writing x := 2: r drops b, tracks a
+-- (a wakes). nothing due: b goes, writing x := 1, and round again. no edge of feeds goes back (a
+-- and b read nothing; r writes only r), no run writes, no cause is kept: a wake is from outside
+def endless : Nat → Comp String J
+  | 0 => { att (.value (.num 0)) "a" with goes := [("x", .num 2)] }
+  | 1 => { att (.value (.num 0)) "b" with goes := [("x", .num 1)] }
+  | _ => cmp (.read "x" fun x => if J.int x % 2 = 0 then .read "a" fun a => .value (a.getD .null)
+      else .read "b" fun b => .value (b.getD .null)) "r"
+def n1 := go endless (makes endless 3 (write endless empty [("x", .num 0)]))
+def n2 := write endless n1 [("x", .num 1)]
+#guard moments n1 0 == [.due 2 4 none, .starts 2 1 0, .due 0 5 none,
+  .ends 2 1 .stopped none (some 0) none, .starts 0 1 0, .ends 0 1 .done (some false) none none,
+  .starts 2 2 1, .ends 2 2 .done (some false) none none]
+#guard (pulse endless rk 100 n2).isNone && (pulse endless rk 3000 n2).isNone
+
+-- a going that writes what it read (no Quiet): its teardown's write is a change named by it, so it
+-- marks the going one itself (its reads not yet dropped): asleep and due. the round goes on and it
+-- runs while asleep, its key untracked, and stays so, holding its reads (the TS the same: bury runs
+-- the teardowns before it untracks)
+def selfgo : Nat → Comp String J
+  | 0 => { att (.read "x" fun x => .value (x.getD .null)) "a" with goes := [("x", .num 5)] }
+  | _ => cmp (.read "flag" fun f => if J.int f = 1 then .read "a" fun a => .value (a.getD .null)
+      else .value (.num 0)) "c"
+def g1 := go selfgo (makes selfgo 2 (write selfgo empty [("x", .num 1), ("flag", .num 1)]))
+def g2 := go selfgo (write selfgo g1 [("flag", .num 0)])
+#guard (g1.asleep 0, (g1.ran 0).isSome) == (false, true)
+#guard (g2.asleep 0, (g2.ran 0).isSome, g2.reads 0, g2.store "x") == (true, true, ["x"], some (.num 5))
 
 end Model.Check

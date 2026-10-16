@@ -34,6 +34,21 @@
 //    key) and its node's value
 // { op: "kinds" }                           → { types }   each name in the cache folder and its node's
 //    ermine.type (null: none)
+// steps (builds.step), the runs by name, each counting its calls, each reading through places:
+//   sum     code: ids; the sum of their values      pick  code: an id; the value of the node its
+//   parity  code: an id; { odd } of its value             value names
+//   label   code: an id; "odd" or "even", by its     wait  code: an id; its value, once settled
+//           value's odd                              oops  code: an id; reads it, throws Error("oops")
+//   tick    code: an id; reads it, gives how many times tick has been called
+// { op: "step", name, run, code, never?, into? } → {}   a computer, in a scope of its own, named:
+//    each run, builds.step(run, code, the run named, { never }), its result kept as it is (equal
+//    to the last, by identity: nothing set); into: each result set written as the value entry
+//    there (an Error: not written)
+// { op: "found", name }                     → { found, entry, checked, entries }   what its last
+//    run's step found (builds' onStep): hit, miss or never; the entry hit (null: none)
+// { op: "ran" }                             → { sum, pick, parity, label, wait, oops, tick }
+// { op: "entries", run, code }              → { entries }   the step's entries, newest first: each
+//    { name, reads, output }, reads as [part, id, path] (no hashes)
 import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
@@ -43,7 +58,16 @@ import { createChangeHeader } from "@ermine/places/header"
 import { upsert } from "@ermine/places/upsert"
 import type { Value } from "@ermine/encoding/cbor"
 import { type Request, serve } from "../../../conformance/typescript/harness.ts"
-import { BuildError, type Builds, type Compiler, createBuilds } from "./build.ts"
+import { hash } from "@ermine/encoding/hash"
+import {
+	BuildError,
+	type Builds,
+	type Compiler,
+	createBuilds,
+	type Found,
+	type Read,
+	TRACE,
+} from "./build.ts"
 
 type Json = unknown
 
@@ -74,11 +98,45 @@ const compilers: Record<string, Compiler> = {
 	live: () => (calls.live++, (() => {}) as never),
 }
 
+// the step runs, and their calls
+const ran: Record<string, number> = {
+	sum: 0,
+	pick: 0,
+	parity: 0,
+	label: 0,
+	wait: 0,
+	oops: 0,
+	tick: 0,
+}
+const value = (id: unknown) => places.readValue("value", id as Id)
+const runs: Record<string, (code: Json) => unknown> = {
+	sum: (ids) => (ran.sum++, (ids as Id[]).reduce((n, id) => n + (value(id) as number), 0)),
+	pick: (id) => (ran.pick++, value(value(id))),
+	parity: (id) => (ran.parity++, { odd: (value(id) as number) % 2 === 1 }),
+	label: (id) => (ran.label++, (value(id) as { odd?: boolean })?.odd ? "odd" : "even"),
+	wait: (id) => {
+		ran.wait++
+		const v = value(id) as Value
+		return new Promise<Value>((resolve, reject) =>
+			waiting.push({ resolve: () => resolve(v), reject })
+		)
+	},
+	oops: (id) => {
+		ran.oops++
+		value(id)
+		throw new Error("oops")
+	},
+	tick: (id) => (value(id), ++ran.tick),
+}
+const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
+
 let builds: Builds | undefined
 let cache: Id | undefined
 let made: Scope[] = []
 const scopes = new Map<string, Scope>()
-const watched = new Map<string, { runs: number; value: unknown }>()
+const watched = new Map<string, { runs: number; value: unknown; found?: Found }>()
+// what each watch's runs found, by its computer
+const finding = new WeakMap<object, { found?: Found }>()
 
 // a result as JSON
 function shown(v: unknown): Json {
@@ -122,12 +180,16 @@ async function answer(r: Request): Promise<Json> {
 			builds?.stop()
 			cache = r.cache
 			builds = hosted(() => createBuilds({ scheduler: s, table, places, cache: r.cache }))
+			builds.onStep((f) => {
+				const w = finding.get(s.getRun()?.computer as object)
+				if (w !== undefined) w.found = f
+			})
 			return {}
 		}
 		case "watch": {
 			const b = builds
 			if (b === undefined) throw new Error("no builds")
-			const o = s.createScope([], host)
+			const o = s.createScope([["watch", r.name]], host)
 			made.push(o)
 			scopes.set(r.name, o)
 			const w = { runs: 0, value: undefined as unknown }
@@ -143,6 +205,58 @@ async function answer(r: Request): Promise<Json> {
 					return { v }
 				}, ({ v }) => void (w.value = v)))
 			return {}
+		}
+		case "step": {
+			const b = builds
+			if (b === undefined) throw new Error("no builds")
+			const run = runs[r.run]
+			if (run === undefined) throw new Error(`no run ${r.run}`)
+			const o = s.createScope([["watch", r.name]], host)
+			made.push(o)
+			scopes.set(r.name, o)
+			const w: { runs: number; value: unknown; found?: Found } = { runs: 0, value: undefined }
+			watched.set(r.name, w)
+			const c = s.runWithScope(o, () =>
+				s.createComputer(() => {
+					w.runs++
+					w.found = undefined
+					return w.value = b.step(r.run, r.code, () => run(r.code), {
+						never: r.never === true,
+					})
+				}, (v) => {
+					if (r.into !== undefined && !(v instanceof Error)) {
+						table.sub("value", r.into, createEntry(v, header()))
+					}
+				}))
+			finding.set(c, w)
+			return {}
+		}
+		case "found": {
+			const f = watchOf(r.name).found
+			if (f === undefined) return { found: null, entry: null, checked: 0, entries: 0 }
+			return { found: f.found, entry: f.entry ?? null, checked: f.checked, entries: f.entries }
+		}
+		case "ran":
+			return { ...ran }
+		case "entries": {
+			if (cache === undefined) throw new Error("no builds")
+			const key = hex(hash([r.run, r.code] as Value))
+			const folder = (table.get("children", cache)?.value as Record<string, Id> | undefined)
+				?.[key]
+			const kids = folder === undefined
+				? {}
+				: (table.get("children", folder)?.value ?? {}) as Record<string, Id>
+			const entries = Object.entries(kids)
+				.sort((a, b) => Number(b[0]) - Number(a[0]))
+				.map(([name, id]) => {
+					const reads = (table.get("attributes", id)?.value as Record<string, Read[]>)[TRACE]
+					return {
+						name,
+						reads: reads.map(([part, id, path]) => [part, id, path]),
+						output: table.get("value", id)?.value ?? null,
+					}
+				})
+			return { entries }
 		}
 		case "stop": {
 			const o = scopes.get(r.name)

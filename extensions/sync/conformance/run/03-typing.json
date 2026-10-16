@@ -1,0 +1,76 @@
+{
+	"title": "a chain of typing: each parent the commit before (null), each insert going on from the last a string",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "body": "" } }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"time": 1760000000,
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"time": 1760000000,
+			"nonce": 3,
+			"parents": ["b"],
+			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+		},
+		{
+			"op": "make",
+			"name": "d",
+			"time": 1760000001,
+			"nonce": 4,
+			"parents": ["c"],
+			"patches": [{ "path": ["body"], "range": [2, 2], "value": "!" }]
+		},
+		{
+			"op": "pack",
+			"commits": ["a", "b", "c", "d"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9440064626173658182f6f944006474696d654880e0bb8e0d000002656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728182f6f94400667369676e6572818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94400676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565a164626f64796081a364706174688164626f64796572616e676582f90000f900006576616c75656168616961216865787465726e616c8182f6f94400686d657461646174618182f6f944006a7369676e61747572657359010056705f63f61790671b7308ccccc60b63f0808e37293573fe73253c88ea63e7376aa063d5bb2a1eb08ecdacfd682ff9ab312f69b5b4e5040ac396fd259c120d0b35ad2901f1af43800fb230511c5ec1252ffae8035d4e645187278748e78c5b1343ced12fe24a7d33f7d11a9e5796dfcd7b0d22364e8272bc98ba184530b41907f6edbe96a03b24a5f83d77a39b6758512ec0be39bd3d374ca74af5c644d9f8c73ce222be27087937bcaab6b3367c8a299e0283d9f535fa09fd7e378d1fd0a5073c74ee64535bfa9ac1521315f3d7d2cbb8a7a26257224abac578c1db69fb280a7cdd48506128de47e83746af2c8d58ef0cc39d831d639cd04510cfdb06913d03"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 4,
+					"base": [[null, 4]],
+					"time": { "/": { "bytes": "gOC7jg0AAAI" } },
+					"actor": [[null, 4]],
+					"nonce": { "/": { "bytes": "AgICAg" } },
+					"table": [["value", 4]],
+					"reader": [[null, 4]],
+					"signer": [[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 4]],
+					"lamport": { "/": { "bytes": "AgICAg" } },
+					"parents": [[], null, null, null],
+					"patches": [
+						[{ "path": [], "value": { "body": "" } }],
+						[{ "path": ["body"], "range": [0, 0], "value": "h" }],
+						"i",
+						"!"
+					],
+					"external": [[null, 4]],
+					"metadata": [[null, 4]],
+					"signatures": {
+						"/": {
+							"bytes": "VnBfY/YXkGcbcwjMzMYLY/CAjjcpNXP+cyU8iOpj5zdqoGPVuyoesI7NrP1oL/mrMS9ptbTlBArDlv0lnBINCzWtKQHxr0OAD7IwURxewSUv+ugDXU5kUYcnh0jnjFsTQ87RL+JKfTP30RqeV5bfzXsNIjZOgnK8mLoYRTC0GQf27b6WoDskpfg9d6ObZ1hRLsC+Ob09N0ynSvXGRNn4xzziIr4nCHk3vKq2szZ8iimeAoPZ9TX6Cf1+N40f0KUHPHTuZFNb+prBUhMV89fSy7inomJXIkq6xXjB22n7KAp83UhQYSjeR+g3Rq8sjVjvDMOdgx1jnNBFEM/bBpE9Aw"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d"] } }
+	]
+}

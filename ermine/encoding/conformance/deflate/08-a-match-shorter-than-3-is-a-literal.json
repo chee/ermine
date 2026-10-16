@@ -1,0 +1,12 @@
+{
+	"title": "a match shorter than 3 is a literal",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "6162786162",
+			"expect": {
+				"bytes": "4b4caa484c0200"
+			}
+		}
+	]
+}

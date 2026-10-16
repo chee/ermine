@@ -1,0 +1,153 @@
+{
+	"title": "an early effect whose result is equal to the one it last acted on does not act",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"mod": [
+					{
+						"read": "a"
+					},
+					2
+				]
+			},
+			"act": {
+				"log": [
+					"x",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 3
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 2
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 1,
+						"early": true
+					},
+					{
+						"due": "x",
+						"tick": 3
+					},
+					{
+						"starts": "x",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 4
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "x",
+						"tick": 4
+					},
+					{
+						"starts": "x",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 3,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						1
+					],
+					[
+						"x",
+						0
+					]
+				]
+			}
+		}
+	]
+}

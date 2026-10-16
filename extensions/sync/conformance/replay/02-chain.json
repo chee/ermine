@@ -1,0 +1,74 @@
+{
+	"title": "along a chain, each commit's tables are its patches applied in order from the root",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0, "list": [] } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"time": 1,
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"time": 2,
+			"patches": [{ "path": ["list"], "range": [0, 0], "value": [1, 2] }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["c"],
+			"time": 3,
+			"patches": [{ "path": ["list"], "range": [0, 1] }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 0, "list": [] }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 1, "list": [] }, "change": { "time": 1, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "c",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "n": 1, "list": [1, 2] },
+						"change": { "time": 2, "actor": null }
+					}
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "d",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 1, "list": [2] }, "change": { "time": 3, "actor": null } }
+				}
+			}
+		}
+	]
+}

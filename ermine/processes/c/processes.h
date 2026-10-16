@@ -42,9 +42,12 @@ typedef struct {
 // the processes running under root, by path: the leaf at here's path + the name. a walk from an id
 // alone, its path not known: nothing. names: every name directly under here's path, a leaf or a
 // level (processes deeper, no id: the walk goes through it, pl_list and pl_members_at show it).
-// Reads through the places it is handed
+// Reads through the places it is handed. Pruning (places.h): no level at here's path + the name (no
+// leaf, nothing, or under a leaf): PL_NONE, so the walk asks it nothing more under there; the read
+// that said so is of all under that path, so a start anywhere under it marks the walk and one
+// elsewhere does not. No names under here's path: none too. A walk from an id alone: none at once
 void pr_processes_init(pr_processes *p, tb_key root);
-// the same walk of a trie of ids by path on root's part (ermine/boxes' boxed items): from, what its
+// the same walk of a trie of ids by path on root's part (any rows kept the same way): from, what its
 // answers say. part and from outlive the places
 void pr_trie_init(pr_processes *p, const char *part, tb_key root, const char *from);
 

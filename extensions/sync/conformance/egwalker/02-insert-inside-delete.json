@@ -1,0 +1,126 @@
+{
+	"title": "text put in inside a range taken out concurrently stays; the rest of the range goes",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"text": "abcdef"
+					}
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"text"
+					],
+					"range": [
+						1,
+						5
+					]
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"text"
+					],
+					"range": [
+						3,
+						3
+					],
+					"value": "XY"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"text": "aXYf"
+						},
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [
+						"text"
+					],
+					"range": [
+						0,
+						6
+					],
+					"value": "new"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"a",
+				"b",
+				"c"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": {
+							"text": "newXY"
+						},
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		}
+	]
+}

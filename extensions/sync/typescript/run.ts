@@ -11,17 +11,75 @@
 //   parents: null when they are exactly the commit before's name (a run of typing, as a rule);
 //            else each parent by its place in the run, or its name when it is not in it
 //   base: as parents' refs, null when there is none
+//   merge: runs of the rule's name, null when there is none; the column only when a commit in the
+//          run is a merge by a rule
 //   patches: a string when the commit is one insert going on from the commit before's last (at
 //            the same path, where that one's text ended): its text; else the patches as they are
 //   signatures: every one, 64 bytes each, end to end: what is left, about 70 bytes a commit
+//
+// a ref (parents, base): a commit earlier in the run by its place, else its name. unpack takes any
+// run whose columns say the commits (a run split in two, a parent written out, an insert as a
+// list): only pack's own spelling is the one the same commits give. refused, the first that says
+// no, as RunError's code (and column):
+//   not-a-run    not CBOR, not a map, or a key that is no column (the first in canonical order)
+//   count        n not a whole number
+//   signatures   not bytes, or not 64 bytes for each commit
+//   runs         a column of runs (table, actor, reader, external, metadata, signer, base, merge,
+//                in this order): not a list of [value, how many ≥ 1], or not n values
+//   differences  a column of differences (time, nonce, lamport): not bytes, a number cut short or
+//                longer than 8 bytes, bytes left over, or one past 2^53 - 1 either way
+//   parents      not a list of n; or one: not a list of refs, or null for the first
+//   patches      not a list of n; or one: not a list or a string
+//   ref          a place not a whole number below the commit's own
+//   insert       a string with no insert before it to go on from
+//   commit       what the columns say for one is not a commit (commit.ts)
+// then, in order, each commit: its parents, its patches, its base, the commit
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
 
+export type Code =
+	| "not-a-run"
+	| "count"
+	| "signatures"
+	| "runs"
+	| "differences"
+	| "parents"
+	| "patches"
+	| "ref"
+	| "insert"
+	| "commit"
+
 export class RunError extends Error {
-	constructor(why: string) {
-		super(why)
+	constructor(readonly code: Code, readonly column?: string) {
+		super(column === undefined ? code : `${code} (${column})`)
 	}
+}
+
+const COLUMNS: ReadonlySet<string> = new Set([
+	"n",
+	"table",
+	"actor",
+	"reader",
+	"external",
+	"metadata",
+	"signer",
+	"time",
+	"nonce",
+	"lamport",
+	"parents",
+	"base",
+	"merge",
+	"patches",
+	"signatures",
+])
+const utf8 = new TextEncoder()
+// canonical order: shorter first, then bytewise
+function canonical(a: string, b: string): number {
+	const x = utf8.encode(a), y = utf8.encode(b)
+	if (x.length !== y.length) return x.length - y.length
+	for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]
+	return 0
 }
 
 type Ref = number | Uint8Array
@@ -38,55 +96,76 @@ function runs(values: unknown[]): [unknown, number][] {
 	}
 	return out
 }
-function unruns(r: unknown, n: number): unknown[] {
-	if (!Array.isArray(r)) throw new RunError("a column of runs")
+function unruns(r: unknown, n: number, column: string): unknown[] {
+	if (!Array.isArray(r)) throw new RunError("runs", column)
 	const out: unknown[] = []
 	for (const pair of r) {
+		// counted before it is spread: a run's count is no bigger than n
 		if (
-			!Array.isArray(pair) || pair.length !== 2 || !Number.isSafeInteger(pair[1]) || pair[1] < 1
+			!Array.isArray(pair) || pair.length !== 2 || !Number.isSafeInteger(pair[1]) ||
+			pair[1] < 1 || out.length + pair[1] > n
 		) {
-			throw new RunError("a run")
+			throw new RunError("runs", column)
 		}
 		for (let i = 0; i < pair[1]; i++) out.push(pair[0])
 	}
-	if (out.length !== n) throw new RunError("a column's length")
+	if (out.length !== n) throw new RunError("runs", column)
 	return out
 }
 
 // whole numbers as the first, then each one's difference from the one before, each zigzag (0, -1,
-// 1, -2 … to 0, 1, 2, 3 …) and seven bits a byte, the high bit set on all but the last
+// 1, -2 … to 0, 1, 2, 3 …) and seven bits a byte, the high bit set on all but the last. a
+// difference is at most 2^53 - 1 either way, so its zigzag at most 2^54 - 2: 8 bytes. past 2^52 a
+// float would round it (2d + 1), so it is worked out whole
 function deltas(xs: number[]): Uint8Array {
 	const out: number[] = []
 	xs.forEach((x, i) => {
 		const d = i === 0 ? x : x - xs[i - 1]
-		let z = d >= 0 ? 2 * d : -2 * d - 1
-		while (z >= 128) {
-			out.push(z % 128 + 128)
-			z = Math.floor(z / 128)
+		if (Math.abs(d) < 2 ** 52) {
+			let z = d >= 0 ? 2 * d : -2 * d - 1
+			while (z >= 128) {
+				out.push(z % 128 + 128)
+				z = Math.floor(z / 128)
+			}
+			out.push(z)
+			return
 		}
-		out.push(z)
+		let z = d >= 0 ? 2n * BigInt(d) : -2n * BigInt(d) - 1n
+		while (z >= 128n) {
+			out.push(Number(z % 128n) + 128)
+			z /= 128n
+		}
+		out.push(Number(z))
 	})
 	return Uint8Array.from(out)
 }
-function undeltas(b: unknown, n: number): number[] {
-	if (!(b instanceof Uint8Array)) throw new RunError("a column of differences")
+function undeltas(b: unknown, n: number, column: string): number[] {
+	if (!(b instanceof Uint8Array)) throw new RunError("differences", column)
 	const out: number[] = []
 	let at = 0
 	for (let i = 0; i < n; i++) {
-		let z = 0, scale = 1
-		for (;;) {
-			if (at >= b.length || scale > 2 ** 56) throw new RunError("a column of differences")
+		// seven bytes as a float, exactly (49 bits); an eighth, whole
+		let z = 0, scale = 1, big: bigint | undefined
+		for (let k = 0;; k++) {
+			if (at >= b.length || k >= 8) throw new RunError("differences", column)
 			const byte = b[at++]
-			z += (byte % 128) * scale
+			if (k < 7) z += (byte % 128) * scale
+			else big = BigInt(z) + BigInt(byte % 128) * 2n ** 49n
 			if (byte < 128) break
 			scale *= 128
 		}
-		const d = z % 2 === 0 ? z / 2 : -(z + 1) / 2
+		let d: number
+		if (big === undefined) d = z % 2 === 0 ? z / 2 : -(z + 1) / 2
+		else {
+			const w = big % 2n === 0n ? big / 2n : -(big + 1n) / 2n
+			if (w > 2n ** 53n || w < -(2n ** 53n)) throw new RunError("differences", column)
+			d = Number(w)
+		}
 		const x = i === 0 ? d : out[i - 1] + d
-		if (!Number.isSafeInteger(x)) throw new RunError("a column of differences")
+		if (!Number.isSafeInteger(x)) throw new RunError("differences", column)
 		out.push(x)
 	}
-	if (at !== b.length) throw new RunError("a column of differences")
+	if (at !== b.length) throw new RunError("differences", column)
 	return out
 }
 
@@ -117,8 +196,13 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 		names.push(hex(nameOf(o.commit)))
 		signatures.set(o.signature, 64 * i)
 	})
-	const place = new Map(names.map((n, i) => [n, i]))
-	const ref = (p: Uint8Array): Ref => place.get(hex(p)) ?? p
+	// each commit's first place; a ref only ever to one before it, as unpack reads them in order
+	const place = new Map<string, number>()
+	names.forEach((n, i) => place.has(n) || place.set(n, i))
+	const ref = (p: Uint8Array, i: number): Ref => {
+		const j = place.get(hex(p))
+		return j !== undefined && j < i ? j : p
+	}
 	const columns: Record<string, unknown> = {
 		n: commits.length,
 		table: runs(commits.map((c) => c.table)),
@@ -133,9 +217,9 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 		parents: commits.map((c, i) =>
 			i > 0 && c.parents.length === 1 && hex(c.parents[0]) === names[i - 1]
 				? null
-				: c.parents.map(ref)
+				: c.parents.map((p) => ref(p, i))
 		),
-		base: runs(commits.map((c) => c.base === undefined ? null : ref(c.base))),
+		base: runs(commits.map((c, i) => c.base === undefined ? null : ref(c.base, i))),
 		patches: commits.map((c, i) => {
 			const p = c.patches[0], want = after(commits[i - 1])
 			if (
@@ -147,6 +231,9 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 		}),
 		signatures,
 	}
+	if (commits.some((c) => c.merge !== undefined)) {
+		columns.merge = runs(commits.map((c) => c.merge ?? null))
+	}
 	return cbor.encode(columns as cbor.Value)
 }
 
@@ -156,34 +243,38 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 	try {
 		x = cbor.decode(bytes)
 	} catch {
-		throw new RunError("not cbor")
+		throw new RunError("not-a-run")
 	}
 	if (x === null || typeof x !== "object" || Array.isArray(x) || ArrayBuffer.isView(x)) {
-		throw new RunError("not a map")
+		throw new RunError("not-a-run")
 	}
 	const o = x as Record<string, unknown>
+	const stray = Object.keys(o).filter((k) => !COLUMNS.has(k)).sort(canonical)
+	if (stray.length) throw new RunError("not-a-run", stray[0])
 	const n = o.n
-	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new RunError("n")
+	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new RunError("count")
 	const count = n as number
 	const signatures = o.signatures
 	if (!(signatures instanceof Uint8Array) || signatures.length !== 64 * count) {
 		throw new RunError("signatures")
 	}
-	const table = unruns(o.table, count),
-		actor = unruns(o.actor, count),
-		reader = unruns(o.reader, count)
-	const external = unruns(o.external, count), metadata = unruns(o.metadata, count)
-	const signer = unruns(o.signer, count), base = unruns(o.base, count)
-	const time = undeltas(o.time, count),
-		nonce = undeltas(o.nonce, count),
-		lamport = undeltas(o.lamport, count)
+	const table = unruns(o.table, count, "table"),
+		actor = unruns(o.actor, count, "actor"),
+		reader = unruns(o.reader, count, "reader")
+	const external = unruns(o.external, count, "external"),
+		metadata = unruns(o.metadata, count, "metadata")
+	const signer = unruns(o.signer, count, "signer"), base = unruns(o.base, count, "base")
+	const merge = "merge" in o ? unruns(o.merge, count, "merge") : undefined
+	const time = undeltas(o.time, count, "time"),
+		nonce = undeltas(o.nonce, count, "nonce"),
+		lamport = undeltas(o.lamport, count, "lamport")
 	if (!Array.isArray(o.parents) || o.parents.length !== count) throw new RunError("parents")
 	if (!Array.isArray(o.patches) || o.patches.length !== count) throw new RunError("patches")
 	const names: Uint8Array[] = [], commits: Commit[] = [], out: Uint8Array[] = []
 	const deref = (r: unknown, i: number): Uint8Array => {
 		if (r instanceof Uint8Array) return r
 		if (!Number.isSafeInteger(r) || (r as number) < 0 || (r as number) >= i) {
-			throw new RunError("a ref")
+			throw new RunError("ref")
 		}
 		return names[r as number]
 	}
@@ -197,7 +288,7 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		const p = o.patches[i]
 		if (typeof p === "string") {
 			const want = after(commits[i - 1])
-			if (want === undefined) throw new RunError("an insert going on from nothing")
+			if (want === undefined) throw new RunError("insert")
 			patches = [{ ...want, value: p }]
 		} else if (Array.isArray(p)) patches = p as Patch[]
 		else throw new RunError("patches")
@@ -215,11 +306,12 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		if (external[i] !== null) c.external = external[i] as Commit["external"]
 		if (metadata[i] !== null) c.metadata = metadata[i] as Commit["metadata"]
 		if (base[i] !== null) c.base = deref(base[i], i)
+		if (merge !== undefined && merge[i] !== null) c.merge = merge[i] as string
 		let b: Uint8Array
 		try {
 			b = encode(c)
 		} catch {
-			throw new RunError("a commit")
+			throw new RunError("commit")
 		}
 		commits.push(c)
 		names.push(nameOf(b))

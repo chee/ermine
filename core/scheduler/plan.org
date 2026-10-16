@@ -63,10 +63,15 @@ s.changed(keys, by?)                  // these landed
   userland library even if it's all there in the graph. finding conflicts, finding pendings,
   finding latest. that's all userland i think"
 - scopes, 10-13 (the code is the truth):
-  - one tree: owner (what is made in it goes under it) and change info (pairs, a write's = each
-    scope's from the root down, outermost first)
+  - one tree: owner (what is made in it goes under it) and change info (pairs, then ["owner", the
+    owner's info], nested; a write's = the open scope's). 10-15, was flat from the root down:
+    "the change array should nest as you join new scopes ... so it can be recursively
+    Object.fromEntries'd to get a trace"; the key: "maybe we should call it `owner`"
+  - no pairs: "empty", 10-15: "what is a "scope with no info"? that should be illegal"
+  - the process API never makes scopes, 10-15: "we're not going to allow creating scopes in the
+    process api"; the process code makes them (calls: caller, trusted)
   - nothing open: scope, compute, effect, cleanup throw "unscoped"
-  - a run opens its own computation, info [["run", n], ["mark", tick]]
+  - a run opens its own computation, info [["run", n], ["mark", tick], ["owner", …]]
   - after an await nothing is open, so nothing is made there and no write is somebody else's,
     *decided*: "is there a way we can ensure that after an await they won't have ANY current
     change/owner? like, it won't accidentally be somebody else's right?"; on reads after an await:

@@ -613,7 +613,8 @@ op_value *world_basic(const op_value *e, op_value *(*eval)(const op_value *e, vo
 		const sc_pair *info = world_info(x->items[0], &n);
 		sc_scope *o = sc_create_scope(world_scheduler, info, n, NULL);
 		if (o == NULL) {
-			*error = world_copy(sc_get_current_scope(world_scheduler) ? SC_DISPOSED : SC_UNSCOPED);
+			sc_scope *open = sc_get_current_scope(world_scheduler);
+			*error = world_copy(open == NULL ? SC_UNSCOPED : sc_scope_alive(open) ? SC_EMPTY : SC_DISPOSED);
 			return NULL;
 		}
 		inside in = {eval, ctx, x->items[1], NULL};
@@ -910,12 +911,14 @@ static op_value *world_answer(const op_value *r) {
 		size_t n;
 		const sc_pair *info = world_info(op_get(r, "info"), &n);
 		sc_scope *o;
-		if (op[0] == 'r') o = sc_create_root_scope(world_scheduler, info, n);
-		else {
+		if (op[0] == 'r') {
+			o = sc_create_root_scope(world_scheduler, info, n);
+			if (o == NULL) return world_error(SC_EMPTY);
+		} else {
 			sc_scope *parent = world_scope(world_text(op_get(r, "parent")));
 			if (parent == NULL) return world_error("no such scope");
 			o = sc_create_scope(world_scheduler, info, n, parent);
-			if (o == NULL) return world_error(SC_DISPOSED);
+			if (o == NULL) return world_error(sc_scope_alive(parent) ? SC_EMPTY : SC_DISPOSED);
 		}
 		char *bad = world_name(o, world_text(op_get(r, "name")));
 		if (bad) return world_error_take(bad);

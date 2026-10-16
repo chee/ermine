@@ -58,3 +58,5 @@ __pycache__/
 .graveyard/core/graph/c/ermine-asan
 **/benchmarks/results/
 .vite/
+# the native fixtures the root Makefile builds (playground/programs/c/fixtures)
+**/c/fixtures/*.so

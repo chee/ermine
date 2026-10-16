@@ -1,0 +1,80 @@
+{
+	"title": "a column of runs: [value, how many] for each stretch of the same value",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"actor": "chee",
+			"patches": [{ "path": [], "value": 1 }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": ["a"],
+			"actor": "chee",
+			"table": "attributes",
+			"patches": [{ "path": [], "value": {} }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"nonce": 3,
+			"parents": ["b"],
+			"actor": { "name": "juno" },
+			"table": "attributes",
+			"patches": []
+		},
+		{
+			"op": "make",
+			"name": "d",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"nonce": 4,
+			"parents": ["c"],
+			"actor": { "name": "juno" },
+			"patches": []
+		},
+		{ "op": "make", "name": "e", "nonce": 5, "parents": ["d"], "actor": "chee", "patches": [] },
+		{
+			"op": "pack",
+			"commits": ["a", "b", "c", "d", "e"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9450064626173658182f6f945006474696d65450000000000656163746f7283826463686565f9400082a1646e616d65646a756e6ff94000826463686565f93c00656e6f6e6365450202020202657461626c6583826576616c7565f93c00826a61747472696275746573f94000826576616c7565f94000667265616465728182f6f94500667369676e6572838258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf940008258208139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f940008258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c00676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a26470617468806576616c7565f93c0081a26470617468806576616c7565a08080806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573590140ed5fd313d90c9c597627e086d4acb28a20e31a40a804569d12c7202b78611d06bf3c3fecabecf917e5bfe5f92baa1d86367d4fe7a5412d48813bad7a558ff003ed9fc6eecbc0f3f743293453c25b4bbf00bfa2839ac6527920e5987d9c0b719553326d02e8d4a992297e8f4b63d4d2f17e1972bdc1694c6411111b748780590aba85d08543a4ec485c7667ac522089893dff18e219de474227e533f6f7f74ba647ba69d38db4258fb96203ff75b442f983975f08e4e5353ccf1e9942bcce74039fb7edb882a8d78f8ded7fa85b46b58ff48452dc932e0503ee9e10b528b4b76c3f406bfde2f3f8ade6961cef5c705a3b6a096d29d8c1aeb9090124595e451c0d99a49c10c4f9d1c990ff10dea04c24369e59cea6b8ac712809d78a36a7d16ab959b4aae38e85500dc1e03a93c88f04fcacc56007522b6e5d993f9741f0ada405"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 5,
+					"base": [[null, 5]],
+					"time": { "/": { "bytes": "AAAAAAA" } },
+					"actor": [["chee", 2], [{ "name": "juno" }, 2], ["chee", 1]],
+					"nonce": { "/": { "bytes": "AgICAgI" } },
+					"table": [["value", 1], ["attributes", 2], ["value", 2]],
+					"reader": [[null, 5]],
+					"signer": [
+						[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 2],
+						[{ "/": { "bytes": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q" } }, 2],
+						[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 1]
+					],
+					"lamport": { "/": { "bytes": "AgICAgI" } },
+					"parents": [[], null, null, null, null],
+					"patches": [[{ "path": [], "value": 1 }], [{ "path": [], "value": {} }], [], [], []],
+					"external": [[null, 5]],
+					"metadata": [[null, 5]],
+					"signatures": {
+						"/": {
+							"bytes": "7V/TE9kMnFl2J+CG1KyyiiDjGkCoBFadEscgK3hhHQa/PD/sq+z5F+W/5fkrqh2GNn1P56VBLUiBO616VY/wA+2fxu7LwPP3Qyk0U8JbS78Av6KDmsZSeSDlmH2cC3GVUzJtAujUqZIpfo9LY9TS8X4Zcr3BaUxkEREbdIeAWQq6hdCFQ6TsSFx2Z6xSIImJPf8Y4hneR0In5TP29/dLpke6adONtCWPuWID/3W0QvmDl18I5OU1PM8emUK8znQDn7ftuIKo14+N7X+oW0a1j/SEUtyTLgUD7p4QtSi0t2w/QGv94vP4reaWHO9ccFo7agltKdjBrrkJASRZXkUcDZmknBDE+dHJkP8Q3qBMJDaeWc6muKxxKAnXijan0Wq5WbSq446FUA3B4DqTyI8E/KzFYAdSK25dmT+XQfCtpAU"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d", "e"] } }
+	]
+}

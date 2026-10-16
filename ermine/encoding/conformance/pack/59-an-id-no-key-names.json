@@ -1,0 +1,7 @@
+{
+	"title": "an id no key names",
+	"bytes": "a167636f6c756d6e7358531dc9c90d80201005d0d14eecc383a193ef300612b730b85cc1666c919bcbf5bd9b1dd4340d7bab17801e6ca39fc4d4b580e31252c6593a9279b1a286485684a829cb8e71936f0ee7d919aa865f3497965e7e00",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

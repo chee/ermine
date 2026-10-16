@@ -1,0 +1,225 @@
+{
+	"title": "edit takes patches: one change on the value; info is the attributes, edited the same, {} when there were none; a whole value at []; nothing there: nothing-there; the change carries the process",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./n",
+						{
+							"a": 1,
+							"b": 2
+						}
+					],
+					"as": "n"
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$n",
+				[
+					{
+						"path": [
+							"a"
+						],
+						"value": 3
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$n"
+			],
+			"expect": {
+				"value": {
+					"a": 3,
+					"b": 2
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$n",
+				[
+					{
+						"path": [
+							"b"
+						]
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$n"
+			],
+			"expect": {
+				"value": {
+					"a": 3
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$n",
+				[
+					"a"
+				]
+			],
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"info",
+				"$n"
+			],
+			"as": "i",
+			"expect": {
+				"value": {
+					"path": [
+						"w",
+						"n"
+					],
+					"part": "attributes"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$i",
+				[
+					{
+						"path": [
+							"ermine.type"
+						],
+						"value": "public.plain-text"
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$i"
+			],
+			"expect": {
+				"value": {
+					"ermine.type": "public.plain-text"
+				}
+			}
+		},
+		{
+			"op": "saved",
+			"part": "attributes",
+			"id": "n1",
+			"expect": {
+				"value": {
+					"ermine.type": "public.plain-text"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"./nothing",
+				[
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			],
+			"fails": true,
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$n",
+				[
+					{
+						"path": [],
+						"value": "whole"
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$n"
+			],
+			"expect": {
+				"value": "whole"
+			}
+		},
+		{
+			"op": "change",
+			"part": "value",
+			"id": "n1",
+			"expect": {
+				"actor": "test",
+				"process": [
+					"w",
+					"p"
+				]
+			}
+		}
+	]
+}

@@ -85,20 +85,30 @@
 					"scope": "call",
 					"pairs": [
 						[
-							"actor",
-							"notes"
-						],
-						[
-							"handler",
-							"click"
-						],
-						[
 							"caller",
 							"games"
 						],
 						[
 							"trusted",
 							false
+						],
+						[
+							"owner",
+							[
+								[
+									"handler",
+									"click"
+								],
+								[
+									"owner",
+									[
+										[
+											"actor",
+											"notes"
+										]
+									]
+								]
+							]
 						]
 					],
 					"writer": "g"
@@ -121,20 +131,30 @@
 					"scope": "call",
 					"pairs": [
 						[
-							"actor",
-							"notes"
-						],
-						[
-							"handler",
-							"click"
-						],
-						[
 							"caller",
 							"games"
 						],
 						[
 							"trusted",
 							false
+						],
+						[
+							"owner",
+							[
+								[
+									"handler",
+									"click"
+								],
+								[
+									"owner",
+									[
+										[
+											"actor",
+											"notes"
+										]
+									]
+								]
+							]
 						]
 					]
 				}

@@ -1,7 +1,7 @@
 {
 	"title": "a computation disposed by a cleanup run before its run or act: its f, or its act, is not called (proof D1, D2)",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
 			"op": "compute",
 			"name": "c",
@@ -11,7 +11,7 @@
 			},
 			"to": "c"
 		},
-		{ "op": "scope", "name": "p", "parent": "o", "expect": {} },
+		{ "op": "scope", "name": "p", "parent": "o", "info": [["why", "p"]], "expect": {} },
 		{
 			"op": "compute",
 			"name": "d",

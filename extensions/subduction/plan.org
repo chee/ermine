@@ -128,6 +128,70 @@ after, against the suites. All *mine* unless quoted.
   could build it, so fragments would stop being the same on every device)
 - a followed document still empty is asked for again, 0.25 s doubling to 16 s: the first ask can
   land while the server is still taking its first commits in (the notes demo lost a note that way)
+- slaygrounds, on galaxy (chee 10-15: "connect to galaxy.observer and add a new note for every
+  peer who joins and when they leave and their heartbeat goes the note can drop away ... cursors";
+  "a demo with dragging a pig around and the drag goes in the ephemeral place"):
+  - examples/lab-sync: one device a page, one room. a device mints its note and names it in its
+    presence row (playground/presence at the room's id, over sync's channel); every device shows a
+    note a live row, so a note drops away when its row lapses. cursors in the row, drawn in a
+    mirror behind each textarea. no shared folder is written: joining and leaving never conflict
+  - examples/lab-pig: where the pig rests is a stored node, one commit a drop; the drag is only
+    in the dragger's presence row (the ephemeral place), so others see it move and nothing is
+    stored; everyone's pointer in their row too
+
+* The C, 10-15
+- suites done (agent): commit 23, seal 7, run 21, history 15, replay 13, snapshot 6, sync 16,
+  transport 10; README in extensions/sync/conformance; three TS fixes (run precision and refs,
+  settle's header on the settling host, an own take waiting on a parent now sent). C of the pure
+  pieces done: commit, seal, run, history, replay, snapshot pass in C, --check and --leaks (85;
+  prefixes cm_ sl_ rn_ hy_ rp_ sn_; Makefile sync-*). transport + sync + channel C done: 26 pass
+  in C, --check, --leaks (tp_ sy_ sc_); 105 random multi-host runs answer as the TS (arrival order
+  of a batch: the store's). libsubduction_c is client-only: two devices link by both connecting.
+  differs: a seed, not a signer; unlocked only; no connectDiscover; errors dropped, not thrown.
+  erminex, ermine-look and ermine-term on today's C table + the C sync (playground/term; no places,
+  no scheduler: places' C needs the scheduler being redesigned). check.ts through a local server:
+  C opens and types, a TypeScript device opens and types (C and TS interoperate, first try), a
+  window after its program ended, ermine-term both ways. found: a follow landing between the
+  server's push and its save missed the commit for good; both transports now ask again twice after
+  a follow, and on while a commit waits on a parent (10/10 check runs). untried on galaxy yet
+  erminex --readonly (chee 10-15: "let me select whether i want it to be readonly or readwrite"):
+  W says so; only this device's typer and size reach the program; ermine-look, window.ts and the
+  page (playground/demos/terminal, which already existed: its check had the old service name) don't
+  type. readwrite stays the default (my pick). ermine-term: no --readonly yet
+chee: erminex in C, "after the C sync". in order: suites with TypeScript harnesses for commit,
+seal, run, history, replay, snapshot, sync (extensions/sync/conformance, ermine/encoding/
+conformance/commit); then the C against them (commit, then seal + run and history + replay +
+snapshot, then transport over libsubduction_c and sync over the C table, places and scheduler);
+then erminex on today's C core and the C sync; then the old extensions/subduction code retires
+
+* Merging, 10-15
+chee: "settle(id)? you dont list the heads youre settling? ... how would you build a merge on this?
+if you wanted to egwalker it"; my shape (merging as a read, writes on all heads) → "yeah"; on what a
+write after a merge is relative to: "`merge-type: eg-walker` or something? i'm happy with that".
+- commit: an optional field merge, a rule's name. a commit with several parents, no base and a
+  merge: its patches apply to merge(parents) by that rule. every device reading it needs the rule
+  (unknown: refused, "merge"); so a rule is fixed, the same in TS and C
+- sync, given rules: with several heads the table shows their merge (no conflicts written for a
+  merged node); a write has every head as its parents and the rule's name, its patches against the
+  merged view; nothing is written to merge by itself (no racing merge commits). no rule: as before
+  (the first head shows, writes extend it, conflicts listed); settle still keeps what shows
+- eg-walker (*mine*, the first rule): the commits since the heads' common ancestor replayed in
+  causal order into a throwaway list CRDT for each string and list, positions in each commit taken
+  in the version it was made on; maps merged per key, a value set by two heads: the later (lamport,
+  then name) wins. its exact tie rules pinned by suites
+- history: the heads' common ancestor and the commits since it, as helpers the rule uses
+- built 10-15 (TS): commit field merge; sync options merges + merge, sync.use(rule) to switch;
+  egwalker.ts (RGA order, concurrent inserts newest commit first, removal beats edits inside, moves
+  copy); since/follows/agreed in history.ts; a merge column in runs; lab-sync's merge on/off button.
+  132 scenarios
+- built 10-15 (TS): walker.ts keeps eg-walker's state per node between merges (rule.keeping);
+  rebuilt from since on an old fork or past 1024 commits; same bytes as egwalker (random-history
+  test + every egwalker scenario run through both). 2x1000 keys: 45.9 s CPU -> 14.0 s, merging
+  32.1 s -> 1.8 s; the rest is signing and packing. equality rests on egwalker's rule 1, unproved
+- built 10-16 (C): merge field, merge column, since/follows, egwalker as a kept walker, sy_use; 125
+  scenarios pass --c/--check/--leaks; random TS-vs-C history check same bytes. merging 7-9x cheaper
+  than TS (2x1000: 118 ms); the total is ed25519. open: history_harness.ts since doesn't check heads
+  are taken (TypeError where C says not taken)
 
 * Ids
 - kept means an ermine:// id, for now, *decided* 10-15: "let's say it means an ermine:// id right
@@ -229,11 +293,38 @@ after, against the suites. All *mine* unless quoted.
 - *lean*: "the use of subduction might be making me conflate ephemeral and not saved and local."
 
 * Ephemeral
-- over a kept id: a patch node {patches, on, at}, patches over a node and the version they were
-  made against (*decided*, core/table/plan.org), placed by places in memory ("the ephemeral wins").
-  sent as commits of the same shape, never sealed, never stored, on the node's own topic. *mine*
-- it ends when a real commit covering at lands: dropped, or carried forward as big-duet's caret is
-  (the anchors library). lanes and optimistic values meet it at transactions. *mine*
+- built 10-16, TS + C (extensions/sync, sync scenarios 23-30), the design chee approved (10-16
+  brief):
+  - writing: sync option ephemeral(doc, table) (C: sy_options.ephemeral). such a change: one
+    ephemeral commit. parents: this device's standing one at the node, else what a stored write
+    goes on. programs unchanged
+  - showing: stored heads, every device's latest standing one on top. two at once: the later
+    (lamport, then name). with a rule: merged by it. only-ephemeral commits checked on what they go on
+  - ending: a stored commit of that device's that follows them (arriving or made here); ttl (4000
+    ms) with nothing heard. beats: the standing tip sent again every beat (1000 ms), stopped by its
+    own stored commit
+  - late joiners: nothing until a commit they can take. a restart: nothing ephemeral
+- *mine*:
+  - follows: same signer, lamport above base (the highest stored lamport the chain went on). one
+    arriving already followed: dropped
+  - an ephemeral commit's lamport: 1 + every tip at the node too, so the newest write is the later
+  - per table: only tables a standing chain touched show it; the stored under them is sync's own; the
+    table holds what shows. with a rule: stored heads not under a tip, and the tips, merged
+  - a write made on something else than it goes on (another's tip shows, or the stored under one):
+    its patches tried on what it goes on, the whole value if they don't apply
+  - time: TS option now (ms) + tick(), no timers then; else sync's own setTimeout. C: the device
+    clock, in sy_run. beat, ttl options. standing(id), close()
+  - transport: heard(listener) (every ephemeral commit heard, sent again too), again(doc, name). C:
+    tp_hearing, tp_again; rp_drop
+  - lab-pig: the pig's value table ephemeral while this device holds it; a drag writes {x, y, by,
+    colour} once a frame; the drop writes {x, y}, stored. presence: pointers only
+- open:
+  - a joiner mid-chain never takes that chain (its commits wait on ones never sent again): only a
+    stored commit, then a new chain, shows. a beat sends the tip only
+  - with a rule, ephemeral typing at once: patches made on the merge are tried on the device's own
+    tip, so positions shift
+- earlier thinking, not built: a patch node {patches, on, at} placed by places; carried forward as
+  big-duet's caret is (the anchors library); lanes and optimistic values at transactions
 - presence and running process names: rows in a part on the anchor's node, one per device, never
   saved (*decided* structure, core/table/plan.org; built: playground/presence)
 - one channel, *thought* 10-14: "i wonder if we need to build a generic ephemeral-channel thing that
@@ -247,10 +338,21 @@ after, against the suites. All *mine* unless quoted.
   document
 
 * Storage, pack, files
+- pack, chee 10-15: "we should columnar encode pack and deflate and then also undo that on the way
+  back". written {columns: deflate(columns)}: ids once (ermine:// ids as 32 bytes), parts as runs,
+  keys and nodes as varints, changes as columns (time differences, actors and sites as runs), values
+  listed; the first form {keys, nodes} still read. deflate is ours (ermine/encoding deflate.ts, C
+  next): every step fixed so any device gives the same bytes (snapshots in fragments), standard
+  deflate that any inflater reads, within 0.4% of zlib's size. a 1000-node graph 507 KB → 84 KB, a
+  30k-name folder 2.7 MB → 1.28 MB, an erminex screen 2.3 KB → 0.87 KB, one small node 148 → 128 B.
+  pack costs about 3–4× the CPU it did (a 2.7 MB folder: 0.4 s in TS)
 - what every storage keeps, *mine*: commits, and snapshots: a pack of a node's kept tables at one
   head (core/table/plan.org: "pack's unit becomes the node", mine). loading: a snapshot, then the
   commits after it
 - sedimentree storage (Subduction, on disk or IndexedDB): the OS card's (os-card, 10-12)
+- sides (.FINAL, a second version of a value), chee 10-15: "sides can be dropped for now, until we get
+  to the conflicts table": files' side scenarios removed; they come back when files sits on sync, a
+  side being a head the conflicts table lists (its value by at)
 - files, a mirror, *mine*: kept nodes laid out as files (values by hash, a manifest) and file edits
   made into commits. *decided*: "the files thing would just be rethought it's okay, the concept is
   still implementable" (where history is saved, conflicts rebuild from it)

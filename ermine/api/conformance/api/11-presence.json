@@ -1,0 +1,152 @@
+{
+	"title": "presence: my row at a node, who the host's who, until now + ttl; read live by an effect; gone when I am absent; past until, not shown",
+	"steps": [
+		{
+			"op": "world",
+			"presence": true,
+			"who": "laptop",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./doc",
+						"hi"
+					],
+					"as": "doc"
+				},
+				{
+					"do": [
+						"effect",
+						"rows",
+						[
+							"presence",
+							"$doc"
+						],
+						"rows"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "rows",
+			"expect": {
+				"values": [
+					[]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"present",
+				"$doc",
+				{
+					"at": 3
+				},
+				{
+					"ttl": 5000
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "rows",
+			"expect": {
+				"values": [
+					[],
+					[
+						{
+							"who": "laptop",
+							"value": {
+								"at": 3
+							},
+							"until": 5000
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"absent",
+				"$doc"
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "rows",
+			"expect": {
+				"values": [
+					[],
+					[
+						{
+							"who": "laptop",
+							"value": {
+								"at": 3
+							},
+							"until": 5000
+						}
+					],
+					[]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"present",
+				"$doc",
+				{
+					"at": 4
+				},
+				{
+					"ttl": 5000
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "now",
+			"t": 6000,
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"presence",
+				"$doc"
+			],
+			"expect": {
+				"value": []
+			}
+		}
+	]
+}

@@ -1,0 +1,19 @@
+{
+	"title": "what has no encoding cannot be carried",
+	"steps": [
+		{
+			"op": "snapshot",
+			"tables": {
+				"value": { "value": { "/": { "symbol": "s" } }, "change": { "time": 0, "actor": null } }
+			},
+			"expect": { "error": "cannot-carry" }
+		},
+		{
+			"op": "snapshot",
+			"tables": {
+				"value": { "value": 1, "change": { "time": 0, "actor": { "/": { "symbol": "me" } } } }
+			},
+			"expect": { "error": "cannot-carry" }
+		}
+	]
+}

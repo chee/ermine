@@ -1,0 +1,135 @@
+{
+	"title": "an early effect whose first run reads a key whose writer is due stops as it is made; it runs after the writer at the pulse, and acts in the early queue",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "a"
+					},
+					1
+				]
+			},
+			"to": "b",
+			"declared": true,
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "x",
+			"scope": "o",
+			"f": {
+				"read": "b"
+			},
+			"act": {
+				"log": [
+					"x",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 2
+					},
+					{
+						"due": "x",
+						"tick": 3
+					},
+					{
+						"starts": "x",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "x",
+						"run": 1,
+						"ended": "stopped",
+						"waits": "b"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "x",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "x",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "x",
+						"run": 2,
+						"early": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"x",
+						2
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,187 @@
+{
+	"title": "what a write takes out is its undo's: written back and written under, the undo never changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"list": [
+					{
+						"n": 0
+					},
+					{
+						"n": 1
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"list",
+						0,
+						"n"
+					],
+					"value": 5
+				}
+			]
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": {
+						"x": 9
+					}
+				},
+				{
+					"path": [
+						"list"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"list"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							{
+								"n": 5
+							}
+						]
+					},
+					{
+						"path": [
+							"a"
+						],
+						"value": {
+							"x": 1
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "unwrite",
+			"hold": "u",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"value": {
+							"x": 9
+						}
+					},
+					{
+						"path": [
+							"list"
+						],
+						"range": [
+							0,
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					},
+					"list": [
+						{
+							"n": 5
+						},
+						{
+							"n": 1
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"list",
+						0,
+						"n"
+					],
+					"value": 6
+				}
+			]
+		},
+		{
+			"op": "held",
+			"name": "u",
+			"expect": {
+				"value": [
+					[
+						{
+							"n": 5
+						}
+					],
+					{
+						"x": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					},
+					"list": [
+						{
+							"n": 6
+						},
+						{
+							"n": 1
+						}
+					]
+				}
+			}
+		}
+	]
+}

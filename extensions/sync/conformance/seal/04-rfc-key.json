@@ -1,0 +1,41 @@
+{
+	"title": "sealed with RFC 8032's first key",
+	"steps": [
+		{
+			"op": "seal",
+			"seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+			"commit": {
+				"table": "value",
+				"actor": { "name": "juno" },
+				"time": 1760000000,
+				"signer": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+				"nonce": 7,
+				"parents": ["abababababababababababababababababababababababababababababababab"],
+				"lamport": 4,
+				"patches": [{ "path": ["title"], "range": [2, 2], "value": "!" }]
+			},
+			"expect": {
+				"sealed": "a266636f6d6d697458bba86474696d65fa4ed1cef0656163746f72a1646e616d65646a756e6f656e6f6e6365f94700657461626c656576616c7565667369676e65725820d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a676c616d706f7274f9440067706172656e7473815820abababababababababababababababababababababababababababababababab677061746368657381a3647061746881657469746c656572616e676582f94000f940006576616c75656121697369676e617475726558409eea785b3fed48ed1b41337396f46acf87b9bad1e0b95f18dde2359afe2f87ef49ab8db756b817a0b5708d6f2a5de3645795df8e4450bf74cf9a46dc8f1df503"
+			}
+		},
+		{
+			"op": "unseal",
+			"sealed": "a266636f6d6d697458bba86474696d65fa4ed1cef0656163746f72a1646e616d65646a756e6f656e6f6e6365f94700657461626c656576616c7565667369676e65725820d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a676c616d706f7274f9440067706172656e7473815820abababababababababababababababababababababababababababababababab677061746368657381a3647061746881657469746c656572616e676582f94000f940006576616c75656121697369676e617475726558409eea785b3fed48ed1b41337396f46acf87b9bad1e0b95f18dde2359afe2f87ef49ab8db756b817a0b5708d6f2a5de3645795df8e4450bf74cf9a46dc8f1df503",
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": { "name": "juno" },
+					"time": 1760000000,
+					"signer": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+					"nonce": 7,
+					"parents": ["abababababababababababababababababababababababababababababababab"],
+					"lamport": 4,
+					"patches": [{ "path": ["title"], "range": [2, 2], "value": "!" }]
+				},
+				"bytes": "a86474696d65fa4ed1cef0656163746f72a1646e616d65646a756e6f656e6f6e6365f94700657461626c656576616c7565667369676e65725820d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a676c616d706f7274f9440067706172656e7473815820abababababababababababababababababababababababababababababababab677061746368657381a3647061746881657469746c656572616e676582f94000f940006576616c75656121",
+				"name": "0bee721c673214ed9db914aacff94b2605f5e1f88796e6cc2cb1f1fa8b2f1daf",
+				"stored": "0510bc0ec97f3a69f55425fc235c0eb8404ee1b39804e29181995b836e8f8d60"
+			}
+		}
+	]
+}

@@ -61,7 +61,7 @@ Deno.test("selector: a key is dropped when its readers go, and a read outside a 
 
 Deno.test("selector: a given equal asks every key held", () => {
 	const s = createScheduler()
-	const root = s.createRootScope()
+	const root = s.createRootScope([["actor", "test"]])
 	const cur = {}
 	let current = 5
 	const evens = s.runWithScope(

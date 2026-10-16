@@ -37,6 +37,12 @@
 // keeps a spot past pl_forget while the cache reads it. A cached answer reflects a write once it is
 // committed, so commit right after update.
 //
+// PRUNING. A contributor's step may answer PL_NONE: nothing at here + name, nor anywhere under it.
+// The walk then asks it nothing more under there (the here's gone), so a trie with nothing on a path
+// is asked once per walk, not once a step. Its names may say none the same way (pl_namelist's none:
+// pl_members_at walks each name on without it). The read that said none is the one tracked:
+// something coming under there marks it, and the walk runs again.
+//
 // A VIEW (pl_view) is the same places from another root, with contributors of its own: everything
 // above is shared with the places it was made from, so a box (ermine/boxes), a view rooted at its
 // folder, needs nothing passed on to it.
@@ -45,11 +51,14 @@
 // a run's reads (the scheduler's run end) can be named as places in the graph. Anything else,
 // or a spot let go, is none.
 //
-// WHO. The pairs of a write are the info of the scopes open, from the root down (sc_get_info), then
-// the call's own. Their values are op_values (value.h), the host's own, except the scheduler's:
-// "run" and "mark" are numbers it keeps as uint64_t, and are given on as op_value numbers. The
-// first "actor" pair is the actor, the first "reader" (a string) the reader, every other pair
-// metadata, in order. A write with no scope open has no who: unscoped.
+// WHO. The pairs of a write are the info of the scope open (sc_get_info), as is; with extra pairs,
+// the extra then "owner" and that info, the write as its own innermost level. Info nests: a scope
+// under another ends with "owner", the owner's info. Values are op_values (value.h), the host's
+// own, except the scheduler's: "run" and "mark" are numbers it keeps as uint64_t, and are given
+// on as op_value numbers, at any depth. The actor is the nearest "actor" pair walking outward from
+// the innermost level, the reader the nearest "reader" the same way (a string; another is
+// passed). The metadata is the write's pairs whole, nested, actor and reader left in place: always
+// there. A write with no scope open has no who: unscoped.
 //
 // MEMORY. A header made (pl_header) refers to a block, a pl_made: the metadata, the site, a hold
 // on each value. The node it is written to refers to the block until its next update: pl_hold keeps
@@ -60,6 +69,7 @@
 #define PLACES_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "../../../core/scheduler/c/paths.h"
 #include "../../../core/scheduler/c/scheduler.h"
@@ -70,23 +80,28 @@
 typedef struct pl pl;
 // only the places, so that it can be the ctx of the hooks below
 pl *pl_new(void);
-// forgets the holds, the pairs, what is open and its views; none of what it was connected to. A
-// view (pl_view): only it, and its watches
+// its watches stopped, and it let go; with the last of a places and its views (pl_view), the holds,
+// the pairs and what is open; none of what it was connected to
 void pl_free(pl *p);
 
-// where a walk has got to: the id it is at, and its path (the names from the root to it). no path
-// (has_path 0): a walk from an id alone, where it is from the root not known
+// where a walk has got to: the id it is at, its path (the names from the root to it), and gone: the
+// contributors that said none at it or above, never asked under it: a bit each, by its place in the
+// asker's list (the first 32; any after are always asked). no path (has_path 0): a walk from an id
+// alone, where it is from the root not known. gone 0: none
 typedef struct {
 	tb_key id;
 	int has_path;
 	const char *const *path;
 	size_t length;
+	uint32_t gone;
 } pl_here;
 
-// names, borrowed (from the table, or the contributor's own); the caller's, pl_namelist_free
+// names, borrowed (from the table, or the contributor's own); the caller's, pl_namelist_free. none:
+// the contributor said none (no names, here or anywhere deeper)
 typedef struct {
 	const char **items;
 	size_t n, cap;
+	int none;
 } pl_namelist;
 void pl_namelist_add(pl_namelist *list, const char *name);
 void pl_namelist_free(pl_namelist *list);
@@ -97,16 +112,19 @@ void pl_namelist_free(pl_namelist *list);
 // itself when it changes
 typedef struct {
 	const char *from;
-	// the id it has at here + name: 1 and *out; none: 0
+	// the id it has at here + name: 1 and *out; nothing there (maybe deeper): 0; nothing there or
+	// anywhere under it: PL_NONE
 	int (*step)(void *ctx, const pl_here *here, const char *name, pl *reads, tb_key *out);
 	// the names it has directly under here, in its order: each one step answers, or a level of its
-	// own, added to out
+	// own, added to out. none (out->none set): no names, here or anywhere deeper
 	void (*names)(void *ctx, const pl_here *here, pl *reads, pl_namelist *out);
 	// whether here + name is a level of its own: no id, but names under it, so a walk goes on through it
 	// as if it were a folder (the walk, in places.c). NULL: never
 	int (*level)(void *ctx, const pl_here *here, const char *name, pl *reads);
 	void *ctx;
 } pl_contributor;
+// a step's answer: nothing at here + name, nor anywhere under it (see PRUNING)
+#define PL_NONE 2
 // the id a walk is at on a level: not an id of any entry, so never given as an answer (pl_get: nothing
 // there)
 tb_key pl_level(void);
@@ -129,11 +147,15 @@ typedef struct {
 void pl_connect(pl *p, const pl_setup *setup);
 // where names start
 tb_key pl_root(const pl *p);
+// the contributors given (*n of them; the array the setup's or view's); none given: NULL, children
+// alone, and *n 0
+const pl_contributor *const *pl_contributors(const pl *p, size_t *n);
 // the same places from another root, asked by contributors of its own (the array kept, the
 // caller's, as are the contributors and root's string; none: children alone): one set of spots,
 // keeps, holds and watches, one commit (pl_commit on either) and one table hook (pl_event on either)
 // with p, so whoever writes tells it nothing more. A box's places (ermine/boxes). Its watches find
-// their path from its root. Let go by pl_free on it (its watches stopped), or with p's
+// their path from its root. Let go by pl_free on it, before or after p's (what they share goes with
+// the last)
 pl *pl_view(pl *p, tb_key root, const pl_contributor *const *contributors, size_t n);
 
 // hooks, ctx the pl
@@ -245,6 +267,9 @@ pl_watch *pl_watch_path(pl *p, const char *const *path, size_t n, pl_watch_fn fn
 	const pl_watching *options);
 // the stop: no more is told; the watch is let go of (a second stop is a mistake)
 void pl_stop(pl_watch *w);
+// every fact, anywhere, told to fn as it lands (a commit's, a table event's), after the mark and
+// before the watches at paths: what a run wrote, for runs.h. Stopped with pl_stop
+pl_watch *pl_watch_all(pl *p, pl_watch_fn fn, void *ctx);
 
 // what is at path in a value: a number into a list or a typed array, a name into a map; nothing
 // there: NULL. Bytes are one whole value: a number into them is nothing. A typed array's element
@@ -261,14 +286,15 @@ const op_value *pl_read(pl *l, tb_key part, tb_key id, const op_key *path, size_
 const ch_header *pl_change(pl *l, tb_key part, tb_key id);
 
 // where a spot reads: the node under (part, id), and the path in its value, length keys; change:
-// the change spot, reads of the change itself, no path. The places' and paths' own, good while the
-// spot is held
+// the change spot, reads of the change itself, no path; keys: a read of which names there are at
+// path, not what is under them (pl_keys). The places' and paths' own, good while the spot is held
 typedef struct {
 	tb_key part;
 	tb_key id;
 	const op_key *path;
 	size_t length;
 	int change;
+	int keys;
 } pl_where;
 // a key told to the scheduler (as a run's end has it): when it is one of this places'
 // spots, held, 1 and *out where it reads; anything else, or a spot let go: 0
@@ -321,8 +347,9 @@ void pl_members_free(pl_members *list);
 
 // the steps of a path from an id, each a name and the id under it, one at a time as they are
 // taken; nothing under a name: the walk stops there. out has room for n; the steps taken. With
-// contributors, each step is the first answer, with its from; from an id that is not the root, the
-// path is not known, so a contributor going by path has nothing. pl_walk_at: from a here
+// contributors, each step is the first answer, with its from (the gone not asked); from an id that is
+// not the root, the path is not known, so a contributor going by path has nothing. pl_walk_at: from
+// a here, its gone too
 size_t pl_walk(pl *p, tb_key from, const char *const *path, size_t n, pl_member *out);
 size_t pl_walk_at(pl *p, const pl_here *from, const char *const *path, size_t n, pl_member *out);
 
@@ -331,12 +358,15 @@ typedef struct {
 	tb_key id;
 	const char *from;
 } pl_answer;
+// gone: the contributors gone under here + name (here's, and those that said none), for a walk on
+// from there
 typedef struct {
 	size_t n;
 	pl_answer *items;
+	uint32_t gone;
 } pl_answers;
 void pl_answers_free(pl_answers *list);
-// every answer at here + name, in the contributors' order
+// every answer at here + name, in the contributors' order (but here's gone)
 pl_answers pl_answers_at(pl *p, const pl_here *here, const char *name);
 // every answer at a path: the walk to the folder it is in (a level too), then every contributor asked
 // its name. The root: itself, from "root". Nothing there, or a level: none
@@ -347,12 +377,16 @@ typedef struct {
 	const char *name;
 	const char *from;
 } pl_named;
+// gone: the contributors gone under here (here's, and those whose names said none), for a walk of
+// each name from there
 typedef struct {
 	size_t n;
 	pl_named *items;
+	uint32_t gone;
 } pl_nameds;
 void pl_nameds_free(pl_nameds *list);
-// the names under here, every contributor's in order, each name once: from the first that gives it
+// the names under here, every contributor's in order (but here's gone), each name once: from the
+// first that gives it
 pl_nameds pl_names(pl *p, const pl_here *here);
 // the id at a path from the root; 1 and *out, or 0: nothing there, or a level
 int pl_get(pl *p, const char *const *path, size_t n, tb_key *out);
@@ -380,8 +414,8 @@ pl_members pl_list(pl *p, const char *const *path, size_t n);
 
 // who ------------------------------------------------------------------------------------------
 
-// who the scope open says a write is, extra (n pairs) after its pairs: a map of actor, reader and
-// metadata (a list of [key, value]) where there are some. New, the caller's to op_free. NULL: no
+// who the scope open says a write is, extra (n pairs) its innermost level: a map of actor and
+// reader where there are some, and metadata (a list of [key, value], nested). New, the caller's to op_free. NULL: no
 // scope open
 op_value *pl_who(pl *l, const sc_pair *extra, size_t n);
 

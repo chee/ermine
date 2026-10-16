@@ -3,20 +3,40 @@
 // once, untracked. the scopes tree holds them: tearing a scope down takes everything under it.
 //
 // a scope is two things, one tree: an owner (what is made in it is put under it) and the info of
-// the changes made in it: pairs, [key, value] in order, opaque, as keys are. a write's pairs: the
-// info of each scope from the root down to the one open, outermost first (getInfo).
-// createScope(info, parent?) makes one under parent, else under the one open; createRootScope(info)
-// one with no parent. a scope is open only in a bracket, while its code is on the stack:
-// runWithScope(scope, f), and the scheduler's own. a computer is a scope under the one open when
-// it was made; its runs, sets and acts open it, written by itself (a run by its own Run, a set or
-// act by the computer). its info is its latest run's, set as the run starts: its number, the tick
-// of the mark that made it due. a teardown opens its scope, and what is under a scope goes with it
-// open: a teardown on a plain scope under a computer, run by the computer's clean or teardown, is
-// written by it. nothing open: making a scope or a computer is unscoped.
+// the changes made in it: pairs, [key, value] in order, opaque, as keys are, then ["owner", the
+// info of the scope it is under] (a root: none). so the info nests, innermost first, and
+// Object.fromEntries at each level gives a trace. a write's pairs: the info of the scope open
+// (getInfo). createScope(info, parent?) makes one under parent, else under the one open;
+// createRootScope(info) one with no parent. no pairs given: empty. a scope is open only in a
+// bracket, while its code is on the stack: runWithScope(scope, f), and the scheduler's own. a
+// computer is a scope under the one open when it was made; its runs, sets and acts open it,
+// written by itself (a run by its own Run, a set or act by the computer). its info is its latest
+// run's, set as the run starts: its number, the tick of the mark that made it due; before its
+// first run, that tick alone. a scope's info is made once, with it: under a computer, it is that
+// run's, as what a run made goes before the next (what an act made, before the next act). a
+// teardown opens its scope, and what is under a scope goes with it open: a teardown on a plain
+// scope under a computer, run by the computer's clean or teardown, is written by it. nothing
+// open: making a scope or a computer is unscoped.
 //
 // a pulse runs what is due, in rounds: a round runs the due computations by rank (rank.ts,
 // order.ts), then acts on the effects' new values; acting may make more due, for another round.
-// a result equal to the last stops there. it holds no values but each computation's last result:
+// a result equal to the last stops there.
+//
+// early effects ("acts at once and is in an earlier queue so it goes compute, early, effect"; "it
+// runs once the moment you create it, and then from then on runs in the early effects queue"):
+// made, it is due, runs and acts at once, inside createEffect, pulse or not: in a run, set, act or
+// teardown too, its run bracketed in it as any. that first run stopped (a writer due) is due, and
+// pending (or awaiting) does not act: either way it acts in an early queue later. after, a round
+// is three queues, in order: the runs, by rank; the early effects' acts; the other effects' acts.
+// each act queue in the order the runs ended, but owners first (E2, chee: "yes, think that's
+// right"): an act waits while the act of a computer above it (its owner: the run or act that made
+// it, or one above that) is due in the same queue; the owner acts first, and what its act tears
+// down never acts. an early act's write marks at once: what it makes
+// due runs in the next round, and an effect it makes due does not act in this one (its value is
+// old: its next run's does), as with any act. an early act that throws: told (onEffect), the round
+// goes on, as any act.
+//
+// it holds no values but each computation's last result:
 // a compute's goes to its set, whose writer says mark(keys, run), and what tracked those keys is
 // due. keys are opaque, compared by identity.
 //
@@ -48,7 +68,7 @@ import { createTracker, type Node } from "./tracker.ts"
 export const PENDING: unique symbol = Symbol.for("ermine.pending")
 
 export class SchedulerError extends Error {
-	constructor(readonly code: "disposed" | "unscoped", message: string) {
+	constructor(readonly code: "disposed" | "unscoped" | "empty", message: string) {
 		super(message)
 		this.name = "SchedulerError"
 	}
@@ -60,8 +80,8 @@ export type Run = { readonly computer: Computer; readonly n: number }
 
 export type Pair = readonly [key: string, value: unknown]
 
-// a scope: the scopes and computers under it, and its teardowns, in the order made; its info,
-// kept as given (never change it). a computer's: its latest run's
+// a scope: the scopes and computers under it, and its teardowns, in the order made; its info: the
+// pairs given, then ["owner", its owner's info] (never change it). a computer's: its latest run's
 export type Scope = {
 	readonly n: number
 	readonly parent: Scope | undefined
@@ -111,18 +131,26 @@ export type Computer = Scope & {
 	loop?: Computer[]
 	looping: boolean
 	acting?: Act
+	// an effect's: it acts in the round's early queue
+	readonly early: boolean
 }
+
+// early: acted on in the round's early queue, and its first run and act when made
+export type EffectOptions = { early?: boolean }
 
 // how a run ended
 export type Ended = "done" | "pending" | "failed" | "stopped" | "looping"
 
 // what more a run's end says: its result equal to the last; what it threw; the computer it waits
-// after (stopped); the loop it went through (looping)
+// after (stopped); the loop it went through (looping); kept: its result, when held past the run
+// (a compute's given to set, even one that threw; an effect's to be acted on): only when not equal
+// to the last. there when held, though the result may be undefined
 export type More = {
 	equal?: boolean
 	error?: unknown
 	waits?: Computer
 	through?: Computer[]
+	kept?: unknown
 }
 
 // who made a change: a run, or a computer (its latest run)
@@ -213,8 +241,10 @@ export function createScheduler(): Scheduler {
 	const live = new Set<Computer>()
 	const order = createOrder<Computer>(() => live)
 	const causes = createCauses<Computer>()
-	// the effects to act, in the order their runs ended; settled promises, for the next pulse
+	// the effects to act, in the order their runs ended, the early ones apart; settled promises,
+	// for the next pulse
 	const acts: Act[] = []
+	const earlies: Act[] = []
 	const landed: { r: Ran; out: Out }[] = []
 
 	let made = 0
@@ -251,11 +281,15 @@ export function createScheduler(): Scheduler {
 		return open.scope
 	}
 
+	// no pairs: empty
 	function grow(up: Scope | undefined, info: Iterable<Pair>): Scope {
+		const pairs: Pair[] = [...info]
+		if (pairs.length === 0) throw empty()
+		if (up) pairs.push(["owner", up.info])
 		const o: Scope = {
 			n: ++made,
 			parent: up,
-			info: [...info],
+			info: pairs,
 			children: [],
 			teardowns: [],
 			state: "alive",
@@ -265,21 +299,15 @@ export function createScheduler(): Scheduler {
 	}
 
 	// a new scope under up, else under the one open; gone: disposed
-	function createScope(info: Iterable<Pair> = nothing, up?: Scope): Scope {
+	function createScope(info: Iterable<Pair>, up?: Scope): Scope {
 		if (up === undefined) return grow(parent(), info)
 		if (up.state !== "alive") throw disposed()
 		return grow(up, info)
 	}
 
-	// the pairs of a write made now: the info of each scope from the root down to the one open;
-	// nothing open: undefined
+	// the pairs of a write made now: the info of the scope open; nothing open: undefined
 	function getInfo(): readonly Pair[] | undefined {
-		if (open === undefined) return
-		const chain: Scope[] = []
-		for (let o: Scope | undefined = open.scope; o; o = o.parent) chain.push(o)
-		const pairs: Pair[] = []
-		for (let i = chain.length - 1; i >= 0; i--) pairs.push(...chain[i].info)
-		return pairs
+		return open?.scope.info
 	}
 
 	// the run a change made now is by: in a run, that run; in a computer's set, act or teardown,
@@ -369,6 +397,7 @@ export function createScheduler(): Scheduler {
 
 	const disposed = () => new SchedulerError("disposed", "the scope is disposed")
 	const unscoped = () => new SchedulerError("unscoped", "no scope is open")
+	const empty = () => new SchedulerError("empty", "a scope's info has no pairs")
 
 	// a key nobody tracks now: untracked, and told
 	function unread(node: Node<unknown>) {
@@ -403,6 +432,7 @@ export function createScheduler(): Scheduler {
 		then: (value: never, previous: never) => void,
 		equal?: Equal<never>,
 		key?: unknown,
+		options?: EffectOptions,
 	): Computer {
 		const o = parent()
 		const c = {
@@ -429,6 +459,7 @@ export function createScheduler(): Scheduler {
 			seen: 0,
 			wrote: new Set(),
 			looping: false,
+			early: kind === "effect" && options?.early === true,
 		} as unknown as Computer & { node: Node<unknown> }
 		c.acted = [c.n, 0]
 		c.node = tracker.node(c)
@@ -442,8 +473,19 @@ export function createScheduler(): Scheduler {
 		// loop mark cuts it
 		if (running?.loop) running.cut = true
 		const t = ++tick
+		// its info till its first run: the tick that made it due, its making
+		c.info = [["mark", t], ["owner", o.info]]
 		const now = due(c, t, running) ? [c] : []
 		for (const f of marks.fs) f([], running?.own, now, t)
+		// early: its first run now, and its act
+		if (c.early && now.length) {
+			first(c, order.rank(c))
+			const a = c.acting
+			if (a) {
+				unact(c)
+				act(a)
+			}
+		}
 		return c
 	}
 
@@ -599,7 +641,7 @@ export function createScheduler(): Scheduler {
 			return
 		}
 		// its info, from here: this run's number, and the tick of the mark that made it due
-		c.info = [["run", n], ["mark", mark]]
+		c.info = [["run", n], ["mark", mark], ["owner", c.parent!.info]]
 		let out: Out
 		reading = r
 		tracker.begin(c.node)
@@ -648,7 +690,11 @@ export function createScheduler(): Scheduler {
 			return finish(r, "looping", { equal, through: r.loop })
 		}
 		if (c.kind === "effect") {
-			if (!equal) acts.push(c.acting = { r, value: v })
+			if (!equal) {
+				const q = c.early ? earlies : acts
+				q.push(c.acting = { r, value: v })
+				return finish(r, "done", { equal, kept: v })
+			}
 			return finish(r, "done", { equal })
 		}
 		if (!equal) {
@@ -672,9 +718,10 @@ export function createScheduler(): Scheduler {
 			// given to set, equal or not
 			if (failed) {
 				c.last = undefined
-				return finish(r, "failed", { equal, error: failed.error })
+				return finish(r, "failed", { equal, error: failed.error, kept: v })
 			}
 			c.last = { value: v }
+			return finish(r, "done", { equal, kept: v })
 		}
 		finish(r, "done", { equal })
 	}
@@ -723,8 +770,29 @@ export function createScheduler(): Scheduler {
 	// acts
 
 	function unact(c: Computer) {
-		acts.splice(acts.indexOf(c.acting!), 1)
+		const q = c.early ? earlies : acts
+		q.splice(q.indexOf(c.acting!), 1)
 		c.acting = undefined
+	}
+
+	// the next act of q, owners first: the nearest computer above it with an act in q acts before
+	// it (and its owner before that); what that tears down does not act
+	function take(q: Act[]) {
+		const a = q.shift()!
+		a.r.c.acting = undefined
+		if (q.length) owners(a.r.c, q)
+		act(a)
+	}
+	function owners(c: Computer, q: Act[]) {
+		for (let o = c.parent; o !== undefined; o = o.parent) {
+			const x = "kind" in o ? (o as Computer).acting : undefined
+			if (x === undefined || (o as Computer).early !== c.early) continue
+			q.splice(q.indexOf(x), 1)
+			x.r.c.acting = undefined
+			owners(x.r.c, q)
+			act(x)
+			return
+		}
 	}
 
 	// what is under the effect goes, then it acts, with the value it acted on last. due again (an
@@ -760,8 +828,8 @@ export function createScheduler(): Scheduler {
 
 	// pulses
 
-	// rounds until nothing is due: the settled promises land, the due run by rank, the effects
-	// act. a pulse in a pulse does nothing
+	// rounds until nothing is due: the settled promises land, the due run by rank, the early
+	// effects act, the effects act. a pulse in a pulse does nothing
 	function pulse() {
 		if (pulsing) return
 		pulsing = true
@@ -771,12 +839,13 @@ export function createScheduler(): Scheduler {
 					const { r, out } = landed.shift()!
 					land(r, out)
 				}
-				if (!order.size() && !acts.length) break
+				if (!order.size() && !earlies.length && !acts.length) break
 				while (order.size()) {
 					const { p, rank } = order.next()
 					first(p, rank)
 				}
-				while (acts.length) act(acts.shift()!)
+				while (earlies.length) take(earlies)
+				while (acts.length) take(acts)
 			}
 		} finally {
 			pulsing = false
@@ -809,7 +878,7 @@ export function createScheduler(): Scheduler {
 	}
 
 	return {
-		createRootScope: (info: Iterable<Pair> = nothing) => grow(undefined, info),
+		createRootScope: (info: Iterable<Pair>) => grow(undefined, info),
 		createScope,
 		runWithScope,
 		getCurrentScope: () => open?.scope,
@@ -829,12 +898,14 @@ export function createScheduler(): Scheduler {
 		): Computer => make("compute", f as Computer["f"], set, equal as Equal<never>, key),
 		// tracked; a result not equal to the one it last acted on is acted on after the round's
 		// last run. first runs at the next pulse. f is given the last value acted on (none yet:
-		// undefined)
+		// undefined). early: acted on in the round's early queue (above)
 		createEffect: <T>(
 			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 			effect: (value: T, previous: T | undefined) => void,
 			equal?: Equal<T>,
-		): Computer => make("effect", f as Computer["f"], effect, equal as Equal<never>),
+			options?: EffectOptions,
+		): Computer =>
+			make("effect", f as Computer["f"], effect, equal as Equal<never>, undefined, options),
 		track,
 		mark,
 		pulse,
@@ -852,8 +923,8 @@ export function createScheduler(): Scheduler {
 
 // each on… is told as it happens, and gives back its remove
 export type Scheduler = {
-	createRootScope: (info?: Iterable<Pair>) => Scope
-	createScope: (info?: Iterable<Pair>, parent?: Scope) => Scope
+	createRootScope: (info: Iterable<Pair>) => Scope
+	createScope: (info: Iterable<Pair>, parent?: Scope) => Scope
 	runWithScope: <T>(o: Scope, f: () => T) => T
 	// the scope open now; none: undefined
 	getCurrentScope: () => Scope | undefined
@@ -871,6 +942,7 @@ export type Scheduler = {
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		effect: (value: T, previous: T | undefined) => void,
 		equal?: Equal<T>,
+		options?: EffectOptions,
 	) => Computer
 	track: (key: unknown) => void
 	// the tick it took

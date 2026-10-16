@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 
-void rk_rank(size_t n, const size_t *off, const size_t *adj, int *out) {
+void rk_rank(size_t n, const size_t *off, const size_t *adj, const int *floor, int *out) {
 	if (n == 0) return;
 	// -1: not visited
 	long *index = malloc(n * sizeof *index);
@@ -53,6 +53,7 @@ void rk_rank(size_t n, const size_t *off, const size_t *adj, int *out) {
 			int r = 0;
 			for (size_t k = from; k < sp; k++) {
 				size_t x = stack[k];
+				if (floor && floor[x] > r) r = floor[x];
 				for (size_t e = off[x]; e < off[x + 1]; e++) {
 					size_t q = adj[e];
 					if (comp[q] != id && out[q] + 1 > r) r = out[q] + 1;

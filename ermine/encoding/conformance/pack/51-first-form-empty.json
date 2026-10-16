@@ -1,0 +1,8 @@
+{
+	"title": "the first form read: nothing",
+	"bytes": "a2646b65797380656e6f64657380",
+	"expect": {
+		"entries": [],
+		"nodes": []
+	}
+}

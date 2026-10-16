@@ -1,0 +1,188 @@
+{
+	"title": "a merge commit's patches land on its parents' merge; merged again with what went on beside it, positions read in each commit's version",
+	"steps": [
+		{
+			"op": "add",
+			"name": "r",
+			"patches": [
+				{
+					"path": [],
+					"value": "ab"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "a",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						1,
+						1
+					],
+					"value": "1"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": [
+				"r"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						2,
+						2
+					],
+					"value": "2"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": [
+				"a",
+				"b"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						4,
+						4
+					],
+					"value": "M"
+				}
+			],
+			"merge": "eg-walker",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "m",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "a1b2M",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": "C"
+				}
+			],
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "merge",
+			"heads": [
+				"m",
+				"c"
+			],
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "Ca1b2M",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "m2",
+			"parents": [
+				"c",
+				"m"
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"value": ">"
+				}
+			],
+			"merge": "eg-walker",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "m2",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": ">Ca1b2M",
+						"change": {
+							"time": 0,
+							"actor": null
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "since",
+			"heads": [
+				"m2"
+			],
+			"expect": {
+				"from": [
+					"r"
+				],
+				"commits": [
+					"a",
+					"b",
+					"c",
+					"m",
+					"m2"
+				]
+			}
+		}
+	]
+}

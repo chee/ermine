@@ -1,0 +1,228 @@
+{
+	"title": "memo and effect: a memo's result in a node of its own, an effect acting after the round; a write from outside pulses by itself; an equal result stops there; equal json; a named memo placed inside",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./n",
+						1
+					],
+					"as": "n"
+				},
+				{
+					"do": [
+						"memo",
+						"plain",
+						{},
+						[
+							"read",
+							"$n"
+						]
+					],
+					"as": "m"
+				},
+				{
+					"do": [
+						"effect",
+						"show",
+						[
+							"read",
+							"$m"
+						],
+						"seen"
+					]
+				},
+				{
+					"do": [
+						"memo",
+						"pair",
+						{
+							"equal": "json"
+						},
+						[
+							"all",
+							[
+								"read",
+								"$n"
+							]
+						]
+					],
+					"as": "pair"
+				},
+				{
+					"do": [
+						"effect",
+						"showpair",
+						[
+							"read",
+							"$pair"
+						],
+						"pairs"
+					]
+				},
+				{
+					"do": [
+						"memo",
+						"double",
+						{},
+						[
+							"read",
+							"$n"
+						]
+					],
+					"as": "named"
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					1
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "pairs",
+			"expect": {
+				"values": [
+					[
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$n",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "pairs",
+			"expect": {
+				"values": [
+					[
+						1
+					],
+					[
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$n",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "seen",
+			"expect": {
+				"values": [
+					1,
+					2
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "pairs",
+			"expect": {
+				"values": [
+					[
+						1
+					],
+					[
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$m"
+			],
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"p",
+				"double"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"./p/double"
+			],
+			"expect": {
+				"value": 2
+			}
+		}
+	]
+}

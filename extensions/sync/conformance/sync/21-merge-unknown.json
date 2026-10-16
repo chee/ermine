@@ -1,0 +1,334 @@
+{
+	"title": "a host that knows no rule refuses a merge commit and what follows it, and shows its heads as before; one that knows the rule but merges by none takes it",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"merge": "eg-walker",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"merge": "eg-walker",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "b",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "host",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "host",
+			"name": "d",
+			"seed": "0404040404040404040404040404040404040404040404040404040404040404",
+			"merges": [
+				"eg-walker"
+			],
+			"expect": {
+				"key": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c"
+			}
+		},
+		{
+			"op": "follow",
+			"host": "c",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"host": "d",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "d",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": "hello"
+				}
+			],
+			"expect": {
+				"commits": 1
+			},
+			"name": "w0"
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "d",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 5,
+			"text": " world",
+			"name": "ta",
+			"expect": {
+				"commits": 6
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "oh, ",
+			"name": "tb",
+			"expect": {
+				"commits": 4
+			}
+		},
+		{
+			"op": "type",
+			"host": "b",
+			"id": "x",
+			"path": [],
+			"at": 9,
+			"text": "!",
+			"name": "tb2",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "read",
+			"host": "a",
+			"id": "x",
+			"expect": {
+				"value": "hello world"
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": {
+				"value": "oh, hello!"
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": ">",
+			"name": "m",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "type",
+			"host": "a",
+			"id": "x",
+			"path": [],
+			"at": 0,
+			"text": "-",
+			"name": "after",
+			"expect": {
+				"commits": 1
+			}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "disconnect",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "b",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "connect",
+			"a": "b",
+			"b": "d",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"ta",
+					"tb2"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"commits": 12
+			}
+		},
+		{
+			"op": "read",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"value": "hello world"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"conflicts": [
+					{
+						"head": "tb2",
+						"lamport": 6,
+						"actor": "b",
+						"tables": {
+							"value": "oh, hello!"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "heads",
+			"host": "d",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"after"
+				]
+			}
+		},
+		{
+			"op": "read",
+			"host": "d",
+			"id": "x",
+			"expect": {
+				"value": "->oh, hello! world"
+			}
+		},
+		{
+			"op": "conflicts",
+			"host": "d",
+			"id": "x",
+			"expect": {
+				"conflicts": []
+			}
+		},
+		{
+			"op": "connect",
+			"a": "a",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"heads": [
+					"ta",
+					"tb2"
+				]
+			}
+		},
+		{
+			"op": "commits",
+			"host": "c",
+			"id": "x",
+			"expect": {
+				"commits": 12
+			}
+		}
+	]
+}

@@ -26,6 +26,8 @@ typedef struct sc_told {
 	int equal;
 	// SC_T_ENDS, SC_T_ACTS: NULL for none
 	const char *error;
+	// SC_T_ACTS: an early effect's act
+	bool early;
 	// SC_T_ENDS stopped: the computer it waits after
 	sc_computer *waits;
 	// SC_T_ENDS looping: the computers on the loop, in the order made
@@ -72,7 +74,8 @@ static inline void sc_trace_end_run(sc_computer *c, unsigned n, sc_ended ended, 
 }
 static inline void sc_trace_effect(sc_computer *c, unsigned n, const char *error, void *data) {
 	sc_trace *t = data;
-	t->f(&(sc_told){.kind = SC_T_ACTS, .c = c, .run = n, .error = error, .equal = -1}, t->data);
+	t->f(&(sc_told){.kind = SC_T_ACTS, .c = c, .run = n, .error = error, .early = sc_scope_early(c), .equal = -1},
+		t->data);
 }
 
 // f told each, in order

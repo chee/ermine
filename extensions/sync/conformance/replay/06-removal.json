@@ -1,0 +1,50 @@
+{
+	"title": "a table removed is gone from the tables after; before, it is there",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"table": "attributes",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"table": "attributes",
+			"patches": [{ "path": [] }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "b",
+			"expect": {
+				"tables": {
+					"value": { "value": 1, "change": { "time": 0, "actor": null } },
+					"attributes": { "value": { "k": 1 }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "replay",
+			"commit": "c",
+			"expect": { "tables": { "value": { "value": 1, "change": { "time": 0, "actor": null } } } }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["c"],
+			"patches": [{ "path": [] }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "replay", "commit": "d", "expect": { "tables": {} } }
+	]
+}

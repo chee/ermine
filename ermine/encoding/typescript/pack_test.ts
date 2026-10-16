@@ -3,42 +3,41 @@ import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine
 import update from "@ermine/node/update"
 import { createTable, type Key } from "@ermine/table"
 import * as cbor from "./cbor.ts"
+import { deflate, inflate } from "./deflate.ts"
 import { decode, encode, type Entry, pack, PackError, unpack } from "./pack.ts"
 
 const code = (f: () => unknown) => (assertThrows(f, PackError) as PackError).code
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const h = (time = 1, actor: unknown = "a"): ChangeHeader => ({ time, actor })
 const n = (value: unknown, change = h()) => createEntry(value, change)
+// a pack's columns, read; and columns written as a pack
+const inner = (b: Uint8Array) =>
+	cbor.decode(inflate((cbor.decode(b) as { columns: Uint8Array }).columns)) as Record<
+		string,
+		cbor.Value
+	>
+const wrap = (columns: cbor.Value) => cbor.encode({ columns: deflate(cbor.encode(columns)) })
 
 Deno.test("pack: one node under one key, written as the module says", () => {
 	const b = pack([["value", "a", n("hi", { time: 1, actor: "x" })]])
-	assertEquals(
-		cbor.decode(b),
-		{ keys: [["value", "a", 0]], nodes: [{ change: { time: 1, actor: "x" }, value: "hi" }] },
-	)
-	assertEquals(
-		hex(b),
-		[
-			"a2", // a map of two
-			"646b657973", // "keys"
-			"81", // one key
-			"83", // [part, id, n]
-			"6576616c7565", // "value"
-			"6161", // "a"
-			"f90000", // node 0
-			"656e6f646573", // "nodes"
-			"81", // one node
-			"a2", // {value, change}: the shorter key first
-			"6576616c7565",
-			"626869", // "hi"
-			"666368616e6765", // "change"
-			"a2", // {time, actor}
-			"6474696d65", // "time"
-			"f93c00", // 1
-			"656163746f72", // "actor"
-			"6178", // "x"
-		].join(""),
-	)
+	assertEquals(Object.keys(cbor.decode(b) as object), ["columns"])
+	assertEquals(inner(b), {
+		ids: ["a"],
+		parts: [["value", 1]],
+		which: Uint8Array.of(0), // the key's id: ids[0]
+		nodes: Uint8Array.of(0), // a new node
+		has: Uint8Array.of(1 | 32), // an actor, a value
+		time: Uint8Array.of(2), // 1, the difference from 0, zigzag
+		actor: [["x", 1]],
+		values: ["hi"],
+	})
+	// an ermine:// id as its 32 bytes
+	const id = "ermine://" + "0f".repeat(32)
+	assertEquals(inner(pack([["value", id, n(1)]])).ids, [new Uint8Array(32).fill(15)])
+	assertEquals(unpack(pack([["value", id, n(1)]]))[0][1], id)
+	// not quite one (upper case hex): its text
+	const upper = "ermine://" + "0F".repeat(32)
+	assertEquals(inner(pack([["value", upper, n(1)]])).ids, [upper])
 })
 
 Deno.test("pack: the same table is the same bytes, whatever order it is given in", () => {
@@ -62,10 +61,10 @@ Deno.test("pack: a node under several keys is one node again", () => {
 	// equal, but two nodes: two again
 	assertEquals(back[0][2] === back[2][2], false)
 	assertEquals(back[0][2].value, back[2][2].value)
-	const raw = cbor.decode(pack([["value", "a", shared], ["value", "b", shared]])) as {
-		nodes: unknown[]
-	}
-	assertEquals(raw.nodes.length, 1)
+	const raw = inner(pack([["value", "a", shared], ["value", "b", shared]]))
+	// key a: a new node; key b: node 0 again
+	assertEquals(raw.nodes, Uint8Array.of(0, 1))
+	assertEquals(raw.values, [{ k: 1 }])
 })
 
 Deno.test("pack: a table's nodes in, a table's nodes out", () => {
@@ -244,11 +243,55 @@ Deno.test("pack: times, lines, columns, path numbers and range ends are whole", 
 })
 
 Deno.test("pack: reading takes exactly what writing gives", () => {
-	const good = cbor.decode(pack([["value", "a", n(1)], ["value", "b", n(2)]])) as {
-		keys: cbor.Value[]
-		nodes: cbor.Value[]
-	}
-	const one = (node: cbor.Value) => ({ keys: [good.keys[0]], nodes: [node] })
+	const good = inner(pack([["value", "a", n(1)], ["value", "b", n(2)]]))
+	const bad: [string, cbor.Value][] = [
+		["another column", { ...good, extra: [] }],
+		["an id named before the ids before it", { ...good, which: Uint8Array.of(1, 0) }],
+		["an id never named", { ...good, ids: ["a", "b", "c"] }],
+		["an id past the ids", { ...good, which: Uint8Array.of(0, 2) }],
+		["keys out of order", { ...good, ids: ["b", "a"] }],
+		["a key twice", {
+			...good,
+			ids: ["a"],
+			which: Uint8Array.of(0, 0),
+			nodes: Uint8Array.of(0, 1),
+		}],
+		["a node named before it is new", { ...good, nodes: Uint8Array.of(0, 2) }],
+		["a node under no key", { ...good, nodes: Uint8Array.of(0, 1) }],
+		["fewer keys than parts", { ...good, which: Uint8Array.of(0) }],
+		["a run of none", { ...good, parts: [["value", 2], ["value", 0]] }],
+		["a node with bits past cow", { ...good, has: Uint8Array.of(32 | 128, 1, 32) }],
+		["a value too few", { ...good, values: [1] }],
+		["a value too many", { ...good, values: [1, 2, 3] }],
+		["an ermine:// id as its text", { ...good, ids: ["ermine://" + "00".repeat(32), "b"] }],
+		["a varint that never ends", { ...good, time: Uint8Array.of(0x80) }],
+	]
+	for (const [name, x] of bad) assertEquals(code(() => unpack(wrap(x))), "not-a-pack", name)
+	assertEquals(
+		code(() => unpack(cbor.encode({ columns: Uint8Array.of(0xff, 0xff) }))),
+		"not-a-pack",
+	)
+	assertEquals(code(() => unpack(cbor.encode({ columns: 1 }))), "not-a-pack")
+	assertEquals(
+		code(() => unpack(pack([["value", "a", n("x".repeat(5000))]]), { limit: 100 })),
+		"not-a-pack",
+	)
+	assertEquals(code(() => unpack(new Uint8Array([0x01]))), "not-a-pack")
+	assertEquals(code(() => decode(cbor.encode({ change: {} }))), "not-a-node")
+	assertEquals(code(() => decode(pack([]))), "not-a-node")
+})
+
+Deno.test("pack: the first form ({keys, nodes}) is read, as exactly as it was written", () => {
+	const node = (value: number) => ({ change: { time: 1, actor: "a" }, value })
+	const good = { keys: [["value", "a", 0], ["value", "b", 1]], nodes: [node(1), node(2)] }
+	const back = unpack(cbor.encode(good))
+	assertEquals(back.map(([p, i, e]) => [p, i, e.value, e.change.time]), [["value", "a", 1, 1], [
+		"value",
+		"b",
+		2,
+		1,
+	]])
+	const one = (x: cbor.Value) => ({ keys: [good.keys[0]], nodes: [x] })
 	const bad: [string, cbor.Value][] = [
 		["not a map", [1]],
 		["another key", { ...good, extra: 1 }],
@@ -270,13 +313,10 @@ Deno.test("pack: reading takes exactly what writing gives", () => {
 		],
 	]
 	for (const [name, x] of bad) assertEquals(code(() => unpack(cbor.encode(x))), "not-a-pack", name)
-	assertEquals(code(() => unpack(new Uint8Array([0x01]))), "not-a-pack")
-	assertEquals(code(() => decode(cbor.encode({ change: {} }))), "not-a-node")
-	assertEquals(code(() => decode(pack([]))), "not-a-node")
 })
 
 Deno.test("pack: an empty pack", () => {
-	assertEquals(cbor.decode(pack([])), { keys: [], nodes: [] })
+	assertEquals(inner(pack([])), {})
 	assertEquals(unpack(pack([])), [])
 })
 

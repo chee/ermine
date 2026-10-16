@@ -15,54 +15,93 @@ import { createTable, type Id, type Key } from "@ermine/table"
 import { createPlaces } from "@ermine/places"
 import { get } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
-import { box, createBoxes } from "@ermine/boxes"
+import { type Read, RUN, type Run } from "@ermine/places/runs"
+import { box, createBox } from "@ermine/boxes"
 import { createScopeNodes } from "@ermine/processes/scopes"
-import { createBuilds } from "@ermine/programs/build"
+import { createBuilds } from "@ermine/build"
 import { satisfy } from "@ermine/programs"
 import { createPrograms, type Process, type Programs } from "@ermine/programs/start"
-import { type API, createProcessAPIs, SendError } from "./api.ts"
+import { no, type Policy, yes } from "@ermine/protect"
+import { Refusal } from "@ermine/places/guard"
+import type { World } from "@ermine/presence"
+import { createOverlay, type Overlay } from "@ermine/patch-nodes"
+import { createSites } from "@ermine/sites"
+import { type API, createProcessAPIs, type Noticed, SendError } from "./api.ts"
 
 const JS = "com.netscape.javascript-source"
 const tick = () => new Promise((r) => setTimeout(r, 0))
 
-function world() {
+function world(o: { may?: Policy; presence?: boolean; overlay?: boolean; sites?: boolean } = {}) {
 	const s = createScheduler()
-	const table = createTable((part, id) => {
-		places.onTableChange(part as Key, id)
-		boxes.onTableChange(part as Key, id)
-	})
+	const table = createTable((part, id) =>
+		overlay ? overlay.onTableChange(part as Key, id) : places.onTableChange(part as Key, id)
+	)
+	const overlay: Overlay | undefined = o.overlay ? createOverlay(table, () => places) : undefined
 	const paths = createPaths<unknown>()
-	const places = createPlaces({ root: "R", table, paths, scheduler: s })
+	const places = createPlaces({ root: "R", table: overlay ?? table, paths, scheduler: s })
 	s.onTrackingEnd((key) => places.release(key))
-	const boxes = createBoxes({ table, paths, scheduler: s })
 	const scopes = createScopeNodes({ scheduler: s, table })
 	const host = s.createRootScope([["actor", "host"]])
-	const above = s.createScope([], host)
+	const above = s.createScope([["role", "programs"]], host)
 	const hosted = <T>(f: () => T) => s.runWithScope(host, f)
 	const header = () => createChangeHeader(s)
-	const commit = (changed: readonly Entry<unknown>[]) => (
-		places.commit(changed), boxes.commit(changed)
-	)
+	const commit = (changed: readonly Entry<unknown>[]) =>
+		overlay ? overlay.commit(changed) : places.commit(changed)
 	const put = (part: Key, id: Id, v: unknown) =>
 		hosted(() => table.sub(part, id, createEntry(v, header())))
+	let now = 1000
+	const presence: World | undefined = o.presence
+		? {
+			table,
+			places: { commit, readValue: places.readValue },
+			scheduler: s,
+			scope: host,
+			now: () => now,
+		}
+		: undefined
 	let programs!: Programs
-	const apis = createProcessAPIs({ scheduler: s, table, commit, boxes, programs: () => programs })
+	// sites: the api, start and the scheduler are ours, so a site is the program's line
+	const sites = o.sites
+		? createSites(s, {
+			ours: [
+				new URL("./api.ts", import.meta.url).href,
+				import.meta.resolve("@ermine/programs/start"),
+				import.meta.resolve("@ermine/processes/start"),
+				import.meta.resolve("@ermine/scheduler"),
+			],
+		})
+		: undefined
+	const noticed: Noticed[] = []
+	const apis = createProcessAPIs({
+		scheduler: s,
+		table,
+		commit,
+		host: { places, table, scheduler: s, commit },
+		programs: () => programs,
+		may: o.may,
+		presence,
+		who: "laptop",
+		overlay,
+		sites,
+		notice: (made) => void noticed.push(made),
+	})
 	put("children", "W", { lib: "LIB" })
 	put("children", "LIB", {})
 	put("value", "RUN", apis.run)
 	put("attributes", "RUN", { "ermine.programs.takes": [JS] })
-	const b = boxes.createBox("W")
-	hosted(() => box(b, ["run"], "RUN"))
+	const b = createBox({ places, table, scheduler: s, commit }, { id: "W" })
+	hosted(() => box(b, ["run"], "RUN", header()))
 	programs = s.runWithScope(above, () => {
 		const writes = { readValue: places.readValue, commit }
 		const builds = createBuilds({ scheduler: s, table, places: writes, cache: "CACHE" })
-		return createPrograms({
+		return createPrograms({ // where the programs are made
 			scheduler: s,
 			table,
 			places: writes,
 			builds,
 			scopes,
 			createProcessAPI: apis.createProcessAPI,
+			sites,
 		})
 	})
 	// a javascript program at name in W (or a folder in W), attributes beside its type
@@ -82,7 +121,7 @@ function world() {
 		})
 	const start = (name: string, at: string[]): Process => {
 		for (const way of satisfy(b.places, name, [])) {
-			const p = hosted(() => programs.start(b, way, at))
+			const p = hosted(() => programs.start(b, way, at)) // where start is called
 			if ("refused" in p) throw new Error(p.refused)
 			s.pulse()
 			return p
@@ -90,7 +129,8 @@ function world() {
 		throw new Error(`no way for ${name}`)
 	}
 	const inW = (name: string) => (table.get("children", "W")?.value as Record<string, Id>)[name]
-	return { s, table, b, apis, program, start, inW, put, hosted }
+	const later = (ms: number) => (now += ms)
+	return { s, table, b, apis, program, start, inW, put, hosted, later, sites, noticed }
 }
 
 Deno.test("open makes once; edit takes a recipe or patches; a write from outside needs no method, and pulses by itself", async () => {
@@ -101,8 +141,8 @@ Deno.test("open makes once; edit takes a recipe or patches; a write from outside
 		api = a
 		const notes = a.open("./notes", { a: 1 })
 		a.open("./notes", { a: 99 })
-		const n = a.memo(() => a.read(notes, ["a"]))
-		a.effect(() => a.read(n), (v) => void seen.push(v))
+		const n = a.memo("n", () => a.read(notes, ["a"]))
+		a.effect("seen", () => a.read(n), (v) => void seen.push(v))
 		a.edit(notes, (d: { a: number }) => void d.a++)
 		return "ticking"
 	})
@@ -122,6 +162,31 @@ Deno.test("open makes once; edit takes a recipe or patches; a write from outside
 	assertEquals(api.read("./notes"), "whole")
 })
 
+Deno.test("a memo's node holds its latest run: what it read, with the change it saw, and wrote; an effect's, its act's writes", async () => {
+	const w = world()
+	w.program("runs.js", (a) => {
+		const notes = a.open("./notes", { a: 1 })
+		const out = a.open("./out", 0)
+		const n = a.memo("n", () => a.read(notes, ["a"]))
+		a.effect("copy", () => a.read(n), (v) => a.edit(out, [{ path: [], value: v }]))
+	})
+	w.start("runs.js", ["runs"])
+	await tick()
+	const [memo, effect] = w.noticed
+	const run = w.table.get("attributes", memo.id)?.value?.[RUN] as Run
+	assertEquals([run.n, run.end], [1, "done"])
+	const notes = w.inW("notes")
+	const named = run.reads.filter((r): r is Exclude<Read, { key: unknown }> => !("key" in r))
+	const read = named.find((r) => r.id === notes)!
+	assertEquals([read.part, read.path], ["value", ["a"]])
+	assertStrictEquals(read.change, w.table.get("value", notes)!.change)
+	// its result, written to its own node by its set
+	assertEquals(run.writes.map((x) => [x.part, x.id]), [["value", memo.id]])
+	const acted = w.table.get("attributes", effect.id)?.value?.[RUN] as Run
+	const out = w.inW("out")
+	assertEquals(acted.writes.map((x) => [x.part, x.id]), [["value", effect.id], ["value", out]])
+})
+
 Deno.test("a bare name is inside the process: reached through its path, gone at its stop; teardown is told why", async () => {
 	const w = world()
 	const whys: string[] = []
@@ -129,7 +194,7 @@ Deno.test("a bare name is inside the process: reached through its path, gone at 
 	const setup = (a: API) => {
 		a.open("scratch", { x: 1 })
 		a.teardown((why) => void whys.push(why))
-		a.effect(() => a.read("scratch", ["x"]), (x) => void xs.push(x))
+		a.effect("peek", () => a.read("scratch", ["x"]), (x) => void xs.push(x))
 	}
 	w.program("scratch.js", setup)
 	const p = w.start("scratch.js", ["s"])
@@ -153,7 +218,7 @@ Deno.test("a teardown under a computer is told replaced as it runs again", async
 	w.program("again.js", (a) => {
 		api = a
 		const n = a.open("./n", 1)
-		a.effect(() => a.read(n), () => a.teardown((why) => void whys.push(why)))
+		a.effect("tear", () => a.read(n), () => a.teardown((why) => void whys.push(why)))
 	})
 	w.start("again.js", ["again"])
 	await tick()
@@ -188,8 +253,8 @@ Deno.test("an async memo: its readers pending (PENDING) till it lands, and it la
 	const seen: unknown[] = []
 	let resolve!: (v: number) => void
 	w.program("slow.js", (a) => {
-		const m = a.memo(() => new Promise<number>((r) => (resolve = r)))
-		a.effect(() => a.read(m), (v) => void seen.push(v))
+		const m = a.memo("m", () => new Promise<number>((r) => (resolve = r)))
+		a.effect("seen", () => a.read(m), (v) => void seen.push(v))
 	})
 	w.start("slow.js", ["slow"])
 	await tick()
@@ -297,4 +362,115 @@ Deno.test("box: a child in a box of a folder, seeing only what is boxed into it"
 	// its "/" is lib: W's own names are not there
 	assertEquals(child.read("/lib"), undefined)
 	assert(child.list("/").includes("inside.js"))
+})
+
+Deno.test("protect: a policy's no refuses a read (Refusal) and a write; a list keeps a refused item, its id REFUSED", async () => {
+	const may: Policy = (ask) => {
+		const path = ask.target.path?.join("/")
+		if (ask.op === "edit" && path === "secret") return no("not yours")
+		if (ask.op === "read" && path === "hidden") return no("hidden")
+		return yes
+	}
+	const w = world({ may })
+	let api!: API
+	w.program("files.js", (a) => void (api = a))
+	w.start("files.js", ["files"])
+	await tick()
+	api.open("./secret", 1)
+	api.open("./hidden", 2)
+	api.open("./open", 3)
+	assertInstanceOf(assertThrows(() => api.edit("./secret", () => 9)), Refusal)
+	assertEquals(api.read("./secret"), 1)
+	assertInstanceOf(assertThrows(() => api.read("./hidden")), Refusal)
+	assertEquals(api.entries("./hidden").map((e) => [e.id === api.REFUSED, e.value]), [[
+		true,
+		undefined,
+	]])
+	api.edit("./open", () => 4)
+	assertEquals(api.read("./open"), 4)
+})
+
+Deno.test("presence: my row at a node, read live by a computation, gone when I am absent", async () => {
+	const w = world({ presence: true })
+	let api!: API
+	const seen: unknown[] = []
+	w.program("cursor.js", (a) => {
+		api = a
+		const doc = a.open("./doc", "hello")
+		a.effect(
+			"rows",
+			() => a.presence(doc).map((r) => [r.who, r.value]),
+			(rows) => void seen.push(rows),
+		)
+	})
+	w.start("cursor.js", ["cursor"])
+	await tick()
+	api.present("./doc", { at: 3 })
+	await tick()
+	api.absent("./doc")
+	await tick()
+	assertEquals(seen, [[], [["laptop", { at: 3 }]], []])
+})
+
+Deno.test("patch nodes: one over another node, read through the overlay, its layers, landed for real", async () => {
+	const w = world({ overlay: true })
+	let api!: API
+	w.program("skins.js", (a) => void (api = a))
+	w.start("skins.js", ["skins"])
+	await tick()
+	const face = api.open("./face", { accent: "red", n: 1 })
+	const skin = api.patch("cherry", face, (d: { accent: string }) => void (d.accent = "cherry"))
+	assertEquals(api.read(face), { accent: "cherry", n: 1 })
+	const layers = api.layers(face, ["accent"])
+	assertEquals(layers.map((l) => l.value), ["cherry", "red"])
+	assertEquals(w.table.get("value", w.inW("face"))?.value, { accent: "red", n: 1 })
+	api.land(skin)
+	assertEquals(w.table.get("value", w.inW("face"))?.value, { accent: "cherry", n: 1 })
+	assertEquals(api.layers(face).length, 1)
+})
+
+Deno.test("sites: a memo made in a program reports the program's line; its chain goes through the process, made where start was called, to where the programs were made", () => {
+	const w = world({ sites: true })
+	w.program("memo.js", (a) => void a.memo("one", () => 1)) // the program's line
+	const p = w.start("memo.js", ["memo"])
+	const [made] = w.noticed
+	const text = Deno.readTextFileSync(new URL(import.meta.url)).split("\n")
+	const line = (mark: string) => text.findIndex((l) => l.endsWith(mark)) + 1
+	const at = (x: { file: string; line: number }) => [x.file.split("/").pop(), x.line]
+	assertEquals(made.kind, "memo")
+	assertEquals(w.sites!.sitesOf(made.computer!).map(at), [
+		["api_test.ts", line("// the program's line")],
+		["api_test.ts", line("// where start is called")],
+		["api_test.ts", line("// where the programs are made")],
+	])
+	assertEquals(w.sites!.sitesOf(p.scope).map(at).slice(0, 1), [
+		["api_test.ts", line("// where start is called")],
+	])
+})
+
+Deno.test("early: its first act happened by the time early returns, and a later change's early act comes before an ordinary effect's", async () => {
+	const w = world()
+	const seen: unknown[] = []
+	let at: unknown[] = []
+	let api!: API
+	w.program("early.js", (a) => {
+		api = a
+		const n = a.open("./n", 1)
+		a.effect("effect", () => a.read(n), (v) => void seen.push(["effect", v]))
+		const e = a.early("early", () => a.read(n), (v) => void seen.push(["early", v]))
+		at = [...seen]
+		assertEquals(a.read(e), 1)
+	})
+	w.start("early.js", ["early"])
+	await tick()
+	assertEquals(at, [["early", 1]])
+	assertEquals(seen, [["early", 1], ["effect", 1]])
+	api.edit("./n", [{ path: [], value: 2 }])
+	await tick()
+	assertEquals(seen.slice(2), [["early", 2], ["effect", 2]])
+	// its node has its status and run record, as an effect's
+	const [, early] = w.noticed
+	const run = w.table.get("attributes", early.id)?.value?.[RUN] as Run
+	assertEquals(run.end, "done")
+	assertEquals(w.table.get("value", early.id)?.value, 2)
 })

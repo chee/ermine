@@ -1,0 +1,215 @@
+{
+	"title": "pruning keeps marking precise: the read that said none is the one tracked, of all under its path, so a row put anywhere under it reruns a reader of the walk and one put elsewhere does not; the rerun asks the contributor down the path again, and a row on the path is found",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"o"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"a": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "B",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "rows",
+			"value": {
+				"apps": {
+					"x": "X"
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "rows",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"get": [
+					"work",
+					"a",
+					"b"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "B"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "rows",
+			"path": [
+				"apps",
+				"y"
+			],
+			"value": "Y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "B"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "rows",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c"
+			],
+			"value": "Z",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "B"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 3,
+				"names": 0
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "rows",
+			"path": [
+				"apps",
+				"z"
+			],
+			"value": "Z2",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "B"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "upsert",
+			"part": "value",
+			"id": "rows",
+			"path": [
+				"work",
+				"a",
+				"b"
+			],
+			"value": "P",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": "P"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 3,
+				"names": 0
+			}
+		}
+	]
+}

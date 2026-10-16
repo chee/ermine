@@ -1,0 +1,54 @@
+{
+	"title": "one commit: its columns, and its sealed bytes back exactly",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"time": 1760000000,
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "title": "hi" } }]
+		},
+		{
+			"op": "sealed",
+			"commit": "a",
+			"expect": {
+				"sealed": "a266636f6d6d69745884a86474696d65fa4ed1cef0656163746f72f6656e6f6e6365f93c00657461626c656576616c7565667369676e657258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e61747572655840443153e2a7ff40081e9c9beb33cd1d66d18ff8e1571291c413eb47927ca09380bb929260461747650e35b5d1876eb25e5657f39c8a45fb2d5c749cd6693e3602"
+			}
+		},
+		{
+			"op": "pack",
+			"commits": ["a"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef93c0064626173658182f6f93c006474696d654580e0bb8e0d656163746f728182f6f93c00656e6f6e63654102657461626c6581826576616c7565f93c00667265616465728182f6f93c00667369676e6572818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c00676c616d706f7274410267706172656e7473818067706174636865738181a26470617468806576616c7565a1657469746c656268696865787465726e616c8182f6f93c00686d657461646174618182f6f93c006a7369676e6174757265735840443153e2a7ff40081e9c9beb33cd1d66d18ff8e1571291c413eb47927ca09380bb929260461747650e35b5d1876eb25e5657f39c8a45fb2d5c749cd6693e3602"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 1,
+					"base": [[null, 1]],
+					"time": { "/": { "bytes": "gOC7jg0" } },
+					"actor": [[null, 1]],
+					"nonce": { "/": { "bytes": "Ag" } },
+					"table": [["value", 1]],
+					"reader": [[null, 1]],
+					"signer": [[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 1]],
+					"lamport": { "/": { "bytes": "Ag" } },
+					"parents": [[]],
+					"patches": [[{ "path": [], "value": { "title": "hi" } }]],
+					"external": [[null, 1]],
+					"metadata": [[null, 1]],
+					"signatures": {
+						"/": {
+							"bytes": "RDFT4qf/QAgenJvrM80dZtGP+OFXEpHEE+tHknygk4C7kpJgRhdHZQ41tdGHbrJeVlfznIpF+y1cdJzWaT42Ag"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a"] } }
+	]
+}

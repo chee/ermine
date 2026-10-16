@@ -1,0 +1,143 @@
+{
+	"title": "external a list of sites: file a string, line whole, column whole and function a string if there, nothing else",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": { "file": "a.ts", "line": 1 }
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "line": 1 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "file": "a.ts" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "file": "a.ts", "line": -1 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "file": "a.ts", "line": 1, "column": 1.5 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "file": "a.ts", "line": 1, "function": 5 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": [{ "file": "a.ts", "line": 1, "host": "x" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": ["a.ts:1"]
+			},
+			"expect": { "error": "not-a-commit", "field": "external" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"external": []
+			},
+			"expect": {
+				"bytes": "a96474696d65fa4ed1cef0656163746f726463686565656e6f6e6365f93c00657461626c656576616c7565667369676e657258201111111111111111111111111111111111111111111111111111111111111111676c616d706f7274f9400067706172656e74738158202222222222222222222222222222222222222222222222222222222222222222677061746368657381a2647061746881657469746c656576616c75656268696865787465726e616c80",
+				"name": "dbfb564599616df5581e8c6eeadb483c92393c488485dc6ced8a6e9914ab53b8"
+			}
+		}
+	]
+}

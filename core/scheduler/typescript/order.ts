@@ -1,14 +1,17 @@
-// order: what runs next. the due, each at the tick it became due; and the ranks, kept as rank.ts
-// would make them: made whole once (rank.ts), then mended where an edge changed.
+// order: what runs next. the due, each at the tick it became due; and the ranks: made whole once
+// (rank.ts), then mended where an edge changed, only ever rising.
 //
 // a computation is after: the writers of the keys its last run read (values), and the one it
 // waits after (after). the scheduler says when those change (sees, waits), and when one is made
 // and goes; order changes nothing else of a computation, but its own fields on it (Ordered).
 //
-// mending: a computation whose edges changed takes its rank again from its edges (one past the
-// most of what it is after; after nothing, 0), and what is after it does the same, as far as a
-// rank changes. that is rank.ts's rank while there is no cycle. a cycle (a component of more than
-// one) is rank.ts's alone: while there is one, any change makes the ranks whole again
+// mending: a computation whose edges changed rises to one past the most of what it is after, if
+// that is more than its rank now, and what is after it does the same, as far as a rank rises.
+// a rank never falls (an edge gone, a computation gone: nothing lowered), so it is at least
+// rank.ts's, never less: still after everything it is after. a cycle (a component of more than
+// one) is rank.ts's alone, ranked over the part of the graph from the change on (local): when a
+// mend reaches one of its members, a member goes, or a mend comes back round to where it began
+// (a cycle made now)
 import rank from "./rank.ts"
 
 // what order keeps on a computation. values: the writers its last run read, no repeats.
@@ -36,7 +39,8 @@ export function createOrder<P extends Ordered<P>>(
 	let making = 0
 	let made = 0
 	let ranked = 0
-	let cyclic = false
+	// the members of a component of more than one, at the making now
+	const members = new Set<P>()
 	let stamps = 0
 	const edge = (p: P, q: P | undefined) => q !== undefined && q !== p && q.state === "alive"
 	const rankOf = (p: P) => p.ranked === making ? p.rank : 0
@@ -65,13 +69,13 @@ export function createOrder<P extends Ordered<P>>(
 		const r = rank([...all()].filter((p) => p.state === "alive"), edges)
 		making = ++made
 		ranked = r.size
-		cyclic = false
+		members.clear()
 		for (const [p, k] of r) {
 			p.rank = k
 			p.ranked = making
 		}
 		for (const [p, k] of r) {
-			for (const q of edges(p)) if (r.get(q) === k) cyclic = true
+			for (const q of edges(p)) if (r.get(q) === k) members.add(p).add(q)
 		}
 		remake()
 	}
@@ -85,27 +89,62 @@ export function createOrder<P extends Ordered<P>>(
 		for (const p of all()) if (p.due !== 0) push(p, rankOf(p), p.due)
 	}
 
-	// the edges of these changed: each takes its rank again from its edges, and what is after it
-	// too, as far as a rank changes. a due one mended goes in the heap again at its new rank. a
-	// cycle, or a rank past the count (a cycle made now), or mending longer than a whole making
-	// would take: made whole at the next
+	// ranked again from start and everything after it (the region): rank.ts over the region's own
+	// edges, each at least one past what it is after outside it. nothing outside is after the
+	// region, so nothing outside changes. its members found again
+	function local(start: Iterable<P>) {
+		const region = new Set<P>()
+		const stack = [...start]
+		while (stack.length) {
+			const x = stack.pop()!
+			if (x.state !== "alive" || region.has(x)) continue
+			region.add(x)
+			if (x.afters) { for (const y of x.afters.keys()) stack.push(y) }
+		}
+		const inner = (p: P) => edges(p).filter((q) => region.has(q))
+		const floor = (p: P) => {
+			let k = 0
+			for (const q of edges(p)) if (!region.has(q)) k = Math.max(k, rankOf(q) + 1)
+			return k
+		}
+		const r = rank(region, inner, floor)
+		for (const [p, k] of r) {
+			members.delete(p)
+			if (p.ranked !== making) ranked++
+			p.rank = k
+			p.ranked = making
+			if (p.due !== 0) push(p, k, p.due)
+		}
+		for (const [p, k] of r) for (const q of inner(p)) if (r.get(q) === k) members.add(p).add(q)
+	}
+
+	// the edges of these changed: each rises to one past its edges' most, and what is after it
+	// too, as far as a rank rises. a due one mended goes in the heap again at its new rank. a
+	// cycle's member reached, or one of these reached again (after what is after it: a cycle made
+	// now): ranked again from these on (local). mending longer than a whole making would take:
+	// made whole at the next
 	function mend(work: P[]) {
 		if (making === 0) return
-		if (cyclic) return void (making = 0)
+		const begun = new Set(work)
 		const limit = 4 * ranked + 64
 		for (let steps = 0; work.length; steps++) {
 			if (steps > limit) return void (making = 0)
 			const x = work.pop()!
 			if (x.state !== "alive") continue
+			if (members.has(x)) return local([x, ...work, ...begun])
 			let k = 0
 			for (const q of x.values) if (edge(x, q)) k = Math.max(k, rankOf(q) + 1)
 			if (edge(x, x.after)) k = Math.max(k, rankOf(x.after!) + 1)
-			if (rankOf(x) === k) continue
-			if (k > ranked) return void (making = 0)
+			if (k <= rankOf(x)) continue
 			x.rank = k
 			x.ranked = making
 			if (x.due !== 0) push(x, k, x.due)
-			if (x.afters) { for (const y of x.afters.keys()) work.push(y) }
+			if (x.afters) {
+				for (const y of x.afters.keys()) {
+					if (begun.has(y)) return local(begun)
+					work.push(y)
+				}
+			}
 		}
 	}
 
@@ -266,7 +305,8 @@ export function createOrder<P extends Ordered<P>>(
 			if (changed) mend([p])
 		},
 
-		// p goes: not due, out of the ranks, after nothing; what was after it is mended
+		// p goes: not due, out of the ranks, after nothing; what was after it keeps its rank. a
+		// cycle's member: what was after it ranked again (local)
 		gone(p: P) {
 			if (p.due !== 0) dues--
 			p.due = 0
@@ -278,7 +318,7 @@ export function createOrder<P extends Ordered<P>>(
 			p.ranked = 0
 			const m = p.afters
 			p.afters = undefined
-			if (m) mend([...m.keys()])
+			if (members.delete(p) && m) local(m.keys())
 		},
 	}
 }

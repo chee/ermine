@@ -1,0 +1,12 @@
+{
+	"title": "inflate: over-subscribed code lengths",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "05e0ffffffffffff07",
+			"expect": {
+				"code": "not-deflate"
+			}
+		}
+	]
+}

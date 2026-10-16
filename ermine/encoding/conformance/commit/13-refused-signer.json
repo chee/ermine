@@ -1,0 +1,108 @@
+{
+	"title": "signer 32 bytes",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "11111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "111111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": 7,
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": [
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17,
+					17
+				],
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		}
+	]
+}

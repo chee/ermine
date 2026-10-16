@@ -1,0 +1,101 @@
+{
+	"title": "every table, each entry's change as a commit carries it, the keys in canonical order",
+	"steps": [
+		{
+			"op": "snapshot",
+			"tables": {
+				"value": {
+					"value": "body",
+					"change": {
+						"time": 3,
+						"actor": {
+							"name": "juno"
+						}
+					}
+				},
+				"children": {
+					"value": {
+						"notes": "ermine://abababababababababababababababababababababababababababababababab"
+					},
+					"change": {
+						"time": 2,
+						"actor": "chee",
+						"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+					}
+				},
+				"attributes": {
+					"value": {
+						"color": "cherry"
+					},
+					"change": {
+						"time": 1,
+						"actor": null,
+						"external": [
+							{
+								"file": "a.ts",
+								"line": 1
+							}
+						],
+						"metadata": [
+							[
+								"cause",
+								1
+							]
+						]
+					}
+				}
+			},
+			"expect": {
+				"snapshot": "a167636f6c756d6e7358c5a550316ec3300c7496fea3e8dc662fba79ea2f4a8b6748812c1514dd26a3e597386bfe17205be82043f6e00882c4f170079e9ca7d2bebebdbbc065fa610d03da97cd06e434cb5c174e34807763ca97afa6b2f3c03a9cad216546699ba6c12f8996b9e28fe278e3bdf321b220adcb8e542574a3a2acb27f1f9c5f65bd801832d5fd376408099fdbade3e76006fd2d4599b9cb7c582ca5f93e3850f71c16b81cb3f4f60a9183c75e2189e254a723f72182e9430b4733b32c567e801293925d54381acb9db802"
+			}
+		},
+		{
+			"op": "tables",
+			"snapshot": "a2646b65797383836576616c756560f9000083686368696c6472656e60f93c00836a6174747269627574657360f94000656e6f64657383a26576616c756564626f6479666368616e6765a26474696d65f94200656163746f72a1646e616d65646a756e6fa26576616c7565a1656e6f746573784965726d696e653a2f2f61626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162666368616e6765a36474696d65f94000656163746f72646368656566726561646572784965726d696e653a2f2f63646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364a26576616c7565a165636f6c6f7266636865727279666368616e6765a46474696d65f93c00656163746f72f66865787465726e616c81a26466696c6564612e7473646c696e65f93c00686d657461646174618182656361757365f93c00",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": "body",
+						"change": {
+							"time": 3,
+							"actor": {
+								"name": "juno"
+							}
+						}
+					},
+					"children": {
+						"value": {
+							"notes": "ermine://abababababababababababababababababababababababababababababababab"
+						},
+						"change": {
+							"time": 2,
+							"actor": "chee",
+							"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+						}
+					},
+					"attributes": {
+						"value": {
+							"color": "cherry"
+						},
+						"change": {
+							"time": 1,
+							"actor": null,
+							"external": [
+								{
+									"file": "a.ts",
+									"line": 1
+								}
+							],
+							"metadata": [
+								[
+									"cause",
+									1
+								]
+							]
+						}
+					}
+				}
+			}
+		}
+	]
+}

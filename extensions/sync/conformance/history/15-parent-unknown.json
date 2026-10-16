@@ -1,0 +1,28 @@
+{
+	"title": "a commit on a name never seen waits on it",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"parents": ["abababababababababababababababababababababababababababababababab"],
+			"lamport": 2,
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": {
+				"added": {
+					"waiting": ["abababababababababababababababababababababababababababababababab"]
+				}
+			}
+		},
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": [
+					{
+						"name": "a",
+						"waiting": ["abababababababababababababababababababababababababababababababab"]
+					}
+				]
+			}
+		}
+	]
+}

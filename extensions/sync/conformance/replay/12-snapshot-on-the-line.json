@@ -1,0 +1,66 @@
+{
+	"title": "replay walks back along each commit's base: a snapshot off that line is not used",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["x"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "keep",
+			"commit": "c",
+			"tables": {
+				"value": { "value": { "from": "c" }, "change": { "time": 0, "actor": null } }
+			},
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": ["b", "c"],
+			"base": "b",
+			"patches": [],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "m",
+			"expect": {
+				"tables": { "value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } } }
+			}
+		},
+		{
+			"op": "keep",
+			"commit": "b",
+			"tables": {
+				"value": { "value": { "from": "b" }, "change": { "time": 0, "actor": null } }
+			},
+			"expect": {}
+		},
+		{
+			"op": "replay",
+			"commit": "m",
+			"expect": {
+				"tables": {
+					"value": { "value": { "from": "b" }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,18 @@
+{
+	"title": "random bytes: stored blocks",
+	"steps": [
+		{
+			"op": "deflate",
+			"make": {
+				"random": 7,
+				"length": 70000,
+				"alphabet": 256
+			},
+			"expect": {
+				"length": 70025,
+				"blake3": "e39dd1a75cbc6877d9d4a30771fa5a3f0a190bccb99014d83d63f020ad2b468d",
+				"inflated": true
+			}
+		}
+	]
+}

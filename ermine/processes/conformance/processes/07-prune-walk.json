@@ -1,0 +1,269 @@
+{
+	"title": "pruning: a walk asks the rows a step only while they have something on its path. none at all: once per walk (none at /work, so not under it); a process elsewhere: once; one beside the path: down to where they part; one on it: down to the process and once under it (nothing sits under a leaf). entries and lookup the same, lookup asking again only from the places not pruned",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"a": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "B",
+			"value": {
+				"c": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C",
+			"value": {
+				"d": "D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "D",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"id": "D"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"id": "D"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"apps",
+				"x"
+			],
+			"id": "X",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"id": "D"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"a",
+				"z"
+			],
+			"id": "Z",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"id": "D"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 3,
+				"names": 0
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"a",
+				"z"
+			],
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "P",
+			"value": {
+				"c": "PC"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PC",
+			"value": {
+				"d": "PD"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "PD",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"a",
+				"b"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"id": "PD"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 4,
+				"names": 0
+			}
+		},
+		{
+			"op": "entries",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"expect": {
+				"entries": [
+					{
+						"id": "PD",
+						"from": "children"
+					}
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 4,
+				"names": 0
+			}
+		},
+		{
+			"op": "lookup",
+			"names": [
+				"b"
+			],
+			"from": [
+				"work",
+				"a",
+				"b",
+				"c"
+			],
+			"expect": {
+				"path": [
+					"work",
+					"a",
+					"b"
+				]
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 6,
+				"names": 0
+			}
+		}
+	]
+}

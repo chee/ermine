@@ -39,7 +39,7 @@ function setup() {
 	}
 	const ends = (c: Computer) =>
 		moments.filter((m) => "ends" in m && m.ends === c) as Extract<Told, { ends: unknown }>[]
-	const o = s.createRootScope()
+	const o = s.createRootScope([["actor", "test"]])
 	const at = <T>(f: () => T) => s.runWithScope(o, f)
 	return { s, store, write, get, moments, ends, o, at }
 }
@@ -145,10 +145,39 @@ Deno.test("a set that throws fails the run; the result is given again the next t
 	assertEquals(set, [1])
 })
 
+Deno.test("a run's end says what it keeps past it: a result given to set (even one that throws), or to be acted on; never an equal one", () => {
+	const { s, at, write, get } = setup()
+	const kept: [Computer, unknown][] = []
+	s.onRunEnd((c, _n, _ended, _reads, more) => void ("kept" in more && kept.push([c, more.kept])))
+	const v = { x: 1 }
+	const c = at(() => s.createComputer(() => (get("a"), v), () => {}))
+	const e = at(() => s.createEffect(() => get("b"), () => {}))
+	write("a", 1)
+	write("b", 2)
+	s.pulse()
+	assertEquals(kept.length, 2)
+	assertStrictEquals(kept.find(([k]) => k === c)![1], v)
+	assertEquals(kept.find(([k]) => k === e)![1], 2)
+	// equal: nothing kept
+	write("a", 2)
+	s.pulse()
+	assertEquals(kept.length, 2)
+	// a set that throws had the result: kept all the same
+	const w = { x: 2 }
+	at(() =>
+		s.createComputer(() => (get("c"), w), () => {
+			throw new Error("no")
+		})
+	)
+	write("c", 1)
+	s.pulse()
+	assertStrictEquals(kept.at(-1)![1], w)
+})
+
 Deno.test("dispose: every cleanup runs, the first error after; one added later runs at once", () => {
 	const { s, o, at } = setup()
 	const ran: string[] = []
-	const p = at(() => s.createScope())
+	const p = at(() => s.createScope([["why", "test"]]))
 	s.runWithScope(p, () => {
 		s.registerTeardown(s.getCurrentScope()!, () => ran.push("p1"))
 		s.registerTeardown(s.getCurrentScope()!, () => {
@@ -163,20 +192,20 @@ Deno.test("dispose: every cleanup runs, the first error after; one added later r
 		})
 	)
 	// a cleanup added in a scope gone while it was open runs at once
-	const late = s.createScope([], p)
+	const late = s.createScope([["why", "test"]], p)
 	s.runWithScope(late, () => {
 		const e = assertThrows(() => s.teardown(o))
 		assertEquals((e as Error).message, "first")
 		assertEquals(ran, ["p2", "p1", "o"])
 		s.registerTeardown(s.getCurrentScope()!, () => ran.push("late"))
 		// nothing made in it now
-		assertThrows(() => s.createScope(), SchedulerError, "disposed")
+		assertThrows(() => s.createScope([["why", "test"]]), SchedulerError, "disposed")
 		assertThrows(() => s.createComputer(() => 1, () => {}), SchedulerError, "disposed")
 	})
 	assertEquals(ran.at(-1), "late")
 	// a gone scope is opened by no one, and has nothing made under it
 	assertThrows(() => s.runWithScope(o, () => {}), SchedulerError, "disposed")
-	assertThrows(() => s.createScope([], o), SchedulerError, "disposed")
+	assertThrows(() => s.createScope([["why", "test"]], o), SchedulerError, "disposed")
 })
 
 Deno.test("what is made under a compute goes before its next run", () => {
@@ -260,7 +289,7 @@ Deno.test("wake: told when a promise settles; its result lands at the next pulse
 	const set: number[] = []
 	// set's value is the promise's: number
 	s.runWithScope(
-		s.createRootScope(),
+		s.createRootScope([["actor", "test"]]),
 		() => s.createComputer(() => Promise.resolve(7), (v: number) => void set.push(v)),
 	)
 	s.pulse()
@@ -407,7 +436,7 @@ function bounded(limit = 2000) {
 		s.track(key)
 		return store.get(key)
 	}
-	const o = s.createRootScope()
+	const o = s.createRootScope([["actor", "test"]])
 	return { s, store, write, get, at: <T>(f: () => T) => s.runWithScope(o, f), runs: () => runs }
 }
 
@@ -436,7 +465,8 @@ Deno.test("a cleanup writing what its computation read, on a plain scope made in
 				const k = get("k") as number
 				const f = () => void write("k", k + 1, s.getRun())
 				if (nested) {
-					s.runWithScope(s.createScope(), () => s.registerTeardown(s.getCurrentScope()!, f))
+					s.runWithScope(s.createScope([["why", "test"]]), () =>
+						s.registerTeardown(s.getCurrentScope()!, f))
 				} else s.registerTeardown(s.getCurrentScope()!, f)
 				return 0
 			}, () => {})
@@ -455,7 +485,7 @@ Deno.test("what an effect's runs make goes before its next run: equal results pi
 	const e: Computer = at(() =>
 		s.createEffect(() => {
 			get("k")
-			s.createScope()
+			s.createScope([["why", "test"]])
 			return 0
 		}, () => {})
 	)
@@ -472,7 +502,7 @@ Deno.test("what an act makes stays until the next act, though the effect runs ag
 	const e: Computer = at(() =>
 		s.createEffect(() => (get("k") as number) % 2, (v) => {
 			s.registerTeardown(s.getCurrentScope()!, () => void undone.push(v))
-			s.createScope()
+			s.createScope([["why", "test"]])
 		})
 	)
 	write("k", 1)
@@ -602,7 +632,7 @@ Deno.test("pending through reads: a read of something pending throws it, and eve
 		})
 		keyOf.set(c, name)
 	}
-	s.runWithScope(s.createRootScope(), () => {
+	s.runWithScope(s.createRootScope([["actor", "test"]]), () => {
 		chain("c1", "x")
 		chain("c2", "c1")
 		chain("c3", "c2")
@@ -629,28 +659,46 @@ Deno.test("pending through reads: a read of something pending throws it, and eve
 Deno.test("scope: nothing open: no scope; making a scope or a computer is unscoped", () => {
 	const s = createScheduler()
 	assertEquals(s.getCurrentScope(), undefined)
-	unscoped(() => s.createScope())
+	unscoped(() => s.createScope([["why", "test"]]))
 	unscoped(() => s.createComputer(() => 1, () => {}))
 	unscoped(() => s.createEffect(() => 1, () => {}))
 	// a root is made with nothing open
-	assertEquals(s.createRootScope().parent, undefined)
+	assertEquals(s.createRootScope([["actor", "test"]]).parent, undefined)
 })
 
-Deno.test("scope: one tree: a write's pairs are the info of each scope from the root down, repeats kept", () => {
+Deno.test("scope: a scope with no pairs is empty: a root, a scope", () => {
+	const s = createScheduler()
+	assertThrows(() => s.createRootScope([]), SchedulerError, "no pairs")
+	const o = s.createRootScope([["actor", "test"]])
+	assertThrows(() => s.createScope([], o), SchedulerError, "no pairs")
+	s.runWithScope(o, () => assertThrows(() => s.createScope([]), SchedulerError, "no pairs"))
+	// nothing made under o
+	assertEquals(o.children, [])
+})
+
+// pairs as an object, each owner's too: a trace
+const tree = (pairs: readonly Pair[]): Record<string, unknown> =>
+	Object.fromEntries(pairs.map(([k, v]) => [k, k === "owner" ? tree(v as Pair[]) : v]))
+
+Deno.test("scope: one tree: a write's pairs are the scope open's, then its owner's info, nested; repeats kept", () => {
 	const s = createScheduler()
 	const chee = s.createRootScope([["actor", "chee"]])
 	const app = s.createScope([["app", "notes"], ["actor", "notes"]], chee)
-	const seen: unknown[] = []
+	const seen: (readonly Pair[])[] = []
 	s.runWithScope(app, () => {
 		const save = s.createScope([["why", "save"]])
 		assertStrictEquals(save.parent, app)
 		s.runWithScope(save, () => seen.push(s.getInfo()!))
 		seen.push(s.getInfo()!)
 	})
-	assertEquals(seen, [
-		[["actor", "chee"], ["app", "notes"], ["actor", "notes"], ["why", "save"]],
-		[["actor", "chee"], ["app", "notes"], ["actor", "notes"]],
-	])
+	const notes: Pair[] = [["app", "notes"], ["actor", "notes"], ["owner", [["actor", "chee"]]]]
+	assertEquals(seen, [[["why", "save"], ["owner", notes]], notes])
+	// the owner's info is the owner's own, not a copy: made once, with the scope
+	assertStrictEquals(seen[0][1][1], app.info)
+	assertEquals(tree(seen[0]), {
+		why: "save",
+		owner: { app: "notes", actor: "notes", owner: { actor: "chee" } },
+	})
 	// the owner too: disposing the root takes all of it
 	s.teardown(chee)
 	assertEquals(app.state, "gone")
@@ -685,12 +733,15 @@ Deno.test("scope: a run opens its computation, its info the run's, written by th
 		e = s.createEffect(() => (eown = s.getRun(), get("a")), () => void (seen.act = now(s)))
 	})
 	const t = write("a", 1)
+	// till its first run, a computer's info is the tick of its making alone
+	assertEquals(c.info, [["mark", t - 2], ["owner", notes.info]])
 	s.pulse()
 	const shown = (x: Now) => [x!.scope, x!.pairs, x!.run]
-	const pairs = (
-		n: number,
-		mark: number,
-	): Pair[] => [["actor", "notes"], ["run", n], ["mark", mark]]
+	const pairs = (n: number, mark: number): Pair[] => [
+		["run", n],
+		["mark", mark],
+		["owner", [["actor", "notes"], ["owner", [["actor", "test"]]]]],
+	]
 	assertStrictEquals(c.parent, notes)
 	// each made due by its making: the mark is the tick it was made at, before the write's
 	assertEquals(shown(seen.run), [c, pairs(1, t - 2), own])
@@ -709,7 +760,8 @@ Deno.test("scope: a run's scope is its own: a pulse with another scope open lend
 	write("a", 1)
 	s.runWithScope(s.createRootScope([["actor", "host"]]), () => s.pulse())
 	assertStrictEquals(seen!.scope, c)
-	assertEquals([seen!.pairs.map(([k]) => k), named(seen!.run)], [["run", "mark"], [c, 1]])
+	assertEquals([seen!.pairs.map(([k]) => k), named(seen!.run)], [["run", "mark", "owner"], [c, 1]])
+	assertEquals(tree(seen!.pairs).owner, { actor: "test" })
 })
 
 Deno.test("scope: after an await in a run nothing is open; making is unscoped", async () => {
@@ -721,7 +773,7 @@ Deno.test("scope: after an await in a run nothing is open; making is unscoped", 
 			await null
 			seen.push(s.getCurrentScope())
 			try {
-				s.createScope()
+				s.createScope([["why", "test"]])
 			} catch (e) {
 				seen.push((e as SchedulerError).code)
 			}
@@ -773,7 +825,25 @@ Deno.test("scope: a teardown opens its scope: a computer's by it (its latest run
 	s.teardown(p)
 	// c's teardown from run 1 runs as run 2 starts: by run 2, its latest
 	assertEquals(seen.map((x) => [x!.scope, named(x!.run)]), [[c, [c, 2]], [p, undefined]])
-	assertEquals(seen[1]!.pairs, [["why", "plain"]])
+	assertEquals(seen[1]!.pairs, [["why", "plain"], ["owner", [["actor", "test"]]]])
+})
+
+Deno.test("scope: a scope made in an act says the run acted on, past a later run that did not act", () => {
+	const { s, at, write, get } = setup()
+	let k!: Scope
+	const e = at(() =>
+		s.createEffect(() => (get("a") as number) > 0, (on) => {
+			if (on) k = s.createScope([["why", "listen"]])
+		})
+	)
+	write("a", 1)
+	s.pulse()
+	// run 2 gives true again: no act, so what act 1 made stays
+	write("a", 2)
+	s.pulse()
+	assertEquals([k.state, tree(e.info).run], ["alive", 2])
+	// made due by its making, at tick 1
+	assertEquals(tree(k.info).owner, { run: 1, mark: 1, owner: { actor: "test" } })
 })
 
 Deno.test("scope: a click dispatched in a run, its scope made there, is under the run's: the process's", () => {
@@ -792,7 +862,12 @@ Deno.test("scope: a click dispatched in a run, its scope made there, is under th
 	write("a", 1)
 	s.pulse()
 	assertStrictEquals(seen!.scope.parent, c)
-	assertEquals(seen!.pairs.map(([k]) => k), ["actor", "run", "mark", "event"])
+	assertEquals(seen!.pairs.map(([k]) => k), ["event", "owner"])
+	assertStrictEquals(seen!.pairs[1][1], c.info)
+	assertEquals(tree(seen!.pairs), {
+		event: "click",
+		owner: { run: 1, mark: 1, owner: { actor: "notes", owner: { actor: "test" } } },
+	})
 	assertStrictEquals(seen!.run, own)
 })
 
@@ -816,10 +891,14 @@ Deno.test("scope: a handler's call, as a scope: under the definer's (it dies wit
 	write("a", 1)
 	s.pulse()
 	s.runWithScope(s.createRootScope([["actor", "host"]]), () => call("chee", true))
-	const definer = [["actor", "notes"], ["handler", "click"]]
+	// the definer's, never the caller's: games and the host are in the info only as the call said
+	const definer = ["owner", [["handler", "click"], ["owner", [["actor", "notes"], ["owner", [[
+		"actor",
+		"test",
+	]]]]]]]
 	assertEquals(seen, [
-		[...definer, ["caller", "games"], ["trusted", false]],
-		[...definer, ["caller", "chee"], ["trusted", true]],
+		[["caller", "games"], ["trusted", false], definer],
+		[["caller", "chee"], ["trusted", true], definer],
 	])
 	// what a call made is the definer's: it goes with notes, not with games
 	s.teardown(games)

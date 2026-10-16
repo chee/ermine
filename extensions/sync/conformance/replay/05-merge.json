@@ -1,0 +1,61 @@
+{
+	"title": "a merge's tables are its base's with its patches: what the other parent changed is there only as the merge says",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0, "x": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["x"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": ["b", "c"],
+			"base": "b",
+			"patches": [],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "m",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 1, "x": 0 }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		},
+		{
+			"op": "add",
+			"name": "k",
+			"parents": ["b", "c"],
+			"base": "c",
+			"nonce": 1,
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "k",
+			"expect": {
+				"tables": {
+					"value": { "value": { "n": 1, "x": 2 }, "change": { "time": 0, "actor": null } }
+				}
+			}
+		}
+	]
+}

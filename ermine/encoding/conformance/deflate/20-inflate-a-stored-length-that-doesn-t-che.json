@@ -1,0 +1,12 @@
+{
+	"title": "inflate: a stored length that doesn't check",
+	"steps": [
+		{
+			"op": "inflate",
+			"bytes": "0105000000",
+			"expect": {
+				"code": "not-deflate"
+			}
+		}
+	]
+}

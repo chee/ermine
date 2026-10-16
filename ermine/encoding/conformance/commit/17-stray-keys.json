@@ -1,0 +1,52 @@
+{
+	"title": "a key no commit has is named before any field; of several, the first in canonical order",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"node": "ermine://abababababababababababababababababababababababababababababababab"
+			},
+			"expect": { "error": "not-a-commit", "field": "node" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"zz": 1,
+				"node": 1,
+				"abc": 1
+			},
+			"expect": { "error": "not-a-commit", "field": "zz" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"op": { "patches": [] }
+			},
+			"expect": { "error": "not-a-commit", "field": "op" }
+		}
+	]
+}

@@ -1,0 +1,22 @@
+{
+	"title": "a root's tables: its table set, the change that set it",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"time": 5,
+			"actor": "chee",
+			"patches": [{ "path": [], "value": { "title": "hi" } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "replay",
+			"commit": "a",
+			"expect": {
+				"tables": {
+					"value": { "value": { "title": "hi" }, "change": { "time": 5, "actor": "chee" } }
+				}
+			}
+		}
+	]
+}

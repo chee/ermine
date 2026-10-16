@@ -1,5 +1,5 @@
 {
-	"title": "a write's header is the pairs of the scope open, from the root down, then the write's own: the first actor and reader lifted, the rest the metadata, in order; the time now, one site. nothing open: unscoped",
+	"title": "a write's header: the scope open's nested pairs (its own, then [owner, the scope under's]), the write's extra its own innermost level; the actor and reader the nearest (a level's last pair, keyed owner, the way up; an owner before it only a pair; a reader a string), the metadata whole. the time now, one site. nothing open: unscoped",
 	"steps": [
 		{
 			"op": "header",
@@ -50,6 +50,14 @@
 				"reader": "juno",
 				"metadata": [
 					[
+						"actor",
+						"chee"
+					],
+					[
+						"reader",
+						"juno"
+					],
+					[
 						"why",
 						"test"
 					]
@@ -72,21 +80,9 @@
 				]
 			],
 			"expect": {
-				"actor": "chee",
+				"actor": "games",
 				"reader": "juno",
 				"metadata": [
-					[
-						"why",
-						"test"
-					],
-					[
-						"cause",
-						"x"
-					],
-					[
-						"actor",
-						"notes"
-					],
 					[
 						"then",
 						"y"
@@ -94,6 +90,36 @@
 					[
 						"actor",
 						"games"
+					],
+					[
+						"owner",
+						[
+							[
+								"cause",
+								"x"
+							],
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"chee"
+									],
+									[
+										"reader",
+										"juno"
+									],
+									[
+										"why",
+										"test"
+									]
+								]
+							]
+						]
 					]
 				],
 				"timely": true,
@@ -104,13 +130,9 @@
 			"op": "header",
 			"scope": "save",
 			"expect": {
-				"actor": "chee",
+				"actor": "notes",
 				"reader": "juno",
 				"metadata": [
-					[
-						"why",
-						"test"
-					],
 					[
 						"cause",
 						"x"
@@ -118,6 +140,93 @@
 					[
 						"actor",
 						"notes"
+					],
+					[
+						"owner",
+						[
+							[
+								"actor",
+								"chee"
+							],
+							[
+								"reader",
+								"juno"
+							],
+							[
+								"why",
+								"test"
+							]
+						]
+					]
+				],
+				"timely": true,
+				"sites": 1
+			}
+		},
+		{
+			"op": "header",
+			"scope": "save",
+			"extra": [
+				[
+					"owner",
+					[
+						[
+							"actor",
+							"fake"
+						]
+					]
+				],
+				[
+					"reader",
+					5
+				]
+			],
+			"expect": {
+				"actor": "notes",
+				"reader": "juno",
+				"metadata": [
+					[
+						"owner",
+						[
+							[
+								"actor",
+								"fake"
+							]
+						]
+					],
+					[
+						"reader",
+						5
+					],
+					[
+						"owner",
+						[
+							[
+								"cause",
+								"x"
+							],
+							[
+								"actor",
+								"notes"
+							],
+							[
+								"owner",
+								[
+									[
+										"actor",
+										"chee"
+									],
+									[
+										"reader",
+										"juno"
+									],
+									[
+										"why",
+										"test"
+									]
+								]
+							]
+						]
 					]
 				],
 				"timely": true,
@@ -127,12 +236,24 @@
 		{
 			"op": "root",
 			"name": "bare",
+			"info": [
+				[
+					"why",
+					"bare"
+				]
+			],
 			"expect": {}
 		},
 		{
 			"op": "header",
 			"scope": "bare",
 			"expect": {
+				"metadata": [
+					[
+						"why",
+						"bare"
+					]
+				],
 				"timely": true,
 				"sites": 1
 			}

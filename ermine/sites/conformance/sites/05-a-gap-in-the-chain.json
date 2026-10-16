@@ -1,0 +1,37 @@
+{
+	"title": "a scope made without the sites between two made with them leaves a gap the chain skips",
+	"steps": [
+		{
+			"op": "root",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "bare",
+			"parent": "r",
+			"wrapped": false,
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "leaf",
+			"parent": "bare",
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"name": "bare",
+			"expect": {
+				"site": false
+			}
+		},
+		{
+			"op": "chain",
+			"name": "leaf",
+			"expect": {
+				"length": 2
+			}
+		}
+	]
+}

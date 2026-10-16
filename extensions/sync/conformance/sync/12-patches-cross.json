@@ -1,0 +1,112 @@
+{
+	"title": "what crosses is the patches: a rename in children, a patch deep in a value, a splice",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": { "key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"table": "children",
+			"id": "x",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"old": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+						"keep": "ermine://efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+					}
+				}
+			],
+			"name": "w0",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"table": "children",
+			"id": "x",
+			"patches": [{ "path": ["new"], "move": { "path": ["old"] } }],
+			"name": "mv",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "doc": { "lines": ["a", "b"] } } }],
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": ["doc", "lines", 1], "value": "B" }],
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": ["doc", "lines"], "range": [0, 1], "value": ["x", "y"] }],
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "read",
+			"host": "b",
+			"table": "children",
+			"id": "x",
+			"expect": {
+				"value": {
+					"keep": "ermine://efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+					"new": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+				}
+			}
+		},
+		{
+			"op": "read",
+			"host": "b",
+			"id": "x",
+			"expect": { "value": { "doc": { "lines": ["x", "y", "B"] } } }
+		},
+		{
+			"op": "commit",
+			"host": "b",
+			"id": "x",
+			"commit": "mv",
+			"expect": {
+				"commit": {
+					"table": "children",
+					"actor": "a",
+					"external": [{ "file": "scenario", "line": 1 }],
+					"time": 1760000000,
+					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"nonce": 3338457402,
+					"parents": ["w0"],
+					"lamport": 2,
+					"patches": [{ "move": { "path": ["old"] }, "path": ["new"] }]
+				}
+			}
+		}
+	]
+}

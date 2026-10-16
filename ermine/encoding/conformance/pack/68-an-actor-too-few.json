@@ -1,0 +1,7 @@
+{
+	"title": "an actor too few",
+	"bytes": "a167636f6c756d6e7358521dcacb0d80200c00d0ca26ece1c1b0492d3590a8188a9f2b9dc615b949bcbebc97028ab396a21745c4d997b8b13386914aca55f16923f09e3c8b03e0037391aa7ce17a729b80ef10293818965f44fbeefc01",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

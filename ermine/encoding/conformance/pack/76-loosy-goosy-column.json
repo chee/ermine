@@ -1,0 +1,37 @@
+{
+	"title": "loosyGoosy: a column no pack has passed over",
+	"bytes": "a167636f6c756d6e7358561dcab90d80301004c0834ee88300b993c55e644b7cf2992704774389643ce9682eeba1a6aa6c709a01b42e8581a62c099ba67866ec7723e49e220e8e93a31a11ce8849cfcc15fdc22f6c3e586fa4e87ed17cd7f2f203",
+	"reading": {
+		"loosyGoosy": true
+	},
+	"expect": {
+		"entries": [
+			[
+				"value",
+				"a",
+				0
+			],
+			[
+				"value",
+				"b",
+				1
+			]
+		],
+		"nodes": [
+			{
+				"change": {
+					"time": 1,
+					"actor": "x"
+				},
+				"value": 1
+			},
+			{
+				"change": {
+					"time": 2,
+					"actor": "x"
+				},
+				"value": 2
+			}
+		]
+	}
+}

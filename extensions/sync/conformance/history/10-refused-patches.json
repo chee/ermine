@@ -1,0 +1,49 @@
+{
+	"title": "patches that do not apply to the table at the commit's base are refused",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["missing", "deep"], "value": 1 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"table": "attributes",
+			"patches": [{ "path": ["k"], "value": 1 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["a"],
+			"table": "attributes",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "e",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["n"], "range": [0, 1], "value": "x" }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{
+			"op": "add",
+			"name": "f",
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{ "op": "heads", "expect": { "heads": ["d"] } }
+	]
+}

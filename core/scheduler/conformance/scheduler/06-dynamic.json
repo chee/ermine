@@ -1,7 +1,7 @@
 {
 	"title": "what a compute reads may change between runs: only what its last run read makes it due",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "flag": true, "a": 1, "b": 2 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

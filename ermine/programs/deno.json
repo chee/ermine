@@ -1,11 +1,8 @@
 {
-	"name": "@ermine/programs",
+	"name": "@ermine/build",
 	"version": "0.0.0",
 	"license": "AGPL-3.0-or-later",
 	"exports": {
-		".": "./typescript/programs.ts",
-		"./build": "./typescript/build.ts",
-		"./start": "./typescript/start.ts",
-		"./types": "./typescript/types.ts"
+		".": "./typescript/build.ts"
 	}
 }

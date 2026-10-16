@@ -1,0 +1,98 @@
+{
+	"title": "metadata a list of [name, value] pairs, each name a string",
+	"steps": [
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": { "cause": 1 }
+			},
+			"expect": { "error": "not-a-commit", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": [["cause"]]
+			},
+			"expect": { "error": "not-a-commit", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": [["cause", 1, 2]]
+			},
+			"expect": { "error": "not-a-commit", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": [[1, "cause"]]
+			},
+			"expect": { "error": "not-a-commit", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": [{ "cause": 1 }]
+			},
+			"expect": { "error": "not-a-commit", "field": "metadata" }
+		},
+		{
+			"op": "encode",
+			"commit": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"metadata": []
+			},
+			"expect": {
+				"bytes": "a96474696d65fa4ed1cef0656163746f726463686565656e6f6e6365f93c00657461626c656576616c7565667369676e657258201111111111111111111111111111111111111111111111111111111111111111676c616d706f7274f9400067706172656e74738158202222222222222222222222222222222222222222222222222222222222222222677061746368657381a2647061746881657469746c656576616c7565626869686d6574616461746180",
+				"name": "949fed491507124fedc6f34674447ad5dfb0e5b1aa528ac8b646902d0d4f7b8a"
+			}
+		}
+	]
+}

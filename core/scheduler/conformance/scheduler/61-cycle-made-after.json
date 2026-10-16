@@ -1,0 +1,417 @@
+{
+	"title": "a cycle made after a chain: p0 reads h, p1 reads p0; c0 reads p1, and c2 once shut is true, closing c0, c1, c2. the cycle's rank is one past p1's, 2, not 0",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"shut": false,
+				"h": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "p0",
+			"scope": "o",
+			"f": {
+				"read": "h"
+			},
+			"to": "kp0",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "p1",
+			"scope": "o",
+			"f": {
+				"read": "kp0"
+			},
+			"to": "kp1",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c0",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"if": [
+							{
+								"read": "shut"
+							},
+							{
+								"mod": [
+									{
+										"read": "k2"
+									},
+									1
+								]
+							},
+							0
+						]
+					},
+					{
+						"read": "kp1"
+					}
+				]
+			},
+			"to": "k0",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c1",
+			"scope": "o",
+			"f": {
+				"read": "k0"
+			},
+			"to": "k1",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c2",
+			"scope": "o",
+			"f": {
+				"read": "k1"
+			},
+			"to": "k2",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"h": 1
+			},
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "p0",
+						"tick": 2
+					},
+					{
+						"due": "p1",
+						"tick": 3
+					},
+					{
+						"due": "c0",
+						"tick": 4
+					},
+					{
+						"due": "c1",
+						"tick": 5
+					},
+					{
+						"due": "c2",
+						"tick": 6
+					},
+					{
+						"starts": "p0",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "p0",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "p1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "p1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c0",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c0",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c1",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c1",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c2",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c2",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "p0",
+						"tick": 12
+					},
+					{
+						"starts": "p0",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "p1",
+						"tick": 13,
+						"writer": "p0"
+					},
+					{
+						"ends": "p0",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "p1",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"due": "c0",
+						"tick": 14,
+						"writer": "p1"
+					},
+					{
+						"ends": "p1",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c0",
+						"run": 2,
+						"rank": 2
+					},
+					{
+						"due": "c1",
+						"tick": 15,
+						"writer": "c0"
+					},
+					{
+						"ends": "c0",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c1",
+						"run": 2,
+						"rank": 3
+					},
+					{
+						"due": "c2",
+						"tick": 16,
+						"writer": "c1"
+					},
+					{
+						"ends": "c1",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c2",
+						"run": 2,
+						"rank": 4
+					},
+					{
+						"ends": "c2",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"shut": true
+			},
+			"expect": {
+				"tick": 18
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"h": 2
+			},
+			"expect": {
+				"tick": 19
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c0",
+						"tick": 18
+					},
+					{
+						"starts": "c0",
+						"run": 3,
+						"rank": 2
+					},
+					{
+						"ends": "c0",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"due": "p0",
+						"tick": 19
+					},
+					{
+						"starts": "p0",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "p1",
+						"tick": 20,
+						"writer": "p0"
+					},
+					{
+						"ends": "p0",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "p1",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"due": "c0",
+						"tick": 21,
+						"writer": "p1"
+					},
+					{
+						"ends": "p1",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c0",
+						"run": 4,
+						"rank": 2
+					},
+					{
+						"due": "c1",
+						"tick": 22,
+						"writer": "c0"
+					},
+					{
+						"ends": "c0",
+						"run": 4,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c1",
+						"run": 3,
+						"rank": 2
+					},
+					{
+						"due": "c2",
+						"tick": 23,
+						"writer": "c1"
+					},
+					{
+						"ends": "c1",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c2",
+						"run": 3,
+						"rank": 2
+					},
+					{
+						"due": "c0",
+						"tick": 24,
+						"writer": "c2"
+					},
+					{
+						"ends": "c2",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c0",
+						"run": 5,
+						"rank": 2
+					},
+					{
+						"ends": "c0",
+						"run": 5,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		}
+	]
+}

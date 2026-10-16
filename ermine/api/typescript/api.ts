@@ -12,25 +12,24 @@
 //
 //   export default function ({ open, read, edit, memo, effect, method, send }) {
 //     const notes = open("./notes", { a: 1 })
-//     const a = memo(() => read(notes, ["a"]))
+//     const a = memo("a", () => read(notes, ["a"]))
 //     method("on/bump", () => edit(notes, (d) => { d.a++ }))
-//     effect(() => read(a), (n) => draw(n))
+//     effect("draw", () => read(a), (n) => draw(n))
 //     return "the process's value"
 //   }
 //
 // paths: a string, split as path.ts' parse, or names already. mine, open (chee: "maybe crew means
 // inside me and ./crew is folder and ../crew is above. it's one or the other"):
 //   crew      inside the process's own node (never saved: gone at its stop)
-//   ./crew    the folder the process is in
+//   ./crew    its working folder (programs' cwd: by default the folder it is in)
 //   ../crew   above that
 //   /crew     the box's "/"
 //
-// a node is {path}, walked again at each use (tracked in a run), or {id} for one with no place (an
-// unnamed memo or effect); part: the table read and written, "value", or "attributes" from info
+// a node is {path}, walked again at each use (tracked in a run), or {id} for one with no place; part: the table read and written, "value", or "attributes" from info
 //
 // pulses: none by hand ("still provide pulse but also batch automatically"). every write here, and
 // every promise settling (the scheduler's onSettle), asks for one pulse in a microtask, as Solid
-// 2.0 does; pulse() runs one now. a node read after a write sees it at once (it is in the table); a
+// 2.0 does (setup.schedule: how it is asked for); pulse() runs one now. a node read after a write sees it at once (it is in the table); a
 // memo gives its last result until the pulse (chee: "whatever is fastest and most reasonable")
 //
 // writes: each with a scope open, its header from it (header.ts). attributes with nothing there
@@ -47,7 +46,7 @@
 //   create(folder, v)    a new node in folder, named by its own id
 //   read(x, path?)       its value at path, tracked; nothing: undefined. a memo pending with no
 //                        value yet: throws PENDING, so the reader is pending too
-//   entries(x)           every item at x: [{ value, from, id }] (reads are lists); nothing: []
+//   entries(x)           every item at x: [{ value, from, id, refused? }] (reads are lists); none: []
 //   list(x)              the names under x, tracked
 //   info(x)              x's attributes, as a node read, edited and watched as any other
 //   edit(x, change)      patches, or a recipe: one change on the value (none there: made)
@@ -56,10 +55,20 @@
 //   place(p, x)          x's node at a second name. unplace(p): the name taken out, the node stays
 //   move(from, to)       places' move. remove(x): unplaced, and its entries deleted (mine: not
 //                        what is under it, which nothing reaches any more)
-//   memo(f, options?)    a compute (the scheduler's), its result written to a node of its own
-//                        (runs are writes), its status on it (status.ts); named: placed at the name
-//   effect(f, act, o?)   an effect: f tracked, act(value, before) after the round; f's value written
-//                        to its node at each act
+//   memo(name, f, options?)   a compute (the scheduler's), its result written to a node of its own
+//                        (runs are writes), its status and its latest run (what it read and wrote:
+//                        runs.ts) on it; placed at the name (a string or path, the first argument).
+//                        its id a new one (setup.id), flat and opaque: the name only places it (chee:
+//                        "i guess b an owner scope"; the owner is in the scope info). one at a name
+//                        made in the same run and alive: a second throws already-there ("making two
+//                        with the same name in the same run shall be illegal"; the same for effect
+//                        and early). the run: the scheduler's run open; none, the scope it is made
+//                        in (a setup, and what is called from outside after it, are one, mine)
+//   effect(name, f, act, o?)   an effect: f tracked, act(value, before) after the round; f's value written
+//                        to its node at each act; its status and latest run on it too
+//   early(name, f, act, o?)    an early effect (the scheduler's): its first run and act at once, where
+//                        early is called; after, its act is in the round's early queue, before the
+//                        other effects'. its node, status and run record as effect's
 //   method(p, fn)        fn as the value of the node at p, called by send in a scope under the one
 //                        open when it was made
 //   send(p, ...args)     the method at p called, with [["caller", this process's id]] and the host's
@@ -68,22 +77,45 @@
 //                        (a computer running again, or a host's stop(p, "replaced"))
 //   ref(p, make)         the node at p, make() its value if nothing is there: a live value kept
 //                        while the node is (inside the process: till its stop)
-//   start(program, at, { box?, args?, onwhynot? })   a process: program a name (satisfy's first
-//                        way, from this process's place; another box: from its "/"), or a way; at a
-//                        path here, or from the box's "/". no way: refused no-way, the whynots
-//                        given. stopped when this one stops (10-06)
+//   start(program, at, { box?, args?, cwd?, onwhynot? })   a process: program a name (satisfy's
+//                        first way, from this process's cwd; another box: from its "/"), or a way;
+//                        at a path here, or from the box's "/" (boxes' inside); cwd likewise. no
+//                        way: refused no-way, the whynots given. stopped when this one stops (10-06)
 //   stop(p)              a process this one started
 //   openwith(x, { onwhynot }?)   programs' openwith from this process's place: every way to open
 //                        x, nearest first (a generator), each candidate not taken told to onwhynot
-//   box(folder?)         a box made in this process's box from folder (none: empty); place and
-//                        unplace in it; closed at this process's stop
-//   args, pulse, PENDING
+//   box(at)              a box: the folder at (made if missing, a regular folder, saved), viewed
+//                        from its own "/" (ermine/boxes); place and unplace in it: regular placements
+//   args, pulse, PENDING, REFUSED
+//
+// protect (setup.may, a protect Policy; none: everything allowed, nothing asked): each process
+// has a guard (places' guard.ts) from where it is. a read asks "read" (refused: guard's Refusal
+// thrown; pending: PENDING); entries keeps a refused item in its place, its id REFUSED and no value;
+// list asks to read the folder's children. a write asks, with the scope open (so who is the
+// caller's): edit "edit" on the part; open, create, place, unplace, move "place" on the slot (the
+// parent's children at the name); remove "remove" on the node; send "execute" on the method's node;
+// present and absent "edit" on the presence part; land "edit" on the target. mine, open: the ops'
+// names; memo's and effect's own writes are not asked
+//
+// presence (setup.presence: the host's presence world, playground/presence; none: these throw):
+//   presence(x)          the live rows at x: [{ who, value, until }], tracked
+//   present(x, v, { ttl?, who? })   my row at x: who setup.who, else this process's id (mine);
+//                        ttl 10s (mine). the heartbeat and the sweeper are the host's
+//   absent(x, { who? })  my row taken out
+//
+// patch nodes (playground/patch-nodes; reading through them is the host's: its places over an
+// overlay, setup.overlay):
+//   patch(at, over, change)   a patch node at at, over over's part: patches, or a recipe on what
+//                        the table has (not the overlay's), made against its change's time
+//   land(p)              its patches put on its target for real, its "patch" entry gone
+//   layers(x, path?)     every layer at x, front first: [{ value, from, stale?, error? }] (no
+//                        overlay: the table's own alone)
 //
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { type Key as Step, type Patch } from "@ermine/op/apply"
 import produce from "@ermine/op/produce"
-import { type Box, box as boxInto, type Boxes, closeBox, unbox } from "@ermine/boxes"
+import { type Box, box as boxInto, createBox, type Host, inside, unbox } from "@ermine/boxes"
 import {
 	type Fact,
 	type Id,
@@ -96,22 +128,82 @@ import {
 import { get, gets, list as listAt } from "@ermine/places/lib"
 import { parse, plan } from "@ermine/places/path"
 import { createChangeHeader } from "@ermine/places/header"
+import {
+	createGuard,
+	REFUSED,
+	slot as slotOf,
+	target as targetOf,
+	type Thing,
+} from "@ermine/places/guard"
+import type { Policy } from "@ermine/protect"
+import {
+	clear,
+	type Live,
+	readPresence,
+	setPresence,
+	type World as PresenceWorld,
+} from "@ermine/presence"
+import {
+	entries as layersOf,
+	type Item as Layer,
+	land as landIn,
+	type Overlay,
+	type PatchNode,
+} from "@ermine/patch-nodes"
 import { createStatus, STATUS } from "@ermine/places/status"
+import { createRuns } from "@ermine/places/runs"
 import { openwith as openwithIn, satisfy, type Way, type Whynot } from "@ermine/programs"
 import type { Context, Process, Programs, Runner } from "@ermine/programs/start"
-import { type Equal, type Pair, PENDING, type Scheduler, type Scope } from "@ermine/scheduler"
+import {
+	type Computer,
+	type Equal,
+	type Pair,
+	PENDING,
+	type Scheduler,
+	type Scope,
+} from "@ermine/scheduler"
+import type { Sited } from "@ermine/sites"
 import type { Key, Table } from "@ermine/table"
 
 export type Setup = {
 	scheduler: Scheduler
 	table: Table
-	// the host's commit: its own places and every box told (boxes.commit)
+	// the host's commit (a box's places is a view of the host's, and shares it)
 	commit: (changed: readonly Entry<unknown>[]) => void
-	boxes: Pick<Boxes, "createBox">
+	// what boxes are made over: the host's places, table and scheduler, and its commit
+	host: Host
 	// made after this (createPrograms takes createProcessAPI): asked when used
 	programs: () => Programs
 	// pairs a send adds after the caller's: the host's (trusted, read from the native event)
 	pairs?: () => Iterable<Pair>
+	// the policy every process's reads and writes are asked of, from where it is; none: all allowed
+	may?: Policy
+	// the host's presence world (playground/presence); none: present, absent and presence throw
+	presence?: PresenceWorld
+	// who a process's presence row is, unless it says (the device); none: the process's id
+	who?: string
+	// the overlay in front of places' table (patch nodes), for layers; none: the table's layer alone
+	overlay?: Pick<Overlay, "layers">
+	// how the automatic pulse is asked for: f run soon, once (none: queueMicrotask). a harness, or a
+	// host with no microtasks (C), runs what it was given when it likes
+	schedule?: (f: () => void) => void
+	// a new node's id (none: uuidv7, time-ordered)
+	id?: () => string
+	// told of each memo, effect and method a program makes, as it is made: for a host's inspector
+	notice?: (made: Noticed) => void
+	// where the memos, effects and send's scopes are made, each noting its site (ermine/sites; its
+	// ours holding this file, start.ts and the scheduler's, as they are made in runWithScope): a
+	// memo's site is the program's line. none: the scheduler's, no sites
+	sites?: Pick<Sited, "createScope" | "createComputer" | "createEffect">
+}
+
+// what notice is told: the computer (none for a method), its node, and the process's id
+export type Noticed = {
+	readonly kind: "memo" | "effect" | "method"
+	readonly computer?: Computer
+	readonly node: Node
+	readonly id: Id
+	readonly process: Id
 }
 
 // a node: walked to by its path at each use, or its id (a node with no place)
@@ -130,7 +222,13 @@ export type Watched = {
 	readonly value: unknown
 }
 
-export type Item = { readonly value: unknown; readonly from: string; readonly id: Id }
+export type Item = {
+	readonly value: unknown
+	readonly from: string
+	readonly id: Id
+	// refused by the policy: its id REFUSED, no value
+	readonly refused?: true
+}
 
 export type BoxNode = {
 	readonly box: Box
@@ -155,13 +253,21 @@ export type API = {
 	move: (from: string | Path, to: string | Path) => void
 	remove: (x: Target) => void
 	memo: <T>(
+		name: string | Path,
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-		options?: { name?: string | Path; equal?: Equal<T> },
+		options?: { equal?: Equal<T> },
 	) => Node
 	effect: <T>(
+		name: string | Path,
 		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 		act: (value: T, before: T | undefined) => void,
-		options?: { name?: string | Path; equal?: Equal<T> },
+		options?: { equal?: Equal<T> },
+	) => Node
+	early: <T>(
+		name: string | Path,
+		f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
+		act: (value: T, before: T | undefined) => void,
+		options?: { equal?: Equal<T> },
 	) => Node
 	method: (at: string | Path, fn: (...args: any[]) => unknown) => Node
 	send: (at: Target, ...args: unknown[]) => unknown
@@ -170,14 +276,26 @@ export type API = {
 	start: (
 		program: string | Way,
 		at: string | Path,
-		options?: { box?: BoxNode; args?: readonly string[]; onwhynot?: (why: Whynot) => void },
+		options?: {
+			box?: BoxNode
+			args?: readonly string[]
+			cwd?: string | Path
+			onwhynot?: (why: Whynot) => void
+		},
 	) => Process | Refusal
 	stop: (p: Process) => void
 	openwith: (x: Target, options?: { onwhynot?: (why: Whynot) => void }) => Generator<Way, void>
-	box: (folder?: Target) => BoxNode
+	box: (at: string | Path) => BoxNode
+	presence: (x: Target) => Live[]
+	present: (x: Target, value: unknown, options?: { ttl?: number; who?: string }) => void
+	absent: (x: Target, options?: { who?: string }) => void
+	patch: (at: string | Path, over: Target, change: Change) => Node
+	land: (p: Target) => void
+	layers: (x: Target, path?: readonly Step[]) => Layer[]
 	readonly args: readonly string[]
 	pulse: () => void
 	readonly PENDING: typeof PENDING
+	readonly REFUSED: typeof REFUSED
 }
 
 export class SendError extends Error {
@@ -192,22 +310,43 @@ export type ProcessAPIs = {
 	// a host runner for a javascript program: its value (or module's default) called with the api,
 	// once, untracked; its return the process's value
 	run: Runner
+	// the same, show(value, api) making setup's return what is kept (a view made real, say), with
+	// the process's scope open; its return the process's value
+	runner: (show?: (value: unknown, api: API) => unknown) => Runner
 	// a process stopped, its teardowns told why
 	stop: (p: Process, why?: Why) => void
 }
 
-const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray(x)
-
-// the names a path in a box comes to, from its "/"
-function inBox(at: string | Path): Path {
-	const names = plan(["/", ...(typeof at === "string" ? parse(at) : at)])
-	if (names === undefined) throw new PlacesError("nothing-there", "..")
-	return names
+// a uuidv7 (rfc 9562): 48 bits of ms, then a 12-bit count within the ms (started random), then
+// random. later ones sort after: a clock going back, or 4096 in one ms, borrows the next ms
+let last = 0
+let count = 0
+export function uuidv7(): string {
+	const now = Date.now()
+	if (now > last) {
+		last = now
+		count = crypto.getRandomValues(new Uint16Array(1))[0] & 0x7ff
+	} else if (++count > 0xfff) {
+		last++
+		count = 0
+	}
+	const b = crypto.getRandomValues(new Uint8Array(16))
+	for (let i = 0; i < 6; i++) b[i] = Math.floor(last / 2 ** (8 * (5 - i))) & 0xff
+	b[6] = 0x70 | (count >> 8)
+	b[7] = count & 0xff
+	b[8] = 0x80 | (b[8] & 0x3f)
+	const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("")
+	return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
 }
 
+const isNode = (x: Target): x is Node => typeof x === "object" && !Array.isArray(x)
+
 export function createProcessAPIs(setup: Setup): ProcessAPIs {
-	const { scheduler: s, table, commit, boxes } = setup
+	const { scheduler: s, table, commit } = setup
+	const sited = setup.sites ?? s
 	const statuses = createStatus({ places: { commit }, table, scheduler: s })
+	const { describe, watchAll } = setup.host.places
+	const runs = createRuns({ places: { commit, describe, watchAll }, table, scheduler: s })
 	// a method's function: the scope open when it was made
 	const methods = new WeakMap<object, Scope>()
 	// why a process is stopping, said by stop before its scope goes
@@ -219,14 +358,16 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 
 	// one pulse, in a microtask, however many ask
 	let queued = false
+	const schedule = setup.schedule ?? queueMicrotask
 	function later() {
 		if (queued) return
 		queued = true
-		queueMicrotask(() => {
+		schedule(() => {
 			queued = false
 			s.pulse()
 		})
 	}
+	const newId = setup.id ?? uuidv7
 	s.onSettle(later)
 
 	const header = () => createChangeHeader(s)
@@ -262,16 +403,28 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 	function createProcessAPI(ctx: Context): API {
 		const { box: home, places, process, scope } = ctx
 		const at = process.at
+		const cwd = process.cwd
 
 		// f with a scope open: the one open, else the process's own
 		const within = <T>(f: () => T): T =>
 			s.getCurrentScope() !== undefined ? f() : s.runWithScope(scope, f)
 		const owner = () => s.getCurrentScope() ?? scope
 
+		// protect: asked only when the host gave a policy
+		const guarded = setup.may !== undefined
+		const guard = createGuard({ places, scheduler: s, table, may: setup.may, from: at })
+		const thing = (id: Id, path?: Path): Thing => path === undefined ? { id } : { id, path }
+		const ask = (op: string, ...targets: Parameters<typeof guard.write>[1][]) => {
+			if (guarded) guard.write(op, ...targets)
+		}
+		// the parent at path's folder, and the name: what placing there changes
+		const slotAt = (path: Path, parent: Id) =>
+			slotOf(thing(parent, path.slice(0, -1)), path[path.length - 1])
+
 		function resolve(p: string | Path): Path {
 			const steps = typeof p === "string" ? parse(p) : p
 			const first = steps[0]
-			const from = first === "/" ? [] : first === "." || first === ".." ? at.slice(0, -1) : at
+			const from = first === "/" ? [] : first === "." || first === ".." ? cwd : at
 			const names = plan(["/", ...from, ...steps])
 			if (names === undefined) throw new PlacesError("nothing-there", "..")
 			return names
@@ -284,8 +437,10 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			return id
 		}
 
-		// id placed under name in the folder parent: its children entry made when it has none
-		function placeUnder(parent: Id, name: string, id: Id) {
+		// id placed under name in the folder parent (at path, its name the last): its children entry
+		// made when it has none
+		function placeUnder(parent: Id, name: string, id: Id, path?: Path) {
+			if (path !== undefined) ask("place", slotAt(path, parent))
 			const children = table.get("children", parent) as Entry<unknown> | undefined
 			if (children === undefined) {
 				table.add(
@@ -296,18 +451,19 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			} else commit(placeIn(children, name, id, header()))
 		}
 		// a node at path holding value (none: a folder), folders made on the way
-		function make(path: Path, value: unknown, id: Id = crypto.randomUUID()): Id {
+		function make(path: Path, value: unknown, id: Id = newId()): Id {
 			if (path.length === 0) throw new PlacesError("already-there", "/")
 			let parent: Id = places.root
 			for (let i = 0; i < path.length - 1; i++) {
 				const there = get(places, path.slice(0, i + 1))
 				if (there !== undefined) parent = there
 				else {
-					const folder = crypto.randomUUID()
-					placeUnder(parent, path[i], folder)
+					const folder = newId()
+					placeUnder(parent, path[i], folder, path.slice(0, i + 1))
 					parent = folder
 				}
 			}
+			ask("place", slotAt(path, parent))
 			if (value !== undefined) table.add("value", id, createEntry(value, header()))
 			placeUnder(parent, path[path.length - 1], id)
 			return id
@@ -334,7 +490,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		}
 
 		function create(folder: string | Path, value: unknown): Node {
-			const id = crypto.randomUUID()
+			const id = newId()
 			const path = [...resolve(folder), id]
 			within(() => make(path, value, id))
 			later()
@@ -345,6 +501,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			const n = nodeOf(x)
 			const id = idOf(n)
 			if (id === undefined) return undefined
+			if (guarded) guard.read(targetOf(thing(id, n.path), n.part, path))
 			if (n.part === "value" && memos.has(id)) {
 				const v = places.readValue("value", id, path)
 				if (v === undefined && places.readValue("attributes", id, [STATUS]) === PENDING) {
@@ -362,15 +519,29 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				const value = places.readValue(n.part, n.id)
 				return value === undefined ? [] : [{ value, from: "id", id: n.id }]
 			}
-			return gets(places, n.path).map((a) => ({
-				value: places.readValue(n.part, a.id),
-				from: a.from,
-				id: a.id,
-			}))
+			const found = gets(places, n.path)
+			if (!guarded || n.path.length === 0) {
+				return found.map((a) => ({
+					value: places.readValue(n.part, a.id),
+					from: a.from,
+					id: a.id,
+				}))
+			}
+			const name = n.path[n.path.length - 1]
+			const asked = guard.members(found.map((a) => ({ name, id: a.id })), n.path.slice(0, -1))
+			return found.map((a, i) =>
+				asked[i].id === REFUSED
+					? { value: undefined, from: a.from, id: REFUSED, refused: true as const }
+					: { value: places.readValue(n.part, a.id), from: a.from, id: a.id }
+			)
 		}
 
 		function list(x: Target): string[] {
 			const n = nodeOf(x)
+			if (guarded) {
+				const id = idOf(n)
+				if (id !== undefined) guard.read(targetOf(thing(id, n.path), "children"))
+			}
 			if (n.path !== undefined) return [...listAt(places, n.path)]
 			return n.id === undefined ? [] : places.readKeys("children", n.id)
 		}
@@ -381,6 +552,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			within(() => {
 				const n = nodeOf(x)
 				const id = needId(n)
+				ask("edit", targetOf(thing(id, n.path), n.part))
 				const patches = typeof change === "function"
 					? produce(table.get(n.part, id)?.value ?? empty(n.part), change as never)
 					: change
@@ -410,14 +582,16 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				if (parent === undefined || path.length === 0) {
 					throw new PlacesError("nothing-there", path.join("/"))
 				}
-				placeUnder(parent, path[path.length - 1], id)
+				placeUnder(parent, path[path.length - 1], id, path)
 			})
 			later()
 		}
 
 		function unplace(p: string | Path) {
 			within(() => {
-				const [children, name] = slot(resolve(p))
+				const path = resolve(p)
+				const [children, name] = slot(path)
+				ask("place", slotAt(path, get(places, path.slice(0, -1))!))
 				commit(unplaceIn(children, name, header()))
 			})
 			later()
@@ -425,7 +599,9 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 
 		function move(from: string | Path, to: string | Path) {
 			within(() => {
-				const source = slot(resolve(from))
+				const fromPath = resolve(from)
+				const source = slot(fromPath)
+				ask("place", slotAt(fromPath, get(places, fromPath.slice(0, -1))!))
 				const path = resolve(to)
 				const parent = get(places, path.slice(0, -1))
 				if (parent === undefined || path.length === 0) {
@@ -434,6 +610,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 				if (table.get("children", parent) === undefined) {
 					table.add("children", parent, createEntry<Record<string, unknown>>({}, header()))
 				}
+				ask("place", slotAt(path, parent))
 				const into = table.get("children", parent) as Entry<unknown>
 				commit(moveIn(source, [into, path[path.length - 1]], header()))
 			})
@@ -444,6 +621,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			within(() => {
 				const n = nodeOf(x)
 				const id = needId(n)
+				ask("remove", targetOf(thing(id, n.path)))
 				if (n.path !== undefined && n.path.length) {
 					const [children, name] = slot(n.path)
 					const v = children.value as Record<string, unknown> | undefined
@@ -454,67 +632,124 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			later()
 		}
 
-		// a computer's node: its id, placed at name when given, its entries gone with own
-		function computerNode(kind: string, own: Scope, name?: string | Path): [Node, Id] {
-			const id = `${kind}:${crypto.randomUUID()}`
-			const path = name === undefined ? undefined : resolve(name)
-			if (path !== undefined) {
-				within(() => {
-					const parent = get(places, path.slice(0, -1))
-					if (parent === undefined) throw new PlacesError("nothing-there", path.join("/"))
-					placeUnder(parent, path[path.length - 1], id)
-				})
+		// the computer last made at each path: its owner, and the run it was made in (the run
+		// open's computer and number; none: the owner)
+		const named = new Map<string, { own: Scope; by: object; n?: number; id: Id }>()
+		const live = new Set<Id>()
+
+		// a computer's node: a new id, placed at name, its entries gone with own. one alive there,
+		// made in this run under own: already-there
+		function computerNode(own: Scope, name: string | Path): [Node, Id] {
+			const path = resolve(name)
+			const at = path.join("/")
+			const r = s.getRun()
+			const by = r?.computer ?? own
+			const was = named.get(at)
+			if (was && live.has(was.id) && was.own === own && was.by === by && was.n === r?.n) {
+				throw new PlacesError("already-there", at)
 			}
+			const id = newId()
+			within(() => {
+				const parent = get(places, path.slice(0, -1))
+				if (parent === undefined) throw new PlacesError("nothing-there", at)
+				placeUnder(parent, path[path.length - 1], id)
+			})
+			named.set(at, { own, by, n: r?.n, id })
+			live.add(id)
 			s.registerTeardown(own, () => {
 				memos.delete(id)
-				if (path !== undefined) {
-					try {
-						const [children, last] = slot(path)
-						if ((children.value as Record<string, unknown>)?.[last] === id) {
-							commit(unplaceIn(children, last, header()))
-						}
-					} catch (e) {
-						if (!(e instanceof PlacesError)) throw e
+				live.delete(id)
+				if (named.get(at)?.id === id) named.delete(at)
+				try {
+					const [children, last] = slot(path)
+					if ((children.value as Record<string, unknown>)?.[last] === id) {
+						commit(unplaceIn(children, last, header()))
 					}
+				} catch (e) {
+					if (!(e instanceof PlacesError)) throw e
 				}
 				for (const [part] of table.get(id)) table.del(part as Key, id)
 			})
-			return [path === undefined ? { id, part: "value" } : { path, part: "value" }, id]
+			return [{ path, part: "value" }, id]
 		}
 
 		function memo<T>(
+			name: string | Path,
 			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
-			options: { name?: string | Path; equal?: Equal<T> } = {},
+			options: { equal?: Equal<T> } = {},
 		): Node {
 			const own = owner()
-			const [n, id] = computerNode("memo", own, options.name)
+			const [n, id] = computerNode(own, name)
 			memos.add(id)
-			const c = s.runWithScope(own, () =>
-				s.createComputer<T>(f, (v) => {
-					if (v !== undefined || table.get("value", id) !== undefined) {
-						write("value", id, whole(v))
-					}
-				}, options.equal))
+			const set = (v: T) => {
+				if (v !== undefined || table.get("value", id) !== undefined) {
+					write("value", id, whole(v))
+				}
+			}
+			const c = s.runWithScope(own, () => sited.createComputer<T>(f, set, options.equal))
 			statuses.give(c, id)
+			runs.give(c, id)
+			setup.notice?.({ kind: "memo", computer: c, node: n, id, process: process.id })
 			later()
 			return n
 		}
 
 		function effect<T>(
+			name: string | Path,
 			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
 			act: (value: T, before: T | undefined) => void,
-			options: { name?: string | Path; equal?: Equal<T> } = {},
+			options: { equal?: Equal<T> } = {},
+		): Node {
+			return effectOf(false, name, f, act, options)
+		}
+
+		function early<T>(
+			name: string | Path,
+			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
+			act: (value: T, before: T | undefined) => void,
+			options: { equal?: Equal<T> } = {},
+		): Node {
+			return effectOf(true, name, f, act, options)
+		}
+
+		// an effect, early or not. an early one runs, and acts, inside createEffect: before its
+		// computer is given back, so its first run gives the status and the run record its node, from
+		// inside it (runs.ts: a run given while it ran)
+		function effectOf<T>(
+			early: boolean,
+			name: string | Path,
+			f: (previous: T | undefined) => T | PromiseLike<T> | typeof PENDING,
+			act: (value: T, before: T | undefined) => void,
+			options: { equal?: Equal<T> },
 		): Node {
 			const own = owner()
-			const [n, id] = computerNode("effect", own, options.name)
-			const c = s.runWithScope(own, () =>
-				s.createEffect<T>(f, (v, before) => {
-					if (v !== undefined || table.get("value", id) !== undefined) {
-						write("value", id, whole(v))
-					}
-					act(v, before)
-				}, options.equal))
+			const [n, id] = computerNode(own, name)
+			let given = false
+			const run = (previous: T | undefined) => {
+				if (!given) {
+					given = true
+					const c = s.getRun()!.computer
+					statuses.give(c, id)
+					runs.give(c, id)
+				}
+				return f(previous)
+			}
+			const then = (v: T, before: T | undefined) => {
+				if (v !== undefined || table.get("value", id) !== undefined) {
+					write("value", id, whole(v))
+				}
+				act(v, before)
+			}
+			const c = s.runWithScope(
+				own,
+				() =>
+					early
+						? sited.createEffect<T>(run, then, options.equal, { early })
+						: sited.createEffect<T>(f, then, options.equal),
+			)
 			statuses.give(c, id)
+			runs.give(c, id)
+			setup.notice?.({ kind: "effect", computer: c, node: n, id, process: process.id })
 			later()
 			return n
 		}
@@ -522,13 +757,17 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		function method(p: string | Path, fn: (...args: any[]) => unknown): Node {
 			methods.set(fn, owner())
 			const path = resolve(p)
-			within(() => {
+			const made = within(() => {
 				const id = get(places, path)
-				if (id === undefined) make(path, fn)
-				else write("value", id, whole(fn))
+				if (id === undefined) return make(path, fn)
+				ask("edit", targetOf(thing(id, path), "value"))
+				write("value", id, whole(fn))
+				return id
 			})
+			const n: Node = { path, part: "value" }
+			setup.notice?.({ kind: "method", node: n, id: made, process: process.id })
 			later()
-			return { path, part: "value" }
+			return n
 		}
 
 		function send(p: Target, ...args: unknown[]): unknown {
@@ -538,11 +777,12 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			if (typeof fn !== "function") {
 				throw new SendError("not-a-method", n.path?.join("/") ?? String(n.id))
 			}
-			const call = s.createScope(
+			const call = sited.createScope(
 				[["caller", process.id], ...(setup.pairs?.() ?? [])],
 				methods.get(fn) ?? scope,
 			)
 			try {
+				s.runWithScope(call, () => ask("execute", targetOf(thing(id!, n.path), "value")))
 				return s.runWithScope(call, () => fn(...args))
 			} finally {
 				s.teardown(call)
@@ -569,25 +809,38 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		function start(
 			program: string | Way,
 			where: string | Path,
-			options: { box?: BoxNode; args?: readonly string[]; onwhynot?: (why: Whynot) => void } =
-				{},
+			options: {
+				box?: BoxNode
+				args?: readonly string[]
+				cwd?: string | Path
+				onwhynot?: (why: Whynot) => void
+			} = {},
 		): Process | Refusal {
 			const target = options.box?.box ?? home
-			const path = options.box ? inBox(where) : resolve(where)
+			const path = options.box ? inside(where) : resolve(where)
+			const dir = options.cwd === undefined
+				? undefined
+				: options.box
+				? inside(options.cwd)
+				: resolve(options.cwd)
 			let way: Way | undefined
 			const why: Whynot[] = []
 			if (typeof program !== "string") way = program
 			else {
 				const onwhynot = (w: Whynot) => (why.push(w), options.onwhynot?.(w))
-				const from = target === home ? at : []
+				const from = target === home ? cwd : []
 				for (const w of satisfy(target.places, program, from, { onwhynot })) {
 					way = w
 					break
 				}
 			}
 			if (way === undefined) return { refused: "no-way", why }
-			const args = options.args === undefined ? {} : { args: options.args }
-			const p = within(() => setup.programs().start(target, way, path, args))
+			const more = {
+				...(options.args === undefined ? {} : { args: options.args }),
+				...(dir === undefined ? {} : { cwd: dir }),
+			}
+			const found = way
+			const p = within(() => setup.programs().start(target, found, path, more))
 			if (!("refused" in p)) {
 				s.registerTeardown(scope, () => stop(p, whys.get(process.id) ?? "ended"))
 			}
@@ -599,24 +852,94 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			x: Target,
 			options: { onwhynot?: (why: Whynot) => void } = {},
 		): Generator<Way, void> {
-			return openwithIn(places, needId(nodeOf(x)), at, options)
+			return openwithIn(places, needId(nodeOf(x)), cwd, options)
 		}
 
-		function box(folder?: Target): BoxNode {
-			const id = folder === undefined ? undefined : needId(nodeOf(folder))
-			const b = boxes.createBox(id, home)
-			s.registerTeardown(scope, () => closeBox(b))
+		function box(where: string | Path): BoxNode {
+			const b = within(() => createBox(setup.host, resolve(where), home, header()))
+			later()
 			return {
 				box: b,
 				place: (p, y) => {
-					within(() => void boxInto(b, inBox(p), needId(nodeOf(y)), header()))
+					within(() => void boxInto(b, p, needId(nodeOf(y)), header()))
 					later()
 				},
 				unplace: (p) => {
-					within(() => void unbox(b, inBox(p), header()))
+					within(() => void unbox(b, p, header()))
 					later()
 				},
 			}
+		}
+
+		function world(): PresenceWorld {
+			if (setup.presence === undefined) throw new Error("no presence here: the host gave none")
+			return setup.presence
+		}
+		function presence(x: Target): Live[] {
+			const n = nodeOf(x)
+			const id = idOf(n)
+			if (id === undefined) return []
+			if (guarded) guard.read(targetOf(thing(id, n.path), "presence" as Key))
+			return readPresence(world(), id)
+		}
+		function present(x: Target, value: unknown, options: { ttl?: number; who?: string } = {}) {
+			within(() => {
+				const n = nodeOf(x)
+				const id = needId(n)
+				ask("edit", targetOf(thing(id, n.path), "presence" as Key))
+				setPresence(
+					world(),
+					id,
+					options.who ?? setup.who ?? String(process.id),
+					value,
+					options.ttl ?? 10_000,
+				)
+			})
+			later()
+		}
+		function absent(x: Target, options: { who?: string } = {}) {
+			within(() => {
+				const n = nodeOf(x)
+				const id = needId(n)
+				ask("edit", targetOf(thing(id, n.path), "presence" as Key))
+				clear(world(), id, options.who ?? setup.who ?? String(process.id))
+			})
+			later()
+		}
+
+		function patch(p: string | Path, over: Target, change: Change): Node {
+			const path = resolve(p)
+			within(() => {
+				const o = nodeOf(over)
+				const on = needId(o)
+				const base = table.get(o.part, on) as Entry<unknown> | undefined
+				const patches = typeof change === "function"
+					? produce(base?.value ?? empty(o.part), change as never)
+					: change
+				const node: PatchNode = { on, part: o.part, at: base?.change.time ?? 0, patches }
+				const id = get(places, path) ?? make(path, undefined)
+				write("patch", id, whole(node))
+			})
+			later()
+			return { path, part: "value" }
+		}
+		function land(p: Target) {
+			within(() => {
+				const id = needId(nodeOf(p))
+				const v = table.get("patch", id)?.value
+				if (v !== undefined) ask("edit", targetOf(thing(v.on), v.part))
+				commit(landIn(table, id, header()))
+			})
+			later()
+		}
+		function layers(x: Target, path: readonly Step[] = []): Layer[] {
+			const n = nodeOf(x)
+			const id = idOf(n)
+			if (id === undefined) return []
+			if (guarded) guard.read(targetOf(thing(id, n.path), n.part, path))
+			if (setup.overlay !== undefined) return layersOf(places, setup.overlay, n.part, id, path)
+			const value = places.readValue(n.part, id, path)
+			return value === undefined ? [] : [{ value, from: "table" }]
 		}
 
 		const api: API = {
@@ -634,6 +957,7 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			remove,
 			memo,
 			effect,
+			early,
 			method,
 			send,
 			teardown,
@@ -642,19 +966,27 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 			stop: (p) => stop(p, "ended"),
 			openwith,
 			box,
+			presence,
+			present,
+			absent,
+			patch,
+			land,
+			layers,
 			args: process.args,
 			pulse: () => s.pulse(),
 			PENDING,
+			REFUSED,
 		}
 		inners.set(api, { id: process.id, scope })
 		return api
 	}
 
-	const run: Runner = (code, api) => {
+	const runner = (show?: (value: unknown, api: API) => unknown): Runner => (code, api) => {
 		const f = typeof code === "function" ? code : (code as { default?: unknown } | null)?.default
 		if (typeof f !== "function") throw new TypeError("not a program: no function, no default")
 		const inner = inners.get(api as object)
-		const value = f(api)
+		const made = f(api)
+		const value = show === undefined ? made : show(made, api as API)
 		if (inner !== undefined && value !== undefined) {
 			s.runWithScope(inner.scope, () => write("value", inner.id, whole(value)))
 			later()
@@ -662,5 +994,5 @@ export function createProcessAPIs(setup: Setup): ProcessAPIs {
 		return { stop: () => {} }
 	}
 
-	return { createProcessAPI, run, stop }
+	return { createProcessAPI, run: runner(), runner, stop }
 }

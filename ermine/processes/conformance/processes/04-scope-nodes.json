@@ -4,18 +4,36 @@
 		{
 			"op": "root",
 			"name": "host",
+			"info": [
+				[
+					"test",
+					"host"
+				]
+			],
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "p",
 			"parent": "host",
+			"info": [
+				[
+					"test",
+					"p"
+				]
+			],
 			"expect": {}
 		},
 		{
 			"op": "scope",
 			"name": "inner",
 			"parent": "p",
+			"info": [
+				[
+					"test",
+					"inner"
+				]
+			],
 			"expect": {}
 		},
 		{

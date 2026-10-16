@@ -1,0 +1,145 @@
+{
+	"title": "decoded, each field is checked as encoding checks it, and the first that says no is named",
+	"steps": [
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": {
+				"commit": {
+					"table": "value",
+					"actor": "chee",
+					"time": 1760000000,
+					"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+					"nonce": 1,
+					"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+					"lamport": 2,
+					"patches": [{ "path": ["title"], "value": "hi" }]
+				},
+				"name": "8998e355a5a3568c9f21248c550530335ad7caad49824251a5723a0a1f0544c6"
+			}
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": "x",
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "time" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": { "/": { "bytes": "dmFsdWU" } },
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "table" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": "1111111111111111111111111111111111111111111111111111111111111111",
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "signer" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": ["2222222222222222222222222222222222222222222222222222222222222222"],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "parents" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"patches": [{ "path": ["title"], "value": "hi" }]
+			},
+			"expect": { "error": "not-a-commit", "field": "lamport" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"node": "x"
+			},
+			"expect": { "error": "not-a-commit", "field": "node" }
+		},
+		{ "op": "decode", "value": {}, "expect": { "error": "not-a-commit", "field": "table" } },
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi", "undo": [] }]
+			},
+			"expect": { "error": "not-a-commit", "field": "patches" }
+		},
+		{
+			"op": "decode",
+			"value": {
+				"table": "value",
+				"actor": "chee",
+				"time": 1760000000,
+				"signer": { "/": { "bytes": "ERERERERERERERERERERERERERERERERERERERERERE" } },
+				"nonce": 1,
+				"parents": [{ "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }],
+				"lamport": 2,
+				"patches": [{ "path": ["title"], "value": "hi" }],
+				"base": { "/": { "bytes": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI" } }
+			},
+			"expect": { "error": "not-a-commit", "field": "base" }
+		}
+	]
+}

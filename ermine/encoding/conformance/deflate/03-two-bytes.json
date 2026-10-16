@@ -1,0 +1,12 @@
+{
+	"title": "two bytes",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "0102",
+			"expect": {
+				"bytes": "63640200"
+			}
+		}
+	]
+}

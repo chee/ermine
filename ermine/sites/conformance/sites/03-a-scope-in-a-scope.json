@@ -1,0 +1,37 @@
+{
+	"title": "a scope in a scope gives a chain of two; a root, of one",
+	"steps": [
+		{
+			"op": "root",
+			"name": "outer",
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "inner",
+			"parent": "outer",
+			"expect": {}
+		},
+		{
+			"op": "chain",
+			"name": "outer",
+			"expect": {
+				"length": 1
+			}
+		},
+		{
+			"op": "chain",
+			"name": "inner",
+			"expect": {
+				"length": 2
+			}
+		},
+		{
+			"op": "site",
+			"name": "inner",
+			"expect": {
+				"site": true
+			}
+		}
+	]
+}

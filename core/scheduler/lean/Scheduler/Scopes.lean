@@ -38,9 +38,16 @@
 --   on scopes under o; run_under, go_under: the same for run(o, f), and for a run of a
 --   computation under o. takes, takes_go: disposing o after takes all of it, and runs every
 --   cleanup registered there exactly once.
--- - the header: line_spec, write_header: a write's pairs are the info of each scope from the
---   root down to the one open, outermost first (write_outside: nothing open, none). pairs_child,
---   go_header: a run's info comes last.
+-- - info: grow_info, a scope made under p has the pairs given, then ["owner", p's info] (Info:
+--   it nests, innermost first; levels unfolds it); grow_empty, make_empty: a scope given no pairs
+--   is not made (empty; a computation's info is its own). the header: write_header, a write's
+--   pairs are the info of the scope open (write_outside: nothing open, none); go_header, in a run
+--   the run's own pairs, then its owner's info. line_spec: the scopes over one, root first
+-- - the going path: bury (a pulse's end, an attended computation going: clean(x) with x open,
+--   then the host's gone told, nothing new open). top_bury: Inv and Ids kept, so no cleanup runs
+--   twice through goings either; going: its cleanups inert, every one under x disposed and every
+--   cleanup of x run, exactly once each, newest first; x left alive (asleep) with no children and
+--   no cleanups; what is not under x as it was. bury_flat: balanced
 -- - who is open: run_opens (run(o, f): o, the writer kept), go_opens (a run: its computation,
 --   written by its own read, its info the run's), give_opens and act_opens (a set, an act: the
 --   computation, written by it), call_opens (a cleanup: its scope; a computation's written by
@@ -55,7 +62,10 @@
 --   state, info, comp}; children hold numbers, not objects (numbers are unique, so lastIndexOf
 --   agrees). numbers start at 1 (made counts them). a number not made yet maps to the empty
 --   record, gone: the code cannot name such a scope; here naming one acts as naming a gone one.
--- - info: a scope's pairs, opaque. a pair is two numbers here, never looked into.
+-- - info: a scope's pairs, opaque (a pair is two numbers here, never looked into), then its
+--   owner's info, nested (Info). a run's info (its number, the tick of its mark) is given to go;
+--   its owner is the computation's parent's info then. a computation's first info (the tick of
+--   its mark) is not kept: .root [] / .under [] until its first run
 -- - a computation is a scope with comp set, made under the one open (comp). what dispose does
 --   to it besides the tree (drop: live, order, tracker, writers, acts, causes, and the host's
 --   forget it may call; `ran = undefined`) is assumed to touch no scope, and is left out. its
@@ -103,6 +113,18 @@ inductive State where
 -- into
 abbrev Pair := Nat × Nat
 
+-- a scope's info (scheduler.ts Scope.info): the pairs given, then ["owner", the info of the scope
+-- it was made under] (a root: none). so it nests, innermost first
+inductive Info where
+  | root (own : List Pair)
+  | under (own : List Pair) (owner : Info)
+  deriving DecidableEq, Repr
+
+-- the pairs, then the owner's info if there is one
+def Info.of (i : List Pair) : Option Info → Info
+  | none => .root i
+  | some o => .under i o
+
 -- who made a change (By): a computation (its latest run), or a run's own read (the run of that
 -- computation going on)
 inductive Who where
@@ -119,7 +141,7 @@ structure Bracket where
 -- what current() shows (Open): the scope open, the pairs of a write made now, the writer
 structure Current where
   scope : Nat
-  pairs : List Pair
+  pairs : Info
   who : Option Who
   deriving DecidableEq, Repr
 
@@ -149,6 +171,8 @@ inductive Err where
   | thrown (e : Nat)
   | disposed
   | unscoped
+  -- a scope made with no pairs (scheduler.ts grow: empty)
+  | empty
   deriving DecidableEq, Repr
 
 -- Scope, without n (the map's key). a cleanup is its id and its code. comp: a computation
@@ -157,7 +181,7 @@ structure Scope where
   children : List Nat := []
   cleanups : List (Nat × Code) := []
   state : State := .gone
-  info : List Pair := []
+  info : Info := .root []
   comp : Bool := false
 
 -- what the log records
@@ -230,8 +254,11 @@ def line (t : Tree) : Nat → Nat → List Nat
     | none => [o]
     | some p => line t n p ++ [o]
 
--- the pairs of a write made with o open: the info of each scope from the root down to o
-def pairs (t : Tree) (o : Nat) : List Pair := (line t (o + 1) o).flatMap (fun m => (t.scopes m).info)
+-- the pairs of a write made with o open (getInfo): o's info, nesting its owners'
+def pairs (t : Tree) (o : Nat) : Info := (t.scopes o).info
+
+-- the info of the scope x is under, as its owner pair holds it (a root: none)
+def ownerOf (t : Tree) (x : Nat) : Option Info := (t.scopes x).parent.map fun p => (t.scopes p).info
 
 -- current(): what is open, the pairs of a write made now, and the writer; nothing open, none
 def current (t : Tree) : Option Current :=
@@ -239,17 +266,21 @@ def current (t : Tree) : Option Current :=
   | [] => none
   | b :: _ => some ⟨b.scope, pairs t b.scope, b.who⟩
 
--- grow(parent, info): a new scope (c: a computation); under a scope not alive, disposed
+-- grow(parent, info): a new scope (c: a computation, its info its own: no pairs needed); under a
+-- scope not alive, disposed; a scope with no pairs, empty. its info: the pairs, then its owner's
 def grow (t : Tree) : Option Nat → List Pair → Bool → Except Err (Tree × Nat)
   | none, i, c =>
-    .ok ({ t with made := t.made + 1 }.set (t.made + 1) { state := .alive, info := i, comp := c },
-      t.made + 1)
+    if c = false ∧ i = [] then .error .empty
+    else .ok ({ t with made := t.made + 1 }.set (t.made + 1)
+      { state := .alive, info := .root i, comp := c }, t.made + 1)
   | some p, i, c =>
     if (t.scopes p).state ≠ .alive then .error .disposed
+    else if c = false ∧ i = [] then .error .empty
     else
       let t' := t.set p { t.scopes p with children := (t.scopes p).children ++ [t.made + 1] }
       .ok ({ t' with made := t.made + 1 }.set (t.made + 1)
-        { parent := some p, state := .alive, info := i, comp := c }, t.made + 1)
+        { parent := some p, state := .alive, info := .under i (t.scopes p).info, comp := c },
+        t.made + 1)
 
 -- scope(info, up), and make's parent(): a new scope under up, else under the one open; nothing
 -- open, unscoped
@@ -360,7 +391,7 @@ def go (n : Nat) (t : Tree) (x after start : Nat) (i : List Pair) (f : Code) : R
   | some (t, e) =>
     if (t.scopes x).state ≠ .alive then some (t, e)
     else
-      match enter ⟨x, some (.read x)⟩ (t.set x { t.scopes x with info := i })
+      match enter ⟨x, some (.read x)⟩ (t.set x { t.scopes x with info := .of i (ownerOf t x) })
           (fun t => exec (dispose n) t f) with
       | none => none
       | some (t, e') => some (t, pick e e')
@@ -381,19 +412,33 @@ def act (n : Nat) (t : Tree) (x : Nat) (f : Code) : Result :=
       | none => none
       | some (t, e') => some (t, pick e e')
 
+-- an attended computation going at a pulse's end (scheduler.ts bury): all under it goes and all
+-- its teardowns run (clean(x), x open as a computation's); gone by then, nothing more; else it
+-- stays alive (asleep: no scope moves) and the host's gone(failed) is told, with nothing new open:
+-- what clean failed with is gone's to see, not thrown; what gone throws is the caller's
+def bury (n : Nat) (t : Tree) (x : Nat) (g : Code) : Result :=
+  match clean (dispose n) t x 0 0 with
+  | none => none
+  | some (t, e) =>
+    if (t.scopes x).state ≠ .alive then some (t, none)
+    else exec (dispose n) t g
+
 -- a call from the top of the stack: code (a host's, an event's handler, a timer, a continuation
--- after an await), or the scheduler's own, in a pulse called from the top: a run, a set, an act
+-- after an await), or the scheduler's own, in a pulse called from the top: a run, a set, an act,
+-- a going
 inductive Call where
   | code (c : Code)
   | go (x after start : Nat) (i : List Pair) (f : Code)
   | give (x : Nat) (f : Code)
   | act (x : Nat) (f : Code)
+  | bury (x : Nat) (g : Code)
 
 def Call.call (n : Nat) (t : Tree) : Call → Result
   | .code c => exec (dispose n) t c
   | .go x a s i f => Scopes.go n t x a s i f
   | .give x f => Scopes.give n t x f
   | .act x f => Scopes.act n t x f
+  | .bury x g => Scopes.bury n t x g
 
 -- calls one after another, each from the top; none if one ran out of fuel. what one throws is
 -- its caller's, and the next goes on
@@ -1298,16 +1343,37 @@ theorem mono_unlink (t : Tree) (x : Nat) : Mono t (unlink t x) := by
   · rename_i q hq
     exact mono_set t q _ rfl (fun _ => ⟨rfl, rfl, out_sub _ _⟩)
 
--- grow(o): a scope made under an alive o
-theorem inv_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : Nat} {t' : Tree} {n : Nat} (h : Inv t ctx)
-    (hr : grow t (some o) i c = .ok (t', n)) : Inv t' ctx ∧ Mono t t' := by
+-- what grow gives when it gives a scope: a root
+theorem grow_none_ok {t t' : Tree} {i : List Pair} {c : Bool} {n : Nat}
+    (hr : grow t none i c = .ok (t', n)) :
+    t' = { t with made := t.made + 1 }.set (t.made + 1) { state := .alive, info := .root i, comp := c } ∧
+      n = t.made + 1 := by
+  simp only [grow] at hr
+  split at hr
+  · cases hr
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at hr; exact ⟨hr.1.symm, hr.2.symm⟩
+
+-- and under p: p alive
+theorem grow_some_ok {t t' : Tree} {p : Nat} {i : List Pair} {c : Bool} {n : Nat}
+    (hr : grow t (some p) i c = .ok (t', n)) :
+    (t.scopes p).state = .alive ∧
+      t' = { t.set p { t.scopes p with children := (t.scopes p).children ++ [t.made + 1] } with
+        made := t.made + 1 }.set (t.made + 1)
+          { parent := some p, state := .alive, info := .under i (t.scopes p).info, comp := c } ∧
+      n = t.made + 1 := by
   simp only [grow] at hr
   split at hr
   · cases hr
   rename_i ha
   simp only [ne_eq, Decidable.not_not] at ha
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  split at hr
+  · cases hr
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at hr; exact ⟨ha, hr.1.symm, hr.2.symm⟩
+
+-- grow(o): a scope made under an alive o
+theorem inv_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : Nat} {t' : Tree} {n : Nat} (h : Inv t ctx)
+    (hr : grow t (some o) i c = .ok (t', n)) : Inv t' ctx ∧ Mono t t' := by
+  obtain ⟨ha, rfl, rfl⟩ := grow_some_ok hr
   have ho := h.alive_made (by rw [ha]; simp)
   -- the new scope: N
   have hN : ∀ m, m ≤ t.made → m ≠ t.made + 1 := fun m hm => by omega
@@ -1393,8 +1459,7 @@ theorem inv_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : N
 -- root(): a scope with no parent
 theorem inv_root {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {t' : Tree} {n : Nat} (h : Inv t ctx)
     (hr : grow t none i c = .ok (t', n)) : Inv t' ctx := by
-  simp only [grow, Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨rfl, rfl⟩ := grow_none_ok hr
   have hc : ∀ p c, c ∈ (t.scopes p).children → c ≤ t.made := fun p c hc => h.child_made hc
   refine ⟨fun m hm => ?_, fun m p hm => ?_, fun p c hc' => ?_, fun p => ?_,
     fun c p hc' hp => ?_, fun c hc' => ?_, fun c hc' => ?_, fun p c hc' => ?_⟩
@@ -1433,8 +1498,7 @@ theorem inv_root {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {t' : 
 
 theorem mono_root {t : Tree} {i : List Pair} {c : Bool} {t' : Tree} {n : Nat}
     (hr : grow t none i c = .ok (t', n)) : Mono t t' := by
-  simp only [grow, Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨rfl, rfl⟩ := grow_none_ok hr
   refine ⟨by simp, by simp, ⟨[], by simp⟩, fun m hm => ?_, fun m hm _ => ?_⟩
   · simp [show m ≠ t.made + 1 by omega]
   · simp [show m ≠ t.made + 1 by omega]
@@ -1790,20 +1854,14 @@ theorem mu_same (t : Tree) (o : Nat) (r : Scope) (ho : o ≤ t.made) (hw : r.wei
 
 theorem mu_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : Nat} {t' : Tree} {n : Nat} (h : Inv t ctx)
     (hr : grow t (some o) i c = .ok (t', n)) : mu t' = mu t + 1 := by
-  simp only [grow] at hr
-  split at hr
-  · cases hr
-  rename_i ha
-  simp only [ne_eq, Decidable.not_not] at ha
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨ha, rfl, rfl⟩ := grow_some_ok hr
   have ho := h.alive_made (by rw [ha]; simp)
   let t₁ := t.set o { t.scopes o with children := (t.scopes o).children ++ [t.made + 1] }
   have m₁ : mu t₁ = mu t := mu_same t o _ ho (by simp [Scope.weight])
   unfold mu
   simp only [set_made, total]
   have : total (fun m => ((({ t₁ with made := t.made + 1 } : Tree).set (t.made + 1)
-      { parent := some o, state := .alive, info := i, comp := c }).scopes m).weight) t.made =
+      { parent := some o, state := .alive, info := .under i (t.scopes o).info, comp := c }).scopes m).weight) t.made =
       total (fun m => (t₁.scopes m).weight) t.made :=
     total_congr _ (fun m hm => by simp [show m ≠ t.made + 1 by omega])
   rw [this]
@@ -1857,12 +1915,11 @@ theorem mu_opened (t : Tree) (l : List Bracket) : mu { t with opened := l } = mu
 
 theorem mu_root {t : Tree} {i : List Pair} {c : Bool} {t' : Tree} {n : Nat}
     (hr : grow t none i c = .ok (t', n)) : mu t' = mu t + 1 := by
-  simp only [grow, Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨rfl, rfl⟩ := grow_none_ok hr
   unfold mu
   simp only [set_made, total]
   have : total (fun m => ((({ t with made := t.made + 1 } : Tree).set (t.made + 1)
-      { state := .alive, info := i, comp := c }).scopes m).weight) t.made =
+      { state := .alive, info := .root i, comp := c }).scopes m).weight) t.made =
       total (fun m => (t.scopes m).weight) t.made :=
     total_congr _ (fun m hm => by simp [show m ≠ t.made + 1 by omega])
   rw [this]
@@ -2296,11 +2353,7 @@ theorem acc_now {t : Tree} (hD : Ids t) (o : Nat) :
 theorem ids_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : Nat} {t' : Tree} {n : Nat} (h : Inv t ctx)
     (hr : grow t (some o) i c = .ok (t', n)) : (∀ m, ids t' m = ids t m) ∧ t'.log = t.log ∧
     t'.regs = t.regs := by
-  simp only [grow] at hr
-  split at hr
-  · cases hr
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨-, rfl, rfl⟩ := grow_some_ok hr
   refine ⟨fun m => ?_, rfl, rfl⟩
   by_cases e : m = t.made + 1
   · subst e; simp [ids, h.fresh (t.made + 1) (by omega)]
@@ -2312,8 +2365,7 @@ theorem ids_make {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {o : N
 theorem ids_root_same {t : Tree} {i : List Pair} {c : Bool} {ctx : List Frame} {t' : Tree} {n : Nat}
     (h : Inv t ctx) (hr : grow t none i c = .ok (t', n)) :
     (∀ m, ids t' m = ids t m) ∧ t'.log = t.log ∧ t'.regs = t.regs := by
-  simp only [grow, Except.ok.injEq, Prod.mk.injEq] at hr
-  obtain ⟨rfl, rfl⟩ := hr
+  obtain ⟨rfl, rfl⟩ := grow_none_ok hr
   refine ⟨fun m => ?_, rfl, rfl⟩
   by_cases e : m = t.made + 1
   · subst e; simp [ids, h.fresh (t.made + 1) (by omega)]
@@ -2805,17 +2857,11 @@ theorem grow_throws (t : Tree) (p : Nat) (i : List Pair) (c : Bool) (h : (t.scop
 theorem grow_some {t : Tree} {ctx : List Frame} {p : Nat} {i : List Pair} {c : Bool} {t' : Tree}
     {m : Nat} (hI : Inv t ctx) (h : grow t (some p) i c = .ok (t', m)) :
     m = t.made + 1 ∧ t'.made = m ∧
-    t'.scopes m = { parent := some p, state := .alive, info := i, comp := c } ∧
+    t'.scopes m = { parent := some p, state := .alive, info := .under i (t.scopes p).info, comp := c } ∧
     (t'.scopes p).children = (t.scopes p).children ++ [m] ∧ (t.scopes p).state = .alive ∧
     (∀ x, x ≠ m → x ≠ p → t'.scopes x = t.scopes x) ∧ t'.regs = t.regs ∧ t'.log = t.log ∧
     t'.opened = t.opened := by
-  simp only [grow] at h
-  split at h
-  · cases h
-  rename_i ha
-  simp only [ne_eq, Decidable.not_not] at ha
-  simp only [Except.ok.injEq, Prod.mk.injEq] at h
-  obtain ⟨rfl, rfl⟩ := h
+  obtain ⟨ha, rfl, rfl⟩ := grow_some_ok h
   have hp := hI.alive_made (by rw [ha]; simp)
   refine ⟨rfl, rfl, by simp, ?_, ha, fun x hx hx' => by simp [hx, hx'], rfl, rfl, rfl⟩
   simp [show p ≠ t.made + 1 by omega]
@@ -3223,9 +3269,7 @@ theorem exec_flat {d : Tree → Nat → Result} (hd : ∀ t o, flat t (d t o)) :
     · rename_i t₁ n₁ hr
       obtain ⟨q, hq⟩ := scope_ok hr
       have : t₁.opened = t.opened := by
-        simp only [grow] at hq; split at hq
-        · cases hq
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at hq; obtain ⟨rfl, rfl⟩ := hq; rfl
+        obtain ⟨-, rfl, rfl⟩ := grow_some_ok hq; rfl
       rw [exec_flat hd k t₁ x h, this]
   | .comp k, t => by
     intro x h
@@ -3235,9 +3279,7 @@ theorem exec_flat {d : Tree → Nat → Result} (hd : ∀ t o, flat t (d t o)) :
     · rename_i t₁ n₁ hr
       obtain ⟨q, hq⟩ := scope_ok hr
       have : t₁.opened = t.opened := by
-        simp only [grow] at hq; split at hq
-        · cases hq
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at hq; obtain ⟨rfl, rfl⟩ := hq; rfl
+        obtain ⟨-, rfl, rfl⟩ := grow_some_ok hq; rfl
       rw [exec_flat hd k t₁ x h, this]
   | .root i k, t => by
     intro x h
@@ -3246,7 +3288,7 @@ theorem exec_flat {d : Tree → Nat → Result} (hd : ∀ t o, flat t (d t o)) :
     · simp at h; subst h; rfl
     · rename_i t₁ n₁ hr
       have : t₁.opened = t.opened := by
-        simp only [grow, Except.ok.injEq, Prod.mk.injEq] at hr; obtain ⟨rfl, rfl⟩ := hr; rfl
+        obtain ⟨rfl, rfl⟩ := grow_none_ok hr; rfl
       rw [exec_flat hd k t₁ x h, this]
   | .disp o k, t => by
     intro x h
@@ -3347,11 +3389,23 @@ theorem act_flat (n : Nat) (t : Tree) (x : Nat) (f : Code) : flat t (act n t x f
   subst h
   rw [give_flat _ _ _ _ _ h₂]; exact h₁'
 
+theorem bury_flat (n : Nat) (t : Tree) (x : Nat) (g : Code) : flat t (bury n t x g) := by
+  intro y h
+  unfold bury at h
+  split at h
+  · cases h
+  rename_i t₁ e₁ h₁
+  have h₁' := clean_flat _ x 0 0 _ h₁
+  split at h
+  · simp at h; subst h; exact h₁'
+  · rw [exec_flat (dispose_flat n) g t₁ y h]; exact h₁'
+
 theorem Call.flat (n : Nat) (t : Tree) : ∀ c : Call, Scopes.flat t (c.call n t)
   | .code c => exec_flat (dispose_flat n) c t
   | .go x a s i f => go_flat n t x a s i f
   | .give x f => give_flat n t x f
   | .act x f => act_flat n t x f
+  | .bury x g => bury_flat n t x g
 
 /-! ## nothing open: after an await -/
 
@@ -3451,16 +3505,11 @@ theorem current_open {t : Tree} {b : Bracket} {bs : List Bracket} (ho : t.opened
     current t = some ⟨b.scope, pairs t b.scope, b.who⟩ := by
   simp [current, ho]
 
--- the header: a write's pairs are the info of each scope from the root down to the one open,
--- outermost first (the first a root, each one's parent the one before it, the last the one
--- open: exactly the scopes over it), and its writer is the writer open
+-- the header: a write's pairs are the info of the scope open (getInfo), and its writer is the
+-- writer open
 theorem write_header (d : Tree → Nat → Result) (t : Tree) (k : Code) (b : Bracket)
-    (bs : List Bracket) (hu : up t) (ho : t.opened = b :: bs) :
-    ∃ l, exec d t (.write k) = exec d (t.note (.write (some
-        ⟨b.scope, l.flatMap (fun m => (t.scopes m).info), b.who⟩))) k ∧
-      l.getLast? = some b.scope ∧ (∀ r ∈ l.head?, (t.scopes r).parent = none) ∧ downs t l ∧
-      ∀ m, m ∈ l ↔ under t m b.scope := by
-  refine ⟨line t (b.scope + 1) b.scope, ?_, line_spec hu _ _ (by omega)⟩
+    (bs : List Bracket) (ho : t.opened = b :: bs) :
+    exec d t (.write k) = exec d (t.note (.write (some ⟨b.scope, (t.scopes b.scope).info, b.who⟩))) k := by
   simp only [exec]
   rw [current_open ho]
   rfl
@@ -3471,15 +3520,10 @@ theorem write_outside (d : Tree → Nat → Result) (t : Tree) (k : Code) (ho : 
   simp only [exec]
   rw [show current t = none by simp [current, ho]]
 
--- under p, x's pairs: p's, then x's own info
-theorem pairs_child {t : Tree} (hu : up t) {x p : Nat} (hp : (t.scopes x).parent = some p) :
-    pairs t x = pairs t p ++ (t.scopes x).info := by
-  have := hu _ _ hp
-  unfold pairs
-  rw [line_succ, hp]
-  simp only []
-  rw [line_fuel hu x (p + 1) p (by omega) (by omega)]
-  simp [List.flatMap_append]
+-- the info, unfolded: each level's own pairs, innermost first
+def Info.levels : Info → List (List Pair)
+  | .root i => [i]
+  | .under i o => i :: o.levels
 
 /-! ## what is made with a scope open goes under it -/
 
@@ -3739,17 +3783,17 @@ theorem run_under {n : Nat} (o : Nat) (t : Tree) (ctx : List Frame) (f : Code) (
 /-! ## runs, sets, acts: who is open -/
 
 -- setting a scope's info is no part of Inv (it not gone), Mono, or Ids
-theorem inv_info {t : Tree} {ctx : List Frame} {x : Nat} (i : List Pair) (h : Inv t ctx)
+theorem inv_info {t : Tree} {ctx : List Frame} {x : Nat} (i : Info) (h : Inv t ctx)
     (hx : (t.scopes x).state ≠ .gone) : Inv (t.set x { t.scopes x with info := i }) ctx :=
   inv_set h (fun _ hf => .inl hf) (h.alive_made hx) rfl (List.Sublist.refl _)
     (fun _ _ _ _ h' h'' => absurd h' h'') (fun e => e) (fun e => h.framed x e)
     (fun e => absurd e hx) (fun e => absurd e hx)
 
-theorem mono_info (t : Tree) (x : Nat) (i : List Pair) :
+theorem mono_info (t : Tree) (x : Nat) (i : Info) :
     Mono t (t.set x { t.scopes x with info := i }) :=
   mono_set t x _ rfl (fun _ => ⟨rfl, rfl, List.Sublist.refl _⟩)
 
-theorem ids_info (t : Tree) (x : Nat) (i : List Pair) (m : Nat) :
+theorem ids_info (t : Tree) (x : Nat) (i : Info) (m : Nat) :
     ids (t.set x { t.scopes x with info := i }) m = ids t m := by
   rw [ids_set]; by_cases e : m = x <;> simp [e, ids]
 
@@ -3765,9 +3809,7 @@ theorem line_congr {t t' : Tree} (h : ∀ m, (t'.scopes m).parent = (t.scopes m)
 
 -- pairs reads only the scopes
 theorem pairs_opened (t : Tree) (l : List Bracket) (o : Nat) :
-    pairs { t with opened := l } o = pairs t o := by
-  unfold pairs
-  rw [line_congr (t := t) (t' := { t with opened := l }) (fun _ => rfl)]
+    pairs { t with opened := l } o = pairs t o := rfl
 
 -- run(o, f), o alive: f runs with o open, the writer open kept; f's throw is the caller's
 theorem run_opens (d : Tree → Nat → Result) (t : Tree) (o : Nat) (f : Code)
@@ -3786,7 +3828,7 @@ theorem go_opens (n : Nat) (t : Tree) (x a s : Nat) (i : List Pair) (f : Code) {
     {e₀ : Option Err} (hc : clean (dispose n) t x a s = some (t₀, e₀))
     (ha : (t₀.scopes x).state = .alive) :
     go n t x a s i f =
-      match enter ⟨x, some (.read x)⟩ (t₀.set x { t₀.scopes x with info := i })
+      match enter ⟨x, some (.read x)⟩ (t₀.set x { t₀.scopes x with info := .of i (ownerOf t₀ x) })
           (fun t => exec (dispose n) t f) with
       | none => none
       | some (t, e') => some (t, pick e₀ e') := by
@@ -3794,29 +3836,34 @@ theorem go_opens (n : Nat) (t : Tree) (x a s : Nat) (i : List Pair) (f : Code) {
   rw [hc]
   simp [ha]
 
--- in a run of x, under p: what current shows at f's start. x open, the pairs p's then the run's
--- info, written by the run's own read
-theorem go_header {t₀ : Tree} {ctx : List Frame} (hI : Inv t₀ ctx) {x p : Nat}
-    (hp : (t₀.scopes x).parent = some p) (i : List Pair) (l : List Bracket) :
-    current { t₀.set x { t₀.scopes x with info := i } with opened := ⟨x, some (.read x)⟩ :: l } =
-      some ⟨x, pairs t₀ p ++ i, some (.read x)⟩ := by
-  have hu := hI.older
-  have hpar : ∀ m, ((t₀.set x { t₀.scopes x with info := i }).scopes m).parent =
-      (t₀.scopes m).parent := fun m => by by_cases e : m = x <;> simp [e]
-  have hu₁ : up (t₀.set x { t₀.scopes x with info := i }) :=
-    fun m q hm => hu m q (by rw [← hpar]; exact hm)
+-- in a run of x, under p: what current shows at f's start. x open, the pairs the run's own, then
+-- ["owner", p's info], written by the run's own read
+theorem go_header (t₀ : Tree) {x p : Nat} (hp : (t₀.scopes x).parent = some p) (i : List Pair)
+    (l : List Bracket) :
+    current { t₀.set x { t₀.scopes x with info := .of i (ownerOf t₀ x) } with
+      opened := ⟨x, some (.read x)⟩ :: l } =
+      some ⟨x, .under i (t₀.scopes p).info, some (.read x)⟩ := by
   rw [current_open rfl]
-  have hxp : p < x := hu _ _ hp
-  rw [pairs_opened, pairs_child hu₁ (by rw [hpar]; exact hp)]
-  have e₂ : pairs (t₀.set x { t₀.scopes x with info := i }) p = pairs t₀ p := by
-    unfold pairs
-    rw [line_congr hpar]
-    apply flat_congr
-    intro m hm
-    have := under_le hu (((line_spec hu _ _ (by omega)).2.2.2 m).mp hm)
-    simp [show m ≠ x by omega]
-  rw [e₂]
-  simp
+  simp [pairs, ownerOf, hp, Info.of]
+
+-- what is made under p nests p's info: its own pairs, then p's info (as it was at the making)
+theorem grow_info {t t' : Tree} {p : Nat} {i : List Pair} {c : Bool} {n : Nat}
+    (h : grow t (some p) i c = .ok (t', n)) :
+    (t'.scopes n).info = .under i (t.scopes p).info ∧
+      (t'.scopes n).info.levels = i :: (t.scopes p).info.levels := by
+  obtain ⟨-, rfl, rfl⟩ := grow_some_ok h
+  simp [Info.levels]
+
+-- a scope given no pairs is not made: empty, the tree as it was (a computation's info is its own)
+theorem grow_empty (t : Tree) (p : Option Nat) (hp : ∀ q, p = some q → (t.scopes q).state = .alive) :
+    grow t p [] false = .error .empty := by
+  cases p with
+  | none => simp [grow]
+  | some q => simp [grow, hp q rfl]
+
+theorem make_empty (d : Tree → Nat → Result) (t : Tree) (p : Nat) (k : Code)
+    (hp : (t.scopes p).state = .alive) : exec d t (.make (some p) [] k) = some (t, some .empty) := by
+  simp [exec, scope, grow_empty t (some p) (fun q e => by cases e; exact hp)]
 
 -- a compute's set: with x open, written by x
 theorem give_opens (n : Nat) (t : Tree) (x : Nat) (f : Code) :
@@ -3888,13 +3935,13 @@ theorem go_after (n : Nat) (t : Tree) (ctx : List Frame) (x a s : Nat) (i : List
   simp only [Option.some.injEq, Prod.mk.injEq] at h
   obtain ⟨rfl, rfl⟩ := h
   have hx : (t₀.scopes x).state ≠ .gone := by simp at ha₀; rw [ha₀]; simp
-  have I₁ := inv_info (x := x) i I₀ hx
-  have D₁ := D₀.same (ids_info t₀ x i) rfl rfl
+  have I₁ := inv_info (x := x) (.of i (ownerOf t₀ x)) I₀ hx
+  have D₁ := D₀.same (ids_info t₀ x (.of i (ownerOf t₀ x))) rfl rfl
   have F := enter_keep (fun t₄ e₄ h₄ =>
     exec_keep (dispose_keep n) f _ ctx t₄ e₄ (I₁.opened _) h₄) h₂
   obtain ⟨D₂, l, A⟩ := enter_once (fun t₄ e₄ h₄ =>
     exec_once (dispose_once n) f _ ctx t₄ e₄ (I₁.opened _) (D₁.same (fun _ => rfl) rfl rfl) h₄) h₂
-  exact ⟨F.1, (mono_info t₀ x i).trans F.2, D₂, _, (Acc.same (ids_info t₀ x i) rfl rfl).trans A⟩
+  exact ⟨F.1, (mono_info t₀ x (.of i (ownerOf t₀ x))).trans F.2, D₂, _, (Acc.same (ids_info t₀ x (.of i (ownerOf t₀ x))) rfl rfl).trans A⟩
 
 -- a run returned: its clean did
 theorem go_clean {n : Nat} {t : Tree} {x a s : Nat} {i : List Pair} {f : Code} {r : Tree × Option Err}
@@ -3969,11 +4016,11 @@ theorem go_under (n : Nat) (o : Nat) (t : Tree) (ctx : List Frame) (x a s : Nat)
   simp only [Option.some.injEq, Prod.mk.injEq] at h
   obtain ⟨rfl, rfl⟩ := h
   have hx₀ : (t₀.scopes x).state ≠ .gone := by simp at ha₀; rw [ha₀]; simp
-  have I₁ := inv_info (x := x) i I₀ hx₀
-  have M := M₀.trans (mono_info t₀ x i)
+  have I₁ := inv_info (x := x) (.of i (ownerOf t₀ x)) I₀ hx₀
+  have M := M₀.trans (mono_info t₀ x (.of i (ownerOf t₀ x)))
   have F := enter_keep (fun t₄ e₄ h₄ =>
     exec_keep (dispose_keep n) f _ ctx t₄ e₄ (I₁.opened _) h₄) h₂
-  exact (Under.same (o := o) (t := t₀) (t' := t₀.set x { t₀.scopes x with info := i }) rfl rfl).trans
+  exact (Under.same (o := o) (t := t₀) (t' := t₀.set x { t₀.scopes x with info := .of i (ownerOf t₀ x) }) rfl rfl).trans
     I₁ F.2 (enter_under (fun t₄ e₄ h₄ =>
       within_under o f _ ctx t₄ e₄ (I₁.opened _)
         (Code.within_mono (fun s hs => (under_opened _ _).mpr (M.fwd hI hs)) f hf)
@@ -4028,6 +4075,48 @@ theorem takes_go (n m : Nat) (t : Tree) (o x a s : Nat) (i : List Pair) (f : Cod
   obtain ⟨I₁, _, D₁, la, A⟩ := go_after n t [] x a s i f hc I₀ D₀ h₁
   exact taken (go_under n o t [] x a s i f hI ha hx hf hc h₁) A I₁ D₁ h₂
 
+
+/-! ## the going path: an attended computation going at a pulse's end -/
+
+-- a going at the top keeps Inv and Ids: no cleanup ever runs twice (six_b's Ids), through goings
+theorem top_bury {n : Nat} {t t' : Tree} {x : Nat} {g : Code} {e : Option Err} (hI : Inv t [])
+    (hD : Ids t) (ha : (t.scopes x).state = .alive) (h : bury n t x g = some (t', e)) :
+    Inv t' [] ∧ Ids t' := by
+  unfold bury at h
+  split at h
+  · cases h
+  rename_i t₀ e₀ hc
+  obtain ⟨I₀, _⟩ := clean_keep n t x 0 0 [] t₀ e₀ hI ha hc
+  have D₀ := (clean_once (dispose_once n) t x 0 0 [] t₀ e₀ hI hD (by rw [ha]; simp) hc).1
+  split at h
+  · simp at h; obtain ⟨rfl, rfl⟩ := h; exact ⟨I₀, D₀⟩
+  · exact ⟨(exec_keep (dispose_keep n) g t₀ [] t' e I₀ h).1,
+      (exec_once (dispose_once n) g t₀ [] t' e I₀ D₀ h).1⟩
+
+-- what a going does to the tree, its cleanups inert: every one under x disposed and every one of
+-- x's cleanups run, exactly once each, newest first; x left with no children and no cleanups, its
+-- state as it was (alive: asleep, not gone); what is not under x as it was
+theorem going {n : Nat} {t t' : Tree} {x : Nat} {e : Option Err} (hu : up t) (ht : tidy t x)
+    (h : clean (dispose n) t x 0 0 = some (t', e)) :
+    let gone := (t.scopes x).children.reverse.flatMap (fold n t) ++ (t.scopes x).cleanups.reverse
+    t'.log = t.log ++ gone.map (fun y => Event.run y.1) ∧
+      (t'.scopes x).children = [] ∧ (t'.scopes x).cleanups = [] ∧
+      (t'.scopes x).state = (t.scopes x).state ∧
+      ∀ m, m ≠ x → (∀ c ∈ (t.scopes x).children, ¬ reach t c m) → t'.scopes m = t.scopes m := by
+  intro gone
+  obtain ⟨h1, -, h3, -, h5, -⟩ := clean_inert n t x 0 0 t' e hu ht h
+  have hpos : ∀ c ∈ (t.scopes x).children, c > 0 := fun c hc => by
+    have := hu _ _ (ht.par x c (.refl _) hc); omega
+  have f1 : (t.scopes x).children.filter (· > 0) = (t.scopes x).children :=
+    List.filter_eq_self.2 fun c hc => by simpa using hpos c hc
+  have f2 : (t.scopes x).children.filter (fun c => !(c > 0)) = [] :=
+    List.filter_eq_nil_iff.2 fun c hc => by have := hpos c hc; simp; omega
+  refine ⟨?_, ?_, ?_, ?_, fun m hm hr => h5 m hm fun c hc _ => hr c hc⟩
+  · rw [h1]; simp only [gone, f1, List.drop_zero]
+  · rw [h3]; exact f2
+  · rw [h3]; simp
+  · rw [h3]
+
 end Scopes
 
 -- fidelity: conformance scenarios 43, 44 and 46 (core/scheduler/conformance/scheduler), checked by
@@ -4041,23 +4130,31 @@ open Scopes
 def writes (t : Tree) : List (Option Current) :=
   t.log.filterMap (fun e => match e with | .write c => some c | _ => none)
 
--- 43: scope with nothing open is unscoped; a scope under the one given, else the one open; the
--- pairs from the root down; disposing the root takes what is under it
+-- who wrote, where: the scope open and the writer of each write
+def whos (t : Tree) : List (Option (Nat × Option Who)) :=
+  (writes t).map (·.map fun c => (c.scope, c.who))
+
+-- 43: scope with nothing open is unscoped; with no pairs, empty; a scope under the one given, else
+-- the one open; its info nests its owner's; disposing the root takes what is under it
 #guard (exec (dispose 20) empty (.make none [] .done)).map (·.2) == some (some .unscoped)
+#guard (exec (dispose 20) empty (.root [] .done)).map (·.2) == some (some .empty)
+#guard (exec (dispose 20) empty (.root [(1, 2)] (.make (some 1) [] .done))).map (·.2) ==
+  some (some .empty)
 #guard match exec (dispose 20) empty
     (.root [(1, 2)] (.make (some 1) [(3, 4), (1, 4)] (.run 2 (.write .done)
       (.run 2 (.make none [(5, 6)] (.run 3 (.write .done) .done))
         (.disp 1 (.run 3 .done .done)))))) with
-  | some (t, e) => writes t == [some ⟨2, [(1, 2), (3, 4), (1, 4)], none⟩,
-      some ⟨3, [(1, 2), (3, 4), (1, 4), (5, 6)], none⟩] && e == some .disposed && t.opened == []
+  | some (t, e) => writes t == [some ⟨2, .under [(3, 4), (1, 4)] (.root [(1, 2)]), none⟩,
+      some ⟨3, .under [(5, 6)] (.under [(3, 4), (1, 4)] (.root [(1, 2)])), none⟩] &&
+      e == some .disposed && t.opened == []
   | none => false
 
--- 44: a run opens its computation, its info the run's, written by its own read; a set by the
--- computation
+-- 44: a run opens its computation, its info the run's (then its owner's), written by its own
+-- read; a set by the computation
 #guard match steps 20 empty [.code (.root [(1, 4)] (.run 1 (.comp .done) .done)),
     .go 2 0 0 [(8, 1), (9, 1)] (.write .done), .give 2 (.write .done)] with
-  | some t => writes t == [some ⟨2, [(1, 4), (8, 1), (9, 1)], some (.read 2)⟩,
-      some ⟨2, [(1, 4), (8, 1), (9, 1)], some (.comp 2)⟩]
+  | some t => writes t == [some ⟨2, .under [(8, 1), (9, 1)] (.root [(1, 4)]), some (.read 2)⟩,
+      some ⟨2, .under [(8, 1), (9, 1)] (.root [(1, 4)]), some (.comp 2)⟩]
   | none => false
 
 -- 46: a cleanup opens its scope: a computation's written by it (its info still the run's that
@@ -4068,38 +4165,48 @@ def writes (t : Tree) : List (Option Current) :=
     .go 3 0 0 [(8, 1), (9, 1)] (.reg (.write .done) .done),
     .go 3 0 0 [(8, 2), (9, 3)] .done,
     .code (.disp 2 .done)] with
-  | some t => writes t == [some ⟨3, [(1, 4), (8, 1), (9, 1)], some (.comp 3)⟩,
-      some ⟨2, [(1, 4), (5, 7)], none⟩]
+  | some t => writes t == [some ⟨3, .under [(8, 1), (9, 1)] (.root [(1, 4)]), some (.comp 3)⟩,
+      some ⟨2, .under [(5, 7)] (.root [(1, 4)]), none⟩]
   | none => false
 
 -- a plain scope made in a run, its cleanup run by the computation's clean before its next run
 -- (children first): written by the computation, as the computation's own cleanup, after
 #guard match steps 20 empty [
-    .code (.root [] (.run 1 (.comp .done) .done)),
-    .go 2 0 0 [] (.make none [] (.run 3 (.reg (.write .done) .done) (.reg (.write .done) .done))),
+    .code (.root [(1, 1)] (.run 1 (.comp .done) .done)),
+    .go 2 0 0 [] (.make none [(7, 7)] (.run 3 (.reg (.write .done) .done) (.reg (.write .done) .done))),
     .go 2 0 0 [] .done] with
-  | some t => writes t == [some ⟨3, [], some (.comp 2)⟩, some ⟨2, [], some (.comp 2)⟩]
+  | some t => whos t == [some (3, some (.comp 2)), some (2, some (.comp 2))]
   | none => false
 
 -- deeper: a plain scope under a plain scope under the computation, written by it; an act's
 -- clean the same
 #guard match steps 20 empty [
-    .code (.root [] (.run 1 (.comp .done) .done)),
-    .go 2 0 0 [] (.make none [] (.run 3 (.make none [] (.run 4 (.reg (.write .done) .done) .done))
-      .done)),
+    .code (.root [(1, 1)] (.run 1 (.comp .done) .done)),
+    .go 2 0 0 [] (.make none [(7, 7)] (.run 3 (.make none [(7, 7)]
+      (.run 4 (.reg (.write .done) .done) .done)) .done)),
     .go 2 0 0 [] .done,
-    .act 2 (.make none [] (.run 5 (.reg (.write .done) .done) .done)),
+    .act 2 (.make none [(7, 7)] (.run 5 (.reg (.write .done) .done) .done)),
     .act 2 .done] with
-  | some t => writes t == [some ⟨4, [], some (.comp 2)⟩, some ⟨5, [], some (.comp 2)⟩]
+  | some t => whos t == [some (4, some (.comp 2)), some (5, some (.comp 2))]
   | none => false
 
 -- under a computation made in the run: written by that inner one, the nearest over it
 #guard match steps 20 empty [
-    .code (.root [] (.run 1 (.comp .done) .done)),
+    .code (.root [(1, 1)] (.run 1 (.comp .done) .done)),
     .go 2 0 0 [] (.comp .done),
-    .go 3 0 0 [] (.make none [] (.run 4 (.reg (.write .done) .done) .done)),
+    .go 3 0 0 [] (.make none [(7, 7)] (.run 4 (.reg (.write .done) .done) .done)),
     .go 2 0 0 [] .done] with
-  | some t => writes t == [some ⟨4, [], some (.comp 3)⟩]
+  | some t => whos t == [some (4, some (.comp 3))]
+  | none => false
+
+-- a going: what is under the computation goes and its cleanups run, written by it, children
+-- first; it stays alive; then gone is told, nothing open: from outside
+#guard match steps 20 empty [
+    .code (.root [(1, 1)] (.run 1 (.comp .done) .done)),
+    .go 2 0 0 [] (.make none [(7, 7)] (.run 3 (.reg (.write .done) .done) (.reg (.write .done) .done))),
+    .bury 2 (.write .done)] with
+  | some t => whos t == [some (3, some (.comp 2)), some (2, some (.comp 2)), none] &&
+      (t.scopes 2).state == .alive && (t.scopes 3).state == .gone && (t.scopes 2).children == []
   | none => false
 
 end Scopes.Check

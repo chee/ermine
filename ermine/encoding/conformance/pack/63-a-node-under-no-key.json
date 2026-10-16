@@ -1,0 +1,7 @@
+{
+	"title": "a node under no key",
+	"bytes": "a167636f6c756d6e7358501dc9cb0d8020100540b413faf060e8e4096b2051312c7eae6c35b6c84df43af3580f365adbe058004c2e87954cdf136c8ea908ee3a2adaa22336aaa31d2973113ab11cf4cde583f56de65f58eaa01abf",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

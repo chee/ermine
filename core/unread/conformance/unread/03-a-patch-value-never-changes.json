@@ -1,0 +1,89 @@
+{
+	"title": "a patch's value goes in as given, and a later write under it copies it: the value given never changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"value": {
+						"x": 1,
+						"list": [
+							1
+						]
+					}
+				}
+			],
+			"hold": "p",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"c"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"c",
+						"list"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": [
+						2
+					]
+				}
+			]
+		},
+		{
+			"op": "held",
+			"name": "p",
+			"expect": {
+				"value": [
+					{
+						"x": 1,
+						"list": [
+							1
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"c": {
+						"x": 2,
+						"list": [
+							1,
+							2
+						]
+					}
+				}
+			}
+		}
+	]
+}

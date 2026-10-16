@@ -52,12 +52,13 @@ export function createStatus(setup: Setup): {
 	// the status written, with c open: nothing when it is already so
 	function write(c: Computer, id: Id, status: unknown) {
 		scheduler.runWithScope(c, () => {
-			const header = createChangeHeader(scheduler)
 			const there = table.get("attributes", id) as Entry<unknown> | undefined
 			const v = there?.value as Record<string, unknown> | undefined
 			const had = v !== undefined && v !== null && typeof v === "object" &&
 				Object.hasOwn(v, STATUS)
 			if (status === undefined ? !had : had && v![STATUS] === status) return
+			// made only for a write: its site is a stack read
+			const header = createChangeHeader(scheduler)
 			if (there === undefined) {
 				const made = createEntry<Record<string, unknown>>({ [STATUS]: status }, header)
 				table.add("attributes", id, made as Entry<Tables["attributes"]>)

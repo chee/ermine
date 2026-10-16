@@ -11,9 +11,9 @@ function setup() {
 	const store = new Map<string, unknown>()
 	const write = (key: string, v: unknown) => (store.set(key, v), s.mark([key]))
 	const get = (key: string) => (s.track(key), store.get(key))
-	const o = s.createRootScope()
+	const o = s.createRootScope([["actor", "test"]])
 	const at = <T>(scope: Scope, f: () => T) => s.runWithScope(scope, f)
-	const scope = (up: Scope = o) => s.createScope([], up)
+	const scope = (up: Scope = o) => s.createScope([["why", "test"]], up)
 	// a compute reading key: PENDING while it holds "wait", a throw while it holds "fail"
 	const compute = (up: Scope, key: string) =>
 		at(up, () =>

@@ -1,0 +1,12 @@
+{
+	"title": "nothing: one fixed block, its end alone",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "",
+			"expect": {
+				"bytes": "0300"
+			}
+		}
+	]
+}

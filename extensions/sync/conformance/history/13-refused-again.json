@@ -1,0 +1,20 @@
+{
+	"title": "a refused commit added again is refused again, the same way",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["x", "y"], "value": 1 }],
+			"expect": { "added": { "refused": "patches" } }
+		},
+		{ "op": "add", "name": "b", "expect": { "added": { "refused": "patches" } } },
+		{ "op": "refused", "expect": { "refused": [{ "name": "b", "refused": "patches" }] } }
+	]
+}

@@ -1,0 +1,50 @@
+{
+	"title": "a commit on a refused one is refused; so is what was waiting on it, and on that",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "make",
+			"name": "bad",
+			"parents": ["a"],
+			"lamport": 1,
+			"patches": [{ "path": ["n"], "value": 1 }]
+		},
+		{
+			"op": "make",
+			"name": "w",
+			"parents": ["bad"],
+			"lamport": 2,
+			"patches": [{ "path": ["n"], "value": 2 }]
+		},
+		{ "op": "make", "name": "w2", "parents": ["w"], "patches": [{ "path": ["n"], "value": 3 }] },
+		{ "op": "add", "name": "w2", "expect": { "added": { "waiting": ["w"] } } },
+		{ "op": "add", "name": "w", "expect": { "added": { "waiting": ["bad"] } } },
+		{ "op": "add", "name": "bad", "expect": { "added": { "refused": "lamport" } } },
+		{
+			"op": "add",
+			"name": "on",
+			"parents": ["bad"],
+			"lamport": 5,
+			"patches": [{ "path": ["n"], "value": 4 }],
+			"expect": { "added": { "refused": "parent" } }
+		},
+		{ "op": "waiting", "expect": { "waiting": [] } },
+		{
+			"op": "refused",
+			"expect": {
+				"refused": [
+					{ "name": "bad", "refused": "lamport" },
+					{ "name": "w", "refused": "parent" },
+					{ "name": "w2", "refused": "parent" },
+					{ "name": "on", "refused": "parent" }
+				]
+			}
+		},
+		{ "op": "heads", "expect": { "heads": ["a"] } }
+	]
+}

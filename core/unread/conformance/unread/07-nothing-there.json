@@ -1,0 +1,117 @@
+{
+	"title": "nothing there: a put at [] makes it, as given; the next write copies it, the one after changes the copy",
+	"steps": [
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"a": 1
+					}
+				}
+			],
+			"hold": "p",
+			"expect": {
+				"undo": [
+					{
+						"path": []
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "given",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 2
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "given",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "mark",
+			"name": "copy",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "copy",
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "held",
+			"name": "p",
+			"expect": {
+				"value": [
+					{
+						"a": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 3
+				}
+			}
+		}
+	]
+}

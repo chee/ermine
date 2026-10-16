@@ -5,7 +5,7 @@ import createEntry from "@ermine/node/entry"
 import { type Computer, createScheduler } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
-import { children, createPlaces, PlacesError, rename } from "@ermine/places"
+import { children, type Contributor, createPlaces, PlacesError, rename } from "@ermine/places"
 import { get, gets, list, lookup, members } from "@ermine/places/lib"
 import { createChangeHeader } from "@ermine/places/header"
 import { createPathCache } from "@ermine/places/cache"
@@ -19,12 +19,19 @@ function world(cached = true) {
 	const s = createScheduler()
 	const table = createTable((part, id) => places.onTableChange(part as Key, id))
 	const paths = createPaths<unknown>()
+	// the rows' contributor, its steps counted (asked)
+	let steps = 0
+	const trie = processes("R")
+	const counted: Contributor = {
+		...trie,
+		step: (here, name, r) => (steps++, trie.step(here, name, r)),
+	}
 	const places = createPlaces({
 		root: "R",
 		table,
 		paths,
 		scheduler: s,
-		contributors: [processes("R"), children],
+		contributors: [counted, children],
 	})
 	s.onTrackingEnd((key) => places.release(key))
 	const cache = cached ? createPathCache({ places, scheduler: s }) : undefined!
@@ -68,6 +75,12 @@ function world(cached = true) {
 		table,
 		places,
 		cache,
+		// the steps the rows were asked since last asked
+		asked: () => {
+			const n = steps
+			steps = 0
+			return n
+		},
 		hosted,
 		kids,
 		watch,
@@ -292,6 +305,41 @@ Deno.test("cache: teardown leaves nothing, no entry, no spot", () => {
 	w.s.pulse()
 	for (const r of rs) w.s.teardown(r.c)
 	assertEquals(w.count(), { entries: 0, reads: 0, spots: 0 })
+})
+
+Deno.test("cache: pruning, the rows asked once on a path they have nothing on; a start under it works out only what changed", () => {
+	const w = world()
+	w.tree()
+	w.start(["apps", "x"], "X")
+	w.asked()
+	const deep = w.watch(() => w.cache.get(["work", "clock", "on", "reset"]))
+	const top = w.watch(() => w.cache.get(["work"]))
+	w.s.pulse()
+	assertEquals([deep.value, top.value], ["RS0", "W"])
+	// at /work: none, so no entry under it asks
+	assertEquals(w.asked(), 1)
+	// a start under /work, beside the path: /work's entry asks again (now a level), its gone changes,
+	// so /work/clock's asks again (none there); its gone is the same, so nothing deeper; no reader reruns
+	w.start(["work", "timer"], "T")
+	w.s.pulse()
+	assertEquals([deep.runs, top.runs], [1, 1])
+	assertEquals(w.asked(), 2)
+	// one start elsewhere: nothing asked, nothing reruns
+	w.start(["apps", "y"], "Y")
+	w.s.pulse()
+	assertEquals([deep.runs, top.runs, w.asked()], [1, 1, 0])
+	// one on the path: each entry down to it asks again, as its gone changes; its reader reruns
+	w.start(["work", "clock", "on", "reset"], "P")
+	w.s.pulse()
+	assertEquals([deep.runs, deep.value, top.runs], [2, "P", 1])
+	assertEquals(w.asked(), 4)
+	// the same through plain places: a walk asks down to where the rows part from its path
+	w.stop(["work", "clock", "on", "reset"])
+	w.asked()
+	assertEquals(get(w.places, ["work", "notes"]), "N")
+	assertEquals(w.asked(), 2)
+	assertEquals(get(w.places, ["work", "clock", "on", "reset"]), "RS0")
+	assertEquals(w.asked(), 2)
 })
 
 Deno.test("cost: 300 paths and 300 processes, the cache against plain places", () => {

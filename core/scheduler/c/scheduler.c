@@ -33,14 +33,47 @@ typedef struct act {
 	void *value;
 } act;
 
+// a scope's info: the pairs given, then "owner" and the owner's info. made once, kept while it
+// or a scope under it is (refs); a block releases its owner's. a computer's: run and mark are the
+// numbers its values point at, in place for its next run when nothing else holds it
+typedef struct info_block info_block;
+struct info_block {
+	sc_info pub;
+	size_t refs;
+	info_block *owner;
+	uint64_t run, mark;
+	sc_pair pairs[];
+};
+
+static void *xalloc(size_t n);
+
+static info_block *block_new(size_t npairs) {
+	info_block *b = xalloc(sizeof *b + npairs * sizeof(sc_pair));
+	b->refs = 1;
+	b->pub.pairs = b->pairs;
+	return b;
+}
+
+static info_block *block_ref(info_block *b) {
+	if (b) b->refs++;
+	return b;
+}
+
+static void block_release(info_block *b) {
+	while (b && --b->refs == 0) {
+		info_block *owner = b->owner;
+		free(b);
+		b = owner;
+	}
+}
+
 // a scope; a computer is one with a kind and the rest
 struct sc_scope {
 	sc_scheduler *s;
 	uint64_t n;
 	sc_scope *parent;
-	// its info, borrowed; a computer's: run_info, its latest run's
-	const sc_pair *info;
-	size_t ninfo;
+	// its info; a computer's: its latest run's
+	info_block *info;
 	sc_scope **children;
 	size_t nchildren, capchildren;
 	teardown_fn *teardowns;
@@ -59,9 +92,6 @@ struct sc_scope {
 	void *last;
 	// its latest run, held: what writer names for it (sc_latest)
 	sc_run *ran;
-	// its latest run's info, and what its values point at
-	sc_pair run_info[2];
-	uint64_t run_number, run_mark;
 	// an effect's: at its last act, the scopes made up to then and its teardowns' count. what was
 	// made under it since goes before each run
 	uint64_t acted_n;
@@ -95,6 +125,9 @@ struct sc_run {
 	// the keys it read, in order, for the moment it ends (kept only while someone listens to run ends)
 	const void **reads;
 	size_t nreads, capreads;
+	// its result, held past it: said at its end (sc_more's kept), then forgotten
+	bool has_kept;
+	const void *kept;
 	size_t refs;
 };
 
@@ -114,6 +147,12 @@ struct sc_promise {
 	void *value;
 	char *error;
 };
+
+// effects to act, in the order their runs ended: from head to n
+typedef struct queue {
+	act **v;
+	size_t n, head, cap;
+} queue;
 
 typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_AFTER, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
 
@@ -147,9 +186,8 @@ struct sc_scheduler {
 	size_t nlive;
 	sc_scope **all;
 	size_t nall, capall;
-	// the effects to act, in the order their runs ended
-	act **acts;
-	size_t nacts, headacts, capacts;
+	// the effects to act, the early ones apart
+	queue acts, earlies;
 	// settled promises, for the next pulse
 	landed *landed;
 	size_t nlanded, headlanded, caplanded;
@@ -296,14 +334,25 @@ static void end_run(sc_scheduler *s, tg_node *f) {
 
 // scopes
 
+// a plain scope's info: n pairs given, then the owner's. none given: NULL. a computer's: NULL, set
+// by its caller
 static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, const sc_pair *info,
 	size_t n) {
+	if (kind == PLAIN && n == 0) return NULL;
 	sc_scope *o = xalloc(sizeof *o);
 	o->s = s;
 	o->n = ++s->made;
 	o->parent = parent;
-	o->info = info;
-	o->ninfo = n;
+	if (kind == PLAIN) {
+		info_block *b = block_new(n + 1);
+		for (size_t i = 0; i < n; i++) b->pairs[i] = info[i];
+		b->pub.n = n;
+		if (parent) {
+			b->owner = block_ref(parent->info);
+			b->pairs[b->pub.n++] = (sc_pair){"owner", &parent->info->pub};
+		}
+		o->info = b;
+	}
 	o->kind = kind;
 	o->state = ALIVE;
 	o->od.owner = o;
@@ -337,27 +386,14 @@ sc_scope *sc_create_scope(sc_scheduler *s, const sc_pair *info, size_t n, sc_sco
 void sc_scope_set(sc_scope *o, void *user) { o->user = user; }
 void *sc_scope_user(const sc_scope *o) { return o->user; }
 bool sc_scope_alive(const sc_scope *o) { return o->state == ALIVE; }
+bool sc_scope_early(const sc_scope *o) { return o->kind == EFFECT && o->def.early; }
 sc_scope *sc_scope_parent(const sc_scope *o) { return o->parent; }
-const sc_pair *sc_scope_info(const sc_scope *o, size_t *n) {
-	*n = o->ninfo;
-	return o->info;
-}
+const sc_info *sc_scope_info(const sc_scope *o) { return o->info ? &o->info->pub : NULL; }
 
 sc_scope *sc_get_current_scope(const sc_scheduler *s) { return s->open; }
 sc_run *sc_get_run(const sc_scheduler *s) { return s->open_writer; }
 
-size_t sc_get_info(const sc_scheduler *s, sc_pair *out, size_t cap) {
-	size_t total = 0;
-	for (const sc_scope *o = s->open; o != NULL; o = o->parent) total += o->ninfo;
-	// from the one open up, each scope's info into its place from the end
-	size_t end = total;
-	for (const sc_scope *o = s->open; o != NULL; o = o->parent) {
-		end -= o->ninfo;
-		for (size_t i = 0; i < o->ninfo; i++)
-			if (end + i < cap) out[end + i] = o->info[i];
-	}
-	return total;
-}
+const sc_info *sc_get_info(const sc_scheduler *s) { return s->open ? &s->open->info->pub : NULL; }
 
 // what was open, to put back
 typedef struct {
@@ -396,15 +432,22 @@ char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *), voi
 	return call_teardown(o, (teardown_fn){f, data});
 }
 
-static void unact(sc_scheduler *s, sc_scope *c) {
+// its act out of its queue, given back
+static act *unqueue(sc_scheduler *s, sc_scope *c) {
 	act *a = c->acting;
-	for (size_t i = s->headacts; i < s->nacts; i++) {
-		if (s->acts[i] != a) continue;
-		memmove(&s->acts[i], &s->acts[i + 1], (s->nacts - i - 1) * sizeof *s->acts);
-		s->nacts--;
+	queue *q = c->def.early ? &s->earlies : &s->acts;
+	for (size_t i = q->head; i < q->n; i++) {
+		if (q->v[i] != a) continue;
+		memmove(&q->v[i], &q->v[i + 1], (q->n - i - 1) * sizeof *q->v);
+		q->n--;
 		break;
 	}
 	c->acting = NULL;
+	return a;
+}
+
+static void unact(sc_scheduler *s, sc_scope *c) {
+	act *a = unqueue(s, c);
 	drop_value(s, a->value);
 	ran_release(a->r);
 	free(a);
@@ -660,7 +703,10 @@ static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *
 			r->adopted = true;
 		}
 	}
-	sc_more more = {.equal = equal, .error = error, .waits = waits, .through = through, .nthrough = nthrough};
+	sc_more more = {.equal = equal, .error = error, .waits = waits, .through = through, .nthrough = nthrough,
+		.has_kept = r->has_kept, .kept = r->kept};
+	r->has_kept = false;
+	r->kept = NULL;
 	EACH(s, ON_END, end, c, r->n, ended, (const void *const *)r->reads, r->nreads, &more);
 	free(error);
 	// ended, unless awaited: no longer a run known to loop
@@ -687,8 +733,11 @@ static void result(sc_scheduler *s, sc_run *r, void *v) {
 			act *a = xalloc(sizeof *a);
 			a->r = ran_ref(r);
 			a->value = v;
-			VEC_PUSH(s->acts, s->nacts, s->capacts, a);
+			queue *q = c->def.early ? &s->earlies : &s->acts;
+			VEC_PUSH(q->v, q->n, q->cap, a);
 			c->acting = a;
+			r->has_kept = true;
+			r->kept = v;
 		} else {
 			drop_value(s, v);
 		}
@@ -707,14 +756,16 @@ static void result(sc_scheduler *s, sc_run *r, void *v) {
 		s->running = wasRunning;
 		s->open = wasopen;
 		s->open_writer = waswriter;
+		r->has_kept = true;
+		r->kept = v;
 		if (failed) {
-			drop_value(s, v);
 			// a set that threw may have written part: the last is forgotten, so the next result
-			// is given to set, equal or not
+			// is given to set, equal or not. the result let go once its end is said
 			if (c->has_last) drop_value(s, c->last);
 			c->last = NULL;
 			c->has_last = false;
 			finish(s, r, SC_FAIL, 0, failed, NULL, NULL, 0);
+			drop_value(s, v);
 			return;
 		}
 		if (c->has_last) drop_value(s, c->last);
@@ -819,12 +870,23 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 		return;
 	}
 	// its info, from here: this run's number, and the tick of the mark that made it due
-	c->run_number = n;
-	c->run_mark = mark;
-	c->run_info[0] = (sc_pair){"run", &c->run_number};
-	c->run_info[1] = (sc_pair){"mark", &c->run_mark};
-	c->info = c->run_info;
-	c->ninfo = 2;
+	// in place when nothing holds the last, else a new one: what was made under it keeps saying it
+	info_block *ib = c->info;
+	if (ib->refs > 1) {
+		block_release(ib);
+		ib = block_new(3);
+		ib->owner = block_ref(c->parent->info);
+	} else if (ib->owner != c->parent->info) {
+		block_release(ib->owner);
+		ib->owner = block_ref(c->parent->info);
+	}
+	ib->run = n;
+	ib->mark = mark;
+	ib->pairs[0] = (sc_pair){"run", &ib->run};
+	ib->pairs[1] = (sc_pair){"mark", &ib->mark};
+	ib->pairs[2] = (sc_pair){"owner", &ib->owner->pub};
+	ib->pub.n = 3;
+	c->info = ib;
 	sc_scope *wasopen = s->open;
 	sc_run *waswriter = s->open_writer;
 	s->reading = r;
@@ -916,6 +978,25 @@ static void do_act(sc_scheduler *s, act *a) {
 	free(a);
 }
 
+// the nearest computer above c with an act in c's queue acts before it (and its owner before that)
+static void owners(sc_scheduler *s, sc_scope *c) {
+	for (sc_scope *o = c->parent; o != NULL; o = o->parent) {
+		if (o->kind != EFFECT || o->acting == NULL || o->def.early != c->def.early) continue;
+		act *x = unqueue(s, o);
+		owners(s, o);
+		do_act(s, x);
+		return;
+	}
+}
+
+// the next act of q, owners first (E2): what an owner's act tears down does not act
+static void take(sc_scheduler *s, queue *q) {
+	act *a = q->v[q->head++];
+	a->r->c->acting = NULL;
+	if (q->head < q->n) owners(s, a->r->c);
+	do_act(s, a);
+}
+
 // pulses
 
 // keys nobody reads, forgotten now and then: any the ends and disposals left
@@ -936,14 +1017,16 @@ void sc_pulse(sc_scheduler *s) {
 	for (;;) {
 		while (s->headlanded < s->nlanded) land(s, s->landed[s->headlanded++]);
 		s->headlanded = s->nlanded = 0;
-		if (!od_size(s->order) && s->headacts == s->nacts) break;
+		if (!od_size(s->order) && s->earlies.head == s->earlies.n && s->acts.head == s->acts.n) break;
 		while (od_size(s->order)) {
 			int rank;
 			od_item *p = od_next(s->order, &rank);
 			first(s, p->owner, rank);
 		}
-		while (s->headacts < s->nacts) do_act(s, s->acts[s->headacts++]);
-		s->headacts = s->nacts = 0;
+		while (s->earlies.head < s->earlies.n) take(s, &s->earlies);
+		s->earlies.head = s->earlies.n = 0;
+		while (s->acts.head < s->acts.n) take(s, &s->acts);
+		s->acts.head = s->acts.n = 0;
 	}
 	s->pulsing = false;
 	cs_end(s->causes);
@@ -959,6 +1042,7 @@ void sc_pulse(sc_scheduler *s) {
 static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	sc_scope *o = s->open;
 	if (o == NULL || o->state != ALIVE) return NULL;
+	if (kind != EFFECT) def.early = false;
 	sc_scope *c = make_scope(s, kind, o, NULL, 0);
 	c->def = def;
 	c->acted_n = c->n;
@@ -973,10 +1057,23 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	// cuts it
 	if (s->running && s->running->nloop > 0) s->running->cut = true;
 	uint64_t t = ++s->tick;
+	// its info till its first run: the tick that made it due, its making
+	c->info = block_new(3);
+	c->info->owner = block_ref(o->info);
+	c->info->mark = t;
+	c->info->pairs[0] = (sc_pair){"mark", &c->info->mark};
+	c->info->pairs[1] = (sc_pair){"owner", &o->info->pub};
+	c->info->pub.n = 2;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
-	if (due(s, c, t, s->running) && told) VEC_PUSH(now.v, now.n, now.cap, c);
+	bool now_due = due(s, c, t, s->running);
+	if (now_due && told) VEC_PUSH(now.v, now.n, now.cap, c);
 	if (told) told_mark(s, NULL, 0, s->running, &now, t);
+	// early: its first run now, and its act
+	if (def.early && now_due) {
+		first(s, c, od_rank(s->order, &c->od));
+		if (c->acting) do_act(s, unqueue(s, c));
+	}
 	return c;
 }
 
@@ -1021,11 +1118,13 @@ void sc_free(sc_scheduler *s) {
 	cs_end(s->causes);
 	for (size_t i = 0; i < s->nall; i++)
 		if (s->all[i]->kind != PLAIN) tg_untrack(s->all[i]->node, NULL);
-	for (size_t i = s->headacts; i < s->nacts; i++) {
-		drop_value(s, s->acts[i]->value);
-		ran_release(s->acts[i]->r);
-		free(s->acts[i]);
-	}
+	queue *qs[] = {&s->earlies, &s->acts};
+	for (int k = 0; k < 2; k++)
+		for (size_t i = qs[k]->head; i < qs[k]->n; i++) {
+			drop_value(s, qs[k]->v[i]->value);
+			ran_release(qs[k]->v[i]->r);
+			free(qs[k]->v[i]);
+		}
 	for (size_t i = s->headlanded; i < s->nlanded; i++) {
 		drop_value(s, s->landed[i].value);
 		free(s->landed[i].error);
@@ -1035,6 +1134,7 @@ void sc_free(sc_scheduler *s) {
 		sc_scope *o = s->all[i];
 		free(o->children);
 		free(o->teardowns);
+		block_release(o->info);
 		if (o->kind != PLAIN) {
 			tg_node_free(o->node);
 			pm_clear(&o->wrote);
@@ -1061,7 +1161,8 @@ void sc_free(sc_scheduler *s) {
 		free(s->listeners[k]);
 	}
 	free(s->all);
-	free(s->acts);
+	free(s->acts.v);
+	free(s->earlies.v);
 	free(s->landed);
 	free(s);
 }

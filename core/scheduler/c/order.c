@@ -20,8 +20,8 @@ struct order {
 	uint64_t epoch;
 	bool ranks_ok;
 	size_t nranked;
-	// some component of the ranks made whole has more than one member
-	bool cyclic;
+	// the last stamp given (od_item stamp)
+	uint64_t stamps;
 	// the items to mend
 	od_item **work;
 	size_t nwork, capwork;
@@ -76,20 +76,111 @@ static int rank_at(const order *o, const od_item *p, uint64_t epoch) {
 	return p->rank_epoch == epoch ? p->rank : 0;
 }
 
-// the edges of what is in work changed: each takes its rank again from its edges, and what is
-// after it too, as far as a rank changes. a cycle, or a rank past the count (a cycle made now),
-// or mending longer than a whole making would take: made whole at the next
+static void grow(od_item ***a, size_t n, size_t *cap) {
+	if (n < *cap) return;
+	*cap = *cap ? *cap * 2 : 16;
+	*a = realloc(*a, *cap * sizeof **a);
+	if (*a == NULL) abort();
+}
+
+// q, an edge of p's: one of the region's edges, or one past its rank into p's floor
+static size_t into(const order *o, uint64_t s, const od_item *p, const od_item *q, size_t *adj, size_t count,
+                   int *floor) {
+	if (!edge(p, q)) return count;
+	if (q->stamp == s) adj[count++] = q->index;
+	else if (rank_at(o, q, o->epoch) + 1 > *floor) *floor = rank_at(o, q, o->epoch) + 1;
+	return count;
+}
+
+// ranked again from start and everything after it (the region): rank.h over the region's own
+// edges, each at least one past what it is after outside it. nothing outside is after the
+// region, so nothing outside changes. its members found again
+static void local(order *o, od_item *const *start, size_t nstart) {
+	uint64_t s = ++o->stamps;
+	od_item **stack = NULL, **at = NULL;
+	size_t sp = 0, capstack = 0, n = 0, capat = 0;
+	for (size_t i = 0; i < nstart; i++) {
+		grow(&stack, sp, &capstack);
+		stack[sp++] = start[i];
+	}
+	while (sp) {
+		od_item *x = stack[--sp];
+		if (!x->alive || x->stamp == s) continue;
+		x->stamp = s;
+		x->index = n;
+		grow(&at, n, &capat);
+		at[n++] = x;
+		for (size_t i = 0; i < x->rev.cap; i++) {
+			if (x->rev.keys[i] == NULL) continue;
+			grow(&stack, sp, &capstack);
+			stack[sp++] = (od_item *)x->rev.keys[i];
+		}
+	}
+	size_t *off = malloc((n + 1) * sizeof *off);
+	int *floor = calloc(n + 1, sizeof *floor);
+	int *out = calloc(n + 1, sizeof *out);
+	size_t cap = 16, count = 0;
+	size_t *adj = malloc(cap * sizeof *adj);
+	if (!off || !floor || !out || !adj) abort();
+	for (size_t i = 0; i < n; i++) {
+		od_item *p = at[i];
+		off[i] = count;
+		size_t need = count + (p->values ? p->values->count : 0) + 1;
+		if (need > cap) {
+			while (need > cap) cap *= 2;
+			adj = realloc(adj, cap * sizeof *adj);
+			if (adj == NULL) abort();
+		}
+		for (size_t j = 0; p->values && j < p->values->cap; j++)
+			count = into(o, s, p, p->values->keys[j], adj, count, &floor[i]);
+		count = into(o, s, p, p->after, adj, count, &floor[i]);
+	}
+	off[n] = count;
+	rk_rank(n, off, adj, floor, out);
+	for (size_t i = 0; i < n; i++) {
+		od_item *p = at[i];
+		if (p->rank_epoch != o->epoch) o->nranked++;
+		p->rank = out[i];
+		p->rank_epoch = o->epoch;
+		p->member_epoch = 0;
+		if (p->due) o->heap_stale = true;
+	}
+	for (size_t i = 0; i < n; i++)
+		for (size_t j = off[i]; j < off[i + 1]; j++)
+			if (out[adj[j]] == out[i]) at[i]->member_epoch = at[adj[j]]->member_epoch = o->epoch;
+	free(stack);
+	free(at);
+	free(off);
+	free(floor);
+	free(out);
+	free(adj);
+}
+
+// the edges of what is in work changed: each rises to one past its edges' most, and what is
+// after it too, as far as a rank rises; a rank never falls (order.ts). a cycle's member reached,
+// or the one it began from reached again (after what is after it: a cycle made now): ranked
+// again from there on (local). mending longer than a whole making would take: made whole at the
+// next
 static void mend(order *o) {
-	if (!o->ranks_ok || o->cyclic) {
+	if (!o->ranks_ok) {
 		o->nwork = 0;
 		o->ranks_ok = false;
 		return;
 	}
+	// what it began from: its callers give one
+	od_item *begun = o->nwork == 1 ? o->work[0] : NULL;
 	size_t limit = 4 * o->nranked + 64;
 	for (size_t steps = 0; o->nwork; steps++) {
 		if (steps > limit) goto whole;
 		od_item *x = o->work[--o->nwork];
 		if (!x->alive) continue;
+		if (x->member_epoch == o->epoch) {
+			work(o, x);
+			if (begun) work(o, begun);
+			local(o, o->work, o->nwork);
+			o->nwork = 0;
+			return;
+		}
 		int k = 0;
 		if (x->values)
 			for (size_t i = 0; i < x->values->cap; i++) {
@@ -97,14 +188,21 @@ static void mend(order *o) {
 				if (q != NULL && edge(x, q) && rank_at(o, q, o->epoch) + 1 > k) k = rank_at(o, q, o->epoch) + 1;
 			}
 		if (edge(x, x->after) && rank_at(o, x->after, o->epoch) + 1 > k) k = rank_at(o, x->after, o->epoch) + 1;
-		if (rank_at(o, x, o->epoch) == k) continue;
-		if ((size_t)k > o->nranked) goto whole;
+		if (k <= rank_at(o, x, o->epoch)) continue;
 		if (x->rank_epoch != o->epoch) o->nranked++;
 		x->rank = k;
 		x->rank_epoch = o->epoch;
 		if (x->due) o->heap_stale = true;
-		for (size_t i = 0; i < x->rev.cap; i++)
-			if (x->rev.keys[i] != NULL) work(o, (od_item *)x->rev.keys[i]);
+		for (size_t i = 0; i < x->rev.cap; i++) {
+			od_item *y = (od_item *)x->rev.keys[i];
+			if (y == NULL) continue;
+			if (y == begun) {
+				o->nwork = 0;
+				local(o, &begun, 1);
+				return;
+			}
+			work(o, y);
+		}
 	}
 	return;
 whole:
@@ -146,13 +244,12 @@ static void ranks(order *o) {
 		if (edge(p, p->after)) adj[count++] = p->after->index;
 	}
 	off[n] = count;
-	rk_rank(n, off, adj, out);
-	o->cyclic = false;
-	for (size_t i = 0; i < n; i++)
-		for (size_t j = off[i]; j < off[i + 1]; j++)
-			if (out[adj[j]] == out[i]) o->cyclic = true;
+	rk_rank(n, off, adj, NULL, out);
 	o->nranked = n;
 	o->epoch++;
+	for (size_t i = 0; i < n; i++)
+		for (size_t j = off[i]; j < off[i + 1]; j++)
+			if (out[adj[j]] == out[i]) at[i]->member_epoch = at[adj[j]]->member_epoch = o->epoch;
 	for (size_t i = 0; i < n; i++) {
 		at[i]->rank = out[i];
 		at[i]->rank_epoch = o->epoch;
@@ -221,6 +318,11 @@ void od_delete(order *o, od_item *p) {
 }
 
 size_t od_size(const order *o) { return o->ndue; }
+
+int od_rank(order *o, const od_item *p) {
+	ranks(o);
+	return rank_at(o, p, o->epoch);
+}
 
 od_item *od_next(order *o, int *rank) {
 	ranks(o);
@@ -332,11 +434,16 @@ void od_gone(order *o, od_item *p) {
 		p->rank_epoch = 0;
 		o->nranked--;
 	}
-	// what was after it is mended
-	for (size_t i = 0; i < p->rev.cap; i++)
-		if (p->rev.keys[i] != NULL) work(o, (od_item *)p->rev.keys[i]);
+	// what was after it keeps its rank; a cycle's member: what was after it ranked again (local)
+	if (o->ranks_ok && p->member_epoch == o->epoch) {
+		p->member_epoch = 0;
+		o->nwork = 0;
+		for (size_t i = 0; i < p->rev.cap; i++)
+			if (p->rev.keys[i] != NULL) work(o, (od_item *)p->rev.keys[i]);
+		local(o, o->work, o->nwork);
+		o->nwork = 0;
+	}
 	pm_clear(&p->rev);
-	mend(o);
 	// out of the live list
 	if (p->slot < o->nlive && o->live[p->slot] == p) {
 		od_item *last = o->live[--o->nlive];

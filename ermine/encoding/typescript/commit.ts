@@ -29,6 +29,9 @@ export type Commit = {
 	parents: Uint8Array[]
 	// with several parents: the one its patches are over (a merge says what it keeps in them)
 	base?: Uint8Array
+	// with several parents and no base: a merge rule's name. its patches are over the merge of its
+	// parents by that rule; a device that doesn't know the rule can't read it
+	merge?: string
 	lamport: number
 	patches: Patch[]
 }
@@ -53,11 +56,12 @@ const FIELDS = [
 	"nonce",
 	"parents",
 	"base",
+	"merge",
 	"lamport",
 	"patches",
 ] as const
 const KNOWN: ReadonlySet<string> = new Set(FIELDS)
-const OPTIONAL: ReadonlySet<string> = new Set(["reader", "external", "metadata", "base"])
+const OPTIONAL: ReadonlySet<string> = new Set(["reader", "external", "metadata", "base", "merge"])
 
 type Fields = { [k: string]: unknown }
 
@@ -124,6 +128,10 @@ const RULES: { [k in typeof FIELDS[number]]: (v: unknown, c: Fields) => boolean 
 	base: (v, c) =>
 		sized(v, 32) && Array.isArray(c.parents) && c.parents.length >= 2 &&
 		c.parents.some((p) => p instanceof Uint8Array && compare(p, v) === 0),
+	// a rule's name, with several parents and no base
+	merge: (v, c) =>
+		typeof v === "string" && v.length > 0 && Array.isArray(c.parents) &&
+		c.parents.length >= 2 && !("base" in c),
 	lamport: (v) => whole(v) && v >= 1,
 	patches: (v) =>
 		Array.isArray(v) &&
@@ -138,7 +146,7 @@ function check(c: Fields): string | undefined {
 	for (const k of FIELDS) {
 		if (!(k in c)) {
 			const needed = !OPTIONAL.has(k) ||
-				k === "base" && Array.isArray(c.parents) && c.parents.length >= 2
+				k === "base" && Array.isArray(c.parents) && c.parents.length >= 2 && !("merge" in c)
 			if (needed) return k
 		} else if (!RULES[k](c[k], c)) return k
 	}

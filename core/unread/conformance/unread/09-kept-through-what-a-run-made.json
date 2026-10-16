@@ -1,0 +1,118 @@
+{
+	"title": "a kept plain value holds nothing; a list a run made, holding what it read, holds that",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"n": 0
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			]
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a",
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				}
+			]
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "keep",
+			"path": [
+				"a"
+			],
+			"wrap": true,
+			"hold": "w",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 3
+				}
+			]
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "w",
+			"expect": {
+				"value": [
+					{
+						"x": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 3
+					},
+					"n": 0
+				}
+			}
+		}
+	]
+}

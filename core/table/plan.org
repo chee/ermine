@@ -274,7 +274,67 @@ chee 10-14: "i think this is the plan."
   stuff"; "but often i'd be boxing in a new folder, so i'd want a way to be able to say
   box("somewhere/folder-that-doesnt-exist-yet""; start, *decided*: "we're not always inside a box"
   (so start takes a box or plain places, the root the outermost box; at absolute from it, array or
-  string: mine); cwd, *decided*: "it also would be useful with box to be able to start the process at
+  string: mine); why and what, *thought* 10-15: "maybe "it was the closest thing" is actually only a
+  rule for the graph layer ... it's _one way of building software_ but it's not core to ermine(?) like
+  the core thing is you can find out _why_ and _what_, if i opened a document with a specific process
+  running a specific program i can see all of that information somewhere"; "maybe it's
+  `ermine.program.default-loader = "loaders/js"; ermine.type = uti for javascript` with the file
+  extension .js... and then a UI can build up all this stuff like openwith"; on needs/provides: "the
+  named-shebang type ... has a definite closest ... with the needs/provides ... the order of things
+  you are checking is not in your control, and if it was it wouldn't be nice"; "it makes we wonder
+  if actually the "satisfy" "open with" and "build a la carte" are they themselves programs". reads,
+  *decided*: "oh shoot we should also record reads"; "reads and writes should be on the "run"
+  record"; "oh silly we don't have run records right now?"; which kept, chosen: the latest only, "1,
+  because subduction will keep the rest"; where, *decided*: "let's keep them both on attributes right now"
+  (ermine.computer.run beside ermine.computer.status; a part of its own or a child: not now). 8b,
+  *decided* 10-15: reads across a realm by pending, "pending is the right choice here" (a run in a
+  worker reading what isn't mirrored ends pending, the value comes back as a change, the next run
+  replays); building in ermine/realms; chee 10-15: "what, why doesn't the worker have ermine in there?" (so
+  the worker runs real ermine: its own table/places/scheduler + ermine/api, a partial replica filled
+  lazily, unloaded = pending; its writes stream to the page as entry changes, applied as the
+  process; the same shape as sync, over a MessagePort). layout, 10-15 (chee): "types dont belong to program they should
+  be @ermine/types a separe thing in ermine/ (also we need to make that js smaller, smaybe a json
+  file ...)"; "program is not about programs really, it's an idea for how to find chains of programs
+  for a given type" → chain finding to playground/ (chosen); "process and the process api are
+  ermine/ but programs actually arent"; builds: "i'd need to understand this package more first";
+  host runners, *thought*: "not sure about this "live function" it should probably be a root process
+  node"; "boxes are nice". front end, *wanted*: "look at all the world.ts and host.ts and
+  createworld stuff and see if there are a nice set of primitives we could put in ermine.ts"
+  (survey: playground/host-survey.org). createErmine's info, *decided*: ""pairs" is not a good word
+  for this, maybe it should be the first arg, no name, like `createScope`, `createErmine(Object.entries({actor:
+  "hehe", whatever: "xyz}`": createErmine(info, options?). put: "we should not be editing by
+  snapshot ... patches are always better. also actually maybe we should export a `deep`/`merge` fn
+  that you could hand to produce `produce(merge({a: 1}))`" (thought); as: "i guess it should be part
+  of the scheduler api if it's so useful. but with a petter name"; reach: "is that a `places`
+  consideration maybe?"; header.ts: nearest exported ("yeah export it"); "maybe that should be
+  change-header.ts?" (rename: open). benches asked: process tree as contributor, api made unused.
+  results: the process tree as a contributor doubles tracked reads (+50-100% uncached); the api made
+  unused costs ~3 µs once and nothing after. chee: "this is obviously dumb ... wait, isn't this
+  another createSelector problem?" (no: waking is selector's, asking is pruning's); pruning,
+  *decided*: "yeah and shouldnt we do this in places in general?" (a contributor may answer "none
+  below"; the walk stops asking it). three scheduler behaviours, 10-15 (chee: "scheduler bug?"): reproduced:
+  a memo after its last effect is disposed, a computed on a dead branch, a write set and set back
+  before the pulse each rerun once; Solid 2.0 rc.14 the same by default, its opt-in `lazy` fixes the
+  first two, not the third. for 3, chee: "i kinda like the idea of #3 in batch's patches squash to
+  nothing..... as long as it's visualizable" (in places' commit, recorded). sent to scheduler-3e
+  ("yeah if it's still working"). "runs are writes", chee: "it's interesting, isn;t it? i dont know
+  when i said this or what i meant by it exactly at the time" (10-11, on newcore ~100x slower than
+  alien-signals: "this is a prerequisite, so the work is to make that fast"). attended computers,
+  *decided* 10-15: built twice outside (path cache, build steps), so "if i've built it twice it
+  should probably be in core"; "if nobody is paying attention to me i might as well die, how would
+  that go in core"; "die at the end of the pulse". render effects, *decided*: "might as well add
+  rendereffect while we're here, an option on effect to run in the queue before"; "and also to run
+  automatically"; chosen: "we can call it early:true" = acts at once when its value changes,
+  synchronously, without waiting for the round's end: "acts at once and is in an earlier queue so it goes
+  compute, early, effect"; "it runs once the moment you create it, and then from then on runs in the
+  early effects queue". names: "i don't like the name `attended` too good. but it is more clear
+  than lazy, which isn't really lazy" (open). lazy memo, *wanted*: "figuring out a way of creating a
+  real lazy memo with this api ... without making the schedler super complicated" (pull-only,
+  Adapton/alien style; agent in playground/lazy-memo). wanted later: `lazy(` and `early(` in the
+  process api ("ok let's add ... wait"); *decided*: "we'll add early(, and we'll add an option on memo to get this
+  one that dies when no ones watching"; named, *decided*: "make the memo option called `chee: true`" order, *decided* 10-15: "let's move onto #8, we can do complaints later. we won't
+  even do #7's shape yet, that can come later, we can just error for now"; "the process api is done
+  now, btw, a first draft anyway" (ermine/api); cwd, *decided*: "it also would be useful with box to be able to start the process at
   a different cwd than the root. so we are boxing /work and starting the process in /work/docs/mouse"
   (mine: {cwd}, default the folder at sits in; ermine.process.cwd on the node). the overlay: step 3, boxes, names *decided* 10-15: "createBox(folder, parent)", "box(somebox, path, node)",
   "unbox"; what's in a box: boxed(somebox) (my placeholder name). mine: the box's own node holds a trie
@@ -324,7 +384,12 @@ chee 10-14: "i think this is the plan."
   generator, i'd also like openwith as all lowercase like that and to separate its .ways from its
   .why ... i'd like the normal openwith to just return the .ways - we should have a way to get the
   whynots though" (mine, open: both yield ways; whynots by an onwhynot callback). DEPTH / too-deep
-  removed ("take out too-deep"); a bench asked for ("run a benchmarks").
+  removed ("take out too-deep"); a bench asked for ("run a benchmarks"). order, *decided* 10-15: "sort the
+  satisfy by shortest path too", "if it can be done efficiently"; strict shortest cost a 2-step chain
+  every level up to / (14 to 170 µs with 100 files there), so chosen: "Nearest, then shortest". builds,
+  *wanted* 10-15: "a version of fancy-notebook on createBuilds but we probably need to change our
+  createBuilds to be more like the notebook's interpretation of build-a-la-carte" (verifying traces,
+  dynamic deps; compile becomes a step whose trace is its input).
   makeApi → createProcessAPI, *decided* 10-15 (createPrograms takes createProcessAPI(ctx))
 - programs, *decided* 10-14: "a process is an instance of a program. a program is a node that declares
   what it needs and provides."
@@ -764,3 +829,35 @@ Gaps found, most-hit first; ✦ touches the data structure:
   something" (chee 10-14)
 - arriving vs empty vs refused: moved to the sync plan (extensions/subduction/plan.org)
 - an app's data about a shared thing, kept neither on it nor per path. fancy-desktop's catclock
+- attended review answers, 10-15 (playground/scheduler-review/attended-early.org), chee: A1 "wake
+  with the reading run's cause" "sounds gine"; A3 untrack first, A2 don't bury while pending:
+  "sounds good"; A9/A10 "throw PENDING". on =bury= (the internal pulse-end step): "i never agreed to
+  that function". then: "hmm it was actually probably a bad idea to add this "attended memo"
+  concept. it has not been designed" (thinking aloud; fixes not applied).
+- clingy, 10-16, chee: "the [idea] of clingy (what i'm calling attended) computers is good but the
+  implementation is entirely fucked". bugs found: A1 (made+read in its reader: endless), A2 (buried
+  while pending), A3 (bury tears down before untracking), A4 (two on a key), A9/A10 (untracked read
+  gives undefined), Lean: two clingy ones ping-pong a pulse forever (a wake has no cause).
+- clingy first read, *decided* 10-16: "2. The reader goes pending until the clingy computer has run,
+  like reading anything that's still pending." (over: stop and rerun the reader, as built; compute
+  on read, Solid's)
+- names first, 10-16, chee: "oh that might have been a mistake [names optional], i think we should
+  probably take the name as the first option for memo, effect, early, ref" (ref and method already
+  take p first). built as memo(name, f, o?), effect(name, f, act, o?), early(name, f, act, o?);
+  options.name gone. b′ (a clingy memo remade in a rerun under the same name is kept) proposed, not
+  chosen.
+- clingy answers, 10-16, chee: b′ (keep a same-named memo across a rerun) "ye"; two on one key:
+  "making two with the same name in the same run shall be illegal"; E2 owner order for acts "yes,
+  think that's right". the ping-pong guard: asked what it means (open).
+- computer node ids, 10-16, chee (lean): "the id should probably be some monotonic random thing, and
+  also scoped under the computation's id" (today: memo:<resolved path>, "the same at every start";
+  unnamed: crypto.randomUUID, v4, not monotonic)
+  chee, after: "eventually it will be a blake3 has[h] provided by subduction id imagine or something
+  otherwise signed"
+  chee: "i guess b an owner scope": flat opaque ids (setup.id; later a hash or signed), the owner
+  recorded on the node, not in the id string
+- clingy out of core, *decided* 10-16, chee: "i feel like i made a mistake in introducing this
+  clingy computation"; then "take it out of core, make it a library that can be used in the two
+  places it was duplicated" (the path cache, filesystem/places cache.ts; build steps,
+  ermine/programs build.ts). goes with it: ermine/api's chee: true. early effects stay, and owner
+  order for acts (E2). the rebuild agent was stopped mid-way (TS scheduler + scenarios touched).

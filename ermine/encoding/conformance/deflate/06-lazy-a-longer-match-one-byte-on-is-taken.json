@@ -1,0 +1,12 @@
+{
+	"title": "lazy: a longer match one byte on is taken, a literal first",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "61626362636465666263646566677861626364656667",
+			"expect": {
+				"bytes": "4b4c4a4e4a4e494d0313e91589101a00"
+			}
+		}
+	]
+}

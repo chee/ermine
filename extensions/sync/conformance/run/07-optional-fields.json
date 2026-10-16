@@ -1,0 +1,68 @@
+{
+	"title": "reader, external and metadata as runs, null where a commit has none",
+	"steps": [
+		{
+			"op": "make",
+			"name": "a",
+			"nonce": 1,
+			"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+			"patches": [{ "path": [], "value": 1 }]
+		},
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": ["a"],
+			"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+			"external": [{ "file": "a.ts", "line": 1 }],
+			"patches": []
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"nonce": 3,
+			"parents": ["b"],
+			"metadata": [["cause", { "why": 1 }]],
+			"patches": []
+		},
+		{ "op": "make", "name": "d", "nonce": 4, "parents": ["c"], "patches": [] },
+		{
+			"op": "pack",
+			"commits": ["a", "b", "c", "d"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9440064626173658182f6f944006474696d654400000000656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728282784965726d696e653a2f2f63646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364f9400082f6f94000667369676e6572818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94400676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565f93c008080806865787465726e616c8382f6f93c008281a26466696c6564612e7473646c696e65f93c00f93c0082f6f94000686d657461646174618382f6f94000828182656361757365a163776879f93c00f93c0082f6f93c006a7369676e617475726573590100d15e1762ee6e91cabb53c9f0af4ebeca3d26b7162208223a29b4ba203e9604f9ce98282356ae285dbedce4835d4ac99e23219fbcfdaff064694f41e39058b90a442bf02f53f45e1e1a6fdcad61aa61dd24e2e5ca5211bb88094a2e93a44660f6e4a5d899895f6db7958a5f900d5405121ed890346870e3e013bc6d51d9812505562b06463575e0a2b31db4d568226544029d2d29014e62262903132dbe3b9094dc9360d1268103874a7c938dc7ffb4393f23bf49efcfb9a39931ebef5bf5a60a6c41428cd4dc486759bc08c8ed79f527b0cd6149ae3430198cd549d46654227fcc17f816b28713635589fdf95574737c601086b6efbae2f0f1c5dae01c91380d"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 4,
+					"base": [[null, 4]],
+					"time": { "/": { "bytes": "AAAAAA" } },
+					"actor": [[null, 4]],
+					"nonce": { "/": { "bytes": "AgICAg" } },
+					"table": [["value", 4]],
+					"reader": [
+						["ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", 2],
+						[null, 2]
+					],
+					"signer": [[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 4]],
+					"lamport": { "/": { "bytes": "AgICAg" } },
+					"parents": [[], null, null, null],
+					"patches": [[{ "path": [], "value": 1 }], [], [], []],
+					"external": [[null, 1], [[{ "file": "a.ts", "line": 1 }], 1], [null, 2]],
+					"metadata": [[null, 2], [[["cause", { "why": 1 }]], 1], [null, 1]],
+					"signatures": {
+						"/": {
+							"bytes": "0V4XYu5ukcq7U8nwr06+yj0mtxYiCCI6KbS6ID6WBPnOmCgjVq4oXb7c5INdSsmeIyGfvP2v8GRpT0HjkFi5CkQr8C9T9F4eGm/crWGqYd0k4uXKUhG7iAlKLpOkRmD25KXYmYlfbbeVil+QDVQFEh7YkDRocOPgE7xtUdmBJQVWKwZGNXXgorMdtNVoImVEAp0tKQFOYiYpAxMtvjuQlNyTYNEmgQOHSnyTjcf/tDk/I79J78+5o5kx6+9b9aYKbEFCjNTcSGdZvAjI7Xn1J7DNYUmuNDAZjNVJ1GZUIn/MF/gWsocTY1WJ/flVdHN8YBCGtu+64vDxxdrgHJE4DQ"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d"] } }
+	]
+}

@@ -108,7 +108,7 @@ function seeded(seed: number, reach: Reach) {
 	}
 	function make(kind: Made["kind"]) {
 		const name = `${kind[0]}${made.length}`
-		const o = s.createRootScope()
+		const o = s.createRootScope([["actor", name]])
 		const m = { name, kind, o } as Made
 		const computes = made.filter((x) => x.kind !== "effect")
 		if (kind === "walker" || !computes.length) {

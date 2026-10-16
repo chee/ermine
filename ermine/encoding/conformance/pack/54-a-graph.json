@@ -1,0 +1,2994 @@
+{
+	"title": "sixty nodes: every column (actors, readers, sites, metadata, ops, values, cow), ids shared by parts, a node under several keys; dynamic codes",
+	"entries": [
+		[
+			"value",
+			"ermine://000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55",
+			0
+		],
+		[
+			"attributes",
+			"ermine://000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55",
+			0
+		],
+		[
+			"children",
+			"local-0",
+			0
+		],
+		[
+			"value",
+			"ermine://25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a",
+			1
+		],
+		[
+			"value",
+			"ermine://4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949f",
+			2
+		],
+		[
+			"value",
+			"ermine://6f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4",
+			3
+		],
+		[
+			"attributes",
+			"ermine://6f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4",
+			3
+		],
+		[
+			"value",
+			"ermine://949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9",
+			4
+		],
+		[
+			"value",
+			"ermine://b9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e",
+			5
+		],
+		[
+			"value",
+			"ermine://dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d2833",
+			6
+		],
+		[
+			"attributes",
+			"ermine://dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d2833",
+			6
+		],
+		[
+			"value",
+			"ermine://030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58",
+			7
+		],
+		[
+			"value",
+			"ermine://28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d",
+			8
+		],
+		[
+			"value",
+			"ermine://4d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2",
+			9
+		],
+		[
+			"attributes",
+			"ermine://4d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2",
+			9
+		],
+		[
+			"value",
+			"ermine://727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7",
+			10
+		],
+		[
+			"children",
+			"local-10",
+			10
+		],
+		[
+			"value",
+			"ermine://97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ec",
+			11
+		],
+		[
+			"value",
+			"ermine://bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb0611",
+			12
+		],
+		[
+			"attributes",
+			"ermine://bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb0611",
+			12
+		],
+		[
+			"value",
+			"ermine://e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36",
+			13
+		],
+		[
+			"value",
+			"ermine://06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b",
+			14
+		],
+		[
+			"value",
+			"ermine://2b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a7580",
+			15
+		],
+		[
+			"attributes",
+			"ermine://2b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a7580",
+			15
+		],
+		[
+			"value",
+			"ermine://505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5",
+			16
+		],
+		[
+			"value",
+			"ermine://75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4bfca",
+			17
+		],
+		[
+			"value",
+			"ermine://9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4ef",
+			18
+		],
+		[
+			"attributes",
+			"ermine://9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4ef",
+			18
+		],
+		[
+			"value",
+			"ermine://bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe0914",
+			19
+		],
+		[
+			"value",
+			"ermine://e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d18232e39",
+			20
+		],
+		[
+			"children",
+			"local-20",
+			20
+		],
+		[
+			"value",
+			"ermine://09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e",
+			21
+		],
+		[
+			"attributes",
+			"ermine://09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e",
+			21
+		],
+		[
+			"value",
+			"ermine://2e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d7883",
+			22
+		],
+		[
+			"value",
+			"ermine://535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8",
+			23
+		],
+		[
+			"value",
+			"ermine://78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cd",
+			24
+		],
+		[
+			"attributes",
+			"ermine://78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cd",
+			24
+		],
+		[
+			"value",
+			"ermine://9da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2",
+			25
+		],
+		[
+			"value",
+			"ermine://c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17",
+			26
+		],
+		[
+			"value",
+			"ermine://e7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c",
+			27
+		],
+		[
+			"attributes",
+			"ermine://e7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c",
+			27
+		],
+		[
+			"value",
+			"ermine://0c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b5661",
+			28
+		],
+		[
+			"value",
+			"ermine://313c47525d68737e89949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86",
+			29
+		],
+		[
+			"value",
+			"ermine://56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0ab",
+			30
+		],
+		[
+			"attributes",
+			"ermine://56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0ab",
+			30
+		],
+		[
+			"children",
+			"local-30",
+			30
+		],
+		[
+			"value",
+			"ermine://7b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0",
+			31
+		],
+		[
+			"value",
+			"ermine://a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5",
+			32
+		],
+		[
+			"value",
+			"ermine://c5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a",
+			33
+		],
+		[
+			"attributes",
+			"ermine://c5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a",
+			33
+		],
+		[
+			"value",
+			"ermine://eaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f",
+			34
+		],
+		[
+			"value",
+			"ermine://0f1a25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e5964",
+			35
+		],
+		[
+			"value",
+			"ermine://343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89",
+			36
+		],
+		[
+			"attributes",
+			"ermine://343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89",
+			36
+		],
+		[
+			"value",
+			"ermine://59646f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3ae",
+			37
+		],
+		[
+			"value",
+			"ermine://7e89949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3",
+			38
+		],
+		[
+			"value",
+			"ermine://a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8",
+			39
+		],
+		[
+			"attributes",
+			"ermine://a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8",
+			39
+		],
+		[
+			"value",
+			"ermine://c8d3dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d",
+			40
+		],
+		[
+			"children",
+			"local-40",
+			40
+		],
+		[
+			"value",
+			"ermine://edf8030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c3742",
+			41
+		],
+		[
+			"value",
+			"ermine://121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67",
+			42
+		],
+		[
+			"attributes",
+			"ermine://121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67",
+			42
+		],
+		[
+			"value",
+			"ermine://37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c",
+			43
+		],
+		[
+			"value",
+			"ermine://5c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1",
+			44
+		],
+		[
+			"value",
+			"ermine://818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6",
+			45
+		],
+		[
+			"attributes",
+			"ermine://818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6",
+			45
+		],
+		[
+			"value",
+			"ermine://a6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb",
+			46
+		],
+		[
+			"value",
+			"ermine://cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a1520",
+			47
+		],
+		[
+			"value",
+			"ermine://f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45",
+			48
+		],
+		[
+			"attributes",
+			"ermine://f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45",
+			48
+		],
+		[
+			"value",
+			"ermine://15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a",
+			49
+		],
+		[
+			"value",
+			"ermine://3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f",
+			50
+		],
+		[
+			"children",
+			"local-50",
+			50
+		],
+		[
+			"value",
+			"ermine://5f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4",
+			51
+		],
+		[
+			"attributes",
+			"ermine://5f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4",
+			51
+		],
+		[
+			"value",
+			"ermine://848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9",
+			52
+		],
+		[
+			"value",
+			"ermine://a9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe",
+			53
+		],
+		[
+			"value",
+			"ermine://ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d1823",
+			54
+		],
+		[
+			"attributes",
+			"ermine://ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d1823",
+			54
+		],
+		[
+			"value",
+			"ermine://f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48",
+			55
+		],
+		[
+			"value",
+			"ermine://18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d",
+			56
+		],
+		[
+			"value",
+			"ermine://3d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c8792",
+			57
+		],
+		[
+			"attributes",
+			"ermine://3d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c8792",
+			57
+		],
+		[
+			"value",
+			"ermine://626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7",
+			58
+		],
+		[
+			"value",
+			"ermine://87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dc",
+			59
+		]
+	],
+	"nodes": [
+		{
+			"change": {
+				"time": 1760000000,
+				"actor": {
+					"name": "juno"
+				},
+				"reader": "circle",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 10,
+						"column": 4,
+						"function": "write"
+					}
+				],
+				"metadata": [
+					[
+						"cause",
+						0
+					],
+					[
+						"tool",
+						"pen"
+					]
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "lemon lemon 0",
+				"body": "lemon",
+				"done": true
+			},
+			"cow": false
+		},
+		{
+			"change": {
+				"time": 1760000003,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "cherry ink 1",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000006,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "paper wren 2",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000009,
+				"actor": "chee"
+			}
+		},
+		{
+			"change": {
+				"time": 1760000012,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 11,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "otter otter 4",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000015,
+				"actor": "chee",
+				"reader": "circle"
+			},
+			"value": {
+				"title": "moth fox 5",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000018,
+				"actor": "chee",
+				"metadata": [
+					[
+						"cause",
+						6
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "wren paper 6",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000021,
+				"actor": {
+					"name": "juno"
+				}
+			},
+			"value": {
+				"title": "fox moth 7",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000024,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 12,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "lemon lemon 8",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000027,
+				"actor": "chee",
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "cherry ink 9",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000030,
+				"actor": "chee",
+				"reader": "circle"
+			},
+			"value": {
+				"title": "paper wren 10",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000033,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "ink cherry 11",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000036,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 10,
+						"column": 4,
+						"function": "write"
+					}
+				],
+				"metadata": [
+					[
+						"cause",
+						12
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "otter otter 12",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000039,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "moth fox 13",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			},
+			"cow": false
+		},
+		{
+			"change": {
+				"time": 1760000042,
+				"actor": {
+					"name": "juno"
+				}
+			}
+		},
+		{
+			"change": {
+				"time": 1760000045,
+				"actor": "chee",
+				"reader": "circle"
+			},
+			"value": {
+				"title": "fox moth 15",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000048,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 11,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "lemon lemon 16",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000051,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "cherry ink 17",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000054,
+				"actor": "chee",
+				"metadata": [
+					[
+						"cause",
+						18
+					],
+					[
+						"tool",
+						"pen"
+					]
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "paper wren 18",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000057,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "ink cherry 19",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000060,
+				"actor": "chee",
+				"reader": "circle",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 12,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "otter otter 20",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000063,
+				"actor": {
+					"name": "juno"
+				}
+			},
+			"value": {
+				"title": "moth fox 21",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000066,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "wren paper 22",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000069,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "fox moth 23",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000072,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 10,
+						"column": 4,
+						"function": "write"
+					}
+				],
+				"metadata": [
+					[
+						"cause",
+						24
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "lemon lemon 24",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000075,
+				"actor": "chee",
+				"reader": "circle"
+			}
+		},
+		{
+			"change": {
+				"time": 1760000078,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "paper wren 26",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			},
+			"cow": false
+		},
+		{
+			"change": {
+				"time": 1760000081,
+				"actor": "chee",
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "ink cherry 27",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000084,
+				"actor": {
+					"name": "juno"
+				},
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 11,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "otter otter 28",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000087,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "moth fox 29",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000090,
+				"actor": "chee",
+				"reader": "circle",
+				"metadata": [
+					[
+						"cause",
+						30
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "wren paper 30",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000093,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "fox moth 31",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000096,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 12,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "lemon lemon 32",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000099,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "cherry ink 33",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000102,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "paper wren 34",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000105,
+				"actor": {
+					"name": "juno"
+				},
+				"reader": "circle"
+			},
+			"value": {
+				"title": "ink cherry 35",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000108,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 10,
+						"column": 4,
+						"function": "write"
+					}
+				],
+				"metadata": [
+					[
+						"cause",
+						36
+					],
+					[
+						"tool",
+						"pen"
+					]
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"change": {
+				"time": 1760000111,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "moth fox 37",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000114,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "wren paper 38",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000117,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "fox moth 39",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			},
+			"cow": false
+		},
+		{
+			"change": {
+				"time": 1760000120,
+				"actor": "chee",
+				"reader": "circle",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 11,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "lemon lemon 40",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000123,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "cherry ink 41",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000126,
+				"actor": {
+					"name": "juno"
+				},
+				"metadata": [
+					[
+						"cause",
+						42
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "paper wren 42",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000129,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "ink cherry 43",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000132,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 12,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "otter otter 44",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000135,
+				"actor": "chee",
+				"reader": "circle",
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "moth fox 45",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000138,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "wren paper 46",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000141,
+				"actor": "chee"
+			}
+		},
+		{
+			"change": {
+				"time": 1760000144,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 10,
+						"column": 4,
+						"function": "write"
+					}
+				],
+				"metadata": [
+					[
+						"cause",
+						48
+					],
+					[
+						"tool",
+						"pen"
+					]
+				]
+			},
+			"value": {
+				"title": "lemon lemon 48",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000147,
+				"actor": {
+					"name": "juno"
+				}
+			},
+			"value": {
+				"title": "cherry ink 49",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000150,
+				"actor": "chee",
+				"reader": "circle"
+			},
+			"value": {
+				"title": "paper wren 50",
+				"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000153,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "ink cherry 51",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000156,
+				"actor": "chee",
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 11,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "otter otter 52",
+				"body": "lemon cherry paper ink otter",
+				"done": true
+			},
+			"cow": false
+		},
+		{
+			"change": {
+				"time": 1760000159,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "moth fox 53",
+				"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000162,
+				"actor": "chee",
+				"metadata": [
+					[
+						"cause",
+						54
+					],
+					[
+						"tool",
+						"pen"
+					]
+				],
+				"op": {
+					"patches": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								0
+							],
+							"value": "x"
+						}
+					],
+					"undo": [
+						{
+							"path": [
+								"body"
+							],
+							"range": [
+								0,
+								1
+							]
+						}
+					]
+				}
+			},
+			"value": {
+				"title": "wren paper 54",
+				"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000165,
+				"actor": "chee",
+				"reader": "circle"
+			},
+			"value": {
+				"title": "fox moth 55",
+				"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000168,
+				"actor": {
+					"name": "juno"
+				},
+				"external": [
+					{
+						"file": "notes.ts",
+						"line": 12,
+						"column": 4,
+						"function": "write"
+					}
+				]
+			},
+			"value": {
+				"title": "lemon lemon 56",
+				"body": "lemon",
+				"done": true
+			}
+		},
+		{
+			"change": {
+				"time": 1760000171,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "cherry ink 57",
+				"body": "lemon cherrylemon cherry",
+				"done": false
+			}
+		},
+		{
+			"change": {
+				"time": 1760000174,
+				"actor": "chee"
+			}
+		},
+		{
+			"change": {
+				"time": 1760000177,
+				"actor": "chee"
+			},
+			"value": {
+				"title": "ink cherry 59",
+				"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+				"done": false
+			}
+		}
+	],
+	"expect": {
+		"bytes": "a167636f6c756d6e73590618ed9a797cd36418c73b86e31e0c06e3d8e009638c6d6c344ddaae3060204e98dc283ede644dba766b9bd9a66ca0c8565414052f14441119a0a8789f080a228aa078df0782a288a228825aef2ccd6af781bc741b65631ffb47f626effb7d9e5ff23cbf364db7ae482c9b5fcdfbdcbc5855cd977192bd8a2f12f959828773170bfe804e17c8d315cbc7ad76c15bb5ead82b743a6126e7f4095cc5ff914edd48563be7c5bcb9540c95969a41a5c95b8a4aa1e40d9d4665c9fb3131a954364531823cb6c4a67114959a4d71547a8c25834ba7292a3bd5eae0bd4b4723e83af4a0069b474f40ab7bd695372c5bf3c88697dffa74dfa1bfda76eb9bc18e2c3c072136bed7802143cf987c81edd2cbe7dfbc7cede3cf6f7ff7f36f8f844084b884e474c3f0b1d32e76487317dc7af7034fbdf0da075f7cff5b08446897d82fd3987fd674ce59ee5fb874d543ebb7bef1f1573ffe1102113a26f5cfce3d7de279bc38fbaa1befb8e7d18ddbdefeec9b9fff0e81089d7ba7e987154cb9b0d833e79a5beebaef894d3bdedbfddd2f312110a16bca2066c4b8b32f29f1555e77dbca754f6fd9f9e1973f045a874084ee90651a35fedc2257c5bc45b7af7ef8d997defce4eb9ffe6c1302117aa6e658c64c3a5f28bbecea9beebcf7b1e75e7967d7fec3ffb40f81086415e26c04b20acf1c3c8e0a5f25025945c53c043aefcca917d9bd575cbb78c5fd4f6e7ef5fd3d077e6dd5294c3e424dfd6694ceacba7e49f583cfbcf8fa477b0ffe7e5a973e03432002a1f00a884028bc0222100aaf800864158b572090552ca94620ab58b60681ac62f95a04cdf6534104cdf653410442e11510815078054420145e0111c82ad66f4520abd8b80d81ac62d30e04b28a2d3b1134db4f051134db4f0511088557400442e11510815078054420abd8b51f81ac62cf0104b28abd0711c82af61d42d06c3f1544d06c3f154420145e01110885574004728ed87804728eb80404728e7689089acda582089acda582089acda5820884b22a2002a1ac0a8840ce31884120e7c832219073e45810345b470511345b470511345b4705110865554004425915b0d8295a3967b6de1efc4bd70e0cb503a676c0d60e8c7a5e72b8042ca8dcbd6151a74cf5b5bd5544a315470d04ce2a891ebf7f25efe65c02ef72b81c81b1957e5ebeff11025367086e9117bc385dd788574c8a39c99010d3ba4dc7ce5d13937a27f7eb9f9e9943b3c6dc614219e791bcf3fcc1dba9c0b44abfdd6a7738798fe00e14e8fc259c24791c453e49f00626e88472bbc36a97a5c4b48a6d7d5a5c9bb6edda77e8d829be739784aedd12bbf748ead9ab779fe494befd80ea9f3a206d60faa08cccacc1d93943f4b481618d2673ae65e8b0bce12346e68fd2c5c675884fe8d6a3579fbed4c08c6c3dc39a87da3c02c70b9e2abfcdeaf0589d42a05067535479979a56056f009d824b74f3bce8168e0892439277952310dcea83ab2ad60677e5ebe7f1cc8232ae4cf080c35d0aa224c9239728d9a15c3e3fb089154dbb523993c3c1332991f783b366f534461f37d071178427285582d76431d06a86645280f0cbec0e860c6e0db92a8ec7c61b7f345cb6ab4690ba8031aa994d4773911ca9d339c16c4a2958831ab76738133eaea3480d59238cb56875a63bbc338da6fa24708625a023eafcdc53b9f34b439d4fd7d6d71359a413b9aaceb5556406971a0c51b7a3a5a9fcc432d1f19351df503f19cd274e91334c51bd0c1eeebfc8fc4d9b5a86010d4cf33320a38fb6011973a33e0f59b6a9fc6ba4a3e35fbac1fea5cd11f9c5c0b60cbf307433f44b6eb4fdc21a1be517a3a1c9fc62a9af70571da337956e3a5a3ecf8dc8ad8ca185b8d5d2fcdcca9aa2ed5623139d0c25ff6568d4db01dd646f07b4253ab632d4ebdb5ef8c727c344644856dffc1ad9c8360f4dce304d51f716cd34ee498abea95adf7002bf6785b73ec336f8490a1d59ebb790471d46a35da890d7ba39e7427fd56adee6700a76b939046f8ee4e59d0eb71018a7b35945a7cfe50e8cd1d96d3eb75572c891ca3d0e49907f21d7822a1b00151232e5eb9ab5bcbc93262fbf79cb3b9957cfee12248ee7246e81dfef17ac9ccf2bc8ff91e1e72551745acbe45f0ee4b8a18929f91a13932b352626694d4cd4ca315e8b28d422a66ed69828d024ea4efc0b",
+		"entries": [
+			[
+				"value",
+				"ermine://000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55",
+				0
+			],
+			[
+				"value",
+				"ermine://030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58",
+				1
+			],
+			[
+				"value",
+				"ermine://06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b",
+				2
+			],
+			[
+				"value",
+				"ermine://09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e",
+				3
+			],
+			[
+				"value",
+				"ermine://0c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b5661",
+				4
+			],
+			[
+				"value",
+				"ermine://0f1a25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e5964",
+				5
+			],
+			[
+				"value",
+				"ermine://121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67",
+				6
+			],
+			[
+				"value",
+				"ermine://15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a",
+				7
+			],
+			[
+				"value",
+				"ermine://18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d",
+				8
+			],
+			[
+				"value",
+				"ermine://25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a",
+				9
+			],
+			[
+				"value",
+				"ermine://28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d",
+				10
+			],
+			[
+				"value",
+				"ermine://2b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a7580",
+				11
+			],
+			[
+				"value",
+				"ermine://2e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d7883",
+				12
+			],
+			[
+				"value",
+				"ermine://313c47525d68737e89949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86",
+				13
+			],
+			[
+				"value",
+				"ermine://343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89",
+				14
+			],
+			[
+				"value",
+				"ermine://37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c",
+				15
+			],
+			[
+				"value",
+				"ermine://3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f",
+				16
+			],
+			[
+				"value",
+				"ermine://3d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c8792",
+				17
+			],
+			[
+				"value",
+				"ermine://4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949f",
+				18
+			],
+			[
+				"value",
+				"ermine://4d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2",
+				19
+			],
+			[
+				"value",
+				"ermine://505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5",
+				20
+			],
+			[
+				"value",
+				"ermine://535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8",
+				21
+			],
+			[
+				"value",
+				"ermine://56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0ab",
+				22
+			],
+			[
+				"value",
+				"ermine://59646f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3ae",
+				23
+			],
+			[
+				"value",
+				"ermine://5c67727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1",
+				24
+			],
+			[
+				"value",
+				"ermine://5f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4",
+				25
+			],
+			[
+				"value",
+				"ermine://626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7",
+				26
+			],
+			[
+				"value",
+				"ermine://6f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4",
+				27
+			],
+			[
+				"value",
+				"ermine://727d88939ea9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7",
+				28
+			],
+			[
+				"value",
+				"ermine://75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4bfca",
+				29
+			],
+			[
+				"value",
+				"ermine://78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cd",
+				30
+			],
+			[
+				"value",
+				"ermine://7b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0",
+				31
+			],
+			[
+				"value",
+				"ermine://7e89949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3",
+				32
+			],
+			[
+				"value",
+				"ermine://818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6",
+				33
+			],
+			[
+				"value",
+				"ermine://848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9",
+				34
+			],
+			[
+				"value",
+				"ermine://87929da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dc",
+				35
+			],
+			[
+				"value",
+				"ermine://949faab5c0cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9",
+				36
+			],
+			[
+				"value",
+				"ermine://97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ec",
+				37
+			],
+			[
+				"value",
+				"ermine://9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4ef",
+				38
+			],
+			[
+				"value",
+				"ermine://9da8b3bec9d4dfeaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2",
+				39
+			],
+			[
+				"value",
+				"ermine://a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5",
+				40
+			],
+			[
+				"value",
+				"ermine://a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8",
+				41
+			],
+			[
+				"value",
+				"ermine://a6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb",
+				42
+			],
+			[
+				"value",
+				"ermine://a9b4bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe",
+				43
+			],
+			[
+				"value",
+				"ermine://b9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e",
+				44
+			],
+			[
+				"value",
+				"ermine://bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb0611",
+				45
+			],
+			[
+				"value",
+				"ermine://bfcad5e0ebf6010c17222d38434e59646f7a85909ba6b1bcc7d2dde8f3fe0914",
+				46
+			],
+			[
+				"value",
+				"ermine://c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4bfcad5e0ebf6010c17",
+				47
+			],
+			[
+				"value",
+				"ermine://c5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a",
+				48
+			],
+			[
+				"value",
+				"ermine://c8d3dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d",
+				49
+			],
+			[
+				"value",
+				"ermine://cbd6e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a1520",
+				50
+			],
+			[
+				"value",
+				"ermine://ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d1823",
+				51
+			],
+			[
+				"value",
+				"ermine://dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d2833",
+				52
+			],
+			[
+				"value",
+				"ermine://e1ecf7020d18232e39444f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36",
+				53
+			],
+			[
+				"value",
+				"ermine://e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d18232e39",
+				54
+			],
+			[
+				"value",
+				"ermine://e7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c",
+				55
+			],
+			[
+				"value",
+				"ermine://eaf5000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f",
+				56
+			],
+			[
+				"value",
+				"ermine://edf8030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c3742",
+				57
+			],
+			[
+				"value",
+				"ermine://f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45",
+				58
+			],
+			[
+				"value",
+				"ermine://f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48",
+				59
+			],
+			[
+				"children",
+				"local-0",
+				0
+			],
+			[
+				"children",
+				"local-10",
+				28
+			],
+			[
+				"children",
+				"local-20",
+				54
+			],
+			[
+				"children",
+				"local-30",
+				22
+			],
+			[
+				"children",
+				"local-40",
+				49
+			],
+			[
+				"children",
+				"local-50",
+				16
+			],
+			[
+				"attributes",
+				"ermine://000b16212c37424d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55",
+				0
+			],
+			[
+				"attributes",
+				"ermine://09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e",
+				3
+			],
+			[
+				"attributes",
+				"ermine://121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67",
+				6
+			],
+			[
+				"attributes",
+				"ermine://2b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a7580",
+				11
+			],
+			[
+				"attributes",
+				"ermine://343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89",
+				14
+			],
+			[
+				"attributes",
+				"ermine://3d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c8792",
+				17
+			],
+			[
+				"attributes",
+				"ermine://4d58636e79848f9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2",
+				19
+			],
+			[
+				"attributes",
+				"ermine://56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0ab",
+				22
+			],
+			[
+				"attributes",
+				"ermine://5f6a75808b96a1acb7c2cdd8e3eef9040f1a25303b46515c67727d88939ea9b4",
+				25
+			],
+			[
+				"attributes",
+				"ermine://6f7a85909ba6b1bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4",
+				27
+			],
+			[
+				"attributes",
+				"ermine://78838e99a4afbac5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cd",
+				30
+			],
+			[
+				"attributes",
+				"ermine://818c97a2adb8c3ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6",
+				33
+			],
+			[
+				"attributes",
+				"ermine://9aa5b0bbc6d1dce7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4ef",
+				38
+			],
+			[
+				"attributes",
+				"ermine://a3aeb9c4cfdae5f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8",
+				41
+			],
+			[
+				"attributes",
+				"ermine://bcc7d2dde8f3fe09141f2a35404b56616c77828d98a3aeb9c4cfdae5f0fb0611",
+				45
+			],
+			[
+				"attributes",
+				"ermine://c5d0dbe6f1fc07121d28333e49545f6a75808b96a1acb7c2cdd8e3eef9040f1a",
+				48
+			],
+			[
+				"attributes",
+				"ermine://ced9e4effa05101b26313c47525d68737e89949faab5c0cbd6e1ecf7020d1823",
+				51
+			],
+			[
+				"attributes",
+				"ermine://dee9f4ff0a15202b36414c57626d78838e99a4afbac5d0dbe6f1fc07121d2833",
+				52
+			],
+			[
+				"attributes",
+				"ermine://e7f2fd08131e29343f4a55606b76818c97a2adb8c3ced9e4effa05101b26313c",
+				55
+			],
+			[
+				"attributes",
+				"ermine://f0fb06111c27323d48535e69747f8a95a0abb6c1ccd7e2edf8030e19242f3a45",
+				58
+			]
+		],
+		"nodes": [
+			{
+				"change": {
+					"time": 1760000000,
+					"actor": {
+						"name": "juno"
+					},
+					"reader": "circle",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 10,
+							"column": 4,
+							"function": "write"
+						}
+					],
+					"metadata": [
+						[
+							"cause",
+							0
+						],
+						[
+							"tool",
+							"pen"
+						]
+					],
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 0"
+				},
+				"cow": false
+			},
+			{
+				"change": {
+					"time": 1760000021,
+					"actor": {
+						"name": "juno"
+					}
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 7"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000042,
+					"actor": {
+						"name": "juno"
+					}
+				}
+			},
+			{
+				"change": {
+					"time": 1760000063,
+					"actor": {
+						"name": "juno"
+					}
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 21"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000084,
+					"actor": {
+						"name": "juno"
+					},
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 11,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 28"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000105,
+					"actor": {
+						"name": "juno"
+					},
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 35"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000126,
+					"actor": {
+						"name": "juno"
+					},
+					"metadata": [
+						[
+							"cause",
+							42
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 42"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000147,
+					"actor": {
+						"name": "juno"
+					}
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 49"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000168,
+					"actor": {
+						"name": "juno"
+					},
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 12,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 56"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000003,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 1"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000024,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 12,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 8"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000045,
+					"actor": "chee",
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 15"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000066,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 22"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000087,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 29"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000108,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 10,
+							"column": 4,
+							"function": "write"
+						}
+					],
+					"metadata": [
+						[
+							"cause",
+							36
+						],
+						[
+							"tool",
+							"pen"
+						]
+					],
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				}
+			},
+			{
+				"change": {
+					"time": 1760000129,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 43"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000150,
+					"actor": "chee",
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 50"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000171,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 57"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000006,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 2"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000027,
+					"actor": "chee",
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 9"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000048,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 11,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 16"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000069,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 23"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000090,
+					"actor": "chee",
+					"reader": "circle",
+					"metadata": [
+						[
+							"cause",
+							30
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 30"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000111,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 37"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000132,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 12,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 44"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000153,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 51"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000174,
+					"actor": "chee"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000009,
+					"actor": "chee"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000030,
+					"actor": "chee",
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 10"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000051,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 17"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000072,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 10,
+							"column": 4,
+							"function": "write"
+						}
+					],
+					"metadata": [
+						[
+							"cause",
+							24
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 24"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000093,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 31"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000114,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 38"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000135,
+					"actor": "chee",
+					"reader": "circle",
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 45"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000156,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 11,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 52"
+				},
+				"cow": false
+			},
+			{
+				"change": {
+					"time": 1760000177,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 59"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000012,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 11,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 4"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000033,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 11"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000054,
+					"actor": "chee",
+					"metadata": [
+						[
+							"cause",
+							18
+						],
+						[
+							"tool",
+							"pen"
+						]
+					],
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 18"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000075,
+					"actor": "chee",
+					"reader": "circle"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000096,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 12,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 32"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000117,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 39"
+				},
+				"cow": false
+			},
+			{
+				"change": {
+					"time": 1760000138,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 46"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000159,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 53"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000015,
+					"actor": "chee",
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 5"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000036,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 10,
+							"column": 4,
+							"function": "write"
+						}
+					],
+					"metadata": [
+						[
+							"cause",
+							12
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 12"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000057,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 19"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000078,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 26"
+				},
+				"cow": false
+			},
+			{
+				"change": {
+					"time": 1760000099,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 33"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000120,
+					"actor": "chee",
+					"reader": "circle",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 11,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 40"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000141,
+					"actor": "chee"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000162,
+					"actor": "chee",
+					"metadata": [
+						[
+							"cause",
+							54
+						],
+						[
+							"tool",
+							"pen"
+						]
+					],
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 54"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000018,
+					"actor": "chee",
+					"metadata": [
+						[
+							"cause",
+							6
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wrenlemon cherry paper ink otter moth wren",
+					"done": true,
+					"title": "wren paper 6"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000039,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter mothlemon cherry paper ink otter moth",
+					"done": false,
+					"title": "moth fox 13"
+				},
+				"cow": false
+			},
+			{
+				"change": {
+					"time": 1760000060,
+					"actor": "chee",
+					"reader": "circle",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 12,
+							"column": 4,
+							"function": "write"
+						}
+					]
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter",
+					"done": true,
+					"title": "otter otter 20"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000081,
+					"actor": "chee",
+					"op": {
+						"patches": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "x"
+							}
+						],
+						"undo": [
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									1
+								]
+							}
+						]
+					}
+				},
+				"value": {
+					"body": "lemon cherry paper inklemon cherry paper inklemon cherry paper inklemon cherry paper ink",
+					"done": false,
+					"title": "ink cherry 27"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000102,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherry paperlemon cherry paperlemon cherry paper",
+					"done": true,
+					"title": "paper wren 34"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000123,
+					"actor": "chee"
+				},
+				"value": {
+					"body": "lemon cherrylemon cherry",
+					"done": false,
+					"title": "cherry ink 41"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000144,
+					"actor": "chee",
+					"external": [
+						{
+							"file": "notes.ts",
+							"line": 10,
+							"column": 4,
+							"function": "write"
+						}
+					],
+					"metadata": [
+						[
+							"cause",
+							48
+						],
+						[
+							"tool",
+							"pen"
+						]
+					]
+				},
+				"value": {
+					"body": "lemon",
+					"done": true,
+					"title": "lemon lemon 48"
+				}
+			},
+			{
+				"change": {
+					"time": 1760000165,
+					"actor": "chee",
+					"reader": "circle"
+				},
+				"value": {
+					"body": "lemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren foxlemon cherry paper ink otter moth wren fox",
+					"done": false,
+					"title": "fox moth 55"
+				}
+			}
+		]
+	}
+}

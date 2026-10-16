@@ -1,0 +1,83 @@
+{
+	"title": "a move takes, then puts: where it puts is found after the take shifted the list, and is copied there, not changed under a reader",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					1,
+					[
+						"a"
+					]
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						[
+							"a"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0
+					],
+					"range": [
+						1,
+						1
+					],
+					"move": {
+						"path": [
+							"l",
+							0
+						]
+					}
+				}
+			],
+			"expect": {},
+			"skip": [
+				"undo"
+			]
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"l": [
+						1,
+						[
+							"a"
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"l": [
+						[
+							"a",
+							1
+						]
+					]
+				}
+			}
+		}
+	]
+}

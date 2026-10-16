@@ -4,6 +4,7 @@
 	"license": "AGPL-3.0-or-later",
 	"exports": {
 		"./channel": "./typescript/channel.ts",
+		"./egwalker": "./typescript/egwalker.ts",
 		"./history": "./typescript/history.ts",
 		"./replay": "./typescript/replay.ts",
 		"./run": "./typescript/run.ts",

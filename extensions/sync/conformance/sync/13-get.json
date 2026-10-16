@@ -1,0 +1,122 @@
+{
+	"title": "a node's tables at a commit: a version",
+	"steps": [
+		{
+			"op": "host",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": { "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+		},
+		{
+			"op": "host",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": { "key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394" }
+		},
+		{
+			"op": "mint",
+			"host": "a",
+			"as": "x",
+			"expect": {
+				"id": "ermine://b40fde52c568d2f3864d68739e98b72b9f144f5566afcbb238fd354ecdc7c755"
+			}
+		},
+		{ "op": "follow", "host": "b", "id": "x", "expect": {} },
+		{ "op": "connect", "a": "a", "b": "b", "expect": {} },
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"name": "w0",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"id": "x",
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"name": "w1",
+			"expect": { "commits": 1 }
+		},
+		{
+			"op": "write",
+			"host": "a",
+			"table": "attributes",
+			"id": "x",
+			"patches": [{ "path": [], "value": { "k": 1 } }],
+			"name": "w2",
+			"expect": { "commits": 1 }
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "w0",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "n": 0 },
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [{ "file": "scenario", "line": 1 }]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "w1",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "n": 1 },
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [{ "file": "scenario", "line": 1 }]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "w2",
+			"expect": {
+				"tables": {
+					"value": {
+						"value": { "n": 1 },
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [{ "file": "scenario", "line": 1 }]
+						}
+					},
+					"attributes": {
+						"value": { "k": 1 },
+						"change": {
+							"time": 1760000000,
+							"actor": "a",
+							"external": [{ "file": "scenario", "line": 1 }]
+						}
+					}
+				}
+			}
+		},
+		{
+			"op": "get",
+			"host": "b",
+			"id": "x",
+			"commit": "abababababababababababababababababababababababababababababababab",
+			"expect": {}
+		}
+	]
+}

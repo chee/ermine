@@ -1,0 +1,211 @@
+{
+	"title": "a read lets go: the next write copies again, and what the reader holds never changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 0
+				},
+				"b": [
+					1,
+					2
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					},
+					"b": [
+						1,
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "root",
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"b"
+					],
+					"range": [
+						0,
+						1
+					]
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b"
+						],
+						"range": [
+							0,
+							0
+						],
+						"value": [
+							1
+						]
+					},
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "root",
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "a",
+			"path": [
+				"a"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "same",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					},
+					"b": [
+						1,
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 2
+					},
+					"b": [
+						2
+					]
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "again",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"a",
+						"x"
+					],
+					"value": 3
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"a",
+							"x"
+						],
+						"value": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "same",
+			"name": "again",
+			"expect": {
+				"same": true
+			}
+		}
+	]
+}

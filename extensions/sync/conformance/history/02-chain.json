@@ -1,0 +1,27 @@
+{
+	"title": "a chain: each on the one before, one head, taken in the order added",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["b"],
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "heads", "expect": { "heads": ["c"] } },
+		{ "op": "all", "expect": { "all": ["a", "b", "c"] } }
+	]
+}

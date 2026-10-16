@@ -1,0 +1,251 @@
+{
+	"title": "pruning keeps marking precise: the read that said none is the one tracked, of all under its path, so a start anywhere under it reruns a reader of the walk and a start elsewhere does not; the stop that empties it again reruns it, and the walk is asked once again",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"test",
+					"o"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"work": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "W",
+			"value": {
+				"a": "A"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "A",
+			"value": {
+				"b": "B"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "B",
+			"value": {
+				"c": "C"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C",
+			"value": {
+				"d": "D"
+			},
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "C",
+			"value": {},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"path": [
+				"apps",
+				"x"
+			],
+			"id": "X",
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "w",
+			"scope": "o",
+			"f": {
+				"get": [
+					"work",
+					"a",
+					"b",
+					"c"
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "C"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"apps",
+				"y"
+			],
+			"id": "Y",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 1,
+				"value": "C"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"z"
+			],
+			"id": "Z",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "C"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 4,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"apps",
+				"z"
+			],
+			"id": "Z2",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 2,
+				"value": "C"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 0,
+				"names": 0
+			}
+		},
+		{
+			"op": "stop",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c",
+				"z"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 3,
+				"value": "C"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 1,
+				"names": 0
+			}
+		},
+		{
+			"op": "start",
+			"path": [
+				"work",
+				"a",
+				"b",
+				"c"
+			],
+			"id": "P",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "w",
+			"expect": {
+				"runs": 4,
+				"value": "P"
+			}
+		},
+		{
+			"op": "asked",
+			"expect": {
+				"steps": 4,
+				"names": 0
+			}
+		}
+	]
+}

@@ -1,0 +1,100 @@
+{
+	"title": "one write that moves a subtree, or puts a value, and then writes under it: neither the reader's nor the value given changes",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": {
+					"x": 1
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"m"
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				},
+				{
+					"path": [
+						"m",
+						"x"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"c"
+					],
+					"value": {
+						"y": 1
+					}
+				},
+				{
+					"path": [
+						"c",
+						"y"
+					],
+					"value": 2
+				}
+			],
+			"hold": "p"
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "p",
+			"expect": {
+				"value": [
+					2,
+					{
+						"y": 1
+					},
+					2
+				]
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"m": {
+						"x": 2
+					},
+					"c": {
+						"y": 2
+					}
+				}
+			}
+		}
+	]
+}

@@ -1,0 +1,174 @@
+{
+	"title": "open with a value makes the node once, folders on the way: a second open gives back what is there; open with no value makes nothing, and reads nothing (entries [])",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./notes",
+						{
+							"a": 1
+						}
+					],
+					"as": "notes"
+				},
+				{
+					"do": [
+						"open",
+						"./notes",
+						{
+							"a": 99
+						}
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$notes"
+			],
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"notes"
+			],
+			"expect": {
+				"id": "n1"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"open",
+				"./later"
+			],
+			"as": "later",
+			"expect": {
+				"value": {
+					"path": [
+						"w",
+						"later"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"$later"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"entries",
+				"$later"
+			],
+			"expect": {
+				"value": []
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"later"
+			],
+			"expect": {}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"open",
+				"./deep/er/notes",
+				"x"
+			],
+			"expect": {
+				"value": {
+					"path": [
+						"w",
+						"deep",
+						"er",
+						"notes"
+					],
+					"part": "value"
+				}
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"deep",
+				"er",
+				"notes"
+			],
+			"expect": {
+				"id": "n2"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"read",
+				"./deep/er/notes"
+			],
+			"expect": {
+				"value": "x"
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"entries",
+				"./deep/er/notes"
+			],
+			"expect": {
+				"value": [
+					{
+						"value": "x",
+						"from": "children",
+						"id": "n2"
+					}
+				]
+			}
+		}
+	]
+}

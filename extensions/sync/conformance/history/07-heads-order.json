@@ -1,0 +1,55 @@
+{
+	"title": "heads in the agreed order: the higher lamport first; at the same lamport, the greater name",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"nonce": 1,
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "name",
+			"commit": "b",
+			"expect": { "name": "f778085658474ae4b6bd3add8aa896a419975fea2b0b4d07cc591154f0dc207b" }
+		},
+		{
+			"op": "name",
+			"commit": "c",
+			"expect": { "name": "bd54647fbbe6f5c2a39efa77f91577400cffa927db5be606bc2fe12d88d64ffe" }
+		},
+		{ "op": "heads", "expect": { "heads": ["b", "c"] } },
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["a"],
+			"lamport": 7,
+			"nonce": 2,
+			"patches": [{ "path": ["n"], "value": 3 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "heads", "expect": { "heads": ["d", "b", "c"] } },
+		{
+			"op": "add",
+			"name": "e",
+			"parents": ["c"],
+			"patches": [{ "path": ["n"], "value": 5 }],
+			"expect": { "added": "taken" }
+		},
+		{ "op": "heads", "expect": { "heads": ["d", "e", "b"] } }
+	]
+}

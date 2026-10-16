@@ -449,37 +449,43 @@ Deno.test("places: members at a path rerun on a new name there; the level above 
 
 // the header: what the scope open says
 
-Deno.test("places: a header is the pairs of the scope open, from the root down, then the write's own; the time now, its site", () => {
+Deno.test("places: a header is the nested pairs of the scope open, the write's own innermost; the nearest actor and reader; the time now, its site", () => {
 	const { s, l } = world()
 	const chee = s.createRootScope([["actor", "chee"], ["reader", "juno"], ["why", "test"]])
 	const save = s.createScope([["cause", "x"], ["why", "again"]], chee)
 	const h = s.runWithScope(save, () => createChangeHeader(s, [["then", "y"]]))
 	assertEquals([h.actor, h.reader], ["chee", "juno"])
-	assertEquals(h.metadata, [["why", "test"], ["cause", "x"], ["why", "again"], ["then", "y"]])
+	const up: [string, unknown][] = [["actor", "chee"], ["reader", "juno"], ["why", "test"]]
+	const mid: [string, unknown][] = [["cause", "x"], ["why", "again"], ["owner", up]]
+	assertEquals(h.metadata, [["then", "y"], ["owner", mid]])
 	assertEquals(Number.isInteger(h.time), true)
 	assertEquals(Math.abs(h.time - Date.now() / 1000) < 5, true)
 	// the site is this file, not places.ts
 	assertEquals(h.external?.length, 1)
 	assertEquals(h.external![0].file.endsWith("places_test.ts"), true)
 	// the extra was for that write alone
-	assertEquals(s.runWithScope(save, () => createChangeHeader(s)).metadata?.at(-1), [
-		"why",
-		"again",
-	])
+	assertEquals(s.runWithScope(save, () => createChangeHeader(s)).metadata, mid)
+	// a nearer actor or reader wins
+	const near = s.createScope([["reader", "sam"]], save)
+	const n = s.runWithScope(near, () => createChangeHeader(s, [["actor", "notes"]]))
+	assertEquals([n.actor, n.reader], ["notes", "sam"])
 })
 
-Deno.test("places: a write can't name another actor: the scope decides who; one under it only adds pairs", () => {
+Deno.test("places: a write's actor is the nearest: a scope or extra naming one wins over the scopes above", () => {
 	const { s, l, notes } = world()
 	const forged = s.runWithScope(
 		notes,
 		() => s.runWithScope(s.createScope([["actor", "chee"]]), () => createChangeHeader(s)),
 	)
-	assertEquals(forged.actor, "notes")
-	assertEquals(forged.metadata, [["actor", "chee"]])
+	assertEquals(forged.actor, "chee")
+	assertEquals(forged.metadata, [["actor", "chee"], ["owner", [["actor", "notes"]]]])
 	assertEquals(
 		s.runWithScope(notes, () => createChangeHeader(s, [["actor", "chee"]])).actor,
-		"notes",
+		"chee",
 	)
+	// no actor named under it: the one above
+	const quiet = s.runWithScope(notes, () => s.createScope([["why", "save"]]))
+	assertEquals(s.runWithScope(quiet, () => createChangeHeader(s)).actor, "notes")
 })
 
 Deno.test("places: nothing open: a write is unscoped and nothing changes; a read counts for nothing", () => {
@@ -550,7 +556,11 @@ Deno.test("places: a click dispatched in a run is the process's: its scope is un
 		}, () => {}))
 	s.pulse()
 	assertEquals(made?.actor, "notes")
-	assertEquals(made?.metadata, [["run", 1], ["mark", 1], ["event", "click"]])
+	assertEquals(made?.metadata, [["event", "click"], ["owner", [
+		["run", 1],
+		["mark", 1],
+		["owner", [["actor", "notes"]]],
+	]]])
 	assert(moments.some((m) => "due" in m && m.due === c && m.by === c))
 })
 

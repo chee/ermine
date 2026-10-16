@@ -1,0 +1,12 @@
+{
+	"title": "a few bytes over and over, two symbols in the codes",
+	"steps": [
+		{
+			"op": "deflate",
+			"input": "000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000",
+			"expect": {
+				"bytes": "63c00bfee305f8f50200"
+			}
+		}
+	]
+}

@@ -15,6 +15,8 @@
 //   now: "now" in an expect is a whole number of seconds since 1970 as of the run (node)
 //   again: the scenarios run once more with a request that has the field given more fields
 //   harness: the adapter and binary of another suite are this one's (invert speaks apply's)
+//   typescript: only the TypeScript harness runs it; --c, --check and --leaks skip it (load)
+//   allow: deno flags the TypeScript harness is run with beyond --allow-read (native: --allow-ffi)
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
 
@@ -135,7 +137,11 @@ for (const s of chosen) {
 			steps: Step[]
 		}
 		for (const run of runs) {
-			Deno.test(`${s.name}/${file}: ${title}${run.name}`, async () => {
+			Deno.test({
+				name: `${s.name}/${file}: ${title}${run.name}`,
+				ignore: s.options.typescript === true &&
+					flags.some((f) => f === "--c" || f === "--check" || f === "--leaks"),
+			}, async () => {
 				const from = Math.floor(Date.now() / 1000)
 				const answers = await ask(harness(s), steps.map((st) => run.change(asked(st))))
 				const window: [number, number] = [from, Math.floor(Date.now() / 1000)]

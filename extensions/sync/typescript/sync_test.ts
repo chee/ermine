@@ -15,6 +15,7 @@ import { createPaths } from "@ermine/scheduler/paths"
 import { createTable, type Id, type Key } from "@ermine/table"
 import { createSigner } from "./seal.ts"
 import { createSync } from "./sync.ts"
+import { egwalker } from "./egwalker.ts"
 
 function pipe(): [Transport, Transport] {
 	type End = Transport & { other?: End; queue: Uint8Array[]; waiting: ((b: Uint8Array) => void)[] }
@@ -43,7 +44,13 @@ function pipe(): [Transport, Transport] {
 }
 
 // a host: the graph, and sync beside places over its own device
-async function host(n: number, storage = new sd.MemoryStorage(), zeros = false) {
+async function host(
+	n: number,
+	storage = new sd.MemoryStorage(),
+	zeros = false,
+	merging = false,
+	extra: Partial<Parameters<typeof createSync>[0]> = {},
+) {
 	const signer = await createSigner(new Uint8Array(32).fill(n))
 	const scheduler = createScheduler()
 	const table = createTable((part, id) => {
@@ -57,6 +64,8 @@ async function host(n: number, storage = new sd.MemoryStorage(), zeros = false) 
 		zeros,
 		storage: storage as unknown as sd.SedimentreeStorage,
 		commit: (changed) => places.commit(changed),
+		...(merging ? { merges: { "eg-walker": egwalker }, merge: "eg-walker" } : {}),
+		...extra,
 	})
 	const device = sync.device
 	const scope = scheduler.createRootScope([["actor", `host${n}`]])
@@ -251,5 +260,111 @@ Deno.test({
 		assertEquals(now.n7, undefined)
 		assertEquals(Object.keys(now).length, 1000)
 		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"sync: a settle is a write: the host that settles shows the merge's change, as the others do",
+	...opts,
+	async fn() {
+		const a = await host(1), b = await host(2)
+		const id = a.sync.mint()
+		await b.sync.follow(id)
+		await connect(a, b)
+		a.write("value", id, [{ path: [], value: { n: 0 } }])
+		await quiet(a, b)
+		a.write("value", id, [{ path: ["n"], value: 1 }])
+		b.write("value", id, [{ path: ["n"], value: 2 }])
+		await quiet(a, b)
+		a.sync.settle(id, { time: 1_760_000_100, actor: "settler" })
+		await quiet(a, b)
+		const { op: _, ...mine } = a.table.get("value", id)!.change
+		const { op: __, ...theirs } = b.table.get("value", id)!.change
+		assertEquals(mine, { time: 1_760_000_100, actor: "settler" })
+		assertEquals(theirs, mine)
+		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name: "sync: merging by eg-walker, two hosts typing into one text at once end with one text",
+	...opts,
+	async fn() {
+		const a = await host(1, undefined, false, true), b = await host(2, undefined, false, true)
+		const id = a.sync.mint()
+		await b.sync.follow(id)
+		await connect(a, b)
+		a.write("value", id, [{ path: [], value: "" }])
+		await quiet(a, b)
+		let seed = 7
+		const r = (n: number) => (seed = (seed * 1103515245 + 12345) % 2 ** 31) % n
+		const type = (h: Host, c: string) => {
+			const at = r([...(h.read("value", id) as string)].length + 1)
+			h.write("value", id, [{ path: [], range: [at, at], value: c }])
+		}
+		const started = performance.now()
+		for (let i = 0; i < 150; i++) {
+			type(a, "a"), type(b, "b")
+			// now and then the other's keystrokes come in between; now and then both stop a moment
+			if (r(3) === 0) await new Promise((r) => setTimeout(r, 0))
+			if (r(10) === 0) await quiet(a, b)
+		}
+		await quiet(a, b)
+		const took = performance.now() - started
+		const text = a.read("value", id) as string
+		assertEquals(b.read("value", id), text)
+		assertEquals(text.length, 300)
+		assertEquals([...text].filter((c) => c === "a").length, 150)
+		assertEquals(a.read("conflicts", id), undefined)
+		assert(took < 20_000, `took ${took} ms`)
+		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name: "sync: a drag as ephemeral commits on sync's own timers: beats keep it, a drop ends it, " +
+		"a close lets it lapse",
+	...opts,
+	async fn() {
+		let held = false
+		const a = await host(1, undefined, false, false, {
+			ephemeral: (_doc, part) => held && part === "value",
+			beat: 20,
+			ttl: 100,
+		})
+		const b = await host(2, undefined, false, false, { beat: 20, ttl: 100 })
+		const id = a.sync.mint()
+		await b.sync.follow(id)
+		await connect(a, b)
+		a.write("value", id, [{ path: [], value: { x: 0, y: 0 } }])
+		await quiet(a, b)
+		held = true
+		a.write("value", id, [{ path: [], value: { x: 1, y: 1, by: "a" } }])
+		await quiet(a, b)
+		assertEquals(b.read("value", id), { x: 1, y: 1, by: "a" })
+		// past ttl, kept by the beats
+		await new Promise((r) => setTimeout(r, 250))
+		assertEquals(b.read("value", id), { x: 1, y: 1, by: "a" })
+		assertEquals(b.sync.standing(id).length, 1)
+		// the drop: one stored commit, which ends it on both
+		held = false
+		a.write("value", id, [{ path: [], value: { x: 2, y: 2 } }])
+		await quiet(a, b)
+		assertEquals(a.read("value", id), { x: 2, y: 2 })
+		assertEquals(b.read("value", id), { x: 2, y: 2 })
+		assertEquals(a.sync.standing(id), [])
+		assertEquals(b.sync.standing(id), [])
+		assertEquals(b.device.history(id).all().length, 2)
+		// a drag, then its device gone: it lapses after ttl
+		held = true
+		a.write("value", id, [{ path: ["x"], value: 5 }])
+		await quiet(a, b)
+		assertEquals(b.read("value", id), { x: 5, y: 2 })
+		await a.sync.close()
+		await new Promise((r) => setTimeout(r, 250))
+		assertEquals(b.read("value", id), { x: 2, y: 2 })
+		assertEquals(b.sync.standing(id), [])
+		await b.sync.close()
 	},
 })

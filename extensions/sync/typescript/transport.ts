@@ -11,7 +11,7 @@ import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, CommitError, decode, name as nameOf } from "@ermine/encoding/commit"
 import { build, depth, type Fragment } from "@ermine/subduction/fragment"
-import { type Added, createHistory, type History, type Kept } from "./history.ts"
+import { type Added, createHistory, type History, type Kept, type Refusal } from "./history.ts"
 import type { Tables } from "./replay.ts"
 import { seal, SealError, type Signer, stored, unseal } from "./seal.ts"
 import { tablesOf } from "./snapshot.ts"
@@ -26,8 +26,13 @@ export type Arrival = { doc: string; layer: Layer; kept: Kept; heard: boolean }
 
 // the integration's: whether a commit whose parents are all taken in applies to its parent's node.
 // called for commits from elsewhere only, never for this device's own takes. it may apply them as
-// it looks
-export type Check = (doc: string, kept: Kept, commit: Commit, layer: Layer) => boolean
+// it looks. false: refused "patches"; a refusal: refused so ("merge": a rule not known here)
+export type Check = (
+	doc: string,
+	kept: Kept,
+	commit: Commit,
+	layer: Layer,
+) => boolean | Refusal
 
 // what a lock's open gives: the bytes close was given; not yet; or never
 export type Opened = Uint8Array | { wait: true } | { refused: string }
@@ -75,7 +80,8 @@ export type Device = {
 	history(doc: string, layer?: Layer): History
 	// a commit this device made, its bytes: into the layer's history at once, synchronously, with no
 	// check (it has applied here already). then, queued in the order made: stored ones sealed, added
-	// as a loose commit, sent; ephemeral ones published unsealed. answers as the history does
+	// as a loose commit, sent; ephemeral ones published unsealed. one waiting on a parent is queued
+	// once the parent lets it in. answers as the history does
 	take(
 		doc: string,
 		bytes: Uint8Array,
@@ -83,6 +89,13 @@ export type Device = {
 		made?: { commit: Commit; name: Uint8Array },
 	): Added
 	arrived(listener: (a: Arrival) => void): () => void
+	// told each ephemeral commit heard on a followed document whose signer is the sender, new or
+	// heard before (sent again), after any arrival it made: the document, the sender's key as
+	// lowercase hex, the commit's name. what keeps another device's ephemeral commits standing
+	heard(listener: (doc: string, from: string, name: Uint8Array) => void): () => void
+	// an ephemeral commit of this device's (in the ephemeral history, not a stored one) published
+	// again, queued as a take is; false: no such commit
+	again(doc: string, name: Uint8Array): boolean
 	// the tables at a commit, when a fragment headed by it carried a snapshot: new objects each time
 	snapshot(doc: string, name: Uint8Array): Tables | undefined
 	// bytes to whoever listens on a topic (a string, named by hash so it is never a document's):
@@ -167,6 +180,8 @@ type Document = {
 	histories: Record<Layer, History>
 	// what each history was given from elsewhere and has not taken in yet, by name: whether heard
 	elsewhere: Record<Layer, Map<string, boolean>>
+	// this device's own takes waiting on a parent, by name: sent once let in
+	own: Record<Layer, Set<string>>
 	// a taken-in seal's name to its stored ids: a signer may have signed twice
 	names: Map<string, string[]>
 	seen: Map<string, Seen>
@@ -244,6 +259,7 @@ export function createDevice(
 	// ---- taking in
 
 	const listeners = new Set<(a: Arrival) => void>()
+	const hearers = new Set<(doc: string, from: string, name: Uint8Array) => void>()
 	// arrivals the histories' taken listeners told, told on after the add that let them in, so a
 	// listener never runs inside a history's add
 	const told: Arrival[] = []
@@ -257,7 +273,13 @@ export function createDevice(
 				}
 			}
 		}
+		for (let r; (r = released.shift()) !== undefined;) {
+			const { d, layer, kept } = r
+			outgoing(() => layer === "stored" ? store(d, kept) : publish(d, kept))
+		}
 	}
+	// own takes that waited, let in by an add: sent by tell, after what let them in
+	const released: { d: Document; layer: Layer; kept: Kept }[] = []
 
 	// own takes and the check: everything from elsewhere is marked in elsewhere before its history's
 	// add, and stays marked until taken in. the history's check asks the integration's only for a
@@ -273,6 +295,7 @@ export function createDevice(
 			stored: new Map(),
 			ephemeral: new Map(),
 		}
+		const own: Record<Layer, Set<string>> = { stored: new Set(), ephemeral: new Set() }
 		const make = (layer: Layer) => {
 			const from = elsewhere[layer]
 			const history = createHistory((kept, commit) => {
@@ -286,7 +309,10 @@ export function createDevice(
 			})
 			history.taken((kept) => {
 				const n = hex(kept.name), heard = from.get(n)
-				if (heard === undefined) return
+				if (heard === undefined) {
+					if (own[layer].delete(n)) released.push({ d: d!, layer, kept })
+					return
+				}
 				from.delete(n)
 				told.push({ doc: id, layer, kept, heard })
 			})
@@ -299,6 +325,7 @@ export function createDevice(
 			topic: sd.Topic.fromBytes(tree),
 			histories: { stored: make("stored"), ephemeral: make("ephemeral") },
 			elsewhere,
+			own,
 			names: new Map(),
 			seen: new Map(),
 			fragments: new Map(),
@@ -557,6 +584,13 @@ export function createDevice(
 		d.heard.delete(key)
 		admit(d, "ephemeral", open, name, true)
 		tell()
+		for (const fn of [...hearers]) {
+			try {
+				fn(d.id, hex(from), name)
+			} catch (e) {
+				trouble.push(e)
+			}
+		}
 	}
 
 	// ---- parts of an ephemeral payload over Subduction's limit
@@ -893,20 +927,28 @@ export function createDevice(
 		await sub.syncWithAllPeers(d.tree, true)
 	}
 
-	// a followed document with nothing in it asked for again, a while later each time: the server
-	// may have had its first commits only just after the ask (taken in, not yet stored), and a
-	// subscription made in that ask hears nothing that came before it. after the last, the
-	// subscription alone
+	// a followed document asked for again, a while later each time: the server pushes a commit to its
+	// subscribers before it stores it, so an ask that lands between is answered without it and hears
+	// no push. asked twice more whatever it holds, then on while it holds nothing or a commit waits
+	// on a parent; after the last step, every last step while a commit waits
 	const backoff = [250, 500, 1000, 2000, 4000, 8000, 16000]
 	const timers = new Set<ReturnType<typeof setTimeout>>()
 	let closed = false
+	const worth = (d: Document, i: number) => {
+		const h = d.histories.stored
+		return i < 2 || (i < backoff.length && h.all().length === 0) || waits(d)
+	}
+	// whether a commit waits on a parent: a seal held here for its parents' seals, or a commit in the
+	// stored history
+	const waits = (d: Document) =>
+		[...d.pending.values()].some((p) => p.waiting) || d.histories.stored.waiting().length > 0
 	function asking(d: Document, i = 0) {
-		if (closed || i >= backoff.length || d.histories.stored.all().length) return
+		if (closed || !worth(d, i)) return
 		const t = setTimeout(() => {
 			timers.delete(t)
-			if (d.histories.stored.all().length) return
+			if (closed || !worth(d, i)) return
 			fetched(d).catch((e) => trouble.push(e)).finally(() => asking(d, i + 1))
-		}, backoff[i])
+		}, backoff[Math.min(i, backoff.length - 1)])
 		timers.add(t)
 	}
 
@@ -949,18 +991,31 @@ export function createDevice(
 			const history = d.histories[layer]
 			const added = history.add(bytes, made)
 			if (layer === "stored") d.histories.ephemeral.add(bytes, made)
-			// an own take may let in what waited on it from elsewhere
+			// only what is taken goes out: one passed is here already, one refused would be refused
+			// by a receiver too, one waiting on a parent goes once it is let in
+			const name = made?.name ?? nameOf(bytes)
+			if (added === "taken") {
+				const kept = history.get(name)!
+				outgoing(() => layer === "stored" ? store(d, kept) : publish(d, kept))
+			} else if (typeof added === "object" && "waiting" in added) d.own[layer].add(hex(name))
+			// an own take may let in what waited on it: from elsewhere, told; its own, sent after it
 			tell()
-			// only what was taken goes out: one passed is here already, one waiting or refused would
-			// be refused by a receiver too
-			if (added !== "taken") return added
-			const kept = history.get(made?.name ?? nameOf(bytes))!
-			outgoing(() => layer === "stored" ? store(d, kept) : publish(d, kept))
 			return added
 		},
 		arrived(listener) {
 			listeners.add(listener)
 			return () => void listeners.delete(listener)
+		},
+		heard(listener) {
+			hearers.add(listener)
+			return () => void hearers.delete(listener)
+		},
+		again(doc, name) {
+			const d = named(doc)
+			const kept = d.histories.ephemeral.get(name)
+			if (kept === undefined || d.histories.stored.get(name) !== undefined) return false
+			outgoing(() => publish(d, kept))
+			return true
 		},
 		snapshot(doc, name) {
 			const d = named(doc)

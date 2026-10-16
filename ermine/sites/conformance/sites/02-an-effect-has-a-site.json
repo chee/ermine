@@ -1,0 +1,30 @@
+{
+	"title": "an effect has one too",
+	"steps": [
+		{
+			"op": "root",
+			"name": "r",
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"parent": "r",
+			"expect": {}
+		},
+		{
+			"op": "site",
+			"name": "e",
+			"expect": {
+				"site": true
+			}
+		},
+		{
+			"op": "chain",
+			"name": "e",
+			"expect": {
+				"length": 2
+			}
+		}
+	]
+}

@@ -1,7 +1,10 @@
 // Nodes under keys of a part and an id (ermine/encoding/typescript/pack.ts), in C: written as one
-// canonical CBOR item, {keys: [[part, id, n], ...], nodes: [node, ...]}, and read back. Which nodes
-// is the caller's; nothing is loaded or placed here. A node: {change, value?}; a change: {time,
-// actor?, reader?, external?, metadata?, op?}. Same bytes as pack.ts.
+// canonical CBOR item, {columns: <deflate of a map of columns>} (deflate.h; pack.ts's header lists
+// the columns), and read back, that or the first form {keys: [[part, id, n], ...], nodes: [node,
+// ...]}. Which nodes is the caller's; nothing is loaded or placed here. A node: {change, value?}; a
+// change: {time, actor?, reader?, external?, metadata?, op?}. Same bytes as pack.ts.
+//
+// pack.c includes deflate.c, so whatever links pack.c has deflate too.
 //
 // SYMBOLS. A key with a symbol in it (table.h) cannot be carried: PK_CANNOT_CARRY, that key. An
 // op_value has no symbol, so there is nothing to look for in a value.
@@ -54,6 +57,8 @@ typedef struct {
 	// in every map a key not known is passed over, not refused; none of it reaches a node. All else
 	// stays strict
 	int loosy;
+	// the most bytes the columns may inflate to; more: PK_NOT_A_PACK. 0: the default, 1 GiB
+	size_t limit;
 } pk_reading;
 
 // the entries as one item, appended to out. The same key twice with the same node is once; with

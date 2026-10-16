@@ -1,0 +1,16 @@
+{
+	"title": "a commit whose parent is not here waits on it, and is taken in after it",
+	"steps": [
+		{ "op": "make", "name": "a", "patches": [{ "path": [], "value": { "n": 0 } }] },
+		{ "op": "make", "name": "b", "parents": ["a"], "patches": [{ "path": ["n"], "value": 1 }] },
+		{ "op": "add", "name": "b", "expect": { "added": { "waiting": ["a"] } } },
+		{ "op": "waiting", "expect": { "waiting": [{ "name": "b", "waiting": ["a"] }] } },
+		{ "op": "heads", "expect": { "heads": [] } },
+		{ "op": "all", "expect": { "all": [] } },
+		{ "op": "add", "name": "a", "expect": { "added": "taken" } },
+		{ "op": "waiting", "expect": { "waiting": [] } },
+		{ "op": "all", "expect": { "all": ["a", "b"] } },
+		{ "op": "heads", "expect": { "heads": ["b"] } },
+		{ "op": "add", "name": "b", "expect": { "added": "passed" } }
+	]
+}

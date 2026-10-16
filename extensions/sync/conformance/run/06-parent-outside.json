@@ -1,0 +1,62 @@
+{
+	"title": "a parent not in the run is written as its name",
+	"steps": [
+		{ "op": "make", "name": "a", "nonce": 1, "patches": [{ "path": [], "value": 1 }] },
+		{
+			"op": "make",
+			"name": "b",
+			"nonce": 2,
+			"parents": ["a"],
+			"patches": [{ "path": [], "value": 2 }]
+		},
+		{
+			"op": "make",
+			"name": "c",
+			"nonce": 3,
+			"parents": ["b", "abababababababababababababababababababababababababababababababab"],
+			"base": "abababababababababababababababababababababababababababababababab",
+			"patches": []
+		},
+		{
+			"op": "pack",
+			"commits": ["b", "c"],
+			"name": "r",
+			"expect": {
+				"run": "ae616ef9400064626173658282f6f93c00825820ababababababababababababababababababababababababababababababababf93c006474696d65420000656163746f728182f6f94000656e6f6e6365420402657461626c6581826576616c7565f94000667265616465728182f6f94000667369676e6572818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000676c616d706f727442040267706172656e74738281582022cd8bba2099b6700c2b76c6fe0206c6ce1c92fbdb9cad028f5f6e96ab42749f82f900005820abababababababababababababababababababababababababababababababab67706174636865738281a26470617468806576616c7565f94000806865787465726e616c8182f6f94000686d657461646174618182f6f940006a7369676e617475726573588095d1acd197aed5bf26bb445ff7929cc47e413016e86ff1fd62e02809ccc4030208c8223c94f0f7b0985843675afabc3bd2cee72480652ea4c21dcaa80b0418071c2036e0b349d59c59121097ca56976ca2e980e3bd9bc5feda357094123ee61a05d8f02e856fad29e480fbf061f73c9541ea974a30ffdb9b6138cdadeff0f00c"
+			}
+		},
+		{
+			"op": "columns",
+			"run": "r",
+			"expect": {
+				"columns": {
+					"n": 2,
+					"base": [
+						[null, 1],
+						[{ "/": { "bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s" } }, 1]
+					],
+					"time": { "/": { "bytes": "AAA" } },
+					"actor": [[null, 2]],
+					"nonce": { "/": { "bytes": "BAI" } },
+					"table": [["value", 2]],
+					"reader": [[null, 2]],
+					"signer": [[{ "/": { "bytes": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w" } }, 2]],
+					"lamport": { "/": { "bytes": "BAI" } },
+					"parents": [
+						[{ "/": { "bytes": "Is2LuiCZtnAMK3bG/gIGxs4ckvvbnK0Cj19ulqtCdJ8" } }],
+						[0, { "/": { "bytes": "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s" } }]
+					],
+					"patches": [[{ "path": [], "value": 2 }], []],
+					"external": [[null, 2]],
+					"metadata": [[null, 2]],
+					"signatures": {
+						"/": {
+							"bytes": "ldGs0Zeu1b8mu0Rf95KcxH5BMBbob/H9YuAoCczEAwIIyCI8lPD3sJhYQ2da+rw70s7nJIBlLqTCHcqoCwQYBxwgNuCzSdWcWRIQl8pWl2yi6YDjvZvF/to1cJQSPuYaBdjwLoVvrSnkgPvwYfc8lUHql0ow/9ubYTjNre/w8Aw"
+						}
+					}
+				}
+			}
+		},
+		{ "op": "unpack", "run": "r", "expect": { "sealed": ["b", "c"] } }
+	]
+}

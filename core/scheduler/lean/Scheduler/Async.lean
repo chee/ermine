@@ -18,6 +18,10 @@
 -- - land: at the start of each round (pulse's loop), the first landed: the run still c's latest
 --   and c not due, its outcome is the run's `out`, then failed, pending, or Model's result
 -- - Check, at the end: scenarios 15, 36, 37, 39, 40, 51, 52 as the TS runs them, and mid
+-- - attended computes and early effects as Model's: a run's reads untracked at its end (untrack),
+--   a step's `.goes` phase is Model's (bury); make grows (a fresh kept, awake), then asleep, or
+--   due, and an early effect's first run is Async's run (a promise given: awaiting) then its act.
+--   pulse or not: between pulses its cause is its run alone (its kept fresh), as Cuts asks
 --
 -- departures from scheduler.ts, beyond Model.lean's:
 -- - settle and named only between pulses (pulsing false): a promise cannot settle in a pulse
@@ -26,14 +30,16 @@
 -- - land and settle ask "still the latest" by the run's number on c's record, not c.runs (the same:
 --   start sets both)
 --
--- proved, for every state Reach reaches (A2):
+-- proved, for every state Reach reaches (A2, with Quiet: no going writes; Reach.inv: Good and
+-- Quiescence's Sleeps, the asleep not due and reading nothing, so a run's computation is awake):
 -- - Reach.good: Good, Quiescence's invariant with promises. follows: f along what it read gave
 --   its out, or the promise the run gave (gave). fresh (Lemma F): not due, done, failed or
 --   pending, its loop not cut (cut): what it read is still there. flag: a flagged latest run is
 --   pending (L1: a run's flag ends with it, unless it ended pending). cut: a cut loop's run is
 --   flagged, or ended looping or stopped (L3: flagged and cut, a failure ends looping too); so
 --   cut_ended, done_uncut, failed_uncut. what is owed (awaiting, landed) is of runs made, each
---   once, and the latest run's is pending with a promise given
+--   once, and the latest run's is pending with a promise given. a going forgets its run, not its
+--   count (Good.runs: a latest run's number is the count), so what it owed lands nowhere
 -- - quiescence_done, quiescent (Theorem 2): a compute done and not due holds its value (last, up to
 --   equal), and f from scratch on the store gives that value, or the same promise the value landed
 --   for, reading the same. a landed result is from a run whose reads are still fresh (§13.3)
@@ -57,8 +63,12 @@
 --   then exactly Model's pulse of the same computations with each promise read as PENDING (erase):
 --   it ends whenever that one does, within as many more steps as landings
 --
+-- the asleep guard (land and run asking the computation awake): not needed. a going drops the run,
+-- so a landing of it fails land's "still the latest" check; and a run is only of a due one, never
+-- asleep (Sleeps)
+--
 -- assumed (hypotheses where used):
--- - A2: no f writes in its run
+-- - A2: no f writes in its run, and Quiet (no going writes)
 -- - a change the host names by a computation whose latest run is flagged comes between pulses
 --   (Reach's write and tell). in a pulse its cause is whole, and its loop mark through another
 --   computation d is cut: d is not due, though its done run read the key (Check, mid). the TS the
@@ -99,7 +109,9 @@ def given (promise : V → Bool) : Out V → Option V
 -- scheduler.ts first: c's run. a promise given (and not stopped): it ends pending, awaiting
 def run (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (c rk : Nat) : State K V :=
   let (s, o) := exec cs c (start a.s c rk) (cs c).f
+  let old := s.reads c
   let s := { s with reads := put s.reads c (((s.ran c).map fun r => r.seen.map (·.1)).getD []) }
+  let s := untrack cs s old
   let p := if ((s.ran c).bind (·.stopped)).isSome then none else given promise o
   let s' := ending cs s c (hide promise o)
   { s := s', landed := a.landed, gave := put a.gave c p,
@@ -157,6 +169,7 @@ def step (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V 
     | some c => some (run cs promise a c (rank a.s c))
     | none => some { a with s := { a.s with phase := .acts } }
   | .acts, _ => (Model.step cs rank a.s).map fun s => { a with s }
+  | .goes, _ => (Model.step cs rank a.s).map fun s => { a with s }
 
 def steps (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V → Nat → Nat) :
     Nat → State K V → Option (State K V)
@@ -170,8 +183,19 @@ def pulse (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V
     (fuel : Nat) (a : State K V) : Option (State K V) :=
   steps cs promise rank fuel { a with s := begin a.s }
 
--- the host's, on the model
-def make (cs : Nat → Comp K V) (a : State K V) : State K V := { a with s := Model.make cs a.s }
+-- the host's, on the model. make: Model's, an early effect's first run Async's (a promise given:
+-- awaiting), then its act
+def make (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) : State K V :=
+  let c := a.s.made
+  let s := grow cs a.s
+  if attends (cs c) && !((cs c).key.any (tracked s ·)) then
+    { a with s := { s with asleep := put s.asleep c true } }
+  else
+    let s := mark s c s.tick none
+    if isearly (cs c) then
+      let a' := run cs promise { a with s } c 0
+      { a' with s := actnow cs a'.s c }
+    else { a with s }
 -- the host's write: each kept at its key, then mark(keys, who): from outside (none), or named by a
 -- computation (its latest run), as a write in run(c)
 def write (cs : Nat → Comp K V) (a : State K V) (kvs : List (K × V)) (who : Option Nat := none) :
@@ -203,13 +227,14 @@ structure Calm (s s' : Model.State K V) : Prop where
   pulses : s'.pulses = s.pulses
   pulsing : s'.pulsing = s.pulsing
   phase : s'.phase = s.phase
+  earlies : s'.earlies = s.earlies
 
 theorem Calm.refl (s : Model.State K V) : Calm s s :=
-  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem Calm.trans {s s' s'' : Model.State K V} (a : Calm s s') (b : Calm s' s'') : Calm s s'' :=
   ⟨b.1.trans a.1, b.2.trans a.2, b.3.trans a.3, b.4.trans a.4, b.5.trans a.5, b.6.trans a.6,
-    b.7.trans a.7, b.8.trans a.8, b.9.trans a.9, b.10.trans a.10, b.11.trans a.11⟩
+    b.7.trans a.7, b.8.trans a.8, b.9.trans a.9, b.10.trans a.10, b.11.trans a.11, b.12.trans a.12⟩
 
 -- causes over pulses: this pulse's cause, its computation went; between pulses each this pulse's
 -- cause is cut, its computation alone
@@ -236,7 +261,7 @@ theorem causeof_cuts {s : Model.State K V} (h : Cuts s) (c : Nat) (hc : (s.ran c
     exact ⟨h, Calm.refl s, rfl, hw, rfl, h.went c hc hw, fun _ => Or.inl rfl, fun _ h => h⟩
   · rename_i hw
     refine ⟨⟨fun d hr hd => ?_, fun hp d hr hd => ?_⟩,
-      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, by simp, by simp, by simp,
+      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, by simp, by simp, by simp,
       fun d => ?_, fun d hd => ?_⟩
     · by_cases e : d = c
       · subst e; simp
@@ -265,23 +290,25 @@ theorem causeof_cut {s : Model.State K V} (h : Cuts s) (hp : s.pulsing = false) 
 theorem settle_moves (s s1 : Model.State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat))
     (hd : d < s.made) (e1 : s1.made = s.made) (e2 : s1.reads = s.reads) (e3 : s1.ran = s.ran)
     (e4 : s1.after = s.after) (e5 : s1.acts = s.acts) (e6 : s1.last = s.last) (e7 : s1.due = s.due)
-    (e8 : s1.looping = s.looping) (e9 : s1.writers = s.writers) (e10 : s1.store = s.store) :
+    (e8 : s1.looping = s.looping) (e9 : s1.writers = s.writers) (e10 : s1.store = s.store)
+    (e11 : s1.earlies = s.earlies := by first | rfl | assumption) :
     Moves s (Model.settle s1 d t who l false) ∧
       (((Model.settle s1 d t who l false).due d).isSome ∨ s.looping d = true) := by
   simp only [Model.settle, Bool.and_false, Bool.false_eq_true, ite_false]
   split
   · rename_i h
     simp only [Bool.and_eq_true] at h
-    refine ⟨⟨e1, e2, e3, e4, e5, e6, ?_, ?_, ?_, ?_, ?_⟩, Or.inr (by simpa [e8] using h.1)⟩
+    refine ⟨⟨e1, e2, e3, e4, e5, e6, ?_, ?_, ?_, ?_, ?_, ?_⟩, Or.inr (by simpa [e8] using h.1)⟩
     · intro x m hx; simpa [e7] using hx
     · intro x hx; simp [e7] at hx; exact Or.inl hx
     · intro x hx; simp [e8, e7] at hx ⊢; exact hx
     · intro k w hk; simp [e9] at hk; exact Or.inl hk
     · intro k hk; simp [e10] at hk
+    · exact e11
   · simp only [due]
     split
     · rename_i hdue
-      refine ⟨⟨e1, e2, e3, e4, e5, e6, ?_, ?_, ?_, ?_, ?_⟩, Or.inl (by simpa [e7] using hdue)⟩
+      refine ⟨⟨e1, e2, e3, e4, e5, e6, ?_, ?_, ?_, ?_, ?_, ?_⟩, Or.inl (by simpa [e7] using hdue)⟩
       · intro x m hx; simpa [e7] using hx
       · intro x hx; simp [e7] at hx; exact Or.inl hx
       · intro x hx
@@ -290,9 +317,10 @@ theorem settle_moves (s s1 : Model.State K V) (d t : Nat) (who : Option Nat) (l 
         · simp [put_ne _ _ hxd, e8, e7] at hx ⊢; exact hx
       · intro k w hk; simp [e9] at hk; exact Or.inl hk
       · intro k hk; simp [e10] at hk
+      · exact e11
     · rename_i hdue
       refine ⟨⟨by simp [say, e1], by simp [say, e2], by simp [say, e3], by simp [say, e4],
-        by simp [say, e5], by simp [say, e6], ?_, ?_, ?_, ?_, ?_⟩, Or.inl (by simp [say])⟩
+        by simp [say, e5], by simp [say, e6], ?_, ?_, ?_, ?_, ?_, ?_⟩, Or.inl (by simp [say])⟩
       · intro x m hx
         by_cases hxd : x = d
         · subst hxd; simp [e7, hx] at hdue
@@ -307,6 +335,7 @@ theorem settle_moves (s s1 : Model.State K V) (d t : Nat) (who : Option Nat) (l 
         · simp [say, put_ne _ _ hxd, e8, e7] at hx ⊢; exact hx
       · intro k w hk; simp [say, e9] at hk; exact Or.inl hk
       · intro k hk; simp [say, e10] at hk
+      · simp [say, e11]
 
 -- settle and due: they leave the causes, cuts aside
 theorem due_calm (s : Model.State K V) (d t : Nat) (who : Option Nat) :
@@ -315,7 +344,7 @@ theorem due_calm (s : Model.State K V) (d t : Nat) (who : Option Nat) :
   unfold due
   split
   · exact ⟨Calm.refl s, rfl, rfl, rfl, rfl⟩
-  · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl⟩
+  · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl⟩
 
 theorem settle_calm (s : Model.State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat))
     (fl : Bool) :
@@ -328,7 +357,7 @@ theorem settle_calm (s : Model.State K V) (d t : Nat) (who : Option Nat) (l : Op
     simp only [Bool.and_eq_true] at h
     split
     · rename_i c
-      refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, fun x => ?_⟩
+      refine ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, fun x => ?_⟩
       by_cases e : x = c
       · subst e; simp [h.1, h.2]
       · simp only [put_ne _ _ e]
@@ -343,12 +372,12 @@ theorem settle_calm (s : Model.State K V) (d t : Nat) (who : Option Nat) (l : Op
       intro x ⟨_, h2, h3⟩; simp [h2, h3] at h
     dsimp only
     split
-    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl,
+    · exact ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl,
         fun x => by simp [hn x]⟩
     · obtain ⟨a, b, c, d', e⟩ := due_calm { s with loop := put s.loop d l, looping := put s.looping d false }
         d t who
       exact ⟨Calm.trans (s' := { s with loop := put s.loop d l, looping := put s.looping d false })
-        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ a, c, d', e,
+        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ a, c, d', e,
         fun x => by rw [b]; simp [hn x]⟩
 
 theorem keep_calm (s : Model.State K V) (d : Nat) (k : Why) :
@@ -381,7 +410,7 @@ theorem mark_calm {s : Model.State K V} (h : Cuts s) (d t : Nat) (who : Option N
     rw [hk]
     obtain ⟨a, b, c', e, f⟩ := settle_calm { s1 with kept := kp } d t (some c)
       (loopof { s1 with kept := kp } k d) (((s1.ran c).bind (·.loop)).isSome)
-    have a' : Calm s1 { s1 with kept := kp } := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    have a' : Calm s1 { s1 with kept := kp } := ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
     refine ⟨h2.trans (a'.trans a), (h1.of_eq rfl rfl rfl rfl rfl rfl).of_eq b a.pulses c' e a.pulsing a.ran,
       ?_, fun x => by rw [b]; exact h7 x, fun x hx => by rw [c']; exact h8 x hx⟩
     intro x
@@ -430,14 +459,14 @@ theorem Kept.learned {s0 s1 : Model.State K V} {r : Option Nat} (h : Kept s0 r s
   cases w with
   | none => exact ⟨h1, h2, h3, h4, h5, h6⟩
   | some c =>
-    exact ⟨h1.trans ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩,
+    exact ⟨h1.trans ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩,
       h2.of_eq rfl rfl rfl rfl rfl rfl, h3, h4, h5, h6⟩
 
 theorem changed_kept (cs : Nat → Comp K V) {s : Model.State K V} (h : Cuts s) (keys : List K)
     (who : Option Nat) : Kept s (runof s who) (changed cs s keys who) := by
   simp only [changed]
   have h0 : Kept s (runof s who) { s with tick := s.tick + 1 } :=
-    ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, h.of_eq rfl rfl rfl rfl rfl rfl,
+    ⟨⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, h.of_eq rfl rfl rfl rfl rfl rfl,
       fun _ h => h, fun _ h => Or.inl h, fun _ => Or.inl rfl, fun _ h => h⟩
   have e : runof { s with tick := s.tick + 1 } who = runof s who := rfl
   rw [e]
@@ -507,7 +536,8 @@ theorem mark_flag {s : Model.State K V} (h : Cuts s) (hp : s.pulsing = false) (d
         { s1 with kept := kp, cut := put s1.cut d true } := by
       simp [Model.settle, hl]
     rw [this]
-    refine ⟨Moves.of_eq h2.store h2.made h2.reads e3.2.2 h2.after e3.1 h2.ran e3.2.1 h2.acts h2.last,
+    refine ⟨Moves.of_eq h2.store h2.made h2.reads e3.2.2 h2.after e3.1 h2.ran e3.2.1 h2.acts h2.last
+      h2.earlies,
       fun h => absurd rfl h, fun _ => by simp⟩
   · have hl : loopof { s1 with kept := kp } (.mk (c, n) []) d = none := by
       simp [loopof, on_cut, Ne.symm hdc]
@@ -517,7 +547,7 @@ theorem mark_flag {s : Model.State K V} (h : Cuts s) (hp : s.pulsing = false) (d
       simp [Model.settle]
     rw [this]
     obtain ⟨m, hm⟩ := settle_moves s { s1 with kept := kp } d t (some c) none hd h2.made h2.reads h2.ran
-      h2.after h2.acts h2.last e3.1 e3.2.1 e3.2.2 h2.store
+      h2.after h2.acts h2.last e3.1 e3.2.1 e3.2.2 h2.store h2.earlies
     exact ⟨m, fun _ => hm, fun h => absurd h hdc⟩
 
 -- what a flagged run's marks leave: d due or looping, or d = c and c's cut set
@@ -595,7 +625,7 @@ theorem changed_flag (cs : Nat → Comp K V) {s : Model.State K V} (h : Cuts s)
       simp only [List.foldl_cons]
       have ml := learn_moves s1 k w (fun x hx => by rw [e1, hw1 x hx]; exact hrc)
       have cl : Calm s1 (learn s1 k w) := by
-        cases w <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+        cases w <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       have hl1 : Cuts (learn s1 k w) := by cases w <;> exact h1.of_eq rfl rfl rfl rfl rfl rfl
       have hl2 : (learn s1 k w).cut = s1.cut := by cases w <;> rfl
       obtain ⟨mt, ct, kt, ht⟩ := marks_flag t (readers (learn s1 k w) k) (learn s1 k w) hl1
@@ -686,8 +716,20 @@ theorem stale_marks (t c : Nat) :
       · exact Or.inr (m1.looping x h).1
 
 -- a stale change: what read its keys is due or looping, as from outside
+theorem learn_moves' (s : Model.State K V) (k : K) (w : Option Nat)
+    (hw : ∀ c, w = some c → c < s.made) : Moves s (learn s k w) := by
+  cases w with
+  | none => exact Moves.refl s
+  | some c =>
+    refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, fun _ _ h => h, fun _ h => Or.inl h, fun _ h => ⟨h, rfl⟩,
+      ?_, fun _ h => absurd rfl h, rfl⟩
+    intro k' w' h
+    by_cases hk : k' = k
+    · subst hk; simp [learn] at h; subst h; exact Or.inr (Or.inr (hw c rfl))
+    · simp [learn, put_ne _ _ hk] at h; exact Or.inl h
+
 theorem stale_moves (cs : Nat → Comp K V) (s : Model.State K V) (keys : List K) (c : Nat)
-    (hc : (s.ran c).isSome) :
+    (hc : c < s.made) :
     Still s (stale cs s keys c) ∧ ∀ k ∈ keys, ∀ d, d < s.made → k ∈ s.reads d →
       ((stale cs s keys c).due d).isSome ∨ s.looping d = true := by
   simp only [stale]
@@ -698,8 +740,8 @@ theorem stale_moves (cs : Nat → Comp K V) (s : Model.State K V) (keys : List K
     intro x hx; subst hw; exact (Option.some.inj (Option.filter_eq_some_iff.1 hx).1).symm
   have s0 : Still s { s with tick := t } :=
     ⟨Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl,
-      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl, rfl⟩
-  have fold : ∀ (ks : List K) (s1 : Model.State K V), s1.ran = s.ran →
+      ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, rfl, rfl, rfl, rfl, rfl⟩
+  have fold : ∀ (ks : List K) (s1 : Model.State K V), s1.ran = s.ran → s1.made = s.made →
       Still s1 (ks.foldl (fun s k => (readers (learn s k w) k).foldl
         (fun s d => Model.settle s d t (some c) none false) (learn s k w)) s1) ∧
       ∀ k ∈ ks, ∀ d, d < s1.made → k ∈ s1.reads d →
@@ -708,18 +750,18 @@ theorem stale_moves (cs : Nat → Comp K V) (s : Model.State K V) (keys : List K
           s1.looping d = true := by
     intro ks
     induction ks with
-    | nil => intro s1 _; exact ⟨Still.refl s1, by simp⟩
+    | nil => intro s1 _ _; exact ⟨Still.refl s1, by simp⟩
     | cons k ks ih =>
-      intro s1 e1
+      intro s1 e1 e1m
       simp only [List.foldl_cons]
       have ml : Still s1 (learn s1 k w) := by
-        refine ⟨learn_moves s1 k w (fun x hx => by rw [e1, hw1 x hx]; exact hc), ?_, ?_, ?_, ?_, ?_,
+        refine ⟨learn_moves' s1 k w (fun x hx => by rw [e1m, hw1 x hx]; exact hc), ?_, ?_, ?_, ?_, ?_,
           ?_⟩
         all_goals (cases w <;>
-          first | rfl | exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
+          first | rfl | exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
       obtain ⟨mt, ht⟩ := stale_marks t c (readers (learn s1 k w) k) (learn s1 k w)
         (fun d hd => by simp [readers] at hd; exact hd.1)
-      obtain ⟨mf, hf⟩ := ih _ (by rw [mt.2.1.ran, ml.2.1.ran, e1])
+      obtain ⟨mf, hf⟩ := ih _ (by rw [mt.2.1.ran, ml.2.1.ran, e1]) (by rw [mt.1.made, ml.1.made, e1m])
       refine ⟨(ml.trans mt).trans mf, ?_⟩
       intro k' hk' d hd hrd
       rcases List.mem_cons.1 hk' with rfl | hk'
@@ -737,7 +779,7 @@ theorem stale_moves (cs : Nat → Comp K V) (s : Model.State K V) (keys : List K
         rcases hf k' hk' d hd' hrd' with h | h
         · exact Or.inl h
         · exact Or.inr ((ml.1.trans mt.1).looping d h).1
-  obtain ⟨mf, hf⟩ := fold keys { s with tick := t } rfl
+  obtain ⟨mf, hf⟩ := fold keys { s with tick := t } rfl rfl
   refine ⟨s0.trans mf, fun k hk d hd hrd => ?_⟩
   rcases hf k hk d hd hrd with h | h
   · exact Or.inl h
@@ -789,13 +831,13 @@ structure Good (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) : 
   looping : ∀ c, a.s.looping c = true → a.s.due c = none ∧ ∃ r, a.s.ran c = some r ∧
     r.ended = some .looping
   pending : ∀ c r, a.s.ran c = some r → r.ended = some .pending → r.out = some .pending
-  acts : ∀ e v, (e, v) ∈ a.s.acts → iseffect (cs e) = true ∧ ∃ r, a.s.ran e = some r ∧
+  acts : ∀ e v, (e, v) ∈ queue a.s → iseffect (cs e) = true ∧ ∃ r, a.s.ran e = some r ∧
     r.loop = none ∧ r.ended = some .done ∧ r.out = some (.value v)
   computes : ∀ c r, iseffect (cs c) = false → a.s.ran c = some r → r.ended = some .done →
     ∃ v, r.out = some (.value v) ∧ near (cs c).equal v (a.s.last c)
   effects : ∀ e r, iseffect (cs e) = true → a.s.ran e = some r → r.ended = some .done →
     ∃ v, r.out = some (.value v) ∧
-      (near (cs e).equal v (a.s.last e) ∨ (e, v) ∈ a.s.acts ∨ (a.s.due e).isSome)
+      (near (cs e).equal v (a.s.last e) ∨ (e, v) ∈ queue a.s ∨ (a.s.due e).isSome)
   failed : ∀ c r, a.s.ran c = some r → r.ended = some .failed →
     r.out = some .error ∨ ∃ v, r.out = some (.value v) ∧ same (cs c).equal v (a.s.last c) = none
   -- a cut loop: its latest run flagged, or ended looping, or stopped
@@ -805,9 +847,11 @@ structure Good (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) : 
   flag : ∀ c r, a.s.ran c = some r → r.loop.isSome → r.ended = some .pending
   when_le : ∀ c, a.s.when c ≤ a.s.pulses
   times : Cuts a.s
-  runs : ∀ c, ((a.s.ran c).map (·.n)).getD 0 = a.s.runs c
-  -- the promises owed: of runs made, each once; the latest run's: pending, a promise given
-  owed_le : ∀ x ∈ owed a, 0 < x.2 ∧ x.2 ≤ a.s.runs x.1
+  -- the latest run's number is the count (a going forgets the run, not the count)
+  runs : ∀ c r, a.s.ran c = some r → r.n = a.s.runs c
+  -- the promises owed: of runs made, of computations made, each once; the latest run's: pending,
+  -- a promise given
+  owed_le : ∀ x ∈ owed a, 0 < x.2 ∧ x.2 ≤ a.s.runs x.1 ∧ x.1 < a.s.made
   nodup : (owed a).Nodup
   owing : ∀ c r, a.s.ran c = some r → (c, r.n) ∈ owed a → r.ended = some .pending ∧
     (a.gave c).isSome
@@ -827,18 +871,19 @@ structure Shift (s s' : Model.State K V) : Prop where
   due : ∀ d m, s.due d = some m → s'.due d = some m
   fresh : ∀ d, (s'.due d).isSome → (s.due d).isSome ∨ d < s.made
   looping : ∀ d, s'.looping d = true → s.looping d = true ∧ s'.due d = s.due d
-  writers : ∀ k w, s'.writers k = some w → s.writers k = some w ∨ (s.ran w).isSome
+  writers : ∀ k w, s'.writers k = some w → s.writers k = some w ∨ (s.ran w).isSome ∨ w < s.made
   store : ∀ k, s'.store k ≠ s.store k → ∀ d, d < s.made → k ∈ s.reads d →
     (s'.due d).isSome ∨ s.looping d = true ∨ s'.cut d = true
   cut : ∀ x, s'.cut x = true → s.cut x = true ∨ ∃ r, s.ran x = some r ∧ r.loop.isSome
   cut_le : ∀ x, s.cut x = true → s'.cut x = true
   runs : s'.runs = s.runs
+  earlies : s'.earlies = s.earlies
 
 theorem shifted {s s' : Model.State K V} (m : Moves s s') (hc : s'.cut = s.cut)
     (hr : s'.runs = s.runs) : Shift s s' :=
   ⟨m.made, m.reads, m.ran, m.after, m.acts, m.last, m.due, m.fresh, m.looping, m.writers,
     fun k hk d hd hr => (m.store k hk d hd hr).elim Or.inl (fun h => Or.inr (Or.inl h)),
-    fun x h => Or.inl (hc ▸ h), fun x h => hc ▸ h, hr⟩
+    fun x h => Or.inl (hc ▸ h), fun x h => hc ▸ h, hr, m.earlies⟩
 
 theorem Shift.isSome {s s' : Model.State K V} (h : Shift s s') {d : Nat} (hd : (s.due d).isSome) :
     (s'.due d).isSome := by
@@ -861,9 +906,10 @@ theorem Good.shift {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
     · exact m.made ▸ g.due_made x h
     · exact m.made ▸ h
   writers_made k w h := by
-    rcases m.writers k w h with h | h
+    rcases m.writers k w h with h | h | h
     · exact m.made ▸ g.writers_made k w h
     · exact m.made ▸ g.ran_made w h
+    · exact m.made ▸ h
   ran_made c h := m.made ▸ g.ran_made c (m.ran ▸ h)
   reads c := by simp only; rw [m.reads, m.ran]; exact g.reads c
   follows c r h := g.follows c r (m.ran ▸ h)
@@ -898,7 +944,7 @@ theorem Good.shift {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
   pending c r h := g.pending c r (m.ran ▸ h)
   acts e v h := by
     simp only at h
-    rw [m.acts] at h
+    rw [queue, m.acts, m.earlies] at h
     obtain ⟨h1, r, h2⟩ := g.acts e v h
     exact ⟨h1, r, m.ran ▸ h2.1, h2.2⟩
   computes c r hc h hd := by
@@ -909,7 +955,7 @@ theorem Good.shift {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
     refine ⟨v, h1, ?_⟩
     rcases h2 with h2 | h2 | h2
     · exact Or.inl (m.last ▸ h2)
-    · exact Or.inr (Or.inl (m.acts ▸ h2))
+    · exact Or.inr (Or.inl (by rw [queue, m.acts, m.earlies]; exact h2))
     · exact Or.inr (Or.inr (m.isSome h2))
   failed c r h hf := m.last ▸ g.failed c r (m.ran ▸ h) hf
   cut c h := by
@@ -920,8 +966,8 @@ theorem Good.shift {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
   flag c r h := g.flag c r (m.ran ▸ h)
   when_le := hw
   times := ht
-  runs c := by simp only; rw [m.ran, m.runs]; exact g.runs c
-  owed_le x hx := by simp only; rw [m.runs]; exact g.owed_le x hx
+  runs c r h := by simp only at h ⊢; rw [m.runs]; exact g.runs c r (m.ran ▸ h)
+  owed_le x hx := by simp only; rw [m.runs, m.made]; exact g.owed_le x hx
   nodup := g.nodup
   owing c r h hx := g.owing c r (m.ran ▸ h) hx
   back c r h := g.back c r (m.ran ▸ h)
@@ -948,7 +994,7 @@ theorem Good.empty (cs : Nat → Comp K V) (promise : V → Bool) :
   fresh c r h := by simp [Async.empty, Model.empty] at h
   looping c h := by simp [Async.empty, Model.empty] at h
   pending c r h := by simp [Async.empty, Model.empty] at h
-  acts e v h := by simp [Async.empty, Model.empty] at h
+  acts e v h := by simp [Async.empty, Model.empty, queue] at h
   computes c r _ h := by simp [Async.empty, Model.empty] at h
   effects e r _ h := by simp [Async.empty, Model.empty] at h
   failed c r h := by simp [Async.empty, Model.empty] at h
@@ -957,7 +1003,7 @@ theorem Good.empty (cs : Nat → Comp K V) (promise : V → Bool) :
   when_le c := by simp [Async.empty, Model.empty]
   times := ⟨fun c h => by simp [Async.empty, Model.empty] at h,
     fun _ c h => by simp [Async.empty, Model.empty] at h⟩
-  runs c := by simp [Async.empty, Model.empty]
+  runs c r h := by simp [Async.empty, Model.empty] at h
   owed_le x h := by simp [owed, Async.empty] at h
   nodup := by simp [owed, Async.empty]
   owing c r h := by simp [Async.empty, Model.empty] at h
@@ -980,7 +1026,7 @@ theorem Good.told {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       · rw [hw c rfl] at hfl; cases hfl
     obtain ⟨m, hm⟩ := changed_flag cs ht hp keys c hfl
     refine g.shift ⟨m.made, m.reads, m.ran, m.after, m.acts, m.last, m.due, m.fresh, m.looping,
-      m.writers, ?_, ?_, k.2.2.1, k.1.runs⟩ k.2.1 (k.when_le g.when_le)
+      m.writers, ?_, ?_, k.2.2.1, k.1.runs, m.earlies⟩ k.2.1 (k.when_le g.when_le)
     · intro k' hk d hd hr
       have hk' : st k' ≠ a.s.store k' := by
         have := k.1.store; simp only at this; rw [this] at hk; exact hk
@@ -1006,7 +1052,7 @@ theorem Good.told {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       | some _ => exact absurd ⟨c, hc, by simp [e]⟩ hf
     obtain ⟨m, h⟩ := changed_moves cs { a.s with store := st } keys who hw'
     refine g.moves ⟨m.made, m.reads, m.ran, m.after, m.acts, m.last, m.due, m.fresh, m.looping,
-      m.writers, ?_⟩ (changed_cut cs ht _ who hw') k.1.runs k.2.1 (k.when_le g.when_le)
+      m.writers, ?_, m.earlies⟩ (changed_cut cs ht _ who hw') k.1.runs k.2.1 (k.when_le g.when_le)
     intro k hk d hd hr
     by_cases e : (changed cs { a.s with store := st } keys who).store k = st k
     · rw [e] at hk
@@ -1045,7 +1091,7 @@ theorem Good.close {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
 theorem Good.grow {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
     (g : Good cs promise a) {s' : Model.State K V} (e1 : a.s.made ≤ s'.made) (e2 : s'.store = a.s.store)
     (e3 : s'.reads = a.s.reads) (e4 : s'.after = a.s.after) (e5 : s'.due = a.s.due)
-    (e6 : s'.ran = a.s.ran) (e7 : s'.looping = a.s.looping) (e8 : s'.acts = a.s.acts)
+    (e6 : s'.ran = a.s.ran) (e7 : s'.looping = a.s.looping) (e8 : queue s' = queue a.s)
     (e9 : s'.last = a.s.last) (e10 : ∀ k w, s'.writers k = some w → w < s'.made)
     (e11 : s'.cut = a.s.cut) (e12 : s'.runs = a.s.runs) (e13 : Cuts s')
     (e14 : ∀ c, s'.when c ≤ s'.pulses) : Good cs promise { a with s := s' } where
@@ -1079,50 +1125,14 @@ theorem Good.grow {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
   flag c r h := g.flag c r (e6 ▸ h)
   when_le := e14
   times := e13
-  runs c := by simp only; rw [e6, e12]; exact g.runs c
-  owed_le x hx := by simp only; rw [e12]; exact g.owed_le x hx
+  runs c r h := by simp only at h ⊢; rw [e12]; exact g.runs c r (e6 ▸ h)
+  owed_le x hx := by
+    simp only; rw [e12]
+    obtain ⟨h1, h2, h3⟩ := g.owed_le x hx
+    exact ⟨h1, h2, by omega⟩
   nodup := g.nodup
   owing c r h hx := g.owing c r (e6 ▸ h) hx
   back c r h := g.back c r (e6 ▸ h)
-
-theorem Good.make {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
-    (g : Good cs promise a) : Good cs promise (make cs a) := by
-  simp only [Async.make, Model.make]
-  generalize hs1 : (match (cs a.s.made).key with
-      | some k => { a.s with made := a.s.made + 1, writers := put a.s.writers k (some a.s.made) }
-      | none => { a.s with made := a.s.made + 1 } : Model.State K V) = s1
-  have f1 : s1.made = a.s.made + 1 ∧ s1.store = a.s.store ∧ s1.reads = a.s.reads ∧
-      s1.after = a.s.after ∧ s1.due = a.s.due ∧ s1.ran = a.s.ran ∧ s1.looping = a.s.looping ∧
-      s1.acts = a.s.acts ∧ s1.last = a.s.last ∧ s1.cut = a.s.cut ∧ s1.runs = a.s.runs ∧
-      s1.when = a.s.when ∧ s1.pulses = a.s.pulses ∧ s1.went = a.s.went ∧ s1.cause = a.s.cause ∧
-      s1.pulsing = a.s.pulsing ∧ (∀ k w, s1.writers k = some w → w < s1.made) := by
-    subst hs1
-    cases hk : (cs a.s.made).key with
-    | none =>
-      refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
-      intro k w h; have := g.writers_made k w h; simp only; omega
-    | some k =>
-      refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ?_⟩
-      intro k' w h
-      by_cases e : k' = k
-      · subst e; simp at h; simp only; omega
-      · simp [put_ne _ _ e] at h; have := g.writers_made k' w h; simp only; omega
-  obtain ⟨e1, e2, e3, e4, e5, e6, e7, e8, e9, e11, e12, w1, w2, w3, w4, w5, e10⟩ := f1
-  have g1 := g.grow (s' := { s1 with tick := s1.tick + 1 }) (by simp [e1]) e2 e3 e4 e5 e6 e7 e8 e9 e10
-    e11 e12 (g.times.of_eq w1 w2 w3 w4 w5 e6) (fun c => by simp only; rw [w1, w2]; exact g.when_le c)
-  have hd : a.s.made < ({ s1 with tick := s1.tick + 1 } : Model.State K V).made := by simp [e1]
-  have m := (mark_moves _ a.s.made (s1.tick + 1) none hd (by simp)).1
-  obtain ⟨c1, c2, c3, c4, _⟩ := mark_calm g1.times a.s.made (s1.tick + 1) none (by simp)
-  have g2 := g1.moves m (funext fun x => by
-    cases e : ({ s1 with tick := s1.tick + 1 } : Model.State K V).cut x <;>
-    cases e' : (mark { s1 with tick := s1.tick + 1 } a.s.made (s1.tick + 1) none).cut x <;>
-    simp_all) c1.runs c2 (fun c => by
-      rw [c1.pulses]
-      rcases c4 c with e | e <;> rw [e]
-      · exact g1.when_le c
-      · exact Nat.le_refl _)
-  subst hs1
-  exact g2
 
 -- settle
 
@@ -1192,13 +1202,9 @@ theorem Good.settle {cs : Nat → Comp K V} {promise : V → Bool} {a : State K 
 -- named
 
 -- a computation with a promise owed has a run
-theorem Good.ran_of {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
-    (g : Good cs promise a) {c n : Nat} (h : (c, n) ∈ owed a) : (a.s.ran c).isSome := by
-  have h1 := g.owed_le _ h
-  have h2 := g.runs c
-  cases e : a.s.ran c with
-  | none => rw [e] at h2; simp at h2; simp at h1; omega
-  | some _ => rfl
+theorem Good.owed_made {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
+    (g : Good cs promise a) {c n : Nat} (h : (c, n) ∈ owed a) : c < a.s.made :=
+  (g.owed_le _ h).2.2
 
 -- a change after an await, between pulses: by the latest run, the host's change named by c
 -- (Good.told); by an older one, stale: it moves, as from outside
@@ -1212,7 +1218,7 @@ theorem Good.named {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
     have hmem : (c, r) ∈ a.awaiting := List.mem_of_getElem? hi
     have howed : (c, r.n) ∈ owed a := by
       simp only [owed]; exact List.mem_append_left _ (List.mem_map.2 ⟨(c, r), hmem, rfl⟩)
-    have hrc : (a.s.ran c).isSome := g.ran_of howed
+    have hrc : c < a.s.made := g.owed_made howed
     obtain ⟨st, h1, h2⟩ := stores_shape a.s kvs
     simp only [h1]
     split
@@ -1220,7 +1226,7 @@ theorem Good.named {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
     · obtain ⟨⟨m, k1, k2, k3, k4, k5, _⟩, hm⟩ :=
         stale_moves cs { a.s with store := st } (kvs.map (·.1)) c hrc
       refine g.moves ⟨m.made, m.reads, m.ran, m.after, m.acts, m.last, m.due, m.fresh, m.looping,
-        m.writers, ?_⟩ k2 k1.runs ((g.times.of_eq rfl rfl rfl rfl rfl rfl).of_eq k3 k1.pulses k4 k5
+        m.writers, ?_, m.earlies⟩ k2 k1.runs ((g.times.of_eq rfl rfl rfl rfl rfl rfl).of_eq k3 k1.pulses k4 k5
           k1.pulsing k1.ran) (fun d => by rw [k3, k1.pulses]; exact g.when_le d)
       intro k hk d hd hr
       have hk' : st k ≠ a.s.store k := by
@@ -1231,7 +1237,7 @@ theorem Good.named {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V
 
 -- a run, A2: start, f read along the store; what the state is when it is told how f ended (first_spec)
 theorem run_spec (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (c rk : Nat)
-    (hp : nowrites (cs c).f) :
+    (hp : nowrites (cs c).f) (hz : a.s.asleep c = false) :
     ∃ (s3 : Model.State K V) (o : Out V) (seen : List (K × Option V)) (vals : List Nat)
       (st : Option Nat),
       (run cs promise a c rk).s = ending cs s3 c (hide promise o) ∧
@@ -1243,38 +1249,100 @@ theorem run_spec (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) 
           | _, _ => a.awaiting) ∧
       s3.ran = put a.s.ran c (some (begun a.s c vals st seen)) ∧
       s3.reads = put a.s.reads c (seen.map (·.1)) ∧
-      s3.store = a.s.store ∧ s3.made = a.s.made ∧ s3.writers = a.s.writers ∧ s3.last = a.s.last ∧
-      s3.looping = a.s.looping ∧ s3.due = put a.s.due c none ∧ s3.after = put a.s.after c none ∧
-      s3.acts = a.s.acts.filter (fun x => x.1 ≠ c) ∧ s3.cut = put a.s.cut c false ∧
+      s3.store = a.s.store ∧ s3.made = a.s.made ∧ s3.last = a.s.last ∧
+      s3.after = put a.s.after c none ∧
+      s3.acts = a.s.acts.filter (fun x => x.1 ≠ c) ∧
+      s3.earlies = a.s.earlies.filter (fun x => x.1 ≠ c) ∧ s3.cut = put a.s.cut c false ∧
       s3.runs = put a.s.runs c (a.s.runs c + 1) ∧ s3.when = put a.s.when c a.s.pulses ∧
       s3.went = put a.s.went c true ∧ s3.pulses = a.s.pulses ∧ s3.pulsing = a.s.pulsing ∧
       s3.cause = put a.s.cause c (.mk (c, a.s.runs c + 1) (a.s.kept c)) ∧
       s3.kept = put a.s.kept c [] ∧
+      s3.due c = none ∧ s3.looping c = a.s.looping c ∧
+      (∀ d m, d ≠ c → a.s.due d = some m → s3.due d = some m) ∧
+      (∀ d, (s3.due d).isSome → (a.s.due d).isSome ∨ d < a.s.made) ∧
+      (∀ d, d ≠ c → s3.looping d = true → a.s.looping d = true ∧ s3.due d = a.s.due d) ∧
+      (∀ k w, s3.writers k = some w →
+        a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c ∨ w < a.s.made) ∧
       (∀ q ∈ seen, a.s.store q.1 = q.2) ∧
       (st = none → follow (cs c).f seen = some o) ∧
-      (∀ w, st = some w → (a.s.due w).isSome ∧ waits (start a.s c rk) w c = false ∧ w ≠ c ∧
-        ∃ k, a.s.writers k = some w) := by
+      (∀ w, st = some w → (s3.due w).isSome ∧ waits (start a.s c rk) w c = false ∧ w ≠ c ∧
+        ∃ k, s3.writers k = some w) := by
   have h0 : (start a.s c rk).ran c = some (begun a.s c [] none []) := by simp [start, say, begun]
-  obtain ⟨seen, vals, st, heq, hst, hfo, hstop⟩ :=
+  obtain ⟨seen, vals, st, ws, heq, hst, hfo, hstop⟩ :=
     exec_spec cs c (cs c).f hp (start a.s c rk) _ h0 rfl
   simp only [run]
   generalize hx : exec cs c (start a.s c rk) (cs c).f = x at heq hfo
   obtain ⟨s2, o⟩ := x
   simp only at heq hfo
   subst heq
-  refine ⟨_, o, seen, vals, st, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  all_goals first
-    | rfl
-    | trivial
-    | (simp [start, say, put_put, begun]; done)
-    | (simp only [put_same, Option.bind_some]; rfl)
-    | skip
-  intro w hw
-  obtain ⟨h1, h2, h3, h4⟩ := hstop w hw
-  refine ⟨?_, h2, h3, ?_⟩
-  · simpa [start, say, put_ne _ _ h3] using h1
-  · simpa [start, say] using h4
+  generalize hW : wakes cs (start a.s c rk) ws = W at hstop
+  have m : Moves (start a.s c rk) W := hW ▸ wakes_moves cs ws (start a.s c rk)
+  have hzs : (start a.s c rk).asleep c = false := by simp [start, say, hz]
+  obtain ⟨k1, k2, _⟩ := wakes_keep cs c ws (start a.s c rk) hzs
+  rw [hW] at k1 k2
+  have hst0 : ∀ d, (start a.s c rk).due d = put a.s.due c none d := by intro d; simp [start, say]
+  refine ⟨_, o, seen, vals, st, rfl, ?g1, ?g2, ?g3, ?g4, ?g5, ?g6, ?g7, ?g8, ?g9, ?g10, ?g11, ?g12,
+    ?g13, ?g14, ?g15, ?g16, ?g17, ?g18, ?g19, ?g20, ?g21, ?g22, ?g23, ?g24, ?g25, ?g26, ?g27, ?g28⟩
+  case g1 => first | rfl | trivial
+  case g2 => simp only [untrack_ran, put_same, Option.bind_some]; try rfl
+  case g3 => simp only [untrack_ran, put_same, Option.bind_some]; try rfl
+  case g4 => simp [start, say, put_put, begun]
+  case g5 => simp [start, say, put_put, begun]
+  case g6 => rw [← hW]; simp [start, say]
+  case g7 => rw [← hW]; simp [start, say]
+  case g8 => rw [← hW]; simp [start, say]
+  case g9 => rw [← hW]; simp [start, say]
+  case g10 => rw [← hW]; simp [start, say]
+  case g11 => rw [← hW]; simp [start, say]
+  case g12 => rw [← hW]; simp [start, say]
+  case g13 => rw [← hW]; simp [start, say]
+  case g14 => rw [← hW]; simp [start, say]
+  case g15 => rw [← hW]; simp [start, say]
+  case g16 => rw [← hW]; simp [start, say]
+  case g17 => rw [← hW]; simp [start, say]
+  case g18 => rw [← hW]; simp [start, say]
+  case g19 => rw [← hW]; simp [start, say]
+  case g20 =>
+    simp [k1, start, say]
+  case g21 =>
+    simp [k2, start, say]
+  case g22 =>
+    intro d n hd h
+    simp only [untrack_due]
+    exact m.due d n (by rw [hst0, put_ne _ _ hd]; exact h)
+  case g23 =>
+    intro d h
+    simp only [untrack_due] at h
+    rcases m.fresh d h with h | h
+    · by_cases hd : d = c
+      · subst hd; rw [hst0] at h; simp at h
+      · rw [hst0, put_ne _ _ hd] at h; exact Or.inl h
+    · exact Or.inr (by simpa [start, say] using h)
+  case g24 =>
+    intro d hd h
+    simp only [untrack_due, untrack_looping] at h ⊢
+    obtain ⟨h1, h2⟩ := m.looping d h
+    refine ⟨by simpa [start, say] using h1, ?_⟩
+    rw [h2, hst0, put_ne _ _ hd]
+  case g25 =>
+    intro k w h
+    simp only [untrack_writers] at h
+    rcases m.writers k w h with h | h | h
+    · exact Or.inl (by simpa [start, say] using h)
+    · by_cases hw : w = c
+      · exact Or.inr (Or.inr (Or.inl hw))
+      · exact Or.inr (Or.inl (by simpa [start, say, put_ne _ _ hw] using h))
+    · exact Or.inr (Or.inr (Or.inr (by simpa [start, say] using h)))
+  case g26 =>
+    exact hst
+  case g27 =>
+    exact hfo
+  case g28 =>
+    intro w hw
+    obtain ⟨h1, h2, h3, k, h4⟩ := hstop w hw
+    refine ⟨by simpa using h1, ?_, h3, k, by simpa using h4⟩
+    rw [← h2]
+    exact (waits_congr (by rw [← hW]; simp) (by rw [← hW]; simp) w c).symm
 
 -- what a run of c leaves, F from a, its record rf (Quiescence's Post, with promises)
 structure After (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (c rk : Nat)
@@ -1289,7 +1357,8 @@ structure After (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (
   fresh : ∀ d, (F.s.due d).isSome → (a.s.due d).isSome ∨ d < a.s.made
   looping : ∀ d, d ≠ c → F.s.looping d = true → a.s.looping d = true ∧ F.s.due d = a.s.due d
   looping_c : F.s.looping c = true → F.s.due c = none ∧ rf.ended = some .looping
-  writers : ∀ k w, F.s.writers k = some w → a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c
+  writers : ∀ k w, F.s.writers k = some w →
+    a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c ∨ w < a.s.made
   store : ∀ k, F.s.store k ≠ a.s.store k → ∀ d, d < a.s.made → d ≠ c → k ∈ a.s.reads d →
     (F.s.due d).isSome ∨ a.s.looping d = true
   follows : rf.ended ≠ some .stopped → ∃ o, follow (cs c).f rf.seen = some o ∧
@@ -1297,16 +1366,16 @@ structure After (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (
   fresh_c : F.s.due c = none → settled rf → F.s.cut c = false → ∀ q ∈ rf.seen, F.s.store q.1 = q.2
   pending : rf.ended = some .pending → rf.out = some .pending
   given_c : rf.given = []
-  acts : ∀ e v, (e, v) ∈ F.s.acts → (e ≠ c ∧ (e, v) ∈ a.s.acts) ∨
+  acts : ∀ e v, (e, v) ∈ queue F.s → (e ≠ c ∧ (e, v) ∈ queue a.s) ∨
     (e = c ∧ iseffect (cs c) = true ∧ rf.loop = none ∧ rf.ended = some .done ∧
       rf.out = some (.value v))
-  acts_keep : ∀ e v, e ≠ c → (e, v) ∈ a.s.acts → (e, v) ∈ F.s.acts
+  acts_keep : ∀ e v, e ≠ c → (e, v) ∈ queue a.s → (e, v) ∈ queue F.s
   last : ∀ d, d ≠ c → F.s.last d = a.s.last d
   computes : iseffect (cs c) = false → rf.ended = some .done →
     ∃ v, rf.out = some (.value v) ∧ near (cs c).equal v (F.s.last c)
   effects : iseffect (cs c) = true → rf.ended = some .done →
     ∃ v, rf.out = some (.value v) ∧
-      (near (cs c).equal v (F.s.last c) ∨ (c, v) ∈ F.s.acts ∨ (F.s.due c).isSome)
+      (near (cs c).equal v (F.s.last c) ∨ (c, v) ∈ queue F.s ∨ (F.s.due c).isSome)
   failed : rf.ended = some .failed →
     rf.out = some .error ∨ ∃ v, rf.out = some (.value v) ∧ same (cs c).equal v (F.s.last c) = none
   -- the async part: the cuts, the causes, the counts and what is owed
@@ -1332,18 +1401,18 @@ theorem Good.after {cs : Nat → Comp K V} {promise : V → Bool} {a F : State K
     | none => rfl
     | some m => rw [p.due d m hd e] at h; cases h
   -- what is owed: as before, or one more, of c's new run; a landing's run owes nothing
-  have book : (∀ x ∈ owed F, 0 < x.2 ∧ x.2 ≤ F.s.runs x.1) ∧ (owed F).Nodup ∧
+  have book : (∀ x ∈ owed F, 0 < x.2 ∧ x.2 ≤ F.s.runs x.1 ∧ x.1 < F.s.made) ∧ (owed F).Nodup ∧
       (∀ d r, F.s.ran d = some r → (d, r.n) ∈ owed F → r.ended = some .pending ∧ (F.gave d).isSome) := by
     have le : ∀ x ∈ owed a, x.2 ≤ F.s.runs x.1 := by
       intro x hx
-      have := (g.owed_le x hx).2
+      have := (g.owed_le x hx).2.1
       by_cases e : x.1 = c
       · rw [e] at this ⊢; rw [p.runs_c.1]; have := p.runs_c.2; omega
       · rw [p.runs x.1 e]; exact this
     rcases p.owed with ⟨hlt, hl, haw⟩ | ⟨hl, haw, hno⟩
     · have old : ∀ x ∈ owed a, x.1 = c → x.2 < rf.n := by
         intro x hx e
-        have := (g.owed_le x hx).2; rw [e] at this; omega
+        have := (g.owed_le x hx).2.1; rw [e] at this; omega
       have hperm : (owed F = owed a ∧ F.gave c = none) ∨ (F.awaiting = a.awaiting ++ [(c, rf)] ∧
           rf.ended = some .pending ∧ (F.gave c).isSome ∧ (owed F).Perm ((c, rf.n) :: owed a)) := by
         rcases haw with ⟨e, e'⟩ | ⟨e, h1, h2⟩
@@ -1372,8 +1441,8 @@ theorem Good.after {cs : Nat → Comp K V} {promise : V → Bool} {a F : State K
             · exact Or.inl h
       refine ⟨fun x hx => ?_, ?_, fun d r h hx => ?_⟩
       · rcases (hown x).1 hx with hx | ⟨rfl, _⟩
-        · exact ⟨(g.owed_le x hx).1, le x hx⟩
-        · refine ⟨by omega, by rw [p.runs_c.1]; exact Nat.le_refl _⟩
+        · exact ⟨(g.owed_le x hx).1, le x hx, by rw [p.made]; exact (g.owed_le x hx).2.2⟩
+        · refine ⟨by omega, by rw [p.runs_c.1]; exact Nat.le_refl _, by rw [p.made]; exact hcm⟩
       · rcases hperm with ⟨e, _⟩ | ⟨_, _, _, pm⟩
         · rw [e]; exact g.nodup
         · refine pm.nodup_iff.2 (List.nodup_cons.2 ⟨fun h => ?_, g.nodup⟩)
@@ -1388,7 +1457,8 @@ theorem Good.after {cs : Nat → Comp K V} {promise : V → Bool} {a F : State K
           · rw [p.gave d hd]; exact g.owing d r h hx
           · exact absurd (Prod.mk.inj hx).1 hd
     · have e : owed F = owed a := by simp only [owed, hl, haw]
-      refine ⟨fun x hx => ⟨(g.owed_le x (e ▸ hx)).1, le x (e ▸ hx)⟩, e ▸ g.nodup,
+      refine ⟨fun x hx => ⟨(g.owed_le x (e ▸ hx)).1, le x (e ▸ hx),
+        by rw [p.made]; exact (g.owed_le x (e ▸ hx)).2.2⟩, e ▸ g.nodup,
         fun d r h hx => ?_⟩
       by_cases hd : d = c
       · subst hd; rw [p.ran_c] at h; cases h; rw [e] at hx; exact absurd hx hno
@@ -1448,10 +1518,11 @@ theorem Good.after {cs : Nat → Comp K V} {promise : V → Bool} {a F : State K
       · exact p.made ▸ g.due_made x h
       · exact p.made ▸ h
     writers_made := fun k w h => by
-      rcases p.writers k w h with h | h | h
+      rcases p.writers k w h with h | h | h | h
       · exact p.made ▸ g.writers_made k w h
       · exact p.made ▸ g.ran_made w h
       · exact p.made ▸ (h ▸ hcm)
+      · exact p.made ▸ h
     ran_made := fun d h => by
       by_cases hd : d = c
       · exact p.made ▸ (hd ▸ hcm)
@@ -1524,10 +1595,10 @@ theorem Good.after {cs : Nat → Comp K V} {promise : V → Bool} {a F : State K
       · exact g.flag d r (p.ran d hd ▸ h) hl
     when_le := p.when_le
     times := p.times
-    runs := fun d => by
+    runs := fun d r h => by
       by_cases hd : d = c
-      · subst hd; rw [p.ran_c, p.runs_c.1]; rfl
-      · rw [p.ran d hd, p.runs d hd]; exact g.runs d
+      · subst hd; rw [p.ran_c] at h; cases h; exact p.runs_c.1.symm
+      · rw [p.ran d hd] at h; rw [p.runs d hd]; exact g.runs d r h
     owed_le := book.1
     nodup := book.2.1
     owing := book.2.2
@@ -1547,11 +1618,16 @@ theorem after_plain {cs : Nat → Comp K V} {promise : V → Bool} {a F : State 
     {rf : Run K V}
     (hm : F.s.made = a.s.made) (hr : F.s.ran = put a.s.ran c (some rf))
     (hreads : F.s.reads = put a.s.reads c (rf.seen.map (·.1))) (ha : F.s.after = put a.s.after c none)
-    (hd : F.s.due = put a.s.due c none) (hst : F.s.store = a.s.store) (hw : F.s.writers = a.s.writers)
-    (hl : ∀ d, d ≠ c → F.s.looping d = a.s.looping d)
+    (hd0 : F.s.due c = none) (hd : ∀ d m, d ≠ c → a.s.due d = some m → F.s.due d = some m)
+    (hfr : ∀ d, (F.s.due d).isSome → (a.s.due d).isSome ∨ d < a.s.made)
+    (hst : F.s.store = a.s.store)
+    (hw : ∀ k w, F.s.writers k = some w → a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c ∨
+      w < a.s.made)
+    (hl : ∀ d, d ≠ c → F.s.looping d = true → a.s.looping d = true ∧ F.s.due d = a.s.due d)
     (hlc : F.s.looping c = true → rf.ended = some .looping)
     (hlast : ∀ d, d ≠ c → F.s.last d = a.s.last d)
-    (X : List (Nat × V)) (hacts : F.s.acts = a.s.acts.filter (fun x => x.1 ≠ c) ++ X)
+    (X : List (Nat × V)) (hq : ∀ x ∈ queue F.s, (x.1 ≠ c ∧ x ∈ queue a.s) ∨ x ∈ X)
+    (hqk : ∀ x ∈ queue a.s, x.1 ≠ c → x ∈ queue F.s)
     (hX : ∀ x ∈ X, x.1 = c ∧ iseffect (cs c) = true ∧ rf.loop = none ∧ rf.ended = some .done ∧
       rf.out = some (.value x.2))
     (hseen : F.s.cut c = false → ∀ q ∈ rf.seen, a.s.store q.1 = q.2)
@@ -1562,7 +1638,7 @@ theorem after_plain {cs : Nat → Comp K V} {promise : V → Bool} {a F : State 
       ∃ v, rf.out = some (.value v) ∧ near (cs c).equal v (F.s.last c))
     (heff : iseffect (cs c) = true → rf.ended = some .done →
       ∃ v, rf.out = some (.value v) ∧
-        (near (cs c).equal v (F.s.last c) ∨ (c, v) ∈ F.s.acts ∨ (F.s.due c).isSome))
+        (near (cs c).equal v (F.s.last c) ∨ (c, v) ∈ queue F.s ∨ (F.s.due c).isSome))
     (hfail : rf.ended = some .failed →
       rf.out = some .error ∨ ∃ v, rf.out = some (.value v) ∧ same (cs c).equal v (F.s.last c) = none)
     (hcut : ∀ d, d ≠ c → F.s.cut d = a.s.cut d)
@@ -1581,30 +1657,22 @@ theorem after_plain {cs : Nat → Comp K V} {promise : V → Bool} {a F : State 
   ran d hd := by rw [hr, put_ne _ _ hd]
   reads := hreads
   after := Or.inl ha
-  due d m hdc h := by rw [hd, put_ne _ _ hdc]; exact h
-  fresh d h := by
-    by_cases hdc : d = c
-    · subst hdc; rw [hd] at h; simp at h
-    · rw [hd, put_ne _ _ hdc] at h; exact Or.inl h
-  looping d hdc h := by
-    rw [hl d hdc] at h
-    exact ⟨h, by rw [hd, put_ne _ _ hdc]⟩
-  looping_c h := ⟨by rw [hd]; simp, hlc h⟩
-  writers k w h := Or.inl (hw ▸ h)
+  due := hd
+  fresh := hfr
+  looping := hl
+  looping_c h := ⟨hd0, hlc h⟩
+  writers := hw
   store k h := absurd (hst ▸ rfl) h
   follows := hfol
   fresh_c _ _ hc q hq := by rw [hst]; exact hseen hc q hq
   pending := hpend
   given_c := hgiven
   acts e v h := by
-    rw [hacts] at h
-    rcases List.mem_append.1 h with h | h
-    · simp only [List.mem_filter, decide_eq_true_eq] at h
-      exact Or.inl ⟨h.2, h.1⟩
+    rcases hq _ h with h | h
+    · exact Or.inl h
     · obtain ⟨h1, h2⟩ := hX _ h
       exact Or.inr ⟨h1, h2⟩
-  acts_keep e v hec h := by
-    rw [hacts]; exact List.mem_append_left _ (by simp [h, hec])
+  acts_keep e v hec h := hqk _ h hec
   last := hlast
   computes := hcomp
   effects := heff
@@ -1643,9 +1711,15 @@ theorem after_set (cs : Nat → Comp K V) (promise : V → Bool) {a F : State K 
     (hcm : c < a.s.made) (hlc : a.s.looping c = false) (hie : iseffect (cs c) = false)
     (f_made : s4.made = a.s.made) (f_reads : s4.reads = put a.s.reads c (r4.seen.map (·.1)))
     (f_ran : s4.ran = put a.s.ran c (some r4)) (f_store : s4.store = a.s.store)
-    (f_writers : s4.writers = a.s.writers) (f_last : s4.last = a.s.last)
-    (f_looping : s4.looping = a.s.looping) (f_due : s4.due = put a.s.due c none)
-    (f_after : s4.after = put a.s.after c none) (f_acts : s4.acts = a.s.acts.filter (fun x => x.1 ≠ c))
+    (f_writers : ∀ k w, s4.writers k = some w →
+      a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c ∨ w < a.s.made)
+    (f_last : s4.last = a.s.last)
+    (f_lc : s4.looping c = a.s.looping c)
+    (f_looping : ∀ d, d ≠ c → s4.looping d = true → a.s.looping d = true ∧ s4.due d = a.s.due d)
+    (f_dc : s4.due c = none) (f_due : ∀ d m, d ≠ c → a.s.due d = some m → s4.due d = some m)
+    (f_fresh : ∀ d, (s4.due d).isSome → (a.s.due d).isSome ∨ d < a.s.made)
+    (f_after : s4.after = put a.s.after c none)
+    (hq4 : ∀ x ∈ queue s4, x.1 ≠ c ∧ x ∈ queue a.s) (hqk4 : ∀ x ∈ queue a.s, x.1 ≠ c → x ∈ queue s4)
     (f_cut : ∀ d, d ≠ c → s4.cut d = a.s.cut d) (f_cutc : s4.cut c = false)
     (f_runs : ∀ d, d ≠ c → s4.runs d = a.s.runs d)
     (hflag : r4.loop = none) (hout : r4.out = some (.value v))
@@ -1674,31 +1748,32 @@ theorem after_set (cs : Nat → Comp K V) (promise : V → Bool) {a F : State K 
     reads := by simp [hs, m.reads, f_reads]
     after := Or.inl (by simp [hs, m.after, f_after])
     due := fun d m' hd h => by
-      have : s4.due d = some m' := by rw [f_due, put_ne _ _ hd]; exact h
-      simp [hs, m.due d m' this]
+      simp [hs, m.due d m' (f_due d m' hd h)]
     fresh := fun d h => by
       rcases m.fresh d (by simpa [hs] using h) with h | h
       · by_cases hd : d = c
         · subst hd; exact Or.inr hcm
-        · rw [f_due, put_ne _ _ hd] at h; exact Or.inl h
+        · exact f_fresh d h
       · exact Or.inr (f_made ▸ h)
     looping := fun d hd h => by
       obtain ⟨h1, h2⟩ := m.looping d (by simpa [hs] using h)
-      exact ⟨by rw [f_looping] at h1; exact h1, by simp [hs, h2, f_due, put_ne _ _ hd]⟩
+      obtain ⟨h3, h4⟩ := f_looping d hd h1
+      exact ⟨h3, by simp [hs, h2, h4]⟩
     looping_c := fun h => by
       obtain ⟨h1, _⟩ := m.looping c (by simpa [hs] using h)
-      rw [f_looping, hlc] at h1; cases h1
+      rw [f_lc, hlc] at h1; cases h1
     writers := fun k w h => by
-      rcases m.writers k w (by simpa [hs] using h) with h | h
-      · exact Or.inl (by rw [f_writers] at h; exact h)
+      rcases m.writers k w (by simpa [hs] using h) with h | h | h
+      · exact f_writers k w h
       · by_cases hw : w = c
-        · exact Or.inr (Or.inr hw)
+        · exact Or.inr (Or.inr (Or.inl hw))
         · rw [f_ran, put_ne _ _ hw] at h; exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr (Or.inr (f_made ▸ h)))
     store := fun k h d hd hdc hr => by
       have h' : s5.store k ≠ s4.store k := by rw [f_store]; simpa [hs] using h
       rcases m.store k h' d (f_made ▸ hd) (by rw [f_reads, put_ne _ _ hdc]; exact hr) with h | h
       · exact Or.inl (by simpa [hs] using h)
-      · exact Or.inr (by rw [f_looping] at h; exact h)
+      · exact Or.inr (f_looping d hdc h).1
     follows := fun _ => hfol
     fresh_c := fun hdue _ _ q hq => by
       have hdue' : s5.due c = none := by simpa [hs] using hdue
@@ -1709,17 +1784,17 @@ theorem after_set (cs : Nat → Comp K V) (promise : V → Bool) {a F : State K 
         rcases m.store q.1 e c (f_made ▸ hcm)
           (by rw [f_reads]; simp; exact ⟨q.2, hq⟩) with h | h
         · rw [hdue'] at h; cases h
-        · rw [f_looping, hlc] at h; cases h
+        · rw [f_lc, hlc] at h; cases h
     pending := fun h => by simp at h
     given_c := rfl
     acts := fun e w h => by
-      have h' : (e, w) ∈ s4.acts := by rw [← m.acts]; simpa [hs] using h
-      rw [f_acts] at h'
-      simp only [List.mem_filter, decide_eq_true_eq] at h'
-      exact Or.inl ⟨h'.2, h'.1⟩
+      have h' : (e, w) ∈ queue s4 := by
+        rw [queue, ← m.acts, ← m.earlies]; simpa [hs, queue] using h
+      exact Or.inl (hq4 _ h')
     acts_keep := fun e w hec h => by
-      have : (e, w) ∈ s4.acts := by rw [f_acts]; simp [h, hec]
-      simpa [hs, m.acts] using this
+      have : (e, w) ∈ queue s4 := hqk4 _ h hec
+      rw [queue, ← m.acts, ← m.earlies] at this
+      simpa [hs, queue] using this
     last := fun d hd => by simp [hs, put_ne _ _ hd, m.last, f_last]
     computes := fun _ _ => ⟨v, by simp [hout], v, by simp [hs], Or.inl rfl⟩
     effects := fun h => by rw [hie] at h; cases h
@@ -1747,25 +1822,51 @@ theorem after_set (cs : Nat → Comp K V) (promise : V → Bool) {a F : State K 
 -- a run step keeps the invariant (A2), in a pulse
 theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
     (g : Good cs promise a) (hA : ∀ c, nowrites (cs c).f) {c : Nat} (hc : (a.s.due c).isSome)
-    (hpl : a.s.pulsing = true) (rk : Nat) : Good cs promise (run cs promise a c rk) := by
-  obtain ⟨s3, o, seen, vals, st, hs, hl, hg, haw, e_ran, e_reads, e_store, e_made, e_writers, e_last,
-    e_looping, e_due, e_after, e_acts, e_cut, e_runs, e_when, e_went, e_pulses, e_pulsing, -, -, hseen,
-    hfol, hstop⟩ := run_spec cs promise a c rk (hA c)
+    (hz : a.s.asleep c = false)
+    (hpl : a.s.pulsing = true ∨ a.s.kept c = []) (rk : Nat) :
+    Good cs promise (run cs promise a c rk) := by
+  obtain ⟨s3, o, seen, vals, st, hs, hl, hg, haw, e_ran, e_reads, e_store, e_made, e_last,
+    e_after, e_acts, e_earlies, e_cut, e_runs, e_when, e_went, e_pulses, e_pulsing, e_cause, -, hd3, e_lc,
+    e_due, e_fresh, e_looping, e_writers, hseen, hfol, hstop⟩ := run_spec cs promise a c rk (hA c) hz
   have hcm : c < a.s.made := g.due_made c hc
   have hlc : a.s.looping c = false := by
     cases h : a.s.looping c with
     | false => rfl
     | true => have := (g.looping c h).1; rw [this] at hc; cases hc
   have hr3 : s3.ran c = some (begun a.s c vals st seen) := by rw [e_ran]; simp
-  have hd3 : s3.due c = none := by rw [e_due]; simp
+  have hq3 : ∀ x ∈ queue s3, x.1 ≠ c ∧ x ∈ queue a.s := by
+    intro x hx
+    simp only [queue, e_acts, e_earlies, List.mem_append, List.mem_filter, decide_eq_true_eq] at hx
+    rcases hx with h | h
+    · exact ⟨h.2, List.mem_append_left _ h.1⟩
+    · exact ⟨h.2, List.mem_append_right _ h.1⟩
+  have hqk3 : ∀ x ∈ queue a.s, x.1 ≠ c → x ∈ queue s3 := by
+    intro x hx hxc
+    simp only [queue, List.mem_append] at hx
+    simp only [queue, e_acts, e_earlies, List.mem_append, List.mem_filter, decide_eq_true_eq]
+    rcases hx with h | h
+    · exact Or.inl ⟨h, hxc⟩
+    · exact Or.inr ⟨h, hxc⟩
   have t3 : Cuts s3 := by
-    refine ⟨fun d hr hd => ?_, fun hp => by rw [e_pulsing, hpl] at hp; cases hp⟩
-    by_cases e : d = c
-    · subst e; rw [e_went]; simp
-    · rw [e_went, put_ne _ _ e]
-      rw [e_ran, put_ne _ _ e] at hr
-      rw [e_when, put_ne _ _ e, e_pulses] at hd
-      exact g.times.went d hr hd
+    refine ⟨fun d hr hd => ?_, fun hp d hr hd => ?_⟩
+    · by_cases e : d = c
+      · subst e; rw [e_went]; simp
+      · rw [e_went, put_ne _ _ e]
+        rw [e_ran, put_ne _ _ e] at hr
+        rw [e_when, put_ne _ _ e, e_pulses] at hd
+        exact g.times.went d hr hd
+    · have hp0 : a.s.pulsing = false := by rw [e_pulsing] at hp; exact hp
+      by_cases e : d = c
+      · subst e
+        have hk : a.s.kept d = [] := by
+          rcases hpl with h | h
+          · rw [hp0] at h; cases h
+          · exact h
+        rw [e_cause]; simp [hk]
+      · rw [e_cause, put_ne _ _ e]
+        rw [e_ran, put_ne _ _ e] at hr
+        rw [e_when, put_ne _ _ e, e_pulses] at hd
+        exact g.times.cut hp0 d hr hd
   have w3 : ∀ d, s3.when d ≤ s3.pulses := by
     intro d; rw [e_when, e_pulses]
     by_cases e : d = c
@@ -1788,26 +1889,30 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       ran := fun d hd => by simp [hs, e_ran, put_ne _ _ hd, begun]
       reads := by simp [hs, e_reads, begun]
       after := Or.inr ⟨w, by simp [hs, e_after, put_put, begun], h2, h3,
-        by have := g.writers_made k w h4; exact this, by simp [hs]⟩
-      due := fun d m hd h => by simp [hs, e_due, put_ne _ _ hd, h, begun]
+        by
+          rcases e_writers k w h4 with h | h | h | h
+          · exact g.writers_made k w h
+          · exact g.ran_made w h
+          · exact absurd h h3
+          · exact h, by simp [hs]⟩
+      due := fun d m hd h => by simp [hs, put_ne _ _ hd, e_due d m hd h, begun]
       fresh := fun d h => by
         by_cases hd : d = c
         · subst hd; exact Or.inr hcm
-        · simp [hs, e_due, put_ne _ _ hd, begun] at h; exact Or.inl h
+        · simp [hs, put_ne _ _ hd, begun] at h; exact e_fresh d h
       looping := fun d hd h => by
-        simp [hs, e_looping, begun] at h
-        exact ⟨h, by simp [hs, e_due, put_ne _ _ hd, begun]⟩
-      looping_c := fun h => by simp [hs, e_looping, hlc, begun] at h
-      writers := fun k' w' h => Or.inl (by simpa [hs, e_writers] using h)
+        simp [hs, begun] at h
+        obtain ⟨h5, h6⟩ := e_looping d hd h
+        exact ⟨h5, by simp [hs, put_ne _ _ hd, h6, begun]⟩
+      looping_c := fun h => by simp [hs, e_lc, hlc, begun] at h
+      writers := fun k' w' h => by simpa using e_writers k' w' (by simpa [hs] using h)
       store := fun k' h => absurd (by simp [hs, e_store, begun]) h
       follows := fun h => absurd rfl h
       fresh_c := fun h => by simp [hs, begun] at h
       pending := fun h => by simp [begun] at h
       given_c := rfl
-      acts := fun e v h => by
-        simp only [hs, e_acts, List.mem_filter, decide_eq_true_eq] at h
-        exact Or.inl ⟨h.2, h.1⟩
-      acts_keep := fun e v hec h => by simp [hs, e_acts, h, hec, begun]
+      acts := fun e v h => Or.inl (hq3 _ (by simpa [hs, queue] using h))
+      acts_keep := fun e v hec h => by simpa [hs, queue] using hqk3 _ h hec
       last := fun d _ => by simp [hs, e_last, begun]
       computes := fun _ h => by simp [begun] at h
       effects := fun _ h => by simp [begun] at h
@@ -1833,15 +1938,15 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       ite_false] at hs haw
     -- the plain ends: the store, dues and afters left as at f's end
     have plain : ∀ (o' : Out V) (e : Ended) (eq : Option Bool) (th : Option (List Nat))
-        (X : List (Nat × V)) (F' : Model.State K V),
-        F' = finish { (edit s3 c fun r => { r with out := some o' }) with acts := s3.acts ++ X } c e
-          eq none th → F.s = F' →
+        (X1 X2 : List (Nat × V)) (F' : Model.State K V),
+        F' = finish { (edit s3 c fun r => { r with out := some o' }) with
+          earlies := s3.earlies ++ X1, acts := s3.acts ++ X2 } c e eq none th → F.s = F' →
         e ≠ .stopped → (e = .pending → o' = .pending) →
-        (∀ x ∈ X, x.1 = c ∧ iseffect (cs c) = true ∧ a.s.loop c = none ∧ e = .done ∧
+        (∀ x ∈ X1 ++ X2, x.1 = c ∧ iseffect (cs c) = true ∧ a.s.loop c = none ∧ e = .done ∧
           o' = .value x.2) →
         (iseffect (cs c) = false → e = .done → ∃ v, o' = .value v ∧ near (cs c).equal v (a.s.last c)) →
         (iseffect (cs c) = true → e = .done → ∃ v, o' = .value v ∧
-          (near (cs c).equal v (a.s.last c) ∨ (c, v) ∈ X)) →
+          (near (cs c).equal v (a.s.last c) ∨ (c, v) ∈ X1 ++ X2)) →
         (e = .failed → o' = .error ∨ ∃ v, o' = .value v ∧ same (cs c).equal v (a.s.last c) = none) →
         (given promise o = none → o' = o) →
         ((F.awaiting = a.awaiting ∧ given promise o = none) ∨
@@ -1850,29 +1955,56 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
             loop := if e = .pending then a.s.loop c else none })] ∧
             e = .pending ∧ (given promise o).isSome)) →
         Good cs promise F := by
-      intro o' e eq th X F' hF' hFs hne hpe hX hcomp heff hfail hgo hawt
-      have hr4 : ({ (edit s3 c fun r => { r with out := some o' }) with acts := s3.acts ++ X } :
+      intro o' e eq th X1 X2 F' hF' hFs hne hpe hX hcomp heff hfail hgo hawt
+      have hr4 : ({ (edit s3 c fun r => { r with out := some o' }) with
+          earlies := s3.earlies ++ X1, acts := s3.acts ++ X2 } :
           Model.State K V).ran c = some { begun a.s c vals none seen with out := some o' } := by
         simp [edit, hr3, begun]
       rw [finish_eq _ c _ hr4 e eq none th (by simp [fails, edit, e_cut])] at hF'
       subst hF'
+      have hqF : ∀ x, x ∈ queue s3 ∨ x ∈ X1 ++ X2 ↔ x ∈ s3.earlies ++ X1 ++ (s3.acts ++ X2) := by
+        intro x; simp only [queue, List.mem_append]
+        constructor
+        · rintro ((h | h) | (h | h))
+          · exact Or.inl (Or.inl h)
+          · exact Or.inr (Or.inl h)
+          · exact Or.inl (Or.inr h)
+          · exact Or.inr (Or.inr h)
+        · rintro ((h | h) | (h | h))
+          · exact Or.inl (Or.inl h)
+          · exact Or.inr (Or.inl h)
+          · exact Or.inl (Or.inr h)
+          · exact Or.inr (Or.inr h)
       refine g.after hcm (after_plain (rk := rk)
           (rf := { begun a.s c vals none seen with
             out := some o', ended := some e, given := [],
             loop := if e = .pending then a.s.loop c else none })
           (by simp [hFs, e_made, edit, begun]) (by simp [hFs, edit, e_ran, put_put, begun])
         (by simp [hFs, e_reads, begun, edit]) (by simp [hFs, e_after, edit, begun])
-        (by simp [hFs, e_due, edit, begun]) (by simp [hFs, e_store, edit, begun])
-        (by simp [hFs, e_writers, edit, begun]) ?_ ?_ (by simp [hFs, e_last, edit, begun]) X
-        (by simp [hFs, e_acts, edit, begun]) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_)
-      · intro d hd
-        by_cases hlp : e = .looping
-        · simp [hFs, hlp, put_ne _ _ hd, e_looping, edit, begun]
-        · simp [hFs, hlp, e_looping, edit, begun]
+        (by simp [hFs, hd3, edit]) (fun d m hd h => by simpa [hFs, edit] using e_due d m hd h)
+        (fun d h => e_fresh d (by simpa [hFs, edit] using h))
+        (by simp [hFs, e_store, edit, begun])
+        (fun k w h => e_writers k w (by simpa [hFs, edit] using h)) ?_ ?_
+        (by simp [hFs, e_last, edit, begun]) (X1 ++ X2) ?_ ?_
+        ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_)
+      · intro d hd h
+        by_cases hl : e = .looping
+        · simp [hFs, hl, put_ne _ _ hd, edit] at h
+          simpa [hFs, edit] using e_looping d hd h
+        · simp [hFs, hl, edit] at h
+          simpa [hFs, edit] using e_looping d hd h
       · intro h
         by_cases hlp : e = .looping
         · simp [hlp, edit, begun]
-        · simp [hFs, hlp, e_looping, hlc, edit, begun] at h
+        · simp [hFs, hlp, e_lc, hlc, edit, begun] at h
+      · intro x hx
+        have hx' : x ∈ s3.earlies ++ X1 ++ (s3.acts ++ X2) := by simpa [hFs, queue, edit] using hx
+        rcases (hqF x).2 hx' with h | h
+        · exact Or.inl (hq3 x h)
+        · exact Or.inr h
+      · intro x hx hxc
+        have := (hqF x).1 (Or.inl (hqk3 x hx hxc))
+        simpa [hFs, queue, edit] using this
       · intro x hx
         obtain ⟨h1, h2, h3, h4, h5⟩ := hX x hx
         exact ⟨h1, h2, by simp [begun, h3, edit], by simp [h4, edit, begun], by simp [h5, edit, begun]⟩
@@ -1896,7 +2028,9 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         refine ⟨v, by simp [h1, edit, begun], ?_⟩
         rcases h2 with h2 | h2
         · exact Or.inl (by simpa [hFs, e_last, edit] using h2)
-        · exact Or.inr (Or.inl (by simp [hFs, h2, edit, begun]))
+        · refine Or.inr (Or.inl ?_)
+          have := (hqF (c, v)).1 (Or.inr h2)
+          simpa [hFs, queue, edit] using this
       · intro h
         simp at h
         rcases hfail h with h1 | ⟨v, h1, h2⟩
@@ -1924,19 +2058,19 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
     cases o with
     | error =>
       simp only [hide, given] at hs hg haw
-      refine plain .error .failed none none [] F.s ?_ rfl (by simp) (by simp) (by simp) (by simp)
+      refine plain .error .failed none none [] [] F.s ?_ rfl (by simp) (by simp) (by simp) (by simp)
         (by simp) (fun _ => Or.inl rfl) (fun _ => rfl) (Or.inl ⟨by rw [haw], rfl⟩)
       rw [hs]; simp only [List.append_nil]; rfl
     | pending =>
       simp only [hide, given] at hs hg haw
-      refine plain .pending .pending none none [] F.s ?_ rfl (by simp) (fun _ => rfl) (by simp)
+      refine plain .pending .pending none none [] [] F.s ?_ rfl (by simp) (fun _ => rfl) (by simp)
         (by simp) (by simp) (by simp) (fun _ => rfl) (Or.inl ⟨by rw [haw], rfl⟩)
       rw [hs]; simp only [List.append_nil]; rfl
     | value v =>
       by_cases hpv : promise v = true
       · -- a promise: the run ends pending, awaiting
         simp only [hide, given, hpv, ite_true] at hs hg haw
-        refine plain .pending .pending none none [] F.s ?_ rfl (by simp) (fun _ => rfl) (by simp)
+        refine plain .pending .pending none none [] [] F.s ?_ rfl (by simp) (fun _ => rfl) (by simp)
           (by simp) (by simp) (by simp) (by simp [given, hpv]) (Or.inr ⟨?_, rfl, by simp [given, hpv]⟩)
         · rw [hs]; simp only [List.append_nil]; rfl
         · rw [haw]
@@ -1959,14 +2093,14 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         cases hsm : same (cs c).equal v (a.s.last c) with
         | none =>
           rw [hsm] at hs
-          refine plain (.value v) .failed none none [] F.s ?_ rfl (by simp) (by simp) (by simp)
+          refine plain (.value v) .failed none none [] [] F.s ?_ rfl (by simp) (by simp) (by simp)
             (by simp) (by simp) (fun _ => Or.inr ⟨v, rfl, hsm⟩) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
           rw [hs]; simp only [List.append_nil]; rfl
         | some e =>
           simp only [hsm, hflag, hcut, Bool.or_false] at hs
           by_cases hlp : ((a.s.loop c).isSome && !e) = true
           · simp only [hlp, ite_true] at hs
-            refine plain (.value v) .looping (some e) (a.s.loop c) [] F.s ?_ rfl (by simp) (by simp)
+            refine plain (.value v) .looping (some e) (a.s.loop c) [] [] F.s ?_ rfl (by simp) (by simp)
               (by simp) (by simp) (by simp) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
             rw [hs]; simp only [List.append_nil]; rfl
           · simp only [hlp, Bool.false_eq_true, ite_false] at hs
@@ -1979,7 +2113,7 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
               cases e with
               | true =>
                 simp only [ite_true] at hs
-                refine plain (.value v) .done (some true) none [] F.s ?_ rfl (by simp) (by simp)
+                refine plain (.value v) .done (some true) none [] [] F.s ?_ rfl (by simp) (by simp)
                   (by simp) (fun h => by rw [hie] at h; cases h)
                   (fun _ _ => ⟨v, rfl, Or.inl (hnear rfl)⟩) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
                 rw [hs]; simp only [List.append_nil]; rfl
@@ -1989,17 +2123,27 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
                   cases h : a.s.loop c with
                   | none => rfl
                   | some _ => simp [h] at hlp
-                refine plain (.value v) .done (some false) none [(c, v)] F.s hs rfl (by simp) (by simp)
-                  (fun x hx => by simp at hx; subst hx; exact ⟨rfl, hie, hln, rfl, rfl⟩)
-                  (fun h => by rw [hie] at h; cases h)
-                  (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
+                have hX : ∀ x ∈ ([(c, v)] : List (Nat × V)), x.1 = c ∧ iseffect (cs c) = true ∧
+                    a.s.loop c = none ∧ Ended.done = .done ∧ Out.value v = .value x.2 := by
+                  intro x hx; simp at hx; subst hx; exact ⟨rfl, hie, hln, rfl, rfl⟩
+                split at hs
+                · refine plain (.value v) .done (some false) none [(c, v)] [] F.s
+                    (by rw [hs]; simp only [List.append_nil]; rfl) rfl (by simp) (by simp)
+                    (fun x hx => hX x (by simpa using hx))
+                    (fun h => by rw [hie] at h; cases h)
+                    (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
+                · refine plain (.value v) .done (some false) none [] [(c, v)] F.s
+                    (by rw [hs]; simp only [List.append_nil]; rfl) rfl (by simp) (by simp)
+                    (fun x hx => hX x (by simpa using hx))
+                    (fun h => by rw [hie] at h; cases h)
+                    (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
             | compute to =>
               have hie : iseffect (cs c) = false := by simp [iseffect, hk]
               simp only [hk] at hs
               cases e with
               | true =>
                 simp only [ite_true] at hs
-                refine plain (.value v) .done (some true) none [] F.s ?_ rfl (by simp) (by simp)
+                refine plain (.value v) .done (some true) none [] [] F.s ?_ rfl (by simp) (by simp)
                   (by simp) (fun _ _ => ⟨v, rfl, hnear rfl⟩)
                   (fun h => by rw [hie] at h; cases h) (by simp) (fun _ => rfl) (Or.inl ⟨haw', hgo⟩)
                 rw [hs]; simp only [List.append_nil]; rfl
@@ -2022,13 +2166,21 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
                     (some { begun a.s c vals none seen with out := some (.value v) }) := by
                   rw [← hs4]; simp [edit, e_ran, put_put, hr3]
                 have f_store : s4.store = a.s.store := by rw [← hs4]; simp [edit, e_store]
-                have f_writers : s4.writers = a.s.writers := by rw [← hs4]; simp [edit, e_writers]
+                have f_writers : ∀ k w, s4.writers k = some w →
+                    a.s.writers k = some w ∨ (a.s.ran w).isSome ∨ w = c ∨ w < a.s.made := by
+                  rw [← hs4]; intro k w h; exact e_writers k w (by simpa [edit] using h)
                 have f_last : s4.last = a.s.last := by rw [← hs4]; simp [edit, e_last]
-                have f_looping : s4.looping = a.s.looping := by rw [← hs4]; simp [edit, e_looping]
-                have f_due : s4.due = put a.s.due c none := by rw [← hs4]; simp [edit, e_due]
+                have f_lc : s4.looping c = a.s.looping c := by rw [← hs4]; simp [edit, e_lc]
+                have f_looping : ∀ d, d ≠ c → s4.looping d = true →
+                    a.s.looping d = true ∧ s4.due d = a.s.due d := by
+                  rw [← hs4]; intro d hd h; simpa [edit] using e_looping d hd (by simpa [edit] using h)
+                have f_dc : s4.due c = none := by rw [← hs4]; simp [edit, hd3]
+                have f_due : ∀ d m, d ≠ c → a.s.due d = some m → s4.due d = some m := by
+                  rw [← hs4]; intro d m hd h; simpa [edit] using e_due d m hd h
+                have f_fresh : ∀ d, (s4.due d).isSome → (a.s.due d).isSome ∨ d < a.s.made := by
+                  rw [← hs4]; intro d h; exact e_fresh d (by simpa [edit] using h)
                 have f_after : s4.after = put a.s.after c none := by rw [← hs4]; simp [edit, e_after]
-                have f_acts : s4.acts = a.s.acts.filter (fun x => x.1 ≠ c) := by
-                  rw [← hs4]; simp [edit, e_acts]
+                have f_q : queue s4 = queue s3 := by rw [← hs4]; simp [edit, queue]
                 have f_cut : s4.cut = put a.s.cut c false := by rw [← hs4]; simp [edit, e_cut]
                 have f_runs : s4.runs = put a.s.runs c (a.s.runs c + 1) := by rw [← hs4]; simp [edit, e_runs]
                 have t4 : Cuts s4 := by
@@ -2054,32 +2206,33 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
                   reads := by simp [hs, m.reads, f_reads, begun]
                   after := Or.inl (by simp [hs, m.after, f_after])
                   due := fun d m' hd h => by
-                    have : s4.due d = some m' := by rw [f_due, put_ne _ _ hd]; exact h
-                    simp [hs, m.due d m' this]
+                    simp [hs, m.due d m' (f_due d m' hd h)]
                   fresh := fun d h => by
                     rcases m.fresh d (by simpa [hs] using h) with h | h
                     · by_cases hd : d = c
                       · subst hd; exact Or.inr hcm
-                      · rw [f_due, put_ne _ _ hd] at h; exact Or.inl h
+                      · exact f_fresh d h
                     · exact Or.inr (f_made ▸ h)
                   looping := fun d hd h => by
                     obtain ⟨h1, h2⟩ := m.looping d (by simpa [hs] using h)
-                    exact ⟨by rw [f_looping] at h1; exact h1, by simp [hs, h2, f_due, put_ne _ _ hd]⟩
+                    obtain ⟨h3, h4⟩ := f_looping d hd h1
+                    exact ⟨h3, by simp [hs, h2, h4]⟩
                   looping_c := fun h => by
                     obtain ⟨h1, _⟩ := m.looping c (by simpa [hs] using h)
-                    rw [f_looping, hlc] at h1; cases h1
+                    rw [f_lc, hlc] at h1; cases h1
                   writers := fun k w h => by
-                    rcases m.writers k w (by simpa [hs] using h) with h | h
-                    · exact Or.inl (by rw [f_writers] at h; exact h)
+                    rcases m.writers k w (by simpa [hs] using h) with h | h | h
+                    · exact f_writers k w h
                     · by_cases hw : w = c
-                      · exact Or.inr (Or.inr hw)
+                      · exact Or.inr (Or.inr (Or.inl hw))
                       · rw [f_ran, put_ne _ _ hw] at h; exact Or.inr (Or.inl h)
+                    · exact Or.inr (Or.inr (Or.inr (f_made ▸ h)))
                   store := fun k h d hd hdc hr => by
                     have h' : s5.store k ≠ s4.store k := by rw [f_store]; simpa [hs] using h
                     rcases m.store k h' d (f_made ▸ hd) (by rw [f_reads, put_ne _ _ hdc]; exact hr)
                       with h | h
                     · exact Or.inl (by simpa [hs] using h)
-                    · exact Or.inr (by rw [f_looping] at h; exact h)
+                    · exact Or.inr (f_looping d hdc h).1
                   follows := fun _ => ⟨.value v, by simpa [begun] using hfo,
                     fun _ => by simp, fun p h => by rw [hg] at h; simp at h⟩
                   fresh_c := fun hdue _ _ q hq => by
@@ -2092,17 +2245,18 @@ theorem Good.run {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
                       rcases m.store q.1 e c (f_made ▸ hcm)
                         (by rw [f_reads]; simp; exact ⟨q.2, hq'⟩) with h | h
                       · rw [hdue'] at h; cases h
-                      · rw [f_looping, hlc] at h; cases h
+                      · rw [f_lc, hlc] at h; cases h
                   pending := fun h => by simp at h
                   given_c := rfl
                   acts := fun e w h => by
-                    have h' : (e, w) ∈ s4.acts := by rw [← m.acts]; simpa [hs] using h
-                    rw [f_acts] at h'
-                    simp only [List.mem_filter, decide_eq_true_eq] at h'
-                    exact Or.inl ⟨h'.2, h'.1⟩
+                    have h' : (e, w) ∈ queue s4 := by
+                      rw [queue, ← m.acts, ← m.earlies]; simpa [hs, queue] using h
+                    rw [f_q] at h'
+                    exact Or.inl (hq3 _ h')
                   acts_keep := fun e w hec h => by
-                    have : (e, w) ∈ s4.acts := by rw [f_acts]; simp [h, hec]
-                    simpa [hs, m.acts] using this
+                    have : (e, w) ∈ queue s4 := by rw [f_q]; exact hqk3 _ h hec
+                    rw [queue, ← m.acts, ← m.earlies] at this
+                    simpa [hs, queue] using this
                   last := fun d hd => by simp [hs, put_ne _ _ hd, m.last, f_last]
                   computes := fun _ _ => ⟨v, by simp, v, by simp [hs], Or.inl rfl⟩
                   effects := fun h => by rw [hie] at h; cases h
@@ -2149,10 +2303,11 @@ theorem writes_kept (cs : Nat → Comp K V) (e : Nat) :
 
 -- an act: its effect not due, it acts on its run's value; due, it is skipped
 theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
-    (g : Good cs promise a) {e : Nat} {v : V} {rest : List (Nat × V)} (hs : a.s.acts = (e, v) :: rest) :
-    Good cs promise { a with s := act cs { a.s with acts := rest } e v } := by
-  obtain ⟨he, r0, hr0, hl0, hd0, ho0⟩ := g.acts e v (by simp [hs])
-  have hrest : ∀ x, x ∈ rest → x ∈ a.s.acts := fun x hx => by simp [hs, hx]
+    (g : Good cs promise a) {e : Nat} {v : V} {es as : List (Nat × V)}
+    (hin : (e, v) ∈ queue a.s) (hsub : ∀ x ∈ es ++ as, x ∈ queue a.s)
+    (hkeep : ∀ x ∈ queue a.s, x.1 ≠ e → x ∈ es ++ as) :
+    Good cs promise { a with s := act cs { a.s with earlies := es, acts := as } e v } := by
+  obtain ⟨he, r0, hr0, hl0, hd0, ho0⟩ := g.acts e v hin
   simp only [Model.act]
   split
   · rename_i hdue
@@ -2160,7 +2315,7 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       after_due := g.after_due, acyclic := g.acyclic, due_made := g.due_made,
       writers_made := g.writers_made, ran_made := g.ran_made, reads := g.reads,
       follows := g.follows, fresh := g.fresh, looping := g.looping, pending := g.pending,
-      acts := fun e' v' h => g.acts e' v' (hrest _ h)
+      acts := fun e' v' h => g.acts e' v' (hsub _ h)
       computes := g.computes
       effects := fun e' r he' h hd => by
         obtain ⟨v', h1, h2⟩ := g.effects e' r he' h hd
@@ -2169,10 +2324,7 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         · subst ee; exact Or.inr (Or.inr hdue)
         · rcases h2 with h2 | h2 | h2
           · exact Or.inl h2
-          · rw [hs] at h2
-            rcases List.mem_cons.1 h2 with h2 | h2
-            · cases h2; exact absurd rfl ee
-            · exact Or.inr (Or.inl h2)
+          · exact Or.inr (Or.inl (hkeep _ h2 ee))
           · exact Or.inr (Or.inr h2)
       failed := g.failed, cut := g.cut, flag := g.flag, when_le := g.when_le,
       times := g.times.of_eq rfl rfl rfl rfl rfl rfl, runs := g.runs,
@@ -2184,9 +2336,9 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       · cases he
     obtain ⟨act', hk⟩ := hk
     simp only [hk]
-    generalize hs1 : say { a.s with acts := rest } (.act e v (a.s.last e)) = s1
+    generalize hs1 : say { a.s with earlies := es, acts := as } (.act e v (a.s.last e)) = s1
     have e1 : s1.ran = a.s.ran := by rw [← hs1]; rfl
-    have e2 : s1.acts = rest := by rw [← hs1]; rfl
+    have e2 : queue s1 = es ++ as := by rw [← hs1]; rfl
     have e3 : s1.last = a.s.last := by rw [← hs1]; rfl
     have e4 : s1.due = a.s.due := by rw [← hs1]; rfl
     have t1 : Cuts s1 := by rw [← hs1]; exact g.times.of_eq rfl rfl rfl rfl rfl rfl
@@ -2198,6 +2350,7 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some e)) s1 = s2 at m k1 k2 k3 k4 k5 k6 k7
     have e5 : s1.cut = a.s.cut := by rw [← hs1]; rfl
     have e6 : s1.runs = a.s.runs := by rw [← hs1]; rfl
+    have e7 : s1.made = a.s.made := by rw [← hs1]; rfl
     exact {
       after_due := fun x w h => by
         simp only [say] at h ⊢; rw [m.after, ← hs1] at h
@@ -2215,9 +2368,10 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         · rw [m.made]; exact h
       writers_made := fun k w h => by
         simp only [say] at h ⊢
-        rcases m.writers k w h with h | h
+        rcases m.writers k w h with h | h | h
         · rw [m.made, ← hs1]; exact g.writers_made k w (by rw [← hs1] at h; exact h)
         · rw [m.made, ← hs1]; exact g.ran_made w (by rw [e1] at h; exact h)
+        · rw [m.made]; exact h
       ran_made := fun c h => by
         simp only [say] at h ⊢
         rw [m.made, ← hs1]; exact g.ran_made c (by rw [m.ran, e1] at h; exact h)
@@ -2253,8 +2407,8 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       pending := fun c r h => by simp only [say] at h; exact g.pending c r (by rw [m.ran, e1] at h; exact h)
       acts := fun e' v' h => by
         simp only [say] at h
-        have h' : (e', v') ∈ rest := by rw [m.acts, e2] at h; exact h
-        obtain ⟨h1, r, h2⟩ := g.acts e' v' (hrest _ h')
+        have h' : (e', v') ∈ es ++ as := by rw [← e2, queue, ← m.acts, ← m.earlies]; exact h
+        obtain ⟨h1, r, h2⟩ := g.acts e' v' (hsub _ h')
         exact ⟨h1, r, by simp only [say]; rw [m.ran, e1]; exact h2.1, h2.2⟩
       computes := fun c r hc h hd => by
         simp only [say] at h ⊢
@@ -2273,10 +2427,10 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
           exact Or.inl ⟨v, by simp, Or.inl rfl⟩
         · rcases h2 with h2 | h2 | h2
           · exact Or.inl (by rw [put_ne _ _ ee, m.last, e3]; exact h2)
-          · rw [hs] at h2
-            rcases List.mem_cons.1 h2 with h2 | h2
-            · cases h2; exact absurd rfl ee
-            · exact Or.inr (Or.inl (by rw [m.acts, e2]; exact h2))
+          · refine Or.inr (Or.inl ?_)
+            have := hkeep _ h2 ee
+            rw [← e2, queue, ← m.acts, ← m.earlies] at this
+            exact this
           · exact Or.inr (Or.inr (m.isSome (by rw [e4]; exact h2)))
       failed := fun c r h hf => by
         simp only [say] at h ⊢
@@ -2293,8 +2447,10 @@ theorem Good.act {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       times := by
         simp only [say]
         exact k1.of_eq rfl rfl rfl rfl rfl rfl
-      runs := fun c => by simp only [say]; rw [k4, e6, m.ran, e1]; exact g.runs c
-      owed_le := fun x hx => by simp only [say]; rw [k4, e6]; exact g.owed_le x hx
+      runs := fun c r h => by
+        simp only [say] at h ⊢; rw [k4, e6]; rw [m.ran, e1] at h; exact g.runs c r h
+      owed_le := fun x hx => by
+        simp only [say]; rw [k4, e6, m.made, e7]; exact g.owed_le x hx
       nodup := g.nodup
       owing := fun c r h hx => g.owing c r (by simp only [say] at h; rw [m.ran, e1] at h; exact h) hx
       back := fun c r h => g.back c r (by simp only [say] at h; rw [m.ran, e1] at h; exact h) }
@@ -2356,14 +2512,10 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       | none => rfl
       | some w => have := (g.after_due c w h).1; rw [hdc] at this; cases this
     have hreads : a.s.reads c = r.seen.map (·.1) := by rw [g.reads c, hr]; rfl
-    have hnoact : a.s.acts.filter (fun x => x.1 ≠ c) = a.s.acts := by
-      apply List.filter_eq_self.2
-      intro x hx
-      have := g.acts x.1 x.2 hx
-      by_cases e : x.1 = c
-      · obtain ⟨_, r', h2, _, h3, _⟩ := this
-        rw [e, hr] at h2; cases h2; rw [hpe] at h3; cases h3
-      · simp [e]
+    have hnoq : ∀ x ∈ queue a.s, x.1 ≠ c := by
+      intro x hx e
+      obtain ⟨_, r', h2, _, h3, _⟩ := g.acts x.1 x.2 hx
+      rw [e, hr] at h2; cases h2; rw [hpe] at h3; cases h3
     have hseen : a.s.cut c = false → ∀ q ∈ r.seen, a.s.store q.1 = q.2 :=
       fun hc => g.fresh c r hr hdc (Or.inr (Or.inr hpe)) hc
     have hcutl : a.s.cut c = true → r.loop.isSome := by
@@ -2372,7 +2524,7 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       · exact h2
       · rw [hpe] at h2; cases h2
       · rw [hpe] at h2; cases h2
-    have hrunsc : a.s.runs c = r.n := by have := g.runs c; rw [hr] at this; simpa using this.symm
+    have hrunsc : a.s.runs c = r.n := (g.runs c r hr).symm
     have hr1 : (edit a.s c fun r => { r with out := some o }).ran c = some { r with out := some o } := by
       simp [edit, hr]
     have hfol : ∃ o', follow (cs c).f r.seen = some o' ∧ (a.gave c = none → False) ∧
@@ -2381,27 +2533,28 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       · rw [hp] at h; cases h
       · rw [hp] at h; cases h; exact ⟨hof, hpp⟩
     -- the plain ends
-    have plain : ∀ (E : Ended) (eq : Option Bool) (th : Option (List Nat)) (X : List (Nat × V))
+    have plain : ∀ (E : Ended) (eq : Option Bool) (th : Option (List Nat)) (X1 X2 : List (Nat × V))
         (F' : Model.State K V),
-        F' = finish { (edit a.s c fun r => { r with out := some o }) with acts := a.s.acts ++ X } c E
-          eq none th →
+        F' = finish { (edit a.s c fun r => { r with out := some o }) with
+          earlies := a.s.earlies ++ X1, acts := a.s.acts ++ X2 } c E eq none th →
         E ≠ .stopped → (E = .pending → o = .pending) →
-        (∀ x ∈ X, x.1 = c ∧ iseffect (cs c) = true ∧ r.loop = none ∧ E = .done ∧ o = .value x.2) →
+        (∀ x ∈ X1 ++ X2, x.1 = c ∧ iseffect (cs c) = true ∧ r.loop = none ∧ E = .done ∧ o = .value x.2) →
         (iseffect (cs c) = false → E = .done → ∃ v, o = .value v ∧ near (cs c).equal v (a.s.last c)) →
         (iseffect (cs c) = true → E = .done → ∃ v, o = .value v ∧
-          (near (cs c).equal v (a.s.last c) ∨ (c, v) ∈ X)) →
+          (near (cs c).equal v (a.s.last c) ∨ (c, v) ∈ X1 ++ X2)) →
         (E = .failed → o = .error ∨ ∃ v, o = .value v ∧ same (cs c).equal v (a.s.last c) = none) →
         (a.s.cut c = true → E ≠ .done) →
         Good cs promise { a with s := F' } := by
-      intro E eq th X F' hF' hne hpe' hX hcomp heff hfail hcd
-      have hr4 : ({ (edit a.s c fun r => { r with out := some o }) with acts := a.s.acts ++ X } :
+      intro E eq th X1 X2 F' hF' hne hpe' hX hcomp heff hfail hcd
+      have hr4 : ({ (edit a.s c fun r => { r with out := some o }) with
+          earlies := a.s.earlies ++ X1, acts := a.s.acts ++ X2 } :
           Model.State K V).ran c = some { r with out := some o } := by simp [edit, hr]
       -- a failure, flagged and cut, ends looping (L3): what is said of E, said of E'
       obtain ⟨E', th', hE, hfin⟩ := finish_any _ c _ hr4 E eq none th
       rw [hfin] at hF'
       subst hF'
       have hne' : E' ≠ .stopped := by rcases hE with ⟨rfl, _⟩ | ⟨_, rfl⟩ <;> simp [hne]
-      have hX' : ∀ x ∈ X, x.1 = c ∧ iseffect (cs c) = true ∧ r.loop = none ∧ E' = .done ∧
+      have hX' : ∀ x ∈ X1 ++ X2, x.1 = c ∧ iseffect (cs c) = true ∧ r.loop = none ∧ E' = .done ∧
           o = .value x.2 := by
         intro x hx
         obtain ⟨h1, h2, h3, h4, h5⟩ := hX x hx
@@ -2425,17 +2578,31 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         (rf := { r with
           out := some o, ended := some E', given := [], loop := if E' = .pending then r.loop else none })
         (by simp [edit]) (by simp [edit, put_put]) (by simp [edit, put_self hreads])
-        (by simp [edit, put_self hac]) (by simp [edit, put_self hdc]) (by simp [edit])
-        (by simp [edit]) ?_ ?_ (by simp [edit]) X (by rw [hnoact]) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+        (by simp [edit, put_self hac]) (by simp [edit, hdc])
+        (fun d m _ h => by simpa [edit] using h) (fun d h => Or.inl (by simpa [edit] using h))
+        (by simp [edit]) (fun k w h => Or.inl (by simpa [edit] using h)) ?_ ?_ (by simp [edit])
+        (X1 ++ X2) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
         ?_ ?_ ?_ ?_ ?_ ⟨by simp [edit, hrunsc], by simp [hrunsc]⟩ (Or.inr ⟨rfl, rfl, hno⟩))
-      · intro d hd
+      · intro d hd h
         by_cases hl : E' = .looping
-        · simp [hl, put_ne _ _ hd, edit]
-        · simp [hl, edit]
+        · simp [hl, put_ne _ _ hd, edit] at h; exact ⟨h, by simp [edit]⟩
+        · simp [hl, edit] at h; exact ⟨h, by simp [edit]⟩
       · intro h
         by_cases hl : E' = .looping
         · simp [hl]
         · simp [hl, edit, hlc] at h
+      · intro x hx
+        simp only [queue, edit, List.mem_append] at hx
+        rcases hx with (h | h) | (h | h)
+        · exact Or.inl ⟨hnoq x (List.mem_append_left _ h), List.mem_append_left _ h⟩
+        · exact Or.inr (List.mem_append_left _ h)
+        · exact Or.inl ⟨hnoq x (List.mem_append_right _ h), List.mem_append_right _ h⟩
+        · exact Or.inr (List.mem_append_right _ h)
+      · intro x hx _
+        simp only [queue, edit, List.mem_append] at hx ⊢
+        rcases hx with h | h
+        · exact Or.inl (Or.inl h)
+        · exact Or.inr (Or.inl h)
       · intro x hx
         obtain ⟨h1, h2, h3, h4, h5⟩ := hX' x hx
         exact ⟨h1, h2, by simp [h4, h3], by simp [h4], by simp [h5]⟩
@@ -2454,7 +2621,11 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
         refine ⟨v, by simp [h1], ?_⟩
         rcases h2 with h2 | h2
         · exact Or.inl (by simpa [edit] using h2)
-        · exact Or.inr (Or.inl (by simp [h2, edit]))
+        · refine Or.inr (Or.inl ?_)
+          simp only [queue, edit, List.mem_append]
+          rcases List.mem_append.1 h2 with h2 | h2
+          · exact Or.inl (Or.inr h2)
+          · exact Or.inr (Or.inr h2)
       · intro h
         simp at h
         rcases hfail (hfail' h).1 with h1 | ⟨v, h1, h2⟩
@@ -2484,11 +2655,11 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       · intro d hd; simp [edit]
     cases o with
     | error =>
-      refine plain .failed none none [] _ ?_ (by simp) (by simp) (by simp) (by simp) (by simp)
+      refine plain .failed none none [] [] _ ?_ (by simp) (by simp) (by simp) (by simp) (by simp)
         (fun _ => Or.inl rfl) (by simp)
       simp only [List.append_nil]; rfl
     | pending =>
-      refine plain .pending none none [] _ ?_ (by simp) (fun _ => rfl) (by simp) (by simp) (by simp)
+      refine plain .pending none none [] [] _ ?_ (by simp) (fun _ => rfl) (by simp) (by simp) (by simp)
         (by simp) (by simp)
       simp only [List.append_nil]; rfl
     | value v =>
@@ -2503,14 +2674,14 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
       cases hsm : same (cs c).equal v (a.s.last c) with
       | none =>
         simp only
-        refine plain .failed none none [] _ ?_ (by simp) (by simp) (by simp) (by simp) (by simp)
+        refine plain .failed none none [] [] _ ?_ (by simp) (by simp) (by simp) (by simp) (by simp)
           (fun _ => Or.inr ⟨v, rfl, hsm⟩) (by simp)
         simp only [List.append_nil]; rfl
       | some e =>
         simp only [hflag, hcut']
         by_cases hlp : (r.loop.isSome && (!e || a.s.cut c)) = true
         · simp only [hlp, ite_true]
-          refine plain .looping (some e) r.loop [] _ ?_ (by simp) (by simp) (by simp) (by simp)
+          refine plain .looping (some e) r.loop [] [] _ ?_ (by simp) (by simp) (by simp) (by simp)
             (by simp) (by simp) (by simp)
           simp only [List.append_nil]; rfl
         · simp only [hlp, Bool.false_eq_true, ite_false]
@@ -2527,7 +2698,7 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
             cases e with
             | true =>
               simp only [ite_true]
-              refine plain .done (some true) none [] _ ?_ (by simp) (by simp) (by simp)
+              refine plain .done (some true) none [] [] _ ?_ (by simp) (by simp) (by simp)
                 (fun h => by rw [hie] at h; cases h)
                 (fun _ _ => ⟨v, rfl, Or.inl (hnear rfl)⟩) (by simp) (fun h => by rw [hc0] at h; cases h)
               simp only [List.append_nil]; rfl
@@ -2537,17 +2708,25 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
                 cases h : r.loop with
                 | none => rfl
                 | some _ => simp [h] at hlp
-              refine plain .done (some false) none [(c, v)] _ rfl (by simp) (by simp)
-                (fun x hx => by simp at hx; subst hx; exact ⟨rfl, hie, hln, rfl, rfl⟩)
-                (fun h => by rw [hie] at h; cases h)
-                (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun h => by rw [hc0] at h; cases h)
+              have hX : ∀ x ∈ ([(c, v)] : List (Nat × V)), x.1 = c ∧ iseffect (cs c) = true ∧
+                  r.loop = none ∧ Ended.done = .done ∧ Out.value v = .value x.2 := by
+                intro x hx; simp at hx; subst hx; exact ⟨rfl, hie, hln, rfl, rfl⟩
+              split
+              · refine plain .done (some false) none [(c, v)] [] _ (by simp only [List.append_nil]; rfl)
+                  (by simp) (by simp) (fun x hx => hX x (by simpa using hx))
+                  (fun h => by rw [hie] at h; cases h)
+                  (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun h => by rw [hc0] at h; cases h)
+              · refine plain .done (some false) none [] [(c, v)] _ (by simp only [List.append_nil]; rfl)
+                  (by simp) (by simp) (fun x hx => hX x (by simpa using hx))
+                  (fun h => by rw [hie] at h; cases h)
+                  (fun _ _ => ⟨v, rfl, Or.inr (by simp)⟩) (by simp) (fun h => by rw [hc0] at h; cases h)
           | compute to =>
             have hie : iseffect (cs c) = false := by simp [iseffect, hk]
             simp only
             cases e with
             | true =>
               simp only [ite_true]
-              refine plain .done (some true) none [] _ ?_ (by simp) (by simp) (by simp)
+              refine plain .done (some true) none [] [] _ ?_ (by simp) (by simp) (by simp)
                 (fun _ _ => ⟨v, rfl, hnear rfl⟩)
                 (fun h => by rw [hie] at h; cases h) (by simp) (fun h => by rw [hc0] at h; cases h)
               simp only [List.append_nil]; rfl
@@ -2560,9 +2739,13 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
               refine g.after hcm (after_set cs promise (rk := 0) (s4 := edit a.s c fun r =>
                   { r with out := some (Out.value v) }) (r4 := { r with out := some (.value v) })
                 hcm hlc hie (by simp [edit]) (by simp [edit, put_self hreads])
-                (by simp [edit, hr]) (by simp [edit]) (by simp [edit]) (by simp [edit])
-                (by simp [edit]) (by simp [edit, put_self hdc]) (by simp [edit, put_self hac])
-                (by simp only [edit]; rw [hnoact]) (fun d _ => by simp [edit])
+                (by simp [edit, hr]) (by simp [edit]) (fun k w h => Or.inl (by simpa [edit] using h))
+                (by simp [edit]) (by simp [edit])
+                (fun d _ h => ⟨by simpa [edit] using h, by simp [edit]⟩) (by simp [edit, hdc])
+                (fun d m _ h => by simpa [edit] using h) (fun d h => Or.inl (by simpa [edit] using h))
+                (by simp [edit, put_self hac])
+                (fun x hx => ⟨hnoq x (by simpa [edit, queue] using hx), by simpa [edit, queue] using hx⟩)
+                (fun x hx _ => by simpa [edit, queue] using hx) (fun d _ => by simp [edit])
                 (by simp [edit, hc0]) (fun d _ => by simp [edit]) (by simp [hln]) (by simp)
                 (g.times.of_ran rfl rfl rfl rfl rfl (fun d h => by
                   by_cases e : d = c
@@ -2573,6 +2756,426 @@ theorem Good.land {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
               obtain ⟨o', h1, h2, h3⟩ := hfol
               exact ⟨o', h1, fun h => (h2 h).elim, h3⟩
   · exact g
+
+-- the host's make: grown (a fresh kept, awake), then asleep, or due; an early effect's first run
+-- now (its kept fresh: between pulses its cause is its run alone, Cuts) and its act
+theorem Good.make {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
+    (g : Good cs promise a) (hA : ∀ c, nowrites (cs c).f) : Good cs promise (make cs promise a) := by
+  have hG : ∃ w, Model.grow cs a.s = { a.s with
+      made := a.s.made + 1, asleep := put a.s.asleep a.s.made false,
+      kept := put a.s.kept a.s.made [], writers := w, tick := a.s.tick + 1 } ∧
+      ∀ k x, w k = some x → x < a.s.made + 1 := by
+    simp only [Model.grow]
+    split
+    · rename_i k hk
+      refine ⟨_, rfl, fun k' x h => ?_⟩
+      by_cases e : k' = k
+      · subst e; simp at h; omega
+      · simp [put_ne _ _ e] at h; have := g.writers_made k' x h; omega
+    · exact ⟨_, rfl, fun k x h => by have := g.writers_made k x h; omega⟩
+  obtain ⟨w, hG, hw⟩ := hG
+  have g1 := g.grow (s' := Model.grow cs a.s) (by rw [hG]; simp) (by rw [hG]) (by rw [hG])
+    (by rw [hG]) (by rw [hG]) (by rw [hG]) (by rw [hG]) (by rw [hG]; rfl) (by rw [hG])
+    (by rw [hG]; exact hw) (by rw [hG]) (by rw [hG])
+    (by rw [hG]; exact g.times.of_eq rfl rfl rfl rfl rfl rfl)
+    (fun c => by rw [hG]; exact g.when_le c)
+  simp only [Async.make]
+  rw [hG] at g1 ⊢
+  generalize hX : ({ a.s with
+      made := a.s.made + 1, asleep := put a.s.asleep a.s.made false,
+      kept := put a.s.kept a.s.made [], writers := w, tick := a.s.tick + 1 } : Model.State K V) = X
+    at g1 ⊢
+  have hXm : X.made = a.s.made + 1 := by rw [← hX]
+  have hXz : X.asleep a.s.made = false := by rw [← hX]; simp
+  have hXk : X.kept a.s.made = [] := by rw [← hX]; simp
+  have hXl : X.looping = a.s.looping := by rw [← hX]
+  have hXr : X.ran = a.s.ran := by rw [← hX]
+  split
+  · exact g1.moves (s' := { X with asleep := put X.asleep a.s.made true })
+      (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
+      (g1.times.of_eq rfl rfl rfl rfl rfl rfl) g1.when_le
+  · have hd : a.s.made < X.made := by omega
+    obtain ⟨m, hdue⟩ := mark_moves X a.s.made X.tick none hd (by simp)
+    obtain ⟨c1, c2, c3, c4, _⟩ := mark_calm g1.times a.s.made X.tick none (by simp)
+    have g2 := g1.moves m (funext fun x => by
+      cases e : X.cut x <;>
+      cases e' : (mark X a.s.made X.tick none).cut x <;>
+      simp_all) c1.runs c2 (fun c => by
+        rw [c1.pulses]
+        rcases c4 c with e | e <;> rw [e]
+        · exact g1.when_le c
+        · exact Nat.le_refl _)
+    have hdue' : ((mark X a.s.made X.tick none).due a.s.made).isSome := by
+      rcases hdue with hd | hd
+      · exact hd
+      · obtain ⟨_, r, h1, _⟩ := g.looping a.s.made (hXl ▸ hd)
+        have := g.ran_made a.s.made (by simp [h1]); omega
+    split
+    · have hz : (mark X a.s.made X.tick none).asleep a.s.made = false := by simp [hXz]
+      have hk : (mark X a.s.made X.tick none).kept a.s.made = [] := by
+        simp only [mark]; rw [settle_kept]; exact hXk
+      have g3 := g2.run (c := a.s.made) hA hdue' hz (Or.inr hk) 0
+      generalize hR : Async.run cs promise { a with s := mark X a.s.made X.tick none } a.s.made 0 = R
+        at g3 ⊢
+      simp only [actnow]
+      split
+      · rename_i x hx
+        obtain ⟨x1, x2⟩ := x
+        have hmem := List.mem_of_find?_eq_some hx
+        have hfst : x1 = a.s.made := by simpa using List.find?_some hx
+        rw [hfst] at hmem
+        simp only [hfst]
+        refine Good.act g3 (es := R.s.earlies.filter (·.1 ≠ a.s.made)) (as := R.s.acts)
+          (by simp [queue, hmem]) ?_ ?_
+        · intro y hy
+          simp only [queue, List.mem_append, List.mem_filter] at hy ⊢
+          rcases hy with h | h
+          · exact Or.inl h.1
+          · exact Or.inr h
+        · intro y hy hne
+          simp only [queue, List.mem_append, List.mem_filter, decide_eq_true_eq] at hy ⊢
+          rcases hy with h | h
+          · exact Or.inl ⟨h, hne⟩
+          · exact Or.inr h
+      · exact g3
+    · exact g2
+
+-- untrack moves only the dying
+theorem Good.untrack {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
+    {s : Model.State K V} (g : Good cs promise { a with s }) (ks : List K) :
+    Good cs promise { a with s := untrack cs s ks } := by
+  obtain ⟨dy, hU⟩ := untrack_shape cs ks s
+  rw [hU]
+  exact g.moves (s' := { s with dying := dy }) (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl)
+    rfl rfl (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le
+
+-- a going (no going writes): d, up and untracked, asleep with no run (nor its cut), no reads, no
+-- last; its count kept, and what it owes: a landing of it lands nowhere
+theorem Good.bury {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V}
+    (g : Good cs promise a) (hQ : Quiet cs) (d : Nat) :
+    Good cs promise { a with s := bury cs a.s d } := by
+  unfold Model.bury
+  cases hk : (cs d).key with
+  | none => exact g
+  | some k =>
+    simp only
+    split
+    · exact g
+    · rename_i ht
+      simp only [Bool.or_eq_true, not_or, Bool.not_eq_true, Bool.not_eq_false] at ht
+      have hnt : ∀ x, k ∉ a.s.reads x := by
+        intro x hx
+        have hxm : x < a.s.made := by
+          have : a.s.reads x ≠ [] := by intro e; rw [e] at hx; simp at hx
+          rw [g.reads x] at this
+          have : (a.s.ran x).isSome := by cases h : a.s.ran x <;> simp_all
+          exact g.ran_made x this
+        simp [tracked, readers] at ht
+        exact ht.2 x hxm hx
+      rw [hQ d]
+      simp only [List.foldl_nil]
+      refine Good.untrack ?_ _
+      exact {
+        after_due := fun x w h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢
+            exact g.after_due x w h
+        acyclic := fun x h => by
+          refine g.acyclic x (tg_mono (fun a b hab => ?_) h)
+          by_cases ha : a = d
+          · subst ha; simp [aft] at hab
+          · simpa [aft, put_ne _ _ ha] using hab
+        due_made := fun x h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.due_made x h
+        writers_made := g.writers_made
+        ran_made := fun x h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.ran_made x (by simp [h])
+        reads := fun x => by
+          by_cases hx : x = d
+          · subst hx; simp
+          · simp [put_ne _ _ hx]; exact g.reads x
+        follows := fun x r h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.follows x r h
+        fresh := fun x r h hd hs hc q hq => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h hd hc
+            have hq1 : q.1 ≠ k := by
+              intro e; apply hnt x; rw [g.reads x, h]; simp; exact ⟨q.2, e ▸ hq⟩
+            simp [put_ne _ _ hq1]
+            exact g.fresh x r h hd hs hc q hq
+        looping := fun x h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢; exact g.looping x h
+        pending := fun x r h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.pending x r h
+        acts := fun e v h => by
+          obtain ⟨h1, r, h2, h3⟩ := g.acts e v (by simpa [queue] using h)
+          have he : e ≠ d := by
+            intro ed; subst ed
+            simp [attends, iseffect] at ht h1
+            split at h1 <;> simp_all
+          exact ⟨h1, r, by simp [put_ne _ _ he, h2], h3⟩
+        computes := fun c r hc h hd => by
+          by_cases hx : c = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢; exact g.computes c r hc h hd
+        effects := fun e r he h hd => by
+          by_cases hx : e = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢
+            obtain ⟨v, h1, h2⟩ := g.effects e r he h hd
+            exact ⟨v, h1, by simpa [queue] using h2⟩
+        failed := fun c r h hf => by
+          by_cases hx : c = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢; exact g.failed c r h hf
+        cut := fun x h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h ⊢; exact g.cut x h
+        flag := fun x r h hl => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.flag x r h hl
+        when_le := g.when_le
+        times := g.times.of_ran rfl rfl rfl rfl rfl (fun x h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simpa [put_ne _ _ hx] using h)
+        runs := fun x r h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.runs x r h
+        owed_le := g.owed_le
+        nodup := g.nodup
+        owing := fun x r h hx' => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.owing x r h hx'
+        back := fun x r h => by
+          by_cases hx : x = d
+          · subst hx; simp at h
+          · simp [put_ne _ _ hx] at h; exact g.back x r h }
+
+-- the asleep, with promises: Quiescence's Hush and Sleeps through a run, a landing, a change after
+-- an await
+
+theorem run_hush (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (c rk : Nat)
+    (hp : nowrites (cs c).f) (hz : a.s.asleep c = false) : Hush a.s (run cs promise a c rk).s := by
+  have h0 : (start a.s c rk).ran c = some (begun a.s c [] none []) := by simp [start, say, begun]
+  obtain ⟨seen, vals, st, ws, heq, _, _, _⟩ := exec_spec cs c (cs c).f hp (start a.s c rk) _ h0 rfl
+  simp only [run]
+  generalize hx : exec cs c (start a.s c rk) (cs c).f = x at heq
+  obtain ⟨s2, o⟩ := x
+  simp only at heq
+  subst heq
+  have hzs : (start a.s c rk).asleep c = false := by simp [start, say, hz]
+  obtain ⟨_, _, hzw⟩ := wakes_keep cs c ws (start a.s c rk) hzs
+  have h1 : Hush a.s (start a.s c rk) :=
+    Hush.only (c := c) (by simp [start, say]) (by simp [start, say])
+      (fun x hx => by simp [start, say, put_ne _ _ hx]) hz
+  have h2 := h1.trans (wakes_hush cs ws (start a.s c rk))
+  generalize hR : (some { begun a.s c [] none [] with
+      seen := [] ++ seen, values := vals, stopped := st } : Option (Run K V)) = R
+  have h3 : Hush (wakes cs (start a.s c rk) ws) { wakes cs (start a.s c rk) ws with
+      ran := put (start a.s c rk).ran c R,
+      reads := put (start a.s c rk).reads c ((start a.s c rk).reads c ++ seen.map (·.1)) } := by
+    refine ⟨fun _ h => h, fun x h => ?_, fun _ h => absurd rfl h, rfl⟩
+    by_cases hx : x = c
+    · subst hx; exact hzw
+    · simp [put_ne _ _ hx] at h
+  generalize hS : ({ wakes cs (start a.s c rk) ws with
+      ran := put (start a.s c rk).ran c R,
+      reads := put (start a.s c rk).reads c ((start a.s c rk).reads c ++ seen.map (·.1)) } :
+        Model.State K V) = S at h3 ⊢
+  have h4 : Hush S { S with
+      reads := put S.reads c (((S.ran c).map fun r => r.seen.map (·.1)).getD []) } := by
+    refine ⟨fun _ h => h, fun x h => ?_, fun _ h => absurd rfl h, rfl⟩
+    by_cases hx : x = c
+    · subst hx; rw [← hS]; exact hzw
+    · simp [put_ne _ _ hx] at h
+  have hzS : S.asleep c = false := by rw [← hS]; exact hzw
+  have h5 : Hush S (untrack cs { S with
+      reads := put S.reads c (((S.ran c).map fun r => r.seen.map (·.1)).getD []) } (S.reads c)) :=
+    h4.trans (Hush.of_eq (untrack_asleep ..) (untrack_reads ..) (untrack_due ..))
+  have h6 := ending_hush cs (untrack cs { S with
+      reads := put S.reads c (((S.ran c).map fun r => r.seen.map (·.1)).getD []) } (S.reads c)) c
+    (hide promise o) (by simpa using hzS)
+  subst hS hR
+  exact ((h2.trans h3).trans h5).trans h6
+
+theorem result_hush (cs : Nat → Comp K V) (s : Model.State K V) (c : Nat) (v : V) :
+    Hush s (result cs s c v) := by
+  have fin : ∀ (X : Model.State K V) e eq w th, X.asleep = s.asleep → X.reads = s.reads →
+      X.due = s.due → X.made = s.made → Hush s (finish X c e eq w th) :=
+    fun X e eq w th h1 h2 h3 h4 => Hush.of_eq (by simp [h1]) (by simp [h2]) (by simp [h3])
+      (by simp [h4])
+  unfold result
+  split
+  · exact fin _ _ _ _ _ rfl rfl rfl rfl
+  · dsimp only
+    split
+    · exact fin _ _ _ _ _ rfl rfl rfl rfl
+    · split
+      · apply fin
+        all_goals (repeat' split) <;> rfl
+      · split
+        · exact fin _ _ _ _ _ rfl rfl rfl rfl
+        · refine ((set_hush cs s c v).trans ?_).trans (finish_keep _ _ _ _ _ _)
+          exact Hush.of_eq rfl rfl rfl
+
+theorem land_hush (cs : Nat → Comp K V) (a : State K V) (c n : Nat) (o : Out V) :
+    Hush a.s (land cs a c n o).s := by
+  unfold Async.land
+  split
+  · have h0 : Hush a.s (edit a.s c fun r => { r with out := some o }) := Hush.of_eq rfl rfl rfl
+    simp only
+    split
+    · exact h0.trans (finish_keep _ _ _ _ _ _)
+    · exact h0.trans (finish_keep _ _ _ _ _ _)
+    · exact h0.trans (result_hush cs _ c _)
+  · exact Hush.refl a.s
+
+theorem settle_reads' (s : Model.State K V) (d t : Nat) (who : Option Nat) (l : Option (List Nat))
+    (fl : Bool) : (Model.settle s d t who l fl).reads = s.reads := by
+  unfold Model.settle
+  split
+  · cases who <;> rfl
+  · dsimp only
+    split
+    · rfl
+    · unfold Model.due; split <;> rfl
+
+theorem settles_hush (t : Nat) (r : Option Nat) : ∀ (ds : List Nat) (s : Model.State K V),
+    (∀ d ∈ ds, s.reads d ≠ []) →
+      Hush s (ds.foldl (fun s d => Model.settle s d t r none false) s)
+  | [], s, _ => Hush.refl s
+  | d :: ds, s, h => by
+    simp only [List.foldl_cons]
+    have m := settle_hush s d t r none false (Or.inr (h d (by simp)))
+    exact m.trans (settles_hush t r ds _
+      (fun x hx => by rw [settle_reads']; exact h x (by simp [hx])))
+
+theorem stale_hush (cs : Nat → Comp K V) (s : Model.State K V) (keys : List K) (c : Nat) :
+    Hush s (stale cs s keys c) := by
+  simp only [stale]
+  generalize s.tick + 1 = t
+  generalize ((some c).filter fun c => match (cs c).kind with
+    | .compute _ => true | .effect _ => false) = w
+  have h0 : Hush s { s with tick := t } := Hush.of_eq rfl rfl rfl
+  suffices ∀ (ks : List K) (s1 : Model.State K V), Hush s1 (ks.foldl (fun s k =>
+      (readers (learn s k w) k).foldl (fun s d => Model.settle s d t (some c) none false)
+        (learn s k w)) s1)
+    from h0.trans (this keys _)
+  intro ks
+  induction ks with
+  | nil => intro s1; exact Hush.refl s1
+  | cons k ks ih =>
+    intro s1
+    simp only [List.foldl_cons]
+    have hl : Hush s1 (learn s1 k w) := by
+      cases w <;> exact Hush.of_eq rfl rfl rfl
+    exact (hl.trans (settles_hush t (some c) _ _ (fun d hd => readers_reads hd))).trans (ih _)
+
+theorem stores_hush (s : Model.State K V) (kvs : List (K × V)) :
+    Hush s (kvs.foldl (fun s kv => store s kv.1 kv.2) s) := by
+  obtain ⟨st, h1, _⟩ := stores_shape s kvs
+  rw [h1]; exact Hush.of_eq rfl rfl rfl
+
+theorem named_hush (cs : Nat → Comp K V) (a : State K V) (i : Nat) (kvs : List (K × V)) :
+    Hush a.s (named cs a i kvs).s := by
+  unfold Async.named
+  split
+  · exact Hush.refl a.s
+  · simp only
+    split
+    · exact (stores_hush _ _).trans (changed_hush cs _ _ _)
+    · exact (stores_hush _ _).trans (stale_hush cs _ _ _)
+
+-- a step: a landing, a run of a due one (Sleeps: awake), or Model's
+theorem Sleeps.astep {cs : Nat → Comp K V} {promise : V → Bool}
+    {rank : Model.State K V → Nat → Nat} {a a' : State K V} (S : Sleeps a.s) (hA : A2 cs)
+    (h : step cs promise rank a = some a') : Sleeps a'.s := by
+  unfold Async.step at h
+  split at h
+  · rename_i c n o rest _ _
+    cases h
+    exact (S.of_eq (s' := ({ a with landed := rest } : State K V).s) rfl rfl rfl rfl).hush
+      (land_hush cs _ c n o)
+  · split at h
+    · rename_i c hc
+      cases h
+      have := (next_ready hc).1
+      simp only [ready, Bool.and_eq_true] at this
+      have hz : a.s.asleep c = false := by
+        cases e : a.s.asleep c
+        · rfl
+        · rw [S.due c e] at this; simp at this
+      exact S.hush (run_hush cs promise a c _ (hA c) hz)
+    · cases h; exact S.of_eq rfl rfl rfl rfl
+  · obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 h
+    subst h2; exact S.step hA h1
+  · obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 h
+    subst h2; exact S.step hA h1
+
+-- the host's make: an early effect's first run (awake: grow wakes it), then its act
+theorem Sleeps.amake {cs : Nat → Comp K V} {promise : V → Bool} {a : State K V} (S : Sleeps a.s)
+    (g : Good cs promise a) (hA : ∀ c, nowrites (cs c).f) : Sleeps (make cs promise a).s := by
+  have S1 : Sleeps (Model.grow cs a.s) := by
+    have e : ∃ w, Model.grow cs a.s = { a.s with
+        made := a.s.made + 1, asleep := put a.s.asleep a.s.made false,
+        kept := put a.s.kept a.s.made [], writers := w, tick := a.s.tick + 1 } := by
+      simp only [Model.grow]; split <;> exact ⟨_, rfl⟩
+    obtain ⟨w, e⟩ := e
+    rw [e]
+    refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+    · by_cases h : c = a.s.made
+      · subst h; simp at hc
+      · simp [put_ne _ _ h] at hc; exact S.due c hc
+    · by_cases h : c = a.s.made
+      · subst h; simp at hc
+      · simp [put_ne _ _ h] at hc; exact S.reads c hc
+  have e1 : (Model.grow cs a.s).due = a.s.due := by simp only [Model.grow]; split <;> rfl
+  have e2 : (Model.grow cs a.s).reads = a.s.reads := by simp only [Model.grow]; split <;> rfl
+  have ez : (Model.grow cs a.s).asleep a.s.made = false := by
+    simp only [Model.grow]; split <;> simp
+  simp only [Async.make]
+  split
+  · refine ⟨fun c hc => ?_, fun c hc => ?_⟩
+    · by_cases h : c = a.s.made
+      · subst h; rw [e1]
+        cases hd : a.s.due a.s.made with
+        | none => rfl
+        | some _ => have := g.due_made _ (by rw [hd]; rfl); omega
+      · simp only [put_ne _ _ h] at hc; exact S1.due c hc
+    · by_cases h : c = a.s.made
+      · subst h; rw [e2, g.reads]
+        cases hr : a.s.ran a.s.made with
+        | none => rfl
+        | some _ => have := g.ran_made _ (by rw [hr]; rfl); omega
+      · simp only [put_ne _ _ h] at hc; exact S1.reads c hc
+  · have S2 := S1.hush (mark_hush _ a.s.made (Model.grow cs a.s).tick none (Or.inl ez))
+    split
+    · have hz : (mark (Model.grow cs a.s) a.s.made (Model.grow cs a.s).tick none).asleep a.s.made =
+          false := by simp [ez]
+      have S3 := S2.hush (run_hush cs promise { a with
+        s := mark (Model.grow cs a.s) a.s.made (Model.grow cs a.s).tick none } a.s.made 0 (hA _) hz)
+      simp only [actnow]
+      split
+      · refine Sleeps.act ?_ _ _; exact S3.of_eq rfl rfl rfl rfl
+      · exact S3
+    · exact S2
 
 -- pulsing: only begin and close move it
 
@@ -2608,14 +3211,19 @@ theorem exec_pulsing (cs : Nat → Comp K V) (c : Nat) : ∀ (p : Prog K V) (s :
   | .error, _ => rfl
   | .pending, _ => rfl
   | .read k next, s => by
+    have hw : ∀ X : Model.State K V, (wake cs X k).pulsing = X.pulsing :=
+      fun X => wakes_pulsing cs X [k]
     simp only [exec]
-    split
-    · rw [exec_pulsing]; rfl
-    · split
-      · rw [exec_pulsing]; rfl
+    by_cases hf : (!tracked s k) = true
+    all_goals simp only [hf, ite_true, ite_false, Bool.false_eq_true]
+    all_goals
+      split
+      · rw [exec_pulsing]; simp only [edit, hw]
       · split
-        · rfl
-        · rw [exec_pulsing]; rfl
+        · rw [exec_pulsing]; simp only [edit, hw]
+        · split
+          · simp only [edit, hw]
+          · rw [exec_pulsing]; simp only [edit, hw]
   | .write k v next, s => by
     simp only [exec]; rw [exec_pulsing, changed_pulsing]; rfl
 
@@ -2638,9 +3246,7 @@ theorem result_pulsing (cs : Nat → Comp K V) (s : Model.State K V) (c : Nat) (
     split
     · rw [finish_pulsing]
     · split
-      · split
-        · rw [finish_pulsing]
-        · rw [finish_pulsing]
+      · rw [finish_pulsing]; (repeat' split) <;> rfl
       · split
         · rw [finish_pulsing]
         · rw [finish_pulsing]; simp only; rw [set_pulsing]
@@ -2674,6 +3280,23 @@ theorem act_pulsing (cs : Nat → Comp K V) (s : Model.State K V) (e : Nat) (v :
       | nil => intros; rfl
       | cons kv ws ih => intro s1; simp only [List.foldl_cons]; rw [ih, changed_pulsing]; rfl
 
+theorem bury_pulsing (cs : Nat → Comp K V) (s : Model.State K V) (d : Nat) :
+    (bury cs s d).pulsing = s.pulsing := by
+  unfold Model.bury
+  split
+  · rfl
+  · split
+    · rfl
+    · simp only [untrack_pulsing]
+      suffices h : ∀ (ws : List (K × V)) (s1 : Model.State K V),
+          (ws.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some d)) s1).pulsing =
+            s1.pulsing by
+        rw [h]
+      intro ws
+      induction ws with
+      | nil => intros; rfl
+      | cons kv ws ih => intro s1; simp only [List.foldl_cons]; rw [ih, changed_pulsing]; rfl
+
 theorem step_pulsing (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V → Nat → Nat)
     {a a' : State K V} (h : step cs promise rank a = some a') : a'.s.pulsing = a.s.pulsing := by
   unfold step at h
@@ -2689,7 +3312,7 @@ theorem step_pulsing (cs : Nat → Comp K V) (promise : V → Bool) (rank : Mode
     · cases h
       simp only [run]
       rw [ending_pulsing]
-      simp only
+      simp only [untrack_pulsing]
       rw [exec_pulsing]; rfl
     · cases h; rfl
   · rename_i hph
@@ -2702,13 +3325,27 @@ theorem step_pulsing (cs : Nat → Comp K V) (promise : V → Bool) (rank : Mode
     split at h1
     · cases h1; rw [act_pulsing]
     · split at h1
-      · cases h1; rfl
-      · cases h1
+      · cases h1; rw [act_pulsing]
+      · split at h1
+        · cases h1; rfl
+        · split at h1
+          · cases h1
+          · cases h1; rfl
+  · rename_i hph
+    obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 h
+    subst h2
+    simp only
+    unfold Model.step at h1
+    rw [hph] at h1
+    simp only at h1
+    split at h1
+    · cases h1; exact bury_pulsing cs _ _
+    · cases h1; rfl
 
 
--- a step keeps the invariant (A2), in a pulse
+-- a step keeps the invariant (A2), in a pulse; the one it runs is due, so awake (Sleeps)
 theorem Good.step {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
-    {a a' : State K V} (g : Good cs promise a) (hA : ∀ c, nowrites (cs c).f)
+    {a a' : State K V} (g : Good cs promise a) (S : Sleeps a.s) (hA : A2 cs)
     (hp : a.s.pulsing = true) (h : step cs promise rank a = some a') : Good cs promise a' := by
   unfold Async.step at h
   split at h
@@ -2721,7 +3358,11 @@ theorem Good.step {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.S
       cases h
       have := (next_ready hc).1
       simp only [ready, Bool.and_eq_true] at this
-      exact g.run hA this.1 hp _
+      have hz : a.s.asleep c = false := by
+        cases e : a.s.asleep c
+        · rfl
+        · rw [S.due c e] at this; simp at this
+      exact g.run hA.runs this.1 hz (Or.inl hp) _
     · cases h
       exact g.moves (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
         (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le
@@ -2731,15 +3372,61 @@ theorem Good.step {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.S
     unfold Model.step at h1
     split at h1
     · rename_i h'; rw [hph] at h'; cases h'
-    · split at h1
+    rotate_left
+    · rename_i h'; rw [hph] at h'; cases h'
+    split at h1
+    · rename_i x rest hx
+      cases h1
+      refine g.act (e := x.1) (v := x.2) (es := rest) (as := a.s.acts) (by simp [queue, hx]) ?_ ?_
+      · intro y hy; simp only [queue, hx, List.mem_append, List.mem_cons] at hy ⊢
+        rcases hy with h | h
+        · exact Or.inl (Or.inr h)
+        · exact Or.inr h
+      · intro y hy hne
+        simp only [queue, hx, List.mem_append, List.mem_cons] at hy ⊢
+        rcases hy with (rfl | h) | h
+        · exact absurd rfl hne
+        · exact Or.inl h
+        · exact Or.inr h
+    · rename_i he
+      split at h1
       · rename_i x rest hx
         cases h1
-        exact g.act hx
+        rw [show ({ a.s with acts := rest } : Model.State K V) =
+          { a.s with earlies := [], acts := rest } by rw [← he]]
+        refine g.act (e := x.1) (v := x.2) (es := []) (as := rest) (by simp [queue, he, hx]) ?_ ?_
+        · intro y hy; simp at hy; simp [queue, he, hx, hy]
+        · intro y hy hne
+          simp only [queue, he, hx, List.mem_append, List.mem_cons, List.nil_append,
+            List.not_mem_nil, false_or] at hy ⊢
+          rcases hy with rfl | h
+          · exact absurd rfl hne
+          · exact h
       · split at h1
         · cases h1
           exact g.moves (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
             (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le
-        · cases h1
+        · split at h1
+          · cases h1
+          · cases h1
+            exact g.moves (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
+              (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le
+  · rename_i hph
+    obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 h
+    subst h2
+    unfold Model.step at h1
+    split at h1
+    · rename_i h'; rw [hph] at h'; cases h'
+    · rename_i h'; rw [hph] at h'; cases h'
+    split at h1
+    · rename_i d rest _
+      cases h1
+      exact (g.moves (s' := { a.s with dying := rest })
+        (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
+        (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le).bury hA.goes d
+    · cases h1
+      exact g.moves (Moves.of_eq rfl rfl rfl rfl rfl rfl rfl rfl rfl rfl) rfl rfl
+        (g.times.of_eq rfl rfl rfl rfl rfl rfl) g.when_le
 
 -- the states the host, the environment and the pulses reach: the host's make, writes and changes
 -- (from outside, or named by a computation: between pulses, or by one whose latest run is
@@ -2748,7 +3435,7 @@ theorem Good.step {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.S
 inductive Reach (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V → Nat → Nat) :
     State K V → Prop
   | empty : Reach cs promise rank Async.empty
-  | make {a} : Reach cs promise rank a → Reach cs promise rank (make cs a)
+  | make {a} : Reach cs promise rank a → Reach cs promise rank (make cs promise a)
   | write {a} (kvs : List (K × V)) (who : Option Nat) : Reach cs promise rank a →
       (a.s.pulsing = false ∨ ∀ c, who = some c → ((a.s.ran c).bind (·.loop)) = none) →
       Reach cs promise rank (write cs a kvs who)
@@ -2765,18 +3452,31 @@ inductive Reach (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.Sta
   | named {a} (i : Nat) (kvs : List (K × V)) : Reach cs promise rank a → a.s.pulsing = false →
       Reach cs promise rank (named cs a i kvs)
 
-theorem Reach.good {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
-    {a : State K V} (hA : A2 cs) (h : Reach cs promise rank a) : Good cs promise a := by
+-- the invariant and the asleep (Sleeps), together
+theorem Reach.inv {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
+    {a : State K V} (hA : A2 cs) (h : Reach cs promise rank a) : Good cs promise a ∧ Sleeps a.s := by
   induction h with
-  | empty => exact Good.empty cs promise
-  | make _ ih => exact ih.make
-  | write kvs who _ hw ih => exact ih.write kvs who hw
-  | tell keys who _ hw ih => exact ih.tell keys who hw
-  | begin _ ih => exact ih.begin
-  | step _ hp h ih => exact ih.step hA hp h
-  | close _ _ ih => exact ih.close
-  | settle i o _ _ ih => exact ih.settle i o
-  | named i kvs _ hp ih => exact ih.named hp i kvs
+  | empty => exact ⟨Good.empty cs promise, Sleeps.empty⟩
+  | make _ ih => exact ⟨ih.1.make hA.runs, Sleeps.amake ih.2 ih.1 hA.runs⟩
+  | write kvs who _ hw ih =>
+    refine ⟨ih.1.write kvs who hw, Sleeps.changed ?_ _ _⟩
+    exact ih.2.hush (stores_hush _ _)
+  | tell keys who _ hw ih => exact ⟨ih.1.tell keys who hw, ih.2.changed keys who⟩
+  | begin _ ih => exact ⟨ih.1.begin, ih.2.of_eq rfl rfl rfl rfl⟩
+  | step _ hp h ih => exact ⟨ih.1.step ih.2 hA hp h, Sleeps.astep ih.2 hA h⟩
+  | close _ _ ih => exact ⟨ih.1.close, ih.2.of_eq rfl rfl rfl rfl⟩
+  | settle i o _ _ ih => exact ⟨ih.1.settle i o, by
+      unfold Async.settle; split
+      · exact ih.2
+      · exact ih.2⟩
+  | named i kvs _ hp ih => exact ⟨ih.1.named hp i kvs, ih.2.hush (named_hush _ _ i kvs)⟩
+
+theorem Reach.good {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
+    {a : State K V} (hA : A2 cs) (h : Reach cs promise rank a) : Good cs promise a := (h.inv hA).1
+
+theorem Reach.sleeps {cs : Nat → Comp K V} {promise : V → Bool}
+    {rank : Model.State K V → Nat → Nat} {a : State K V} (hA : A2 cs)
+    (h : Reach cs promise rank a) : Sleeps a.s := (h.inv hA).2
 
 -- a pulse, run to its end, reaches what it ends at
 theorem steps_reach {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat} :
@@ -2933,12 +3633,12 @@ theorem quiescence_failed {cs : Nat → Comp K V} {promise : V → Bool}
 -- gives the same promise (the same reads) that landed with it
 theorem act_fresh {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
     {a : State K V} (hA : A2 cs) (h : Reach cs promise rank a) {e : Nat} {v : V}
-    {rest : List (Nat × V)} (ha : a.s.acts = (e, v) :: rest) (hd : a.s.due e = none) :
+    (ha : (e, v) ∈ queue a.s) (hd : a.s.due e = none) :
     ∃ r, a.s.ran e = some r ∧ r.out = some (.value v) ∧ (eval a.s.store (cs e).f).2 = r.seen ∧
       ((a.gave e = none ∧ (eval a.s.store (cs e).f).1 = .value v) ∨
         ∃ p, a.gave e = some p ∧ promise p = true ∧ (eval a.s.store (cs e).f).1 = .value p) := by
   have g := h.good hA
-  obtain ⟨_, r, hr, _, hdone, ho⟩ := g.acts e v (by simp [ha])
+  obtain ⟨_, r, hr, _, hdone, ho⟩ := g.acts e v ha
   obtain ⟨o, he, h1, h2, _⟩ := quiescence hA h hr hd (Or.inl hdone) (done_uncut g hr hdone)
   refine ⟨r, hr, ho, by rw [he], ?_⟩
   cases hg : a.gave e with
@@ -2952,9 +3652,9 @@ theorem act_fresh {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.S
 -- newer inputs; only a pending, due, failed or looping compute's key can be behind)
 theorem step_acts {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.State K V → Nat → Nat}
     {a a' : State K V} (hA : A2 cs) (h : Reach cs promise rank a) {e : Nat} {v : V}
-    {rest : List (Nat × V)} (hph : a.s.phase = .acts) (ha : a.s.acts = (e, v) :: rest)
+    {rest : List (Nat × V)} (hph : a.s.phase = .acts) (ha : queue a.s = (e, v) :: rest)
     (hd : a.s.due e = none) (hs : step cs promise rank a = some a') :
-    a' = { a with s := act cs { a.s with acts := rest } e v } ∧
+    (∃ es as, es ++ as = rest ∧ a' = { a with s := act cs { a.s with earlies := es, acts := as } e v }) ∧
       (∃ r, a.s.ran e = some r ∧ r.out = some (.value v) ∧ (eval a.s.store (cs e).f).2 = r.seen ∧
         ((a.gave e = none ∧ (eval a.s.store (cs e).f).1 = .value v) ∨
           ∃ p, a.gave e = some p ∧ promise p = true ∧ (eval a.s.store (cs e).f).1 = .value p)) ∧
@@ -2963,12 +3663,27 @@ theorem step_acts {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.S
           (eval a.s.store (cs c).f).2 = r.seen ∧
           ((a.gave c = none ∧ (eval a.s.store (cs c).f).1 = .value w) ∨
             ∃ p, a.gave c = some p ∧ promise p = true ∧ (eval a.s.store (cs c).f).1 = .value p) := by
-  refine ⟨?_, act_fresh hA h ha hd, fun c r hk hr hdc hdone => quiescence_done hA h hk hr hdc hdone⟩
+  refine ⟨?_, act_fresh hA h (by rw [ha]; simp) hd,
+    fun c r hk hr hdc hdone => quiescence_done hA h hk hr hdc hdone⟩
   simp only [Async.step, hph] at hs
   obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 hs
   subst h2
-  simp only [Model.step, hph, ha] at h1
-  cases h1; simp only [hph]
+  simp only [Model.step, hph] at h1
+  simp only [queue] at ha
+  cases he : a.s.earlies with
+  | nil =>
+    rw [he] at ha h1
+    simp only [List.nil_append] at ha
+    simp only [ha] at h1
+    cases h1
+    exact ⟨[], rest, rfl, by rw [← hph]⟩
+  | cons x es =>
+    rw [he] at ha h1
+    simp only [List.cons_append, List.cons.injEq] at ha
+    obtain ⟨h3, h4⟩ := ha
+    subst h3
+    cases h1
+    exact ⟨es, a.s.acts, h4, by rw [← hph]⟩
 
 theorem mark_ran (s : Model.State K V) (d t : Nat) (who : Option Nat) :
     (mark s d t who).ran = s.ran := by
@@ -3017,14 +3732,13 @@ theorem finish_ended (X : Model.State K V) (c : Nat) (e : Ended) (eq : Option Bo
 -- calls no set: the store and the lasts are as they were. so its key holds the value its last set
 -- gave (when nothing else writes it), while its inputs may be newer
 theorem pending_keeps (cs : Nat → Comp K V) (promise : V → Bool) (a : State K V) (c rk : Nat)
-    (hp : nowrites (cs c).f)
+    (hp : nowrites (cs c).f) (hz : a.s.asleep c = false)
     (hend : ((run cs promise a c rk).s.ran c).bind (·.ended) = some .pending) :
     (run cs promise a c rk).s.store = a.s.store ∧ (run cs promise a c rk).s.last = a.s.last := by
-  obtain ⟨s3, o, seen, vals, st, hs, -, -, -, e_ran, -, e_store, -, -, e_last, -, e_due, -, -, -, -,
-    -, -, -, -, -, -, -, -, -⟩ := run_spec cs promise a c rk hp
+  obtain ⟨s3, o, seen, vals, st, hs, -, -, -, e_ran, -, e_store, -, e_last, -, -, -, -, -, -, -, -,
+    -, -, -, hd3, -, -, -, -, -, -, -, -⟩ := run_spec cs promise a c rk hp hz
   rw [hs] at hend ⊢
   have hr3 : s3.ran c = some (begun a.s c vals st seen) := by rw [e_ran]; simp
-  have hd3 : s3.due c = none := by rw [e_due]; simp
   have keep : ∀ (t : Model.State K V) (e : Ended) (eq : Option Bool) (w : Option Nat)
       (th : Option (List Nat)), t.store = a.s.store → t.last = a.s.last → (∃ r, t.ran c = some r) →
       (finish t c e eq w th).store = a.s.store ∧ (finish t c e eq w th).last = a.s.last := by
@@ -3057,9 +3771,11 @@ theorem pending_keeps (cs : Nat → Comp K V) (promise : V → Bool) (a : State 
       · split at hend
         · cases finish_ended _ _ _ _ _ _ (hr4 _) hend
         · split at hend
-          · split at hend
-            · cases finish_ended _ _ _ _ _ _ (hr4 _) hend
-            · cases finish_ended _ _ _ _ _ _ (by simpa using hr4 _) hend
+          · have hr5 := hr4 (.value v)
+            (repeat' split at hend) <;>
+              first
+              | cases finish_ended _ _ _ _ _ _ hr5 hend
+              | cases finish_ended _ _ _ _ _ _ (by simpa using hr5) hend
           · split at hend
             · cases finish_ended _ _ _ _ _ _ (hr4 _) hend
             · cases finish_ended _ _ _ _ _ _ (by simpa [set_ran] using hr4 _) hend
@@ -3259,11 +3975,9 @@ theorem result_live (cs : Nat → Comp K V) {s : Model.State K V} (h : Live s) (
     split
     · exact finish_live h _ _ _ _ _ hg
     · split
-      · split
-        · exact finish_live h _ _ _ _ _ hg
-        · apply finish_live
-          · exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
-          · exact hg.of (fun r hr => ⟨r, hr, rfl⟩) (fun _ h => h)
+      · apply finish_live
+        · (repeat' split) <;> exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+        · (repeat' split) <;> exact hg.of (fun r hr => ⟨r, hr, rfl⟩) (fun _ h => h)
       · split
         · exact finish_live h _ _ _ _ _ hg
         · apply finish_live
@@ -3324,9 +4038,10 @@ theorem changed_pulses (cs : Nat → Comp K V) (s : Model.State K V) (keys : Lis
 
 -- a run keeps causes live (A2): its cause is of this run and the causes kept on it
 theorem run_live (cs : Nat → Comp K V) (promise : V → Bool) {a : State K V} (h : Live a.s)
-    (c rk : Nat) (hp : nowrites (cs c).f) : Live (run cs promise a c rk).s := by
-  obtain ⟨s3, o, seen, vals, st, hs, -, -, -, e_ran, -, -, -, -, -, -, -, -, -, -, -, e_when, e_went,
-    e_pulses, -, e_cause, e_kept, -, -, -⟩ := run_spec cs promise a c rk hp
+    (c rk : Nat) (hp : nowrites (cs c).f) (hz : a.s.asleep c = false) :
+    Live (run cs promise a c rk).s := by
+  obtain ⟨s3, o, seen, vals, st, hs, -, -, -, e_ran, -, -, -, -, -, -, -, -, -, e_when, e_went,
+    e_pulses, -, e_cause, e_kept, -, -, -, -, -, -, -, -, -⟩ := run_spec cs promise a c rk hp hz
   rw [hs]
   have hw : ∀ y, a.s.went y = true → s3.went y = true := by
     intro y hy; rw [e_went]; by_cases e : y = c
@@ -3388,15 +4103,60 @@ theorem act_live (cs : Nat → Comp K V) {s : Model.State K V} (h : Live s) (e :
       exact (hf _ _ (h.of (s' := say s (.act e v (s.last e))) rfl rfl (fun _ h => h) rfl (fun _ h => h)
         (fun _ _ h => h))).of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
 
+theorem untrack_live (cs : Nat → Comp K V) {s : Model.State K V} (ks : List K) (h : Live s) :
+    Live (untrack cs s ks) := by
+  obtain ⟨dy, hU⟩ := untrack_shape cs ks s
+  rw [hU]; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+
+-- a going: its writes are changes named by it; then its run, kept and reads dropped
+theorem bury_live (cs : Nat → Comp K V) {s : Model.State K V} (h : Live s) (d : Nat) :
+    Live (bury cs s d) := by
+  have same : ∀ s1 : Model.State K V, Live s1 → Live s1 := fun _ h => h
+  unfold Model.bury
+  split
+  · exact h
+  · split
+    · exact h
+    · rename_i k _ _
+      have hf : ∀ (ws : List (K × V)) (s1 : Model.State K V), Live s1 →
+          Live (ws.foldl (fun s kv => changed cs (store s kv.1 kv.2) [kv.1] (some d)) s1) := by
+        intro ws
+        induction ws with
+        | nil => intro s1 h1; exact h1
+        | cons kv ws ih =>
+          intro s1 h1; simp only [List.foldl_cons]
+          apply ih; apply changed_live
+          exact h1.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+      have h1 := hf (cs d).goes { s with due := put s.due d none }
+        (h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h))
+      simp only
+      apply untrack_live
+      refine same _ (h1.of rfl rfl (fun _ h => h) rfl (fun x hx => ?_) (fun x y hy => ?_))
+      · by_cases e : x = d
+        · subst e; simp at hx
+        · simpa [put_ne _ _ e] using hx
+      · by_cases e : x = d
+        · subst e; simp at hy
+        · simpa [put_ne _ _ e] using hy
+
 theorem step_live (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V → Nat → Nat)
-    {a a' : State K V} (hA : A2 cs) (h : Live a.s) (hb : ∀ c r, a.s.ran c = some r → r.given = [])
+    {a a' : State K V} (hA : A2 cs) (h : Live a.s) (hS : Sleeps a.s)
+    (hb : ∀ c r, a.s.ran c = some r → r.given = [])
     (hs : step cs promise rank a = some a') : Live a'.s := by
   unfold Async.step at hs
   split at hs
   · rename_i c n o rest _ _
     cases hs; exact land_live cs (a := { a with landed := rest }) h _ _ _ (hb _)
   · split at hs
-    · cases hs; exact run_live cs promise h _ _ (hA _)
+    · rename_i c hc
+      cases hs
+      have := (next_ready hc).1
+      simp only [ready, Bool.and_eq_true] at this
+      have hz : a.s.asleep c = false := by
+        cases e : a.s.asleep c
+        · rfl
+        · rw [hS.due c e] at this; simp at this
+      exact run_live cs promise h _ _ (hA c) hz
     · cases hs; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
   · rename_i hph
     obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 hs
@@ -3407,11 +4167,32 @@ theorem step_live (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.S
     · split at h1
       · rename_i x rest _
         cases h1
-        exact act_live cs (s := { a.s with acts := rest })
+        exact act_live cs (s := { a.s with earlies := rest })
           (h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)) _ _
       · split at h1
-        · cases h1; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
-        · cases h1
+        · rename_i x rest _
+          cases h1
+          exact act_live cs (s := { a.s with acts := rest })
+            (h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)) _ _
+        · split at h1
+          · cases h1; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+          · split at h1
+            · cases h1
+            · cases h1; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+    · rename_i h'; rw [hph] at h'; cases h'
+  · rename_i hph
+    obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 hs
+    subst h2
+    unfold Model.step at h1
+    split at h1
+    · rename_i h'; rw [hph] at h'; cases h'
+    · rename_i h'; rw [hph] at h'; cases h'
+    · split at h1
+      · rename_i d rest _
+        cases h1
+        exact bury_live cs (s := { a.s with dying := rest })
+          (h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)) _
+      · cases h1; exact h.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
 
 theorem named_live (cs : Nat → Comp K V) {a : State K V} (h : Live a.s) (i : Nat)
     (kvs : List (K × V)) : Live (named cs a i kvs).s := by
@@ -3433,10 +4214,31 @@ theorem Reach.live {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.
   induction h with
   | empty => exact ⟨fun d x hx => by simp [Async.empty, Model.empty] at hx,
       fun c hr => by simp [Async.empty, Model.empty] at hr⟩
-  | make _ ih =>
-    simp only [Async.make, Model.make]
-    apply mark_live _ _ _ _ (by simp)
-    split <;> exact ih.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+  | @make a _ ih =>
+    have hg : Live (Model.grow cs a.s) := by
+      have e6 : ∀ d, ∀ x ∈ (put a.s.kept a.s.made [] : Nat → List Why) d, x ∈ a.s.kept d := by
+        intro d x hx
+        by_cases hd : d = a.s.made
+        · subst hd; simp at hx
+        · rwa [put_ne _ _ hd] at hx
+      simp only [Model.grow]
+      split <;> exact ih.of rfl rfl (fun _ h => h) rfl (fun _ h => h) e6
+    simp only [Async.make]
+    split
+    · exact hg.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+    · have hm := mark_live hg a.s.made (Model.grow cs a.s).tick none (by simp)
+      split
+      · have hz : (mark (Model.grow cs a.s) a.s.made (Model.grow cs a.s).tick none).asleep a.s.made =
+            false := by simp only [mark_asleep, Model.grow]; split <;> simp
+        have hr := run_live cs promise (a := { a with
+          s := mark (Model.grow cs a.s) a.s.made (Model.grow cs a.s).tick none }) hm a.s.made 0
+          (hA.runs _) hz
+        simp only [actnow]
+        split
+        · refine act_live cs ?_ _ _
+          exact hr.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
+        · exact hr
+      · exact hm
   | write kvs _ _ _ ih =>
     simp only [Async.write]
     apply changed_live
@@ -3444,7 +4246,7 @@ theorem Reach.live {cs : Nat → Comp K V} {promise : V → Bool} {rank : Model.
     rw [h1]; exact ih.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
   | tell keys _ _ _ ih => exact changed_live cs ih _ _
   | begin _ ih => exact ih.of rfl rfl (fun _ h => h) rfl (fun _ h => h) (fun _ _ h => h)
-  | step ha _ h ih => exact step_live cs _ _ hA ih (ha.good hA).back h
+  | step ha _ h ih => exact step_live cs _ _ hA ih (ha.sleeps hA) (ha.good hA).back h
   | @close a ha _ ih =>
     have g := ha.good hA
     refine ⟨fun d x hx => by simp [Model.close] at hx, fun c _ hc => ?_⟩
@@ -3551,7 +4353,7 @@ theorem result_went_only (cs : Nat → Comp K V) (s : Model.State K V) (c : Nat)
     split at hx
     · rw [finish_went] at hx; exact Or.inl hx
     · split at hx
-      · rw [finish_went] at hx; left; split at hx <;> exact hx
+      · rw [finish_went] at hx; left; (repeat' split at hx) <;> exact hx
       · split at hx
         · rw [finish_went] at hx; exact Or.inl hx
         · rw [finish_went] at hx
@@ -3595,10 +4397,10 @@ theorem act_went_only (cs : Nat → Comp K V) (s : Model.State K V) (e : Nat) (v
 
 -- a step sets went only for the computation it lands, runs or acts
 theorem step_went (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.State K V → Nat → Nat)
-    {a a' : State K V} (hA : A2 cs) (hs : step cs promise rank a = some a') (x : Nat)
+    {a a' : State K V} (hA : A2 cs) (hS : Sleeps a.s) (hs : step cs promise rank a = some a') (x : Nat)
     (hx : a'.s.went x = true) :
     a.s.went x = true ∨ (∃ n o rest, a.landed = (x, n, o) :: rest) ∨ next rank a.s = some x ∨
-      ∃ v rest, a.s.acts = (x, v) :: rest := by
+      ∃ v rest, queue a.s = (x, v) :: rest := by
   unfold Async.step at hs
   split at hs
   · rename_i c n o rest _ hl
@@ -3617,8 +4419,14 @@ theorem step_went (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.S
   · split at hs
     · rename_i c hc
       cases hs
-      obtain ⟨s3, o, seen, vals, st, hs3, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, e_went,
-        -, -, -, -, -, -, -⟩ := run_spec cs promise a c (rank a.s c) (hA c)
+      have := (next_ready hc).1
+      simp only [ready, Bool.and_eq_true] at this
+      have hz : a.s.asleep c = false := by
+        cases e : a.s.asleep c
+        · rfl
+        · rw [hS.due c e] at this; simp at this
+      obtain ⟨s3, o, seen, vals, st, hs3, -, -, -, -, -, -, -, -, -, -, -, -, -, -, e_went,
+        -, -, -, -, -, -, -, -, -, -, -, -, -⟩ := run_spec cs promise a c (rank a.s c) (hA c) hz
       rw [hs3] at hx
       rcases ending_went_only cs s3 c _ x hx with h | h
       · rw [e_went] at h
@@ -3638,10 +4446,41 @@ theorem step_went (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.S
         cases h1
         rcases act_went_only cs _ _ _ x hx with h | h
         · exact Or.inl h
-        · subst h; exact Or.inr (Or.inr (Or.inr ⟨y.2, rest, hy⟩))
-      · split at h1
-        · cases h1; exact Or.inl hx
-        · cases h1
+        · subst h; exact Or.inr (Or.inr (Or.inr ⟨y.2, rest ++ a.s.acts, by simp [queue, hy]⟩))
+      · rename_i he
+        split at h1
+        · rename_i y rest hy
+          cases h1
+          rcases act_went_only cs _ _ _ x hx with h | h
+          · exact Or.inl h
+          · subst h; exact Or.inr (Or.inr (Or.inr ⟨y.2, rest, by simp [queue, he, hy]⟩))
+        · split at h1
+          · cases h1; exact Or.inl hx
+          · split at h1
+            · cases h1
+            · cases h1; exact Or.inl hx
+    · rename_i h'; rw [hph] at h'; cases h'
+  · rename_i hph
+    obtain ⟨s', h1, h2⟩ := Option.map_eq_some_iff.1 hs
+    subst h2
+    unfold Model.step at h1
+    split at h1
+    · rename_i h'; rw [hph] at h'; cases h'
+    · rename_i h'; rw [hph] at h'; cases h'
+    · split at h1
+      · rename_i d rest _
+        cases h1
+        left
+        simp only at hx
+        unfold Model.bury at hx
+        split at hx
+        · exact hx
+        · split at hx
+          · exact hx
+          · rw [hA.goes d] at hx
+            simp only [List.foldl_nil, untrack_went] at hx
+            exact hx
+      · cases h1; exact Or.inl hx
 
 -- between pulses: a promise settling sets no went; a change named by a handle, only its
 -- computation's; the host's changes, none
@@ -3689,6 +4528,15 @@ def erase (cs : Nat → Comp K V) (promise : V → Bool) : Nat → Comp K V :=
 theorem changed_erase (cs : Nat → Comp K V) (promise : V → Bool) :
     changed (erase cs promise) = (changed cs : Model.State K V → List K → Option Nat → Model.State K V) := rfl
 
+theorem wake_erase (cs : Nat → Comp K V) (promise : V → Bool) :
+    wake (erase cs promise) = (wake cs : Model.State K V → K → Model.State K V) := rfl
+
+theorem untrack_erase (cs : Nat → Comp K V) (promise : V → Bool) :
+    untrack (erase cs promise) = (untrack cs : Model.State K V → List K → Model.State K V) := rfl
+
+theorem bury_erase (cs : Nat → Comp K V) (promise : V → Bool) :
+    bury (erase cs promise) = (bury cs : Model.State K V → Nat → Model.State K V) := rfl
+
 theorem exec_erase (cs : Nat → Comp K V) (promise : V → Bool) (c : Nat) :
     ∀ (p : Prog K V) (s : Model.State K V),
       exec (erase cs promise) c s (hidep promise p) = ((exec cs c s p).1, hide promise (exec cs c s p).2)
@@ -3697,14 +4545,17 @@ theorem exec_erase (cs : Nat → Comp K V) (promise : V → Bool) (c : Nat) :
   | .error, s => by simp [hidep, exec, hide]
   | .pending, s => by simp [hidep, exec, hide]
   | .read k next, s => by
-    simp only [hidep, exec]
-    split
-    · exact exec_erase cs promise c _ _
-    · split
+    simp only [hidep, exec, wake_erase]
+    by_cases hf : (!tracked s k) = true
+    all_goals simp only [hf, ite_true, ite_false, Bool.false_eq_true]
+    all_goals
+      split
       · exact exec_erase cs promise c _ _
       · split
-        · simp [hide]
         · exact exec_erase cs promise c _ _
+        · split
+          · simp [hide]
+          · exact exec_erase cs promise c _ _
   | .write k v next, s => by
     simp only [hidep, exec]
     rw [changed_erase]
@@ -3765,7 +4616,7 @@ theorem land_phase (cs : Nat → Comp K V) (a : State K V) (c n : Nat) (o : Out 
         split
         · rw [finish_phase]; rfl
         · split
-          · rw [finish_phase]; split <;> rfl
+          · rw [finish_phase]; (repeat' split) <;> rfl
           · split
             · rw [finish_phase]; rfl
             · rw [finish_phase]; simp only; unfold Model.set; split
@@ -3788,13 +4639,11 @@ theorem step_sync (cs : Nat → Comp K V) (promise : V → Bool) (rank : Model.S
       refine ⟨by simp [run_erase], fun a' h' => ?_⟩
       cases h'; simp [run, h]
     | none => exact ⟨rfl, fun a' h' => by cases h'; rfl⟩
-  | acts =>
+  | acts | goes =>
     simp only
     refine ⟨?_, fun a' h' => ?_⟩
-    · simp only [Option.map_map]
-      split
-      · rfl
-      · split <;> rfl
+    · simp only [Option.map_map, Function.comp_def, Option.map_id']
+      rfl
     · obtain ⟨_, _, h2⟩ := Option.map_eq_some_iff.1 h'
       subst h2; rfl
 
@@ -3884,7 +4733,7 @@ def eff (f : Prog String J) : Comp String J :=
 def go (cs : Nat → Comp String J) (a : Async.State String J) : Async.State String J :=
   (pulse cs promise rk 1000 a).getD a
 def makes (cs : Nat → Comp String J) (n : Nat) (a : Async.State String J) : Async.State String J :=
-  (List.range n).foldl (fun a _ => make cs a) a
+  (List.range n).foldl (fun a _ => make cs promise a) a
 def acted (a : Async.State String J) : List (Event J) :=
   ((observations a.s).filter fun e => match e.event with | .act .. => true | _ => false).map (·.event)
 
@@ -3970,7 +4819,7 @@ def s40 : Nat → Comp String J
 def a40 := go s40 (makes s40 2 (write s40 empty [("x", .num 1)]))
 def b40 := go s40 (write s40 a40 [("x", .num 0)])
 def c40 := go s40 (write s40 b40 [("x", .num 1)])
-def d40 := go s40 (make s40 c40)
+def d40 := go s40 (make s40 promise c40)
 def e40 := go s40 (settle d40 0 .pending)
 #guard a40.s.store "c" == some (.num 1) && acted a40 == [.act 1 (.num 1) none]
 #guard moments b40.s 1 == [.due 0 5 none, .due 1 5 none, .starts 0 2 0,
@@ -3988,7 +4837,7 @@ def e40 := go s40 (settle d40 0 .pending)
 def s51 : Nat → Comp String J
   | _ => cmp (.read "m" fun m => if m = some (.num 1) then .read "k" fun k => .value (.num (J.int k + 1))
       else .read "c" fun c => if c = none then .value (.num 1) else .value (.prom (.str "p"))) "c"
-def a51 := go s51 (make s51 empty)
+def a51 := go s51 (make s51 promise empty)
 def b51 := go s51 (write s51 a51 [("m", .num 1)])
 def c51 := go s51 (settle (named s51 b51 0 [("k", .num 5)]) 0 (.value .null))
 #guard moments a51.s 0 == [.due 0 1 none, .starts 0 1 0, .due 0 2 (some 0),
@@ -4006,8 +4855,8 @@ def c51 := go s51 (settle (named s51 b51 0 [("k", .num 5)]) 0 (.value .null))
 def s52 : Nat → Comp String J
   | 0 => cmp (.read "k" fun k => .write "k" (.num (J.int k + 1)) .error) "a"
   | _ => cmp (.read "j" fun _ => .value (.prom (.str "q"))) "b"
-def a52 := go s52 (make s52 empty)
-def b52 := go s52 (make s52 a52)
+def a52 := go s52 (make s52 promise empty)
+def b52 := go s52 (make s52 promise a52)
 def c52 := go s52 (settle (named s52 b52 0 [("j", .num 1)]) 0 .error)
 def d52 := go s52 (settle (named s52 c52 0 [("j", .num 2)]) 0 .error)
 #guard moments a52.s 0 == [.due 0 1 none, .starts 0 1 0, .due 0 2 (some 0),

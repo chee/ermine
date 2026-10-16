@@ -1,7 +1,7 @@
 {
 	"title": "a compute that throws: its run failed, the error told; nothing given to set, nothing after it runs",
 	"steps": [
-		{ "op": "root", "name": "o", "expect": {} },
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{ "op": "write", "values": { "a": 1 }, "expect": { "tick": 1 } },
 		{
 			"op": "compute",

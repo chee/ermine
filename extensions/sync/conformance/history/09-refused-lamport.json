@@ -1,0 +1,62 @@
+{
+	"title": "a lamport not above every parent's is refused",
+	"steps": [
+		{
+			"op": "add",
+			"name": "a",
+			"patches": [{ "path": [], "value": { "n": 0 } }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "b",
+			"parents": ["a"],
+			"lamport": 3,
+			"patches": [{ "path": ["n"], "value": 1 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "c",
+			"parents": ["a"],
+			"lamport": 1,
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": { "refused": "lamport" } }
+		},
+		{
+			"op": "add",
+			"name": "d",
+			"parents": ["b"],
+			"lamport": 3,
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": { "refused": "lamport" } }
+		},
+		{
+			"op": "add",
+			"name": "e",
+			"parents": ["b"],
+			"lamport": 4,
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": { "added": "taken" }
+		},
+		{
+			"op": "add",
+			"name": "m",
+			"parents": ["a", "e"],
+			"base": "e",
+			"lamport": 4,
+			"expect": { "added": { "refused": "lamport" } }
+		},
+		{ "op": "heads", "expect": { "heads": ["e"] } },
+		{
+			"op": "refused",
+			"expect": {
+				"refused": [
+					{ "name": "c", "refused": "lamport" },
+					{ "name": "d", "refused": "lamport" },
+					{ "name": "m", "refused": "lamport" }
+				]
+			}
+		}
+	]
+}
