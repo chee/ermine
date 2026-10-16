@@ -160,10 +160,15 @@ static ap_given *now(void) {
 	return depth > 0 && depth <= 64 ? running[depth - 1] : NULL;
 }
 
+static void drvFree(ap_fn *self) {
+	free(self);
+}
+
 ap_fn *drvFn(ErmFn fn) {
 	if (!fn.call) return NULL;
 	DrvFn *f = calloc(1, sizeof *f);
 	f->base.call = call;
+	f->base.free = drvFree;
 	f->fn = fn;
 	return &f->base;
 }

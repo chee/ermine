@@ -75,11 +75,6 @@
 			margin: 0 auto;
 			padding: 1.6em 16px 3em;
 		}
-		.lead {
-			margin: 0 0 1.6em;
-			max-width: 38em;
-			font-size: 1.15em;
-		}
 
 		.demo {
 			display: grid;
@@ -149,16 +144,6 @@
 			background: var(--page);
 			border: 1px solid var(--ink);
 			transform: skewX(-10deg);
-		}
-		.text p {
-			margin: 0 0 0.8em;
-		}
-		code {
-			font-family: var(--mono);
-			font-size: 0.82em;
-			padding: 0.05em 0.3em;
-			background: var(--lemon);
-			border: 1px solid #0002;
 		}
 		.buttons {
 			display: flex;
@@ -301,11 +286,6 @@
 		</header>
 
 		<main>
-			<p class="lead">
-				ermine is a graph that programs live in: their nodes, their builds and what they did,
-				all there to open and change while they run.
-			</p>
-
 			<article class="demo">
 				<a class="picture" href="slaygrounds/" tabindex="-1">
 					<img src="pictures/slaygrounds.jpg"
@@ -318,10 +298,6 @@
 						<li>typescript</li>
 						<li>editor</li>
 					</ul>
-					<p>
-						A live editor for ermine programs: an editor, what it renders, a console, its graph,
-						a map and its files. Edit and it runs again. Many examples, listed below.
-					</p>
 					<div class="buttons">
 						<a class="button go" href="slaygrounds/">open</a>
 					</div>
@@ -339,11 +315,6 @@
 						<li>C</li>
 						<li>wasm</li>
 					</ul>
-					<p>
-						xclock's cat (X11, 1988) in plain C. Its source, its compiler, its runner and its
-						builds are nodes you can open and change; the build and the clock follow. The first
-						build in your browser fetches clang (105&nbsp;MB).
-					</p>
 					<div class="buttons">
 						<a class="button go" href="catclock/">open</a>
 						<a class="button" href="catclock/clock.html">the clock alone</a>
@@ -362,12 +333,6 @@
 						<li>C</li>
 						<li>sync</li>
 					</ul>
-					<p>
-						lab-pig's pigs in a terminal, in C on the table and sync: the same pigs, in the same
-						room, as slaygrounds' lab-pig. Pick one up in either and the other sees it carried.
-						Build it with <code>make</code> in <code>playground/demos/pigs</code>, then
-						<code>./ermine-pigs</code>.
-					</p>
 					<div class="buttons">
 						<a class="button go" href="slaygrounds/#lab-pig">the pigs on the web</a>
 						<a class="button"
@@ -388,11 +353,6 @@
 						<li>typescript</li>
 						<li>sync</li>
 					</ul>
-					<p>
-						One world, two pictures: the tree of names beside what the scheduler holds, who
-						waits on whom. The graph is shared: open its link in another window and both run
-						their own processes over it. Save it to a file, load one back.
-					</p>
 					<div class="buttons">
 						<a class="button go" href="shape/">open</a>
 					</div>

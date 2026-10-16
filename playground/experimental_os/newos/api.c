@@ -224,6 +224,8 @@ void ap_free(ap_os *os) {
 	ap_sweep(os);
 	for (size_t i = 0; i < os->nkept; i++) free(os->kept[i]);
 	free(os->kept);
+	for (size_t i = 0; i < os->nlives; i++)
+		if (os->lives[i].fn && os->lives[i].fn->free) os->lives[i].fn->free(os->lives[i].fn);
 	free(os->lives), free(os->here), free(os->in_front);
 	free(os->held);
 	free(os);
@@ -1038,8 +1040,11 @@ static void removing(void *data) {
 	if (m->at >= 0 && (size_t)m->at < n && m->at < 64) {
 		const char *id = ids[m->at];
 		char *kept = ap_dup(os, id);
-		if (!code_of(w, fr_remove(os->places, os->table, FR_PART, tb_string(m->parent), m->name, tb_string(kept), w->h, &w->changed), "remove"))
+		if (!code_of(w, fr_remove(os->places, os->table, FR_PART, tb_string(m->parent), m->name, tb_string(kept), w->h, &w->changed), "remove")) {
 			front_out(os, kept, m->parent, m->name);
+			// an ephemeral node out of its last front: its handler is called no more, its function let go
+			if (!id_is(kept) && !fronted(os, kept)) lives_out(os, kept);
+		}
 		return;
 	}
 	const char *child = child_at(os, m->parent, m->name);
@@ -1133,6 +1138,32 @@ typedef struct {
 	char *id;
 } Going;
 
+// a live function let go: its function freed (ap_fn's free), its number answering no one (live_of)
+static void live_out(ap_os *os, const op_value *v, int depth) {
+	if (!v || depth > 64) return;
+	if (v->type == OP_STAND) {
+		const op_value *kind = v->count ? v->items[0] : NULL;
+		const op_value *n = kind && kind->type == OP_MAP ? op_get(kind, "live") : NULL;
+		if (!n || n->type != OP_NUM || n->num < 0 || (size_t)n->num >= os->nlives) return;
+		Live *l = &os->lives[(size_t)n->num];
+		if (l->fn && l->fn->free) l->fn->free(l->fn);
+		l->fn = NULL, l->owner = NULL;
+	} else if (v->type == OP_LIST || v->type == OP_MAP)
+		for (size_t i = 0; i < v->count; i++) live_out(os, v->items[i], depth + 1);
+}
+
+/** the lives a node's value holds let go: the node is gone, or out of its last front (a handler no one reaches again) */
+static void lives_out(ap_os *os, const char *id) {
+	const nd_entry *e = tb_get(os->table, tb_string("value"), tb_string(id));
+	if (e) live_out(os, e->value, 0);
+}
+
+static bool fronted(ap_os *os, const char *id) {
+	for (size_t i = 0; i < os->nfront; i++)
+		if (!strcmp(os->in_front[i].id, id)) return true;
+	return false;
+}
+
 // an ephemeral node's teardown: out of every front it is in, its entries out of the table
 static char *going(void *data) {
 	Going *g = data;
@@ -1158,6 +1189,7 @@ static char *going(void *data) {
 		ap_commit(os, &w.changed);
 		front_out(os, g->id, parent, name);
 	}
+	lives_out(os, g->id);
 	const char *parts[] = {"value", "attributes", "children", FR_PART};
 	for (size_t i = 0; i < 4; i++) tb_del(os->table, tb_string(parts[i]), tb_string(g->id));
 	free(g->id);
@@ -1250,7 +1282,8 @@ static const Live *live_of(ap_os *os, const op_value *v) {
 	const op_value *kind = v->items[0];
 	const op_value *n = kind && kind->type == OP_MAP ? op_get(kind, "live") : NULL;
 	if (!n || n->type != OP_NUM || n->num < 0 || (size_t)n->num >= os->nlives) return NULL;
-	return &os->lives[(size_t)n->num];
+	const Live *l = &os->lives[(size_t)n->num];
+	return l->fn ? l : NULL;
 }
 
 ap_fn *ap_live_fn(ap_os *os, const op_value *v) {

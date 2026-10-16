@@ -204,6 +204,7 @@ static void hangup(const ErmGiven *g, Sock *k, Conn *c, const char *why) {
 	hostSay(k->host, "sock %d: %s", c->n, why);
 	free(c->wait);
 	free(c->pid);
+	jsonFree(c->at);
 	free(c);
 }
 

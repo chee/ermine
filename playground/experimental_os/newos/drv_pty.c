@@ -305,6 +305,8 @@ static int pushed(int cols, const VTermScreenCell *cells, void *data) {
 		else s->fresh--;
 		b = &s->back[s->head];
 		free(b->cells);
+		jsonFree(b->line);
+		jsonFree(b->style);
 		s->head = (s->head + 1) % KEEPBACK;
 	} else b = &s->back[(s->head + s->backs++) % KEEPBACK];
 	s->fresh++;
@@ -330,14 +332,22 @@ static int popped(int cols, VTermScreenCell *cells, void *data) {
 		else cells[c] = (VTermScreenCell){ .chars = { 0 }, .width = 1, .fg = fg, .bg = bg };
 	}
 	free(b->cells);
+	jsonFree(b->line);
+	jsonFree(b->style);
 	b->cells = NULL;
+	b->line = b->style = NULL;
 	s->backed = s->changed = true;
 	return 1;
 }
 
 static int cleared(void *data) {
 	Session *s = data;
-	for (int i = 0; i < s->backs; i++) free(s->back[(s->head + i) % KEEPBACK].cells);
+	for (int i = 0; i < s->backs; i++) {
+		Back *b = &s->back[(s->head + i) % KEEPBACK];
+		free(b->cells);
+		jsonFree(b->line);
+		jsonFree(b->style);
+	}
 	s->head = s->backs = 0;
 	s->trimmed = s->left = s->popped = s->fresh = 0;
 	s->backed = s->changed = s->cleared = true;
@@ -388,11 +398,19 @@ static void seed(Session *s, const Json *screen) {
 static void unterminal(Session *s) {
 	if (s->vt) vterm_free(s->vt);
 	s->vt = NULL;
-	for (int i = 0; i < s->backs; i++) free(s->back[(s->head + i) % KEEPBACK].cells);
+	for (int i = 0; i < s->backs; i++) {
+		Back *b = &s->back[(s->head + i) % KEEPBACK];
+		free(b->cells);
+		jsonFree(b->line);
+		jsonFree(b->style);
+	}
 	s->backs = 0;
 	free(s->dirty);
+	for (int r = 0; s->text && r < s->wrows; r++) jsonFree(s->text[r]), jsonFree(s->runs[r]);
 	free(s->text);
 	free(s->runs);
+	jsonFree(s->props);
+	s->props = NULL;
 }
 
 /** a colour as the screen node has it: -1 the terminal's own, 0-255 xterm's, else 1 << 24 | 0xrrggbb */
@@ -556,6 +574,7 @@ static void publish(const ErmGiven *g, Session *s) {
 	s->whole = false;
 	Json *props = propsOf(s);
 	if (whole) {
+		for (int r = 0; s->text && r < s->wrows; r++) jsonFree(s->text[r]), jsonFree(s->runs[r]);
 		free(s->text);
 		free(s->runs);
 		s->text = calloc((size_t)s->rows, sizeof *s->text);
@@ -564,12 +583,12 @@ static void publish(const ErmGiven *g, Session *s) {
 		Json *lines = jsonArray(), *styles = jsonArray();
 		for (int r = 0; r < s->rows; r++) {
 			s->text[r] = screenRow(s, r, &s->runs[r]);
-			jsonPush(lines, s->text[r]);
-			jsonPush(styles, s->runs[r]);
+			jsonPush(lines, jsonRef(s->text[r]));
+			jsonPush(styles, jsonRef(s->runs[r]));
 			s->dirty[r] = false;
 		}
 		Json *screen = drvMap("rows", jsonInteger(s->rows), "cols", jsonInteger(s->cols), "lines", lines, "styles", styles, NULL);
-		for (int i = 0; i < props->object.count; i++) jsonAdd(screen, props->object.members[i].key, props->object.members[i].value);
+		for (int i = 0; i < props->object.count; i++) jsonAdd(screen, props->object.members[i].key, jsonRef(props->object.members[i].value));
 		drvSnap(g->api, at(s, "screen"), screen);
 	} else {
 		Json *patches = jsonArray();
@@ -577,19 +596,25 @@ static void publish(const ErmGiven *g, Session *s) {
 			if (!s->dirty[r]) continue;
 			s->dirty[r] = false;
 			Json *runs, *line = screenRow(s, r, &runs);
-			if (!jsonEqual(line, s->text[r])) jsonPush(patches, splice("lines", r, s->text[r] = line));
-			else jsonFree(line);
-			if (!jsonEqual(runs, s->runs[r])) jsonPush(patches, splice("styles", r, s->runs[r] = runs));
-			else jsonFree(runs);
+			if (!jsonEqual(line, s->text[r])) {
+				jsonFree(s->text[r]);
+				jsonPush(patches, jsonRef(splice("lines", r, jsonRef(s->text[r] = line))));
+			} else jsonFree(line);
+			if (!jsonEqual(runs, s->runs[r])) {
+				jsonFree(s->runs[r]);
+				jsonPush(patches, jsonRef(splice("styles", r, jsonRef(s->runs[r] = runs))));
+			} else jsonFree(runs);
 		}
 		for (int i = 0; i < props->object.count; i++) {
 			JsonMember *m = &props->object.members[i];
 			if (!jsonEqual(m->value, jsonGet(s->props, m->key)))
-				jsonPush(patches, drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString(m->key), "value", m->value, NULL));
+				jsonPush(patches, jsonRef(drvMap("type", jsonString("set"), "path", jsonArray(), "key", jsonString(m->key), "value", jsonRef(m->value), NULL)));
 		}
 		if (patches->array.count) drvOp(g->api, "write", drvMap("address", at(s, "screen"), "patches", patches, NULL));
+		else jsonFree(patches);
 	}
-	s->props = props;
+	jsonFree(s->props);
+	s->props = jsonRef(props);
 	if (s->backed) {
 		// a splice from the front for the rows gone there, one from the end for those taken back, one for
 		// the new: the rows a burst pushes and lets go before this are never written
@@ -597,18 +622,20 @@ static void publish(const ErmGiven *g, Session *s) {
 		Json *patches = jsonArray();
 		for (int k = 0; k < 2; k++) {
 			const char *key = k ? "styles" : "lines";
-			if (s->trimmed) jsonPush(patches, drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(0, s->trimmed), "value", jsonArray(), NULL));
-			if (s->popped) jsonPush(patches, drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(s->left, s->left + s->popped), "value", jsonArray(), NULL));
+			if (s->trimmed) jsonPush(patches, jsonRef(drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(0, s->trimmed), "value", jsonArray(), NULL)));
+			if (s->popped) jsonPush(patches, jsonRef(drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(s->left, s->left + s->popped), "value", jsonArray(), NULL)));
 			Json *rows = jsonArray();
 			for (int i = s->backs - s->fresh; i < s->backs; i++) {
 				Back *b = &s->back[(s->head + i) % KEEPBACK];
 				if (!b->line) b->line = rowJson(s, b->cells, b->cols, &b->style);
-				jsonPush(rows, k ? b->style : b->line);
+				jsonPush(rows, jsonRef(k ? b->style : b->line));
 			}
-			if (s->fresh) jsonPush(patches, drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(s->left, s->left), "value", rows, NULL));
+			if (s->fresh) jsonPush(patches, jsonRef(drvMap("type", jsonString("splice"), "path", drvPath(key, NULL), "range", range(s->left, s->left), "value", rows, NULL)));
+			else jsonFree(rows);
 		}
 		if (s->cleared) drvSnap(g->api, at(s, "scrollback"), drvMap("lines", jsonArray(), "styles", jsonArray(), NULL));
 		if (patches->array.count) drvOp(g->api, "write", drvMap("address", at(s, "scrollback"), "patches", patches, NULL));
+		else jsonFree(patches);
 		s->left = s->backs;
 		s->trimmed = s->popped = s->fresh = 0;
 		s->cleared = false;
@@ -875,6 +902,7 @@ static ErmErr ptyIrq(void *data, const ErmGiven *g, Json **out) {
 			free(s->lines.items);
 			free(s->wait);
 			unterminal(s);
+			jsonFree(s->at);
 			free(s);
 			continue;
 		}
@@ -951,7 +979,7 @@ static ErmErr ptyNew(void *data, const ErmGiven *g, Json **out) {
 	Json *args = jsonArray();
 	for (int i = 0; jsonIsArray(argv) && i < argv->array.count; i++) {
 		if (!jsonText(argv->array.items[i])) return ermField("wrong-field", "argv");
-		jsonPush(args, argv->array.items[i]);
+		jsonPush(args, jsonRef(argv->array.items[i]));
 	}
 	if (!args->array.count) jsonPush(args, jsonString(shell)), jsonPush(args, jsonString("-l"));
 	const char *cwd = jsonText(jsonGet(r, "cwd")) ? jsonText(jsonGet(r, "cwd")) : home;
@@ -997,19 +1025,19 @@ static ErmErr ptyNew(void *data, const ErmGiven *g, Json **out) {
 	Json *dev = drvPath("/", "dev", "pty", NULL), *what = drvMap("argv", args, "cwd", jsonString(cwd), NULL);
 	if (place) {
 		// made where it was asked, a shared document's node; /dev/pty/<n> says where
-		s->at = drvUnder(place, n, NULL);
+		s->at = jsonRef(drvUnder(place, n, NULL));
 		drvMake(g->api, place, n, id, what);
 		free(id);
 		id = formatString("pty/%d/at", s->n);
 		drvMake(g->api, dev, n, id, drvMap("at", s->at, NULL));
 	} else {
-		s->at = drvUnder(dev, n, NULL);
+		s->at = jsonRef(drvUnder(dev, n, NULL));
 		drvMake(g->api, dev, n, id, what);
 	}
 	free(id);
 	Json *to = jsonArray(), *given = jsonGet(r, "to");
 	for (int i = 0; jsonIsArray(given) && i < given->array.count; i++)
-		if (jsonIsArray(given->array.items[i])) jsonPush(to, given->array.items[i]);
+		if (jsonIsArray(given->array.items[i])) jsonPush(to, jsonRef(given->array.items[i]));
 	const char *names[] = { "rx", "tx", "stats", "size", "status", "to", "keys", "screen", "scrollback" };
 	Json *values[] = { jsonBytes("", 0), jsonBytes("", 0), drvMap("rx", jsonInteger(0), "tx", jsonInteger(0), "keys", jsonInteger(0), NULL),
 		           drvMap("cols", jsonInteger(cols), "rows", jsonInteger(rows), NULL), statusOf(s, 0), to, jsonArray(), jsonNull(),
@@ -1048,22 +1076,22 @@ static ErmErr pumpCompute(void *data, const ErmGiven *g, Json **out) {
 		jsonPush(row, jsonInteger(s->n));
 		jsonPush(row, jsonBoolean(there));
 		Json *rx = there ? bytesOf(drvRead(g->api, at(s, "rx"))) : NULL;
-		jsonPush(row, rx ? rx : jsonBytes("", 0));
+		jsonPush(row, rx ? jsonRef(rx) : jsonBytes("", 0));
 		jsonPush(row, jsonInteger(there ? whole(jsonGet(drvRead(g->api, at(s, "stats")), "rx"), 0) : 0));
 		Json *size = there ? drvRead(g->api, at(s, "size")) : NULL;
-		jsonPush(row, size ? size : jsonNull());
+		jsonPush(row, size ? jsonRef(size) : jsonNull());
 		for (int j = 0; there && jsonIsArray(to) && j < to->array.count; j++) {
 			Json *line = to->array.items[j], *l = jsonArray();
 			if (!jsonIsArray(line)) continue;
 			Json *lrx = bytesOf(drvRead(g->api, drvUnder(line, "rx", NULL)));
-			jsonPush(l, line);
-			jsonPush(l, lrx ? lrx : jsonBytes("", 0));
+			jsonPush(l, jsonRef(line));
+			jsonPush(l, lrx ? jsonRef(lrx) : jsonBytes("", 0));
 			jsonPush(l, jsonInteger(whole(jsonGet(drvRead(g->api, drvUnder(line, "stats", NULL)), "rx"), 0)));
 			jsonPush(lines, l);
 		}
 		jsonPush(row, lines);
 		Json *keys = there ? drvRead(g->api, at(s, "keys")) : NULL;
-		jsonPush(row, jsonIsArray(keys) ? keys : jsonArray());
+		jsonPush(row, jsonIsArray(keys) ? jsonRef(keys) : jsonArray());
 		jsonPush(row, jsonInteger(there ? whole(jsonGet(drvRead(g->api, at(s, "stats")), "keys"), 0) : 0));
 		jsonPush(*out, row);
 	}
