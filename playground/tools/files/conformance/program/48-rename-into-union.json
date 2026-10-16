@@ -1,0 +1,264 @@
+{
+	"title": "a node with a folder moved into a union's folder: placed at the number its name gives, its folder comes too, the members numbered again",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {
+				"root": "r"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "apps",
+			"value": {
+				"theme": "dark"
+			},
+			"expect": {
+				"id": "id1"
+			}
+		},
+		{
+			"op": "place",
+			"path": [
+				"apps"
+			],
+			"slot": "clock",
+			"value": "12:00",
+			"expect": {
+				"id": "id2"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": "hello",
+			"expect": {
+				"id": "id3"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": {
+				"/": {
+					"bytes": "iVBORw0KGgo"
+				}
+			},
+			"expect": {
+				"id": "id4"
+			}
+		},
+		{
+			"op": "mount",
+			"path": [],
+			"slot": "pinned",
+			"to": [
+				"docs"
+			],
+			"expect": {}
+		},
+		{
+			"op": "save",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"edit": "rename",
+			"from": "docs",
+			"to": "papers"
+		},
+		{
+			"op": "pass",
+			"touched": [
+				""
+			],
+			"expect": {
+				"called": true,
+				"settled": true
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "rename",
+			"from": "apps.text",
+			"to": "papers/0 apps.text"
+		},
+		{
+			"op": "pass",
+			"touched": [
+				"",
+				"papers"
+			],
+			"expect": {
+				"called": true,
+				"settled": true
+			}
+		},
+		{
+			"op": "graph",
+			"expect": {
+				"root": "r",
+				"nodes": {
+					"id": "r",
+					"value": [],
+					"slots": [
+						[
+							"papers",
+							[
+								{
+									"id": "id1",
+									"value": [
+										{
+											"content": {
+												"theme": "dark"
+											},
+											"actor": "host"
+										}
+									],
+									"slots": [
+										[
+											"clock",
+											[
+												{
+													"id": "id2",
+													"value": [
+														{
+															"content": "12:00",
+															"actor": "host"
+														}
+													],
+													"slots": []
+												}
+											]
+										]
+									]
+								},
+								{
+									"id": "id3",
+									"again": true
+								},
+								{
+									"id": "id4",
+									"value": [
+										{
+											"content": {
+												"/": {
+													"bytes": "iVBORw0KGgo"
+												}
+											},
+											"actor": "host"
+										}
+									],
+									"slots": []
+								}
+							]
+						],
+						[
+							"pinned",
+							[
+								{
+									"id": "id3",
+									"value": [
+										{
+											"content": "hello",
+											"actor": "host"
+										}
+									],
+									"slots": []
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": "papers",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": [
+								"r",
+								"papers"
+							]
+						}
+					},
+					{
+						"path": "papers/1 apps",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "papers/1 apps.text",
+						"kind": "file",
+						"hex": "7b0a2020227468656d65223a20226461726b220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "papers/1 apps/clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "id2"
+						}
+					},
+					{
+						"path": "papers/2.txt",
+						"kind": "file",
+						"hex": "68656c6c6f",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					},
+					{
+						"path": "papers/3.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "id4"
+						}
+					},
+					{
+						"path": "pinned.txt",
+						"kind": "link",
+						"target": "papers/2.txt",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					}
+				],
+				"trash": null,
+				"listed": []
+			}
+		}
+	]
+}

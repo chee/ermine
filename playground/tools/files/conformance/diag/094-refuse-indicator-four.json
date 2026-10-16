@@ -1,0 +1,15 @@
+{
+	"title": "_4 is no indicator",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[1_4]",
+			"expect": {
+				"code": "not-diag",
+				"at": 2,
+				"line": 1,
+				"column": 3
+			}
+		}
+	]
+}

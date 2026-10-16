@@ -1,0 +1,921 @@
+{
+	"title": "a crashed batch that removes a folder holding a person's file sends that folder to the Trash whole on loading",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 6,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"keep",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"gone",
+							[
+								{
+									"content": [
+										"g"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "kept",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "g",
+					"value": [
+						{
+							"content": "bye",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "g"
+							}
+						}
+					],
+					"info": [],
+					"children": [
+						[
+							"child",
+							[
+								{
+									"content": [
+										"k"
+									],
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "g"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "k",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "k"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "g",
+											"to": "gone",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "g",
+											"to": "gone.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "a",
+											"to": "keep.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "vE0KaSQX85ctRmRTn0MGcsFknjgRScoMlO71b2bP6u4"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "k",
+											"to": "gone/child.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										}
+									],
+									"node:a": "a5626964616164696e666f806576616c756581a2646b657074825820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee63747874666368616e6765a3646e6f646561616474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:g": "a5626964616764696e666f806576616c756581a2646b657074825820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c063747874666368616e6765a3646e6f646561676474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e8182656368696c6481a2666368616e6765a3646e6f646561676474696d65f94600656163746f7264686f737467636f6e74656e7481616b",
+									"node:k": "a5626964616b64696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f6465616b6474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e74816167",
+									"shown:a": "a36466696c65686b6565702e74787464686f6d65836172646b656570f90000646c6169645820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+									"shown:g": "a56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+									"shown:k": "a36466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a264676f6e6564676f6e65646b656570646b656570"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94600647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c0",
+						"kind": "file",
+						"hex": "627965"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+						"kind": "file",
+						"hex": "6b657074"
+					},
+					{
+						"path": "gone",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "g"
+						}
+					},
+					{
+						"path": "gone.txt",
+						"kind": "file",
+						"hex": "627965",
+						"attrs": {
+							"party.chee.ermine.id": "g"
+						}
+					},
+					{
+						"path": "gone/child.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "k"
+						}
+					},
+					{
+						"path": "keep.txt",
+						"kind": "file",
+						"hex": "6b657074",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "frame",
+			"records": {
+				"meta": "a264726f6f7461726474696d65f94700",
+				"plan": [
+					{
+						"id": "k",
+						"form": "bin",
+						"from": "gone/child.png",
+						"what": "remove",
+						"after": null,
+						"before": {
+							"file": {
+								"/": {
+									"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+								}
+							}
+						},
+						"number": 1
+					},
+					{
+						"id": "g",
+						"from": "gone",
+						"what": "remove",
+						"after": null,
+						"before": {
+							"folder": {
+								"ino": "gone"
+							}
+						},
+						"number": 2
+					},
+					{
+						"id": "g",
+						"form": "txt",
+						"from": "gone.txt",
+						"what": "remove",
+						"after": null,
+						"before": {
+							"file": {
+								"/": {
+									"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+								}
+							}
+						},
+						"number": 3
+					}
+				],
+				"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94700656163746f7264686f737467636f6e74656e7480",
+				"shown:g": "a66461776179f56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+				"shown:k": "a46461776179f56466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+				"shown:r": "a266666f6c646572f567656e7472696573a1646b656570646b656570"
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": "gone/notes.txt",
+			"text": "a person's notes"
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "g",
+											"to": "gone",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "g",
+											"to": "gone.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "a",
+											"to": "keep.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "vE0KaSQX85ctRmRTn0MGcsFknjgRScoMlO71b2bP6u4"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "k",
+											"to": "gone/child.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										}
+									],
+									"node:a": "a5626964616164696e666f806576616c756581a2646b657074825820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee63747874666368616e6765a3646e6f646561616474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:g": "a5626964616764696e666f806576616c756581a2646b657074825820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c063747874666368616e6765a3646e6f646561676474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e8182656368696c6481a2666368616e6765a3646e6f646561676474696d65f94600656163746f7264686f737467636f6e74656e7481616b",
+									"node:k": "a5626964616b64696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f6465616b6474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e74816167",
+									"shown:a": "a36466696c65686b6565702e74787464686f6d65836172646b656570f90000646c6169645820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+									"shown:g": "a56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+									"shown:k": "a36466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a264676f6e6564676f6e65646b656570646b656570"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94600647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94700",
+									"plan": [
+										{
+											"id": "k",
+											"form": "bin",
+											"from": "gone/child.png",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "g",
+											"from": "gone",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"folder": {
+													"ino": "gone"
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "g",
+											"form": "txt",
+											"from": "gone.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+													}
+												}
+											},
+											"number": 3
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94700656163746f7264686f737467636f6e74656e7480",
+									"shown:g": "a66461776179f56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+									"shown:k": "a46461776179f56466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a1646b656570646b656570"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c0",
+						"kind": "file",
+						"hex": "627965"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+						"kind": "file",
+						"hex": "6b657074"
+					},
+					{
+						"path": "gone",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "g"
+						}
+					},
+					{
+						"path": "gone.txt",
+						"kind": "file",
+						"hex": "627965",
+						"attrs": {
+							"party.chee.ermine.id": "g"
+						}
+					},
+					{
+						"path": "gone/child.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "k"
+						}
+					},
+					{
+						"path": "gone/notes.txt",
+						"kind": "file",
+						"hex": "6120706572736f6e2773206e6f746573"
+					},
+					{
+						"path": "keep.txt",
+						"kind": "file",
+						"hex": "6b657074",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 7,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"keep",
+									[
+										{
+											"content": [
+												"a"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"gone",
+									[
+										{
+											"content": [],
+											"change": {
+												"node": "r",
+												"time": 7,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "a",
+							"value": [
+								{
+									"content": "kept",
+									"change": {
+										"node": "a",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [
+						{
+							"id": "g",
+							"value": [
+								{
+									"content": "bye",
+									"change": {
+										"node": "g",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [
+								[
+									"child",
+									[
+										{
+											"content": [
+												"k"
+											],
+											"change": {
+												"node": "g",
+												"time": 6,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "k",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"bytes": "iVBORw0KGgo"
+										}
+									},
+									"change": {
+										"node": "k",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"missing": []
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94600",
+									"plan": [
+										{
+											"id": "g",
+											"to": "gone",
+											"info": [],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "g",
+											"to": "gone.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "a",
+											"to": "keep.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "vE0KaSQX85ctRmRTn0MGcsFknjgRScoMlO71b2bP6u4"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "k",
+											"to": "gone/child.png",
+											"form": "bin",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										}
+									],
+									"node:a": "a5626964616164696e666f806576616c756581a2646b657074825820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee63747874666368616e6765a3646e6f646561616474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:g": "a5626964616764696e666f806576616c756581a2646b657074825820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c063747874666368616e6765a3646e6f646561676474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e8182656368696c6481a2666368616e6765a3646e6f646561676474696d65f94600656163746f7264686f737467636f6e74656e7481616b",
+									"node:k": "a5626964616b64696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f6465616b6474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e74816167",
+									"shown:a": "a36466696c65686b6565702e74787464686f6d65836172646b656570f90000646c6169645820bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+									"shown:g": "a56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+									"shown:k": "a36466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a264676f6e6564676f6e65646b656570646b656570"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94600647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94700",
+									"plan": [
+										{
+											"id": "k",
+											"form": "bin",
+											"from": "gone/child.png",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "ZAUFfVyxayfstf0mu16F5yZdgyzmvsBRiCdt9srhvNs"
+													}
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "g",
+											"from": "gone",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"folder": {
+													"ino": "trash/gone"
+												}
+											},
+											"number": 2
+										},
+										{
+											"id": "g",
+											"form": "txt",
+											"from": "gone.txt",
+											"what": "remove",
+											"after": null,
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "RYroiRNYsubpjakCoXK5MJf2k47jZFNu2x7ZSwFjosA"
+													}
+												}
+											},
+											"number": 3
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282646b65657081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e748161618264676f6e6581a2666368616e6765a3646e6f646561726474696d65f94700656163746f7264686f737467636f6e74656e7480",
+									"shown:g": "a66461776179f56466696c6568676f6e652e74787464686f6d6583617264676f6e65f90000646c6169645820458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c066666f6c646572f567656e7472696573a1656368696c64656368696c64",
+									"shown:k": "a46461776179f56466696c65696368696c642e706e6764686f6d65836167656368696c64f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a1646b656570646b656570"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94700647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/458ae8891358b2e6e98da902a172b93097f6938ee364536edb1ed94b0163a2c0",
+						"kind": "file",
+						"hex": "627965"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/bc4d0a692417f3972d4664539f430672c1649e381149ca0c94eef56f66cfeaee",
+						"kind": "file",
+						"hex": "6b657074"
+					},
+					{
+						"path": "keep.txt",
+						"kind": "file",
+						"hex": "6b657074",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					}
+				],
+				"trash": [
+					{
+						"path": "gone",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "g"
+						}
+					},
+					{
+						"path": "gone/notes.txt",
+						"kind": "file",
+						"hex": "6120706572736f6e2773206e6f746573"
+					}
+				],
+				"listed": [
+					{
+						"path": "gone",
+						"why": "folder-held"
+					}
+				]
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		}
+	]
+}

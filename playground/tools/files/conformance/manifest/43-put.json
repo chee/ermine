@@ -1,0 +1,264 @@
+{
+	"title": "a value is kept once, by its hash, through tmp, synced, then its folder",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"value": "12:00",
+			"expect": {
+				"kept": [
+					"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+					"txt"
+				],
+				"synced": [
+					"tmp/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+			"form": "txt",
+			"expect": {
+				"value": "12:00"
+			}
+		},
+		{
+			"op": "put",
+			"value": {
+				"/": {
+					"bytes": "iVBORw0KGgoBAgMEBQY"
+				}
+			},
+			"expect": {
+				"kept": [
+					"da6f5e807637dbb71b43a8f8337e1bb896ba1bfdeb4b78cfbcad13e7ea4664a3",
+					"bin"
+				],
+				"synced": [
+					"tmp/da6f5e807637dbb71b43a8f8337e1bb896ba1bfdeb4b78cfbcad13e7ea4664a3",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "da6f5e807637dbb71b43a8f8337e1bb896ba1bfdeb4b78cfbcad13e7ea4664a3",
+			"form": "bin",
+			"expect": {
+				"value": {
+					"/": {
+						"bytes": "iVBORw0KGgoBAgMEBQY"
+					}
+				}
+			}
+		},
+		{
+			"op": "put",
+			"value": {
+				"/": {
+					"float32": [
+						1,
+						"NaN"
+					]
+				}
+			},
+			"expect": {
+				"kept": [
+					"92d56ff014557cc91cca0a8ad8bc26adf192df5a62f755ef14cebb8e2d5e82e4",
+					"float32"
+				],
+				"synced": [
+					"tmp/92d56ff014557cc91cca0a8ad8bc26adf192df5a62f755ef14cebb8e2d5e82e4",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "92d56ff014557cc91cca0a8ad8bc26adf192df5a62f755ef14cebb8e2d5e82e4",
+			"form": "float32",
+			"expect": {
+				"value": {
+					"/": {
+						"float32": [
+							1,
+							"NaN"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "put",
+			"value": {
+				"/": {
+					"int64": [
+						"-5"
+					]
+				}
+			},
+			"expect": {
+				"kept": [
+					"cf5f270861e86272d502f9617b7ecda66323f94292f2075b1e90fc13dae8253e",
+					"int64"
+				],
+				"synced": [
+					"tmp/cf5f270861e86272d502f9617b7ecda66323f94292f2075b1e90fc13dae8253e",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "cf5f270861e86272d502f9617b7ecda66323f94292f2075b1e90fc13dae8253e",
+			"form": "int64",
+			"expect": {
+				"value": {
+					"/": {
+						"int64": [
+							"-5"
+						]
+					}
+				}
+			}
+		},
+		{
+			"op": "put",
+			"value": {
+				"theme": "dark"
+			},
+			"expect": {
+				"kept": [
+					"3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+					"cbor"
+				],
+				"synced": [
+					"tmp/3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"theme": "dark"
+				}
+			}
+		},
+		{
+			"op": "put",
+			"value": null,
+			"expect": {
+				"kept": [
+					"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+					"cbor"
+				],
+				"synced": [
+					"tmp/61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+			"form": "cbor",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "put",
+			"value": {
+				"/": {
+					"live": "clock"
+				}
+			},
+			"expect": {
+				"kept": [
+					"251a49fb4e845f8bd2df6fad6311d4d58f696dcc4483a6e897f24402167c21b1",
+					"cbor"
+				],
+				"synced": [
+					"tmp/251a49fb4e845f8bd2df6fad6311d4d58f696dcc4483a6e897f24402167c21b1",
+					"values"
+				]
+			}
+		},
+		{
+			"op": "get",
+			"hash": "251a49fb4e845f8bd2df6fad6311d4d58f696dcc4483a6e897f24402167c21b1",
+			"form": "cbor",
+			"expect": {
+				"value": {
+					"/": {
+						"live": "clock"
+					}
+				}
+			}
+		},
+		{
+			"op": "put",
+			"value": "12:00",
+			"expect": {
+				"kept": [
+					"9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+					"txt"
+				],
+				"synced": []
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": [
+					[
+						"values/251a49fb4e845f8bd2df6fad6311d4d58f696dcc4483a6e897f24402167c21b1",
+						"da1234567865636c6f636b"
+					],
+					[
+						"values/3a1d2e1079106cc7a51cb25f21067e4332dcf2770c6e6b71b7f7b2909a7e5214",
+						"a1657468656d65646461726b"
+					],
+					[
+						"values/61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+						"f6"
+					],
+					[
+						"values/92d56ff014557cc91cca0a8ad8bc26adf192df5a62f755ef14cebb8e2d5e82e4",
+						"0000803f0000c07f"
+					],
+					[
+						"values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"31323a3030"
+					],
+					[
+						"values/cf5f270861e86272d502f9617b7ecda66323f94292f2075b1e90fc13dae8253e",
+						"fbffffffffffffff"
+					],
+					[
+						"values/da6f5e807637dbb71b43a8f8337e1bb896ba1bfdeb4b78cfbcad13e7ea4664a3",
+						"89504e470d0a1a0a010203040506"
+					]
+				]
+			}
+		}
+	]
+}

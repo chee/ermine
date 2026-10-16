@@ -1,0 +1,131 @@
+{
+	"title": "Turkish i: dotless ı stays, dotted İ folds to i and a dot above, I to i",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "I",
+			"expect": {
+				"result": "i"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "i",
+			"expect": {
+				"result": "i"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ı",
+			"expect": {
+				"result": "ı"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "İ",
+			"expect": {
+				"result": "i̇"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "İ",
+			"expect": {
+				"result": "i̇"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "i̇",
+			"expect": {
+				"result": "i̇"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ıI",
+			"expect": {
+				"result": "ıi"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Iı",
+			"expect": {
+				"result": "iı"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ISTANBUL",
+			"expect": {
+				"result": "istanbul"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "İSTANBUL",
+			"expect": {
+				"result": "i̇stanbul"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ISPARTA",
+			"expect": {
+				"result": "isparta"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ısparta",
+			"expect": {
+				"result": "ısparta"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ıİı",
+			"expect": {
+				"result": "ıi̇ı"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ııı",
+			"expect": {
+				"result": "ııı"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ΑΣı",
+			"expect": {
+				"result": "αςı"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ıΣ",
+			"expect": {
+				"result": "ıσ"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ıΑΣ",
+			"expect": {
+				"result": "ıας"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Σ",
+			"expect": {
+				"result": "σ"
+			}
+		}
+	]
+}

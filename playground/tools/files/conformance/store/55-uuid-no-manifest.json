@@ -1,0 +1,93 @@
+{
+	"title": "a folder carrying a uuid and no manifest here, as iCloud brings one from another Mac, is a new store that keeps the uuid",
+	"steps": [
+		{
+			"op": "edit",
+			"edit": "mkdir",
+			"path": "@Outside/Brought"
+		},
+		{
+			"op": "edit",
+			"edit": "attr",
+			"path": "@Outside/Brought",
+			"name": "party.chee.ermine.store",
+			"text": "from-another-mac"
+		},
+		{
+			"op": "open",
+			"folder": "@Outside/Brought",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "observe",
+			"folder": "@Outside/Brought",
+			"at": [
+				"@Home/.ermine/external"
+			],
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.store": "from-another-mac"
+						}
+					}
+				],
+				"trash": [],
+				"listed": [],
+				"at": {
+					"@Home/.ermine/external": [
+						{
+							"path": "@Home/.ermine/external",
+							"kind": "folder"
+						},
+						{
+							"path": "@Home/.ermine/external/from-another-mac",
+							"kind": "folder"
+						},
+						{
+							"path": "@Home/.ermine/external/from-another-mac/id",
+							"kind": "folder"
+						},
+						{
+							"path": "@Home/.ermine/external/from-another-mac/tmp",
+							"kind": "folder"
+						},
+						{
+							"path": "@Home/.ermine/external/from-another-mac/values",
+							"kind": "folder"
+						},
+						{
+							"path": "@Home/.ermine/external/stores",
+							"kind": "file",
+							"stores": [
+								{
+									"uuid": "from-another-mac",
+									"path": "@Outside/Brought"
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "stores",
+			"expect": {
+				"stores": [
+					{
+						"uuid": "from-another-mac",
+						"path": "@Outside/Brought"
+					}
+				]
+			}
+		}
+	]
+}

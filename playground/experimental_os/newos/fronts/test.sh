@@ -1,0 +1,14 @@
+#!/bin/sh
+# test.sh: builds fronts_test.c with today's places, table, node, op and scheduler (the root Makefile's
+# places_src, less its harness) into OUT (default a temporary folder) and runs it
+set -e
+here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "$here/../../../.." && pwd)"
+out="${OUT:-$(mktemp -d)}"
+cd "$root"
+cc -std=c11 -Wall -Wextra -O1 -g -o "$out/fronts_test" "$here/fronts_test.c" "$here/fronts.c" \
+	filesystem/places/c/places.c filesystem/places/c/cache.c filesystem/places/c/status.c core/scheduler/c/selector.c \
+	core/table/c/table.c core/node/c/node.c core/node/c/update.c core/op/c/value.c core/op/c/apply.c core/op/c/invert.c \
+	core/scheduler/c/paths.c core/scheduler/c/scheduler.c core/scheduler/c/order.c core/scheduler/c/rank.c \
+	core/scheduler/c/causes.c core/scheduler/c/ptrmap.c core/scheduler/c/tracker.c
+"$out/fronts_test"

@@ -1,0 +1,128 @@
+{
+	"title": "frames read back folded into records, a null key gone, an empty frame nothing",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"a",
+					"31"
+				],
+				[
+					"b",
+					"32"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest",
+					"."
+				]
+			}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"a",
+					null
+				],
+				[
+					"c",
+					"33"
+				],
+				[
+					"é",
+					"34"
+				],
+				[
+					"",
+					"35"
+				],
+				[
+					"aa",
+					"36"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "append",
+			"frame": [],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"zz",
+					null
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": [
+					[
+						"manifest",
+						"00000009a2616141316162413200000015a56041356161f661634133626161413662c3a9413400000001a000000005a1627a7af6"
+					]
+				]
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"",
+						"35"
+					],
+					[
+						"aa",
+						"36"
+					],
+					[
+						"b",
+						"32"
+					],
+					[
+						"c",
+						"33"
+					],
+					[
+						"é",
+						"34"
+					]
+				]
+			}
+		}
+	]
+}

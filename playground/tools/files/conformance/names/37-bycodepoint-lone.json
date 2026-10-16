@@ -1,0 +1,101 @@
+{
+	"title": "a lone surrogate sorts as its UTF-16 unit: after U+E000 to U+FFFF",
+	"steps": [
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "￿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "￿",
+			"b": "\ud800",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "퟿",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "\udc00",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\udc00",
+			"b": "\ud800",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "\ud800",
+			"expect": {
+				"result": 0
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "a",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\udfff",
+			"b": "\udc00",
+			"expect": {
+				"result": 1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "\ud800",
+			"b": "𐀀",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "퟿",
+			"b": "\ud800",
+			"expect": {
+				"result": -1
+			}
+		},
+		{
+			"op": "bycodepoint",
+			"a": "a\ud800",
+			"b": "a",
+			"expect": {
+				"result": 1
+			}
+		}
+	]
+}

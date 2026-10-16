@@ -1,0 +1,15 @@
+{
+	"title": "_ alone after a number",
+	"steps": [
+		{
+			"op": "read",
+			"text": "1_",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

@@ -1,0 +1,200 @@
+{
+	"title": "/ as :, : as U+FF1A, NUL as U+FFFD, empty as untitled",
+	"steps": [
+		{
+			"op": "write",
+			"name": "a/b",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "a:b"
+			}
+		},
+		{
+			"op": "write",
+			"name": "a:b",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "a：b"
+			}
+		},
+		{
+			"op": "write",
+			"name": "a/b:c/d",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "a:b：c:d"
+			}
+		},
+		{
+			"op": "write",
+			"name": "a\u0000b",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "a�b"
+			}
+		},
+		{
+			"op": "write",
+			"name": "\u0000",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "�"
+			}
+		},
+		{
+			"op": "write",
+			"name": "",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "untitled"
+			}
+		},
+		{
+			"op": "write",
+			"name": "",
+			"pass": [],
+			"expect": {
+				"result": "untitled"
+			}
+		},
+		{
+			"op": "write",
+			"name": "plain",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "plain"
+			}
+		},
+		{
+			"op": "write",
+			"name": "日本語/😀",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "日本語:😀"
+			}
+		},
+		{
+			"op": "write",
+			"name": "：",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "："
+			}
+		},
+		{
+			"op": "write",
+			"name": ".",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": "."
+			}
+		},
+		{
+			"op": "write",
+			"name": "..",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": ".."
+			}
+		}
+	]
+}

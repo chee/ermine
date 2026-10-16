@@ -1,0 +1,488 @@
+{
+	"title": "a whole name matched by a pattern, * for any run",
+	"steps": [
+		{
+			"op": "passes",
+			"name": ".DS_Store",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": ".DS_StorE",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "x.DS_Store",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "._",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "._x",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": ".",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "x._x",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "Icon\r",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "Icon",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "~",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "a~",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "~a",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "a.swp",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": ".swp",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "swp",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "a.swpx",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "##",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "#",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "#a#",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "#a#b",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "4913",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "49130",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "",
+			"pass": [
+				"*"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "",
+			"pass": [
+				""
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "a",
+			"pass": [
+				""
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "a",
+			"pass": [],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "日本~",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "😀~",
+			"pass": [
+				".DS_Store",
+				".localized",
+				"._*",
+				"Icon\r",
+				"*~",
+				"*.swp",
+				"#*#",
+				"4913"
+			],
+			"expect": {
+				"result": true
+			}
+		},
+		{
+			"op": "passes",
+			"name": "é",
+			"pass": [
+				"é"
+			],
+			"expect": {
+				"result": false
+			}
+		},
+		{
+			"op": "passes",
+			"name": "É",
+			"pass": [
+				"é"
+			],
+			"expect": {
+				"result": false
+			}
+		}
+	]
+}

@@ -1,0 +1,266 @@
+{
+	"title": "anything else in .ermine is never read as an edit",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {
+				"root": "r"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "apps",
+			"value": {
+				"theme": "dark"
+			},
+			"expect": {
+				"id": "id1"
+			}
+		},
+		{
+			"op": "place",
+			"path": [
+				"apps"
+			],
+			"slot": "clock",
+			"value": "12:00",
+			"expect": {
+				"id": "id2"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": "hello",
+			"expect": {
+				"id": "id3"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": {
+				"/": {
+					"bytes": "iVBORw0KGgo"
+				}
+			},
+			"expect": {
+				"id": "id4"
+			}
+		},
+		{
+			"op": "mount",
+			"path": [],
+			"slot": "pinned",
+			"to": [
+				"docs"
+			],
+			"expect": {}
+		},
+		{
+			"op": "save",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": ".ermine/junk.txt",
+			"text": "junk"
+		},
+		{
+			"op": "edit",
+			"edit": "mkdir",
+			"path": ".ermine/stuff"
+		},
+		{
+			"op": "pass",
+			"touched": [
+				""
+			],
+			"expect": {
+				"called": false,
+				"settled": true
+			}
+		},
+		{
+			"op": "graph",
+			"expect": {
+				"root": "r",
+				"nodes": {
+					"id": "r",
+					"value": [],
+					"slots": [
+						[
+							"apps",
+							[
+								{
+									"id": "id1",
+									"value": [
+										{
+											"content": {
+												"theme": "dark"
+											},
+											"actor": "host"
+										}
+									],
+									"slots": [
+										[
+											"clock",
+											[
+												{
+													"id": "id2",
+													"value": [
+														{
+															"content": "12:00",
+															"actor": "host"
+														}
+													],
+													"slots": []
+												}
+											]
+										]
+									]
+								}
+							]
+						],
+						[
+							"docs",
+							[
+								{
+									"id": "id3",
+									"value": [
+										{
+											"content": "hello",
+											"actor": "host"
+										}
+									],
+									"slots": []
+								},
+								{
+									"id": "id4",
+									"value": [
+										{
+											"content": {
+												"/": {
+													"bytes": "iVBORw0KGgo"
+												}
+											},
+											"actor": "host"
+										}
+									],
+									"slots": []
+								}
+							]
+						],
+						[
+							"pinned",
+							[
+								{
+									"id": "id3",
+									"again": true
+								}
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/junk.txt",
+						"kind": "file",
+						"hex": "6a756e6b"
+					},
+					{
+						"path": ".ermine/stuff",
+						"kind": "folder"
+					},
+					{
+						"path": "apps",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "apps.text",
+						"kind": "file",
+						"hex": "7b0a2020227468656d65223a20226461726b220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "id1"
+						}
+					},
+					{
+						"path": "apps/clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "id2"
+						}
+					},
+					{
+						"path": "docs",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.slot": [
+								"r",
+								"docs"
+							]
+						}
+					},
+					{
+						"path": "docs/1.txt",
+						"kind": "file",
+						"hex": "68656c6c6f",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					},
+					{
+						"path": "docs/2.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "id4"
+						}
+					},
+					{
+						"path": "pinned.txt",
+						"kind": "link",
+						"target": "docs/1.txt",
+						"attrs": {
+							"party.chee.ermine.id": "id3"
+						}
+					}
+				],
+				"trash": null,
+				"listed": []
+			}
+		}
+	]
+}

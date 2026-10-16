@@ -1,0 +1,120 @@
+{
+	"title": "the stem with .FINAL added until it is free",
+	"steps": [
+		{
+			"op": "free",
+			"stem": "a",
+			"taken": [],
+			"expect": {
+				"result": "a"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "a",
+			"taken": [
+				"a"
+			],
+			"expect": {
+				"result": "a.FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "a",
+			"taken": [
+				"a",
+				"a.FINAL"
+			],
+			"expect": {
+				"result": "a.FINAL.FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "a",
+			"taken": [
+				"a.FINAL"
+			],
+			"expect": {
+				"result": "a"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "a",
+			"taken": [
+				"a",
+				"a.FINAL",
+				"a.FINAL.FINAL"
+			],
+			"expect": {
+				"result": "a.FINAL.FINAL.FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": ".",
+			"taken": [],
+			"expect": {
+				"result": "..FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "..",
+			"taken": [],
+			"expect": {
+				"result": "...FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": ".",
+			"taken": [
+				"..FINAL"
+			],
+			"expect": {
+				"result": "..FINAL.FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "",
+			"taken": [],
+			"expect": {
+				"result": ""
+			}
+		},
+		{
+			"op": "free",
+			"stem": "",
+			"taken": [
+				""
+			],
+			"expect": {
+				"result": ".FINAL"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "é",
+			"taken": [
+				"é"
+			],
+			"expect": {
+				"result": "é"
+			}
+		},
+		{
+			"op": "free",
+			"stem": "日本",
+			"taken": [
+				"日本"
+			],
+			"expect": {
+				"result": "日本.FINAL"
+			}
+		}
+	]
+}

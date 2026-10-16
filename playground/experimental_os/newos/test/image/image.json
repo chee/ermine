@@ -1,0 +1,121 @@
+{
+	"about": "a small image for newos/test/boot.c: kbd, and one JavaScript program in newcore's words",
+	"nodes": [
+		{
+			"at": [],
+			"name": "dev",
+			"value": null
+		},
+		{
+			"at": [],
+			"name": "drivers",
+			"value": null
+		},
+		{
+			"at": [],
+			"name": "programs",
+			"value": null
+		},
+		{
+			"at": [],
+			"name": "apps",
+			"value": null
+		},
+		{
+			"at": [
+				"drivers"
+			],
+			"name": "kbd",
+			"value": {
+				"kind": "c",
+				"name": "kbd"
+			}
+		},
+		{
+			"at": [
+				"dev"
+			],
+			"name": "kbd",
+			"value": null
+		},
+		{
+			"at": [
+				"programs"
+			],
+			"name": "hello",
+			"source": "programs/hello.js"
+		},
+		{
+			"at": [
+				"apps"
+			],
+			"name": "hello",
+			"value": null
+		},
+		{
+			"at": [
+				"programs"
+			],
+			"name": "bye",
+			"source": "programs/bye.js"
+		},
+		{
+			"at": [
+				"programs"
+			],
+			"name": "kid",
+			"source": "programs/kid.js"
+		},
+		{
+			"at": [
+				"programs"
+			],
+			"name": "parent",
+			"source": "programs/parent.js"
+		}
+	],
+	"boot": [
+		{
+			"start": [
+				"dev",
+				"kbd"
+			],
+			"name": "driver",
+			"program": [
+				"drivers",
+				"kbd"
+			]
+		},
+		{
+			"start": [
+				"apps",
+				"hello"
+			],
+			"name": "p",
+			"program": [
+				"programs",
+				"hello"
+			]
+		},
+		{
+			"start": [
+				"apps"
+			],
+			"name": "bye",
+			"program": [
+				"programs",
+				"bye"
+			]
+		},
+		{
+			"start": [
+				"apps"
+			],
+			"name": "parent",
+			"program": [
+				"programs",
+				"parent"
+			]
+		}
+	]
+}

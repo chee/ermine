@@ -1,0 +1,159 @@
+{
+	"title": "a dot not first, then 1 to 8 ASCII letters and digits",
+	"steps": [
+		{
+			"op": "extension",
+			"name": "clock",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "README.md",
+			"expect": {
+				"result": "md"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "data.raw.float32",
+			"expect": {
+				"result": "float32"
+			}
+		},
+		{
+			"op": "extension",
+			"name": ".bashrc",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "..a",
+			"expect": {
+				"result": "a"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "x.12345678",
+			"expect": {
+				"result": "12345678"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "x.123456789",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "x.tar-gz",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "x.é",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "x.ｔｘｔ",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "café.txt",
+			"expect": {
+				"result": "txt"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.b/c",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.TXT",
+			"expect": {
+				"result": "TXT"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.b\u0000",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "日本語.png",
+			"expect": {
+				"result": "png"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "😀.md",
+			"expect": {
+				"result": "md"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.FINAL",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.FINAL.FINAL",
+			"expect": {
+				"result": null
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.FINAL.txt",
+			"expect": {
+				"result": "txt"
+			}
+		},
+		{
+			"op": "extension",
+			"name": "a.final",
+			"expect": {
+				"result": "final"
+			}
+		}
+	]
+}

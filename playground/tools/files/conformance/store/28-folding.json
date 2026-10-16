@@ -1,0 +1,580 @@
+{
+	"title": "a manifest grown past four times what it holds and slack is folded to one frame once a batch is done; kept files no record names go",
+	"steps": [
+		{
+			"op": "open",
+			"slack": 0,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 4,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"b",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "zero",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "b"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 5,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"b",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "value 1",
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "b"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 6,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"b",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "value 2",
+							"change": {
+								"time": 6,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "b"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 7,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"b",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "value 3",
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "b"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 8,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"a",
+							[
+								{
+									"content": [
+										"a"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"b",
+							[
+								{
+									"content": [
+										"b"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "a",
+					"value": [
+						{
+							"content": "value 4",
+							"change": {
+								"time": 8,
+								"actor": "host",
+								"node": "a"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "b",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"bytes": "iVBORw0KGgo"
+								}
+							},
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "b"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94800",
+									"store": "a364646f6e65f94800647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00",
+									"node:a": "a5626964616164696e666f806576616c756581a2646b657074825820e36a2baf159c4569f59ecafe398293860cc3f5434b22a0a5f569faa9f45315d663747874666368616e6765a3646e6f646561616474696d65f94800656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:b": "a5626964616264696e666f806576616c756581a2646b6570748258206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb6362696e666368616e6765a3646e6f646561626474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8282616181a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481616182616281a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e74816162",
+									"shown:a": "a36466696c6565612e74787464686f6d658361726161f90000646c6169645820e36a2baf159c4569f59ecafe398293860cc3f5434b22a0a5f569faa9f45315d6",
+									"shown:b": "a36466696c6565622e706e6764686f6d658361726162f90000646c61696458206405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+									"shown:r": "a266666f6c646572f567656e7472696573a26161616161626162"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/6405057d5cb16b27ecb5fd26bb5e85e7265d832ce6bec05188276df6cae1bcdb",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a"
+					},
+					{
+						"path": ".ermine/values/e36a2baf159c4569f59ecafe398293860cc3f5434b22a0a5f569faa9f45315d6",
+						"kind": "file",
+						"hex": "76616c75652034"
+					},
+					{
+						"path": "a.txt",
+						"kind": "file",
+						"hex": "76616c75652034",
+						"attrs": {
+							"party.chee.ermine.id": "a"
+						}
+					},
+					{
+						"path": "b.png",
+						"kind": "file",
+						"hex": "89504e470d0a1a0a",
+						"attrs": {
+							"party.chee.ermine.id": "b"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "open",
+			"slack": 0,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 8,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"a",
+									[
+										{
+											"content": [
+												"a"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"b",
+									[
+										{
+											"content": [
+												"b"
+											],
+											"change": {
+												"node": "r",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "a",
+							"value": [
+								{
+									"content": "value 4",
+									"change": {
+										"node": "a",
+										"time": 8,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "b",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"bytes": "iVBORw0KGgo"
+										}
+									},
+									"change": {
+										"node": "b",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

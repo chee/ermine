@@ -1,0 +1,15 @@
+{
+	"title": "_ alone after a string with something in it",
+	"steps": [
+		{
+			"op": "read",
+			"text": "\"a\"_",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}

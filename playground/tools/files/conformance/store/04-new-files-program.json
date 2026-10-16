@@ -1,0 +1,106 @@
+{
+	"title": "a folder holding others' entries becomes a store for a host running the files program; they are differences",
+	"steps": [
+		{
+			"op": "edit",
+			"edit": "mkdir",
+			"path": ""
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": "notes.md",
+			"text": "# hi"
+		},
+		{
+			"op": "edit",
+			"edit": "mkdir",
+			"path": "photos"
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": "photos/cat.png",
+			"text": "meow"
+		},
+		{
+			"op": "open",
+			"files": true,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": [
+					{
+						"path": "notes.md",
+						"now": {
+							"kind": "file",
+							"form": "txt",
+							"value": "# hi",
+							"hash": "ecfab7efefceb72a09bc317d26dd040fbec6d5cff360a03a3f0a2e96de05111c"
+						}
+					},
+					{
+						"path": "photos",
+						"now": {
+							"kind": "folder"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": "notes.md",
+						"kind": "file",
+						"hex": "23206869"
+					},
+					{
+						"path": "photos",
+						"kind": "folder"
+					},
+					{
+						"path": "photos/cat.png",
+						"kind": "file",
+						"hex": "6d656f77"
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		}
+	]
+}

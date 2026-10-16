@@ -1,0 +1,15 @@
+{
+	"title": "base64 of a bad length",
+	"steps": [
+		{
+			"op": "read",
+			"text": "b64'a'",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

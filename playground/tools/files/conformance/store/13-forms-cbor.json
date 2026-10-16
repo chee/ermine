@@ -1,0 +1,1101 @@
+{
+	"title": "anything else is CBOR diagnostic notation in .text: null, booleans, numbers with a point, NaN, -0.0, lists, maps, bytes and typed arrays inside",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 20,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"null",
+							[
+								{
+									"content": [
+										"c1"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"yes",
+							[
+								{
+									"content": [
+										"c2"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"half",
+							[
+								{
+									"content": [
+										"c3"
+									],
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"minus zero",
+							[
+								{
+									"content": [
+										"c4"
+									],
+									"change": {
+										"time": 8,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"nan",
+							[
+								{
+									"content": [
+										"c5"
+									],
+									"change": {
+										"time": 10,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"inf",
+							[
+								{
+									"content": [
+										"c6"
+									],
+									"change": {
+										"time": 12,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"list",
+							[
+								{
+									"content": [
+										"c7"
+									],
+									"change": {
+										"time": 14,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"map",
+							[
+								{
+									"content": [
+										"c8"
+									],
+									"change": {
+										"time": 16,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"slash",
+							[
+								{
+									"content": [
+										"c9"
+									],
+									"change": {
+										"time": 18,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"big",
+							[
+								{
+									"content": [
+										"c10"
+									],
+									"change": {
+										"time": 20,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c1",
+					"value": [
+						{
+							"content": null,
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "c1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c2",
+					"value": [
+						{
+							"content": true,
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "c2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c3",
+					"value": [
+						{
+							"content": 1.5,
+							"change": {
+								"time": 5,
+								"actor": "host",
+								"node": "c3"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c4",
+					"value": [
+						{
+							"content": -0,
+							"change": {
+								"time": 7,
+								"actor": "host",
+								"node": "c4"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c5",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"number": "NaN"
+								}
+							},
+							"change": {
+								"time": 9,
+								"actor": "host",
+								"node": "c5"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c6",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"number": "Infinity"
+								}
+							},
+							"change": {
+								"time": 11,
+								"actor": "host",
+								"node": "c6"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c7",
+					"value": [
+						{
+							"content": [
+								1,
+								"x",
+								true,
+								null
+							],
+							"change": {
+								"time": 13,
+								"actor": "host",
+								"node": "c7"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c8",
+					"value": [
+						{
+							"content": {
+								"zeta": 1,
+								"alpha": {
+									"bytes": {
+										"/": {
+											"bytes": "AQI"
+										}
+									},
+									"floats": {
+										"/": {
+											"float32": [
+												1
+											]
+										}
+									}
+								},
+								"": []
+							},
+							"change": {
+								"time": 15,
+								"actor": "host",
+								"node": "c8"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c9",
+					"value": [
+						{
+							"content": {
+								"/": {
+									"map": {
+										"/": "a map whose one key is /"
+									}
+								}
+							},
+							"change": {
+								"time": 17,
+								"actor": "host",
+								"node": "c9"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "c10",
+					"value": [
+						{
+							"content": 1e+300,
+							"change": {
+								"time": 19,
+								"actor": "host",
+								"node": "c10"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94d00",
+									"plan": [
+										{
+											"id": "c10",
+											"to": "big.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "Z15Meq/UXk3t+6a/ufzPacqfja4oxotYILkl9ezd83Y"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c3",
+											"to": "half.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "IZJM9km7+kAE3mpbE0xqHPxfVv/TVbk4tS2R0BKMNXE"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "c6",
+											"to": "inf.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "ZyVTkBfYGntRGF+t9UGKs5IR+eRFfgIrdyyP2HZRnQQ"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										},
+										{
+											"id": "c7",
+											"to": "list.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "13FzcHKBFXOibUiC+nK33sfw3ZIponnNIlSBVoR2sp4"
+													}
+												}
+											},
+											"before": null,
+											"number": 4
+										},
+										{
+											"id": "c8",
+											"to": "map.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "BKrgeuFzVuKoHvDgC96RKoCEgtI/mGmpnDDz5aRF92A"
+													}
+												}
+											},
+											"before": null,
+											"number": 5
+										},
+										{
+											"id": "c4",
+											"to": "minus zero.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "kxvosu0AbgDUdmWrj2PCnQQnppq46wkZGXNM7mGjTWY"
+													}
+												}
+											},
+											"before": null,
+											"number": 6
+										},
+										{
+											"id": "c5",
+											"to": "nan.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "8jV0CTZMqeth0MOlxA9SV1QxXZfwMxlkM66uXPCSsEg"
+													}
+												}
+											},
+											"before": null,
+											"number": 7
+										},
+										{
+											"id": "c1",
+											"to": "null.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "Yam/EPD/7cfcd1ia4qtMqAsAbIBuZjbkG2BBDNjwu8Q"
+													}
+												}
+											},
+											"before": null,
+											"number": 8
+										},
+										{
+											"id": "c9",
+											"to": "slash.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "p6aiPAmExzFMQekQXidn8k4Bwnz2kNf5KWP/8m5mqlU"
+													}
+												}
+											},
+											"before": null,
+											"number": 9
+										},
+										{
+											"id": "c2",
+											"to": "yes.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "UY9yY/+4pBDkh0kVofmjvX8R2qL0kKvLAJOc3rAC/IE"
+													}
+												}
+											},
+											"before": null,
+											"number": 10
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e8a82646e756c6c81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e7481626331826379657381a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481626332826468616c6681a2666368616e6765a3646e6f646561726474696d65f94600656163746f7264686f737467636f6e74656e7481626333826a6d696e7573207a65726f81a2666368616e6765a3646e6f646561726474696d65f94800656163746f7264686f737467636f6e74656e748162633482636e616e81a2666368616e6765a3646e6f646561726474696d65f94900656163746f7264686f737467636f6e74656e74816263358263696e6681a2666368616e6765a3646e6f646561726474696d65f94a00656163746f7264686f737467636f6e74656e748162633682646c69737481a2666368616e6765a3646e6f646561726474696d65f94b00656163746f7264686f737467636f6e74656e748162633782636d617081a2666368616e6765a3646e6f646561726474696d65f94c00656163746f7264686f737467636f6e74656e74816263388265736c61736881a2666368616e6765a3646e6f646561726474696d65f94c80656163746f7264686f737467636f6e74656e7481626339826362696781a2666368616e6765a3646e6f646561726474696d65f94d00656163746f7264686f737467636f6e74656e748163633130",
+									"node:c1": "a562696462633164696e666f806576616c756581a2646b65707482582061a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc46463626f72666368616e6765a3646e6f64656263316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c2": "a562696462633264696e666f806576616c756581a2646b657074825820518f7263ffb8a410e4874915a1f9a3bd7f11daa2f490abcb00939cdeb002fc816463626f72666368616e6765a3646e6f64656263326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c3": "a562696462633364696e666f806576616c756581a2646b65707482582021924cf649bbfa4004de6a5b134c6a1cfc5f56ffd355b938b52d91d0128c35716463626f72666368616e6765a3646e6f64656263336474696d65f94500656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c4": "a562696462633464696e666f806576616c756581a2646b657074825820931be8b2ed006e00d47665ab8f63c29d0427a69ab8eb091919734cee61a34d666463626f72666368616e6765a3646e6f64656263346474696d65f94700656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c5": "a562696462633564696e666f806576616c756581a2646b657074825820f2357409364ca9eb61d0c3a5c40f525754315d97f033196433aeae5cf092b0486463626f72666368616e6765a3646e6f64656263356474696d65f94880656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c6": "a562696462633664696e666f806576616c756581a2646b6570748258206725539017d81a7b51185fadf5418ab39211f9e4457e022b772c8fd876519d046463626f72666368616e6765a3646e6f64656263366474696d65f94980656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c7": "a562696462633764696e666f806576616c756581a2646b657074825820d771737072811573a26d4882fa72b7dec7f0dd9229a279cd225481568476b29e6463626f72666368616e6765a3646e6f64656263376474696d65f94a80656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c8": "a562696462633864696e666f806576616c756581a2646b65707482582004aae07ae17356e2a81ef0e00bde912a808482d23f9869a99c30f3e5a445f7606463626f72666368616e6765a3646e6f64656263386474696d65f94b80656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:c9": "a562696462633964696e666f806576616c756581a2646b657074825820a7a6a23c0984c7314c41e9105e2767f24e01c27cf690d7f92963fff26e66aa556463626f72666368616e6765a3646e6f64656263396474696d65f94c40656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573aa636269676362696763696e6663696e66636d6170636d6170636e616e636e616e63796573637965736468616c666468616c66646c697374646c697374646e756c6c646e756c6c65736c61736865736c6173686a6d696e7573207a65726f6a6d696e7573207a65726f",
+									"node:c10": "a56269646363313064696e666f806576616c756581a2646b657074825820675e4c7aafd45e4dedfba6bfb9fccf69ca9f8dae28c68b5820b925f5ecddf3766463626f72666368616e6765a3646e6f6465636331306474696d65f94cc0656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:c1": "a36466696c65696e756c6c2e7465787464686f6d65836172646e756c6cf90000646c616964582061a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+									"shown:c2": "a36466696c65687965732e7465787464686f6d6583617263796573f90000646c6169645820518f7263ffb8a410e4874915a1f9a3bd7f11daa2f490abcb00939cdeb002fc81",
+									"shown:c3": "a36466696c656968616c662e7465787464686f6d658361726468616c66f90000646c616964582021924cf649bbfa4004de6a5b134c6a1cfc5f56ffd355b938b52d91d0128c3571",
+									"shown:c4": "a36466696c656f6d696e7573207a65726f2e7465787464686f6d658361726a6d696e7573207a65726ff90000646c6169645820931be8b2ed006e00d47665ab8f63c29d0427a69ab8eb091919734cee61a34d66",
+									"shown:c5": "a36466696c65686e616e2e7465787464686f6d65836172636e616ef90000646c6169645820f2357409364ca9eb61d0c3a5c40f525754315d97f033196433aeae5cf092b048",
+									"shown:c6": "a36466696c6568696e662e7465787464686f6d6583617263696e66f90000646c61696458206725539017d81a7b51185fadf5418ab39211f9e4457e022b772c8fd876519d04",
+									"shown:c7": "a36466696c65696c6973742e7465787464686f6d65836172646c697374f90000646c6169645820d771737072811573a26d4882fa72b7dec7f0dd9229a279cd225481568476b29e",
+									"shown:c8": "a36466696c65686d61702e7465787464686f6d65836172636d6170f90000646c616964582004aae07ae17356e2a81ef0e00bde912a808482d23f9869a99c30f3e5a445f760",
+									"shown:c9": "a36466696c656a736c6173682e7465787464686f6d6583617265736c617368f90000646c6169645820a7a6a23c0984c7314c41e9105e2767f24e01c27cf690d7f92963fff26e66aa55",
+									"shown:c10": "a36466696c65686269672e7465787464686f6d6583617263626967f90000646c6169645820675e4c7aafd45e4dedfba6bfb9fccf69ca9f8dae28c68b5820b925f5ecddf376"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94d00647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/04aae07ae17356e2a81ef0e00bde912a808482d23f9869a99c30f3e5a445f760",
+						"kind": "file",
+						"hex": "a36080647a657461f93c0065616c706861a265627974657342010266666c6f617473d855440000803f"
+					},
+					{
+						"path": ".ermine/values/21924cf649bbfa4004de6a5b134c6a1cfc5f56ffd355b938b52d91d0128c3571",
+						"kind": "file",
+						"hex": "f93e00"
+					},
+					{
+						"path": ".ermine/values/518f7263ffb8a410e4874915a1f9a3bd7f11daa2f490abcb00939cdeb002fc81",
+						"kind": "file",
+						"hex": "f5"
+					},
+					{
+						"path": ".ermine/values/61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+						"kind": "file",
+						"hex": "f6"
+					},
+					{
+						"path": ".ermine/values/6725539017d81a7b51185fadf5418ab39211f9e4457e022b772c8fd876519d04",
+						"kind": "file",
+						"hex": "f97c00"
+					},
+					{
+						"path": ".ermine/values/675e4c7aafd45e4dedfba6bfb9fccf69ca9f8dae28c68b5820b925f5ecddf376",
+						"kind": "file",
+						"hex": "fb7e37e43c8800759c"
+					},
+					{
+						"path": ".ermine/values/931be8b2ed006e00d47665ab8f63c29d0427a69ab8eb091919734cee61a34d66",
+						"kind": "file",
+						"hex": "f98000"
+					},
+					{
+						"path": ".ermine/values/a7a6a23c0984c7314c41e9105e2767f24e01c27cf690d7f92963fff26e66aa55",
+						"kind": "file",
+						"hex": "a1612f781861206d61702077686f7365206f6e65206b6579206973202f"
+					},
+					{
+						"path": ".ermine/values/d771737072811573a26d4882fa72b7dec7f0dd9229a279cd225481568476b29e",
+						"kind": "file",
+						"hex": "84f93c006178f5f6"
+					},
+					{
+						"path": ".ermine/values/f2357409364ca9eb61d0c3a5c40f525754315d97f033196433aeae5cf092b048",
+						"kind": "file",
+						"hex": "f97e00"
+					},
+					{
+						"path": "big.text",
+						"kind": "file",
+						"hex": "31652b333030",
+						"attrs": {
+							"party.chee.ermine.id": "c10"
+						}
+					},
+					{
+						"path": "half.text",
+						"kind": "file",
+						"hex": "312e35",
+						"attrs": {
+							"party.chee.ermine.id": "c3"
+						}
+					},
+					{
+						"path": "inf.text",
+						"kind": "file",
+						"hex": "496e66696e697479",
+						"attrs": {
+							"party.chee.ermine.id": "c6"
+						}
+					},
+					{
+						"path": "list.text",
+						"kind": "file",
+						"hex": "5b0a2020312e302c0a20202278222c0a2020747275652c0a20206e756c6c0a5d",
+						"attrs": {
+							"party.chee.ermine.id": "c7"
+						}
+					},
+					{
+						"path": "map.text",
+						"kind": "file",
+						"hex": "7b0a202022223a205b5d2c0a202022616c706861223a207b0a20202020226279746573223a20682730313032272c0a2020202022666c6f617473223a203835286827303030303830336627290a20207d2c0a2020227a657461223a20312e300a7d",
+						"attrs": {
+							"party.chee.ermine.id": "c8"
+						}
+					},
+					{
+						"path": "minus zero.text",
+						"kind": "file",
+						"hex": "2d302e30",
+						"attrs": {
+							"party.chee.ermine.id": "c4"
+						}
+					},
+					{
+						"path": "nan.text",
+						"kind": "file",
+						"hex": "4e614e",
+						"attrs": {
+							"party.chee.ermine.id": "c5"
+						}
+					},
+					{
+						"path": "null.text",
+						"kind": "file",
+						"hex": "6e756c6c",
+						"attrs": {
+							"party.chee.ermine.id": "c1"
+						}
+					},
+					{
+						"path": "slash.text",
+						"kind": "file",
+						"hex": "7b0a2020222f223a202261206d61702077686f7365206f6e65206b6579206973202f220a7d",
+						"attrs": {
+							"party.chee.ermine.id": "c9"
+						}
+					},
+					{
+						"path": "yes.text",
+						"kind": "file",
+						"hex": "74727565",
+						"attrs": {
+							"party.chee.ermine.id": "c2"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 20,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"null",
+									[
+										{
+											"content": [
+												"c1"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"yes",
+									[
+										{
+											"content": [
+												"c2"
+											],
+											"change": {
+												"node": "r",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"half",
+									[
+										{
+											"content": [
+												"c3"
+											],
+											"change": {
+												"node": "r",
+												"time": 6,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"minus zero",
+									[
+										{
+											"content": [
+												"c4"
+											],
+											"change": {
+												"node": "r",
+												"time": 8,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"nan",
+									[
+										{
+											"content": [
+												"c5"
+											],
+											"change": {
+												"node": "r",
+												"time": 10,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"inf",
+									[
+										{
+											"content": [
+												"c6"
+											],
+											"change": {
+												"node": "r",
+												"time": 12,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"list",
+									[
+										{
+											"content": [
+												"c7"
+											],
+											"change": {
+												"node": "r",
+												"time": 14,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"map",
+									[
+										{
+											"content": [
+												"c8"
+											],
+											"change": {
+												"node": "r",
+												"time": 16,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"slash",
+									[
+										{
+											"content": [
+												"c9"
+											],
+											"change": {
+												"node": "r",
+												"time": 18,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"big",
+									[
+										{
+											"content": [
+												"c10"
+											],
+											"change": {
+												"node": "r",
+												"time": 20,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "c1",
+							"value": [
+								{
+									"content": null,
+									"change": {
+										"node": "c1",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c2",
+							"value": [
+								{
+									"content": true,
+									"change": {
+										"node": "c2",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c3",
+							"value": [
+								{
+									"content": 1.5,
+									"change": {
+										"node": "c3",
+										"time": 5,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c4",
+							"value": [
+								{
+									"content": -0,
+									"change": {
+										"node": "c4",
+										"time": 7,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c5",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"number": "NaN"
+										}
+									},
+									"change": {
+										"node": "c5",
+										"time": 9,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c6",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"number": "Infinity"
+										}
+									},
+									"change": {
+										"node": "c6",
+										"time": 11,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c7",
+							"value": [
+								{
+									"content": [
+										1,
+										"x",
+										true,
+										null
+									],
+									"change": {
+										"node": "c7",
+										"time": 13,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c8",
+							"value": [
+								{
+									"content": {
+										"": [],
+										"zeta": 1,
+										"alpha": {
+											"bytes": {
+												"/": {
+													"bytes": "AQI"
+												}
+											},
+											"floats": {
+												"/": {
+													"float32": [
+														1
+													]
+												}
+											}
+										}
+									},
+									"change": {
+										"node": "c8",
+										"time": 15,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c9",
+							"value": [
+								{
+									"content": {
+										"/": {
+											"map": {
+												"/": "a map whose one key is /"
+											}
+										}
+									},
+									"change": {
+										"node": "c9",
+										"time": 17,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "c10",
+							"value": [
+								{
+									"content": 1e+300,
+									"change": {
+										"node": "c10",
+										"time": 19,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

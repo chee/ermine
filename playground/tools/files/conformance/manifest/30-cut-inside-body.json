@@ -1,0 +1,87 @@
+{
+	"title": "a last frame cut short (inside-body) is dropped and cut off by an append",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000009a26161",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"a",
+						"31"
+					]
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [],
+				"files": [
+					[
+						"manifest",
+						"00000005a16161413100000009a26161"
+					]
+				]
+			}
+		},
+		{
+			"op": "append",
+			"frame": [
+				[
+					"c",
+					"33"
+				]
+			],
+			"expect": {
+				"synced": [
+					"manifest"
+				]
+			}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [],
+				"files": [
+					[
+						"manifest",
+						"00000005a16161413100000005a161634133"
+					]
+				]
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"a",
+						"31"
+					],
+					[
+						"c",
+						"33"
+					]
+				]
+			}
+		}
+	]
+}

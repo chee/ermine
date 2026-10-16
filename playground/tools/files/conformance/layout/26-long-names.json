@@ -1,0 +1,728 @@
+{
+	"title": "a long name cut between scalar values to leave room for its extension and five .FINALs",
+	"steps": [
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": [
+								"a"
+							],
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy": [
+								"b"
+							],
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": [
+								"c"
+							],
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊": [
+								"d"
+							],
+							"u": [
+								"e",
+								"f"
+							],
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": [
+								"g"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"c": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"d": {
+						"kept": [
+							"f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9",
+							"float64"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"e": {
+						"kept": [
+							"b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"f": {
+						"kept": [
+							"a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"g": {
+						"kept": [
+							"e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {},
+			"probe": {
+				"": [
+					".ermine"
+				],
+				".ermine": []
+			},
+			"time": 1,
+			"ino": {},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"u": [
+								"u",
+								"1",
+								"2"
+							],
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊"
+						}
+					},
+					"e": {
+						"home": [
+							"r",
+							"u",
+							0
+						],
+						"file": "1.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+					},
+					"f": {
+						"home": [
+							"r",
+							"u",
+							1
+						],
+						"file": "2.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+					},
+					"a": {
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							0
+						],
+						"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+					},
+					"b": {
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+							0
+						],
+						"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+					},
+					"c": {
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"g": {
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+							0
+						],
+						"file": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+					},
+					"d": {
+						"home": [
+							"r",
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊",
+							0
+						],
+						"file": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊.float64",
+						"laid": "f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9"
+					},
+					"k": {
+						"home": [
+							"c",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"u": [
+								"u",
+								"1",
+								"2"
+							],
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊"
+						}
+					},
+					"e": {
+						"home": [
+							"r",
+							"u",
+							0
+						],
+						"file": "1.txt",
+						"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+					},
+					"f": {
+						"home": [
+							"r",
+							"u",
+							1
+						],
+						"file": "2.txt",
+						"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+					},
+					"a": {
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							0
+						],
+						"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+						"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+					},
+					"b": {
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+							0
+						],
+						"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+						"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+					},
+					"c": {
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"g": {
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+							0
+						],
+						"file": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+						"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+					},
+					"d": {
+						"home": [
+							"r",
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊",
+							0
+						],
+						"file": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊.float64",
+						"laid": "f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9"
+					},
+					"k": {
+						"home": [
+							"c",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "folder",
+						"to": "u",
+						"before": null,
+						"after": {
+							"folder": null
+						},
+						"slot": [
+							"r",
+							"u"
+						]
+					},
+					{
+						"number": 2,
+						"what": "file",
+						"to": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+						"before": null,
+						"after": {
+							"file": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+						},
+						"id": "b",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 3,
+						"what": "file",
+						"to": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+						"before": null,
+						"after": {
+							"file": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+						},
+						"id": "a",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 4,
+						"what": "folder",
+						"to": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+						"before": null,
+						"after": {
+							"folder": null
+						},
+						"id": "c",
+						"info": []
+					},
+					{
+						"number": 5,
+						"what": "file",
+						"to": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+						"before": null,
+						"after": {
+							"file": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+						},
+						"id": "g",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 6,
+						"what": "file",
+						"to": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊.float64",
+						"before": null,
+						"after": {
+							"file": "f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9"
+						},
+						"id": "d",
+						"form": "float64",
+						"info": []
+					},
+					{
+						"number": 7,
+						"what": "file",
+						"to": "u/1.txt",
+						"before": null,
+						"after": {
+							"file": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+						},
+						"id": "e",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 8,
+						"what": "file",
+						"to": "u/2.txt",
+						"before": null,
+						"after": {
+							"file": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+						},
+						"id": "f",
+						"form": "txt",
+						"info": []
+					},
+					{
+						"number": 9,
+						"what": "file",
+						"to": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/k.txt",
+						"before": null,
+						"after": {
+							"file": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+						},
+						"id": "k",
+						"form": "txt",
+						"info": []
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": [
+								"a"
+							],
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy": [
+								"b"
+							],
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": [
+								"c"
+							],
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊": [
+								"d"
+							],
+							"u": [
+								"e",
+								"f"
+							],
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": [
+								"g"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"b": {
+						"kept": [
+							"2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"c": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"d": {
+						"kept": [
+							"f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9",
+							"float64"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"e": {
+						"kept": [
+							"b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"f": {
+						"kept": [
+							"a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"g": {
+						"kept": [
+							"e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"u": [
+							"u",
+							"1",
+							"2"
+						],
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL",
+						"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+						"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+						"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊"
+					}
+				},
+				"e": {
+					"home": [
+						"r",
+						"u",
+						0
+					],
+					"file": "1.txt",
+					"laid": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4"
+				},
+				"f": {
+					"home": [
+						"r",
+						"u",
+						1
+					],
+					"file": "2.txt",
+					"laid": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334"
+				},
+				"a": {
+					"home": [
+						"r",
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+						0
+					],
+					"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt",
+					"laid": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19"
+				},
+				"b": {
+					"home": [
+						"r",
+						"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+						0
+					],
+					"file": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt",
+					"laid": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2"
+				},
+				"c": {
+					"home": [
+						"r",
+						"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"g": {
+					"home": [
+						"r",
+						"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+						0
+					],
+					"file": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+					"laid": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0"
+				},
+				"d": {
+					"home": [
+						"r",
+						"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊",
+						0
+					],
+					"file": "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊.float64",
+					"laid": "f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9"
+				},
+				"k": {
+					"home": [
+						"c",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"expect": {
+				"laid": {
+					"u/1.txt": {
+						"kind": "file",
+						"id": "e",
+						"home": [
+							"r",
+							"u",
+							0
+						],
+						"form": "txt",
+						"hash": "b29d086848ae252d713ba2b9ff9d0e9ad2793b21d1dc1c9ae7b1643c8d45ceb4",
+						"info": []
+					},
+					"u/2.txt": {
+						"kind": "file",
+						"id": "f",
+						"home": [
+							"r",
+							"u",
+							1
+						],
+						"form": "txt",
+						"hash": "a847d48f4d24443d4432aba13d762df8e2aabcc87b45fe73b924b6277072f334",
+						"info": []
+					},
+					"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.txt": {
+						"kind": "file",
+						"id": "a",
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+							0
+						],
+						"form": "txt",
+						"hash": "211db469968e18af8a4c08b0aaca0901a09e1dd5929df5bebf8c38c8c8a12e19",
+						"info": []
+					},
+					"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.FINAL.txt": {
+						"kind": "file",
+						"id": "b",
+						"home": [
+							"r",
+							"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxy",
+							0
+						],
+						"form": "txt",
+						"hash": "2dc99999a6aaef3f20349d2ed4057a2b54419545dabb809e6381de1bad8337e2",
+						"info": []
+					},
+					"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé": {
+						"kind": "folder",
+						"id": "c",
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+							0
+						],
+						"info": []
+					},
+					"ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md": {
+						"kind": "file",
+						"id": "g",
+						"home": [
+							"r",
+							"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.md",
+							0
+						],
+						"form": "txt",
+						"hash": "e812913d334930050ec0ad1139344ab06db428c6d2b144f4e6f020a8f7222ec0",
+						"info": []
+					},
+					"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊.float64": {
+						"kind": "file",
+						"id": "d",
+						"home": [
+							"r",
+							"🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊",
+							0
+						],
+						"form": "float64",
+						"hash": "f0bd6238f8843422aa7b59ba6f2648e369f435ba8dadb02c81832861447552d9",
+						"info": []
+					},
+					"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé/k.txt": {
+						"kind": "file",
+						"id": "k",
+						"home": [
+							"c",
+							"k",
+							0
+						],
+						"form": "txt",
+						"hash": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"info": []
+					},
+					"u": {
+						"kind": "union",
+						"holder": "r",
+						"name": "u"
+					}
+				}
+			}
+		}
+	]
+}

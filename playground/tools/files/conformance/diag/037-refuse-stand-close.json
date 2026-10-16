@@ -1,0 +1,15 @@
+{
+	"title": "a stand-in's kind not closed by )",
+	"steps": [
+		{
+			"op": "read",
+			"text": "305419896(\"clock\" 1)",
+			"expect": {
+				"code": "not-diag",
+				"at": 18,
+				"line": 1,
+				"column": 19
+			}
+		}
+	]
+}

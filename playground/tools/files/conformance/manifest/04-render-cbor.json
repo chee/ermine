@@ -1,0 +1,207 @@
+{
+	"title": "any other value's file is its diagnostic notation",
+	"steps": [
+		{
+			"op": "render",
+			"value": null,
+			"form": "cbor",
+			"expect": {
+				"bytes": "6e756c6c"
+			}
+		},
+		{
+			"op": "render",
+			"value": true,
+			"form": "cbor",
+			"expect": {
+				"bytes": "74727565"
+			}
+		},
+		{
+			"op": "render",
+			"value": 1,
+			"form": "cbor",
+			"expect": {
+				"bytes": "312e30"
+			}
+		},
+		{
+			"op": "render",
+			"value": -0,
+			"form": "cbor",
+			"expect": {
+				"bytes": "2d302e30"
+			}
+		},
+		{
+			"op": "render",
+			"value": 0.1,
+			"form": "cbor",
+			"expect": {
+				"bytes": "302e31"
+			}
+		},
+		{
+			"op": "render",
+			"value": 1e+21,
+			"form": "cbor",
+			"expect": {
+				"bytes": "31652b3231"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"number": "NaN"
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "4e614e"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"number": "-Infinity"
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "2d496e66696e697479"
+			}
+		},
+		{
+			"op": "render",
+			"value": [
+				"a\"\\\n\t\u0001é"
+			],
+			"form": "cbor",
+			"expect": {
+				"bytes": "5b0a202022615c225c5c5c6e5c745c7530303031c3a9220a5d"
+			}
+		},
+		{
+			"op": "render",
+			"value": [],
+			"form": "cbor",
+			"expect": {
+				"bytes": "5b5d"
+			}
+		},
+		{
+			"op": "render",
+			"value": {},
+			"form": "cbor",
+			"expect": {
+				"bytes": "7b7d"
+			}
+		},
+		{
+			"op": "render",
+			"value": [
+				1,
+				"two",
+				null
+			],
+			"form": "cbor",
+			"expect": {
+				"bytes": "5b0a2020312e302c0a20202274776f222c0a20206e756c6c0a5d"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"theme": "dark",
+				"n": -0,
+				"b": {
+					"/": {
+						"bytes": "AAA"
+					}
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "7b0a20202262223a20682730303030272c0a2020226e223a202d302e302c0a2020227468656d65223a20226461726b220a7d"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"a": [
+					1,
+					{
+						"b": []
+					}
+				]
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "7b0a20202261223a205b0a20202020312e302c0a202020207b0a2020202020202262223a205b5d0a202020207d0a20205d0a7d"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"t": {
+					"/": {
+						"float32": [
+							1
+						]
+					}
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "7b0a20202274223a203835286827303030303830336627290a7d"
+			}
+		},
+		{
+			"op": "render",
+			"value": [
+				{
+					"/": {
+						"int8": [
+							1,
+							2
+						]
+					}
+				}
+			],
+			"form": "cbor",
+			"expect": {
+				"bytes": "5b0a202037322868273031303227290a5d"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"live": "clock"
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "3330353431393839362822636c6f636b2229"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"c": {
+					"/": {
+						"live": {
+							"w": 1
+						}
+					}
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"bytes": "7b0a20202263223a20333035343139383936287b0a202020202277223a20312e300a20207d290a7d"
+			}
+		}
+	]
+}

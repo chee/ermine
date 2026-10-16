@@ -1,0 +1,15 @@
+{
+	"title": "a - with no number",
+	"steps": [
+		{
+			"op": "read",
+			"text": "-",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

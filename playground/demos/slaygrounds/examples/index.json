@@ -1,0 +1,214 @@
+[
+	{
+		"name": "counter",
+		"title": "counter: n, double, a count (jsx)"
+	},
+	{
+		"name": "todos",
+		"title": "todos: a keyed list of nodes (jsx)"
+	},
+	{
+		"name": "clock",
+		"title": "two processes: a clock and a view (jsx)"
+	},
+	{
+		"name": "async",
+		"title": "async: a compute awaiting a fake fetch (jsx)"
+	},
+	{
+		"name": "rules",
+		"title": "rules: a node of rules, refused items (jsx)"
+	},
+	{
+		"name": "call",
+		"title": "a call across processes (jsx)"
+	},
+	{
+		"name": "trust",
+		"title": "trust: a vault only a person opens, and the tricks that fail (jsx)"
+	},
+	{
+		"name": "toy-pet",
+		"title": "toy-pet: a pet that gets hungry (jsx)"
+	},
+	{
+		"name": "toy-paint",
+		"title": "toy-paint: pixel pad, two views (jsx)"
+	},
+	{
+		"name": "lab-pyramid",
+		"title": "lab: pyramid of dots, a number in a node each (jsx)"
+	},
+	{
+		"name": "toy-drums",
+		"title": "toy-drums: a tiny drum machine (jsx)"
+	},
+	{
+		"name": "toy-stickers",
+		"title": "toy-stickers: a sticker page (jsx)"
+	},
+	{
+		"name": "toy-fortune",
+		"title": "toy-fortune: ask the ball (jsx)"
+	},
+	{
+		"name": "desk",
+		"title": "desk: folders, drag to move, alt-drag to mount, who drew this pixel? (jsx)"
+	},
+	{
+		"name": "lab-boids",
+		"title": "lab: boids, the rules are nodes (jsx)"
+	},
+	{
+		"name": "talk",
+		"title": "talk: five ways processes talk (jsx)"
+	},
+	{
+		"name": "lab-strokes",
+		"title": "lab: strokes are nodes, two canvases (jsx)"
+	},
+	{
+		"name": "live-camera",
+		"title": "live-camera: a camera, a code editor, an output, wired (jsx)"
+	},
+	{
+		"name": "lab-life",
+		"title": "lab: life, a node per cell, a plan of flips (jsx)"
+	},
+	{
+		"name": "lab-sheet",
+		"title": "lab: sheet, a calc per cell, pending cells (jsx)"
+	},
+	{
+		"name": "big-trello",
+		"title": "big-trello: a board, drag cards (places' move), undo"
+	},
+	{
+		"name": "lab-lamps",
+		"title": "lab: lamps, lit by the nearest power up the tree (jsx)"
+	},
+	{
+		"name": "big-shell",
+		"title": "big-shell: a shell over the graph, run and kill processes (jsx)"
+	},
+	{
+		"name": "toy-tarot",
+		"title": "toy-tarot: gather entropy, seed a shuffle, read the cards (jsx)"
+	},
+	{
+		"name": "big-rewind",
+		"title": "big-rewind: snake on a nokia 3210, and a time machine (jsx)"
+	},
+	{
+		"name": "prog-render",
+		"title": "prog-render: view nodes, one renderer, two hosts (dom, chars)"
+	},
+	{
+		"name": "prog-build",
+		"title": "prog-build: loaders collected on a walk, C to wasm, a build cache (jsx)"
+	},
+	{
+		"name": "big-duet",
+		"title": "big-duet: two editors, one text node, a poet (jsx)"
+	},
+	{
+		"name": "nn",
+		"title": "nn: a neural network, a node per weight (jsx)"
+	},
+	{
+		"name": "lab-save",
+		"title": "lab: save and load, /data packed into IndexedDB (jsx)"
+	},
+	{
+		"name": "lab-load",
+		"title": "lab: load a graph, drop in a file 💾 save graph made (jsx)"
+	},
+	{
+		"name": "lab-sync",
+		"title": "lab: sync, a note for everyone here, with cursors, over galaxy (jsx)"
+	},
+	{
+		"name": "lab-pig",
+		"title": "lab: pigs everyone adds, carries, bins and shames, over galaxy (walking worked out, never sent; the carry ephemeral, the drop stored) (jsx)"
+	},
+	{
+		"name": "fancy-layers",
+		"title": "fancy-layers: a pixel editor on same-id layers (draft, preview, pending over stored)"
+	},
+	{
+		"name": "fancy-branches",
+		"title": "fancy-branches: time travel with branches, a history tree, compare and merge"
+	},
+	{
+		"name": "fancy-synth",
+		"title": "fancy-synth: a little eurorack, modules are processes, cables are nodes (jsx)"
+	},
+	{
+		"name": "fancy-sequencer",
+		"title": "fancy-sequencer: notes are nodes, a clock process, patterns mounted twice (jsx)"
+	},
+	{
+		"name": "fancy-notebook",
+		"title": "fancy-notebook: a reactive notebook, cells are nodes, arrows are each run's reads (jsx)"
+	},
+	{
+		"name": "fancy-lisp",
+		"title": "fancy-lisp: a lisp REPL whose frames are folders, lookup walks up (jsx)"
+	},
+	{
+		"name": "fancy-desktop",
+		"title": "fancy-desktop: windows are processes, apps found by lookup (jsx)"
+	},
+	{
+		"name": "fancy-scene",
+		"title": "fancy-scene: a 3D scene graph, an instance, a spinner (jsx)"
+	},
+	{
+		"name": "friends-card",
+		"title": "friends-card: a birthday card going round, a flower for every name (jsx)"
+	},
+	{
+		"name": "friends-riso",
+		"title": "friends-riso: a riso poster, three drums off register, ink runs out (jsx)"
+	},
+	{
+		"name": "friends-dinner",
+		"title": "friends-dinner: dinner at mine, the post brings replies, seats as they answer (jsx)"
+	},
+	{
+		"name": "friends-plants",
+		"title": "friends-plants: the windowsill rota, a fox, a frog and a cactus (jsx)"
+	},
+	{
+		"name": "fancy-embark",
+		"title": "fancy-embark: a trip as a dynamic document, places, formulas, map and calendar (jsx)"
+	},
+	{
+		"name": "piece-pipe",
+		"title": "piece-pipe: one thing in two shapes, a lens rewrites the patches between (jsx)"
+	},
+	{
+		"name": "piece-oven",
+		"title": "piece-oven: ovens that await, pending and burnt on each computer's status node, settings written by upsert (jsx)"
+	},
+	{
+		"name": "piece-dev",
+		"title": "piece-dev: processes at paths shadow saved names, readers counted plain and through the path cache (jsx)"
+	},
+	{
+		"name": "piece-lazy",
+		"title": "piece-lazy: /dev/clock ticks only while someone reads its time (jsx)"
+	},
+	{
+		"name": "piece-skin",
+		"title": "piece-skin: my tweak over a shared card, a patch node, a drag ghost, stale and land (jsx)"
+	},
+	{
+		"name": "piece-cursors",
+		"title": "piece-cursors: presence on two devices (and other tabs), rows that grey and go (jsx)"
+	},
+	{
+		"name": "piece-lens",
+		"title": "piece-lens: a file or folder from your computer, a patchwork doc, inner nodes; splices between, through lenses with complements (jsx)"
+	}
+]

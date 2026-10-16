@@ -1,0 +1,15 @@
+{
+	"title": "\\u{} with no digits",
+	"steps": [
+		{
+			"op": "read",
+			"text": "\"\\u{}\"",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

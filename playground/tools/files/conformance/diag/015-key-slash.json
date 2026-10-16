@@ -1,0 +1,31 @@
+{
+	"title": "a key \"/\" is a key like any",
+	"steps": [
+		{
+			"op": "write",
+			"value": {
+				"/": {
+					"map": {
+						"/": 1
+					}
+				}
+			},
+			"expect": {
+				"text": "{\n  \"/\": 1.0\n}"
+			}
+		},
+		{
+			"op": "read",
+			"text": "{\n  \"/\": 1.0\n}",
+			"expect": {
+				"value": {
+					"/": {
+						"map": {
+							"/": 1
+						}
+					}
+				}
+			}
+		}
+	]
+}

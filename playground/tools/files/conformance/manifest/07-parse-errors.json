@@ -1,0 +1,77 @@
+{
+	"title": "a file that does not read as its form is a form error",
+	"steps": [
+		{
+			"op": "parse",
+			"bytes": "ff",
+			"form": "txt",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "c328",
+			"form": "cbor",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b2261223a20",
+			"form": "cbor",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "31283229",
+			"form": "cbor",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "7b2261223a20312c202261223a20327d",
+			"form": "cbor",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "000000",
+			"form": "float32",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "000000000000000000",
+			"form": "int64",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "00",
+			"form": "uint16",
+			"expect": {
+				"code": "form"
+			}
+		},
+		{
+			"op": "parse",
+			"bytes": "000000",
+			"form": "int32",
+			"expect": {
+				"code": "form"
+			}
+		}
+	]
+}

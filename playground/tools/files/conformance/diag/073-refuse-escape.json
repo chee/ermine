@@ -1,0 +1,15 @@
+{
+	"title": "an escape that means nothing",
+	"steps": [
+		{
+			"op": "read",
+			"text": "\"a\\x\"",
+			"expect": {
+				"code": "not-diag",
+				"at": 2,
+				"line": 1,
+				"column": 3
+			}
+		}
+	]
+}

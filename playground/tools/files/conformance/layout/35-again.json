@@ -1,0 +1,1003 @@
+{
+	"title": "laid out again: the same graph with no before gives no plan; with no ino a folder is expected as any",
+	"steps": [
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {},
+			"probe": {
+				"": [
+					".ermine"
+				],
+				".ermine": []
+			},
+			"time": 1,
+			"ino": {},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"a": "a"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"a": "a"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "folder",
+						"to": "a",
+						"before": null,
+						"after": {
+							"folder": null
+						},
+						"id": "a",
+						"info": []
+					},
+					{
+						"number": 2,
+						"what": "file",
+						"to": "a/k.txt",
+						"before": null,
+						"after": {
+							"file": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+						},
+						"id": "k",
+						"form": "txt",
+						"info": []
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"a": "a"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"expect": {
+				"laid": {
+					"a": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"a/k.txt": {
+						"kind": "file",
+						"id": "k",
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"form": "txt",
+						"hash": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"info": []
+					}
+				}
+			}
+		},
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"a": "a"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"probe": {
+				"": [
+					".ermine",
+					"a"
+				],
+				".ermine": [],
+				"a": [
+					"k.txt"
+				]
+			},
+			"time": 2,
+			"ino": {
+				"a": 100
+			},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"a": "a"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"changed": {},
+				"plan": []
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"a": "a"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"expect": {
+				"laid": {
+					"a": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"a",
+							0
+						],
+						"info": []
+					},
+					"a/k.txt": {
+						"kind": "file",
+						"id": "k",
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"form": "txt",
+						"hash": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"info": []
+					}
+				}
+			}
+		},
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"a": "a"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"a",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"probe": {
+				"": [
+					".ermine",
+					"a"
+				],
+				".ermine": [],
+				"a": [
+					"k.txt"
+				]
+			},
+			"time": 3,
+			"before": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"a": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"b": "b"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true,
+						"entries": {
+							"b": "b"
+						}
+					},
+					"a": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						}
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "rename",
+						"from": "a",
+						"to": "b",
+						"before": {
+							"folder": null
+						},
+						"after": {
+							"folder": null
+						},
+						"id": "a"
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"b": "b"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"b",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"expect": {
+				"laid": {
+					"b": {
+						"kind": "folder",
+						"id": "a",
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"info": []
+					},
+					"b/k.txt": {
+						"kind": "file",
+						"id": "k",
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"form": "txt",
+						"hash": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"info": []
+					}
+				}
+			}
+		},
+		{
+			"op": "lay",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"old": {
+				"r": {
+					"folder": true,
+					"entries": {
+						"b": "b"
+					}
+				},
+				"a": {
+					"home": [
+						"r",
+						"b",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					}
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+				}
+			},
+			"probe": {
+				"": [
+					".ermine",
+					"b"
+				],
+				".ermine": [],
+				"b": [
+					"k.txt"
+				]
+			},
+			"time": 4,
+			"ino": {
+				"b": 100
+			},
+			"before": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"b": [
+								"a"
+							]
+						}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"expect": {
+				"layout": {
+					"r": {
+						"folder": true
+					},
+					"a": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						},
+						"away": true
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"away": true
+					}
+				},
+				"changed": {
+					"r": {
+						"folder": true
+					},
+					"a": {
+						"home": [
+							"r",
+							"b",
+							0
+						],
+						"folder": true,
+						"entries": {
+							"k": "k"
+						},
+						"away": true
+					},
+					"k": {
+						"home": [
+							"a",
+							"k",
+							0
+						],
+						"file": "k.txt",
+						"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+						"away": true
+					}
+				},
+				"plan": [
+					{
+						"number": 1,
+						"what": "remove",
+						"from": "b/k.txt",
+						"before": {
+							"file": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8"
+						},
+						"after": null,
+						"id": "k",
+						"form": "txt"
+					},
+					{
+						"number": 2,
+						"what": "remove",
+						"from": "b",
+						"before": {
+							"folder": 100
+						},
+						"after": null,
+						"id": "a"
+					}
+				]
+			}
+		},
+		{
+			"op": "disk",
+			"graph": {
+				"root": "r",
+				"nodes": {
+					"r": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					},
+					"a": {
+						"kept": [
+							"61a9bf10f0ffedc7dc77589ae2ab4ca80b006c806e6636e41b60410cd8f0bbc4",
+							"cbor"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {
+							"k": [
+								"k"
+							]
+						}
+					},
+					"k": {
+						"kept": [
+							"ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+							"txt"
+						],
+						"sides": [],
+						"info": [],
+						"directory": {}
+					}
+				}
+			},
+			"layout": {
+				"r": {
+					"folder": true
+				},
+				"a": {
+					"home": [
+						"r",
+						"b",
+						0
+					],
+					"folder": true,
+					"entries": {
+						"k": "k"
+					},
+					"away": true
+				},
+				"k": {
+					"home": [
+						"a",
+						"k",
+						0
+					],
+					"file": "k.txt",
+					"laid": "ed402bf6bd346d6df9d375dbeb5d632c18a5af0ff5fabff372f3ee1af8cc05a8",
+					"away": true
+				}
+			},
+			"expect": {
+				"laid": {}
+			}
+		}
+	]
+}

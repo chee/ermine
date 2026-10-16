@@ -1,0 +1,123 @@
+{
+	"title": "the store record: format 1, done and pass",
+	"steps": [
+		{
+			"op": "encode",
+			"codec": "state",
+			"record": {
+				"format": 1,
+				"done": 6,
+				"pass": [
+					".DS_Store",
+					"*~"
+				]
+			},
+			"expect": {
+				"bytes": "a364646f6e65f94600647061737382692e44535f53746f7265622a7e66666f726d6174f93c00"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a364646f6e65f94600647061737382692e44535f53746f7265622a7e66666f726d6174f93c00",
+			"expect": {
+				"record": {
+					"format": 1,
+					"done": 6,
+					"pass": [
+						".DS_Store",
+						"*~"
+					]
+				}
+			}
+		},
+		{
+			"op": "encode",
+			"codec": "state",
+			"record": {
+				"format": 1,
+				"done": 0,
+				"pass": []
+			},
+			"expect": {
+				"bytes": "a364646f6e65f9000064706173738066666f726d6174f93c00"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a364646f6e65f9000064706173738066666f726d6174f93c00",
+			"expect": {
+				"record": {
+					"format": 1,
+					"done": 0,
+					"pass": []
+				}
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a364646f6e65f9460064706173738066666f726d6174f94000",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a364646f6e65f9460064706173738066666f726d61746131",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a264646f6e65f94600647061737380",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a264646f6e65f9460066666f726d6174f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a264706173738066666f726d6174f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a364646f6e65f94600647061737381f93c0066666f726d6174f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "a464646f6e65f94600647061737380656578747261f93c0066666f726d6174f93c00",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "decode",
+			"codec": "state",
+			"bytes": "81f93c00",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

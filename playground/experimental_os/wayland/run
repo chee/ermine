@@ -1,0 +1,28 @@
+#!/bin/sh
+# run: a command as a client of ermineOS's Wayland compositor (NOTES.md).
+#   wayland/run weston-simple-shm      a client built here (../mac/build/wayland/bin), or any command
+#   wayland/run                        lists the clients built here, and the live sockets
+# XDG_RUNTIME_DIR: as drv_wayland.c chooses it, $XDG_RUNTIME_DIR if set,
+# else ~/.ermine/wayland. WAYLAND_DISPLAY: if not set, the first wayland-N
+# a compositor holds (its .lock open: a crashed run's socket is skipped).
+here="$(cd "$(dirname "$0")" && pwd)"
+bin="$here/../mac/build/wayland/bin"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.ermine/wayland}"
+live() { [ -S "$XDG_RUNTIME_DIR/$1" ] && [ -n "$(lsof -t "$XDG_RUNTIME_DIR/$1.lock" 2>/dev/null)" ]; }
+sockets() { for s in $(ls "$XDG_RUNTIME_DIR" 2>/dev/null | grep '^wayland-[0-9]*$' | sort -t- -k2 -n); do live "$s" && echo "$s"; done; }
+if [ $# -eq 0 ]; then
+	echo "clients in $bin:"
+	ls "$bin" | grep -v -e '\.dSYM$' -e '^way_test' -e '^wayland-scanner$' | sed 's/^/  /'
+	echo "live in $XDG_RUNTIME_DIR:"
+	sockets | sed 's/^/  /'
+	exit 0
+fi
+if [ -z "$WAYLAND_DISPLAY" ]; then
+	WAYLAND_DISPLAY="$(sockets | head -1)"
+	export WAYLAND_DISPLAY
+fi
+if [ -z "$WAYLAND_DISPLAY" ] || ! live "$WAYLAND_DISPLAY"; then
+	echo "run: no compositor on $XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:-wayland-N}: is ermineOS running? (cat /dev/wayland/socket there)" >&2
+	exit 1
+fi
+PATH="$bin:$PATH" exec "$@"

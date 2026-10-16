@@ -1,0 +1,194 @@
+{
+	"title": "a lone surrogate, NUL, and controls pass through",
+	"steps": [
+		{
+			"op": "key",
+			"stem": "\ud800",
+			"expect": {
+				"result": "\ud800"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\udc00",
+			"expect": {
+				"result": "\udc00"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "a\ud800B",
+			"expect": {
+				"result": "a\ud800b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\udc00\ud800",
+			"expect": {
+				"result": "\udc00\ud800"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "A\ud83d",
+			"expect": {
+				"result": "a\ud83d"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\ude00A",
+			"expect": {
+				"result": "\ude00a"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\u0000",
+			"expect": {
+				"result": "\u0000"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "A\u0000B",
+			"expect": {
+				"result": "a\u0000b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\u0001",
+			"expect": {
+				"result": "\u0001"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "﻿",
+			"expect": {
+				"result": "﻿"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "�",
+			"expect": {
+				"result": "�"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "￿",
+			"expect": {
+				"result": "￿"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "￾",
+			"expect": {
+				"result": "￾"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "",
+			"expect": {
+				"result": ""
+			}
+		},
+		{
+			"op": "key",
+			"stem": "‍",
+			"expect": {
+				"result": "‍"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "A‍B",
+			"expect": {
+				"result": "a‍b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": " ",
+			"expect": {
+				"result": " "
+			}
+		},
+		{
+			"op": "key",
+			"stem": "a­b",
+			"expect": {
+				"result": "a­b"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "  ",
+			"expect": {
+				"result": "  "
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\r\n\t ",
+			"expect": {
+				"result": "\r\n\t "
+			}
+		},
+		{
+			"op": "key",
+			"stem": "͸",
+			"expect": {
+				"result": "͸"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "􏿿",
+			"expect": {
+				"result": "􏿿"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "󠀁",
+			"expect": {
+				"result": "󠀁"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "󠄀",
+			"expect": {
+				"result": "󠄀"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "ΑΣ\ud800",
+			"expect": {
+				"result": "ας\ud800"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "Σ\ud800Α",
+			"expect": {
+				"result": "σ\ud800α"
+			}
+		},
+		{
+			"op": "key",
+			"stem": "\ud800Σ",
+			"expect": {
+				"result": "\ud800σ"
+			}
+		}
+	]
+}

@@ -1,0 +1,426 @@
+{
+	"title": "a live content is left out; a live change, because or header cannot be saved",
+	"steps": [
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"info",
+					0,
+					1,
+					0,
+					"content"
+				]
+			],
+			"expect": {
+				"record": "a5626964616c64696e666f8182616981a2646b65707482582056af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f463747874666368616e6765f944006576616c756581a3646b657074825820b6f86afd9b2006f02a4a7f052019ba229416ff951b46663a8e8e9537bd04165763747874666368616e6765f93c006762656361757365f9400066686561646572a2656163746f7261616563617573656163686368696c6472656e8182616381a2666368616e6765f9450067636f6e74656e74816161",
+				"values": [
+					[
+						"56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4",
+						"z"
+					],
+					[
+						"b6f86afd9b2006f02a4a7f052019ba229416ff951b46663a8e8e9537bd041657",
+						"v"
+					]
+				],
+				"shape": {
+					"kept": [
+						"b6f86afd9b2006f02a4a7f052019ba229416ff951b46663a8e8e9537bd041657",
+						"txt"
+					],
+					"sides": [],
+					"info": [
+						[
+							"i",
+							"56af6a39348011a941d5dfd8d2a89106aa13691d554fa6fc160fc97e56a1e3f4",
+							"txt"
+						]
+					],
+					"directory": [
+						[
+							"c",
+							[
+								"a"
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"value",
+					0,
+					"change"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"value",
+					0,
+					"because"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"info",
+					0,
+					1,
+					1,
+					"change"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"children",
+					0,
+					1,
+					0,
+					"change"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"header",
+					"actor"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "save",
+			"node": {
+				"id": "l",
+				"value": [
+					{
+						"content": "v",
+						"change": 1,
+						"because": 2
+					}
+				],
+				"info": [
+					[
+						"i",
+						[
+							{
+								"content": "w",
+								"change": 3
+							},
+							{
+								"content": "z",
+								"change": 4
+							}
+						]
+					]
+				],
+				"children": [
+					[
+						"c",
+						[
+							{
+								"content": [
+									"a"
+								],
+								"change": 5
+							}
+						]
+					]
+				],
+				"header": {
+					"actor": "a",
+					"cause": "c"
+				}
+			},
+			"live": [
+				[
+					"header",
+					"cause"
+				]
+			],
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

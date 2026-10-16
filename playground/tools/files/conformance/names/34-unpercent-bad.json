@@ -1,0 +1,229 @@
+{
+	"title": "a segment that does not decode is returned as it is",
+	"steps": [
+		{
+			"op": "unpercent",
+			"segment": "%",
+			"expect": {
+				"result": "%"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%2",
+			"expect": {
+				"result": "%2"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%zz",
+			"expect": {
+				"result": "%zz"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%2G",
+			"expect": {
+				"result": "%2G"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "a%",
+			"expect": {
+				"result": "a%"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "ok%41%",
+			"expect": {
+				"result": "ok%41%"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%80",
+			"expect": {
+				"result": "%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%BF",
+			"expect": {
+				"result": "%BF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3",
+			"expect": {
+				"result": "%C3"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3%",
+			"expect": {
+				"result": "%C3%"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3%2",
+			"expect": {
+				"result": "%C3%2"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3A",
+			"expect": {
+				"result": "%C3A"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3%41",
+			"expect": {
+				"result": "%C3%41"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C3%C3",
+			"expect": {
+				"result": "%C3%C3"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%E6%97",
+			"expect": {
+				"result": "%E6%97"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%F0%9F%98",
+			"expect": {
+				"result": "%F0%9F%98"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C0%80",
+			"expect": {
+				"result": "%C0%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%C1%BF",
+			"expect": {
+				"result": "%C1%BF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%E0%80%80",
+			"expect": {
+				"result": "%E0%80%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%E0%9F%BF",
+			"expect": {
+				"result": "%E0%9F%BF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%F0%80%80%80",
+			"expect": {
+				"result": "%F0%80%80%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%F0%8F%BF%BF",
+			"expect": {
+				"result": "%F0%8F%BF%BF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%ED%A0%80",
+			"expect": {
+				"result": "%ED%A0%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%ED%BF%BF",
+			"expect": {
+				"result": "%ED%BF%BF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%ED%9F%BF",
+			"expect": {
+				"result": "퟿"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%EE%80%80",
+			"expect": {
+				"result": ""
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%F4%90%80%80",
+			"expect": {
+				"result": "%F4%90%80%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%F8%88%80%80%80",
+			"expect": {
+				"result": "%F8%88%80%80%80"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%FF",
+			"expect": {
+				"result": "%FF"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%FE%FE",
+			"expect": {
+				"result": "%FE%FE"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "%41%42%C3",
+			"expect": {
+				"result": "%41%42%C3"
+			}
+		},
+		{
+			"op": "unpercent",
+			"segment": "é%zz",
+			"expect": {
+				"result": "é%zz"
+			}
+		}
+	]
+}

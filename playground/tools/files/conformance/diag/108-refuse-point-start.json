@@ -1,0 +1,15 @@
+{
+	"title": ".5 is not a number",
+	"steps": [
+		{
+			"op": "read",
+			"text": ".5",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

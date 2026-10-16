@@ -1,0 +1,1536 @@
+{
+	"title": "info is party.chee.ermine.info.<name> on the file and the folder, rendered in its form; a value written again keeps a Finder tag",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 7,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:00",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [
+						[
+							"color",
+							[
+								{
+									"content": "red",
+									"change": {
+										"time": 5,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"shape",
+							[
+								{
+									"content": {
+										"round": true
+									},
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"bytes",
+							[
+								{
+									"content": {
+										"/": {
+											"bytes": "AAH/"
+										}
+									},
+									"change": {
+										"time": 7,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"inner",
+							[
+								{
+									"content": [
+										"i"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "i",
+					"value": [
+						{
+							"content": 1,
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "i"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94700",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "i",
+											"to": "clock/inner.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "CcxW6bhIeZRZ577s4bTdlzwRubtbJSNYVm3uRNVLTGk"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f838265636f6c6f7281a2646b65707482582041c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f52563747874666368616e6765a3646e6f646561636474696d65f94500656163746f7264686f73748265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f73746576616c756581a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:i": "a5626964616964696e666f806576616c756581a2646b65707482582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c696463626f72666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a56466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9266666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:i": "a36466696c656a696e6e65722e7465787464686f6d6583616365696e6e6572f90000646c616964582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94700647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+						"kind": "file",
+						"hex": "f93c00"
+					},
+					{
+						"path": ".ermine/values/41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+						"kind": "file",
+						"hex": "726564"
+					},
+					{
+						"path": ".ermine/values/58a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea1920",
+						"kind": "file",
+						"hex": "a165726f756e64f5"
+					},
+					{
+						"path": ".ermine/values/92f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb65585",
+						"kind": "file",
+						"hex": "0001ff"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": "clock",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.color": "red",
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}"
+						}
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3030",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.color": "red",
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}"
+						}
+					},
+					{
+						"path": "clock/inner.text",
+						"kind": "file",
+						"hex": "312e30",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "edit",
+			"edit": "attr",
+			"path": "clock.txt",
+			"name": "com.apple.metadata:_kMDItemUserTags",
+			"text": "Red"
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 10,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:01",
+							"change": {
+								"time": 8,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [
+						[
+							"shape",
+							[
+								{
+									"content": {
+										"round": true
+									},
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"bytes",
+							[
+								{
+									"content": {
+										"/": {
+											"bytes": "AAH/"
+										}
+									},
+									"change": {
+										"time": 7,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"size",
+							[
+								{
+									"content": 3,
+									"change": {
+										"time": 10,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"inner",
+							[
+								{
+									"content": [
+										"i"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "i",
+					"value": [
+						{
+							"content": 1,
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "i"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"attrs": [
+				"com.apple.metadata:_kMDItemUserTags"
+			],
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94700",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "i",
+											"to": "clock/inner.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "CcxW6bhIeZRZ577s4bTdlzwRubtbJSNYVm3uRNVLTGk"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f838265636f6c6f7281a2646b65707482582041c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f52563747874666368616e6765a3646e6f646561636474696d65f94500656163746f7264686f73748265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f73746576616c756581a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:i": "a5626964616964696e666f806576616c756581a2646b65707482582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c696463626f72666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a56466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9266666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:i": "a36466696c656a696e6e65722e7465787464686f6d6583616365696e6e6572f90000646c616964582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94700647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94900",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "YGAhjrL98mFX/Aftl5Xl/9tIalFU/1ITopl+QChD5LY"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "info",
+											"after": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "YGAhjrL98mFX/Aftl5Xl/9tIalFU/1ITopl+QChD5LY"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "QdHfvnQNdszYe6Fjb7WfVBjznSyzRIBLDQALJ6B+faM"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"number": 2
+										}
+									],
+									"node:c": "a5626964616364696e666f838265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f7374826473697a6581a2646b6570748258206060218eb2fdf26157fc07ed9795e5ffdb486a5154ff5213a2997e402843e4b66463626f72666368616e6765a3646e6f646561636474696d65f94900656163746f7264686f73746576616c756581a2646b65707482582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da363747874666368616e6765a3646e6f646561636474696d65f94800656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"shown:c": "a66377617358209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c926466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c616964582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da366666f6c646572f567656e7472696573a165696e6e657265696e6e6572"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94900647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00",
+									"shown:c": "a56466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c616964582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da366666f6c646572f567656e7472696573a165696e6e657265696e6e6572"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+						"kind": "file",
+						"hex": "f93c00"
+					},
+					{
+						"path": ".ermine/values/41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+						"kind": "file",
+						"hex": "726564"
+					},
+					{
+						"path": ".ermine/values/41d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da3",
+						"kind": "file",
+						"hex": "31323a3031"
+					},
+					{
+						"path": ".ermine/values/58a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea1920",
+						"kind": "file",
+						"hex": "a165726f756e64f5"
+					},
+					{
+						"path": ".ermine/values/6060218eb2fdf26157fc07ed9795e5ffdb486a5154ff5213a2997e402843e4b6",
+						"kind": "file",
+						"hex": "f94200"
+					},
+					{
+						"path": ".ermine/values/92f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb65585",
+						"kind": "file",
+						"hex": "0001ff"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": "clock",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
+							"party.chee.ermine.info.size": "3.0"
+						}
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3031",
+						"attrs": {
+							"com.apple.metadata:_kMDItemUserTags": "Red",
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
+							"party.chee.ermine.info.size": "3.0"
+						}
+					},
+					{
+						"path": "clock/inner.text",
+						"kind": "file",
+						"hex": "312e30",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 11,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"clock",
+							[
+								{
+									"content": [
+										"c"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "c",
+					"value": [
+						{
+							"content": "12:01",
+							"change": {
+								"time": 8,
+								"actor": "host",
+								"node": "c"
+							}
+						}
+					],
+					"info": [
+						[
+							"shape",
+							[
+								{
+									"content": {
+										"round": true
+									},
+									"change": {
+										"time": 6,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"bytes",
+							[
+								{
+									"content": {
+										"/": {
+											"bytes": "AAH/"
+										}
+									},
+									"change": {
+										"time": 7,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						],
+						[
+							"size",
+							[
+								{
+									"content": 4,
+									"change": {
+										"time": 11,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					],
+					"children": [
+						[
+							"inner",
+							[
+								{
+									"content": [
+										"i"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "c"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "i",
+					"value": [
+						{
+							"content": 1,
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "i"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "observe",
+			"attrs": [
+				"com.apple.metadata:_kMDItemUserTags"
+			],
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94700",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "folder",
+											"after": {
+												"folder": null
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [
+												[
+													"color",
+													{
+														"/": {
+															"bytes": "QcjXWOiA/ovZii2XMmY3MVjQH5WfNI1BiS7gW/Ai9SU"
+														}
+													},
+													"txt"
+												],
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										},
+										{
+											"id": "i",
+											"to": "clock/inner.text",
+											"form": "cbor",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "CcxW6bhIeZRZ577s4bTdlzwRubtbJSNYVm3uRNVLTGk"
+													}
+												}
+											},
+											"before": null,
+											"number": 3
+										}
+									],
+									"node:c": "a5626964616364696e666f838265636f6c6f7281a2646b65707482582041c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f52563747874666368616e6765a3646e6f646561636474696d65f94500656163746f7264686f73748265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f73746576616c756581a2646b6570748258209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9263747874666368616e6765a3646e6f646561636474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"node:i": "a5626964616964696e666f806576616c756581a2646b65707482582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c696463626f72666368616e6765a3646e6f646561696474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e818265636c6f636b81a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816163",
+									"shown:c": "a56466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c61696458209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c9266666f6c646572f567656e7472696573a165696e6e657265696e6e6572",
+									"shown:i": "a36466696c656a696e6e65722e7465787464686f6d6583616365696e6e6572f90000646c616964582009cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+									"shown:r": "a266666f6c646572f567656e7472696573a165636c6f636b65636c6f636b"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94700647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94900",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "YGAhjrL98mFX/Aftl5Xl/9tIalFU/1ITopl+QChD5LY"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "info",
+											"after": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"form": "txt",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "YGAhjrL98mFX/Aftl5Xl/9tIalFU/1ITopl+QChD5LY"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "QdHfvnQNdszYe6Fjb7WfVBjznSyzRIBLDQALJ6B+faM"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "nUAt3T9LeEspIzR2xpmnb0vibh8v0paW6Qhgu2Y0XJI"
+													}
+												}
+											},
+											"number": 2
+										}
+									],
+									"node:c": "a5626964616364696e666f838265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f7374826473697a6581a2646b6570748258206060218eb2fdf26157fc07ed9795e5ffdb486a5154ff5213a2997e402843e4b66463626f72666368616e6765a3646e6f646561636474696d65f94900656163746f7264686f73746576616c756581a2646b65707482582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da363747874666368616e6765a3646e6f646561636474696d65f94800656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169",
+									"shown:c": "a66377617358209d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c926466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c616964582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da366666f6c646572f567656e7472696573a165696e6e657265696e6e6572"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94900647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00",
+									"shown:c": "a56466696c6569636c6f636b2e74787464686f6d6583617265636c6f636bf90000646c616964582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da366666f6c646572f567656e7472696573a165696e6e657265696e6e6572"
+								}
+							},
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94980",
+									"plan": [
+										{
+											"id": "c",
+											"to": "clock",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "Y6Ui0DBVbWe9CqHXWEggSAlLIQYyCZ+w+1Jl3G32m+4"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "info",
+											"after": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"before": {
+												"folder": {
+													"ino": "clock"
+												}
+											},
+											"number": 1
+										},
+										{
+											"id": "c",
+											"to": "clock.txt",
+											"info": [
+												[
+													"shape",
+													{
+														"/": {
+															"bytes": "WKldan7zVO95faB98Pgnbo0YyCI1icT/MJiTg7fqGSA"
+														}
+													},
+													"cbor"
+												],
+												[
+													"bytes",
+													{
+														"/": {
+															"bytes": "kvECEySUld0oHZYGnVHQK6+ZYRmkvuHzzPyqCqu2VYU"
+														}
+													},
+													"bin"
+												],
+												[
+													"size",
+													{
+														"/": {
+															"bytes": "Y6Ui0DBVbWe9CqHXWEggSAlLIQYyCZ+w+1Jl3G32m+4"
+														}
+													},
+													"cbor"
+												]
+											],
+											"what": "info",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "QdHfvnQNdszYe6Fjb7WfVBjznSyzRIBLDQALJ6B+faM"
+													}
+												}
+											},
+											"before": {
+												"file": {
+													"/": {
+														"bytes": "QdHfvnQNdszYe6Fjb7WfVBjznSyzRIBLDQALJ6B+faM"
+													}
+												}
+											},
+											"number": 2
+										}
+									],
+									"node:c": "a5626964616364696e666f838265736861706581a2646b65707482582058a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea19206463626f72666368616e6765a3646e6f646561636474696d65f94600656163746f7264686f73748265627974657381a2646b65707482582092f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb655856362696e666368616e6765a3646e6f646561636474696d65f94700656163746f7264686f7374826473697a6581a2646b65707482582063a522d030556d67bd0aa1d758482048094b210632099fb0fb5265dc6df69bee6463626f72666368616e6765a3646e6f646561636474696d65f94980656163746f7264686f73746576616c756581a2646b65707482582041d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da363747874666368616e6765a3646e6f646561636474696d65f94800656163746f7264686f737466686561646572a0686368696c6472656e818265696e6e657281a2666368616e6765a3646e6f646561636474696d65f94400656163746f7264686f737467636f6e74656e74816169"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94980647061737388692e44535f53746f72656a2e6c6f63616c697a6564632e5f2a6549636f6e0d622a7e652a2e73777063232a23643439313366666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/09cc56e9b848799459e7beece1b4dd973c11b9bb5b252358566dee44d54b4c69",
+						"kind": "file",
+						"hex": "f93c00"
+					},
+					{
+						"path": ".ermine/values/41c8d758e880fe8bd98a2d973266373158d01f959f348d41892ee05bf022f525",
+						"kind": "file",
+						"hex": "726564"
+					},
+					{
+						"path": ".ermine/values/41d1dfbe740d76ccd87ba1636fb59f5418f39d2cb344804b0d000b27a07e7da3",
+						"kind": "file",
+						"hex": "31323a3031"
+					},
+					{
+						"path": ".ermine/values/58a95d6a7ef354ef797da07df0f8276e8d18c8223589c4ff30989383b7ea1920",
+						"kind": "file",
+						"hex": "a165726f756e64f5"
+					},
+					{
+						"path": ".ermine/values/6060218eb2fdf26157fc07ed9795e5ffdb486a5154ff5213a2997e402843e4b6",
+						"kind": "file",
+						"hex": "f94200"
+					},
+					{
+						"path": ".ermine/values/63a522d030556d67bd0aa1d758482048094b210632099fb0fb5265dc6df69bee",
+						"kind": "file",
+						"hex": "f94400"
+					},
+					{
+						"path": ".ermine/values/92f10213249495dd281d96069d51d02baf996119a4bee1f3ccfcaa0aabb65585",
+						"kind": "file",
+						"hex": "0001ff"
+					},
+					{
+						"path": ".ermine/values/9d402ddd3f4b784b29233476c699a76f4be26e1f2fd29696e90860bb66345c92",
+						"kind": "file",
+						"hex": "31323a3030"
+					},
+					{
+						"path": "clock",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
+							"party.chee.ermine.info.size": "4.0"
+						}
+					},
+					{
+						"path": "clock.txt",
+						"kind": "file",
+						"hex": "31323a3031",
+						"attrs": {
+							"com.apple.metadata:_kMDItemUserTags": "Red",
+							"party.chee.ermine.id": "c",
+							"party.chee.ermine.info.bytes": {
+								"hex": "0001ff"
+							},
+							"party.chee.ermine.info.shape": "{\n  \"round\": true\n}",
+							"party.chee.ermine.info.size": "3.0"
+						}
+					},
+					{
+						"path": "clock/inner.text",
+						"kind": "file",
+						"hex": "312e30",
+						"attrs": {
+							"party.chee.ermine.id": "i"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": []
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 11,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"clock",
+									[
+										{
+											"content": [
+												"c"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "c",
+							"value": [
+								{
+									"content": "12:01",
+									"change": {
+										"node": "c",
+										"time": 8,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [
+								[
+									"shape",
+									[
+										{
+											"content": {
+												"round": true
+											},
+											"change": {
+												"node": "c",
+												"time": 6,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"bytes",
+									[
+										{
+											"content": {
+												"/": {
+													"bytes": "AAH/"
+												}
+											},
+											"change": {
+												"node": "c",
+												"time": 7,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"size",
+									[
+										{
+											"content": 4,
+											"change": {
+												"node": "c",
+												"time": 11,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"children": [
+								[
+									"inner",
+									[
+										{
+											"content": [
+												"i"
+											],
+											"change": {
+												"node": "c",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "i",
+							"value": [
+								{
+									"content": 1,
+									"change": {
+										"node": "i",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		}
+	]
+}

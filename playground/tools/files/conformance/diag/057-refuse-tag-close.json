@@ -1,0 +1,15 @@
+{
+	"title": "a tag's value not closed by )",
+	"steps": [
+		{
+			"op": "read",
+			"text": "72(h'00' 1)",
+			"expect": {
+				"code": "not-diag",
+				"at": 9,
+				"line": 1,
+				"column": 10
+			}
+		}
+	]
+}

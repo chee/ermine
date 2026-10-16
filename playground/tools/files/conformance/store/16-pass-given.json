@@ -1,0 +1,368 @@
+{
+	"title": "a store made with its own pass keeps it in its store record; a passed name is written in _ and is never a difference",
+	"steps": [
+		{
+			"op": "edit",
+			"edit": "mkdir",
+			"path": ""
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": "junk.tmp",
+			"text": "a person's"
+		},
+		{
+			"op": "open",
+			"pass": [
+				"*.tmp",
+				".DS_Store"
+			],
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": null
+			}
+		},
+		{
+			"op": "write",
+			"root": "r",
+			"time": 4,
+			"nodes": [
+				{
+					"id": "r",
+					"value": [],
+					"info": [],
+					"children": [
+						[
+							"x.tmp",
+							[
+								{
+									"content": [
+										"p1"
+									],
+									"change": {
+										"time": 2,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						],
+						[
+							"plain",
+							[
+								{
+									"content": [
+										"p2"
+									],
+									"change": {
+										"time": 4,
+										"actor": "host",
+										"node": "r"
+									}
+								}
+							]
+						]
+					]
+				},
+				{
+					"id": "p1",
+					"value": [
+						{
+							"content": "named as a passed name",
+							"change": {
+								"time": 1,
+								"actor": "host",
+								"node": "p1"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				},
+				{
+					"id": "p2",
+					"value": [
+						{
+							"content": "plain",
+							"change": {
+								"time": 3,
+								"actor": "host",
+								"node": "p2"
+							}
+						}
+					],
+					"info": [],
+					"children": []
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": ".DS_Store",
+			"text": "finder"
+		},
+		{
+			"op": "edit",
+			"edit": "write",
+			"path": "Icon\r",
+			"text": "no longer passed"
+		},
+		{
+			"op": "observe",
+			"expect": {
+				"folder": [
+					{
+						"path": "",
+						"kind": "folder",
+						"attrs": {
+							"party.chee.ermine.id": "r",
+							"party.chee.ermine.store": "uuid"
+						}
+					},
+					{
+						"path": ".DS_Store",
+						"kind": "file",
+						"hex": "66696e646572"
+					},
+					{
+						"path": ".ermine",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/id",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/manifest",
+						"kind": "file",
+						"frames": [
+							{
+								"records": {
+									"meta": "a264726f6f7461726474696d65f94400",
+									"plan": [
+										{
+											"id": "p1",
+											"to": "_x.tmp_.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "X81GDFDVAvBQBmVtk6HudNXHRzhtmuf6wR+nm0iZ+lI"
+													}
+												}
+											},
+											"before": null,
+											"number": 1
+										},
+										{
+											"id": "p2",
+											"to": "plain.txt",
+											"form": "txt",
+											"info": [],
+											"what": "file",
+											"after": {
+												"file": {
+													"/": {
+														"bytes": "CtSC/jv7Xyd4IBCzFkXaipPyrvnZRd8m2BaQCxzQ8Ng"
+													}
+												}
+											},
+											"before": null,
+											"number": 2
+										}
+									],
+									"node:r": "a5626964617264696e666f806576616c75658066686561646572a0686368696c6472656e828265782e746d7081a2666368616e6765a3646e6f646561726474696d65f94000656163746f7264686f737467636f6e74656e74816270318265706c61696e81a2666368616e6765a3646e6f646561726474696d65f94400656163746f7264686f737467636f6e74656e7481627032",
+									"node:p1": "a562696462703164696e666f806576616c756581a2646b6570748258205fcd460c50d502f05006656d93a1ee74d5c747386d9ae7fac11fa79b4899fa5263747874666368616e6765a3646e6f64656270316474696d65f93c00656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"node:p2": "a562696462703264696e666f806576616c756581a2646b6570748258200ad482fe3bfb5f27782010b31645da8a93f2aef9d945df26d816900b1cd0f0d863747874666368616e6765a3646e6f64656270326474696d65f94200656163746f7264686f737466686561646572a0686368696c6472656e80",
+									"shown:r": "a266666f6c646572f567656e7472696573a265706c61696e65706c61696e65782e746d70675f782e746d705f",
+									"shown:p1": "a36466696c656b5f782e746d705f2e74787464686f6d6583617265782e746d70f90000646c61696458205fcd460c50d502f05006656d93a1ee74d5c747386d9ae7fac11fa79b4899fa52",
+									"shown:p2": "a36466696c6569706c61696e2e74787464686f6d6583617265706c61696ef90000646c61696458200ad482fe3bfb5f27782010b31645da8a93f2aef9d945df26d816900b1cd0f0d8"
+								}
+							},
+							{
+								"records": {
+									"plan": null,
+									"store": "a364646f6e65f94400647061737382652a2e746d70692e44535f53746f726566666f726d6174f93c00"
+								}
+							}
+						]
+					},
+					{
+						"path": ".ermine/tmp",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values",
+						"kind": "folder"
+					},
+					{
+						"path": ".ermine/values/0ad482fe3bfb5f27782010b31645da8a93f2aef9d945df26d816900b1cd0f0d8",
+						"kind": "file",
+						"hex": "706c61696e"
+					},
+					{
+						"path": ".ermine/values/5fcd460c50d502f05006656d93a1ee74d5c747386d9ae7fac11fa79b4899fa52",
+						"kind": "file",
+						"hex": "6e616d6564206173206120706173736564206e616d65"
+					},
+					{
+						"path": "Icon\r",
+						"kind": "file",
+						"hex": "6e6f206c6f6e67657220706173736564"
+					},
+					{
+						"path": "_x.tmp_.txt",
+						"kind": "file",
+						"hex": "6e616d6564206173206120706173736564206e616d65",
+						"attrs": {
+							"party.chee.ermine.id": "p1"
+						}
+					},
+					{
+						"path": "junk.tmp",
+						"kind": "file",
+						"hex": "6120706572736f6e2773"
+					},
+					{
+						"path": "plain.txt",
+						"kind": "file",
+						"hex": "706c61696e",
+						"attrs": {
+							"party.chee.ermine.id": "p2"
+						}
+					}
+				],
+				"trash": [],
+				"listed": []
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": [
+					{
+						"path": "Icon\r",
+						"now": {
+							"kind": "file",
+							"form": "txt",
+							"value": "no longer passed",
+							"hash": "6aed442241df4a067c83a79e0f5fd75cdeec566e948b36c68a3ed42aed53b05c"
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "open",
+			"files": true,
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"restored": {
+					"root": "r",
+					"time": 4,
+					"nodes": [
+						{
+							"id": "r",
+							"value": [],
+							"info": [],
+							"children": [
+								[
+									"x.tmp",
+									[
+										{
+											"content": [
+												"p1"
+											],
+											"change": {
+												"node": "r",
+												"time": 2,
+												"actor": "host"
+											}
+										}
+									]
+								],
+								[
+									"plain",
+									[
+										{
+											"content": [
+												"p2"
+											],
+											"change": {
+												"node": "r",
+												"time": 4,
+												"actor": "host"
+											}
+										}
+									]
+								]
+							],
+							"header": {}
+						},
+						{
+							"id": "p1",
+							"value": [
+								{
+									"content": "named as a passed name",
+									"change": {
+										"node": "p1",
+										"time": 1,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						},
+						{
+							"id": "p2",
+							"value": [
+								{
+									"content": "plain",
+									"change": {
+										"node": "p2",
+										"time": 3,
+										"actor": "host"
+									}
+								}
+							],
+							"info": [],
+							"children": [],
+							"header": {}
+						}
+					],
+					"others": [],
+					"missing": []
+				}
+			}
+		},
+		{
+			"op": "differences",
+			"expect": {
+				"differences": [
+					{
+						"path": "Icon\r",
+						"now": {
+							"kind": "file",
+							"form": "txt",
+							"value": "no longer passed",
+							"hash": "6aed442241df4a067c83a79e0f5fd75cdeec566e948b36c68a3ed42aed53b05c"
+						}
+					}
+				]
+			}
+		}
+	]
+}

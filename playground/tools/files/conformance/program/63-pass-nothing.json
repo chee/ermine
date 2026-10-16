@@ -1,0 +1,89 @@
+{
+	"title": "a pass that finds no differences does not call edit",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {
+				"root": "r"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "apps",
+			"value": {
+				"theme": "dark"
+			},
+			"expect": {
+				"id": "id1"
+			}
+		},
+		{
+			"op": "place",
+			"path": [
+				"apps"
+			],
+			"slot": "clock",
+			"value": "12:00",
+			"expect": {
+				"id": "id2"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": "hello",
+			"expect": {
+				"id": "id3"
+			}
+		},
+		{
+			"op": "place",
+			"path": [],
+			"slot": "docs",
+			"value": {
+				"/": {
+					"bytes": "iVBORw0KGgo"
+				}
+			},
+			"expect": {
+				"id": "id4"
+			}
+		},
+		{
+			"op": "mount",
+			"path": [],
+			"slot": "pinned",
+			"to": [
+				"docs"
+			],
+			"expect": {}
+		},
+		{
+			"op": "save",
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"expect": {}
+		},
+		{
+			"op": "pass",
+			"expect": {
+				"called": false,
+				"settled": true
+			}
+		},
+		{
+			"op": "pass",
+			"touched": [
+				"docs"
+			],
+			"expect": {
+				"called": false,
+				"settled": true
+			}
+		}
+	]
+}

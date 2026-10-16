@@ -1,0 +1,15 @@
+{
+	"title": "an unknown word",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[1, foo]",
+			"expect": {
+				"code": "not-diag",
+				"at": 4,
+				"line": 1,
+				"column": 5
+			}
+		}
+	]
+}

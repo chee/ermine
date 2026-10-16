@@ -1,0 +1,15 @@
+{
+	"title": "tag 64: no uint8 kind, bytes are that (the designer, 10-12), so not a typed array's",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[64(h'0102')]",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

@@ -1,0 +1,19 @@
+{
+	"title": "null alone",
+	"steps": [
+		{
+			"op": "write",
+			"value": null,
+			"expect": {
+				"text": "null"
+			}
+		},
+		{
+			"op": "read",
+			"text": "null",
+			"expect": {
+				"value": null
+			}
+		}
+	]
+}

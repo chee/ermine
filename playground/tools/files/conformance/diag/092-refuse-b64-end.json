@@ -1,0 +1,15 @@
+{
+	"title": "base64 with no end",
+	"steps": [
+		{
+			"op": "read",
+			"text": "b64'abcd",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

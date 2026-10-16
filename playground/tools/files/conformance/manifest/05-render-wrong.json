@@ -1,0 +1,125 @@
+{
+	"title": "a value is rendered only in its own form",
+	"steps": [
+		{
+			"op": "render",
+			"value": 5,
+			"form": "txt",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": "x",
+			"form": "bin",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": "x",
+			"form": "cbor",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"bytes": "AQ"
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			},
+			"form": "bin",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			},
+			"form": "cbor",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"float32": [
+						1
+					]
+				}
+			},
+			"form": "float64",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"int8": [
+						1
+					]
+				}
+			},
+			"form": "int16",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {},
+			"form": "int16",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": "x",
+			"form": "int16",
+			"expect": {
+				"code": "wrong-form"
+			}
+		},
+		{
+			"op": "render",
+			"value": {
+				"/": {
+					"bytes": "AQI"
+				}
+			},
+			"form": "uint8",
+			"expect": {
+				"code": "wrong-form"
+			}
+		}
+	]
+}

@@ -207,6 +207,9 @@ void sq_push(sq *s, const sq_patch *p) {
 		while (s->n) {
 			const sq_patch *t = &s->buf[s->n - 1];
 			if (p->has_range || p->move || t->move || !under(t->path, t->depth, p->path, p->depth)) break;
+			// t removing a list element (a number last) moves the ones after it: p at the same place
+			// is at another element
+			if (!t->has_value && !t->has_range && t->depth == p->depth && !t->path[t->depth - 1].s) break;
 			drop_tail(s);
 		}
 	}

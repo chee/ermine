@@ -1,0 +1,205 @@
+{
+	"title": "a frame, last or not, that is not a map of bytes or null is a store error",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000002617800000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a161614131000000026178",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a1616141310000000481f93c0000000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a1616141310000000481f93c00",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000008a16161647465787400000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000008a161616474657874",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000006a16161f93c0000000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000006a16161f93c00",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000007a16161d848410100000005a161634133",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000005a16161413100000007a16161d8484101",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"code": "store"
+			}
+		}
+	]
+}

@@ -1,0 +1,15 @@
+{
+	"title": "1e is 1 and then an e",
+	"steps": [
+		{
+			"op": "read",
+			"text": "1e",
+			"expect": {
+				"code": "not-diag",
+				"at": 1,
+				"line": 1,
+				"column": 2
+			}
+		}
+	]
+}

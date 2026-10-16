@@ -1,0 +1,53 @@
+{
+	"title": "b64'' bytes: base64 or base64url, padded or not, spacing allowed",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[b64'AP8=', b64'AP8', b64'-_8', b64'+/8=', b64'AP 8\n=', b64'', b64'YQ==', b64'YWJj']",
+			"expect": {
+				"value": [
+					{
+						"/": {
+							"bytes": "AP8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AP8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "+/8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "+/8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AP8"
+						}
+					},
+					{
+						"/": {
+							"bytes": ""
+						}
+					},
+					{
+						"/": {
+							"bytes": "YQ"
+						}
+					},
+					{
+						"/": {
+							"bytes": "YWJj"
+						}
+					}
+				]
+			}
+		}
+	]
+}

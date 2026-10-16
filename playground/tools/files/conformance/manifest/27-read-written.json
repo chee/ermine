@@ -1,0 +1,61 @@
+{
+	"title": "a log written by hand reads as its records",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "00000009a2617841316179413200000005a16178413300000004a16179f6",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "exists",
+			"expect": {
+				"exists": true
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"x",
+						"33"
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"path": "manifest",
+			"bytes": "0000000da3616141326163f66262624131",
+			"expect": {}
+		},
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": [
+					[
+						"a",
+						"32"
+					],
+					[
+						"bb",
+						"31"
+					]
+				]
+			}
+		}
+	]
+}

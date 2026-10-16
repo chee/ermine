@@ -1,0 +1,25 @@
+{
+	"title": "[] and {} on one line",
+	"steps": [
+		{
+			"op": "write",
+			"value": [
+				[],
+				{}
+			],
+			"expect": {
+				"text": "[\n  [],\n  {}\n]"
+			}
+		},
+		{
+			"op": "read",
+			"text": "[\n  [],\n  {}\n]",
+			"expect": {
+				"value": [
+					[],
+					{}
+				]
+			}
+		}
+	]
+}

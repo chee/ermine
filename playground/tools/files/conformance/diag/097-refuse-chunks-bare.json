@@ -1,0 +1,15 @@
+{
+	"title": "( not followed by _",
+	"steps": [
+		{
+			"op": "read",
+			"text": "(1)",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

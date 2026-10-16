@@ -1,0 +1,57 @@
+{
+	"title": "make makes values, tmp and id; no manifest reads as no records",
+	"steps": [
+		{
+			"op": "open",
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": []
+			}
+		},
+		{
+			"op": "exists",
+			"expect": {
+				"exists": false
+			}
+		},
+		{
+			"op": "read",
+			"expect": {
+				"records": []
+			}
+		},
+		{
+			"op": "grown",
+			"expect": {
+				"grown": false
+			}
+		},
+		{
+			"op": "make",
+			"expect": {}
+		},
+		{
+			"op": "files",
+			"expect": {
+				"folders": [
+					"id",
+					"tmp",
+					"values"
+				],
+				"files": []
+			}
+		}
+	]
+}

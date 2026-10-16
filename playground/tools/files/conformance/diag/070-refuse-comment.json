@@ -1,0 +1,15 @@
+{
+	"title": "a comment with no end",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[1 / abc",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}

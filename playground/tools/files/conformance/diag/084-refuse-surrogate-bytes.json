@@ -1,0 +1,15 @@
+{
+	"title": "a lone surrogate in a '' string",
+	"steps": [
+		{
+			"op": "read",
+			"text": "'\\udc00'",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

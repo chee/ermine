@@ -1,0 +1,15 @@
+{
+	"title": "a lone surrogate in the text itself",
+	"steps": [
+		{
+			"op": "read",
+			"text": "\"a\ud800b\"",
+			"expect": {
+				"code": "not-diag",
+				"at": 0,
+				"line": 1,
+				"column": 1
+			}
+		}
+	]
+}

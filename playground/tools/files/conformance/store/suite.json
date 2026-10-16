@@ -1,0 +1,3 @@
+{
+	"allow": ["--allow-write", "--allow-ffi", "--allow-run", "--allow-env"]
+}

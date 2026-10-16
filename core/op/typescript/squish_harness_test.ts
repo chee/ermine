@@ -50,7 +50,7 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 		return { path, len: typeof s === "string" ? chars(s) : s.length, text: typeof s === "string" }
 	}
 	for (let i = 0; i < count; i++) {
-		const k = pick(21)
+		const k = pick(24)
 		let p: Patch | null = null
 		if (k < 11) {
 			const s = seq(pick(3) === 0 ? ["l"] : ["t"])
@@ -112,10 +112,16 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 			else if (j === 4 && x && typeof x === "object") {
 				p = { path: ["n", "x", "z"], value: pick(9) }
 			}
-		} else if (pick(3) === 0) {
+		} else if (k < 21) {
 			// the whole, same shape
-			const c = start(pick) as Record<string, V>
-			p = { path: [], value: c }
+			if (pick(3) === 0) p = { path: [], value: start(pick) }
+		} else {
+			// one element of the list, by its place: a removal moves the ones after it
+			const l = at(content, ["l"]) as unknown[]
+			if (l.length) {
+				const i = pick(l.length)
+				p = pick(2) === 0 ? { path: ["l", i] } : { path: ["l", i], value: pick(100) }
+			}
 		}
 		if (!p) continue
 		content = apply(content, p)

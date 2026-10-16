@@ -1,0 +1,15 @@
+{
+	"title": "a list not closed",
+	"steps": [
+		{
+			"op": "read",
+			"text": "[1,",
+			"expect": {
+				"code": "not-diag",
+				"at": 3,
+				"line": 1,
+				"column": 4
+			}
+		}
+	]
+}
