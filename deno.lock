@@ -23,6 +23,7 @@
     "npm:@codemirror/view@6": "6.43.14",
     "npm:@deno/vite-plugin@^2.0.4": "2.0.4_vite@8.3.4",
     "npm:@lezer/highlight@1": "1.2.5",
+    "npm:@noble/curves@1.9.7": "1.9.7",
     "npm:@noble/hashes@1.8.0": "1.8.0",
     "npm:@yowasp/clang@22.0.0-git20542-10": "22.0.0-git20542-10",
     "npm:cbor-x@^1.6.6": "1.6.6",
@@ -256,6 +257,12 @@
     },
     "@marijn/find-cluster-break@1.0.4": {
       "integrity": "sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ=="
+    },
+    "@noble/curves@1.9.7": {
+      "integrity": "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==",
+      "dependencies": [
+        "@noble/hashes"
+      ]
     },
     "@noble/hashes@1.8.0": {
       "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="
