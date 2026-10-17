@@ -3,26 +3,18 @@
 // sit in, and one extra, who: who is calling, which the api does not say.
 // the worker is no process of the module's: boss starts it. so the host writes its program node
 // (/code/worker) as reload does for the others
+import { getWho } from "@ermine/places/header"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render as h } from "ermine-h"
 
-// who is calling: the nearest caller and trusted, walking the owner links out from the innermost
+// who is calling: the nearest caller and trusted, from the innermost
 // scope open (the way the header's actor goes). caller is a process's id: said by its name
 export type Who = { caller: string; trusted: boolean }
 export type Tools = { who: () => Who }
 
 const named = new Map<string, string>()
 type Pairs = readonly (readonly [string, unknown])[] | undefined
-const nearest = (pairs: Pairs, key: string) => {
-	for (let p = pairs; p !== undefined;) {
-		let up: Pairs
-		for (const [k, v] of p) {
-			if (k === key) return v
-			if (k === "owner") up = v as Pairs
-		}
-		p = up
-	}
-}
+const nearest = (pairs: Pairs, key: string) => pairs?.find(([k]) => k === key)?.[1]
 
 // section 0..4: the five ways to talk, and which process sits in which
 const SECTIONS: [number, ...string[]][] = [
@@ -90,7 +82,7 @@ const world = createWorld({
 		named.set(ctx.process.id, ctx.process.at.join("/"))
 		return {
 			who() {
-				const pairs = ctx.scheduler.getInfo()
+				const pairs = getWho(ctx.scheduler)?.metadata
 				const caller = nearest(pairs, "caller")
 				return {
 					caller: named.get(String(caller)) ?? String(caller),

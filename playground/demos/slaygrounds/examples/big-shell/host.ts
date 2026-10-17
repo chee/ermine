@@ -16,16 +16,9 @@ const TEXT = "public.plain-text"
 const JSON_TYPE = "public.json"
 const PROGRAMS = ["ticker", "lamp", "bunny", "mirror"]
 
-// the pairs of a header, walking the "owner" links outward: caller and trusted are in there somewhere
-export const flat = (pairs: readonly (readonly [string, unknown])[] = []) => {
-	const out: [string, unknown][] = []
-	for (let p: any = pairs; p;) {
-		let up
-		for (const [k, v] of p) k === "owner" ? (up = v) : out.push([k, v])
-		p = up
-	}
-	return out
-}
+// the pairs of a header (already flat): caller and trusted are in there somewhere
+export const flat = (pairs: readonly (readonly [string, unknown])[] = []) =>
+	pairs.map(([k, v]): [string, unknown] => [k, v])
 
 const world = createWorld({
 	render,

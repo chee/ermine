@@ -2,11 +2,12 @@
 // card: default; the frog, the hedgehog and the snail: friend, each in a folder of its own), and
 // two extras, who and change: who wrote a thing, which the api does not say
 import type { ChangeHeader as Header } from "@ermine/node/entry"
+import { getWho } from "@ermine/places/header"
 import { createWorld } from "@ermine/slaygrounds/world"
 import { render } from "ermine-h"
 
-// who a call or a change is: the nearest caller and trusted, walking the owner links out from the
-// innermost scope (the same walk the header's actor goes). caller is a process's id: said by name
+// who a call or a change is: the nearest caller and trusted, from the
+// innermost scope. caller is a process's id: said by name
 export type Who = { caller: string; trusted: boolean }
 export type Tools = {
 	// who is calling, in the call now
@@ -17,16 +18,8 @@ export type Tools = {
 }
 
 const named = new Map<string, string>()
-const nearest = (pairs: readonly (readonly [string, unknown])[] | undefined, key: string) => {
-	for (let p = pairs; p !== undefined;) {
-		let up: typeof pairs
-		for (const [k, v] of p) {
-			if (k === key) return v
-			if (k === "owner") up = v as typeof pairs
-		}
-		p = up
-	}
-}
+const nearest = (pairs: readonly (readonly [string, unknown])[] | undefined, key: string) =>
+	pairs?.find(([k]) => k === key)?.[1]
 
 const world = createWorld({
 	render,
@@ -46,7 +39,7 @@ const world = createWorld({
 			}
 		}
 		return {
-			who: (change) => say(change ? change.metadata : ctx.scheduler.getInfo()),
+			who: (change) => say(change ? change.metadata : getWho(ctx.scheduler)?.metadata),
 			change(x) {
 				const id = api.entries(x)[0]?.id
 				return id === undefined ? undefined : ctx.places.readChange("value", id)

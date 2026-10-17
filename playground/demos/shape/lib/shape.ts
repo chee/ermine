@@ -38,7 +38,7 @@ const ROW = 50
 const CAP = 600
 
 const isComputer = (o: Scope): o is Computer => "kind" in o
-const given = (o: Scope) => o.info.filter(([k]) => k !== "owner" && k !== "run" && k !== "mark")
+const given = (o: Scope) => o.info.filter(([k]) => k !== "run" && k !== "mark")
 const short = (v: unknown, n = 24) => {
 	let s: string
 	try {
