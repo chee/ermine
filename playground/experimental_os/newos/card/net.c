@@ -350,10 +350,10 @@ void netIn(Net *n) {
 
 void netTurn(Net *n) {
 	int64_t now = hostNow(n->host);
-	uint8_t key[32];
+	uint8_t key[SL_KEY]; // the multikey: 0xed 0x01, then the 32 bytes of the Ed25519 key
 	if (n->ws && !n->joined && tp_connected(n->t, n->conn, key)) {
 		n->joined = true;
-		for (int i = 0; i < 32; i++) snprintf(n->peer + 2 * i, 3, "%02x", key[i]);
+		for (int i = 0; i < 32; i++) snprintf(n->peer + 2 * i, 3, "%02x", key[SL_KEY - 32 + i]);
 		n->backoff = SECOND;
 		free(n->error);
 		n->error = NULL;

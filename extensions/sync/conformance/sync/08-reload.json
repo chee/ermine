@@ -5,7 +5,7 @@
 			"op": "host",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"expect": { "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
 		},
 		{
 			"op": "mint",
@@ -66,7 +66,7 @@
 					"actor": "a",
 					"external": [{ "file": "scenario", "line": 1 }],
 					"time": 1760000000,
-					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 2609446591,
 					"parents": ["w2"],
 					"lamport": 3,

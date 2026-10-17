@@ -31,6 +31,7 @@
 
 #include "history.h"
 #include "replay.h"
+#include "seal.h"
 #include "../../subduction/c/fragment.h"
 #include "../../subduction/c/subduction/subduction.h"
 
@@ -73,7 +74,7 @@ typedef bool (*tp_snapshot_fn)(void *context, const char *doc, const hy_kept *he
 typedef uint64_t (*tp_clock_fn)(void *context);
 
 typedef struct {
-	// Subduction's peer key and the seals' signer: the device's Ed25519 key
+	// Subduction's peer key and the seals' signer: the device's Ed25519 key (its multikey for the seals)
 	uint8_t seed[32];
 	// where Subduction keeps what it holds: borrowed, it must outlive the device
 	const ErmStore *store;
@@ -95,7 +96,7 @@ tp_device *tp_create(const tp_options *options);
 // lets go of everything, the store's contents aside (what is not stored yet is lost: run to tp_idle
 // first)
 void tp_free(tp_device *t);
-// the device's key (its peer id)
+// the device's key (its peer id): an Ed25519 multikey, SL_KEY bytes
 const uint8_t *tp_key(const tp_device *t);
 
 // runs everything that can run: the ms until it must run again though nothing comes in (0: at once),
@@ -119,10 +120,10 @@ uint64_t tp_connect(tp_device *t, const char *service);
 void tp_received(tp_device *t, uint64_t conn, const uint8_t *bytes, size_t length);
 // the host's transport for the connection closed
 void tp_closed(tp_device *t, uint64_t conn);
-// whether the connection's handshake is done, and the peer's key
-bool tp_connected(const tp_device *t, uint64_t conn, uint8_t key[32]);
-// every connection to the peer with that key let go of, each asked of the host to close
-void tp_disconnect(tp_device *t, const uint8_t key[32]);
+// whether the connection's handshake is done, and the peer's key (a multikey)
+bool tp_connected(const tp_device *t, uint64_t conn, uint8_t key[SL_KEY]);
+// every connection to the peer with that key (a multikey) let go of, each asked of the host to close
+void tp_disconnect(tp_device *t, const uint8_t key[SL_KEY]);
 // the service name a server url defaults to: its host, with :port when it names one (a login left
 // out), into out of size bytes
 void tp_service(const char *url, char *out, size_t size);
@@ -160,9 +161,10 @@ hy_added tp_take(tp_device *t, const char *doc, const uint8_t *bytes, size_t len
 // of a history's add. Any number of listeners
 void tp_arrived(tp_device *t, tp_arrived_fn fn, void *context);
 // told each ephemeral commit heard on a followed document whose signer is the sender, new or heard
-// before (sent again), after any arrival it made: the document, the sender's key, the commit's name.
+// before (sent again), after any arrival it made: the document, the sender's key (a multikey), the
+// commit's name.
 // What keeps another device's ephemeral commits standing. Any number of listeners
-typedef void (*tp_hearing_fn)(void *context, const char *doc, const uint8_t from[32], const uint8_t name[32]);
+typedef void (*tp_hearing_fn)(void *context, const char *doc, const uint8_t from[SL_KEY], const uint8_t name[32]);
 void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context);
 // an ephemeral commit of this device's (in the ephemeral history, not a stored one) published again,
 // queued as a take is; false: no such commit
@@ -186,7 +188,7 @@ size_t tp_fragments(tp_device *t, const char *doc, const fragment ***out);
 // bytes to whoever listens on the topic: kept nowhere, not heard here. Over 65 536 bytes (or looking
 // like a part): sent as parts, joined at the other end
 void tp_send(tp_device *t, const char *topic, const uint8_t *bytes, size_t length);
-// told each message on the topic: the sender's key as lowercase hex, the bytes (good for the call)
+// told each message on the topic: the sender's key (a multikey) as lowercase hex, the bytes (good for the call)
 typedef void (*tp_heard_fn)(void *context, const char *from, const uint8_t *bytes, size_t length);
 typedef struct tp_listener tp_listener;
 // subscribes as needed; the listener, for tp_unlisten

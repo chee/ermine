@@ -34,7 +34,7 @@ typedef struct {
 	const sq_key *path;
 	size_t depth;
 	int has_range;
-	long from, to;
+	int64_t from, to;
 	int has_value;
 	sq_value value;
 	const void *move;
@@ -55,9 +55,9 @@ const sq_patch *sq_patches(const sq *s, size_t *n);
 void sq_clear(sq *s);
 void sq_free(sq *s);
 
-// [value, count, value, count, ...]; n: how many longs
+// [value, count, value, count, ...]; n: how many numbers
 typedef struct {
-	long *v;
+	int64_t *v;
 	size_t n;
 } sq_runs;
 

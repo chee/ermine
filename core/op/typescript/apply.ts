@@ -20,6 +20,11 @@ export type Options = {
 	// false: change the value given in place, not a copy of it. the value returned is the one given
 	// unless the whole was replaced. default true
 	cow?: boolean
+	// with cow false: which containers may change where they are. a list, map or typed array about
+	// to change is given to owned first, which gives back the one to change: the same, or a copy it
+	// made, which goes in its place (the root's too: then it is the value returned). none: every
+	// container changes where it is
+	owned?: (container: object) => object
 }
 
 export type Code = "not-a-patch" | "no-key" | "range" | "wrong-kind" | "into-itself"
@@ -79,7 +84,12 @@ function shape(p: Patch): boolean {
 type Took = { m: unknown; back: Target; untake: Patch | null; taking: boolean; listed: boolean }
 
 // one edit's content, changed patch by patch; undo: the undo is wanted
-function createWork(root: unknown, undo: boolean, cow: boolean) {
+function createWork(
+	root: unknown,
+	undo: boolean,
+	cow: boolean,
+	owned?: (container: object) => object,
+) {
 	// made here: may change in place, until the undo holds it. few, scanned; past 16, a WeakSet
 	let own: object[] | WeakSet<object> | undefined
 	const mine = <T extends object>(c: T): T => {
@@ -91,7 +101,9 @@ function createWork(root: unknown, undo: boolean, cow: boolean) {
 		return c
 	}
 	const copy = <T extends object>(v: T): T =>
-		!cow || own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
+		!cow
+			? owned ? owned(v) as T : v
+			: own !== undefined && (Array.isArray(own) ? own.includes(v) : own.has(v))
 			? v
 			: mine((isList(v) ? v.slice() : { ...v }) as T)
 	const work = { root }
@@ -186,7 +198,9 @@ function createWork(root: unknown, undo: boolean, cow: boolean) {
 			const len = t.length - (b - a) + size
 			// in place only when the length stays
 			if (!cow && len === t.length) {
-				if (w) t.set(w as Typed, a)
+				const o = copy(t)
+				if (o !== t) set(path, o)
+				if (w) o.set(w as Typed, a)
 			} else {
 				const n = new (t.constructor as new (n: number) => Typed)(len)
 				n.set(t.subarray(0, a), 0)
@@ -472,6 +486,7 @@ export default function apply(
 		value !== undefined ? value : ABSENT,
 		undo !== undefined || !cow,
 		cow,
+		options.owned,
 	)
 	// each patch's undo starts at its mark
 	const marks: number[] = []

@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert"
-import { CborError, decode, encode, Stand, type Value } from "./cbor.ts"
+import { CborError, decode, DEPTH, encode, Stand, type Value } from "./cbor.ts"
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const unhex = (s: string) => new Uint8Array(s.match(/../g)?.map((x) => parseInt(x, 16)) ?? [])
@@ -436,4 +436,23 @@ Deno.test("cbor: strings across the buffer's growing", () => {
 		const v = ["x".repeat(pad), "é水😀".repeat(1 + pad % 13), "ü".repeat(30)]
 		assertEquals(decode(encode(v)), v)
 	}
+})
+
+// DEPTH containers, one in another, a map among them halfway
+function nest(n: number): Value {
+	let v: Value = []
+	for (let i = n - 1; i >= 1; i--) v = i === Math.floor(n / 2) ? { k: v } : [v]
+	return v
+}
+
+Deno.test("cbor: a value nests at most DEPTH containers, either way, refused without overflowing", () => {
+	const most = nest(DEPTH)
+	assertEquals(decode(encode(most)), most)
+	for (const n of [DEPTH + 1, 1_000_000]) {
+		assertThrows(() => encode(nest(n)), CborError, "deeper")
+		const bytes = new Uint8Array(n).fill(0x81)
+		bytes[n - 1] = 0x80
+		assertThrows(() => decode(bytes), CborError, "nested deeper than 1024")
+	}
+	assertThrows(() => decode(new Uint8Array(DEPTH + 1).fill(0xd8)), CborError)
 })

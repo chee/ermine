@@ -40,7 +40,9 @@
 // stack of containers being written (as jsonPrint does); a map's keys are
 // put in order by finding the next one each time, with no scratch. Decoding
 // makes the value with json.h's constructors and keeps its own stack of
-// containers. NOTHING RECURSES: a value may nest as deep as memory allows.
+// containers. NOTHING RECURSES. A value nests at most CBOR_DEPTH containers
+// (lists, maps, stand-ins), one inside the next, as cbor.ts's DEPTH: a deeper
+// one has no encoding, and bytes that nest deeper are not one.
 
 #ifndef CBOR_H
 #define CBOR_H
@@ -49,6 +51,10 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+
+/** how many containers a value nests at most, one inside the next */
+#define CBOR_DEPTH 1024
+#define CBOR_DEPTH_TEXT "1024"
 
 /**
  * Writes the value's encoding into out[0 .. capacity) and puts its whole

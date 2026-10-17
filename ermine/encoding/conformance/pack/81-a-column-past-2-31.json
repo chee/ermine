@@ -1,0 +1,7 @@
+{
+	"title": "a site's column past 2^31 - 1 (what any C long holds): not the encoding of a pack",
+	"bytes": "a2646b65797381836576616c75656161f90000656e6f64657381a1666368616e6765a26474696d65f93c006865787465726e616c81a36466696c656161646c696e65f93c0066636f6c756d6efa4f000000",
+	"expect": {
+		"code": "not-a-pack"
+	}
+}

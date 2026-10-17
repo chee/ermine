@@ -83,7 +83,9 @@ const isFields = (x: unknown): x is Fields => {
 // an integer from 0 to 2^53 - 1
 const whole = (n: unknown): n is number =>
 	Number.isSafeInteger(n) && !Object.is(n, -0) && (n as number) >= 0
-const isKey = (k: unknown) => typeof k === "string" || whole(k)
+// a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any C long holds
+const small = (n: unknown): n is number => whole(n) && n < 2 ** 31
+const isKey = (k: unknown) => typeof k === "string" || small(k)
 const isRange = (r: unknown) => Array.isArray(r) && r.length === 2 && r.every(whole)
 // a multikey is a varint code (shortest form, 1 to 7 bytes) then a key of 1 byte or more, MULTIKEY_MAX
 // bytes in all. only its code says what a key is; whether it is one is for whoever verifies
@@ -130,11 +132,11 @@ const PATCH: ReadonlySet<string> = new Set(["path", "range", "value", "move"])
 const MOVE: ReadonlySet<string> = new Set(["path", "range"])
 
 function site(x: unknown): boolean {
-	if (!isFields(x) || typeof x.file !== "string" || !whole(x.line)) return false
+	if (!isFields(x) || typeof x.file !== "string" || !small(x.line)) return false
 	for (const k of Object.keys(x)) {
 		if (k !== "file" && k !== "line" && k !== "column" && k !== "function") return false
 	}
-	if ("column" in x && !whole(x.column)) return false
+	if ("column" in x && !small(x.column)) return false
 	return !("function" in x) || typeof x.function === "string"
 }
 

@@ -11,12 +11,13 @@
 // it in its context, so a write in a run (after an await too) names the run; in a set, act,
 // teardown or run(), the computer's latest run (sc_latest); else none; "open": the run open
 // (sc_get_run); a computation's name: its latest run (sc_latest). a scope's info is the
-// request's own pairs; every line is retained to the end, so what points into one stays good. a pulse past ENDLESS
-// moments is left by a longjmp out of a listener: it answers {"error":"endless"}, and the
-// scheduler is not used again reliably (it leaks)
+// request's own pairs; every line is retained to the end, so what points into one stays good. a
+// pulse past ENDLESS moments is left as the reference's is: every moment after throws (sc_throw),
+// and what is thrown out leaves the pulse (sc_escaped): it answers {"error":"endless"}. what the
+// scheduler throws out of a call (sc_escaped) is that request's error, or, in a program, thrown
+// there, as the reference's throw is
 #define _POSIX_C_SOURCE 200809L
 #include <math.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -72,12 +73,64 @@ static size_t nstore, capstore;
 		(v)[(n)++] = (x); \
 	} while (0)
 
+// strings to what they name: open addressing, never more than half full. a key is kept as given:
+// whoever gave it keeps it alive
+typedef struct smap {
+	const char **keys;
+	void **vals;
+	size_t cap, count;
+} smap;
+static size_t shash(const char *k) {
+	size_t h = 1469598103934665603u;
+	for (; *k; k++) h = (h ^ (unsigned char)*k) * 1099511628211u;
+	return h;
+}
+// k's slot: where it is, or where it would go
+static size_t sslot(const smap *m, const char *k) {
+	size_t i = shash(k) & (m->cap - 1);
+	while (m->keys[i] != NULL && strcmp(m->keys[i], k) != 0) i = (i + 1) & (m->cap - 1);
+	return i;
+}
+static void *sget(const smap *m, const char *k) {
+	if (m->cap == 0) return NULL;
+	size_t i = sslot(m, k);
+	return m->keys[i] ? m->vals[i] : NULL;
+}
+static void sput(smap *m, const char *k, void *v) {
+	if (2 * (m->count + 1) > m->cap) {
+		smap n = {allocate((m->cap ? 2 * m->cap : 64) * sizeof *n.keys), allocate((m->cap ? 2 * m->cap : 64) * sizeof *n.vals),
+			m->cap ? 2 * m->cap : 64, m->count};
+		for (size_t i = 0; i < m->cap; i++) {
+			if (m->keys[i] == NULL) continue;
+			size_t j = sslot(&n, m->keys[i]);
+			n.keys[j] = m->keys[i];
+			n.vals[j] = m->vals[i];
+		}
+		free(m->keys);
+		free(m->vals);
+		*m = n;
+	}
+	size_t i = sslot(m, k);
+	if (m->keys[i] == NULL) m->count++;
+	m->keys[i] = k;
+	m->vals[i] = v;
+}
+static void sfree(smap *m) {
+	free(m->keys);
+	free(m->vals);
+	*m = (smap){0};
+}
+
+// the store's entries by key
+static smap entries;
+
 static entry *entry_of(const char *key) {
-	for (size_t i = 0; i < nstore; i++)
-		if (strcmp(store[i]->key, key) == 0) return store[i];
-	entry *e = allocate(sizeof *e);
+	entry *e = sget(&entries, key);
+	if (e) return e;
+	e = allocate(sizeof *e);
 	e->key = copyString(key);
 	PUSH(store, nstore, capstore, e);
+	sput(&entries, e->key, e);
 	return e;
 }
 
@@ -91,12 +144,11 @@ static void keep(const char *key, op_value *v) {
 static sc_scope **named;
 static size_t nnamed, capnamed;
 
+// each name's latest scope
+static smap names;
+
 // the latest named so
-static sc_scope *scope_named(const char *name) {
-	for (size_t i = nnamed; i > 0; i--)
-		if (strcmp((char *)sc_scope_user(named[i - 1]), name) == 0) return named[i - 1];
-	return NULL;
-}
+static sc_scope *scope_named(const char *name) { return sget(&names, name); }
 
 // an error when the name is taken (by one not torn down: else taken over): asked before anything
 // is made, so a refused one makes nothing
@@ -106,8 +158,10 @@ static char *taken(const char *name) {
 }
 // names the scope
 static char *name_it(sc_scope *o, const char *name) {
-	sc_scope_set(o, copyString(name ? name : ""));
+	char *n = copyString(name ? name : "");
+	sc_scope_set(o, n);
 	PUSH(named, nnamed, capnamed, o);
+	sput(&names, n, o);
 	return NULL;
 }
 
@@ -128,11 +182,33 @@ static size_t nmoments, capmoments;
 #define ENDLESS 10000
 static size_t told;
 static bool pulsing;
-static jmp_buf endless;
+
+// a listener armed to throw, once: which, at what (a computation's name, or a key), its message
+static char *armed_on, *armed_at, *armed_error;
+static const char *const listeners[] = {"mark", "starts", "ends", "acts", "forgotten", "started"};
+
+static void disarm(void) {
+	free(armed_on);
+	free(armed_at);
+	free(armed_error);
+	armed_on = armed_at = armed_error = NULL;
+}
+// the armed listener on, told of at (NULL: of nothing it could name)
+static void fire(const char *on, const char *at) {
+	if (armed_on == NULL || strcmp(armed_on, on) != 0) return;
+	if (armed_at != NULL && (at == NULL || strcmp(armed_at, at) != 0)) return;
+	char *e = armed_error;
+	armed_error = NULL;
+	disarm();
+	sc_throw(sch, e);
+}
 
 static void told_moment(const sc_told *m, void *data) {
 	(void)data;
-	if (pulsing && ++told > ENDLESS) longjmp(endless, 1);
+	if (pulsing && ++told > ENDLESS) sc_throw(sch, copyString("endless"));
+	if (m->kind == SC_T_STARTS) fire("starts", sc_scope_user(m->c));
+	else if (m->kind == SC_T_ENDS) fire("ends", sc_scope_user(m->c));
+	else if (m->kind == SC_T_ACTS) fire("acts", sc_scope_user(m->c));
 	moment x = {.m = *m};
 	x.error = m->error ? copyString(m->error) : NULL;
 	x.m.error = x.error;
@@ -156,6 +232,7 @@ static size_t nforgotten, capforgotten;
 static void untrack(const void *key, void *data) {
 	(void)data;
 	PUSH(forgotten, nforgotten, capforgotten, op_str(key));
+	fire("forgotten", key);
 }
 
 // the keys that gained their first tracker since last asked
@@ -166,6 +243,7 @@ static void first_track(const void *key, sc_run *run, void *data) {
 	(void)run;
 	(void)data;
 	PUSH(started, nstarted, capstarted, op_str(key));
+	fire("started", key);
 }
 
 // the tick of the latest mark (each mark and each new computer takes the next)
@@ -174,8 +252,13 @@ static sc_trace trace;
 
 static void marked(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
 	size_t ndue, uint64_t tick, void *data) {
-	(void)keys, (void)nkeys, (void)run, (void)due, (void)ndue, (void)data;
+	(void)run, (void)due, (void)ndue, (void)data;
 	latest_tick = tick;
+	if (armed_on == NULL || strcmp(armed_on, "mark") != 0) return;
+	const char *at = NULL;
+	for (size_t i = 0; armed_at != NULL && at == NULL && i < nkeys; i++)
+		if (strcmp(keys[i], armed_at) == 0) at = keys[i];
+	if (armed_at == NULL || at != NULL) fire("mark", at);
 }
 
 static void drop(void *v, void *data) {
@@ -438,6 +521,8 @@ static val evaluate(const op_value *e, const ctx *c) {
 		entry *en = entry_of(k);
 		free(k);
 		sc_track_status st = sc_track(sch, en->key);
+		char *out = sc_escaped(sch);
+		if (out) return thrown(out);
 		if (st == SC_STOP) return (val){V_STOP, NULL, NULL, NULL};
 		return ok(en->value ? op_ref(en->value) : op_null());
 	}
@@ -514,6 +599,11 @@ static val evaluate(const op_value *e, const ctx *c) {
 			writer = sc_latest(o);
 		}
 		sc_mark(sch, &key, 1, writer);
+		char *out = sc_escaped(sch);
+		if (out) {
+			release(v);
+			return thrown(out);
+		}
 		return v;
 	}
 	if (strcmp(form, "throw") == 0) {
@@ -651,6 +741,8 @@ static char *program_set(void *value, void *data) {
 	if (p->to != NULL) {
 		keep(p->to, value);
 		sc_mark(sch, (const void *[]){p->to}, 1, sc_latest(p->self));
+		char *out = sc_escaped(sch);
+		if (out) return out;
 	}
 	if (p->set == NULL) return NULL;
 	ctx c = {NULL, p->self, value, NULL};
@@ -781,7 +873,9 @@ static op_value *make_computer(const op_value *r, bool effect) {
 	if (c == NULL) return answer_error(copyString(SC_DISPOSED));
 	p->self = c;
 	bad = name_it(c, text(op_get(r, "name")));
-	return bad ? answer_error(bad) : op_map();
+	if (bad) return answer_error(bad);
+	char *out = sc_escaped(sch);
+	return out ? answer_error(out) : op_map();
 }
 
 // {"effect":[c,f,act,early?]}: an effect under the scope open. c taken by one torn down: taken over
@@ -804,6 +898,8 @@ static val made_in(const char *form, const op_value *a0, const op_value *a1, con
 	p->self = c;
 	char *bad = name_it(c, name);
 	if (bad) return thrown(bad);
+	char *out = sc_escaped(sch);
+	if (out) return thrown(out);
 	return ok(op_null());
 }
 
@@ -894,17 +990,28 @@ static op_value *answer(const op_value *r) {
 		}
 		uint64_t t = sc_mark(sch, keys, n, NULL);
 		free(keys);
-		return answer_tick(t);
+		char *out = sc_escaped(sch);
+		return out ? answer_error(out) : answer_tick(t);
 	}
 	if (strcmp(op, "pulse") == 0) {
 		told = 0;
 		pulsing = true;
-		if (setjmp(endless) != 0) {
-			pulsing = false;
-			return answer_error(copyString("endless"));
-		}
 		sc_pulse(sch);
 		pulsing = false;
+		char *out = sc_escaped(sch);
+		return out ? answer_error(out) : op_map();
+	}
+	if (strcmp(op, "listener") == 0) {
+		const char *on = text(op_get(r, "on"));
+		bool known = false;
+		for (size_t i = 0; on && i < sizeof listeners / sizeof *listeners; i++) known = known || strcmp(on, listeners[i]) == 0;
+		if (!known) return answer_error(formatString("unknown listener %s", on ? on : "undefined"));
+		disarm();
+		armed_on = copyString(on);
+		const char *at = text(op_get(r, "at"));
+		armed_at = at ? copyString(at) : NULL;
+		const char *why = text(op_get(r, "throw"));
+		armed_error = copyString(why ? why : "null");
 		return op_map();
 	}
 	if (strcmp(op, "resolve") == 0) return settle(r, true);
@@ -973,6 +1080,9 @@ void hh_answer(const op_value *r, FILE *out) {
 }
 
 void hh_finish(void) {
+	disarm();
+	sfree(&names);
+	sfree(&entries);
 	if (sch == NULL) return;
 	for (size_t i = 0; i < nwaits; i++) wait_free(waits[i]);
 	for (size_t i = 0; i < nold; i++) wait_free(old[i]);

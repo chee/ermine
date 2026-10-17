@@ -9,11 +9,11 @@
   ;; computations
   f act-expr set-expr to equal early
   (runs 0) latest info-run (last +none+) made-tick
-  due due-tick (rank 0) (floor 0) (after '()) waits
+  due due-tick (values '()) waits aside
   (chains '()) latest-loop looping
   tnode)                                ; its name in the tracker
 
-(defstruct crun comp n mark chain given flag cut state reads promise)
+(defstruct crun comp n mark chain given flag cut state reads promise (values '()) stopped)
 (defstruct chain comp pulse given)
 (defstruct cleanup expr owner origin env)
 (defstruct promise name run cont env (state :pending) outcome)
@@ -45,16 +45,43 @@
 (defun oops (fmt &rest args) (error 'sched-error :msg (apply #'format nil fmt args)))
 (define-condition pending-signal (error) () (:report "pending"))
 (define-condition stop-signal (error) ((waits :initarg :waits :reader waits)) (:report "stopped"))
-(define-condition endless (error) () (:report "endless"))
+(defvar *thrown* nil "nil, or (error): the first error a listener or a cleanup after a run threw, held")
+(defvar *armed* nil "nil, or (on at message): a listener armed to throw, once")
+(defvar *running* nil "the run whose f, set, act or cleanups are going on")
 (defvar +pending+ '+pending+)
 
 (defun computation-p (o) (and o (member (owner-kind o) '(:compute :effect))))
 (defun alive-p (o) (and o (not (owner-disposed o))))
 
-(defun moment (m)
+(defun fire (on names)
+  "the harness's own listener on, told: throws once when armed (at: one of names)"
+  (when (and *armed* (equal (first *armed*) on)
+             (or (null (second *armed*)) (member (second *armed*) names :test #'equal)))
+    (let ((msg (third *armed*)))
+      (setf *armed* nil)
+      (oops "~a" msg))))
+
+(defun moment (m &optional on name)
+  "a moment told: kept, counted (endless past 10000), then the listener on armed to throw"
   (push m *moments*)
-  (when *in-pulse*
-    (when (> (incf *pulse-moments*) 10000) (error 'endless))))
+  (when (and *in-pulse* (> (incf *pulse-moments*) 10000)) (oops "endless"))
+  (when on (fire on (list name))))
+
+;;; finish, then rethrow: what a listener threw is held while what was going on finishes
+(defun hold-error (e) (unless *thrown* (setf *thrown* (list e))))
+(defmacro holding (&body body)
+  "body, an error it signals held"
+  `(handler-case (progn ,@body) (sched-error (e) (hold-error e))))
+(defun rethrow (outer)
+  (let ((tt *thrown*))
+    (setf *thrown* outer)
+    (when tt (error (first tt)))))
+(defmacro bracket (&body body)
+  "a bracket of its own: what was held in it comes out at its end; what was held around it stays"
+  (let ((outer (gensym)))
+    `(let ((,outer *thrown*))
+       (setf *thrown* nil)
+       (unwind-protect (progn ,@body) (rethrow ,outer)))))
 
 ;;; ---------------------------------------------------------------- equality
 
@@ -141,69 +168,65 @@
   (let ((n (gethash (owner-tnode c) *tnodes*)))
     (if n (remove-duplicates (mapcar (lambda (l) (node-key (link-to l))) (tnode-reads n)) :test #'string=) '())))
 
+;;; the key's first tracker, told: a listener's error comes back (the read is all done first)
 (defun track-read (c k)
   (let ((before (key-tracked-p k)))
     (track (owner-tnode c) (key-node k))
-    (when (and (not before) (key-tracked-p k)) (push k *started*))))
+    (when (and (not before) (key-tracked-p k))
+      (push k *started*)
+      (handler-case (progn (fire "started" (list k)) nil) (sched-error (e) e)))))
 
+(defun forget (keys)
+  "keys nobody tracks now: told, a listener's error held"
+  (dolist (k keys)
+    (unless (key-tracked-p k)
+      (push k *forgotten*)
+      (holding (fire "forgotten" (list k))))))
 (defun end-tracking (c)
   (let ((before (reads-keys c)))
     (end-run (owner-tnode c))
-    (dolist (k before) (unless (key-tracked-p k) (push k *forgotten*)))))
+    (forget before)))
 (defun untrack-all (c)
   (let ((before (reads-keys c)))
     (untrack (owner-tnode c))
-    (dolist (k before) (unless (key-tracked-p k) (push k *forgotten*)))))
+    (forget before)))
 
-;;; ---------------------------------------------------------------- ranks
+;;; ---------------------------------------------------------------- order
 
 (defun waits-of (c) (let ((w (owner-waits c))) (and (alive-p w) w)))
 (defun live-computations () (remove-if-not #'alive-p *all*))
 
-(defun learn-edges (c)
-  "c's afters, fixed as its run ends: the writers of what it read, and the one it waits after"
-  (let ((new '()))
-    (dolist (k (reads-keys c))
-      (let ((w (gethash k *key-writer*)))
-        (when (and (alive-p w) (not (eq w c))) (pushnew w new))))
-    (let ((w (waits-of c))) (when (and w (not (eq w c))) (pushnew w new)))
-    (when (set-difference (owner-after c) new)
-      ;; an edge gone lowers nothing
-      (setf (owner-floor c) (max (owner-floor c) (owner-rank c))))
-    (setf (owner-after c) new)))
+(defun edges-of (p)
+  "what p is after: the writers its last run read, and the one it waits after (alive, not itself)"
+  (let ((w (waits-of p)))
+    (remove-if (lambda (q) (or (eq q p) (not (alive-p q))))
+               (if w (cons w (owner-values p)) (owner-values p)))))
+(defun reaches-p (p q)
+  "p reaches q going up its edges"
+  (let ((seen (make-hash-table :test 'eq)) (stack (edges-of p)))
+    (loop while stack
+          do (let ((x (pop stack)))
+               (when (eq x q) (return-from reaches-p t))
+               (unless (gethash x seen)
+                 (setf (gethash x seen) t)
+                 (setf stack (append (edges-of x) stack)))))
+    nil))
 
-(defun rerank ()
-  "ranks from the after graph: a component of more than one shares one rank, one past what it is
-   after; each one past the most of its afters, never below its floor"
-  (let* ((nodes (reverse (live-computations)))
-         (index (make-hash-table)) (low (make-hash-table)) (on (make-hash-table))
-         (stack '()) (i 0) (done (make-hash-table)))
-    (labels ((afters (c) (remove-if-not #'alive-p (owner-after c)))
-             (finish (scc)
-               (let* ((base (loop for c in scc
-                                  maximize (loop for a in (afters c)
-                                                 unless (member a scc) maximize (1+ (owner-rank a)))))
-                      (r (if (cdr scc)
-                             (max base (loop for c in scc maximize (owner-floor c)))
-                             (max base (owner-floor (first scc))))))
-                 (dolist (c scc) (setf (owner-rank c) r (gethash c done) t))))
-             (connect (v)
-               (setf (gethash v index) i (gethash v low) i) (incf i)
-               (push v stack) (setf (gethash v on) t)
-               (dolist (w (afters v))
-                 (cond ((not (gethash w index))
-                        (connect w)
-                        (setf (gethash v low) (min (gethash v low) (gethash w low))))
-                       ((gethash w on)
-                        (setf (gethash v low) (min (gethash v low) (gethash w index))))))
-               (when (= (gethash v low) (gethash v index))
-                 (let ((scc '()))
-                   (loop (let ((w (pop stack)))
-                           (setf (gethash w on) nil)
-                           (push w scc)
-                           (when (eq w v) (return))))
-                   (finish scc)))))
-      (dolist (v nodes) (unless (gethash v index) (connect v))))))
+(defun next-due ()
+  "the due one to run: not waiting after a due one, no due one above it (reached up its edges, a
+   cycle it is in aside); of those the earliest due, then the oldest"
+  (let* ((due (remove-if-not (lambda (c) (and (alive-p c) (owner-due c))) *all*))
+         (ready (remove-if (lambda (p)
+                             (or (let ((w (waits-of p))) (and w (owner-due w)))
+                                 (some (lambda (q) (and (not (eq q p)) (reaches-p p q) (not (reaches-p q p))))
+                                       due)))
+                           due))
+         (best nil))
+    (dolist (c (or ready due) best)
+      (when (or (null best)
+                (< (owner-due-tick c) (owner-due-tick best))
+                (and (= (owner-due-tick c) (owner-due-tick best)) (< (owner-id c) (owner-id best))))
+        (setf best c)))))
 
 ;;; ---------------------------------------------------------------- chains and loops
 
@@ -228,39 +251,51 @@
         ((computation-p named) (owner-latest named))
         (t nil)))
 
+(defun due-moment (c tick writer)
+  (moment (jmap "due" (owner-name c) "tick" tick "writer" (and writer (owner-name writer)))))
+
 (defun change (keys named)
-  "the keys changed (one mark, one tick), named by a run, a computation or nothing"
+  "the keys changed (one mark, one tick), named by a run, a computation or nothing. every listener
+   is told; the first error one threw comes out after"
   (let* ((tick (incf *tick*))
          (run (named-run named))
          (comp (cond ((crun-p named) (crun-comp named))
                      ((and (computation-p named) run) named)
                      (t nil)))
-         (chain (and run (eq run (owner-latest (crun-comp run))) (crun-chain run))))
-    ;; a compute alive, named by a run of it or by it, becomes the keys' writer
-    (when (and comp (eq (owner-kind comp) :compute) (alive-p comp))
-      (dolist (k keys) (setf (gethash k *key-writer*) comp)))
+         (chain (and run (eq run (owner-latest (crun-comp run))) (crun-chain run)))
+         (now '()) (failed nil))
     (dolist (k keys)
+      ;; a compute alive, named by a run of it or by it, becomes the keys' writer
+      (when (and comp (eq (owner-kind comp) :compute) (alive-p comp))
+        (setf (gethash k *key-writer*) comp))
       (dolist (c (readers-of k))
-        (mark-on c tick comp run chain)))
+        (when (mark-on c tick run chain) (push c now))))
+    (setf now (nreverse now))
+    (handler-case (dolist (c now) (due-moment c tick comp))
+      (sched-error (e) (setf failed e)))
+    (handler-case (fire "mark" keys)
+      (sched-error (e) (unless failed (setf failed e))))
+    (when failed (error failed))
     tick))
 
-(defun mark-on (c tick writer run chain)
+(defun mark-on (c tick run chain)
+  "c is due by a change: true when it was not already"
   (when (alive-p c)
     (let* ((through (loop-through chain c))
-           (cut (and through run (crun-flag run) (member (crun-state run) '(:running :pending)))))
+           (cut (and through run (crun-flag run))))
       (when chain (push chain (owner-chains c)))
       (cond
-        (cut (setf (crun-cut run) t))
+        (cut (setf (crun-cut run) t) nil)
         (t
          (setf (owner-latest-loop c) through)
-         (cond ((and through (owner-looping c)))
+         (cond ((and through (owner-looping c)) nil)
                (t (setf (owner-looping c) nil)
-                  (make-due c tick writer))))))))
+                  (make-due c tick))))))))
 
-(defun make-due (c tick writer)
+(defun make-due (c tick)
   (unless (owner-due c)
     (setf (owner-due c) t (owner-due-tick c) tick)
-    (moment (jmap "due" (owner-name c) "tick" tick "writer" (and writer (owner-name writer))))))
+    t))
 
 ;;; ---------------------------------------------------------------- teardown and dispose
 
@@ -272,42 +307,74 @@
     (handler-case (progn (evaluate (cleanup-expr cl)) nil)
       (error (e) e))))
 
+(defun dispose-kids (kids writer)
+  "kids, newest first, each disposed; the first error"
+  (let ((first-error nil))
+    (dolist (k (reverse kids) first-error)
+      (handler-case (dispose (car k) :writer writer)
+        (error (e) (unless first-error (setf first-error e)))))))
+
 (defun teardown (o &key (which :all) writer)
-  "what is under o first, newest first, then its cleanups, newest first; the first error"
+  "what is under o first, newest first, then its cleanups, newest first; every one runs, the first
+   error comes back. o stays"
   (let ((first-error nil))
     (flet ((note (e) (when (and e (not first-error)) (setf first-error e))))
       (let ((kids (remove-if-not (lambda (k) (or (eq which :all) (eq (cdr k) which))) (owner-children o))))
         (setf (owner-children o) (set-difference (owner-children o) kids))
-        (dolist (k (reverse kids)) (note (dispose (car k) :writer writer))))
+        (note (dispose-kids kids writer)))
       (let ((cls (remove-if-not (lambda (c) (or (eq which :all) (eq (cleanup-origin c) which))) (owner-cleanups o))))
         (setf (owner-cleanups o) (set-difference (owner-cleanups o) cls))
         (dolist (cl (reverse cls))
           (note (run-cleanup cl (if (computation-p o) (and (owner-latest o) o) writer))))))
     first-error))
 
+(defun shed (c)
+  "before a run, like Solid: what is under c goes, newest first (what one threw held), and its
+   cleanups are set aside, to run once the run is done"
+  (let* ((which (if (eq (owner-kind c) :effect) :run :all))
+         (kids (remove-if-not (lambda (k) (or (eq which :all) (eq (cdr k) which))) (owner-children c))))
+    (setf (owner-children c) (set-difference (owner-children c) kids))
+    (let ((e (dispose-kids kids c))) (when e (hold-error e)))
+    (let ((cls (remove-if-not (lambda (x) (or (eq which :all) (eq (cleanup-origin x) which))) (owner-cleanups c))))
+      (setf (owner-cleanups c) (set-difference (owner-cleanups c) cls))
+      (setf (owner-aside c) (append (owner-aside c) cls)))))
+
+(defun lay (c r)
+  "the cleanups set aside before r, once r is done: newest first; one that throws ends the rest,
+   its error held"
+  (let ((fs (owner-aside c)))
+    (setf (owner-aside c) nil)
+    (let ((*running* r))
+      (dolist (cl (reverse fs))
+        (let ((e (run-cleanup cl c)))
+          (when e (hold-error e) (return)))))))
+
+(defun unact (c) (setf *acts* (remove c *acts* :key #'car)))
+
 (defun dispose (o &key writer)
-  "o and all under it gone; the first error a cleanup threw, or nil"
-  (if (owner-disposed o) nil
-      (progn
-        (setf (owner-disposed o) t)
-        (let ((err (teardown o :writer (if (computation-p o) o writer))))
-          (when (owner-name o)
-            (when (eq (gethash (owner-name o) *owners*) o) (remhash (owner-name o) *owners*))
-            (setf (gethash (owner-name o) *gone*) o))
-          (when (owner-parent o)
-            (setf (owner-children (owner-parent o)) (remove o (owner-children (owner-parent o)) :key #'car)))
-          (when (computation-p o)
-            (setf (owner-due o) nil)
-            (setf *acts* (remove o *acts* :key #'car))
-            (untrack-all o)
-            (maphash (lambda (k w) (when (eq w o) (remhash k *key-writer*))) *key-writer*)
-            ;; an edge to one gone is an edge gone: it lowers nothing
-            (dolist (c *all*)
-              (when (member o (owner-after c))
-                (setf (owner-floor c) (max (owner-floor c) (owner-rank c))
-                      (owner-after c) (remove o (owner-after c)))))
-            (rerank))
-          err))))
+  "o and all under it gone; every cleanup runs, and the first error comes out, after them all"
+  (unless (owner-disposed o)
+    (let ((outer *thrown*) (err nil))
+      (setf *thrown* nil)
+      (setf (owner-disposed o) t)
+      (when (computation-p o)
+        ;; going: not due, untracked, the writer of nothing, its act undone
+        (setf (owner-due o) nil)
+        (unact o)
+        (untrack-all o)
+        (maphash (lambda (k w) (when (eq w o) (remhash k *key-writer*))) *key-writer*)
+        ;; set aside before its run: older than the rest
+        (setf (owner-cleanups o) (append (owner-aside o) (owner-cleanups o))
+              (owner-aside o) nil))
+      (setf err (teardown o :writer (if (computation-p o) o writer)))
+      (when (owner-name o)
+        (when (eq (gethash (owner-name o) *owners*) o) (remhash (owner-name o) *owners*))
+        (setf (gethash (owner-name o) *gone*) o))
+      (when (owner-parent o)
+        (setf (owner-children (owner-parent o)) (remove o (owner-children (owner-parent o)) :key #'car)))
+      (when (computation-p o) (setf (owner-latest o) nil))
+      (when (and err (not *thrown*)) (setf *thrown* (list err)))
+      (rethrow outer))))
 
 ;;; ---------------------------------------------------------------- expressions
 
@@ -326,15 +393,19 @@
 (defun read-host-key (k)
   (unless (stringp k) (oops "bad key"))
   (let ((run (ctx-run *ctx*)))
-    (when run
+    (when (and run (alive-p (crun-comp run)))
       (let* ((c (crun-comp run)) (w (gethash k *key-writer*)))
         (push k (crun-reads run))
-        (track-read c k)
-        (when (and (alive-p w) (not (eq w c)) (owner-due w)
-                   (not (waits-reach w c))
-                   (not (some (lambda (ch) (and (eq (chain-comp ch) c) (= (chain-pulse ch) *pulse*)))
-                              (owner-chains w))))
-          (error 'stop-signal :waits w))))
+        ;; every listener told; what one threw comes out once the read is all done
+        (let ((failed (track-read c k)))
+          (when (and w (not (eq c w))) (pushnew w (crun-values run)))
+          (when (and (alive-p w) (not (eq w c)) (owner-due w)
+                     (not (waits-reach w c))
+                     (not (some (lambda (ch) (and (eq (chain-comp ch) c) (= (chain-pulse ch) *pulse*)))
+                                (owner-chains w))))
+            (setf (crun-stopped run) w))
+          (when failed (error failed))
+          (when (crun-stopped run) (error 'stop-signal :waits (crun-stopped run))))))
     (multiple-value-bind (v there) (gethash k *values*)
       (if there v :null))))
 
@@ -426,10 +497,8 @@
               (make-computation :effect name (open-scope) f :act act :early (eq (evaluate early) :true)))
             :null))
          ((string= tag "dispose")
-          (let* ((o (lookup (evaluate body)))
-                 (err (dispose o :writer (ctx-writer *ctx*))))
-            (when err (error err))
-            :null))
+          (dispose (lookup (evaluate body)) :writer (ctx-writer *ctx*))
+          :null)
          (t (oops "unknown form ~a" tag)))))))
 
 (defun add-cleanup (o x)
@@ -488,108 +557,122 @@
     (adopt scope c)
     (push c *all*)
     (when declared (setf (gethash to *key-writer*) c))
-    ;; a flagged run that makes a computation cuts
-    (let ((r (and *ctx* (ctx-run *ctx*)))) (when (and r (crun-flag r)) (setf (crun-cut r) t)))
-    (let ((tick (incf *tick*)))
+    ;; made in a run known to loop: the loop is cut there
+    (let ((r *running*)) (when (and r (crun-flag r)) (setf (crun-cut r) t)))
+    (let* ((tick (incf *tick*))
+           (r *running*)
+           (writer (and r (crun-comp r))))
       (setf (owner-made-tick c) tick)
-      (make-due c tick (and *ctx* (ctx-maker *ctx*))))
-    (when early
-      (let ((r (run-computation c)))
-        (when (and r (assoc c *acts*) (not (owner-due c)))
-          (setf *acts* (remove c *acts* :key #'car))
-          (act c r))))
+      ;; made in a run, set, act or cleanup: it carries that run's cause
+      (when (and r (eq r (owner-latest (crun-comp r))))
+        (push (crun-chain r) (owner-chains c)))
+      (let ((now (make-due c tick)))
+        (bracket
+          (holding (when now (due-moment c tick writer)))
+          (holding (fire "mark" nil))
+          ;; early: its first run now, and its act
+          (when (and early now)
+            (holding (run-computation c))
+            (let ((queued (assoc c *acts*)))
+              (when queued
+                (unact c)
+                (act c (cdr queued))))))))
     c))
 
 (defun equal-field (c result)
   (and (not (eq (owner-last c) +none+)) (results-equal c (owner-last c) result)))
 
-(defun end-moment (r ended &key equal error waits through)
+(defun end-moment (r ended &key (equal :none) error waits through)
   (let ((c (crun-comp r)))
-    (moment (jmap "ends" (owner-name c) "run" (crun-n r) "ended" ended
-                "equal" (cond ((eq equal :none) nil) (equal :true) (t :false))
-                "error" error "waits" (and waits (owner-name waits))
-                "through" (and through (mklist (mapcar #'owner-name through)))
-                "reads" (mklist (reverse (crun-reads r)))))))
-
-(defun give-back (r)
-  (let ((c (crun-comp r)))
-    (setf (owner-chains c) (append (crun-given r) (owner-chains c)))
-    (setf (crun-given r) '())))
+    (moment (jmap "ends" (owner-name c) "run" (crun-n r) "ended" (string-downcase (symbol-name ended))
+                  "equal" (cond ((eq equal :none) nil) (equal :true) (t :false))
+                  "error" (and error (princ-to-string error)) "waits" (and waits (owner-name waits))
+                  "through" (and through (mklist (mapcar #'owner-name through)))
+                  "reads" (mklist (reverse (crun-reads r))))
+            "ends" (owner-name c))))
 
 (defun queue-act (c r)
   (setf *acts* (append (remove c *acts* :key #'car) (list (cons c r)))))
 
-(defun finish (r outcome value)
-  "a run ends: done (value), pending, failed (value an error), stopped (value the one it waits)"
+(defun finish (r ended &key (equal :none) error waits through)
+  "a run ends: done, pending, failed (error), stopped (waits), looping (through)"
   (let ((c (crun-comp r)))
-    (setf (crun-state r) :ended)
-    (when (eq (owner-kind c) :effect) (setf *acts* (remove c *acts* :key #'car)))
-    (ecase outcome
-      (:stopped
-       (setf (owner-waits c) value (owner-due c) t (owner-due-tick c) (crun-mark r))
-       (give-back r)
-       (end-moment r "stopped" :equal :none :waits value))
-      (:pending
-       (setf (crun-state r) :pending)
-       (give-back r)
-       (end-moment r "pending" :equal :none))
-      (:failed
-       (give-back r)
-       (if (and (crun-flag r) (crun-cut r))
-           (progn (setf (owner-looping c) t)
-                  (end-moment r "looping" :equal :none :error (princ-to-string value) :through (crun-flag r)))
-           (end-moment r "failed" :equal :none :error (princ-to-string value))))
-      (:done
-       (let ((equal (equal-field c value)))
-         (cond
-           ((and (crun-flag r) (or (not equal) (crun-cut r)))
-            (give-back r)
-            (setf (owner-looping c) t)
-            (end-moment r "looping" :equal equal :through (crun-flag r)))
-           ((progn (setf (gethash r *results*) value) equal)
-            (setf (crun-given r) '())
-            (end-moment r "done" :equal t))
-           ((eq (owner-kind c) :effect)
-            (setf (crun-given r) '())
-            (queue-act c r)
-            (end-moment r "done" :equal nil))
-           (t
-            (let ((err (set-result c r value)))
-              (setf (crun-given r) '())
-              (if err
-                  (end-moment r "failed" :equal nil :error (princ-to-string err))
-                  (end-moment r "done" :equal nil))))))))))
+    ;; its cleanups, set aside before it, once it is done
+    (when (and (owner-aside c) (eq (owner-latest c) r) (alive-p c)) (lay c r))
+    ;; flagged, and cut a loop (in its cleanups too): a failure ends looping, and so does a result
+    ;; equal to the last
+    (when (and (crun-flag r) (crun-cut r) (or (eq ended :failed) (and (eq ended :done) (eq equal t))))
+      (return-from finish
+        (finish r :looping :equal equal :error error :waits waits :through (crun-flag r))))
+    (when (alive-p c)
+      (when (and (not (eq ended :done)) (crun-given r))
+        (setf (owner-chains c) (append (crun-given r) (owner-chains c))))
+      (setf (crun-given r) '())
+      (when (eq ended :looping) (setf (owner-looping c) t))
+      (unless (eq ended :stopped) (setf (owner-values c) (crun-values r))))
+    (setf (crun-state r) (if (eq ended :pending) :pending :ended))
+    ;; ended, unless awaited: no longer a run known to loop
+    (unless (eq ended :pending) (setf (crun-flag r) nil))
+    (holding (end-moment r ended :equal equal :error error :waits waits :through through))))
 
-(defun set-result (c r value)
+(defun stop (r)
+  (let ((c (crun-comp r)) (w (crun-stopped r)))
+    (setf (owner-waits c) w (owner-due c) t (owner-due-tick c) (crun-mark r))
+    (finish r :stopped :waits w)))
+
+(defun set-result (c value)
   "a compute's result given to set: kept at its key and marked; then its set; what that throws"
-  (declare (ignore r))
   (setf (owner-last c) value)
-  (when (owner-to c)
-    (setf (gethash (owner-to c) *values*) value)
-    (change (list (owner-to c)) c))
-  (when (owner-set-expr c)
-    (let ((*ctx* (make-ctx :owner c :writer c :name c :value value :previous value :maker c)))
-      (handler-case (progn (evaluate (owner-set-expr c)) nil)
-        (pending-signal () (setf (owner-last c) +none+) "pending")
-        (error (e) (setf (owner-last c) +none+) e)))))
+  (handler-case
+      (progn
+        (when (owner-to c)
+          (setf (gethash (owner-to c) *values*) value)
+          (change (list (owner-to c)) c))
+        (when (owner-set-expr c)
+          (let ((*ctx* (make-ctx :owner c :writer c :name c :value value :previous value :maker c)))
+            (evaluate (owner-set-expr c))))
+        nil)
+    (pending-signal () (setf (owner-last c) +none+) "pending")
+    (error (e) (setf (owner-last c) +none+) e)))
 
-(defun run-computation (c)
-  "one run of c: its teardown, its f, its end. the run, or nil when it went"
+(defun result (r value)
+  "a result: equal to the last, it stops there. a compute's goes to set; an effect's waits for the acts"
+  (let* ((c (crun-comp r)) (equal (equal-field c value)))
+    (setf (gethash r *results*) value)
+    (cond
+      ;; flagged: a new result, or a loop it cut, ends looping
+      ((and (crun-flag r) (or (not equal) (crun-cut r)))
+       (finish r :looping :equal equal :through (crun-flag r)))
+      ((eq (owner-kind c) :effect)
+       (unless equal (queue-act c r))
+       (finish r :done :equal equal))
+      ((not equal)
+       (let ((err (let ((*running* r)) (set-result c value))))
+         (if err
+             (finish r :failed :equal nil :error err)
+             (finish r :done :equal nil))))
+      (t (finish r :done :equal t)))))
+
+(defun begin (c)
+  "one run of c: its start, what is under it gone, its f, its end"
   (let* ((n (1+ (owner-runs c)))
          (r (make-crun :comp c :n n :mark (owner-due-tick c) :state :running
-                       :given (owner-chains c) :flag (owner-latest-loop c))))
+                       :given (owner-chains c) :flag (owner-latest-loop c)))
+         (outcome nil) (value nil))
     (setf (owner-chains c) '()
           (crun-chain r) (make-chain :comp c :pulse *pulse* :given (crun-given r))
           (owner-due c) nil (owner-waits c) nil
           (owner-runs c) n (owner-latest c) r)
-    ;; torn down first: a compute's all, an effect's what its runs made
-    (let ((*ctx* (make-ctx :owner c :writer c :name r :run nil :maker c)))
-      (teardown c :which (if (eq (owner-kind c) :effect) :run :all) :writer c))
-    (when (owner-disposed c) (return-from run-computation nil))
-    (setf (owner-info-run c) r)
-    (moment (jmap "starts" (owner-name c) "run" n "rank" (owner-rank c)))
-    (let ((outcome nil) (value nil))
-      (let ((*ctx* (make-ctx :owner c :writer c :name r :run r :maker c
+    ;; an effect acts on its latest run's value only
+    (unact c)
+    (holding (moment (jmap "starts" (owner-name c) "run" n) "starts" (owner-name c)))
+    (let ((*running* r))
+      ;; what is under it goes first; its cleanups wait till the run is done
+      (let ((*ctx* (make-ctx :owner c :writer c :name r :run nil)))
+        (shed c))
+      (when (owner-disposed c) (return-from begin nil))
+      (setf (owner-info-run c) r)
+      (let ((*ctx* (make-ctx :owner c :writer c :name r :run r
                              :previous (owner-last c) :origin :run)))
         (begin-run (owner-tnode c))
         (handler-case
@@ -597,29 +680,35 @@
               (cond ((eq v +pending+) (setf outcome :pending))
                     ((promise-p v) (setf outcome :pending (crun-promise r) v))
                     (t (setf outcome :done value v))))
-          (stop-signal (s) (setf outcome :stopped value (waits s)))
           (pending-signal () (setf outcome :pending))
-          (endless (e) (error e))
           (error (e) (setf outcome :failed value e)))
-        (end-tracking c))
-      (when (owner-disposed c) (return-from run-computation nil))
-      (learn-edges c)
-      (rerank)
-      (finish r outcome value)
-      r)))
+        (end-tracking c)))
+    (when (owner-disposed c) (return-from begin nil))
+    (cond ((crun-stopped r) (stop r))
+          ((eq outcome :failed) (finish r :failed :error value))
+          ((eq outcome :pending) (finish r :pending))
+          (t (result r value)))))
+
+(defun run-computation (c)
+  "one run of c, a bracket of its own: what a listener or a cleanup after it threw comes out after"
+  (bracket (begin c)))
 
 (defun act (c r)
-  "an effect acts on its run's value"
-  (let ((*ctx* (make-ctx :owner c :writer c :name c :maker c :origin :act)))
-    (teardown c :which :all :writer c))
-  (when (owner-disposed c) (return-from act nil))
-  (let* ((value (crun-result-value r)) (previous (owner-last c)) (err nil))
-    (setf (owner-last c) value)
-    (let ((*ctx* (make-ctx :owner c :writer c :name c :maker c :origin :act :value value :previous previous)))
-      (handler-case (evaluate (owner-act-expr c))
-        (endless (e) (error e))
-        (error (e) (setf err (princ-to-string e)))))
-    (moment (jmap "acts" (owner-name c) "run" (crun-n r) "early" (and (owner-early c) :true) "error" err))))
+  "an effect acts on its run's value: what is under it goes first; the first error of those and
+   its act is the act's"
+  (when (or (not (alive-p c)) (owner-due c)) (return-from act nil))
+  (let ((failed nil) (*running* r))
+    (let ((*ctx* (make-ctx :owner c :writer c :name c :maker c :origin :act)))
+      (setf failed (teardown c :which :all :writer c)))
+    (when (owner-disposed c) (return-from act nil))
+    (let* ((value (crun-result-value r)) (previous (owner-last c)))
+      (setf (owner-last c) value)
+      (let ((*ctx* (make-ctx :owner c :writer c :name c :maker c :origin :act :value value :previous previous)))
+        (handler-case (evaluate (owner-act-expr c))
+          (error (e) (unless failed (setf failed e)))))
+      (holding (moment (jmap "acts" (owner-name c) "run" (crun-n r) "early" (and (owner-early c) :true)
+                             "error" (and failed (princ-to-string failed)))
+                       "acts" (owner-name c))))))
 
 ;;; the value a run gave, kept on it for its act
 (defun crun-result-value (r) (gethash r *results* :null))
@@ -629,11 +718,12 @@
 (defun land (pr)
   (let* ((r (promise-run pr)) (c (and r (crun-comp r))))
     (when (and r (alive-p c) (eq r (owner-latest c)) (not (owner-due c)) (eq (crun-state r) :pending))
-      (destructuring-bind (kind . v) (promise-outcome pr)
-        (ecase kind
-          (:value (setf (gethash r *results*) v) (finish r :done v))
-          (:pending (finish r :pending nil))
-          (:error (finish r :failed v)))))))
+      (bracket
+        (destructuring-bind (kind . v) (promise-outcome pr)
+          (ecase kind
+            (:value (result r v))
+            (:pending (finish r :pending))
+            (:error (finish r :failed :error v))))))))
 
 (defun settle (name kind value)
   (let ((pr (gethash name *promises*)))
@@ -648,23 +738,9 @@
                         (let ((v (evaluate (promise-cont pr))))
                           (if (eq v +pending+) (cons :pending nil) (cons :value v)))
                       (pending-signal () (cons :pending nil))
-                      (endless (e) (error e))
                       (error (e) (cons :error e))))
                   (cons :value value))))
     (when (promise-run pr) (setf *settled* (append *settled* (list pr))))))
-
-(defun next-due ()
-  (let ((best nil))
-    (dolist (c (live-computations) best)
-      (when (and (owner-due c)
-                 (not (let ((w (waits-of c))) (and w (owner-due w)))))
-        (when (or (null best)
-                  (< (owner-rank c) (owner-rank best))
-                  (and (= (owner-rank c) (owner-rank best))
-                       (or (< (owner-due-tick c) (owner-due-tick best))
-                           (and (= (owner-due-tick c) (owner-due-tick best))
-                                (< (owner-id c) (owner-id best))))))
-          (setf best c))))))
 
 (defun owner-of-p (a b)
   "a owns b, at any depth"
@@ -678,24 +754,24 @@
                           queue)))
       (unless pick (return))
       (setf *acts* (remove pick *acts*))
-      (let ((c (car pick)))
-        (when (and (alive-p c) (not (owner-due c)))
-          (act c (cdr pick)))))))
+      (bracket (act (car pick) (cdr pick))))))
 
 (defun pulse ()
   (incf *pulse*)
   (setf *pulse-moments* 0)
-  (let ((*in-pulse* t))
-    (unwind-protect
-         (loop
-           (let ((settled *settled*))
-             (setf *settled* '())
-             (dolist (pr settled) (land pr)))
-           (loop for c = (next-due) while c do (run-computation c))
-           (act-queue t)
-           (act-queue nil)
-           (unless (or (next-due) *settled* *acts*) (return)))
-      (dolist (c *all*) (setf (owner-chains c) '())))))
+  (let ((*in-pulse* t) (outer *thrown*) (failed nil))
+    (setf *thrown* nil)
+    (handler-case
+        (loop
+          (loop while *settled* do (land (pop *settled*)))
+          (loop for c = (next-due) while c do (run-computation c))
+          (act-queue t)
+          (act-queue nil)
+          (unless (or (next-due) *settled* *acts*) (return)))
+      (error (e) (setf failed e)))
+    (dolist (c *all*) (setf (owner-chains c) '()))
+    (when failed (setf *thrown* (list failed)))
+    (rethrow outer)))
 
 ;;; ---------------------------------------------------------------- the harness
 
@@ -713,6 +789,7 @@
 
 (defharness "scheduler" (req)
   (let ((op (op-of req)) (*ctx* (top-ctx)))
+    (setf *thrown* nil)
     (handler-case
         (cond
           ((string= op "root")
@@ -745,8 +822,14 @@
              (add-cleanup s (jget req "do"))
              (jmap)))
           ((string= op "dispose")
-           (let* ((s (scope-arg req "scope")) (err (dispose s)))
-             (if err (answer-error err) (jmap))))
+           (dispose (scope-arg req "scope"))
+           (jmap))
+          ((string= op "listener")
+           (let ((on (jget req "on")))
+             (unless (member on '("mark" "starts" "ends" "acts" "forgotten" "started") :test #'equal)
+               (oops "unknown listener ~a" on))
+             (setf *armed* (list on (and (jhas req "at") (jget req "at")) (jget req "throw")))
+             (jmap)))
           ((string= op "run")
            (let ((s (scope-arg req "scope")))
              (handler-case
@@ -783,5 +866,4 @@
           ((string= op "tick") (jmap "tick" *tick*))
           ((string= op "current") (jmap "value" (current-json)))
           (t (oops "unknown op ~a" op)))
-      (endless () (jmap "error" "endless"))
       (error (e) (answer-error e)))))

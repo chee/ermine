@@ -1,5 +1,5 @@
 {
-	"title": "a 32-byte seed gives the same Ed25519 key every time, as RFC 8032 has it; another length is refused",
+	"title": "a 32-byte seed gives the same Ed25519 key every time, as RFC 8032 has it, written as a multikey (ed01, then the key); another length is refused",
 	"steps": [
 		{
 			"op": "key",

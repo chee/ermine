@@ -230,7 +230,7 @@ typedef struct {
 	bool known, held, shame, binned;
 	double x, y, at;
 	uint32_t seed;
-	char by[64], who[65];
+	char by[64], who[DV_KEY];
 	rgb colour;
 	pig_path path;
 	// drawn: where (fractions), facing, how it hangs, its transitions
@@ -275,7 +275,7 @@ static pig *pig_add(dv *d, const char *id) {
 // ---- the world here
 
 typedef struct {
-	char who[65], name[64];
+	char who[DV_KEY], name[64];
 	rgb colour;
 	bool pointer;
 	double x, y, until;
@@ -289,7 +289,7 @@ static struct {
 	dv *d;
 	bool server;
 	screen s;
-	char name[64], colour_text[8], me[65];
+	char name[64], colour_text[8], me[DV_KEY];
 	rgb colour;
 	bool online;
 	// the field, in terminal pixels (a cell is two, one above the other): px a web px is

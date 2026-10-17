@@ -219,7 +219,7 @@ Deno.test("pack: cannot-carry, at the first key of the node", () => {
 	assertEquals(code(() => encode(n(1, { time: 1, actor: "a", reader }))), "cannot-carry")
 })
 
-Deno.test("pack: times, lines, columns, path numbers and range ends are whole", () => {
+Deno.test("pack: times, lines, columns, path numbers and range ends are whole; lines, columns and path numbers fit a C long", () => {
 	const at = (change: ChangeHeader) => code(() => encode(n(1, change)))
 	for (const time of [1.5, -0, NaN, 2 ** 53]) {
 		assertEquals(at({ time, actor: "a" }), "cannot-carry")
@@ -232,11 +232,22 @@ Deno.test("pack: times, lines, columns, path numbers and range ends are whole", 
 	const op = (p: object) => ({ time: 1, actor: "a", op: { patches: [p as never], undo: [] } })
 	assertEquals(at(op({ path: [0.5] })), "cannot-carry")
 	assertEquals(at(op({ path: ["a"], range: [0, 1.5] })), "cannot-carry")
+	// a line, a column and a path's number: what any C long holds, no more
+	assertEquals(
+		at({ time: 1, actor: "a", external: [{ file: "a", line: 2 ** 31 }] }),
+		"cannot-carry",
+	)
+	assertEquals(at(op({ path: [2 ** 31] })), "cannot-carry")
+	assertEquals(at(op({ path: [-(2 ** 31) - 1] })), "cannot-carry")
 	// the largest whole either side, and negatives
 	const edge = n(1, {
 		time: -(2 ** 53 - 1),
 		actor: "a",
-		external: [{ file: "a", line: 2 ** 53 - 1 }],
+		external: [{ file: "a", line: 2 ** 31 - 1, column: 2 ** 31 - 1 }],
+		op: {
+			patches: [{ path: ["a", 2 ** 31 - 1, -(2 ** 31)], range: [-1, 2 ** 53 - 1] }],
+			undo: [],
+		},
 	})
 	assertEquals(decode(encode(edge)).change, edge.change)
 	assertEquals(code(() => decode(cbor.encode({ change: { time: 0.5 } }))), "not-a-node")

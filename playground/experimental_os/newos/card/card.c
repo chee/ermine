@@ -447,7 +447,7 @@ bool cardStart(Card *c, pl *places, tb_table *table, sc_scheduler *s, const card
 		say(c, "card: Subduction would not make a device");
 		return false;
 	}
-	hex(tp_key(sy_device(c->sync)), 32, c->hex);
+	hex(tp_key(sy_device(c->sync)) + SL_KEY - 32, 32, c->hex); // the Ed25519 key, after the multikey's 0xed 0x01
 	tp_arrived(sy_device(c->sync), arrived, c);
 	// what the card holds, taken in before anything else: sync writes every document on it to the table
 	c->booting = true;

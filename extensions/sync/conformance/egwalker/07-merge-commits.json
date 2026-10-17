@@ -171,18 +171,7 @@
 			"heads": [
 				"m2"
 			],
-			"expect": {
-				"from": [
-					"r"
-				],
-				"commits": [
-					"a",
-					"b",
-					"c",
-					"m",
-					"m2"
-				]
-			}
+			"expect": { "from": ["r"], "commits": ["b", "a", "m", "c", "m2"] }
 		}
 	]
 }

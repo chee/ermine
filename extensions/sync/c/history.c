@@ -13,6 +13,7 @@ const char *hy_refusal_name(hy_refusal refusal) {
 	case HY_PATCHES: return "patches";
 	case HY_PARENT: return "parent";
 	case HY_MERGE: return "merge";
+	case HY_WAIT: break;
 	}
 	return "";
 }
@@ -25,7 +26,7 @@ struct rec {
 	hy_kept kept;
 	// how many taken commits go on this one
 	size_t children;
-	// waiting: the parents not taken yet, in order
+	// waiting: the parents not taken yet, in order; none, on the check
 	rec **on;
 	size_t on_length;
 	// the commits waiting on this one, in the order they came
@@ -188,16 +189,24 @@ static bool is_taken(const hy_history *h, const uint8_t name[32]) {
 	return r != NULL && r->state == S_TAKEN;
 }
 
-// the parents all taken: the lamport, then check; taken, or refused (what waits on it released or
-// refused by the caller)
+// on the check: waiting on nothing named, listed in the waits once
+static void hold(hy_history *h, rec *r) {
+	if (r->state != S_WAITING) push(&h->waits, r);
+	r->state = S_WAITING;
+	r->on_length = 0;
+}
+
+// the parents all taken: the lamport, then check; taken, waiting on the check, or refused (what
+// waits on it released or refused by the caller)
 static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 	int64_t top = 0;
 	for (size_t i = 0; i < r->kept.parents_length; i++) {
 		int64_t l = find(h, r->kept.parents[i])->kept.lamport;
 		if (l > top) top = l;
 	}
-	if (r->kept.lamport <= top) return refuse(h, r, HY_LAMPORT), false;
+	if (r->kept.lamport != top + 1) return refuse(h, r, HY_LAMPORT), false;
 	hy_refusal why = h->check != NULL ? h->check(h->context, &r->kept, commit) : 0;
+	if (why == HY_WAIT) return hold(h, r), false;
 	if (why != 0) return refuse(h, r, why), false;
 	r->state = S_TAKEN;
 	push(&h->taken, r);
@@ -318,12 +327,35 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	} else if (take(h, r, c)) {
 		a.kind = HY_TAKEN;
 		release(h, r);
-	} else {
+	} else if (r->state == S_WAITING) a.kind = HY_WAITING;
+	else {
 		a.kind = HY_REFUSED;
 		a.refusal = r->refusal;
 	}
 	cm_free(&own);
 	return a;
+}
+
+void hy_again(hy_history *h) {
+	// what waits on the check now, in order: a take may add to the waits as it goes
+	list held = {0};
+	for (size_t i = 0; i < h->waits.n; i++) {
+		rec *r = h->waits.p[i];
+		if (r->state == S_WAITING && r->on_length == 0) push(&held, r);
+	}
+	for (size_t i = 0; i < held.n; i++) {
+		rec *r = held.p[i];
+		if (r->state != S_WAITING || r->on_length != 0) continue;
+		cm_commit c;
+		if (cm_decode(r->kept.bytes, r->kept.length, &c, NULL) != CM_OK) {
+			mark(h, r, HY_SHAPE);
+			continue;
+		}
+		bool ok = take(h, r, &c);
+		cm_free(&c);
+		if (ok) release(h, r);
+	}
+	free(held.p);
 }
 
 void hy_added_free(hy_added *a) {

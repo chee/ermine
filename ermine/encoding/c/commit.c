@@ -52,11 +52,33 @@ static bool whole(const Json *x) {
 	double d = x->number;
 	return d >= 0 && d <= 9007199254740991.0 && d == floor(d) && !(d == 0 && signbit(d));
 }
-static bool is_key(const Json *k) { return jsonIsString(k) || whole(k); }
+// a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any long holds
+static bool small(const Json *x) { return whole(x) && x->number <= 2147483647.0; }
+static bool is_key(const Json *k) { return jsonIsString(k) || small(k); }
 static bool is_range(const Json *r) {
 	return is_array(r) && r->array.count == 2 && whole(r->array.items[0]) && whole(r->array.items[1]);
 }
 static bool sized(const Json *b, size_t n) { return b != NULL && b->type == JSON_BYTES && b->bytes.length == n; }
+
+int cm_key_split(const uint8_t *b, size_t length, uint64_t *code, const uint8_t **key, size_t *key_length) {
+	size_t i = 0;
+	while (i < length && i < 7 && (b[i] & 0x80)) i++;
+	if (i >= length || i >= 7 || (i > 0 && b[i] == 0) || i + 1 >= length || length > CM_SIGNER_MAX) return 0;
+	uint64_t c = 0;
+	for (size_t k = 0; k <= i; k++) c |= (uint64_t)(b[k] & 0x7f) << (7 * k);
+	if (code != NULL) *code = c;
+	if (key != NULL) *key = b + i + 1;
+	if (key_length != NULL) *key_length = length - i - 1;
+	return 1;
+}
+int cm_multikey(const uint8_t *b, size_t length) { return cm_key_split(b, length, NULL, NULL, NULL); }
+size_t cm_key_join(uint64_t code, const uint8_t *key, size_t key_length, uint8_t *out) {
+	size_t n = 0;
+	for (; code >= 0x80; code >>= 7) out[n++] = (uint8_t)(code & 0x7f) | 0x80;
+	out[n++] = (uint8_t)code;
+	memcpy(out + n, key, key_length);
+	return n + key_length;
+}
 
 static bool only(const Json *x, const char *const *keys) {
 	for (int i = 0; i < x->object.count; i++) {
@@ -79,10 +101,10 @@ static bool place(const Json *x, bool patch) {
 
 static bool site(const Json *x) {
 	static const char *const keys[] = {"file", "line", "column", "function", NULL};
-	if (!is_fields(x) || !jsonIsString(jsonGet(x, "file")) || !whole(jsonGet(x, "line"))) return false;
+	if (!is_fields(x) || !jsonIsString(jsonGet(x, "file")) || !small(jsonGet(x, "line"))) return false;
 	if (!only(x, keys)) return false;
 	const Json *column = jsonGet(x, "column"), *function = jsonGet(x, "function");
-	if (column != NULL && !whole(column)) return false;
+	if (column != NULL && !small(column)) return false;
 	return function == NULL || jsonIsString(function);
 }
 
@@ -106,7 +128,7 @@ static bool rule(int k, const Json *v, const Json *c) {
 		return true;
 	case TIME:
 	case NONCE: return whole(v);
-	case SIGNER: return sized(v, 32);
+	case SIGNER: return v != NULL && v->type == JSON_BYTES && cm_multikey(v->bytes.data, v->bytes.length);
 	case PARENTS:
 		if (!is_array(v)) return false;
 		for (int i = 0; i < v->array.count; i++) {
@@ -285,6 +307,7 @@ void cm_free(cm_commit *c) {
 	*c = (cm_commit){0};
 }
 
+// x checked (cm_check): a key's number fits a long, a range's ends an int64_t
 static void read_target(arena *a, const Json *x, op_target *t) {
 	const Json *path = jsonGet(x, "path"), *range = jsonGet(x, "range");
 	op_key *ks = grab(a, (size_t)path->array.count * sizeof *ks);
@@ -297,8 +320,8 @@ static void read_target(arena *a, const Json *x, op_target *t) {
 	t->length = (size_t)path->array.count;
 	if (range != NULL) {
 		t->has_range = 1;
-		t->from = (long)range->array.items[0]->number;
-		t->to = (long)range->array.items[1]->number;
+		t->from = (int64_t)range->array.items[0]->number;
+		t->to = (int64_t)range->array.items[1]->number;
 	}
 }
 
@@ -321,6 +344,7 @@ cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 		for (int i = 0; i < external->array.count; i++) {
 			const Json *s = external->array.items[i], *column = jsonGet(s, "column"), *function = jsonGet(s, "function");
 			ss[i].file = dup(a, jsonGet(s, "file"));
+			// checked: under 2^31, as any long holds
 			ss[i].line = (long)jsonGet(s, "line")->number;
 			if (column != NULL) ss[i].has_column = 1, ss[i].column = (long)column->number;
 			if (function != NULL) ss[i].function = dup(a, function);
@@ -338,7 +362,9 @@ cm_code cm_of_json(const Json *c, cm_commit *out, char **field) {
 		h->metadata = es;
 		h->metadata_length = (size_t)metadata->array.count;
 	}
-	memcpy(out->signer, jsonGet(c, "signer")->bytes.data, 32);
+	const Json *signer = jsonGet(c, "signer");
+	memcpy(out->signer, signer->bytes.data, signer->bytes.length);
+	out->signer_length = signer->bytes.length;
 	out->nonce = (int64_t)jsonGet(c, "nonce")->number;
 	const Json *parents = jsonGet(c, "parents"), *base = jsonGet(c, "base"), *patches = jsonGet(c, "patches");
 	uint8_t(*ps)[32] = grab(a, (size_t)parents->array.count * 32);
@@ -421,7 +447,7 @@ Json *cm_to_json(const cm_commit *c) {
 		}
 	}
 	jsonAdd(j, "time", jsonNumber((double)h->time));
-	jsonAdd(j, "signer", jsonBytes(c->signer, 32));
+	jsonAdd(j, "signer", jsonBytes(c->signer, c->signer_length));
 	jsonAdd(j, "nonce", jsonNumber((double)c->nonce));
 	Json *parents = jsonArray();
 	jsonAdd(j, "parents", parents);

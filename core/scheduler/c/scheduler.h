@@ -50,6 +50,18 @@
 // listeners (sc_on_...): each kind a small list, told in the order added; adding gives back a
 // handle, sc_remove_listener takes it away (not from inside a call of its own kind).
 //
+// thrown out ("finish, then rethrow"): what a listener throws (sc_throw, as no C function can),
+// or a computer's cleanup run once its next run is done (below), is held while what was going on
+// finishes (every listener told; the run, act, mark or teardown all done), then it comes out:
+// the first, the rest let go. sc_teardown returns it; sc_pulse, sc_mark, sc_track,
+// sc_create_computer, sc_create_effect, sc_resolve and the like leave it for sc_escaped. a pulse
+// is left there: what is still due, or to act, waits for the next.
+//
+// cleanups, like Solid: before a run, what is under the computer goes (a compute's all, an
+// effect's what was made since its last act), and its own cleanups are set aside; they run once
+// the run is done (its result set, before its end is told), newest first, and the first that
+// fails ends the rest, its error thrown out. a computer torn down takes those set aside with it.
+//
 // memory: values a run gives (its result, a promise's value) are the scheduler's until it lets
 // go of them with options.drop (replaced as last, equal, failed, torn down, or at sc_free).
 // set and act are lent them for the call. scopes and computers are the scheduler's until
@@ -223,7 +235,7 @@ const sc_info *sc_get_info(const sc_scheduler *s);
 // on scope o; it gone already, f runs now (its error, if it ran)
 char *sc_register_teardown(sc_scheduler *s, sc_scope *o, char *(*f)(void *data), void *data);
 // children first, newest first, then o's teardowns, newest first. every teardown runs; the first
-// error is returned
+// error is returned (a listener's thrown while it went first: sc_throw)
 char *sc_teardown(sc_scope *o);
 
 // f once, untracked, with o open, the run open the same: a setup, a host's write, a call.
@@ -254,8 +266,15 @@ uint64_t sc_mark(sc_scheduler *s, const void *const *keys, size_t count, sc_run 
 
 // rounds until nothing is due: the settled promises land, the due run in order (order.h), the
 // effects act.
-// a pulse in a pulse does nothing
+// a pulse in a pulse does nothing. what is thrown out leaves it (sc_escaped)
 void sc_pulse(sc_scheduler *s);
+
+// a listener's throw: held while what was going on finishes, then out (above). error is the
+// scheduler's
+void sc_throw(sc_scheduler *s, char *error);
+// what was thrown out of the last call that leaves it here, taken (the caller frees it); NULL:
+// none
+char *sc_escaped(sc_scheduler *s);
 
 // promises. one is the host's until sc_promise_free
 sc_promise *sc_promise_new(sc_scheduler *s);

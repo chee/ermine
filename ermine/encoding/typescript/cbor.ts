@@ -14,6 +14,8 @@
 //   over its kind, any value; a live value itself has no encoding
 // - a symbol has no encoding, anywhere: in a value, or as a map's key. Getting
 //   rid of them first is the caller's
+// - a value nests at most DEPTH containers (lists, maps, stand-ins), one inside
+//   the next: a deeper one has no encoding, and its bytes are not one
 //
 // Bytes are a Uint8Array, any view, given and given back; decoded, a fresh
 // one. A typed array is its own class. Decoding accepts exactly what encoding
@@ -264,6 +266,10 @@ function compare(a: Uint8Array, b: Uint8Array): number {
 // containers deeper than this are tracked: a value holding itself is found within one turn of it
 const SHALLOW = 64
 
+/** How many containers a value nests at most, one inside the next (cbor.h's CBOR_DEPTH). */
+export const DEPTH = 1024
+const tooDeep = `nested deeper than ${DEPTH}`
+
 function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 	if (typeof x === "number") return number(out, x)
 	if (typeof x === "string") return text(out, x)
@@ -276,6 +282,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		return out.bytes(x)
 	}
 	if (x instanceof Stand) {
+		if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
 		out.head(6, STAND)
 		return value(out, x.kind, open, depth + 1)
 	}
@@ -291,6 +298,7 @@ function value(out: Out, x: unknown, open: Set<object>, depth: number) {
 		}
 		return out.bytes(elements(t, kind))
 	}
+	if (depth >= DEPTH) throw new CborError(`a value ${tooDeep} has no encoding`)
 	const deep = depth > SHALLOW
 	if (deep) {
 		if (open.has(x)) throw new CborError("a value cannot hold itself")
@@ -422,7 +430,8 @@ function string(input: In, n: number): string {
 	}
 }
 
-function read(input: In): Value {
+// depth: how many containers hold what is read
+function read(input: In, depth: number): Value {
 	input.need(1)
 	const start = input.at
 	const ib = input.b[input.at++]
@@ -436,13 +445,15 @@ function read(input: In): Value {
 		case 3:
 			return string(input, input.arg(info))
 		case 4: {
+			if (depth >= DEPTH) throw wrong(tooDeep)
 			const n = input.arg(info)
 			if (n > input.b.length - input.at) throw wrong("a list is longer than the input")
 			const list: Value[] = []
-			for (let i = 0; i < n; i++) list.push(read(input))
+			for (let i = 0; i < n; i++) list.push(read(input, depth + 1))
 			return list
 		}
 		case 5: {
+			if (depth >= DEPTH) throw wrong(tooDeep)
 			const n = input.arg(info)
 			if (n > input.b.length - input.at) throw wrong("a map is longer than the input")
 			const map: { [k: string]: Value } = {}
@@ -451,7 +462,7 @@ function read(input: In): Value {
 			for (let i = 0; i < n; i++) {
 				const at = input.at
 				if (at < b.length && b[at] >> 5 !== 3) throw wrong("a map key that is not a string")
-				const key = read(input) as string
+				const key = read(input, depth + 1) as string
 				// after the last key, bytewise
 				if (from >= 0) {
 					const end = input.at, k = Math.min(to - from, end - at)
@@ -462,7 +473,7 @@ function read(input: In): Value {
 					}
 				}
 				from = at, to = input.at
-				const v = read(input)
+				const v = read(input, depth + 1)
 				if (key === "__proto__") {
 					Object.defineProperty(map, key, {
 						value: v,
@@ -476,7 +487,10 @@ function read(input: In): Value {
 		}
 		case 6: {
 			const tag = input.arg(info)
-			if (tag === STAND) return new Stand(read(input))
+			if (tag === STAND) {
+				if (depth >= DEPTH) throw wrong(tooDeep)
+				return new Stand(read(input, depth + 1))
+			}
 			const kind = BY_TAG.get(tag)
 			if (!kind) throw wrong("a tag that is not a typed array's")
 			input.need(1)
@@ -546,7 +560,7 @@ function read(input: In): Value {
 /** The value a deterministic encoding encodes; anything else throws. */
 export function decode(bytes: Uint8Array | ArrayBuffer): Value {
 	const input = new In(bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes)
-	const x = read(input)
+	const x = read(input, 0)
 	if (input.at !== input.b.length) throw wrong("bytes after the value")
 	return x
 }

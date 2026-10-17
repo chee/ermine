@@ -4,9 +4,10 @@
 // nothing here is ever shared with what changes.
 //
 // Taking a commit in: its bytes decoded (a commit's shape, commit.h), its parents all here and taken
-// (else it waits), its lamport above theirs, and check (the integration's: do its patches apply to
-// its parent's node) says yes. A commit taken in releases what waited on it, in order, depth first,
-// as history.ts does. A commit refused for its shape releases nothing, as there. Out of memory
+// (else it waits), its lamport 1 + the highest of theirs (1 for a root: derived, never chosen), and
+// check (the integration's: do its patches apply to its parent's node) says yes. A commit taken in
+// releases what waited on it, in order, depth first, as history.ts does. One the check cannot judge
+// yet waits on nothing named until hy_again. A commit refused for its shape releases nothing, as there. Out of memory
 // aborts. Nothing recurses on how long a chain of waiting commits is.
 #ifndef HY_HISTORY_H
 #define HY_HISTORY_H
@@ -17,9 +18,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// merge: a merge commit by a rule this device doesn't know
-typedef enum { HY_SHAPE = 1, HY_LAMPORT, HY_PATCHES, HY_PARENT, HY_MERGE } hy_refusal;
-// "shape", "lamport", "patches", "parent", "merge"
+// merge: a merge commit by a rule this device doesn't know. HY_WAIT is no refusal: what a check
+// gives for a commit it cannot judge yet (authority not here yet, say), which waits on the check
+typedef enum { HY_SHAPE = 1, HY_LAMPORT, HY_PATCHES, HY_PARENT, HY_MERGE, HY_WAIT } hy_refusal;
+// "shape", "lamport", "patches", "parent", "merge"; "" for HY_WAIT
 const char *hy_refusal_name(hy_refusal refusal);
 
 // what a commit is kept as: its bytes, and what ordering and replay read without decoding again.
@@ -41,7 +43,8 @@ typedef struct {
 
 typedef enum { HY_TAKEN, HY_PASSED, HY_WAITING, HY_REFUSED } hy_kind;
 // what add answers. HY_WAITING: the names of the parents not taken in, in parents' order (waiting,
-// waiting_length; hy_added_free). HY_REFUSED: refusal. PASSED: it is here already
+// waiting_length; hy_added_free); none: it waits on the check. HY_REFUSED: refusal. PASSED: it is
+// here already
 typedef struct {
 	hy_kind kind;
 	hy_refusal refusal;
@@ -53,7 +56,7 @@ void hy_added_free(hy_added *a);
 // given a commit whose parents are all taken (its patches are borrowed, only to be read, and not
 // changed), whether its patches apply to its parent's node (the integration's, which may apply
 // them as it looks): 0 yes; else the refusal (HY_PATCHES: they don't apply; HY_MERGE: a rule not
-// known here)
+// known here); HY_WAIT: it cannot judge it yet
 typedef hy_refusal (*hy_check)(void *context, const hy_kept *kept, const cm_commit *commit);
 
 typedef struct hy_history hy_history;
@@ -86,7 +89,11 @@ typedef void (*hy_taken)(void *context, const hy_kept *kept);
 void hy_on_taken(hy_history *h, hy_taken f, void *context);
 void hy_off_taken(hy_history *h, hy_taken f, void *context);
 
-// a commit waiting, and the parents it waits on; refused, and why
+// the commits waiting on the check judged again, in the order they came to wait; each keeps its
+// place while it waits on
+void hy_again(hy_history *h);
+
+// a commit waiting, and the parents it waits on (none: on the check); refused, and why
 typedef struct {
 	uint8_t name[32];
 	uint8_t (*waiting)[32];

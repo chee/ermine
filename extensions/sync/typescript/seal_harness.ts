@@ -2,13 +2,16 @@
 // lines. another implementation joins by speaking this (HARNESS). conventions:
 // extensions/sync/conformance/README.md
 //
-// { op: "key", seed }               → { key }       the Ed25519 key of a 32-byte seed
+// { op: "key", seed }               → { key }       the Ed25519 key of a 32-byte seed, as a
+//                                                    multikey (0xed 0x01, then the 32 bytes)
 // { op: "seal", seed, commit }      → { sealed }    commit: its bytes (hex), or a commit in JSON
 //                                                    (encoded first); sealed by the seed's signer
 // { op: "unseal", sealed }          → { commit, bytes, name, stored }   commit in JSON, bytes its
 //                                                    bytes, name its name, stored the seal's id
 // { op: "unseal", value }           → the same, the value (its JSON form) encoded canonically first
 // { op: "stored", sealed }          → { stored }
+// { op: "verify", key, message, signature } → { good }   the raw signature (64 bytes) the raw key's
+//                                                    (32 bytes) over the message, checked strictly
 // refused: { error: code }, SealError's code; a commit's own refusal as the commit harness gives it
 import * as cbor from "@ermine/encoding/cbor"
 import { encode } from "@ermine/encoding/commit"
@@ -21,7 +24,7 @@ import {
 	refusal,
 	unhex,
 } from "../../../ermine/encoding/typescript/commit_harness.ts"
-import { createSigner, seal, SealError, stored, unseal } from "./seal.ts"
+import { createSigner, good, seal, SealError, stored, unseal } from "./seal.ts"
 
 // a commit's bytes: hex, or a commit in JSON encoded
 export const commitBytes = (x: unknown) => typeof x === "string" ? unhex(x) : encode(commitOf(x))
@@ -55,6 +58,12 @@ async function answer(r: Request): Promise<Answer> {
 			}
 			case "stored":
 				return { stored: hex(stored(unhex(r.sealed))) }
+			case "verify": {
+				const key = unhex(r.key), signature = unhex(r.signature)
+				const ok = key.length === 32 && signature.length === 64 &&
+					await good(signature, key, unhex(r.message))
+				return { good: ok }
+			}
 		}
 	} catch (e) {
 		return sealRefusal(e)

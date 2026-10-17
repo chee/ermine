@@ -26,7 +26,7 @@ typedef struct {
 	char here[DV_ID];
 	bool closet;
 	// someone on a page dragging you: their name and key, when they last moved you
-	char dragged_by[64], dragger[65];
+	char dragged_by[64], dragger[DV_KEY];
 	double dragged_at;
 	// stuck in the corner of shame: in the closet, by its door or by a drag; out only by a page's drag
 	// (stuck when it began, the last door-is-stuck told)

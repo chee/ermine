@@ -1,5 +1,5 @@
 {
-	"title": "whole numbers to the largest safe integer, either side",
+	"title": "whole numbers at their edges: time and a range's ends to the largest safe integer, either side; a path's number, a line and a column to what any C long holds, 2^31 - 1 (-2^31 the other side)",
 	"entries": [
 		[
 			"value",
@@ -14,8 +14,8 @@
 				"external": [
 					{
 						"file": "a",
-						"line": 9007199254740991,
-						"column": 0
+						"line": 2147483647,
+						"column": 2147483647
 					}
 				],
 				"op": {
@@ -23,7 +23,8 @@
 						{
 							"path": [
 								"a",
-								9007199254740991
+								2147483647,
+								-2147483648
 							],
 							"range": [
 								-1,

@@ -11,6 +11,7 @@ import apply from "@ermine/op/apply"
 import { type Commit, decode } from "@ermine/encoding/commit"
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import type { History, Kept } from "./history.ts"
+import { alike, tablesOf } from "./snapshot.ts"
 
 // each table's entry: its value, and the change that last touched it
 export type Tables = Record<string, Entry<unknown>>
@@ -41,6 +42,26 @@ export function changeOf(c: Commit): ChangeHeader {
 	if (c.external !== undefined) h.external = c.external
 	if (c.metadata !== undefined) h.metadata = c.metadata
 	return h
+}
+
+// whether a snapshot of the tables at name (packed, snapshot.ts) from elsewhere is right: the tables
+// replayed to it (from the snapshots given, each checked so itself) are the same. no snapshot is
+// signed, so one is a hint, kept only when it matches (transport.ts); false: not taken in, a merge on
+// the way by a rule not given, or bytes that are no snapshot
+export function matches(
+	history: History,
+	name: Uint8Array,
+	bytes: Uint8Array,
+	snapshot: Snapshots = () => undefined,
+	merges?: Merges,
+): boolean {
+	const tables = replay(history, name, snapshot, merges)
+	if (tables === undefined) return false
+	try {
+		return alike(tables, tablesOf(bytes))
+	} catch {
+		return false
+	}
 }
 
 // the tables at name; undefined: not taken in, or a merge on the way by a rule not given

@@ -26,7 +26,7 @@
 // throws changes nothing. cow (node's update's flag, set false by places for children and
 // attributes) is not read: what is changed in place is decided here, so a reader's never is
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
-import apply, { ApplyError, type Key, type Patch, type Target } from "@ermine/op/apply"
+import apply, { type Patch } from "@ermine/op/apply"
 import type { Scheduler } from "@ermine/scheduler"
 import type { Id, Table } from "@ermine/table"
 import { keep } from "./unread_conformance_hook.ts"
@@ -51,32 +51,6 @@ const typed = (v: unknown): v is Int8Array =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 const container = (v: unknown): v is object => Array.isArray(v) || isMap(v) || typed(v)
 
-// what a patch changes in place: its path, and a move's (a range: the list or string there too).
-// a move takes, then puts: where it puts is found after the take, which shifts the list it took
-// from, so its path is given as it reads before the take
-function places(p: Patch): [readonly Key[], boolean][] {
-	const m = p.move
-	if (m === undefined || !Array.isArray(m.path)) return [[p.path, p.range !== undefined]]
-	return [[m.path, m.range !== undefined], [before(p.path, m), p.range !== undefined]]
-}
-
-// a path read after a take, as it reads before it: a number past what a list lost, moved up
-function before(path: readonly Key[], m: Target): readonly Key[] {
-	const last = m.path[m.path.length - 1]
-	const [list, a, b] = m.range !== undefined
-		? [m.path, m.range[0], m.range[1]]
-		: typeof last === "number"
-		? [m.path.slice(0, -1), last, last + 1]
-		: [undefined, 0, 0]
-	if (list === undefined || !Array.isArray(path) || path.length <= list.length) return path
-	for (let i = 0; i < list.length; i++) if (path[i] !== list[i]) return path
-	const j = path[list.length]
-	if (typeof j !== "number" || j < a) return path
-	const out = path.slice()
-	out[list.length] = j + (b - a)
-	return out
-}
-
 export function createUnread(): Unread {
 	// an entry → its token: made at its first write since it was last read
 	const owns = new WeakMap<Entry<unknown>, object>()
@@ -84,34 +58,12 @@ export function createUnread(): Unread {
 	// per copy; a read gives the entry a new token, letting go of all of it at once
 	const owner = new WeakMap<object, object>()
 
-	// the root a write is applied to: every container its patches change in place owned, copied
-	// where not (the copies owned); the entry's value untouched until the write lands
-	function own(root: unknown, ps: readonly Patch[], mine: object): unknown {
-		const take = (v: unknown): unknown => {
-			if (!container(v) || owner.get(v) === mine) return v
-			const c = Array.isArray(v) || typed(v) ? v.slice() : { ...v }
-			owner.set(c, mine)
-			return c
-		}
-		for (const p of ps) {
-			if (p === null || typeof p !== "object" || !Array.isArray(p.path)) continue
-			for (const [path, ranged] of places(p)) {
-				if (!Array.isArray(path) || path.length === 0 && !ranged) continue
-				root = take(root)
-				let v = root
-				// the containers above the last key; a range's own container too
-				const end = ranged ? path.length : path.length - 1
-				for (let i = 0; i < end; i++) {
-					const k = path[i]
-					if (!container(v) || !Object.hasOwn(v, k)) break
-					const at = v as Record<Key, unknown>
-					const next = at[k], c = take(next)
-					if (c !== next) at[k] = c
-					v = c
-				}
-			}
-		}
-		return root
+	// apply's owned: a container a write changes, owned, or its copy, owned from now
+	const take = (mine: object) => (v: object): object => {
+		if (owner.get(v) === mine) return v
+		const c = Array.isArray(v) || typed(v) ? v.slice() : { ...v }
+		owner.set(c, mine)
+		return c
 	}
 
 	// what a write took out (its undo holds it) no longer owned: owned containers are connected
@@ -128,23 +80,11 @@ export function createUnread(): Unread {
 		const ps: readonly Patch[] = Array.isArray(patches) ? patches : [...patches]
 		let mine = owns.get(entry)
 		if (mine === undefined) owns.set(entry, mine = {})
-		// one patch at a time: each owns what it changes in the tree the ones before it left (one
-		// may move a subtree, or put a value in, that the next writes under)
-		const undos: Patch[][] = []
-		let after: unknown = entry.value
-		try {
-			for (const p of ps) {
-				const undo: Patch[] = []
-				after = apply(own(after, [p], mine), [p], { undo, cow: false })
-				undos.push(undo)
-			}
-		} catch (e) {
-			// what landed put back, last first; the patch that threw named in the whole write
-			const failed = undos.length
-			for (let i = undos.length - 1; i >= 0; i--) after = apply(after, undos[i], { cow: false })
-			throw e instanceof ApplyError ? new ApplyError(e.code, failed) : e
-		}
-		const undo = undos.reverse().flat()
+		// one apply, in place where owned: what a patch changes that is not owned yet is copied as
+		// it lands, in the tree the patches before it left (one may move a subtree, or put a value
+		// in, that the next writes under). a throw changes nothing
+		const undo: Patch[] = []
+		const after = apply(entry.value, ps, { undo, cow: false, owned: take(mine) })
 		for (const u of undo) if ("value" in u) free(u.value, mine)
 		if (after === undefined) delete entry.value
 		else entry.value = after as V

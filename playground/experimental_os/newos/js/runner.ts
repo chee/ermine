@@ -116,7 +116,9 @@ let steps = BUDGET
 function step(): void {
 	if (--steps < 0) {
 		steps = 0
-		const e = new Error(`the run took more than ${BUDGET} steps (loop turns and functions entered), and was stopped`)
+		const e = new Error(
+			`the run took more than ${BUDGET} steps (loop turns and functions entered), and was stopped`,
+		)
 		e.name = "budget"
 		throw e
 	}
@@ -124,7 +126,9 @@ function step(): void {
 
 /** a program's setup: its module evaluated once, with its URL so its frames say where, the budget's steps in its code */
 function load(source: string, url: string): unknown {
-	const wrapped = `(function (__library, ${STEP}) { let __default;\n${budget(script(source))}\n;return __default })`
+	const wrapped = `(function (__library, ${STEP}) { let __default;\n${
+		budget(script(source))
+	}\n;return __default })`
 	const f = evaluate(wrapped, url) as (lib: (name: string) => unknown, step: () => void) => unknown
 	steps = BUDGET
 	return f((name) => {

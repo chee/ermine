@@ -267,7 +267,7 @@ static void device(const op_value *r, FILE *out) {
 	devices[device_count++] = d;
 	settle(d);
 	fputs("{\"key\":", out);
-	cf_put_hex(out, tp_key(d->t), 32);
+	cf_put_hex(out, tp_key(d->t), SL_KEY);
 	fputc('}', out);
 }
 

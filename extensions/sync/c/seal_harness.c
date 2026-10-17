@@ -1,6 +1,7 @@
 // The C seal on the line protocol (conformance/c/harness.h): requests and answers as
 // extensions/sync/typescript/seal_harness.ts has them. Nothing lasts between lines
 #include "seal.h"
+#include "ed25519/ed25519.h"
 
 #include "../../../ermine/encoding/c/commit_form.h"
 #include "../../../ermine/encoding/c/pack.h"
@@ -27,7 +28,7 @@ static void key(const op_value *r, FILE *out) {
 	sl_seeded s;
 	if (!seed_of(r, out, &s)) return;
 	fputs("{\"key\":", out);
-	cf_put_hex(out, s.signer.key, 32);
+	cf_put_hex(out, s.signer.key, s.signer.key_length);
 	fputc('}', out);
 }
 
@@ -93,7 +94,7 @@ static void unseal(const op_value *r, FILE *out) {
 		return;
 	}
 	sl_unsealed u;
-	sl_code code = sl_unseal(bytes, length, &u);
+	sl_code code = sl_unseal(bytes, length, &u, NULL);
 	if (code != SL_OK) {
 		refuse(out, code);
 		return;
@@ -125,6 +126,23 @@ static void stored(const op_value *r, FILE *out) {
 	fputc('}', out);
 }
 
+// { op: "verify", key, message, signature }: whether the raw signature is the raw key's over the
+// message, as strictly as ed25519.h checks
+static void verify(const op_value *r, FILE *out) {
+	const char *names[3] = {"key", "message", "signature"};
+	uint8_t *b[3];
+	size_t n[3];
+	for (int i = 0; i < 3; i++) {
+		const char *hex = hh_str(r, names[i]);
+		if (hex == NULL || !cf_unhex(hex, &b[i], &n[i])) {
+			hh_error(out, "not hex");
+			return;
+		}
+	}
+	bool good = n[0] == 32 && n[2] == 64 && ermEd25519Verify(b[0], b[1], n[1], b[2]);
+	fprintf(out, "{\"good\":%s}", good ? "true" : "false");
+}
+
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
 	if (op == NULL) hh_unknown(out, r);
@@ -132,5 +150,6 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "seal") == 0) seal(r, out);
 	else if (strcmp(op, "unseal") == 0) unseal(r, out);
 	else if (strcmp(op, "stored") == 0) stored(r, out);
+	else if (strcmp(op, "verify") == 0) verify(r, out);
 	else hh_unknown(out, r);
 }

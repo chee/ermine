@@ -15,7 +15,7 @@ struct chn_listener {
 struct sc_channel {
 	chn_channel channel;
 	tp_device *t;
-	char name[65];
+	char name[2 * SL_KEY + 1];
 	chn_listener *first;
 };
 
@@ -58,7 +58,7 @@ sc_channel *sc_create(tp_device *t) {
 	if (s == NULL) abort();
 	s->t = t;
 	const uint8_t *key = tp_key(t);
-	for (int i = 0; i < 32; i++) snprintf(s->name + 2 * i, 3, "%02x", key[i]);
+	for (int i = 0; i < SL_KEY; i++) snprintf(s->name + 2 * i, 3, "%02x", key[i]);
 	s->channel = (chn_channel){s->name, channel_send, channel_on, channel_off, s};
 	return s;
 }

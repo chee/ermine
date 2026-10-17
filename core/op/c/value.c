@@ -15,9 +15,27 @@ static void *xrealloc(void *p, size_t n) {
 	}
 	return q;
 }
-static char *xdup(const char *s) {
+// names: a count of holders past the first, then the string
+typedef struct {
+	size_t refs;
+	char s[];
+} name;
+#define NAME(p) ((name *)((p) - offsetof(name, s)))
+char *op_name(const char *s) {
 	size_t n = strlen(s) + 1;
-	return memcpy(xrealloc(NULL, n), s, n);
+	name *k = xrealloc(NULL, sizeof *k + n);
+	k->refs = 0;
+	return memcpy(k->s, s, n);
+}
+char *op_name_ref(char *p) {
+	NAME(p)->refs++;
+	return p;
+}
+void op_name_free(char *p) {
+	if (p == NULL) return;
+	name *k = NAME(p);
+	if (k->refs) k->refs--;
+	else free(k);
 }
 // room for one more at index count
 #define GROW(p, count, capacity) \
@@ -208,12 +226,13 @@ void op_unset(op_value *map, size_t i) {
 			map->gaps[0] = 0;
 		}
 	}
-	free(map->keys[i]);
+	op_name_free(map->keys[i]);
 	memmove(map->keys + i, map->keys + i + 1, (map->count - i - 1) * sizeof *map->keys);
 	memmove(map->items + i, map->items + i + 1, (map->count - i - 1) * sizeof *map->items);
 	map->count--;
 }
-void op_set(op_value *map, const char *key, op_value *v) {
+// the key a name already (shared: given), or a string to make one of
+static void put(op_value *map, const char *key, char *shared, op_value *v) {
 	size_t at;
 	if (lookup(map, key, &at) != NULL) {
 		op_free(map->items[at]);
@@ -225,13 +244,26 @@ void op_set(op_value *map, const char *key, op_value *v) {
 		map->items = xrealloc(map->items, map->capacity * sizeof *map->items);
 		map->keys = xrealloc(map->keys, map->capacity * sizeof *map->keys);
 	}
-	map->keys[map->count] = xdup(key);
+	map->keys[map->count] = shared != NULL ? op_name_ref(shared) : op_name(key);
 	map->items[map->count++] = v;
 	if (map->index != NULL) {
 		size_t gaps = map->gaps ? map->gaps[0] : 0;
 		if (map->slots >= 2 * map->count) slot(map, map->count - 1 + gaps);
 		else unindex(map);
 	}
+}
+void op_set(op_value *map, const char *key, op_value *v) { put(map, key, NULL, v); }
+void op_set_name(op_value *map, char *name, op_value *v) { put(map, name, name, v); }
+op_value *op_map_copy(const op_value *from) {
+	op_value *to = make(OP_MAP);
+	if (from->count == 0) return to;
+	to->items = xrealloc(NULL, from->count * sizeof *to->items);
+	memcpy(to->items, from->items, from->count * sizeof *to->items);
+	to->keys = xrealloc(NULL, from->count * sizeof *to->keys);
+	for (size_t i = 0; i < from->count; i++) to->keys[i] = op_name_ref(from->keys[i]);
+	to->capacity = to->count = from->count;
+	op_map_table_copy(to, from);
+	return to;
 }
 void op_map_table_copy(op_value *to, const op_value *from) {
 	if (from->index == NULL) return;
@@ -247,21 +279,29 @@ op_value *op_ref(op_value *v) {
 	if (v != NULL) v->refs++;
 	return v;
 }
+// no recursion: what a value holds waits on a stack of its own, so it may nest as deep as memory allows
 void op_free(op_value *v) {
-	if (v == NULL) return;
-	if (v->refs) {
-		v->refs--;
-		return;
-	}
-	if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
-		for (size_t i = 0; i < v->count; i++) {
-			op_free(v->items[i]);
-			if (v->type == OP_MAP) free(v->keys[i]);
+	op_value **stack = NULL;
+	size_t n = 0, room = 0;
+	for (; v != NULL; v = n ? stack[--n] : NULL) {
+		if (v->refs) {
+			v->refs--;
+			continue;
 		}
-		free(v->items);
-		free(v->keys);
-		free(v->index);
-		free(v->gaps);
-	} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
-	free(v);
+		if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
+			for (size_t i = 0; i < v->count; i++) {
+				if (v->items[i] != NULL) {
+					if (n == room) stack = xrealloc(stack, (room = room ? room * 2 : 16) * sizeof *stack);
+					stack[n++] = v->items[i];
+				}
+				if (v->type == OP_MAP) op_name_free(v->keys[i]);
+			}
+			free(v->items);
+			free(v->keys);
+			free(v->index);
+			free(v->gaps);
+		} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
+		free(v);
+	}
+	free(stack);
 }

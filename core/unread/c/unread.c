@@ -140,26 +140,21 @@ static int container(const op_value *v) {
 	return v != NULL && (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_TYPED);
 }
 
-// a shallow copy: the same items, one reference on each. a typed array's elements copied
+// a shallow copy: the same items, one reference on each, a map's keys shared. a typed array's
+// elements copied
 static op_value *copy(const op_value *v) {
 	if (v->type == OP_TYPED) return op_typed(v->kind, v->data, op_length(v));
-	op_value *c = v->type == OP_LIST ? op_list() : op_map();
-	if (v->count == 0) return c;
-	c->items = malloc(v->count * sizeof *c->items);
-	if (c->items == NULL) abort();
-	c->capacity = v->count;
-	if (v->type == OP_MAP) {
-		c->keys = malloc(v->count * sizeof *c->keys);
-		if (c->keys == NULL) abort();
+	op_value *c;
+	if (v->type == OP_MAP) c = op_map_copy(v);
+	else {
+		c = op_list();
+		if (v->count == 0) return c;
+		c->items = malloc(v->count * sizeof *c->items);
+		if (c->items == NULL) abort();
+		memcpy(c->items, v->items, v->count * sizeof *c->items);
+		c->capacity = c->count = v->count;
 	}
-	for (size_t i = 0; i < v->count; i++) {
-		c->items[i] = op_ref(v->items[i]);
-		if (v->type == OP_MAP) {
-			c->keys[i] = strdup(v->keys[i]);
-			if (c->keys[i] == NULL) abort();
-		}
-		c->count++;
-	}
+	for (size_t i = 0; i < c->count; i++) op_ref(c->items[i]);
 	return c;
 }
 
@@ -184,64 +179,15 @@ static op_value *take(set *mine, made *m, op_value *v) {
 	return c;
 }
 
-// the slot a key leads to in v: NULL when v has none (as hasOwn does not)
-static op_value **slot(op_value *v, const op_key *k) {
-	if (v->type == OP_LIST) {
-		if (k->type != OP_NUM_KEY || k->n < 0 || (size_t)k->n >= v->count) return NULL;
-		return &v->items[k->n];
-	}
-	if (v->type != OP_MAP || k->type != OP_STR_KEY) return NULL;
-	long i = op_find(v, k->s);
-	return i < 0 ? NULL : &v->items[i];
-}
-
-// the containers a patch changes in place on its target's path: owned, copied where not
-static void own_target(op_value **root, const op_target *t, set *mine, made *m) {
-	if (t->length == 0 && !t->has_range) return;
-	op_value *r = take(mine, m, *root);
-	if (r != *root) op_free(*root), *root = r;
-	op_value *v = *root;
-	// the containers above the last key; a range's own container too
-	size_t end = t->has_range ? t->length : t->length - 1;
-	for (size_t i = 0; i < end; i++) {
-		if (!container(v)) break;
-		op_value **at = slot(v, &t->path[i]);
-		if (at == NULL) break;
-		op_value *c = take(mine, m, *at);
-		if (c != *at) op_free(*at), *at = c;
-		v = c;
-	}
-}
-
-static int same_key(const op_key *a, const op_key *b) {
-	if (a->type != b->type) return 0;
-	if (a->type == OP_NUM_KEY) return a->n == b->n;
-	if (a->type == OP_STR_KEY) return strcmp(a->s, b->s) == 0;
-	return a->a == b->a && a->b == b->b;
-}
-
-// a move takes, then puts: where it puts is found after the take, which shifts the list it took
-// from. t, read after the take, as it reads before it: a number past what the list lost, moved up.
-// keys: room for t's path, written when it shifts
-static op_target before(const op_target *t, const op_target *m, op_key *keys) {
-	size_t list;
-	long a, b;
-	if (m->has_range) {
-		list = m->length, a = m->from, b = m->to;
-	} else if (m->length > 0 && m->path[m->length - 1].type == OP_NUM_KEY) {
-		list = m->length - 1, a = m->path[m->length - 1].n, b = a + 1;
-	} else {
-		return *t;
-	}
-	if (t->length <= list) return *t;
-	for (size_t i = 0; i < list; i++)
-		if (!same_key(&t->path[i], &m->path[i])) return *t;
-	if (t->path[list].type != OP_NUM_KEY || t->path[list].n < a) return *t;
-	memcpy(keys, t->path, t->length * sizeof *keys);
-	keys[list].n += b - a;
-	op_target out = *t;
-	out.path = keys;
-	return out;
+// a write's: what it owns, and the copies it made
+typedef struct {
+	set *mine;
+	made made;
+} owning;
+// op_apply's owned: the container to change in place
+static op_value *owned(op_value *v, void *data) {
+	owning *o = data;
+	return take(o->mine, &o->made, v);
 }
 
 // what a write took out (its undo holds it) no longer owned: owned containers are connected from
@@ -336,68 +282,23 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 		u->records[u->count++] = r;
 		pm_set(&u->by_entry, entry, r);
 	}
-	set *mine = r->owned;
-	op_undo *undos = calloc(n + 1, sizeof *undos);
-	if (undos == NULL) abort();
-	// one patch at a time: each owns what it changes in the tree the ones before it left (one may
-	// move a subtree, or put a value in, that the next writes under)
-	made made_here = {0};
-	op_value *after = op_ref(entry->value);
-	size_t i = 0;
-	int code = OP_OK;
-	for (; i < n; i++) {
-		op_value *out;
-		if (patches[i].has_move) {
-			own_target(&after, &patches[i].move, mine, &made_here);
-			op_key *keys = malloc((patches[i].place.length + 1) * sizeof *keys);
-			if (keys == NULL) abort();
-			op_target put = before(&patches[i].place, &patches[i].move, keys);
-			own_target(&after, &put, mine, &made_here);
-			free(keys);
-		} else {
-			own_target(&after, &patches[i].place, mine, &made_here);
-		}
-		op_apply_options options = {.undo = &undos[i], .in_place = 1};
-		code = op_apply(after, &patches[i], 1, &options, &out, NULL);
-		if (code != OP_OK) break;
-		op_free(after);
-		after = out;
-	}
+	// one op_apply, in place where owned: what a patch changes that is not owned yet is copied
+	// (take) as it lands, in the tree the patches before it left (one may move a subtree, or put a
+	// value in, that the next writes under)
+	owning o = {r->owned, {0}};
+	op_undo undo = {0};
+	op_apply_options options = {.undo = &undo, .in_place = 1, .owned = owned, .data = &o};
+	op_value *after;
+	int code = op_apply(entry->value, patches, n, &options, &after, failed);
 	if (code != OP_OK) {
-		// what landed put back, last first; the patch that failed named in the whole write
-		op_apply_options back = {.in_place = 1};
-		for (size_t j = i; j-- > 0;) {
-			op_value *out;
-			op_apply(after, undos[j].patches, undos[j].n, &back, &out, NULL);
-			op_free(after);
-			after = out;
-		}
-		op_free(after);
 		// the copies it made are no longer wanted: each let go of, now nothing holds it but the set
-		for (size_t j = 0; j < made_here.count; j++) del(mine, made_here.copies[j]);
-		free(made_here.copies);
-		for (size_t j = 0; j < i; j++) op_undo_free(&undos[j]);
-		free(undos);
-		if (failed) *failed = i;
+		for (size_t j = 0; j < o.made.count; j++) del(o.mine, o.made.copies[j]);
+		free(o.made.copies);
 		return code;
 	}
-	// the undo of the write: the patches' undos, the last patch's first
-	op_undo undo = {0};
-	for (size_t j = 0; j < n; j++) undo.n += undos[j].n;
-	if (undo.n > 0) {
-		undo.patches = malloc(undo.n * sizeof *undo.patches);
-		if (undo.patches == NULL) abort();
-		undo.capacity = undo.n;
-	}
-	size_t at = 0;
-	for (size_t j = n; j-- > 0;) {
-		for (size_t k = 0; k < undos[j].n; k++) undo.patches[at++] = undos[j].patches[k];
-		free(undos[j].patches);
-	}
-	free(undos);
-	free(made_here.copies);
+	free(o.made.copies);
 	for (size_t k = 0; k < undo.n; k++)
-		if (undo.patches[k].has_value) let_go(mine, undo.patches[k].value, 1);
+		if (undo.patches[k].has_value) let_go(o.mine, undo.patches[k].value, 1);
 	op_free(entry->value);
 	entry->value = after;
 	op_undo_free(&entry->undo);

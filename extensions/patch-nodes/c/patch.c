@@ -36,9 +36,16 @@ typedef struct {
 
 static const op_key bad_key = {.type = OP_NUM_KEY, .n = -1};
 
-static int whole(const op_value *x, long *out) {
+static int whole(const op_value *x, int64_t *out) {
 	if (x->type != OP_NUM || !isfinite(x->num) || x->num != floor(x->num) || x->num < -1e15) return 0;
-	*out = x->num > 1e15 ? LONG_MAX : (long)x->num;
+	*out = x->num > 1e15 ? INT64_MAX : (int64_t)x->num;
+	return 1;
+}
+// a key's number: past what a long holds, the largest (or the smallest)
+static int index_of(const op_value *x, long *out) {
+	int64_t n;
+	if (!whole(x, &n)) return 0;
+	*out = n > LONG_MAX ? LONG_MAX : n < LONG_MIN ? LONG_MIN : (long)n;
 	return 1;
 }
 
@@ -51,7 +58,7 @@ static void place_of(parsed *ps, const op_value *m, op_target *p) {
 	for (size_t i = 0; i < path->count; i++) {
 		const op_value *x = path->items[i];
 		if (x->type == OP_STR) ks[i] = (op_key){.type = OP_STR_KEY, .s = x->str};
-		else if (x->type == OP_NUM && whole(x, &ks[i].n)) ks[i].type = OP_NUM_KEY;
+		else if (x->type == OP_NUM && index_of(x, &ks[i].n)) ks[i].type = OP_NUM_KEY;
 		else goto bad;
 	}
 	p->path = ks;

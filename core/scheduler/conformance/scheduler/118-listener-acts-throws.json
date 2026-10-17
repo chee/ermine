@@ -1,160 +1,160 @@
 {
-  "title": "an act listener that throws: the effect has acted (its value is the one acted on), then the error comes out of the pulse, left there: the other effect's act waits for the next pulse. the effect acts again when x changes",
-  "steps": [
-    {
-      "op": "root",
-      "name": "o",
-      "info": [
-        [
-          "actor",
-          "test"
-        ]
-      ],
-      "expect": {}
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 1
-      },
-      "expect": {
-        "tick": 1
-      }
-    },
-    {
-      "op": "effect",
-      "name": "e",
-      "scope": "o",
-      "f": {
-        "read": "x"
-      },
-      "act": {
-        "log": [
-          "e",
-          {
-            "given": "value"
-          },
-          {
-            "given": "previous"
-          }
-        ]
-      },
-      "expect": {}
-    },
-    {
-      "op": "effect",
-      "name": "f",
-      "scope": "o",
-      "f": {
-        "read": "x"
-      },
-      "act": {
-        "log": [
-          "f",
-          {
-            "given": "value"
-          }
-        ]
-      },
-      "expect": {}
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "e",
-            1,
-            null
-          ],
-          [
-            "f",
-            1
-          ]
-        ]
-      }
-    },
-    {
-      "op": "listener",
-      "on": "acts",
-      "at": "e",
-      "throw": "acts threw",
-      "expect": {}
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 2
-      },
-      "expect": {
-        "tick": 4
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {
-        "error": "acts threw"
-      }
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "e",
-            2,
-            1
-          ]
-        ]
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "f",
-            2
-          ]
-        ]
-      }
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 3
-      },
-      "expect": {
-        "tick": 5
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "log",
-      "expect": {
-        "log": [
-          [
-            "e",
-            3,
-            2
-          ],
-          [
-            "f",
-            3
-          ]
-        ]
-      }
-    }
-  ]
+	"title": "an act listener that throws: the effect has acted (its value is the one acted on), then the error comes out of the pulse, left there: the other effect's act waits for the next pulse. the effect acts again when x changes",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"log": [
+					"e",
+					{
+						"given": "value"
+					},
+					{
+						"given": "previous"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "f",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"log": [
+					"f",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						1,
+						null
+					],
+					[
+						"f",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "listener",
+			"on": "acts",
+			"at": "e",
+			"throw": "acts threw",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "acts threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						2,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"f",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						3,
+						2
+					],
+					[
+						"f",
+						3
+					]
+				]
+			}
+		}
+	]
 }

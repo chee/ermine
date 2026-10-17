@@ -1,5 +1,5 @@
 {
-	"title": "a snapshot kept at a commit is where replay starts, taken as given: after it, its tables and the patches since; at it, its tables; before it, the commits",
+	"title": "a snapshot from elsewhere is a hint: kept only when a replay to its commit gives the same tables, so a forged one is never where replay starts; one that matches is, and changes nothing",
 	"steps": [
 		{
 			"op": "add",
@@ -22,35 +22,61 @@
 			"expect": { "added": "taken" }
 		},
 		{
-			"op": "keep",
+			"op": "hint",
 			"commit": "b",
-			"tables": { "value": { "value": { "n": 100 }, "change": { "time": 7, "actor": "kept" } } },
-			"expect": {}
+			"tables": { "value": { "value": { "n": 100 }, "change": { "time": 0, "actor": null } } },
+			"expect": { "kept": false }
+		},
+		{
+			"op": "hint",
+			"commit": "b",
+			"tables": { "value": { "value": { "n": 1 }, "change": { "time": 7, "actor": "kept" } } },
+			"expect": { "kept": false }
+		},
+		{
+			"op": "hint",
+			"commit": "b",
+			"tables": {
+				"value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } },
+				"extra": { "value": 1, "change": { "time": 0, "actor": null } }
+			},
+			"expect": { "kept": false }
 		},
 		{
 			"op": "replay",
 			"commit": "c",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 100, "m": 2 }, "change": { "time": 0, "actor": null } }
+					"value": { "value": { "n": 1, "m": 2 }, "change": { "time": 0, "actor": null } }
 				}
 			}
 		},
 		{
-			"op": "replay",
+			"op": "hint",
 			"commit": "b",
+			"tables": { "value": { "value": { "n": 1 }, "change": { "time": 0, "actor": null } } },
+			"expect": { "kept": true }
+		},
+		{
+			"op": "replay",
+			"commit": "c",
 			"expect": {
 				"tables": {
-					"value": { "value": { "n": 100 }, "change": { "time": 7, "actor": "kept" } }
+					"value": { "value": { "n": 1, "m": 2 }, "change": { "time": 0, "actor": null } }
 				}
 			}
 		},
 		{
-			"op": "replay",
+			"op": "hint",
+			"commit": "zz",
+			"tables": {},
+			"fails": true
+		},
+		{
+			"op": "hint",
 			"commit": "a",
-			"expect": {
-				"tables": { "value": { "value": { "n": 0 }, "change": { "time": 0, "actor": null } } }
-			}
+			"tables": { "value": { "value": { "n": 0 }, "change": { "time": 0, "actor": null } } },
+			"expect": { "kept": true }
 		}
 	]
 }

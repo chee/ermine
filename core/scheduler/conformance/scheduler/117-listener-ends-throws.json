@@ -1,162 +1,162 @@
 {
-  "title": "a run-end listener that throws: the run's end is all done (what it read now is what it runs again on), then the error comes out of the pulse",
-  "steps": [
-    {
-      "op": "root",
-      "name": "o",
-      "info": [
-        [
-          "actor",
-          "test"
-        ]
-      ],
-      "expect": {}
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 1,
-        "y": 10,
-        "flag": false
-      },
-      "expect": {
-        "tick": 1
-      }
-    },
-    {
-      "op": "compute",
-      "name": "c",
-      "scope": "o",
-      "f": {
-        "if": [
-          {
-            "read": "flag"
-          },
-          {
-            "read": "y"
-          },
-          {
-            "read": "x"
-          }
-        ]
-      },
-      "to": "c",
-      "expect": {}
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "listener",
-      "on": "ends",
-      "at": "c",
-      "throw": "ends threw",
-      "expect": {}
-    },
-    {
-      "op": "write",
-      "values": {
-        "flag": true
-      },
-      "expect": {
-        "tick": 4
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {
-        "error": "ends threw"
-      }
-    },
-    {
-      "op": "get",
-      "key": "c",
-      "expect": {
-        "value": 10
-      }
-    },
-    {
-      "op": "forgotten",
-      "expect": {
-        "keys": [
-          "x"
-        ]
-      }
-    },
-    {
-      "op": "moments",
-      "expect": {
-        "moments": [
-          {
-            "due": "c",
-            "tick": 2
-          },
-          {
-            "starts": "c",
-            "run": 1
-          },
-          {
-            "ends": "c",
-            "run": 1,
-            "ended": "done",
-            "equal": false
-          },
-          {
-            "due": "c",
-            "tick": 4
-          },
-          {
-            "starts": "c",
-            "run": 2
-          },
-          {
-            "ends": "c",
-            "run": 2,
-            "ended": "done",
-            "equal": false
-          }
-        ]
-      }
-    },
-    {
-      "op": "write",
-      "values": {
-        "x": 2
-      },
-      "expect": {
-        "tick": 6
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "moments",
-      "expect": {
-        "moments": []
-      }
-    },
-    {
-      "op": "write",
-      "values": {
-        "y": 11
-      },
-      "expect": {
-        "tick": 7
-      }
-    },
-    {
-      "op": "pulse",
-      "expect": {}
-    },
-    {
-      "op": "get",
-      "key": "c",
-      "expect": {
-        "value": 11
-      }
-    }
-  ]
+	"title": "a run-end listener that throws: the run's end is all done (what it read now is what it runs again on), then the error comes out of the pulse",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"y": 10,
+				"flag": false
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"if": [
+					{
+						"read": "flag"
+					},
+					{
+						"read": "y"
+					},
+					{
+						"read": "x"
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "listener",
+			"on": "ends",
+			"at": "c",
+			"throw": "ends threw",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"flag": true
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "ends threw"
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 10
+			}
+		},
+		{
+			"op": "forgotten",
+			"expect": {
+				"keys": [
+					"x"
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"starts": "c",
+						"run": 2
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"y": 11
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 11
+			}
+		}
+	]
 }

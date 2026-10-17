@@ -118,7 +118,11 @@
          (back-path (first back)) (back-range (second back))
          (n (if fr (- (second fr) (first fr)) 1)))
     (flet ((fallen (land-undo)
-             (dolist (u take-undo) (disown (jget u "value")))
+             ;; in place, what the undo holds of what moved is a copy: the tree goes on changing
+             (when *owned*
+               (dolist (u take-undo)
+                 (multiple-value-bind (v there) (jget u "value")
+                   (when there (jput u "value" (deep-copy v))))))
              (append land-undo take-undo))
            (moved-back (move-path move-range)
              (undo-patch back-path :range back-range :move-path move-path :move-range move-range)))

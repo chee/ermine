@@ -163,7 +163,7 @@ static pt_step *kid(const pt_paths *p, const pt_step *up, const op_key *k) {
 	return NULL;
 }
 // the first of up's number kids with key >= a
-static size_t from(const pt_step *up, long a) {
+static size_t from(const pt_step *up, int64_t a) {
 	size_t lo = 0, hi = up->count;
 	while (lo < hi) {
 		size_t mid = (lo + hi) / 2;
@@ -237,9 +237,9 @@ typedef struct {
 	const op_key *path;
 	size_t length;
 	int ranged;
-	long a, b;
+	int64_t a, b;
 	int put;
-	long n;
+	int64_t n;
 } place;
 
 // a move is its take and its landing; a landing holds the take's count, or 1
@@ -248,11 +248,11 @@ static size_t places(const op_patch *p, place out[2]) {
 	if (p->has_move) {
 		const op_target *m = &p->move;
 		out[0] = (place){m->path, m->length, m->has_range, m->from, m->to, 0, 0};
-		long n = m->has_range ? m->to - m->from : 1;
+		int64_t n = m->has_range ? m->to - m->from : 1;
 		out[1] = (place){t->path, t->length, t->has_range, t->from, t->to, 1, n};
 		return 2;
 	}
-	long n = !p->has_value ? 0 : p->value != NULL && p->value->type == OP_LIST ? (long)p->value->count : -1;
+	int64_t n = !p->has_value ? 0 : p->value != NULL && p->value->type == OP_LIST ? (int64_t)p->value->count : -1;
 	out[0] = (place){t->path, t->length, t->has_range, t->from, t->to, p->has_value, n};
 	return 1;
 }
@@ -310,7 +310,7 @@ static void all(pt_paths *p, const pt_step *at) {
 	for (pt_step *k = at->first; k != NULL; k = k->next) all(p, k);
 }
 // at's number kids from a on, up to b
-static void span(pt_paths *p, const pt_step *at, long a, long b, int open) {
+static void span(pt_paths *p, const pt_step *at, int64_t a, int64_t b, int open) {
 	for (size_t i = from(at, a); i < at->count; i++) {
 		if (!open && at->nums[i]->key.n >= b) return;
 		all(p, at->nums[i]);

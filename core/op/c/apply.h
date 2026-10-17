@@ -30,10 +30,13 @@
 #define OP_APPLY_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "value.h"
 
-// a path item: a key (number or string, never the same), or a span [a, b) last
+// a path item: a key (number or string, never the same), or a span [a, b) last. a number key is a
+// list's index: up to 2^31 - 1, what any long holds (the encodings refuse more); a span's ends,
+// as a range's, are int64_t: a sequence past 2^31 stays editable on a 32-bit machine
 typedef enum { OP_NUM_KEY, OP_STR_KEY, OP_SPAN } op_key_type;
 typedef struct {
 	op_key_type type;
@@ -42,7 +45,7 @@ typedef struct {
 		long n; // a number key
 		const char *s; // a string key
 		struct {
-			long a, b; // a span
+			int64_t a, b; // a span
 		};
 	};
 } op_key;
@@ -52,7 +55,7 @@ typedef struct {
 	const op_key *path;
 	size_t length;
 	int has_range;
-	long from, to;
+	int64_t from, to;
 } op_target;
 
 // has_value: a "value" was given (null counts); else the place is removed
@@ -89,6 +92,13 @@ typedef struct {
 	op_undo *undo;
 	// change the value given in place (see above); 0: a copy is changed
 	int in_place;
+	// in place: which containers may change where they are. a list, map or typed array about to
+	// change is given to owned first (with data), which gives back the one to change: the same,
+	// or a copy it made (one reference on each item, as op_ref made them), which goes in its
+	// place (the given value's root too: then *out is the copy). a container the call made is
+	// given too, once it holds its items. NULL: every container changes where it is
+	op_value *(*owned)(op_value *container, void *data);
+	void *data;
 } op_apply_options;
 
 // the patches, in order, to the value; *out the value after them. value NULL: nothing there; a

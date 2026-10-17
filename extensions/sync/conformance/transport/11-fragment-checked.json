@@ -1,0 +1,131 @@
+{
+	"title": "a fragment from elsewhere is checked before anything of it is taken in or stored: each member's seal as it is read (one not good refuses it whole), its head of depth 1 or more, every member reached from the head, its boundary none of its members, its checkpoints its members with a depth",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+		},
+		{
+			"op": "make",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [{ "path": [], "value": { "n": 1 } }],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "c2",
+			"nonce": 444,
+			"parents": ["c1"],
+			"patches": [{ "path": ["n"], "value": 2 }],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "x",
+			"nonce": 7,
+			"patches": [{ "path": [], "value": { "x": 1 } }],
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "a",
+			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"head": "c2",
+			"members": ["c1", "c2"],
+			"tamper": ["c1"],
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "a",
+			"doc": "ermine://3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b00000000000000000000000000000000",
+			"head": "c1",
+			"members": ["c1"],
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "a",
+			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"head": "c2",
+			"members": ["c1", "c2", "x"],
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "a",
+			"doc": "ermine://3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d00000000000000000000000000000000",
+			"head": "c2",
+			"members": ["c1", "c2"],
+			"boundary": ["c1"],
+			"expect": {}
+		},
+		{
+			"op": "fragment",
+			"device": "a",
+			"doc": "ermine://3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e00000000000000000000000000000000",
+			"head": "c2",
+			"members": ["c1", "c2"],
+			"checkpoints": ["c1"],
+			"expect": {}
+		},
+		{ "op": "quiet", "expect": {} },
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"expect": { "waiting": [], "refused": [{ "fragment": "c2", "refused": "signature" }] }
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b3b00000000000000000000000000000000",
+			"expect": { "waiting": [], "refused": [{ "fragment": "c1", "refused": "boundary" }] }
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"expect": { "waiting": [], "refused": [{ "fragment": "c2", "refused": "boundary" }] }
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d00000000000000000000000000000000",
+			"expect": { "waiting": [], "refused": [{ "fragment": "c2", "refused": "boundary" }] }
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e3e00000000000000000000000000000000",
+			"expect": { "waiting": [], "refused": [{ "fragment": "c2", "refused": "boundary" }] }
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"doc": "ermine://3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a00000000000000000000000000000000",
+			"expect": { "heads": [] }
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"expect": { "heads": [] }
+		},
+		{
+			"op": "fragments",
+			"device": "a",
+			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"expect": { "fragments": [] }
+		},
+		{
+			"op": "blob",
+			"device": "a",
+			"doc": "ermine://3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c00000000000000000000000000000000",
+			"head": "c2",
+			"expect": {}
+		}
+	]
+}

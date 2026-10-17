@@ -1,5 +1,5 @@
 {
-	"title": "a seal is a map of exactly commit (a commit's bytes) and signature (64 bytes); anything else is refused shape",
+	"title": "a seal is a map of exactly commit (a commit's bytes) and signature (bytes: a varsig header, then 64); anything else is refused shape",
 	"steps": [
 		{
 			"op": "unseal",

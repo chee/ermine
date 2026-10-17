@@ -52,7 +52,10 @@ static void start(const op_value *r) {
 
 static void update(const op_value *r, FILE *out) {
 	const op_value *list = op_get(r, "patches");
-	if (list == NULL || list->type != OP_LIST) hh_fail("no patches");
+	if (list == NULL || list->type != OP_LIST) {
+		hh_error(out, "update: patches is not a list");
+		return;
+	}
 	size_t n = list->count;
 	op_patch *patches = hh_take((n ? n : 1) * sizeof *patches);
 	for (size_t i = 0; i < n; i++) hh_patch(list->items[i], &patches[i]);

@@ -5,7 +5,7 @@
 			"op": "device",
 			"name": "a",
 			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
-			"expect": { "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
+			"expect": { "key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c" }
 		},
 		{
 			"op": "make",
@@ -17,7 +17,7 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 137,
+			"nonce": 444,
 			"parents": ["c1"],
 			"patches": [{ "path": ["n"], "value": 2 }],
 			"expect": {}

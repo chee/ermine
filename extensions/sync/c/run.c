@@ -6,6 +6,7 @@
 
 #include "../../../ermine/encoding/c/cbor.h"
 #include "../../../ermine/encoding/c/commit.h"
+#include "seal.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -160,13 +161,14 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	rn_code code = RN_OK;
 	Json **commits = allocate((n + 1) * sizeof *commits);
 	uint8_t(*names)[32] = allocate((n + 1) * 32);
-	uint8_t *signatures = allocate(64 * n + 1);
+	// each signature's varsig header, and the bytes after it
+	Json **header = allocate((n + 1) * sizeof *header), **tail = allocate((n + 1) * sizeof *tail);
 	size_t made = 0;
 	for (; made < n; made++) {
 		Json *x = cborDecode(sealed[made].bytes, sealed[made].length, NULL, NULL);
 		const Json *commit = jsonGet(x, "commit"), *signature = jsonGet(x, "signature");
 		Json *c = NULL;
-		if (is_bytes(commit) && is_bytes(signature) && signature->bytes.length == 64) {
+		if (is_bytes(commit) && is_bytes(signature)) {
 			c = cborDecode(commit->bytes.data, commit->bytes.length, NULL, NULL);
 			if (c != NULL && cm_check(c, NULL) != CM_OK) jsonFree(c), c = NULL;
 		}
@@ -177,7 +179,9 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		}
 		commits[made] = c;
 		cm_name(commit->bytes.data, commit->bytes.length, names[made]);
-		memcpy(signatures + 64 * made, signature->bytes.data, 64);
+		size_t h = sl_header_length(signature->bytes.data, signature->bytes.length);
+		header[made] = jsonBytes(signature->bytes.data, h);
+		tail[made] = jsonBytes(signature->bytes.data + h, signature->bytes.length - h);
 		jsonFree(x);
 	}
 	places at;
@@ -226,6 +230,8 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		v[i] = m != NULL ? (merges = true, m) : none;
 	}
 	if (merges) jsonAdd(cols, "merge", runs(v, n));
+	for (size_t i = 0; i < n; i++) v[i] = header[i];
+	jsonAdd(cols, "headers", runs(v, n));
 	Json *patches = jsonArray();
 	for (size_t i = 0; i < n; i++) {
 		const Json *ps = jsonGet(commits[i], "patches"), *path;
@@ -243,7 +249,9 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		jsonPush(patches, jsonRef((Json *)ps));
 	}
 	jsonAdd(cols, "patches", patches);
-	jsonAdd(cols, "signatures", jsonBytes(signatures, 64 * n));
+	Json *tails = jsonArray();
+	for (size_t i = 0; i < n; i++) jsonPush(tails, jsonRef(tail[i]));
+	jsonAdd(cols, "signatures", tails);
 	cborEncode(cols, NULL, 0, &made, NULL);
 	*out = allocate(made ? made : 1);
 	cborEncode(cols, *out, made, length, NULL);
@@ -254,17 +262,18 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	free(at.slot);
 	made = n;
 done:
-	for (size_t i = 0; i < made; i++) jsonFree(commits[i]);
+	for (size_t i = 0; i < made; i++) jsonFree(commits[i]), jsonFree(header[i]), jsonFree(tail[i]);
 	free(commits);
 	free(names);
-	free(signatures);
+	free(header);
+	free(tail);
 	return code;
 }
 
 // --- reading ---
 
 static const char *const COLUMNS[] = {"n", "table", "actor", "reader", "external", "metadata", "signer",
-	"time", "nonce", "lamport", "parents", "base", "merge", "patches", "signatures"};
+	"time", "nonce", "lamport", "parents", "base", "merge", "patches", "headers", "signatures"};
 
 // canonical order: shorter first, then bytewise (a key's U+0000 held as C0 80 is the byte 00)
 static size_t real(const char *s, size_t n, unsigned char *out) {
@@ -372,13 +381,15 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 	// Number.isSafeInteger(n) && n >= 0
 	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0) return jsonFree(x), RN_COUNT;
 	size_t n = (size_t)n64;
-	if (!is_bytes(signatures) || signatures->bytes.length / 64 != n || signatures->bytes.length % 64 != 0) {
+	bool listed = signatures != NULL && signatures->type == JSON_ARRAY && (size_t)signatures->array.count == n;
+	for (size_t i = 0; listed && i < n; i++) listed = is_bytes(signatures->array.items[i]);
+	if (!listed) {
 		jsonFree(x);
 		return RN_SIGNATURES;
 	}
 	// the columns of runs, in the order run.ts reads them
 	static const char *const run_columns[] = {"table", "actor", "reader", "external", "metadata", "signer", "base"};
-	const Json **col[8] = {0};
+	const Json **col[9] = {0};
 	int64_t *time = allocate((n + 1) * sizeof *time), *nonce = allocate((n + 1) * sizeof *nonce),
 		*lamport = allocate((n + 1) * sizeof *lamport);
 	uint8_t(*names)[32] = allocate((n + 1) * 32);
@@ -393,6 +404,17 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 	if (jsonGet(x, "merge") != NULL && (col[7] = unruns(jsonGet(x, "merge"), n)) == NULL) {
 		code = fail(RN_RUNS, column, "merge");
 		goto done;
+	}
+	// headers: runs of bytes
+	if ((col[8] = unruns(jsonGet(x, "headers"), n)) == NULL) {
+		code = fail(RN_RUNS, column, "headers");
+		goto done;
+	}
+	for (size_t i = 0; i < n; i++) {
+		if (!is_bytes(col[8][i])) {
+			code = fail(RN_RUNS, column, "headers");
+			goto done;
+		}
 	}
 	if (!undeltas(jsonGet(x, "time"), n, time)) {
 		code = fail(RN_DIFFERENCES, column, "time");
@@ -501,7 +523,12 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		jsonFree(c);
 		Json *s = jsonObject();
 		jsonAdd(s, "commit", jsonBytes(b, b_length));
-		jsonAdd(s, "signature", jsonBytes(signatures->bytes.data + 64 * i, 64));
+		const Json *h = col[8][i], *t = signatures->array.items[i];
+		uint8_t *whole = allocate(h->bytes.length + t->bytes.length + 1);
+		memcpy(whole, h->bytes.data, h->bytes.length);
+		memcpy(whole + h->bytes.length, t->bytes.data, t->bytes.length);
+		jsonAdd(s, "signature", jsonBytes(whole, h->bytes.length + t->bytes.length));
+		free(whole);
 		free(b);
 		size_t size;
 		cborEncode(s, NULL, 0, &size, NULL);
@@ -511,7 +538,7 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		out->count++;
 	}
 done:
-	for (int k = 0; k < 8; k++) free((void *)col[k]);
+	for (int k = 0; k < 9; k++) free((void *)col[k]);
 	free(time), free(nonce), free(lamport), free(names);
 	jsonFree(before);
 	jsonFree(x);

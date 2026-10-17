@@ -97,7 +97,7 @@ Deno.test("run: packs to columns and back to each sealed commit's exact bytes", 
 	assert(packed.length < whole / 2.5, `${packed.length} against ${whole}`)
 })
 
-Deno.test("run: typing packs to about its signatures", async () => {
+Deno.test("run: typing packs to about its signatures and their list", async () => {
 	const s = signers[0]
 	const sealed: Uint8Array[] = []
 	let parent: Uint8Array | undefined
@@ -117,7 +117,7 @@ Deno.test("run: typing packs to about its signatures", async () => {
 		parent = name(b)
 	}
 	const per = pack(sealed).length / 256
-	assert(per < 72, `${per} bytes a commit`)
+	assert(per < 74, `${per} bytes a commit`)
 	assertEquals(unpack(pack(sealed)), sealed)
 })
 
@@ -164,7 +164,7 @@ Deno.test("run: refused with a code, and the column", () => {
 			cbor.encode({
 				...cbor.decode(pack([])) as object,
 				n: 1,
-				signatures: new Uint8Array(64),
+				signatures: [new Uint8Array(64)],
 				table: [["value", 2 ** 50]],
 			}),
 		)

@@ -1,5 +1,5 @@
 {
-	"title": "two hosts write an ephemeral table apart: once each is heard (a beat sends it again), every host shows the later (lamport, then name); a write is later than every one its host has seen, and over its own standing one carries the whole value",
+	"title": "two hosts write an ephemeral table apart: once each is heard (a beat sends it again), every host shows the later (lamport, then name: a lamport is derived from the stored heads it goes on, so two on the same heads are told apart by name); a host's own later write replaces its standing one, and carries the whole value",
 	"steps": [
 		{
 			"op": "host",
@@ -9,7 +9,7 @@
 				"value"
 			],
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -20,7 +20,7 @@
 				"value"
 			],
 			"expect": {
-				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
 		},
 		{
@@ -28,7 +28,7 @@
 			"name": "c",
 			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
 			"expect": {
-				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+				"key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
 			}
 		},
 		{
@@ -219,8 +219,8 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"x": 0,
-					"y": 2
+					"x": 1,
+					"y": 0
 				}
 			}
 		},
@@ -230,8 +230,8 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"x": 0,
-					"y": 2
+					"x": 1,
+					"y": 0
 				}
 			}
 		},
@@ -241,8 +241,8 @@
 			"id": "x",
 			"expect": {
 				"value": {
-					"x": 0,
-					"y": 2
+					"x": 1,
+					"y": 0
 				}
 			}
 		},
@@ -253,11 +253,11 @@
 			"expect": {
 				"standing": [
 					[
-						"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 						"eb"
 					],
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"ea"
 					]
 				]
@@ -277,16 +277,16 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ea",
+							"by": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"name": "eb",
 							"tables": [
 								"value"
 							],
 							"lamport": 2
 						},
 						{
-							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-							"name": "eb",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "ea",
 							"tables": [
 								"value"
 							],
@@ -310,16 +310,16 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-							"name": "ea",
+							"by": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"name": "eb",
 							"tables": [
 								"value"
 							],
 							"lamport": 2
 						},
 						{
-							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-							"name": "eb",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"name": "ea",
 							"tables": [
 								"value"
 							],
@@ -391,11 +391,11 @@
 			"expect": {
 				"standing": [
 					[
-						"8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+						"ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 						"eb"
 					],
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"ea2"
 					]
 				]
@@ -415,7 +415,7 @@
 					},
 					"on": [
 						{
-							"by": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+							"by": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
 							"name": "eb",
 							"tables": [
 								"value"
@@ -423,12 +423,12 @@
 							"lamport": 2
 						},
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "ea2",
 							"tables": [
 								"value"
 							],
-							"lamport": 3
+							"lamport": 2
 						}
 					]
 				}
@@ -451,12 +451,12 @@
 						}
 					],
 					"time": 1760000000,
-					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457402,
 					"parents": [
 						"w0"
 					],
-					"lamport": 3,
+					"lamport": 2,
 					"patches": [
 						{
 							"path": [],

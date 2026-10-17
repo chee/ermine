@@ -9,6 +9,7 @@
 #include "json_text.h"
 #include "pack.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,14 +61,23 @@ static op_value *value_of(Json **slot) {
 // form, as the reference refuses it
 static int bent;
 
-static long number_of(const Json *j) {
+static int64_t number_of(const Json *j) {
 	if (j == NULL || !jsonIsNumber(j)) return 0;
 	double d = j->number;
 	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d) || (d == 0 && signbit(d))) {
 		bent = 1;
 		return 0;
 	}
-	return (long)d;
+	return (int64_t)d;
+}
+// a key's number, a line or a column: one a long holds (pack refuses past 2^31 - 1 itself)
+static long long_of(const Json *j) {
+	int64_t n = number_of(j);
+	if (n < LONG_MIN || n > LONG_MAX) {
+		bent = 1;
+		return 0;
+	}
+	return (long)n;
 }
 
 static Json **at(Json *j, const char *key) {
@@ -84,7 +94,7 @@ static int target(Json *x, op_target *t) {
 	for (size_t i = 0; i < n; i++) {
 		const Json *k = (*path)->array.items[i];
 		if (jsonIsString(k)) ks[i] = (op_key){.type = OP_STR_KEY, .s = jsonText(k)};
-		else ks[i] = (op_key){.type = OP_NUM_KEY, .n = number_of(k)};
+		else ks[i] = (op_key){.type = OP_NUM_KEY, .n = long_of(k)};
 	}
 	t->path = ks;
 	t->length = n;
@@ -130,8 +140,8 @@ static int header(Json *c, ch_header *h) {
 			Json *s = (*external)->array.items[i];
 			Json **column = at(s, "column"), **function = at(s, "function");
 			ss[i].file = jsonText(*at(s, "file"));
-			ss[i].line = number_of(*at(s, "line"));
-			if (column != NULL) ss[i].has_column = 1, ss[i].column = number_of(*column);
+			ss[i].line = long_of(*at(s, "line"));
+			if (column != NULL) ss[i].has_column = 1, ss[i].column = long_of(*column);
 			if (function != NULL) ss[i].function = jsonText(*function);
 		}
 		h->external = ss;

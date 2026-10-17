@@ -9,7 +9,7 @@
 				"value"
 			],
 			"expect": {
-				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+				"key": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
 			}
 		},
 		{
@@ -17,7 +17,7 @@
 			"name": "b",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"expect": {
-				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+				"key": "ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
 			}
 		},
 		{
@@ -25,7 +25,7 @@
 			"name": "c",
 			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
 			"expect": {
-				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+				"key": "ed01ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
 			}
 		},
 		{
@@ -190,7 +190,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"e2"
 					]
 				]
@@ -257,7 +257,7 @@
 			"expect": {
 				"standing": [
 					[
-						"8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+						"ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 						"e2"
 					]
 				]
@@ -277,12 +277,12 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "e2",
 							"tables": [
 								"value"
 							],
-							"lamport": 3
+							"lamport": 2
 						}
 					]
 				}
@@ -302,12 +302,12 @@
 					},
 					"on": [
 						{
-							"by": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+							"by": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 							"name": "e2",
 							"tables": [
 								"value"
 							],
-							"lamport": 3
+							"lamport": 2
 						}
 					]
 				}
@@ -356,7 +356,7 @@
 						}
 					],
 					"time": 1760000000,
-					"signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+					"signer": "ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
 					"nonce": 3338457403,
 					"parents": [
 						"wb"

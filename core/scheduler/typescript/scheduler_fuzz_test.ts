@@ -18,6 +18,13 @@ import { type Told, trace } from "./trace.ts"
 import type { Link, Node } from "./tracker.ts"
 import { rand } from "../../fuzz/gen.ts"
 
+// how many are under o
+const under = (o: Scope) => {
+	let n = 0
+	for (let x = o.newest; x; x = x.older) n++
+	return n
+}
+
 const SEEDS = 40
 const STEPS = 15
 const HOST = ["h0", "h1", "h2", "h3", "h4"]
@@ -539,7 +546,7 @@ async function loops(seed: number, reach: Loops) {
 		assertEquals(problems, [], label)
 		for (const e of effects) {
 			if (e.state !== "alive") continue
-			assert(e.children.length <= 2, `${label}: ${e.children.length} scopes under an effect`)
+			assert(under(e) <= 2, `${label}: ${under(e)} scopes under an effect`)
 		}
 	}
 
