@@ -1,0 +1,17 @@
+{
+	"title": "a refused write on a value already copied keeps its keys' order: what it took out is put back where it was",
+	"steps": [
+		{ "op": "start", "value": { "a": 1, "b": 2 }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["b"], "value": 3 }],
+			"expect": { "undo": [{ "path": ["b"], "value": 2 }] }
+		},
+		{
+			"op": "write",
+			"patches": [{ "path": ["a"] }, { "path": ["nope", "x"], "value": 1 }],
+			"expect": { "error": "no-key", "patch": 1 }
+		},
+		{ "op": "read", "expect": { "value": { "a": 1, "b": 3 } } }
+	]
+}

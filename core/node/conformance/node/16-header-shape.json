@@ -1,0 +1,30 @@
+{
+	"title": "a change answers the header's own fields only, in the header's order (time, actor, reader, external, metadata), a site's as file, line, column, function; a time of -0 is 0",
+	"steps": [
+		{
+			"op": "entry",
+			"header": { "time": 1, "custom": "x" },
+			"expect": { "entry": { "change": { "time": 1 } } }
+		},
+		{
+			"op": "entry",
+			"header": {
+				"time": 1,
+				"external": [{ "function": "f", "line": 1, "file": "a.c", "column": 2 }]
+			},
+			"expect": {
+				"entry": {
+					"change": {
+						"time": 1,
+						"external": [{ "file": "a.c", "line": 1, "column": 2, "function": "f" }]
+					}
+				}
+			}
+		},
+		{
+			"op": "entry",
+			"header": { "time": -0 },
+			"expect": { "entry": { "change": { "time": 0 } } }
+		}
+	]
+}

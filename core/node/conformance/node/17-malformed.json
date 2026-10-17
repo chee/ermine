@@ -1,0 +1,14 @@
+{
+	"title": "a request missing what it needs, or with a metadata entry that is not a pair, is an error, and the next line is answered",
+	"steps": [
+		{ "op": "node", "fails": true },
+		{ "op": "node", "values": [], "fails": true },
+		{ "op": "entry", "header": { "time": 1, "metadata": [["k"]] }, "fails": true },
+		{
+			"op": "entry",
+			"value": 1,
+			"header": { "time": 1 },
+			"expect": { "entry": { "value": 1, "change": { "time": 1 } } }
+		}
+	]
+}
