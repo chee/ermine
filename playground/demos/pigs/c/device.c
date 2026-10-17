@@ -196,10 +196,8 @@ void dv_free(dv *d) {
 	free(d);
 }
 
-sy_sync *dv_sync(dv *d) { return d->sync; }
 const char *dv_key(dv *d) { return d->key; }
 bool dv_online(dv *d) { return d->ws && tp_connected(sy_device(d->sync), d->conn, NULL); }
-uint64_t dv_changes(dv *d) { return d->changes; }
 
 const op_value *dv_value(dv *d, const char *part, const char *id) {
 	nd_entry *e = tb_get(d->table, tb_string(part), tb_string(id));

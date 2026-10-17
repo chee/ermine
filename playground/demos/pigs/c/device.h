@@ -29,12 +29,9 @@ enum { DV_KEY = 2 * SL_KEY + 1 };
 dv *dv_new(const char *server, const char *service, bool zeros, const char *actor, const char **why);
 // lets go of everything: dv_flush first, or what is not sent yet is lost
 void dv_free(dv *d);
-sy_sync *dv_sync(dv *d);
 // this device's key, a multikey as 68 hex digits (what presence names its rows by)
 const char *dv_key(dv *d);
 bool dv_online(dv *d);
-// counts every change to the table: a reader reads again when it moves
-uint64_t dv_changes(dv *d);
 
 // the value under (part, id), borrowed, good until the next write or turn; NULL: none
 const op_value *dv_value(dv *d, const char *part, const char *id);
