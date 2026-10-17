@@ -27,9 +27,9 @@
 				"moments": [
 					{ "due": "e1", "tick": 1 },
 					{ "due": "e2", "tick": 2 },
-					{ "starts": "e1", "run": 1, "rank": 0 },
+					{ "starts": "e1", "run": 1 },
 					{ "ends": "e1", "run": 1, "ended": "done", "equal": false },
-					{ "starts": "e2", "run": 1, "rank": 0 },
+					{ "starts": "e2", "run": 1 },
 					{ "ends": "e2", "run": 1, "ended": "done", "equal": false },
 					{ "acts": "e1", "run": 1, "error": "bad" },
 					{ "acts": "e2", "run": 1 }

@@ -1,1 +1,14 @@
-{ "again": { "name": "cow: false", "has": "patches", "set": { "cow": false } }, "ordered": true }
+{
+	"again": { "name": "cow: false", "has": "patches", "set": { "cow": false } },
+	"ordered": true,
+	"reads": [
+		{
+			"op": "apply",
+			"value": { "a": [1, "é😀z"], "b": { "c": null } },
+			"patches": [
+				{ "path": ["a", 1], "range": [1, 2], "value": "x" },
+				{ "path": ["d"], "move": { "path": ["b"] } }
+			]
+		}
+	]
+}

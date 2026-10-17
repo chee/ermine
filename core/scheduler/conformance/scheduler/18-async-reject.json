@@ -18,7 +18,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "c", "tick": 1 },
-					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "starts": "c", "run": 1 },
 					{ "ends": "c", "run": 1, "ended": "pending" },
 					{ "ends": "c", "run": 1, "ended": "failed", "error": "nope" }
 				]

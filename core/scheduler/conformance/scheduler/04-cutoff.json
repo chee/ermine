@@ -47,8 +47,7 @@
 					},
 					{
 						"starts": "p",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "p",
@@ -58,8 +57,7 @@
 					},
 					{
 						"starts": "q",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "q",
@@ -69,8 +67,7 @@
 					},
 					{
 						"starts": "e",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e",
@@ -92,7 +89,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "p", "tick": 7 },
-					{ "starts": "p", "run": 2, "rank": 0 },
+					{ "starts": "p", "run": 2 },
 					{ "ends": "p", "run": 2, "ended": "done", "equal": true }
 				]
 			}

@@ -1,0 +1,242 @@
+{
+	"title": "a move's source is not copied: the span or key taken is the very one put (a list made for a span holds the same elements), what stays is the same, what a reader holds is untouched",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"l": [
+					{
+						"x": 0
+					},
+					{
+						"y": 0
+					},
+					{
+						"z": 0
+					}
+				],
+				"m": {
+					"k": {
+						"q": 0
+					}
+				},
+				"w": []
+			},
+			"expect": {}
+		},
+		{
+			"op": "read",
+			"hold": "r",
+			"expect": {
+				"value": {
+					"l": [
+						{
+							"x": 0
+						},
+						{
+							"y": 0
+						},
+						{
+							"z": 0
+						}
+					],
+					"m": {
+						"k": {
+							"q": 0
+						}
+					},
+					"w": []
+				}
+			}
+		},
+		{
+			"op": "mark",
+			"name": "e0",
+			"path": [
+				"l",
+				0
+			]
+		},
+		{
+			"op": "mark",
+			"name": "e1",
+			"path": [
+				"l",
+				1
+			]
+		},
+		{
+			"op": "mark",
+			"name": "e2",
+			"path": [
+				"l",
+				2
+			]
+		},
+		{
+			"op": "mark",
+			"name": "k",
+			"path": [
+				"m",
+				"k"
+			]
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"w"
+					],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"l"
+						],
+						"range": [
+							0,
+							2
+						]
+					}
+				}
+			],
+			"skip": [
+				"undo"
+			]
+		},
+		{
+			"op": "same",
+			"name": "e0",
+			"path": [
+				"w",
+				0
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "e1",
+			"path": [
+				"w",
+				1
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "e2",
+			"path": [
+				"l",
+				0
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"move": {
+						"path": [
+							"m",
+							"k"
+						]
+					}
+				}
+			],
+			"skip": [
+				"undo"
+			]
+		},
+		{
+			"op": "same",
+			"name": "k",
+			"path": [
+				"n"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "k",
+			"path": [
+				"m",
+				"k"
+			],
+			"expect": {
+				"same": false
+			}
+		},
+		{
+			"op": "held",
+			"name": "r",
+			"expect": {
+				"value": {
+					"l": [
+						{
+							"x": 0
+						},
+						{
+							"y": 0
+						},
+						{
+							"z": 0
+						}
+					],
+					"m": {
+						"k": {
+							"q": 0
+						}
+					},
+					"w": []
+				}
+			}
+		},
+		{
+			"op": "unwrite",
+			"skip": [
+				"undo"
+			]
+		},
+		{
+			"op": "same",
+			"name": "k",
+			"path": [
+				"m",
+				"k"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "unwrite",
+			"skip": [
+				"undo"
+			]
+		},
+		{
+			"op": "same",
+			"name": "k",
+			"path": [
+				"n"
+			],
+			"expect": {
+				"same": true
+			}
+		}
+	]
+}

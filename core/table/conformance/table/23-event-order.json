@@ -1,0 +1,281 @@
+{
+	"title": "events in order through a mixed run of adds, subs and dels, each with every part at its id as it was when told: a replace, a no-op, a del of a node's keys in who's order, a del of a part's ids, an add by sub, a del with nothing there",
+	"steps": [
+		{
+			"op": "add",
+			"part": "value",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "x",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "y",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "y",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "x",
+			"node": "c",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "x",
+			"node": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "y",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "z",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"part": "children",
+			"id": "z",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"node": "b",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "children",
+			"id": "x",
+			"expect": {}
+		},
+		{
+			"op": "sub",
+			"part": "value",
+			"id": "w",
+			"node": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"node": "c",
+			"expect": {}
+		},
+		{
+			"op": "del",
+			"part": "value",
+			"id": "nothing",
+			"expect": {
+				"error": "nothing-there"
+			}
+		},
+		{
+			"op": "add",
+			"part": "value",
+			"id": "x",
+			"node": "a",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"at": true,
+			"expect": {
+				"events": [
+					[
+						"value",
+						"x",
+						[
+							[
+								"value",
+								"a"
+							]
+						]
+					],
+					[
+						"children",
+						"x",
+						[
+							[
+								"value",
+								"a"
+							],
+							[
+								"children",
+								"b"
+							]
+						]
+					],
+					[
+						"value",
+						"y",
+						[
+							[
+								"value",
+								"a"
+							]
+						]
+					],
+					[
+						"children",
+						"y",
+						[
+							[
+								"value",
+								"a"
+							],
+							[
+								"children",
+								"a"
+							]
+						]
+					],
+					[
+						"value",
+						"x",
+						[
+							[
+								"children",
+								"b"
+							],
+							[
+								"value",
+								"c"
+							]
+						]
+					],
+					[
+						"value",
+						"y",
+						[]
+					],
+					[
+						"children",
+						"y",
+						[]
+					],
+					[
+						"value",
+						"y",
+						[
+							[
+								"value",
+								"b"
+							]
+						]
+					],
+					[
+						"value",
+						"z",
+						[
+							[
+								"value",
+								"b"
+							]
+						]
+					],
+					[
+						"children",
+						"z",
+						[
+							[
+								"value",
+								"b"
+							],
+							[
+								"children",
+								"b"
+							]
+						]
+					],
+					[
+						"value",
+						"y",
+						[]
+					],
+					[
+						"value",
+						"z",
+						[
+							[
+								"children",
+								"b"
+							]
+						]
+					],
+					[
+						"children",
+						"x",
+						[
+							[
+								"value",
+								"c"
+							]
+						]
+					],
+					[
+						"value",
+						"w",
+						[
+							[
+								"value",
+								"c"
+							]
+						]
+					],
+					[
+						"value",
+						"x",
+						[]
+					],
+					[
+						"value",
+						"w",
+						[]
+					],
+					[
+						"value",
+						"x",
+						[
+							[
+								"value",
+								"a"
+							]
+						]
+					]
+				]
+			}
+		}
+	]
+}

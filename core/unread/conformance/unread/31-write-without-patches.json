@@ -1,0 +1,57 @@
+{
+	"title": "a write whose patches are missing or not a list is an error that is not a code; nothing changes and the next line is answered",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": 1
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"fails": true
+		},
+		{
+			"op": "write",
+			"hold": "x",
+			"fails": true
+		},
+		{
+			"op": "write",
+			"patches": {
+				"path": [
+					"a"
+				],
+				"value": 2
+			},
+			"fails": true
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "x",
+			"expect": {}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"error": "nothing-written"
+			}
+		},
+		{
+			"op": "write",
+			"patches": [],
+			"expect": {
+				"undo": []
+			}
+		}
+	]
+}

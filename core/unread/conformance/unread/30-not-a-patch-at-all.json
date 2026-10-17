@@ -1,0 +1,285 @@
+{
+	"title": "a write whose patch is not an object (a string, null, a list) answers not-a-patch at its index; nothing changes, what a reader holds stays",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"a": [
+					1,
+					2
+				],
+				"b": {
+					"x": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						"x"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b",
+							"x"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "read",
+			"hold": "h",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				""
+			],
+			"hold": "w0",
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				null
+			],
+			"hold": "w1",
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						"x"
+					],
+					"value": 2
+				},
+				null
+			],
+			"hold": "w2",
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 1
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				[]
+			],
+			"hold": "w3",
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "held",
+			"name": "h",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				""
+			],
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				null
+			],
+			"expect": {
+				"error": "not-a-patch",
+				"patch": 0
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"a": [
+						1,
+						2
+					],
+					"b": {
+						"x": 1
+					}
+				}
+			}
+		},
+		{
+			"op": "unwrite",
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b",
+							"x"
+						],
+						"value": 1
+					}
+				]
+			}
+		}
+	]
+}

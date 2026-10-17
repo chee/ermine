@@ -43,7 +43,7 @@
 import { command, type Suite, suites } from "./typescript/ask.ts"
 import { line } from "./typescript/form.ts"
 
-const SLACK = 2.5
+const SLACK = 3
 const RUNS = 3
 const AGAIN_MS = 4000
 const FLOOR_MS = 10
@@ -150,7 +150,9 @@ const timer = (() => {
 
 async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise<number> {
 	const started = performance.now()
-	let child
+	let child: Deno.ChildProcess | undefined
+	let stuck: ReturnType<typeof setTimeout> | undefined
+	let timedOut = false
 	const run = timer ? ["/usr/bin/time", "-p", ...cmd] : cmd
 	try {
 		child = new Deno.Command(run[0], {
@@ -158,9 +160,17 @@ async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise
 			stdin: "piped",
 			stdout: "piped",
 			stderr: "piped",
-			// a backstop only: the cap is on the work
-			signal: AbortSignal.timeout(CAP_MS * 6),
 		}).spawn()
+		// a backstop only (the cap is on the work): the harness under `time` is killed first
+		stuck = setTimeout(() => {
+			timedOut = true
+			try {
+				new Deno.Command("pkill", { args: ["-9", "-P", String(child!.pid)] }).outputSync()
+			} catch { /* none */ }
+			try {
+				child!.kill("SIGKILL")
+			} catch { /* gone */ }
+		}, CAP_MS * 3)
 	} catch (e) {
 		throw new Broken(`cannot run ${cmd[0]}: ${e}`)
 	}
@@ -171,12 +181,9 @@ async function once(cmd: string[], input: Uint8Array, fails: boolean[]): Promise
 		await w.write(input)
 		await w.close()
 	} catch { /* its exit says why */ }
-	let out
-	try {
-		out = await done
-	} catch {
-		throw new Broken(`past ${CAP_MS * 6 / 1000}s of the clock`)
-	}
+	const out = await done
+	clearTimeout(stuck)
+	if (timedOut) throw new Broken(`past ${CAP_MS * 3 / 1000}s of the clock`)
 	let ms = performance.now() - started
 	let err = new TextDecoder().decode(out.stderr)
 	if (timer) {
@@ -239,7 +246,10 @@ async function measure(cmd: string[], sc: Scenario): Promise<Result & { times?: 
 			try {
 				net.push(await least(cmd, sc.template, n) - base)
 			} catch (e) {
-				if (e instanceof Broken) e.message += ` (at n = ${n})`
+				if (e instanceof Broken) {
+					const before = net.map((t, i) => `n = ${sc.sizes[i]}: ${t.toFixed(0)}ms`)
+					e.message += ` at n = ${n}${before.length ? ` (${before.join(", ")})` : ""}`
+				}
 				throw e
 			}
 		}

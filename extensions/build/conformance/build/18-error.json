@@ -1,0 +1,189 @@
+{
+	"title": "an error is never kept: oops reads N, then throws. both readers get its Error from one call. N edited while they read it: the step runs again (it read N), failing again. both stopped, the step goes; a new reader calls it again. nothing is ever kept",
+	"steps": [
+		{
+			"op": "builds",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"cache": "CACHE"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "N",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "step",
+			"name": "a",
+			"run": "oops",
+			"code": "N",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "a",
+			"expect": {
+				"value": {
+					"failed": "oops"
+				}
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 0,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 1,
+				"tick": 0
+			}
+		},
+		{
+			"op": "cache",
+			"skip": [
+				"entries"
+			],
+			"expect": {
+				"size": 0
+			}
+		},
+		{
+			"op": "step",
+			"name": "b",
+			"run": "oops",
+			"code": "N",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "b",
+			"expect": {
+				"value": {
+					"failed": "oops"
+				}
+			}
+		},
+		{
+			"op": "found",
+			"name": "b",
+			"expect": {
+				"found": "miss",
+				"entry": null,
+				"checked": 0,
+				"entries": 0
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 0,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 1,
+				"tick": 0
+			}
+		},
+		{
+			"op": "value",
+			"id": "N",
+			"value": 2,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "a",
+			"expect": {
+				"value": {
+					"failed": "oops"
+				}
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 0,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 2,
+				"tick": 0
+			}
+		},
+		{
+			"op": "stop",
+			"name": "a",
+			"expect": {}
+		},
+		{
+			"op": "stop",
+			"name": "b",
+			"expect": {}
+		},
+		{
+			"op": "step",
+			"name": "c",
+			"run": "oops",
+			"code": "N",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "c",
+			"expect": {
+				"value": {
+					"failed": "oops"
+				}
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 0,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 3,
+				"tick": 0
+			}
+		},
+		{
+			"op": "cache",
+			"skip": [
+				"entries"
+			],
+			"expect": {
+				"size": 0
+			}
+		}
+	]
+}

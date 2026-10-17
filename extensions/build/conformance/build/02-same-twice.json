@@ -1,0 +1,24 @@
+{
+	"title": "the same input twice compiles once: two runs compiling it before a pulse share one step; a third, made after, finds it in the cache; so does a fourth, made after the first is stopped",
+	"steps": [
+		{ "op": "builds", "cache": "CACHE", "expect": {} },
+		{ "op": "kids", "id": "R", "value": { "cache": "CACHE", "catclock.c": "CAT" }, "expect": {} },
+		{ "op": "value", "id": "CAT", "value": "hi", "expect": {} },
+		{ "op": "compiler", "id": "UP", "compiler": "upper", "expect": {} },
+		{ "op": "watch", "name": "a", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "watch", "name": "b", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "value": "HI" } },
+		{ "op": "state", "name": "b", "expect": { "value": "HI" } },
+		{ "op": "calls", "expect": { "upper": 1, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "watch", "name": "c", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "c", "expect": { "value": "HI" } },
+		{ "op": "stop", "name": "a", "expect": {} },
+		{ "op": "watch", "name": "d", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "d", "expect": { "value": "HI" } },
+		{ "op": "calls", "expect": { "upper": 1, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 1 } }
+	]
+}

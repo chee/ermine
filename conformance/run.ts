@@ -25,6 +25,17 @@
 //   ordered: a map's keys compared in order too (a key put back goes last: apply)
 //   now: "now" in an expect is a whole number of seconds since 1970 as of the run (node)
 //   again: the scenarios run once more with a request that has the field given more fields
+//   undoes: the suite asks { op: "invert", value?, patches }. an answer without error in its expect is
+//     not compared to expect: it must be { undo }, and only undo it (asked of this harness, in the
+//     run's own again fields): apply(apply(value, patches), undo) is value, and apply(value,
+//     undo of that undo) is apply(value, patches) again; maps by content (a key put back goes last),
+//     nothing there by nothing there. an error is pinned as ever (expect, or fails)
+//   reads: requests that change nothing, asked just before and just after every step that fails
+//     (fails, or an error in its expect), in the same run: the answers must be the same (keys in
+//     order when ordered, as sets the unordered fields): a refused request changes nothing. a
+//     top-level field "$name" in one stands for each value the field name has in the scenario's
+//     requests (by content, first met first; several such: every combination); none, the read is
+//     not asked. sent as given (not the run's again fields), never compared to anything else
 //   harness: the adapter and binary of another suite are this one's (invert speaks apply's)
 //   typescript: only the TypeScript harness runs it; --c, --check and --leaks skip it (load)
 //   allow: deno flags the TypeScript harness is run with beyond --allow-read (native: --allow-ffi)
@@ -129,7 +140,110 @@ function check(
 	}
 }
 
+// whether a step's answer is checked as undoing: an invert of a suite that undoes, not one that
+// says it fails or has an error in its expect (those are pinned as ever)
+const undoing = (o: Options, st: Step) =>
+	o.undoes === true && st.op === "invert" && !st.fails && !(st.expect && "error" in st.expect)
+
+// the answers of the undoing steps, walked back with the harness (one ask for each stage): why not
+// for each step, or undefined. the run's changes are in every request (cow: false too)
+const sortKeys = (v: unknown) =>
+	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
+// nothing there is no value; maps by content
+const same = (a?: Record<string, any>, b?: Record<string, any>) =>
+	line(a && "value" in a ? a.value : undefined, sortKeys) ===
+		line(b && "value" in b ? b.value : undefined, sortKeys)
+const held = (r?: Record<string, any>) => (r && "value" in r ? { value: r.value } : {})
+
+async function undone(
+	cmd: string[],
+	run: (r: Record<string, unknown>) => Record<string, unknown>,
+	steps: Step[],
+	answers: Record<string, any>[],
+	o: Options,
+): Promise<(string | undefined)[]> {
+	const why: (string | undefined)[] = steps.map(() => undefined)
+	const fail = (i: number, s: string) => (why[i] = s, false)
+	const request = (op: string, from: Record<string, any> | undefined, patches: unknown) =>
+		run({ op, ...held(from), patches })
+	let live = steps.flatMap((st, i) => undoing(o, st) ? [i] : [])
+	live = live.filter((i) =>
+		Array.isArray(answers[i]?.undo) || fail(i, `not an undo: ${show(answers[i])}`)
+	)
+	// the change
+	const changed: Record<number, Record<string, any>> = {}
+	const done = await ask(cmd, live.map((i) => request("apply", steps[i], steps[i].patches)))
+	live = live.filter((i, k) => {
+		if (done[k]?.error !== undefined) {
+			return fail(i, `the patches: an error: ${show(done[k].error)}`)
+		}
+		changed[i] = done[k] ?? {}
+		return true
+	})
+	// the undo applied to it; its undo
+	const back = await ask(
+		cmd,
+		live.flatMap((i) => [
+			request("apply", changed[i], answers[i].undo),
+			request("invert", changed[i], answers[i].undo),
+		]),
+	)
+	const unwound: Record<number, unknown> = {}
+	live = live.filter((i, k) => {
+		const b = back[2 * k], u = back[2 * k + 1]
+		if (b?.error !== undefined) return fail(i, `the undo: an error: ${show(b.error)}`)
+		if (!same(b, steps[i] as Record<string, any>)) {
+			return fail(i, `the undo gives ${show(held(b))}, not ${show(held(steps[i]))}`)
+		}
+		if (!Array.isArray(u?.undo)) return fail(i, `the undo's undo: ${show(u)}`)
+		unwound[i] = u.undo
+		return true
+	})
+	// the undo of the undo, applied to the value given
+	const last = await ask(cmd, live.map((i) => request("apply", steps[i], unwound[i])))
+	live.forEach((i, k) => {
+		if (last[k]?.error !== undefined) {
+			why[i] = `the undo's undo: an error: ${show(last[k].error)}`
+		} else if (!same(last[k], changed[i])) {
+			why[i] = `the undo's undo gives ${show(held(last[k]))}, not ${show(held(changed[i]))}`
+		}
+	})
+	return why
+}
+
 const asked = ({ expect: _, fails: __, skip: ___, ...request }: Step) => request
+
+// the suite's reads for a scenario: each "$name" field made every value name has in its requests
+function reads(o: Options, requests: Record<string, unknown>[]): Record<string, unknown>[] {
+	const values = (name: string) => {
+		const seen = new Map<string, unknown>()
+		for (const r of requests) {
+			if (Object.hasOwn(r, name) && !seen.has(line(r[name]))) seen.set(line(r[name]), r[name])
+		}
+		return [...seen.values()]
+	}
+	return (o.reads ?? []).flatMap((read) =>
+		Object.entries(read).reduce<Record<string, unknown>[]>(
+			(out, [k, v]) =>
+				typeof v === "string" && v.startsWith("$")
+					? out.flatMap((r) => values(v.slice(1)).map((x) => ({ ...r, [k]: x })))
+					: out.map((r) => ({ ...r, [k]: v })),
+			[{}],
+		)
+	)
+}
+// a step a refused request: the reads are asked around it
+const refused = (st: Step) => st.fails === true || (st.expect !== undefined && "error" in st.expect)
+// an answer as compared to itself: keys in order or not, unordered fields as sets
+function settled(a: Record<string, unknown> | undefined, o: Options) {
+	if (a === undefined) return "no answer"
+	const sets = Object.fromEntries(
+		Object.entries(a).map((
+			[k, v],
+		) => [k, o.unordered?.includes(k) && Array.isArray(v) ? v.map(show).sort() : v]),
+	)
+	return line(sets, o.ordered ? (v) => v : sortKeys)
+}
 
 for (const s of chosen) {
 	const files = [...Deno.readDirSync(s.fixtures)].map((f) => f.name).filter((n) =>
@@ -159,12 +273,39 @@ for (const s of chosen) {
 					flags.some((f) => f === "--c" || f === "--check" || f === "--leaks"),
 			}, async () => {
 				const from = Math.floor(Date.now() / 1000)
-				const answers = await ask(harness(s), steps.map((st) => run.change(asked(st))))
+				// the steps, the reads around each refused one: where each step's answer is
+				const around = reads(s.options, steps.map(asked))
+				const sent: Record<string, unknown>[] = [], at: number[] = []
+				for (const st of steps) {
+					const guard = around.length > 0 && refused(st)
+					if (guard) sent.push(...around)
+					at.push(sent.length)
+					sent.push(run.change(asked(st)))
+					if (guard) sent.push(...around)
+				}
+				const all = await ask(harness(s), sent)
 				const window: [number, number] = [from, Math.floor(Date.now() / 1000)]
-				assertEquals(answers.length, steps.length, "one answer per request")
+				assertEquals(all.length, sent.length, "one answer per request")
+				const answers = at.map((k) => all[k])
+				const walked = s.options.undoes
+					? await undone(harness(s), run.change, steps, answers, s.options)
+					: []
 				steps.forEach((st, i) => {
-					const why = check(st, answers[i], s.options, window)
+					const why = undoing(s.options, st)
+						? (answers[i] === undefined ? "no answer" : walked[i])
+						: check(st, answers[i], s.options, window)
 					assert(why === undefined, `step ${i}: ${why}: ${show(asked(st))}`)
+					if (!(around.length > 0 && refused(st))) return
+					around.forEach((r, j) => {
+						const before = settled(all[at[i] - around.length + j], s.options)
+						const after = settled(all[at[i] + 1 + j], s.options)
+						assert(
+							before === after,
+							`step ${i} changed ${show(r)}: ${before} before, ${after} after: ${
+								show(asked(st))
+							}`,
+						)
+					})
 				})
 			})
 		}

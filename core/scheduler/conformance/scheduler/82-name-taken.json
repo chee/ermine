@@ -90,8 +90,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c",

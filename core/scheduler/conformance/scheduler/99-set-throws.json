@@ -88,8 +88,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c",
@@ -99,8 +98,7 @@
 					},
 					{
 						"starts": "r",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "r",
@@ -146,8 +144,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"due": "r",
@@ -163,8 +160,7 @@
 					},
 					{
 						"starts": "r",
-						"run": 2,
-						"rank": 1
+						"run": 2
 					},
 					{
 						"ends": "r",
@@ -232,8 +228,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"due": "r",
@@ -248,8 +243,7 @@
 					},
 					{
 						"starts": "r",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"ends": "r",
@@ -294,8 +288,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 4,
-						"rank": 0
+						"run": 4
 					},
 					{
 						"ends": "c",

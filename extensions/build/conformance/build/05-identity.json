@@ -1,0 +1,79 @@
+{
+	"title": "two compiler nodes saying one identity share every entry: CLANG (a server's) and WCLANG (built as wasm) both say clang 19.1.0 for wasm32: compiled once, a hit for the other. a different version: compiled again. two nodes saying none: each its own id, compiled apart",
+	"steps": [
+		{ "op": "builds", "cache": "CACHE", "expect": {} },
+		{ "op": "kids", "id": "R", "value": { "cache": "CACHE", "catclock.c": "CAT" }, "expect": {} },
+		{ "op": "value", "id": "CAT", "value": "hi", "expect": {} },
+		{ "op": "compiler", "id": "CLANG", "compiler": "upper", "expect": {} },
+		{ "op": "compiler", "id": "WCLANG", "compiler": "upper", "expect": {} },
+		{ "op": "compiler", "id": "NEW", "compiler": "upper", "expect": {} },
+		{ "op": "compiler", "id": "UP", "compiler": "upper", "expect": {} },
+		{ "op": "compiler", "id": "UP2", "compiler": "upper", "expect": {} },
+		{
+			"op": "attrs",
+			"id": "CLANG",
+			"value": {
+				"ermine.programs.compiler": {
+					"name": "clang",
+					"version": "19.1.0",
+					"target": "wasm32",
+					"flags": ["-O2"]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "WCLANG",
+			"value": {
+				"ermine.programs.compiler": {
+					"name": "clang",
+					"version": "19.1.0",
+					"target": "wasm32",
+					"flags": ["-O2"]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "attrs",
+			"id": "NEW",
+			"value": {
+				"ermine.programs.compiler": {
+					"name": "clang",
+					"version": "20.1.0",
+					"target": "wasm32",
+					"flags": ["-O2"]
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "watch",
+			"name": "server",
+			"compilers": ["CLANG"],
+			"input": "int main",
+			"expect": {}
+		},
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "server", "expect": { "value": "INT MAIN" } },
+		{ "op": "calls", "expect": { "upper": 1, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "watch", "name": "wasm", "compilers": ["WCLANG"], "input": "int main", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "wasm", "expect": { "value": "INT MAIN" } },
+		{ "op": "calls", "expect": { "upper": 1, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 1 } },
+		{ "op": "watch", "name": "new", "compilers": ["NEW"], "input": "int main", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "new", "expect": { "value": "INT MAIN" } },
+		{ "op": "calls", "expect": { "upper": 2, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 2 } },
+		{ "op": "watch", "name": "up", "compilers": ["UP"], "input": "int main", "expect": {} },
+		{ "op": "watch", "name": "up2", "compilers": ["UP2"], "input": "int main", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "up", "expect": { "value": "INT MAIN" } },
+		{ "op": "state", "name": "up2", "expect": { "value": "INT MAIN" } },
+		{ "op": "calls", "expect": { "upper": 4, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 4 } }
+	]
+}

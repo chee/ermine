@@ -111,8 +111,7 @@
 					},
 					{
 						"starts": "x",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "x",
@@ -131,8 +130,7 @@
 					},
 					{
 						"starts": "x",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "x",

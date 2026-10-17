@@ -1,0 +1,175 @@
+{
+	"title": "two stored documents, one followed: only that one comes in; the other when it is followed",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"store": "s",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://e7fa5ce00b16d685b8a2b5de801af9838a5580e447bdbacfe371a1300a4907d3",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 532
+				}
+			],
+			"actor": "a",
+			"nonce": "0000021500000000",
+			"expect": {
+				"name": "f32a0a1b62d7162c131c1877c8fbec01db525844aa3f1e07202acbc9a796f178",
+				"stored": "a24a0aea8771255f1fbc6ff0a16874737ed17aaf37603d54418e980ea7a9ae22"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 533
+				}
+			],
+			"actor": "a",
+			"nonce": "0000021600000000",
+			"expect": {
+				"name": "90136a5b62a75c605f7c2bd0775bf0a2c8f4dec9cf2af4835eb60ae4ce6da1c4",
+				"stored": "a506f26fe5749a3761e7ce568dc9ecf394373dcfee5b4ac9142fd9e259d9dc6b"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://e7fa5ce00b16d685b8a2b5de801af9838a5580e447bdbacfe371a1300a4907d3",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"actor": "a",
+			"nonce": "0000021700000000",
+			"expect": {
+				"name": "39a3d5de0cf3ba795c5ecf786a1a2f340b2ef118600043c50f8e2dad5cecfbb5",
+				"stored": "28c46bb8b8a46910c43afc91966bf7dc2a2dcd9195b2fd12b587de8bf769efcc"
+			}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "drop",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"store": "s",
+			"lazy": true,
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a2",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "a2",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"90136a5b62a75c605f7c2bd0775bf0a2c8f4dec9cf2af4835eb60ae4ce6da1c4"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "state",
+			"device": "a2",
+			"doc": "ermine://e7fa5ce00b16d685b8a2b5de801af9838a5580e447bdbacfe371a1300a4907d3",
+			"expect": {
+				"heads": [],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a2",
+			"doc": "ermine://e7fa5ce00b16d685b8a2b5de801af9838a5580e447bdbacfe371a1300a4907d3",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "a2",
+			"doc": "ermine://e7fa5ce00b16d685b8a2b5de801af9838a5580e447bdbacfe371a1300a4907d3",
+			"expect": {
+				"heads": [
+					"39a3d5de0cf3ba795c5ecf786a1a2f340b2ef118600043c50f8e2dad5cecfbb5"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		}
+	]
+}

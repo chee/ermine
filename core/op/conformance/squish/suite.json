@@ -1,1 +1,21 @@
-{ "ordered": true }
+{
+	"ordered": true,
+	"reads": [
+		{
+			"op": "squish",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" },
+				{ "path": ["m", "k"], "value": 1 }
+			]
+		},
+		{
+			"op": "encode",
+			"patches": [
+				{ "path": ["t"], "range": [0, 0], "value": "a" },
+				{ "path": ["t"], "range": [1, 1], "value": "b" },
+				{ "path": ["m", "k"], "value": 1 }
+			]
+		}
+	]
+}

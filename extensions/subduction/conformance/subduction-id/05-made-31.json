@@ -1,0 +1,13 @@
+{
+	"title": "made 31 bytes: size",
+	"steps": [
+		{
+			"op": "id",
+			"lock": "unlocked",
+			"made": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e",
+			"expect": {
+				"code": "size"
+			}
+		}
+	]
+}

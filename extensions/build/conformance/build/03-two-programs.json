@@ -1,0 +1,24 @@
+{
+	"title": "two programs with the same source share one cache entry: catclock.c and dogclock.c are both \"hi\", and the program is not in the key. dogclock.c edited to \"ho\": an entry of its own",
+	"steps": [
+		{ "op": "builds", "cache": "CACHE", "expect": {} },
+		{ "op": "kids", "id": "R", "value": { "cache": "CACHE", "catclock.c": "CAT" }, "expect": {} },
+		{ "op": "value", "id": "CAT", "value": "hi", "expect": {} },
+		{ "op": "compiler", "id": "UP", "compiler": "upper", "expect": {} },
+		{ "op": "value", "id": "DOG", "value": "hi", "expect": {} },
+		{ "op": "watch", "name": "cat", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "watch", "name": "dog", "compilers": ["UP"], "node": "DOG", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "cat", "expect": { "value": "HI" } },
+		{ "op": "state", "name": "dog", "expect": { "value": "HI" } },
+		{ "op": "calls", "expect": { "upper": 1, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 1 } },
+		{ "op": "value", "id": "DOG", "value": "ho", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "dog", "expect": { "value": "HO" } },
+		{ "op": "state", "name": "cat", "expect": { "value": "HI" } },
+		{ "op": "calls", "expect": { "upper": 2, "wrap": 0, "slow": 0, "boom": 0, "live": 0 } },
+		{ "op": "cache", "skip": ["entries"], "expect": { "size": 2 } }
+	]
+}

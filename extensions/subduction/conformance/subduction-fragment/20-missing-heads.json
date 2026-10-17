@@ -1,0 +1,45 @@
+{
+	"title": "heads h(1) and q(0) not here, b here: only b",
+	"names": {
+		"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459": "b",
+		"00ba02f11c4c8016f2647040da1d2613b52373944a7233c9c05f91c95e715261": "h",
+		"2a32660bab3815c7635490664b6ca4e837dad2a88bcf0574b18ac2db943f9474": "q",
+		"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5": "a"
+	},
+	"steps": [
+		{
+			"op": "build",
+			"commits": [
+				{
+					"id": "cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5",
+					"parents": []
+				},
+				{
+					"id": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+					"parents": [
+						"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+					]
+				}
+			],
+			"heads": [
+				"00ba02f11c4c8016f2647040da1d2613b52373944a7233c9c05f91c95e715261",
+				"2a32660bab3815c7635490664b6ca4e837dad2a88bcf0574b18ac2db943f9474",
+				"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459"
+			],
+			"known": [],
+			"expect": {
+				"fragments": [
+					{
+						"head": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+						"members": [
+							"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+							"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+						],
+						"boundary": [],
+						"checkpoints": []
+					}
+				]
+			}
+		}
+	]
+}

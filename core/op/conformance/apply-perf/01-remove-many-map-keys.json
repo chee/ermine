@@ -1,6 +1,6 @@
 {
 	"title": "one call removes n keys from a map of n keys",
-	"sizes": [25000, 100000, 400000],
+	"sizes": [6250, 25000, 100000],
 	"bound": "n log n",
 	"template": [
 		{

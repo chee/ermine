@@ -1,0 +1,39 @@
+{
+	"title": "a cached output has the compiler's ermine.programs.gives as its ermine.type, written with the value. a compiler with no gives writes no type; the type is not in the key (the same keys as an untyped compile)",
+	"steps": [
+		{ "op": "builds", "cache": "CACHE", "expect": {} },
+		{ "op": "kids", "id": "R", "value": { "cache": "CACHE", "catclock.c": "CAT" }, "expect": {} },
+		{ "op": "value", "id": "CAT", "value": "hi", "expect": {} },
+		{
+			"op": "attrs",
+			"id": "UP",
+			"value": { "ermine.programs.gives": "public.wasm-executable" },
+			"expect": {}
+		},
+		{ "op": "compiler", "id": "UP", "compiler": "upper", "expect": {} },
+		{ "op": "compiler", "id": "WR", "compiler": "wrap", "expect": {} },
+		{ "op": "watch", "name": "a", "compilers": ["UP"], "node": "CAT", "expect": {} },
+		{ "op": "watch", "name": "b", "compilers": ["WR"], "node": "CAT", "expect": {} },
+		{ "op": "pulse", "expect": {} },
+		{ "op": "state", "name": "a", "expect": { "value": "HI" } },
+		{
+			"op": "cache",
+			"expect": {
+				"size": 2,
+				"entries": {
+					"23722319b76c942d5964e47e121277db9ea377fefb66cecf7efd7f36b1364e23": "HI",
+					"62e4674594290e16906ce638182ecc042f1c22b3c659d2544c6cb35646b49e12": { "wasm": "hi" }
+				}
+			}
+		},
+		{
+			"op": "kinds",
+			"expect": {
+				"types": {
+					"23722319b76c942d5964e47e121277db9ea377fefb66cecf7efd7f36b1364e23": "public.wasm-executable",
+					"62e4674594290e16906ce638182ecc042f1c22b3c659d2544c6cb35646b49e12": null
+				}
+			}
+		}
+	]
+}

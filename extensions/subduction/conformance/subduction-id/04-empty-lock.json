@@ -1,0 +1,13 @@
+{
+	"title": "the empty name is a name",
+	"steps": [
+		{
+			"op": "id",
+			"lock": "",
+			"made": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+			"expect": {
+				"id": "ermine://207279b165dadc646914aaafb6b8be8d97ff7e679188fde445cb0ade91b7be9c"
+			}
+		}
+	]
+}

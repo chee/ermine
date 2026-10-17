@@ -1,0 +1,109 @@
+{
+	"title": "a range past the string: refused patches",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "GwAAABsAAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": "abc"
+					}
+				]
+			},
+			"name": "c28dec93b13ea0ead668be2c0a73469476532964197445a53758887fd8d01857",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "HAAAABwAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "wo3sk7E+oOrWaL4sCnNGlHZTKWQZdEWlN1iIf9jQGFc"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": [
+					{
+						"path": [],
+						"range": [
+							2,
+							5
+						]
+					}
+				]
+			},
+			"name": "a597ba15aa98c660ae7b94ac15cfb199b86f73f43ca0aa2ee2624cbbe389de65",
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
+		},
+		{
+			"op": "versions",
+			"object": "value",
+			"times": {
+				"c28dec93b13ea0ead668be2c0a73469476532964197445a53758887fd8d01857": 1026
+			},
+			"expect": {
+				"versions": [
+					{
+						"content": "abc",
+						"change": {
+							"actor": "a",
+							"time": 1026
+						},
+						"because": {
+							"layer": "sync",
+							"place": {
+								"lamport": 1,
+								"name": "c28dec93b13ea0ead668be2c0a73469476532964197445a53758887fd8d01857"
+							},
+							"why": {
+								"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}

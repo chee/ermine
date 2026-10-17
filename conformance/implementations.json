@@ -1,0 +1,62 @@
+{
+	"typescript": {
+		"apply": "deno run --quiet --allow-read core/op/typescript/apply_harness.ts",
+		"invert": "deno run --quiet --allow-read core/op/typescript/apply_harness.ts",
+		"squish": "deno run --quiet --allow-read core/op/typescript/squish_harness.ts",
+		"node": "deno run --quiet --allow-read core/node/typescript/node_harness.ts",
+		"update": "deno run --quiet --allow-read core/node/typescript/update_harness.ts",
+		"table": "deno run --quiet --allow-read core/table/typescript/table_harness.ts",
+		"unread": "deno run --quiet --allow-read core/unread/typescript/unread_harness.ts",
+		"tracker": "deno run --quiet --allow-read core/scheduler/typescript/tracker_harness.ts",
+		"paths": "deno run --quiet --allow-read core/scheduler/typescript/paths_harness.ts",
+		"scheduler": "deno run --quiet --allow-read core/scheduler/typescript/scheduler_harness.ts"
+	},
+	"c": {
+		"apply": "core/op/c/apply-harness",
+		"invert": "core/op/c/apply-harness",
+		"squish": "core/op/c/squish-harness",
+		"node": "core/node/c/node-harness",
+		"update": "core/node/c/update-harness",
+		"table": "core/table/c/table-harness",
+		"unread": "core/unread/c/unread-harness",
+		"tracker": "core/scheduler/c/tracker-harness",
+		"paths": "core/scheduler/c/paths-harness",
+		"scheduler": "core/scheduler/c/scheduler-harness"
+	},
+	"c-check": {
+		"apply": "core/op/c/apply-harness-check",
+		"invert": "core/op/c/apply-harness-check",
+		"squish": "core/op/c/squish-harness-check",
+		"node": "core/node/c/node-harness-check",
+		"update": "core/node/c/update-harness-check",
+		"table": "core/table/c/table-harness-check",
+		"unread": "core/unread/c/unread-harness-check",
+		"tracker": "core/scheduler/c/tracker-harness-check",
+		"paths": "core/scheduler/c/paths-harness-check",
+		"scheduler": "core/scheduler/c/scheduler-harness-check"
+	},
+	"haskell": {
+		"apply": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/apply-harness/build/apply-harness/apply-harness",
+		"invert": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/apply-harness/build/apply-harness/apply-harness",
+		"squish": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/squish-harness/build/squish-harness/squish-harness",
+		"node": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/node-harness/build/node-harness/node-harness",
+		"update": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/update-harness/build/update-harness/update-harness",
+		"table": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/table-harness/build/table-harness/table-harness",
+		"unread": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/unread-harness/build/unread-harness/unread-harness",
+		"tracker": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/tracker-harness/build/tracker-harness/tracker-harness",
+		"paths": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/paths-harness/build/paths-harness/paths-harness",
+		"scheduler": "playground/haskell/dist-newstyle/build/aarch64-osx/ghc-9.14.1/ermine-hs-0.1.0/x/scheduler-harness/build/scheduler-harness/scheduler-harness"
+	},
+	"lisp": {
+		"apply": "playground/lisp/bin/apply",
+		"invert": "playground/lisp/bin/apply",
+		"squish": "playground/lisp/bin/squish",
+		"node": "playground/lisp/bin/node",
+		"update": "playground/lisp/bin/update",
+		"table": "playground/lisp/bin/table",
+		"unread": "playground/lisp/bin/unread",
+		"tracker": "playground/lisp/bin/tracker",
+		"paths": "playground/lisp/bin/paths",
+		"scheduler": "playground/lisp/bin/scheduler"
+	}
+}

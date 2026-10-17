@@ -60,8 +60,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "b",
@@ -71,8 +70,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "a",
@@ -115,8 +113,7 @@
 				"moments": [
 					{
 						"starts": "b",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "b",
@@ -126,8 +123,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "a",
@@ -136,8 +132,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"ends": "b",
@@ -178,8 +173,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 4,
-						"rank": 1
+						"run": 4
 					},
 					{
 						"ends": "b",
@@ -261,8 +255,7 @@
 					},
 					{
 						"starts": "b2",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "b2",
@@ -272,8 +265,7 @@
 					},
 					{
 						"starts": "a2",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "a2",
@@ -314,8 +306,7 @@
 				"moments": [
 					{
 						"starts": "b2",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "b2",
@@ -325,8 +316,7 @@
 					},
 					{
 						"starts": "a2",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "a2",
@@ -360,8 +350,7 @@
 					},
 					{
 						"starts": "b2",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "b2",
@@ -371,8 +360,7 @@
 					},
 					{
 						"starts": "a2",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "a2",

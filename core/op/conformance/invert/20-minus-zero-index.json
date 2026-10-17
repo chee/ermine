@@ -4,14 +4,12 @@
 		{
 			"op": "invert",
 			"value": [1, 2],
-			"patches": [{ "path": [-0] }],
-			"expect": { "undo": [{ "path": [], "range": [0, 0], "value": [1] }] }
+			"patches": [{ "path": [-0] }]
 		},
 		{
 			"op": "invert",
 			"value": "ab",
-			"patches": [{ "path": [], "range": [-0, 1] }],
-			"expect": { "undo": [{ "path": [], "range": [0, 0], "value": "a" }] }
+			"patches": [{ "path": [], "range": [-0, 1] }]
 		}
 	]
 }

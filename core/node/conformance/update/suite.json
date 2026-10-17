@@ -1,5 +1,6 @@
 {
 	"again": { "name": "cow: false", "op": "start", "set": { "cow": false } },
 	"ordered": true,
-	"now": true
+	"now": true,
+	"reads": [{ "op": "entry" }]
 }

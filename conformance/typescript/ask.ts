@@ -30,6 +30,8 @@ export type Options = {
 	ordered?: boolean
 	// "now" in an expect: a whole number of seconds since 1970, as of the run
 	now?: boolean
+	// invert's answers are checked as undoing, not compared to expect (conformance/run.ts)
+	undoes?: boolean
 	// the scenarios run again, a request that has the field (or this op) given more fields
 	again?: { name: string; has?: string; op?: string; set: Record<string, unknown> }
 	// the suite runs only against the TypeScript harness: --c, --check and --leaks skip it (a loader
@@ -37,43 +39,66 @@ export type Options = {
 	typescript?: boolean
 	// what the TypeScript harness is allowed beyond reading: deno's flags (native: --allow-ffi, ...)
 	allow?: string[]
+	// requests that change nothing, asked around every refused step: the same before and after
+	// (conformance/run.ts)
+	reads?: Record<string, unknown>[]
 }
 
 // every suite there is: a folder in <package>/conformance/ with an adapter in <package>/typescript/
 export function suites(): Suite[] {
 	const found: Suite[] = []
+	// a package is a folder of a group with conformance/ in it, or one folder further down (playground/tools/files)
+	const packages: string[] = []
+	const has = (path: string) => {
+		try {
+			return Deno.statSync(`${root}${path}/conformance`).isDirectory
+		} catch {
+			return false
+		}
+	}
 	for (const group of ["core", "filesystem", "ermine", "extensions", "playground"]) {
 		for (const p of Deno.readDirSync(`${root}${group}`)) {
-			const dir = `${root}${group}/${p.name}/conformance`
-			let names: Deno.DirEntry[]
+			if (!p.isDirectory) continue
+			if (has(`${group}/${p.name}`)) packages.push(`${group}/${p.name}`)
+			else {
+				for (const q of Deno.readDirSync(`${root}${group}/${p.name}`)) {
+					if (q.isDirectory && has(`${group}/${p.name}/${q.name}`)) {
+						packages.push(`${group}/${p.name}/${q.name}`)
+					}
+				}
+			}
+		}
+	}
+	for (const path of packages) {
+		const dir = `${root}${path}/conformance`
+		let names: Deno.DirEntry[]
+		try {
+			names = [...Deno.readDirSync(dir)].filter((d) => d.isDirectory)
+		} catch {
+			continue
+		}
+		for (const d of names) {
+			const fixtures = `${dir}/${d.name}/`
+			let options: Options = {}
 			try {
-				names = [...Deno.readDirSync(dir)].filter((d) => d.isDirectory)
+				options = JSON.parse(Deno.readTextFileSync(`${fixtures}suite.json`))
+			} catch { /* none */ }
+			const pkg = `${root}${path}`
+			const shared = options.harness ?? d.name
+			const typescript = `${pkg}/typescript/${shared}_harness.ts`
+			try {
+				Deno.statSync(typescript)
 			} catch {
 				continue
 			}
-			for (const d of names) {
-				const fixtures = `${dir}/${d.name}/`
-				let options: Options = {}
-				try {
-					options = JSON.parse(Deno.readTextFileSync(`${fixtures}suite.json`))
-				} catch { /* none */ }
-				const pkg = `${root}${group}/${p.name}`
-				const shared = options.harness ?? d.name
-				const typescript = `${pkg}/typescript/${shared}_harness.ts`
-				try {
-					Deno.statSync(typescript)
-				} catch {
-					continue
-				}
-				found.push({
-					name: d.name,
-					package: `${group}/${p.name}`,
-					fixtures,
-					typescript,
-					binary: `${pkg}/c/${shared}-harness`,
-					options,
-				})
-			}
+			found.push({
+				name: d.name,
+				package: path,
+				fixtures,
+				typescript,
+				binary: `${pkg}/c/${shared}-harness`,
+				options,
+			})
 		}
 	}
 	return found.sort((a, b) => a.name.localeCompare(b.name))

@@ -1,0 +1,13 @@
+{
+	"title": "made no bytes: size",
+	"steps": [
+		{
+			"op": "id",
+			"lock": "unlocked",
+			"made": "",
+			"expect": {
+				"code": "size"
+			}
+		}
+	]
+}

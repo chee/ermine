@@ -1,0 +1,208 @@
+{
+	"title": "a read value changed is a miss: A from 1 to 10, sum runs again and its reads are kept as entry 2, newest. changed back to 1: entry 2 is checked first and differs at A, entry 1 matches all through: a hit on the old entry, sum not called",
+	"steps": [
+		{
+			"op": "builds",
+			"cache": "CACHE",
+			"expect": {}
+		},
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"cache": "CACHE"
+			},
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "value",
+			"id": "B",
+			"value": 2,
+			"expect": {}
+		},
+		{
+			"op": "step",
+			"name": "s",
+			"run": "sum",
+			"code": [
+				"A",
+				"B"
+			],
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "s",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 1,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 0,
+				"tick": 0
+			}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 10,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "s",
+			"expect": {
+				"value": 12
+			}
+		},
+		{
+			"op": "runs",
+			"name": "s",
+			"expect": {
+				"runs": 4
+			}
+		},
+		{
+			"op": "found",
+			"name": "s",
+			"expect": {
+				"found": "hit",
+				"entry": "2",
+				"checked": 1,
+				"entries": 2
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 2,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 0,
+				"tick": 0
+			}
+		},
+		{
+			"op": "entries",
+			"run": "sum",
+			"code": [
+				"A",
+				"B"
+			],
+			"expect": {
+				"entries": [
+					{
+						"name": "2",
+						"reads": [
+							[
+								"value",
+								"A",
+								[]
+							],
+							[
+								"value",
+								"B",
+								[]
+							]
+						],
+						"output": 12
+					},
+					{
+						"name": "1",
+						"reads": [
+							[
+								"value",
+								"A",
+								[]
+							],
+							[
+								"value",
+								"B",
+								[]
+							]
+						],
+						"output": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "value",
+			"id": "A",
+			"value": 1,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"name": "s",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "runs",
+			"name": "s",
+			"expect": {
+				"runs": 5
+			}
+		},
+		{
+			"op": "found",
+			"name": "s",
+			"expect": {
+				"found": "hit",
+				"entry": "1",
+				"checked": 2,
+				"entries": 2
+			}
+		},
+		{
+			"op": "ran",
+			"expect": {
+				"sum": 2,
+				"pick": 0,
+				"parity": 0,
+				"label": 0,
+				"wait": 0,
+				"oops": 0,
+				"tick": 0
+			}
+		},
+		{
+			"op": "cache",
+			"skip": [
+				"entries"
+			],
+			"expect": {
+				"size": 1
+			}
+		}
+	]
+}

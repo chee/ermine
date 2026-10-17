@@ -1,5 +1,24 @@
 {
 	"harness": "apply",
 	"again": { "name": "cow: false", "has": "patches", "set": { "cow": false } },
-	"ordered": true
+	"ordered": true,
+	"undoes": true,
+	"reads": [
+		{
+			"op": "apply",
+			"value": { "a": [1, "é😀z"], "b": { "c": null } },
+			"patches": [
+				{ "path": ["a", 1], "range": [1, 2], "value": "x" },
+				{ "path": ["d"], "move": { "path": ["b"] } }
+			]
+		},
+		{
+			"op": "invert",
+			"value": { "a": [1, "é😀z"], "b": { "c": null } },
+			"patches": [
+				{ "path": ["a", 1], "range": [1, 2], "value": "x" },
+				{ "path": ["d"], "move": { "path": ["b"] } }
+			]
+		}
+	]
 }

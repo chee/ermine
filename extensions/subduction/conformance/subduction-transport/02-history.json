@@ -1,0 +1,131 @@
+{
+	"title": "a history of three commits crosses: one head, three loose commits",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			],
+			"actor": "a",
+			"nonce": "0000000200000000",
+			"expect": {
+				"name": "5fa9f7e9c73b593f0308a5c6de164701d3610dc7f9f96dc8ea6f68b24cdd9b24",
+				"stored": "2fddf91d37795d365a6e08343df2bf93071001f669ab6c117a10de1cbdcb8e96"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 2
+				}
+			],
+			"actor": "a",
+			"nonce": "0000000300000000",
+			"expect": {
+				"name": "6940754dac550796f8b16f521ce301b56ca93c2870ac0399bcddeffad92df427",
+				"stored": "d5a761769b2a151156038c83938d99260ed5546afb43e23d48e8538bdf2aef66"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"actor": "a",
+			"nonce": "0000000400000000",
+			"expect": {
+				"name": "8f993e0e700fbe62f944a4ab374b12e8192cbc35da551d2a38527072ac49bf0f",
+				"stored": "a5a7d71b27260caa01bdbce0656a48477a8f40b168ddf0d09aa00414f55d9f19"
+			}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"8f993e0e700fbe62f944a4ab374b12e8192cbc35da551d2a38527072ac49bf0f"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "stored",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"stored": [
+					"2fddf91d37795d365a6e08343df2bf93071001f669ab6c117a10de1cbdcb8e96",
+					"a5a7d71b27260caa01bdbce0656a48477a8f40b168ddf0d09aa00414f55d9f19",
+					"d5a761769b2a151156038c83938d99260ed5546afb43e23d48e8538bdf2aef66"
+				]
+			}
+		}
+	]
+}

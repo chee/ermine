@@ -1,0 +1,110 @@
+{
+	"title": "the same with one stored commit whose blob is no seal: refused shape, as when it arrived; the rest taken in",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"store": "s",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 456
+				}
+			],
+			"actor": "a",
+			"nonce": "000001c900000000",
+			"expect": {
+				"name": "89a2782bad1aef63bbe4ce239c2ac5087c80229a5b8430511fa2073f61d836b7",
+				"stored": "fe4eb961c4b07990f8fca9e9939d32a64487128b7a298958079a1c420dbbe77c"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 457
+				}
+			],
+			"actor": "a",
+			"nonce": "000001ca00000000",
+			"expect": {
+				"name": "3be488a7352f6e1a4ca436d514431928c5f03190a2b719bf085aef8f51d45db7",
+				"stored": "cf20bc025226bb4c0115829e8011a9b56fa04b9d7f14918451eed6a985b1f17d"
+			}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"head": "3333333333333333333333333333333333333333333333333333333333333333",
+			"parents": [],
+			"blob": "6e6f742061207365616c",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "drop",
+			"device": "a",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a2",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"store": "s",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "state",
+			"device": "a2",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"3be488a7352f6e1a4ca436d514431928c5f03190a2b719bf085aef8f51d45db7"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "3333333333333333333333333333333333333333333333333333333333333333",
+							"refused": "shape"
+						}
+					]
+				}
+			}
+		}
+	]
+}

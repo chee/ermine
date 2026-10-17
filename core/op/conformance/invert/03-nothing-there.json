@@ -3,10 +3,7 @@
 	"steps": [
 		{
 			"op": "invert",
-			"patches": [],
-			"expect": {
-				"undo": []
-			}
+			"patches": []
 		},
 		{
 			"op": "invert",
@@ -17,14 +14,7 @@
 						"a": 1
 					}
 				}
-			],
-			"expect": {
-				"undo": [
-					{
-						"path": []
-					}
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
@@ -33,14 +23,7 @@
 					"path": [],
 					"value": null
 				}
-			],
-			"expect": {
-				"undo": [
-					{
-						"path": []
-					}
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
@@ -53,18 +36,7 @@
 					"path": [],
 					"value": 2
 				}
-			],
-			"expect": {
-				"undo": [
-					{
-						"path": [],
-						"value": 1
-					},
-					{
-						"path": []
-					}
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
@@ -83,26 +55,7 @@
 						0
 					]
 				}
-			],
-			"expect": {
-				"undo": [
-					{
-						"path": [
-							"a"
-						],
-						"range": [
-							0,
-							0
-						],
-						"value": [
-							1
-						]
-					},
-					{
-						"path": []
-					}
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
@@ -117,30 +70,14 @@
 					"path": [],
 					"value": "x"
 				}
-			],
-			"expect": {
-				"undo": [
-					{
-						"path": []
-					},
-					{
-						"path": [],
-						"value": {
-							"a": 1
-						}
-					}
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
 			"value": {
 				"a": 1
 			},
-			"patches": [],
-			"expect": {
-				"undo": []
-			}
+			"patches": []
 		},
 		{
 			"op": "invert",

@@ -1,0 +1,215 @@
+{
+	"title": "a commit of depth 1 makes a fragment on the device that added it and the one that took it in; a late joiner takes it in",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 23
+				}
+			],
+			"actor": "a",
+			"nonce": "0000001800000000",
+			"expect": {
+				"name": "a5a32791671260672945cd7a7eae058c22826799889a61b35dab5b10b72d656b",
+				"stored": "26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 24
+				}
+			],
+			"actor": "a",
+			"nonce": "0000001900000000",
+			"expect": {
+				"name": "77e3555b817d1920886c939f4aaed82f008953cf317f5c79ed2b131b78542db3",
+				"stored": "e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 3
+				}
+			],
+			"actor": "a",
+			"nonce": "000000bb00000000",
+			"expect": {
+				"name": "5271869cc17b99cbb9d79f0e80ba4dff23adb043494d65d3135d989020124723",
+				"stored": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 187
+				}
+			],
+			"actor": "a",
+			"nonce": "000000bc00000000",
+			"expect": {
+				"name": "6c93a0a07908efd20d60d4fdd07b14d906f9f02bc91093033bd60320f1545206",
+				"stored": "696a75ce53a923b12b1d85fa59a6590eff82591a4dab0c97f73206f2ce9ea8a9"
+			}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "fragments",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"fragments": [
+					{
+						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"members": [
+							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
+							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+						],
+						"boundary": []
+					}
+				]
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"fragments": [
+					{
+						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"members": [
+							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
+							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+						],
+						"boundary": []
+					}
+				]
+			}
+		},
+		{
+			"op": "device",
+			"name": "c",
+			"seed": "0303030303030303030303030303030303030303030303030303030303030303",
+			"expect": {
+				"key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "c",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "b",
+			"b": "c",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "c",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"6c93a0a07908efd20d60d4fdd07b14d906f9f02bc91093033bd60320f1545206"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "fragments",
+			"device": "c",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"fragments": [
+					{
+						"head": "00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+						"members": [
+							"00a20c0a2ef3031453bb5a21e451ac4024da5f7a1571028355f219cd2d9de383",
+							"26cebedaa71740b9e40f4af6a61835ed1255216c7a7bb291dbe5a140015056ae",
+							"e0129be3a70fd4ea8305891acd7b4c7ca3ab964ec2fd7480f9a0ec14cc2bb3eb"
+						],
+						"boundary": []
+					}
+				]
+			}
+		}
+	]
+}
