@@ -1,4 +1,4 @@
-// A presence channel (playground/presence/c/channel.h) over a device's ephemeral messages
+// A presence channel (extensions/presence/c/channel.h) over a device's ephemeral messages
 // (extensions/sync/typescript/channel.ts), in C: the connection the device already has. Its name is
 // the device's key as lowercase hex, which is how a receiver names the sender's rows. Ephemeral: a
 // send no peer hears is lost, as any would be
@@ -6,7 +6,7 @@
 #define SC_CHANNEL_H
 
 #include "transport.h"
-#include "../../../playground/presence/c/channel.h"
+#include "../../../extensions/presence/c/channel.h"
 
 typedef struct sc_channel sc_channel;
 
