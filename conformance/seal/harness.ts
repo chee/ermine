@@ -28,7 +28,7 @@ async function answer(r: Request): Promise<unknown> {
 			case "seal":
 				return { bytes: hex(await seal(unhex(r.blop!), signer(unhex(r.seed!)))) }
 			case "unseal": {
-				const u = unseal(unhex(r.bytes!))
+				const u = await unseal(unhex(r.bytes!))
 				return {
 					blop: hex(encode(u.blop)),
 					name: hex(u.name),

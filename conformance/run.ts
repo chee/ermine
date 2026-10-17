@@ -4,6 +4,16 @@
 // the C binary <package>/c/<suite>-harness, --check its sanitizer build, --leaks the binary under
 // leaks (conformance/leaks.sh); HARNESS, a command, is any other (one suite).
 //
+// a harness: a command, HARNESS split at spaces (no quoting: conformance/typescript/ask.ts), run
+// once per scenario. one JSON request per line on stdin, one answer per line on stdout, in order;
+// stdin closes after the last; it exits 0. a non-zero exit, or a sanitizer's report on stderr
+// ("runtime error:", "Sanitizer"), fails the scenario, even after every answer; other stderr is
+// passed on. its JSON reader must keep: a map's key order, lone surrogates (\udxxx) and NUL in
+// strings and keys, -0 (written -0, both ways), whole numbers up to 2^53 exactly, the rest as
+// doubles (0.5, 1e300). a value's "/" forms (bytes, typed arrays, NaN and the infinities, a map
+// whose one key is "/", stand-ins, symbols): conformance/typescript/form.ts. answers are read with
+// JSON.parse: keys that read as array indices ("0") lose their order
+//
 // a scenario (<package>/conformance/<suite>/NN-name.json) is { title, steps }, a step a request
 // and what it says of the answer. each scenario is one run of the harness, the steps its lines.
 //   expect: the answer's fields, deep-equal; the answer has no others
@@ -20,6 +30,7 @@
 //   allow: deno flags the TypeScript harness is run with beyond --allow-read (native: --allow-ffi)
 import { assert, assertEquals } from "@std/assert"
 import { ask, command, type Options, type Suite, suites } from "./typescript/ask.ts"
+import { line } from "./typescript/form.ts"
 
 type Step = Record<string, any> & {
 	expect?: Record<string, unknown>
@@ -46,7 +57,8 @@ function harness(s: Suite): string[] {
 
 const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
-const show = (x: unknown) => JSON.stringify(x)
+// -0 shown as -0: JSON says 0
+const show = (x: unknown) => line(x)
 
 // whether the answer says what is expected; the first thing it does not, or undefined
 function differs(
