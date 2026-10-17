@@ -48,9 +48,3 @@ void nd_free_node(nd_node *n) {
 	free(n);
 }
 
-nd_entry *nd_find(const nd_node *n, const char *table) {
-	for (size_t i = 0; i < n->length; i++) {
-		if (strcmp(n->slots[i].table, table) == 0) return n->slots[i].entry;
-	}
-	return NULL;
-}

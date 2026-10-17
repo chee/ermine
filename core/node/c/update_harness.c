@@ -13,7 +13,7 @@
 
 #include "update.h"
 #include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 
 static nd_entry *entry;
 // the line the entry's change refers to

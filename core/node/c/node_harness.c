@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "../../../conformance/c/harness.h"
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 
 static void entry(const op_value *request, FILE *out) {
 	nd_entry *e = hh_entry(request);

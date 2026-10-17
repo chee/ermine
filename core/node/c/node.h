@@ -117,7 +117,5 @@ nd_node *nd_make_node(const nd_value *values, size_t length, const ch_header *he
 	const nd_entry_options *options);
 // frees a node nd_make_node made: its slots and entries; not the table names
 void nd_free_node(nd_node *n);
-// the entry at a table name, NULL when the node has none
-nd_entry *nd_find(const nd_node *n, const char *table);
 
 #endif
