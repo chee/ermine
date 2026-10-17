@@ -80,9 +80,9 @@ export function createUnread(): Unread {
 
 	function update<V>(entry: Entry<V>, patches: Iterable<Patch>, change: ChangeHeader) {
 		const ps: readonly Patch[] = Array.isArray(patches) ? patches : [...patches]
-		// a run going on (keeping) may hand on what it read: let go of first
+		// a run past its body's return (keeping: its set) may hand on what it read: let go of first
 		const ws = wired.get(unread)
-		if (ws !== undefined) { for (const g of ws) if (g.runs.size) before(g, entry) }
+		if (ws !== undefined) { for (const g of ws) if (g.returned.size) before(g, entry) }
 		// what a patch puts is the caller's from now: nothing in it owned
 		for (const p of ps) {
 			if (p !== null && typeof p === "object" && "value" in p && container(p.value)) {
@@ -132,11 +132,12 @@ export function createUnread(): Unread {
 		}
 	}
 
-	// a write while runs go on: what their reads gave them let go; none known (no handed), all of
-	// the entry written
+	// a write while runs past their body's return go on: what their reads gave them let go; none
+	// known (no handed), all of the entry written
 	function before(g: Going, entry: Entry<unknown>) {
 		if (!g.handed) return void owns.delete(entry)
-		for (const given of g.runs.values()) {
+		for (const c of g.returned) {
+			const given = g.runs.get(c)!
 			for (const x of given) drop(x)
 			given.length = 0
 		}
@@ -152,28 +153,30 @@ export function createUnread(): Unread {
 }
 
 // a scheduler's runs going on, as keeping sees them: each run → the values its reads gave it
-// (handed: none known, an empty list)
-type Going = { runs: Map<unknown, unknown[]>; handed: boolean }
+// (handed: none known, an empty list); returned, those whose body returned (in their set)
+type Going = { runs: Map<unknown, unknown[]>; returned: Set<unknown>; handed: boolean }
 // an unread → its wirings: its writes read them
 const wired = new WeakMap<object, Going[]>()
 
 // a scheduler's run ends wired to unread: what a computation keeps past its run is held (kept).
 // a plain result holds nothing. handed: the value a key the run tracked gave it (with places,
 // the value at its spot's path), so the walk stops there; none: results walked whole. a write
-// made while a run goes on (its set, given the result before the run ends, or the run itself):
-// what the run's reads gave it let go first (no handed: all of the entry written), so what the
-// run keeps never changes. a run awaiting goes on no longer: its landing's set is not seen.
-// gives back the stop
+// made in a run's body (before onRunReturn) is the run's own: in place, as any, so what the run
+// read can change under it by its own writes. one made after its body returned, before its end
+// (its set, given the result): what the run's reads gave it let go first (no handed: all of the
+// entry written), so what the run keeps never changes after it returned. a run awaiting goes on
+// no longer: its landing's set is not seen. gives back the stop
 export function keeping(
-	scheduler: Pick<Scheduler, "onRunStart" | "onRunEnd" | "onTrack">,
+	scheduler: Pick<Scheduler, "onRunStart" | "onRunReturn" | "onRunEnd" | "onTrack">,
 	unread: Pick<Unread, "kept">,
 	handed?: (key: unknown) => unknown,
 ): () => void {
-	const g: Going = { runs: new Map(), handed: handed !== undefined }
+	const g: Going = { runs: new Map(), returned: new Set(), handed: handed !== undefined }
 	let ws = wired.get(unread)
 	if (ws === undefined) wired.set(unread, ws = [])
 	ws.push(g)
-	const start = scheduler.onRunStart((c) => void g.runs.set(c, []))
+	const start = scheduler.onRunStart((c) => (g.runs.set(c, []), void g.returned.delete(c)))
+	const returns = scheduler.onRunReturn((c) => void (g.runs.has(c) && g.returned.add(c)))
 	const track = handed === undefined ? () => {} : scheduler.onTrack((key, run) => {
 		const given = g.runs.get(run.computer)
 		if (given === undefined) return
@@ -182,6 +185,7 @@ export function keeping(
 	})
 	const end = scheduler.onRunEnd((c, _n, _ended, reads, more) => {
 		g.runs.delete(c)
+		g.returned.delete(c)
 		if (!("kept" in more) || !container(more.kept)) return
 		if (handed === undefined || reads.length === 0) return unread.kept(more.kept)
 		const given = new Set<unknown>()
@@ -192,7 +196,7 @@ export function keeping(
 		unread.kept(more.kept, given)
 	})
 	return () => {
-		start(), track(), end()
+		start(), returns(), track(), end()
 		ws.splice(ws.indexOf(g), 1)
 	}
 }

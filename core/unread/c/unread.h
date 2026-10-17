@@ -57,10 +57,12 @@ void un_kept(un_unread *u, const op_value *value, const op_value *const *handed,
 // the scheduler's values are taken as op_value * (as the harness world's are). handed: NULL, or the
 // host's function from a key the run tracked to the value that key gave it (NULL: none, or not a
 // container); with it and reads, those values are the handed set, else the result is walked whole.
-// ctx is passed to it. a write (un_update) made while a run goes on (its set, given the result
-// before the run ends, or the run itself): what the run's reads gave it (held till the run ends)
-// let go of first; no handed, all of the entry written. a run awaiting goes on no longer: its
-// landing's set is not seen. the wiring, for un_unwire (u keeps it until un_free)
+// ctx is passed to it. a write (un_update) made in a run's body (before sc_on_run_return) is the
+// run's own: in place, as any, so what the run read can change under it by its own writes. one
+// made after its body returned, before its end (its set, given the result): what the run's reads
+// gave it (held till the run ends) let go of first; no handed, all of the entry written. a run
+// awaiting goes on no longer: its landing's set is not seen. the wiring, for un_unwire (u keeps
+// it until un_free)
 typedef struct un_wiring un_wiring;
 un_wiring *un_keeping(sc_scheduler *s, un_unread *u,
 	const op_value *(*handed)(const void *key, void *ctx), void *ctx);

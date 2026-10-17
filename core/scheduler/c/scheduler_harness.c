@@ -178,9 +178,11 @@ static char *name_it(sc_scope *o, const char *name) {
 static op_value **logged;
 static size_t nlogged, caplogged;
 
-// moments, as told (named when asked: a new computer is due before it has a name)
+// moments, as told (named when asked: a new computer is due before it has a name). returns: a
+// run's body returned (sc_on_run_return; m.c and m.run only), not trace's, shown when asked
 typedef struct moment {
 	sc_told m;
+	bool returns;
 	char *error;
 	sc_computer **through;
 	const void **reads;
@@ -195,7 +197,7 @@ static bool pulsing;
 
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 static char *armed_on, *armed_at, *armed_error;
-static const char *const listeners[] = {"mark", "starts", "ends", "acts", "forgotten", "started", "settles"};
+static const char *const listeners[] = {"mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles"};
 
 // what a listener threw in a making or a settling (sc_escaped after it): kept, the first, to be
 // the answer of the pulse going on, else the next, as the reference's scheduler holds it
@@ -241,6 +243,14 @@ static void told_moment(const sc_told *m, void *data) {
 		memcpy(x.reads, m->reads, m->nreads * sizeof *x.reads);
 		x.m.reads = x.reads;
 	}
+	PUSH(moments, nmoments, capmoments, x);
+}
+
+// a run's body returned: a returns moment, not counted toward ENDLESS
+static void run_returned(sc_computer *c, unsigned n, const void *value, void *data) {
+	(void)value, (void)data;
+	fire("returns", sc_scope_user(c));
+	moment x = {.m = {.c = c, .run = n}, .returns = true};
 	PUSH(moments, nmoments, capmoments, x);
 }
 
@@ -301,7 +311,7 @@ static bool object_is(const void *a, const void *b, void *data) {
 	switch (x->type) {
 	case OP_NULL: return true;
 	case OP_BOOL: return x->bool_ == y->bool_;
-	case OP_NUM: return (x->num == y->num && signbit(x->num) == signbit(y->num)) || (isnan(x->num) && isnan(y->num));
+	case OP_NUM: return op_same_num(x, y);
 	case OP_STR: return strcmp(x->str, y->str) == 0;
 	default: return false;
 	}
@@ -405,16 +415,15 @@ static const sc_pair *info_of(const op_value *list, size_t *n) {
 	return out;
 }
 
-// an info as [[key, value]..], nested: a computer's run and mark are the scheduler's numbers, any
-// other value a request's; "owner" is the owner's info
+// an info as [[key, value]..]: a computer's run and mark are the scheduler's numbers, any other
+// value a request's
 static op_value *pairs_of(const sc_info *info) {
 	op_value *pairs = op_list();
 	for (size_t j = 0; j < info->n; j++) {
 		const sc_pair *q = &info->pairs[j];
 		op_value *p = op_list();
 		op_push(p, op_str(q->key));
-		if (strcmp(q->key, "owner") == 0 && j == info->n - 1) op_push(p, pairs_of(q->value));
-		else if (strcmp(q->key, "run") == 0 || strcmp(q->key, "mark") == 0)
+		if (strcmp(q->key, "run") == 0 || strcmp(q->key, "mark") == 0)
 			op_push(p, integer((int64_t)*(const uint64_t *)q->value));
 		else op_push(p, op_ref((op_value *)q->value));
 		op_push(pairs, p);
@@ -815,6 +824,11 @@ static op_value *name_json(const sc_computer *c) { return op_str((const char *)s
 static op_value *moment_json(const moment *x, bool reads) {
 	const sc_told *m = &x->m;
 	op_value *o = op_map();
+	if (x->returns) {
+		op_set(o, "returns", name_json(m->c));
+		op_set(o, "run", integer(m->run));
+		return o;
+	}
 	switch (m->kind) {
 	case SC_T_DUE:
 		op_set(o, "due", name_json(m->c));
@@ -1098,10 +1112,12 @@ static op_value *answer(const op_value *r) {
 		return out;
 	}
 	if (strcmp(op, "moments") == 0) {
-		const op_value *reads = op_get(r, "reads");
+		const op_value *reads = op_get(r, "reads"), *returns = op_get(r, "returns");
+		bool showReturns = is(returns, OP_BOOL) && returns->bool_;
 		op_value *list = op_list();
 		for (size_t i = 0; i < nmoments; i++) {
-			op_push(list, moment_json(&moments[i], is(reads, OP_BOOL) && reads->bool_));
+			if (showReturns || !moments[i].returns)
+				op_push(list, moment_json(&moments[i], is(reads, OP_BOOL) && reads->bool_));
 			free(moments[i].error);
 			free(moments[i].through);
 			free(moments[i].reads);
@@ -1136,6 +1152,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		sch = sc_new((sc_options){.drop = drop});
 		sc_trace_start(sch, &trace, told_moment, NULL);
 		sc_on_tracking_end(sch, untrack, NULL);
+		sc_on_run_return(sch, run_returned, NULL);
 		sc_on_tracking_start(sch, first_track, NULL);
 		sc_on_settle(sch, settled, NULL);
 		sc_on_mark(sch, marked, NULL);

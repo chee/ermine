@@ -35,14 +35,11 @@ typedef struct act {
 	size_t at;
 } act;
 
-// a scope's info: the pairs given, then "owner" and the owner's info. made once, kept while it
-// or a scope under it is (refs); a block releases its owner's. a computer's: run and mark are the
-// numbers its values point at, in place for its next run when nothing else holds it
+// a scope's info: the pairs given, nothing appended; the tree is parent. made once, with it. a
+// computer's: run and mark are the numbers its values point at, in place for its next run
 typedef struct info_block info_block;
 struct info_block {
 	sc_info pub;
-	size_t refs;
-	info_block *owner;
 	uint64_t run, mark;
 	sc_pair pairs[];
 };
@@ -53,22 +50,8 @@ static void *xalloc(size_t n);
 
 static info_block *block_new(size_t npairs) {
 	info_block *b = xalloc(sizeof *b + npairs * sizeof(sc_pair));
-	b->refs = 1;
 	b->pub.pairs = b->pairs;
 	return b;
-}
-
-static info_block *block_ref(info_block *b) {
-	if (b) b->refs++;
-	return b;
-}
-
-static void block_release(info_block *b) {
-	while (b && --b->refs == 0) {
-		info_block *owner = b->owner;
-		free(b);
-		b = owner;
-	}
 }
 
 // a scope; a computer is one with a kind and the rest. a plain scope is allocated only as far as
@@ -178,7 +161,7 @@ typedef struct queue {
 	size_t n, head, cap, live;
 } queue;
 
-typedef enum { ON_TRACK, ON_MARK, ON_START, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
+typedef enum { ON_TRACK, ON_MARK, ON_START, ON_RETURN, ON_END, ON_EFFECT, ON_SETTLE, ON_UNTRACK, ON_FIRST, ON_KINDS } listening;
 
 struct sc_listener {
 	sc_scheduler *s;
@@ -187,6 +170,7 @@ struct sc_listener {
 		sc_track_fn track;
 		sc_mark_fn mark;
 		sc_run_start_fn start;
+		sc_run_return_fn ret;
 		sc_run_end_fn end;
 		sc_effect_fn effect;
 		sc_settle_fn settle;
@@ -306,6 +290,9 @@ sc_listener *sc_on_mark(sc_scheduler *s, sc_mark_fn f, void *data) {
 sc_listener *sc_on_run_start(sc_scheduler *s, sc_run_start_fn f, void *data) {
 	return listen(s, ON_START, (sc_listener){.f.start = f, .data = data});
 }
+sc_listener *sc_on_run_return(sc_scheduler *s, sc_run_return_fn f, void *data) {
+	return listen(s, ON_RETURN, (sc_listener){.f.ret = f, .data = data});
+}
 sc_listener *sc_on_run_end(sc_scheduler *s, sc_run_end_fn f, void *data) {
 	return listen(s, ON_END, (sc_listener){.f.end = f, .data = data});
 }
@@ -423,7 +410,7 @@ static void end_run(sc_scheduler *s, tg_node *f) {
 
 // scopes
 
-// a plain scope's info: n pairs given, then the owner's. none given: NULL. a computer's: NULL, set
+// a plain scope's info: the n pairs given. none given: NULL. a computer's: NULL, set
 // by its caller
 static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, const sc_pair *info,
 	size_t n) {
@@ -433,13 +420,9 @@ static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, cons
 	o->n = ++s->made;
 	o->parent = parent;
 	if (kind == PLAIN) {
-		info_block *b = block_new(n + 1);
+		info_block *b = block_new(n);
 		for (size_t i = 0; i < n; i++) b->pairs[i] = info[i];
 		b->pub.n = n;
-		if (parent) {
-			b->owner = block_ref(parent->info);
-			b->pairs[b->pub.n++] = (sc_pair){"owner", &parent->info->pub};
-		}
 		o->info = b;
 	}
 	o->kind = kind;
@@ -1009,10 +992,16 @@ static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *
 	}
 }
 
-// a result: equal to the last, it stops there. a compute's goes to set; an effect's waits for
-// the acts, the latest one
+// a result: told first (sc_on_run_return), as the body gave it. equal to the last, it stops there.
+// a compute's goes to set; an effect's waits for the acts, the latest one
 static void result(sc_scheduler *s, sc_run *r, void *v) {
 	sc_scope *c = r->c;
+	EACH(s, ON_RETURN, ret, c, r->n, v);
+	// torn down by a listener: nothing more
+	if (c->state != ALIVE) {
+		drop_value(s, v);
+		return;
+	}
 	bool equal = c->has_last && same(c, v, c->last);
 	// flagged: a new result, or a loop it cut, ends looping
 	if (r->nloop > 0 && (!equal || r->cut)) {
@@ -1192,23 +1181,13 @@ static void begin(sc_scheduler *s, sc_scope *c, int rank) {
 	}
 	liftChildren(c);
 	// its info, from here: this run's number, and the tick of the mark that made it due
-	// in place when nothing holds the last, else a new one: what was made under it keeps saying it
+	// in place
 	info_block *ib = c->info;
-	if (ib->refs > 1) {
-		block_release(ib);
-		ib = block_new(3);
-		ib->owner = block_ref(c->parent->info);
-	} else if (ib->owner != c->parent->info) {
-		block_release(ib->owner);
-		ib->owner = block_ref(c->parent->info);
-	}
 	ib->run = n;
 	ib->mark = mark;
 	ib->pairs[0] = (sc_pair){"run", &ib->run};
 	ib->pairs[1] = (sc_pair){"mark", &ib->mark};
-	ib->pairs[2] = (sc_pair){"owner", &ib->owner->pub};
-	ib->pub.n = 3;
-	c->info = ib;
+	ib->pub.n = 2;
 	sc_scope *wasopen = s->open;
 	sc_run *waswriter = s->open_writer;
 	s->reading = r;
@@ -1440,12 +1419,10 @@ static sc_computer *make(sc_scheduler *s, kind_t kind, sc_def def) {
 	if (s->running && s->running->nloop > 0) s->running->cut = true;
 	uint64_t t = ++s->tick;
 	// its info till its first run: the tick that made it due, its making
-	c->info = block_new(3);
-	c->info->owner = block_ref(o->info);
+	c->info = block_new(2);
 	c->info->mark = t;
 	c->info->pairs[0] = (sc_pair){"mark", &c->info->mark};
-	c->info->pairs[1] = (sc_pair){"owner", &o->info->pub};
-	c->info->pub.n = 2;
+	c->info->pub.n = 1;
 	dues now = {0};
 	bool told = s->nlisteners[ON_MARK] > 0;
 	bool now_due = due(s, c, t, s->running);
@@ -1524,7 +1501,7 @@ void sc_free(sc_scheduler *s) {
 	for (size_t i = 0; i < s->nall; i++) {
 		sc_scope *o = s->all[i];
 		free(o->teardowns);
-		block_release(o->info);
+		free(o->info);
 		if (o->kind != PLAIN) {
 			tg_node_free(o->node);
 			pm_clear(&o->wrote);

@@ -17,7 +17,8 @@ const view = (v: unknown): v is ArrayLike<unknown> & object =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView)
 
 // where a and b differ ("": nowhere). lists, strings and typed arrays element for element; maps
-// by content, and in key order when order
+// by content (a map's key order is not part of its value: apply.ts). order: in key order too, for
+// telling a value changed in place after it was handed out
 function differ(a: unknown, b: unknown, order = false, at = "$"): string {
 	if (typeof a === "string" || typeof b === "string") return a === b ? "" : `${at}: string`
 	if (Array.isArray(a) || Array.isArray(b)) {
@@ -84,9 +85,9 @@ Deno.test("invert: puts, each undone by a put of what was there or a removal", (
 		round(v, [{ path: ["n"], value: { x: [1] } }, { path: ["n", "x", 0], value: 2 }]),
 		[{ path: ["n", "x", 0], value: 1 }, { path: ["n"] }],
 	)
-	// a key put over keeps its place in the key order
+	// a key put over and put back: as it was, by content
 	const back = apply(apply(v, [{ path: ["m", "a"], value: 9 }]), [{ path: ["m", "a"], value: 1 }])
-	assertEquals(differ(back, v, true), "")
+	assertEquals(differ(back, v), "")
 })
 
 Deno.test("invert: removals; a missing map key's is nothing", () => {
