@@ -46,10 +46,10 @@ Deno.test("blop: round trip, byte fields as byte strings", () => {
 	assertEquals(name(bytes), name(encode(decode(bytes))))
 })
 
-Deno.test("blop: lamport 1 is f93c00; nothing left out", () => {
+Deno.test("blop: lamport 1 is the integer 01; nothing left out", () => {
 	const bytes = encode(blop({ reader: undefined }))
 	const hex = Array.from(bytes, (x) => x.toString(16).padStart(2, "0")).join("")
-	assertEquals(hex.includes("676c616d706f7274f93c00"), true)
+	assertEquals(hex.includes("676c616d706f727401"), true)
 	assertEquals("reader" in decode(bytes), false)
 })
 

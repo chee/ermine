@@ -221,13 +221,15 @@ Deno.test("pack: cannot-carry, at the first key of the node", () => {
 
 Deno.test("pack: times, lines, columns, path numbers and range ends are whole; lines, columns and path numbers fit a C long", () => {
 	const at = (change: ChangeHeader) => code(() => encode(n(1, change)))
-	for (const time of [1.5, -0, NaN, 2 ** 53]) {
+	for (const time of [1.5, NaN, 2 ** 53]) {
 		assertEquals(at({ time, actor: "a" }), "cannot-carry")
 	}
 	assertEquals(at({ time: 1, actor: "a", external: [{ file: "a", line: 1.5 }] }), "cannot-carry")
+	// -0 is 0: whole, written 00
+	const zero = n(1, { time: -0, actor: "a", external: [{ file: "a", line: 1, column: -0 }] })
 	assertEquals(
-		at({ time: 1, actor: "a", external: [{ file: "a", line: 1, column: -0 }] }),
-		"cannot-carry",
+		encode(zero),
+		encode(n(1, { time: 0, actor: "a", external: [{ file: "a", line: 1, column: 0 }] })),
 	)
 	const op = (p: object) => ({ time: 1, actor: "a", op: { patches: [p as never], undo: [] } })
 	assertEquals(at(op({ path: [0.5] })), "cannot-carry")

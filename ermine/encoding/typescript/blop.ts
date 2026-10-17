@@ -1,5 +1,5 @@
 // one change to one object of a node, with its patches, as one item in the canonical encoding
-// (ENCODING.tex), and back (BLOP.tex). the shape only: no hashing but its name, no signing, no
+// (cbor.ts), and back (BLOP.tex). the shape only: no hashing but its name, no signing, no
 // parents looked up
 import { blake3 } from "@ermine/blake3"
 import * as cbor from "./cbor.ts"
@@ -83,7 +83,7 @@ const isFields = (x: unknown): x is Fields => {
 }
 // an integer from 0 to 2^53 - 1
 const whole = (n: unknown): n is number =>
-	Number.isSafeInteger(n) && !Object.is(n, -0) && (n as number) >= 0
+	Number.isSafeInteger(n) && (n as number) >= 0
 const isKey = (k: unknown) => typeof k === "string" || whole(k) && (k as number) >= 0
 const isRange = (r: unknown) =>
 	Array.isArray(r) && r.length === 2 && r.every((n) => whole(n) && n >= 0)

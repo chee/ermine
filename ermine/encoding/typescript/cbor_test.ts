@@ -5,9 +5,21 @@ const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "
 const unhex = (s: string) => new Uint8Array(s.match(/../g)?.map((x) => parseInt(x, 16)) ?? [])
 const bytes = (...xs: number[]) => new Uint8Array(xs)
 
-/** Equal as ENCODING.tex has it: numbers as Object.is, kinds kept apart, maps in any order. */
+// a number as read back: -0 is 0, a whole number past 2^53 - 1 a bigint, a safe bigint a number
+const canon = (x: number | bigint) =>
+	typeof x === "bigint"
+		? (x >= -(2n ** 53n) + 1n && x <= 2n ** 53n - 1n ? Number(x) : x)
+		: Number.isInteger(x) && !Number.isSafeInteger(x)
+		? BigInt(x)
+		: x === 0
+		? 0
+		: x
+
+/** Equal as cbor.ts has it: numbers by value (Object.is after canon), kinds apart, maps in any order. */
 function same(a: unknown, b: unknown): boolean {
-	if (typeof a === "number") return typeof b === "number" && Object.is(a, b)
+	if (typeof a === "number" || typeof a === "bigint") {
+		return (typeof b === "number" || typeof b === "bigint") && Object.is(canon(a), canon(b))
+	}
 	if (a === null || typeof a !== "object") return a === b
 	if (b === null || typeof b !== "object") return false
 	if (ArrayBuffer.isView(a)) {
@@ -31,23 +43,26 @@ const VECTORS: [string, Value, string][] = [
 	["null", null, "f6"],
 	["false", false, "f4"],
 	["true", true, "f5"],
-	["0", 0, "f90000"],
-	["-0", -0, "f98000"],
-	["1 is a half, not an integer", 1, "f93c00"],
-	["-1", -1, "f9bc00"],
+	["0", 0, "00"],
+	["1 is an integer", 1, "01"],
+	["-1", -1, "20"],
+	["23", 23, "17"],
+	["24 in two bytes", 24, "1818"],
+	["-25", -25, "3818"],
+	["65535", 65535, "19ffff"],
+	["65536 in five bytes", 65536, "1a00010000"],
+	["100000", 100000, "1a000186a0"],
+	["2^32 in nine bytes", 2 ** 32, "1b0000000100000000"],
+	["2^53 - 1, the last safe", 2 ** 53 - 1, "1b001fffffffffffff"],
+	["-(2^53 - 1)", -(2 ** 53 - 1), "3b001ffffffffffffe"],
 	["1.5", 1.5, "f93e00"],
-	["largest half", 65504, "f97bff"],
 	["smallest half subnormal", 2 ** -24, "f90001"],
 	["smallest half normal", 2 ** -14, "f90400"],
 	["a half subnormal", 3 * 2 ** -20, "f90030"],
-	["65505 needs a float32", 65505, "fa477fe100"],
-	["100000", 100000, "fa47c35000"],
+	["65504.5 needs a float32", 65504.5, "fa477fe080"],
 	["2^-25 needs a float32", 2 ** -25, "fa33000000"],
-	["largest float32", 3.4028234663852886e38, "fa7f7fffff"],
 	["1.1 needs a float64", 1.1, "fb3ff199999999999a"],
-	["1e300", 1e300, "fb7e37e43c8800759c"],
-	["2^53", 2 ** 53, "fa5a000000"],
-	["2^53+2", 2 ** 53 + 2, "fb4340000000000001"],
+	["0.1", 0.1, "fb3fb999999999999a"],
 	["Infinity", Infinity, "f97c00"],
 	["-Infinity", -Infinity, "f9fc00"],
 	["NaN", NaN, "f97e00"],
@@ -60,9 +75,13 @@ const VECTORS: [string, Value, string][] = [
 	["empty bytes", bytes(), "40"],
 	["bytes", bytes(1, 2, 3, 4), "4401020304"],
 	["empty list", [], "80"],
-	["nested list", [1, [2, 3]], "82f93c0082f94000f94200"],
+	["nested list", [1, [2, 3]], "8201820203"],
 	["empty map", {}, "a0"],
-	["map keys sorted by encoding", { b: 1, aa: 3, a: 2 }, "a36161f940006162f93c00626161f94200"],
+	[
+		"map keys sorted by encoding",
+		{ b: 1, aa: 3, a: 2 },
+		"a3616102616201626161 03".replace(" ", ""),
+	],
 	["a Uint8Array is bytes", new Uint8Array([1, 2]), "420102"],
 	["uint16", new Uint16Array([1, 0x0203]), "d84544" + "0100" + "0302"],
 	["uint32", new Uint32Array([1]), "d8464401000000"],
@@ -76,7 +95,7 @@ const VECTORS: [string, Value, string][] = [
 	["empty float64", new Float64Array(0), "d85640"],
 	["a stand-in", new Stand("canvas"), "da123456786663616e766173"],
 	["a stand-in of null", new Stand(null), "da12345678f6"],
-	["a stand-in of a map", new Stand({ w: 2, url: "x" }), "da12345678a26177f940006375726c6178"],
+	["a stand-in of a map", new Stand({ w: 2, url: "x" }), "da12345678a26177026375726c6178"],
 	[
 		"a stand-in of a stand-in in a list",
 		[new Stand(new Stand("a"))],
@@ -135,11 +154,26 @@ Deno.test("cbor: decoding gives fresh values of their own class", () => {
 })
 
 const REJECTED: [string, string][] = [
-	["an unsigned integer", "01"],
-	["a negative integer", "20"],
-	["a longer integer", "1818"],
+	["an integer in a longer head", "1817"],
+	["a negative integer in a longer head", "3817"],
+	["an integer in an eight-byte head a four-byte one holds", "1b00000000ffffffff"],
+	["an indefinite integer", "1f"],
+	["a reserved integer head", "1c"],
+	["an integer that ends early", "1a0001"],
+	["0 as a half", "f90000"],
+	["-0 as a half", "f98000"],
+	["1 as a half", "f93c00"],
 	["1 as a float32", "fa3f800000"],
 	["1 as a float64", "fb3ff0000000000000"],
+	["2^53 as a float32", "fa5a000000"],
+	["2^64 as a float32", "fa5f800000"],
+	["1e300 as a float64", "fb7e37e43c8800759c"],
+	["a bignum a plain integer holds", "c2480100000000000000"],
+	["a bignum of nothing", "c240"],
+	["a bignum with a leading zero", "c24a00010000000000000000"],
+	["a negative bignum with a leading zero", "c34a00010000000000000000"],
+	["a bignum over a string", "c2696161616161616161 61".replace(" ", "")],
+	["a bignum in a longer tag head", "d802490100000000000000 00".replace(" ", "")],
 	["1.5 as a float64", "fb3ff8000000000000"],
 	["100000 as a float64", "fb40f86a0000000000"],
 	["a NaN with a payload", "f97e01"],
@@ -163,7 +197,8 @@ const REJECTED: [string, string][] = [
 	["a string that is not UTF-8", "62c328"],
 	["a string with a surrogate", "63eda080"],
 	["a map key that is not a string", "a14161f6"],
-	["a map key that is a number", "a1f93c00f6"],
+	["a map key that is a number", "a101f6"],
+	["a map key that is a float", "a1f93e00f6"],
 	["map keys out of order", "a26162f66161f6"],
 	["longer key first", "a2626161f66162f6"],
 	["a repeated key", "a26161f66161f6"],
@@ -200,7 +235,6 @@ const UNENCODABLE: [string, unknown][] = [
 	["a live value in a list", [new Canvas()]],
 	["undefined", undefined],
 	["a function", () => 1],
-	["a bigint", 1n],
 	["a symbol", Symbol("s")],
 	["a Date", new Date(0)],
 	["a Map", new Map()],
@@ -224,7 +258,7 @@ Deno.test("cbor: a value that holds itself has no encoding", () => {
 	a.push(a)
 	assertThrows(() => encode(a), CborError)
 	const shared = [1]
-	assertEquals(hex(encode([shared, shared])), "8281f93c0081f93c00")
+	assertEquals(hex(encode([shared, shared])), "8281018101")
 })
 
 // a symbol anywhere: none, getting rid of them is the caller's
@@ -270,7 +304,18 @@ const NUMBERS = [
 	Infinity,
 	-Infinity,
 	Number.MAX_SAFE_INTEGER,
+	2 ** 53,
 	2 ** 64,
+	-(2 ** 64),
+	2 ** 70,
+	5n,
+	2n ** 53n + 1n,
+	-(2n ** 53n) - 1n,
+	2n ** 64n - 1n,
+	-(2n ** 64n),
+	2n ** 64n,
+	-(2n ** 64n) - 1n,
+	-(2n ** 100n),
 ]
 
 function text(r: () => number): string {
@@ -345,7 +390,7 @@ Deno.test("cbor: round trips", () => {
 	}
 })
 
-// the shared vectors: each a value in its JSON form (ENCODING.tex) and its encoding in hex,
+// the shared vectors: each a value in its JSON form (conformance/typescript/form.ts) and its encoding in hex,
 // bytes in hex that no value encodes as, or a JSON form that is no value
 
 const TYPED: { [kind: string]: new (xs: never[]) => ArrayBufferView } = {
@@ -362,7 +407,7 @@ const TYPED: { [kind: string]: new (xs: never[]) => ArrayBufferView } = {
 
 const special = (x: unknown) => typeof x === "string" ? Number(x) : x as number
 
-/** A value from its JSON form (ENCODING.tex). */
+/** A value from its JSON form. */
 function fromJson(x: unknown): Value {
 	if (x === null || typeof x !== "object") return x as Value
 	if (Array.isArray(x)) return x.map(fromJson)
@@ -372,6 +417,7 @@ function fromJson(x: unknown): Value {
 		if (tag === "live") return new Stand(fromJson(body))
 		if (tag === "bytes") return Uint8Array.from(atob(body as string), (c) => c.charCodeAt(0))
 		if (tag === "number") return Number(body)
+		if (tag === "bigint") return BigInt(body as string)
 		if (tag === "map") return { "/": fromJson((body as { "/": unknown })["/"]) }
 		const T = TYPED[tag]
 		if (!T) throw new Error(`no value for ${tag}`)
@@ -430,7 +476,7 @@ Deno.test("cbor: agrees with cbor/conformance/vectors.json", async () => {
 	assertEquals(disagree, [])
 })
 
-// found by the pack fuzz, 10-11: a string written as the buffer grows keeps its bytes
+// found by the pack fuzz: a string written as the buffer grows keeps its bytes
 Deno.test("cbor: strings across the buffer's growing", () => {
 	for (let pad = 0; pad < 300; pad += 7) {
 		const v = ["x".repeat(pad), "é水😀".repeat(1 + pad % 13), "ü".repeat(30)]

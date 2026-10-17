@@ -1,30 +1,17 @@
-// deflate (RFC 1951, raw: no zlib or gzip wrapper) whose output is fixed by the input alone: the
-// same bytes from this file and from deflate.c, so a pack, a snapshot or a fragment built on two
-// devices is the same. any inflater reads it; inflate here reads any deflate.
+// deflate (RFC 1951, raw) whose output is fixed by the input alone: the same bytes here and from
+// deflate.c, so packs, snapshots and fragments match across devices. inflate reads any deflate.
 //
-// the encoder, every step fixed (deflate.c follows it line for line):
-//   matches   a window of 32768 bytes, lengths 3 to 258. each position p with p + 2 < n is put in a
-//             hash chain once every position before it is: hash (b[p] << 10 ^ b[p+1] << 5 ^ b[p+2])
-//             & 32767, the newest first. a search at p walks at most CHAIN (64) candidates of p's
-//             hash, newest first, within the window; the first longest wins, and a match of NICE
-//             (128) or more ends the walk
-//   choosing  at p: the best match there. none (shorter than 3): a literal. one shorter than LAZY
-//             (32), and p + 1 < n: the best at p + 1 too; longer there: a literal at p, and p + 1
-//             is looked at again; else the match at p
-//   blocks    every BLOCK (16384) symbols (a literal or a match), and the end-of-block after; the
-//             last block final. each written in the smallest of: stored (only when its bytes are
-//             65535 or fewer), fixed codes, dynamic codes; even sizes: stored, then fixed, then
-//             dynamic
-//   codes     code lengths by package-merge (limits 15, 15 and 7), weights the counts, ties by
-//             symbol, a merge putting single symbols before packages of the same weight. the end
-//             of block counts once. fewer than two symbols with a count: the lowest unused
-//             symbols (from 0) given a count of 1 until there are two (a block with no matches:
-//             distance codes 0 and 1)
-//   lengths   literal/length and distance lengths as one sequence (257 + at least 0, 1 + at least
-//             0: the last nonzero kept), run-length coded: a zero run of 11 or more by 18 (up to
-//             138 at a time), then 3 to 10 by 17, fewer by zeros; a run of another length: the
-//             length once, then 16 for 3 to 6 more at a time, fewer by the length again. the code
-//             length code's lengths in RFC order, at least 4, the last nonzero kept
+// the encoder (deflate.c follows it line for line):
+//   matches   window 32768, lengths 3–258. hash (b[p] << 10 ^ b[p+1] << 5 ^ b[p+2]) & 32767,
+//             newest first; walk at most CHAIN (64); first longest wins; NICE (128) ends the walk
+//   choosing  no match: a literal. shorter than LAZY (32): try p + 1; longer there: literal at p
+//   blocks    every BLOCK (16384) symbols, last final; smallest of stored (<= 65535 bytes), fixed,
+//             dynamic; ties in that order
+//   codes     package-merge (limits 15, 15, 7), ties by symbol, single symbols before packages;
+//             fewer than two used symbols: lowest unused get count 1
+//   lengths   lit/len and dist lengths as one run-length sequence (last nonzero kept): zero runs
+//             >= 11 by 18 (<= 138), 3–10 by 17; repeats by 16 (3–6); code length lengths in RFC
+//             order, at least 4
 
 export class DeflateError extends Error {
 	constructor(why: string) {

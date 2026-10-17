@@ -1,38 +1,26 @@
-// nodes under keys of a part and an id (the table's), as one item in the canonical encoding
-// (cbor.ts), and back. which nodes is the caller's: a walk, an id's parts, a whole table; nothing
-// is loaded or placed here. places are derived from the children nodes, never packed.
+// pack: nodes under (part, id) keys as one item in the canonical encoding (cbor.ts), and back.
+// which nodes is the caller's; nothing is loaded or placed. places are never packed. symbols
+// can't be carried.
 //
-// a symbol anywhere, in a key or in a node, cannot be carried: getting rid of them first is the
-// caller's.
+// keys sorted by encoding, none twice; a node under several keys is one node again when read.
+// node: {change, value?, cow?} (cow only false). change: {time, actor?, reader?, external?,
+// metadata?, op?}; external: sites {file, line, column?, function?}; op: {patches, undo}.
+// whole numbers: time, range ends (safe); line, column, path numbers (int32); written as integers.
+// absent fields are left out.
 //
-// the keys: sorted by their encodings, none twice; each names a node, numbered in the order the
-// keys first name them, so a node under several keys is one node again when read. a node: {change,
-// value?, cow?}, cow only ever false, as the node has it (changed in place, not copied on write). a
-// change: {time, actor?, reader?, external?, metadata?, op?}; external: sites {file, line, column?,
-// function?}; metadata: [name, value] lists; op: {patches, undo}, each patch {path, range?,
-// value?, move?}, move {path, range?}. time and a range's ends are whole: safe integers, never -0;
-// a site's line and column and a path's numbers are whole from -2^31 to 2^31 - 1, what any C long
-// holds. a field not there is left out, never written as nothing.
-//
-// written: {columns: bytes}, the bytes deflate.ts's deflate (the same bytes on any device) of a map
-// of columns, each left out when empty:
-//   ids       every id the keys name, in the order they first name them: an ermine:// id (lowercase
-//             hex) as its 32 bytes, any other as its text
-//   parts     the keys' parts as runs, [[part, how many], …]
-//   which     per key, its id's place in ids
-//   nodes     per key, 0: a new node (the next number); k + 1: node k again
-//   has       per node, what it has, bits: 1 actor, 2 reader, 4 external, 8 metadata, 16 op,
-//             32 value, 64 cow (false)
-//   time      per node, its change's time: the first, then each one's difference from the one
-//             before, zigzag (0, -1, 1, -2 … as 0, 1, 2, 3 …)
-//   actor, reader, external, metadata   runs over the nodes that have one, [[it, how many], …],
-//             equal: the same encoding
+// written: {columns: bytes}, deflate.ts's deflate of a map of columns (empty ones left out):
+//   ids       ids in first-named order: ermine:// as 32 bytes, others as text
+//   parts     runs [[part, how many], …]
+//   which     per key, its id's index
+//   nodes     per key, 0 new, k + 1 node k again
+//   has       per node, bits: 1 actor, 2 reader, 4 external, 8 metadata, 16 op, 32 value, 64 cow
+//   time      per node, first then zigzag deltas
+//   actor, reader, external, metadata   runs [[it, how many], …] over nodes that have one
 //   op        per node with an op, {patches, undo}
-//   values    per node with a value, the value
-// which, nodes, has and time are bytes: whole numbers 7 bits a byte, the low first, the high bit
-// on all but a number's last byte. reading takes exactly what writing gives, and also the first
-// form, {keys: [[part, id, n], …], nodes: [{change, value?, cow?}, …]} (packs from before 10-15);
-// loosyGoosy, a key it does not know is passed over
+//   values    per node with a value
+// which, nodes, has, time: varints, 7 bits a byte, low first.
+// reading also takes the first form {keys: [[part, id, n], …], nodes: [...]}; unknown keys are
+// skipped (loosyGoosy).
 import * as cbor from "./cbor.ts"
 import { deflate, DeflateError, inflate } from "./deflate.ts"
 import createEntry, { type ChangeHeader, type Entry as NodeEntry } from "@ermine/node/entry"
@@ -113,8 +101,8 @@ const isFields = (x: unknown): x is Fields =>
 	x !== null && typeof x === "object" && !Array.isArray(x) && !ArrayBuffer.isView(x) &&
 	!(x instanceof cbor.Stand)
 
-// a whole number C holds too: a safe integer, never -0
-const whole = (x: unknown) => Number.isSafeInteger(x) && !Object.is(x, -0)
+// a whole number C holds too: a safe integer (-0 is 0, written 00)
+const whole = (x: unknown) => Number.isSafeInteger(x)
 
 // a path's number, a site's line or column: whole, and one any C long holds
 const small = (x: unknown) => whole(x) && (x as number) >= -(2 ** 31) && (x as number) < 2 ** 31
@@ -598,7 +586,7 @@ function first(x: unknown, r: Reader): Entry[] {
 		const [part, id, n] = k
 		if (typeof part !== "string" || typeof id !== "string") throw no()
 		// numbered in the order first named
-		if (typeof n !== "number" || !Number.isInteger(n) || Object.is(n, -0)) throw no()
+		if (typeof n !== "number" || !Number.isInteger(n)) throw no()
 		if (n < 0 || n > next || n >= nodes.length) throw no()
 		if (n === next) next++
 		// sorted, none twice
