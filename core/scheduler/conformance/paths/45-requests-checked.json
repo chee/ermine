@@ -1,0 +1,18 @@
+{
+	"title": "a mark with no patches (even at a key with no spots), marks with no patch, or a malformed patch, is an error",
+	"steps": [
+		{ "op": "mark", "source": "v", "id": "n", "fails": true },
+		{ "op": "marks", "paths": [], "fails": true },
+		{ "op": "spot", "source": "v", "id": "n", "path": ["a"], "expect": {} },
+		{ "op": "mark", "source": "v", "id": "n", "patches": [{ "path": "x" }], "fails": true },
+		{ "op": "mark", "source": "v", "id": "n", "patches": [{ "value": 1 }], "fails": true },
+		{ "op": "mark", "source": "v", "id": "n", "patches": [5], "fails": true },
+		{
+			"op": "mark",
+			"source": "v",
+			"id": "n",
+			"patches": [{ "path": ["a"] }],
+			"expect": { "spots": [["a"]] }
+		}
+	]
+}

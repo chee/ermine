@@ -1,0 +1,8 @@
+{
+	"title": "a run() whose expression gives PENDING or a promise answers no value",
+	"steps": [
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "run", "scope": "o", "do": { "pending": null }, "expect": {} },
+		{ "op": "run", "scope": "o", "do": { "wait": ["p"] }, "expect": {} }
+	]
+}

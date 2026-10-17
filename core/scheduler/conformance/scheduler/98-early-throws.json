@@ -1,0 +1,363 @@
+{
+	"title": "an early act that throws: told, with its error, at once as it is made and later in the early queue; the round goes on, the other acts after it, and it acts again on its next value",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"do": [
+					{
+						"log": [
+							"e",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"mod": [
+											{
+												"given": "value"
+											},
+											2
+										]
+									},
+									1
+								]
+							},
+							{
+								"throw": "odd"
+							},
+							null
+						]
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 2
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1,
+						"early": true,
+						"error": "odd"
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "effect",
+			"name": "f",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"log": [
+					"f",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "effect",
+			"name": "g",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"act": {
+				"log": [
+					"g",
+					{
+						"given": "value"
+					}
+				]
+			},
+			"early": true,
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "f",
+						"tick": 3
+					},
+					{
+						"due": "g",
+						"tick": 4
+					},
+					{
+						"starts": "g",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "g",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "g",
+						"run": 1,
+						"early": true
+					},
+					{
+						"due": "e",
+						"tick": 5
+					},
+					{
+						"due": "g",
+						"tick": 5
+					},
+					{
+						"starts": "f",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "f",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "g",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "g",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 2,
+						"early": true,
+						"error": "odd"
+					},
+					{
+						"acts": "g",
+						"run": 2,
+						"early": true
+					},
+					{
+						"acts": "f",
+						"run": 1
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"g",
+						1
+					],
+					[
+						"e",
+						3
+					],
+					[
+						"g",
+						3
+					],
+					[
+						"f",
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 4
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "e",
+						"tick": 6
+					},
+					{
+						"due": "g",
+						"tick": 6
+					},
+					{
+						"due": "f",
+						"tick": 6
+					},
+					{
+						"starts": "e",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "f",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "f",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "g",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "g",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 3,
+						"early": true
+					},
+					{
+						"acts": "g",
+						"run": 3,
+						"early": true
+					},
+					{
+						"acts": "f",
+						"run": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e",
+						4
+					],
+					[
+						"g",
+						4
+					],
+					[
+						"f",
+						4
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,8 @@
+{
+	"title": "a sum of anything but numbers and null is an error",
+	"steps": [
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "run", "scope": "o", "do": { "sum": ["a", 1] }, "fails": true },
+		{ "op": "run", "scope": "o", "do": { "sum": [1, null, 2] }, "expect": { "value": 3 } }
+	]
+}

@@ -1,0 +1,8 @@
+{
+	"title": "a write naming a scope that is not there is an error that writes nothing",
+	"steps": [
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "run", "scope": "o", "do": { "write": ["k", 1, "zz"] }, "fails": true },
+		{ "op": "get", "key": "k", "expect": { "value": null } }
+	]
+}

@@ -1,0 +1,316 @@
+{
+	"title": "a set that throws fails the run, its error told, though what it kept stays and its mark is made; the last result is forgotten, so the next result is given to set, equal or not",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1,
+				"boom": false
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "c",
+			"set": {
+				"do": [
+					{
+						"log": [
+							"set",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"read": "boom"
+							},
+							{
+								"throw": "set threw"
+							},
+							null
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "r",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "c"
+					},
+					100
+				]
+			},
+			"to": "r",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "r",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "r",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"set",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2,
+				"boom": true
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 6
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "r",
+						"tick": 7,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "failed",
+						"equal": false,
+						"error": "set threw"
+					},
+					{
+						"starts": "r",
+						"run": 2,
+						"rank": 1
+					},
+					{
+						"ends": "r",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"set",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "get",
+			"key": "r",
+			"expect": {
+				"value": 102
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"boom": false
+			},
+			"expect": {
+				"tick": 9
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"x"
+			],
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 10
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"due": "r",
+						"tick": 11,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "r",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "r",
+						"run": 3,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"set",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"x"
+			],
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 12
+					},
+					{
+						"starts": "c",
+						"run": 4,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		}
+	]
+}

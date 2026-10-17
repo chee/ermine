@@ -1,0 +1,269 @@
+{
+	"title": "keys are any string, compared whole: one with a NUL inside, the empty one, a lone surrogate, either half of a pair and the pair are each a key of their own; a value of -0 is kept as -0, and is not 0 by Object.is",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"\ud800": 1,
+				"\udc00": 2,
+				"𐀀": 3,
+				"a\u0000b": 4,
+				"": 5
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": [
+				{
+					"read": "\ud800"
+				},
+				{
+					"read": "\udc00"
+				},
+				{
+					"read": "𐀀"
+				},
+				{
+					"read": "a\u0000b"
+				},
+				{
+					"read": ""
+				}
+			],
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": [
+					1,
+					2,
+					3,
+					4,
+					5
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "a\u0000c",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "moments",
+			"reads": true,
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false,
+						"reads": [
+							"\ud800",
+							"\udc00",
+							"𐀀",
+							"a\u0000b",
+							""
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"a\u0000c",
+				"a",
+				"\ud801",
+				"\udc01",
+				"𐀁"
+			],
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "changed",
+			"keys": [
+				"\udc00"
+			],
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 5
+					}
+				]
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"z": -0
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "get",
+			"key": "z",
+			"expect": {
+				"value": -0
+			}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"read": "z"
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "d",
+			"expect": {
+				"value": -0
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"z": 0
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "d",
+						"tick": 8
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "d",
+						"tick": 10
+					},
+					{
+						"starts": "d",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "d",
+			"expect": {
+				"value": 0
+			}
+		}
+	]
+}

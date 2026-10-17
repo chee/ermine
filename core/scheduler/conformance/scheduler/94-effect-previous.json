@@ -1,0 +1,164 @@
+{
+	"title": "an effect's f is given the value it last acted on (none yet: null), not its last run's; its act is given the value and the one it acted on before (none yet: null)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "e",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"log": [
+							"run",
+							{
+								"given": "previous"
+							}
+						]
+					},
+					{
+						"mod": [
+							{
+								"read": "x"
+							},
+							3
+						]
+					}
+				]
+			},
+			"act": {
+				"log": [
+					"act",
+					{
+						"given": "value"
+					},
+					{
+						"given": "previous"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"run",
+						null
+					],
+					[
+						"act",
+						1,
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 3
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"run",
+						1
+					],
+					[
+						"act",
+						2,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 5
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"run",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 6
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"run",
+						2
+					],
+					[
+						"act",
+						0,
+						2
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,231 @@
+{
+	"title": "a mark on a computation already due joins what made it due: t's change reaches a, due already from outside, so a's change back to t is a loop through both, and t's next run ends looping",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"go": false,
+				"kt": 0,
+				"ka": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "t",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "kt"
+					},
+					{
+						"if": [
+							{
+								"read": "go"
+							},
+							{
+								"write": [
+									"ka",
+									{
+										"read": "kt"
+									}
+								]
+							},
+							null
+						]
+					},
+					{
+						"read": "kt"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"read": "ka"
+					},
+					{
+						"if": [
+							{
+								"read": "go"
+							},
+							{
+								"write": [
+									"kt",
+									{
+										"sum": [
+											{
+												"read": "ka"
+											},
+											1
+										]
+									}
+								]
+							},
+							null
+						]
+					},
+					{
+						"read": "ka"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "t",
+						"tick": 2
+					},
+					{
+						"due": "a",
+						"tick": 3
+					},
+					{
+						"starts": "t",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "t",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"go": true
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "t",
+						"tick": 4
+					},
+					{
+						"due": "a",
+						"tick": 4
+					},
+					{
+						"starts": "t",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "t",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "t",
+						"tick": 6,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "t",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "t",
+						"run": 3,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"t",
+							"a"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "kt",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "get",
+			"key": "ka",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

@@ -1,0 +1,262 @@
+{
+	"title": "a dispose whose cleanups throw: every cleanup still runs, what is under it first, newest first, and the dispose answers the first error; the scope is gone all the same, and disposing it again does nothing",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "scope",
+			"name": "p",
+			"parent": "o",
+			"info": [
+				[
+					"why",
+					"p"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "cleanup",
+			"scope": "p",
+			"do": {
+				"log": "p1"
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "p",
+			"f": {
+				"read": "x"
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "cleanup",
+			"scope": "p",
+			"do": {
+				"do": [
+					{
+						"log": "p2"
+					},
+					{
+						"throw": "p2 threw"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "cleanup",
+			"scope": "p",
+			"do": {
+				"log": "p3"
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 2
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "cleanup",
+			"scope": "c",
+			"do": {
+				"do": [
+					{
+						"log": "c"
+					},
+					{
+						"throw": "c threw"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "p",
+			"expect": {
+				"error": "c threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"c",
+					"p3",
+					"p2",
+					"p1"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "p",
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"scope": "c",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "run",
+			"scope": "p",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		},
+		{
+			"op": "scope",
+			"name": "p",
+			"parent": "o",
+			"info": [
+				[
+					"why",
+					"p again"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "run",
+			"scope": "p",
+			"do": {
+				"current": null
+			},
+			"expect": {
+				"value": {
+					"scope": "p",
+					"pairs": [
+						[
+							"why",
+							"p again"
+						],
+						[
+							"owner",
+							[
+								[
+									"actor",
+									"test"
+								]
+							]
+						]
+					]
+				}
+			}
+		},
+		{
+			"op": "cleanup",
+			"scope": "o",
+			"do": {
+				"throw": "o threw"
+			},
+			"expect": {}
+		},
+		{
+			"op": "dispose",
+			"scope": "o",
+			"expect": {
+				"error": "o threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "run",
+			"scope": "p",
+			"do": 1,
+			"expect": {
+				"error": "disposed"
+			}
+		}
+	]
+}

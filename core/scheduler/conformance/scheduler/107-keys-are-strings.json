@@ -1,0 +1,8 @@
+{
+	"title": "a key that is not a string is an error, and takes no tick",
+	"steps": [
+		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
+		{ "op": "changed", "keys": [1], "fails": true },
+		{ "op": "changed", "keys": ["a"], "expect": { "tick": 1 } }
+	]
+}

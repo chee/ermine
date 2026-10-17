@@ -1,0 +1,160 @@
+{
+	"title": "a change in a run's own code makes its compute the key's writer, as a set does: b, made first, reads k; once a has written k in its run, b is ranked after a and runs after it",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "h"
+					},
+					{
+						"read": "k"
+					}
+				]
+			},
+			"to": "kb",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"write": [
+							"k",
+							{
+								"read": "h"
+							}
+						]
+					},
+					1
+				]
+			},
+			"to": "ka",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 1
+					},
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "b",
+						"tick": 4,
+						"writer": "a"
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"h": 5
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 6
+					},
+					{
+						"due": "a",
+						"tick": 6
+					},
+					{
+						"starts": "a",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "b",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "b",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

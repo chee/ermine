@@ -1,0 +1,141 @@
+{
+	"title": "a run's flag is the latest mark's: c, due by its own change (a loop through it), is changed from outside before it runs, so that run is not flagged and ends done; its next ends looping",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"write": [
+					"k",
+					{
+						"sum": [
+							{
+								"read": "k"
+							},
+							1
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "u",
+			"scope": "o",
+			"f": {
+				"write": [
+					"k",
+					100,
+					null
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 1
+					},
+					{
+						"due": "u",
+						"tick": 2
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 3,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "u",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "u",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "c",
+						"tick": 5,
+						"writer": "c"
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 3,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "looping",
+						"equal": false,
+						"through": [
+							"c"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "k",
+			"expect": {
+				"value": 102
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

@@ -1,0 +1,269 @@
+{
+	"title": "settled promises wait for the next pulse, and land in the order they settled, before anything due runs; a promise resolved to PENDING lands pending",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "a",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"pa",
+					{
+						"sum": [
+							{
+								"given": "previous"
+							},
+							1
+						]
+					}
+				]
+			},
+			"to": "a",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"pb",
+					{
+						"sum": [
+							{
+								"given": "previous"
+							},
+							2
+						]
+					}
+				]
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"read": "x"
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "d",
+			"scope": "o",
+			"f": {
+				"wait": [
+					"pd",
+					{
+						"pending": null
+					}
+				]
+			},
+			"to": "d",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "a",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"due": "c",
+						"tick": 4
+					},
+					{
+						"due": "d",
+						"tick": 5
+					},
+					{
+						"starts": "a",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "b",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"starts": "c",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "pending"
+					}
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "pb",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "pd",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "pa",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": null
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 7
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"ends": "d",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "a",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "a",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "get",
+			"key": "b",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "get",
+			"key": "d",
+			"expect": {
+				"value": null
+			}
+		}
+	]
+}

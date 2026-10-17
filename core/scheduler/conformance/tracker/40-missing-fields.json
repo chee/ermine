@@ -1,0 +1,14 @@
+{
+	"title": "a request missing from, to or of is an error that changes nothing, and the next line is answered",
+	"steps": [
+		{ "op": "begin", "fails": true },
+		{ "op": "frob", "fails": true },
+		{ "op": "reads", "fails": true },
+		{ "op": "readers", "fails": true },
+		{ "op": "add", "from": "p", "fails": true },
+		{ "op": "track", "from": "p", "fails": true },
+		{ "op": "reads", "of": "p", "expect": { "names": [] } },
+		{ "op": "add", "from": "p", "to": "a", "expect": {} },
+		{ "op": "reads", "of": "p", "expect": { "names": ["a"] } }
+	]
+}

@@ -1,0 +1,34 @@
+{
+	"title": "an owner whose act re-makes n child effects, due as it tears them down (200 rounds: a pulse may tell no more than 10000 moments, so n stays small)",
+	"sizes": [60, 240, 960],
+	"bound": "n",
+	"template": [
+		{ "op": "root", "name": "o", "info": [["actor", "t"]] },
+		{
+			"op": "effect",
+			"name": "owner",
+			"scope": "o",
+			"f": { "read": "k" },
+			"act": {
+				"do": [
+					{
+						"for": "i",
+						"to": "n",
+						"do": [
+							{ "effect": ["c{i}", { "read": "k" }, null] }
+						]
+					}
+				]
+			}
+		},
+		{ "op": "pulse" },
+		{
+			"for": "r",
+			"to": 200,
+			"do": [
+				{ "op": "write", "values": { "k": { "=": "r+1" } } },
+				{ "op": "pulse" }
+			]
+		}
+	]
+}
