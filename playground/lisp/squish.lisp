@@ -107,7 +107,17 @@
                                       (join l p))))
                     (when (raw-lone-p (sq-value p)) (foul path))
                     (if joined
-                        (setf (aref kept (1- (length kept))) joined)
+                        (progn
+                          (setf (aref kept (1- (length kept))) joined)
+                          ;; merges reach back: the joined patch joined into the one before it, while they join
+                          (loop while (>= (length kept) 2)
+                                do (let* ((e (aref kept (- (length kept) 2)))
+                                          (j (and (sq-range e) (not (sq-move-p e)) (equal (sq-path e) path)
+                                                  (not (raw-lone-p (sq-value e)))
+                                                  (join e (aref kept (1- (length kept)))))))
+                                     (unless j (return))
+                                     (decf (fill-pointer kept))
+                                     (setf (aref kept (1- (length kept))) j))))
                         (vector-push-extend p kept)))))))
     (mklist (map 'list #'sq-json kept))))
 

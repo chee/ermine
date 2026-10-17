@@ -4,7 +4,8 @@
 -- Lists and maps carry an identity (Form's VListI / VMapI). A write applies the patches as values
 -- (op's apply), then settles: a container the write changed keeps its identity when owned (changed
 -- in place) and gets a new one, owned, when not (copied); one the write made is new and owned. What
--- leaves the tree is owned no more; a read lets go of everything, a keep of what it keeps.
+-- leaves the tree is owned no more; a read lets go of everything, a keep of what it keeps, a
+-- write of what its patches put.
 module Main (main) where
 
 import qualified Data.Map.Strict as M
@@ -30,7 +31,7 @@ data St = St
   , records :: M.Map Int Shallow
   , next :: Int
   , held :: M.Map String (Maybe V)
-  , marks :: M.Map String (Maybe Token)
+  , marks :: M.Map String (Maybe V)
   , lastUndo :: Maybe [V]
   }
 
@@ -172,7 +173,9 @@ holdAs req v st = case getStr "hold" req of
 -- | write patches (values), as a write: the answer and the state after
 write :: J -> [V] -> St -> (J, St)
 write req ps0 st0 =
-  let (ps, st1, _) = identAll st0 ps0
+  let (ps, st1', _) = identAll st0 ps0
+      -- what a patch puts is the caller's from now: owned no more
+      st1 = st1' {owned = S.difference (owned st1') (S.unions [idsIn v | VMap kvs <- ps, Just v <- [lookup "value" kvs]])}
       puts = [v | VMap kvs <- ps, Just v <- [lookup "value" kvs]]
       st2 = holdAs req (Just (VList puts)) st1
       -- one patch at a time, as unread does: each settles (copies what it changed that is not
@@ -205,7 +208,7 @@ step st req = case getStr "op" req of
         (v', st', _) = maybe (Nothing, fresh {next = next st}, []) (\x -> let (y, s, m) = ident (fresh {next = next st}) x in (Just y, s, m)) v
      in (obj [], st' {root = v'})
   Just "write" -> case getField "patches" req of
-    Just (JArr raw) -> write req (map (either failWith id . fromForm) raw) st
+    Just (JArr raw) -> write req (marked (map (either failWith id . fromForm) raw)) st
     _ -> failWith "patches: not a list"
   Just "unwrite" -> case lastUndo st of
     Nothing -> (obj [("error", JStr "nothing-written")], st)
@@ -216,13 +219,26 @@ step st req = case getStr "op" req of
         wrapped = getField "wrap" req == Just (JBool True)
         kept = if wrapped then Just (VList [maybe VNull id v]) else v
         letGo = maybe S.empty idsIn v
-     in (obj [], holdAs req kept st {owned = S.difference (owned st) letGo})
+        st' = holdAs req kept st {owned = S.difference (owned st) letGo}
+     in -- writes: by its set or its run, after what it keeps is let go (refused: nothing)
+        case getField "writes" req of
+          Just (JArr raw) -> (obj [], snd (write (obj []) (map (either failWith id . fromForm) raw) st'))
+          _ -> (obj [], st')
   Just "held" -> (valueAnswer (maybe Nothing id (M.lookup (nameOf req) (held st))), st)
   Just "value" -> (valueAnswer (root st), st)
-  Just "mark" -> (obj [], st {marks = M.insert (nameOf req) (token <$> at (pathOf req) (root st)) (marks st)})
+  Just "mark" -> (obj [], st {marks = M.insert (nameOf req) (at (pathOf req) (root st)) (marks st)})
   Just "same" ->
     let now = token <$> at (pathOf req) (root st)
-        was = maybe Nothing id (M.lookup (nameOf req) (marks st))
+        was = token <$> maybe Nothing id (M.lookup (nameOf req) (marks st))
      in (obj [("same", JBool (sameToken was now))], st)
   Just o -> failWith ("unknown op " ++ o)
   Nothing -> failWith "no op"
+  where
+    -- marked: patch i given what was marked under marked[i], as it is (nothing there: a removal)
+    marked ps = case getField "marked" req of
+      Just (JArr names) -> zipWith given ps (map Just names ++ repeat Nothing)
+      _ -> ps
+    given (VMap kvs) (Just (JStr n)) =
+      let rest = filter ((/= "value") . fst) kvs
+       in VMap (rest ++ maybe [] (\v -> [("value", v)]) (maybe Nothing id (M.lookup n (marks st))))
+    given p _ = p
