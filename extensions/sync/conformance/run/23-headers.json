@@ -1,5 +1,5 @@
 {
-	"title": "headers: runs of each signature's varsig header; a signature with no header this reads is whole in signatures, its header empty; the same sealed commits come back either way",
+	"title": "headers: runs of each signature's varsig header, null for a commit vouched for by the next; a signature with no header this reads is whole in signatures, its header empty; the same commits come back either way, and a run with every commit signed takes them all",
 	"steps": [
 		{
 			"op": "make",
@@ -71,6 +71,105 @@
 			"run": "r",
 			"expect": {
 				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					"c"
+				]
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"headers": [
+					[
+						null,
+						2
+					],
+					[
+						{
+							"/": {
+								"bytes": ""
+							}
+						},
+						1
+					]
+				],
+				"signatures": [
+					{
+						"/": {
+							"bytes": "NAHtAe0BE1+HzNysaWNqjaH9uvkEPRUXy7LJlYXaVJrCLtLK1jADI/MGHfBiH2Z0XDaeGIyH3WHCq8QtOOXmWLRBTEUg2WMN"
+						}
+					}
+				]
+			},
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					"c"
+				]
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"headers": [
+					[
+						{
+							"/": {
+								"bytes": "NAHtAe0BE18"
+							}
+						},
+						1
+					],
+					[
+						{
+							"/": {
+								"bytes": ""
+							}
+						},
+						1
+					],
+					[
+						{
+							"/": {
+								"bytes": "NAHtAe0BE18"
+							}
+						},
+						1
+					]
+				],
+				"ids": [],
+				"signatures": [
+					{
+						"/": {
+							"bytes": "1PBwt3aJGXptyz3r5BpAWffWfsvMMnjzjbY8D8tt1V03QOcQhH1u9Oa1zlqxLYJ129CT0OC/DyKNxSGJmPUtCA"
+						}
+					},
+					{
+						"/": {
+							"bytes": "NAHtAe0BE1/gnaFKWMTFgg2ECH0hILAwndCsl2i/8E3dIGxpWj+0lE4vKeeJ8LTDu+0TdDUGEtXS8vK/VDBtxd8Vkb0ptZoH"
+						}
+					},
+					{
+						"/": {
+							"bytes": "h8zcrGljao2h/br5BD0VF8uyyZWF2lSawi7SytYwAyPzBh3wYh9mdFw2nhiMh91hwqvELTjl5li0QUxFINljDQ"
+						}
+					}
+				]
+			},
+			"expect": {
+				"sealed": [
 					"a",
 					"b",
 					"c"
@@ -85,131 +184,15 @@
 					[
 						{
 							"/": {
-								"bytes": ""
+								"bytes": "NAHtAe0BE18"
 							}
 						},
 						3
 					]
-				],
-				"signatures": [
-					{
-						"/": {
-							"bytes": "NAHtAe0BE1/TG/ZDuGATlHhDt3Y9lDomDvZ50azS7HmqhDY2eMjzlkyrDYGnWmNkkzOIY6f5ZrhAins/pP1fr1u5a4k7dcwG"
-						}
-					},
-					{
-						"/": {
-							"bytes": "NAHtAe0BE1/UK8k8illrtnJ361DS3sMIDrj32OIT7i0hWm92BnSnxsbV1aF5a9Ud396O7+shesAh2Y/wyxG6hNUwlzI6EqgN"
-						}
-					},
-					{
-						"/": {
-							"bytes": "NAHtAe0BE19qZKOo60vn3s3TWAmEdMOlPYb2MHRZDCMUQZU+hVGrtEmlgOh+tzLt3o/bfQPzVnREG5m20vsYq7nDl4vOLD4G"
-						}
-					}
 				]
 			},
 			"expect": {
-				"sealed": [
-					"a",
-					"b",
-					"c"
-				]
-			}
-		},
-		{
-			"op": "unpack",
-			"run": "r",
-			"set": {
-				"headers": [
-					[
-						{
-							"/": {
-								"bytes": "NAHtAe0BE18"
-							}
-						},
-						1
-					],
-					[
-						{
-							"/": {
-								"bytes": ""
-							}
-						},
-						1
-					],
-					[
-						{
-							"/": {
-								"bytes": "NAHtAe0BE18"
-							}
-						},
-						1
-					]
-				],
-				"signatures": [
-					{
-						"/": {
-							"bytes": "0xv2Q7hgE5R4Q7d2PZQ6Jg72edGs0ux5qoQ2NnjI85ZMqw2Bp1pjZJMziGOn+Wa4QIp7P6T9X69buWuJO3XMBg"
-						}
-					},
-					{
-						"/": {
-							"bytes": "NAHtAe0BE1/UK8k8illrtnJ361DS3sMIDrj32OIT7i0hWm92BnSnxsbV1aF5a9Ud396O7+shesAh2Y/wyxG6hNUwlzI6EqgN"
-						}
-					},
-					{
-						"/": {
-							"bytes": "amSjqOtL597N01gJhHTDpT2G9jB0WQwjFEGVPoVRq7RJpYDofrcy7d6P230D81Z0RBuZttL7GKu5w5eLziw+Bg"
-						}
-					}
-				]
-			},
-			"expect": {
-				"sealed": [
-					"a",
-					"b",
-					"c"
-				]
-			}
-		},
-		{
-			"op": "unpack",
-			"run": "r",
-			"set": {
-				"headers": [
-					[
-						{
-							"/": {
-								"bytes": "NAHtAe0BE18"
-							}
-						},
-						1
-					],
-					[
-						{
-							"/": {
-								"bytes": "NAHtAe0BE18"
-							}
-						},
-						1
-					],
-					[
-						{
-							"/": {
-								"bytes": "NAHtAe0BE18"
-							}
-						},
-						1
-					]
-				]
-			},
-			"expect": {
-				"sealed": [
-					"a",
-					"b",
-					"c"
-				]
+				"error": "signatures"
 			}
 		},
 		{

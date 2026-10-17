@@ -6,21 +6,30 @@
 			"name": "a",
 			"time": 1760000000,
 			"nonce": 1,
-			"patches": [{ "path": [], "value": { "title": "hi" } }]
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"title": "hi"
+					}
+				}
+			]
 		},
 		{
 			"op": "sealed",
 			"commit": "a",
 			"expect": {
-				"sealed": "a266636f6d6d69745886a86474696d65fa4ed1cef0656163746f72f6656e6f6e6365f93c00657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135f383e4a65955fba36387abf2c48950d3ed54f9af694ecc3da7598891c6db9056c13b5d1b66fc29040b423896ac889395fca1b84a13cd1ee2f2e72334a8520c401"
+				"sealed": "a266636f6d6d69745886a86474696d65fa4ed1cef0656163746f72f6656e6f6e6365f93c00657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565a1657469746c65626869697369676e617475726558483401ed01ed01135f917a6ac50d3af650d86866c9ba962fa28b5454f4ec621bb86e0bb5380be1121418b6cf103d6090593704302525e2179812fb25f6038578a51a3f690f3a961004"
 			}
 		},
 		{
 			"op": "pack",
-			"commits": ["a"],
+			"commits": [
+				"a"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef93c0064626173658182f6f93c006474696d654580e0bb8e0d656163746f728182f6f93c00656e6f6e63654102657461626c6581826576616c7565f93c00667265616465728182f6f93c00667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c0067686561646572738182483401ed01ed01135ff93c00676c616d706f7274410267706172656e7473818067706174636865738181a26470617468806576616c7565a1657469746c656268696865787465726e616c8182f6f93c00686d657461646174618182f6f93c006a7369676e617475726573815840383e4a65955fba36387abf2c48950d3ed54f9af694ecc3da7598891c6db9056c13b5d1b66fc29040b423896ac889395fca1b84a13cd1ee2f2e72334a8520c401"
+				"run": "b0616ef93c00636964738064626173658182f6f93c006474696d654580e0bb8e0d656163746f728182f6f93c00656e6f6e63654102657461626c6581826576616c7565f93c00667265616465728182f6f93c00667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c0067686561646572738182483401ed01ed01135ff93c00676c616d706f7274410267706172656e7473818067706174636865738181a26470617468806576616c7565a1657469746c656268696865787465726e616c8182f6f93c00686d657461646174618182f6f93c006a7369676e617475726573815840917a6ac50d3af650d86866c9ba962fa28b5454f4ec621bb86e0bb5380be1121418b6cf103d6090593704302525e2179812fb25f6038578a51a3f690f3a961004"
 			}
 		},
 		{
@@ -29,31 +38,109 @@
 			"expect": {
 				"columns": {
 					"n": 1,
-					"base": [[null, 1]],
-					"time": { "/": { "bytes": "gOC7jg0" } },
-					"actor": [[null, 1]],
-					"nonce": { "/": { "bytes": "Ag" } },
-					"table": [["value", 1]],
-					"reader": [[null, 1]],
-					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 1]
+					"ids": [],
+					"base": [
+						[
+							null,
+							1
+						]
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 1]],
-					"lamport": { "/": { "bytes": "Ag" } },
-					"parents": [[]],
-					"patches": [[{ "path": [], "value": { "title": "hi" } }]],
-					"external": [[null, 1]],
-					"metadata": [[null, 1]],
+					"time": {
+						"/": {
+							"bytes": "gOC7jg0"
+						}
+					},
+					"actor": [
+						[
+							null,
+							1
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "Ag"
+						}
+					},
+					"table": [
+						[
+							"value",
+							1
+						]
+					],
+					"reader": [
+						[
+							null,
+							1
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							1
+						]
+					],
+					"headers": [
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "Ag"
+						}
+					},
+					"parents": [
+						[]
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": {
+									"title": "hi"
+								}
+							}
+						]
+					],
+					"external": [
+						[
+							null,
+							1
+						]
+					],
+					"metadata": [
+						[
+							null,
+							1
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "OD5KZZVfujY4er8sSJUNPtVPmvaU7MPadZiJHG25BWwTtdG2b8KQQLQjiWrIiTlfyhuEoTzR7i8ucjNKhSDEAQ"
+								"bytes": "kXpqxQ069lDYaGbJupYvootUVPTsYhu4bgu1OAvhEhQYts8QPWCQWTcEMCUl4heYEvsl9gOFeKUaP2kPOpYQBA"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					"a"
+				]
+			}
+		}
 	]
 }

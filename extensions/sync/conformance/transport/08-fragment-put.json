@@ -26,7 +26,43 @@
 		{
 			"op": "make",
 			"name": "c2",
-			"nonce": 444,
+			"nonce": 1528,
+			"parents": [
+				"c1"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "c2d",
+			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
+			"nonce": 1070,
+			"parents": [
+				"c1"
+			],
+			"patches": [
+				{
+					"path": [
+						"n"
+					],
+					"value": 2
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "make",
+			"name": "c2e",
+			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
+			"nonce": 1307,
 			"parents": [
 				"c1"
 			],
@@ -115,10 +151,10 @@
 			"op": "fragment",
 			"device": "a",
 			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
-			"head": "c2",
+			"head": "c2e",
 			"members": [
 				"c1",
-				"c2"
+				"c2e"
 			],
 			"tables": {
 				"value": {
@@ -141,7 +177,7 @@
 			"op": "snapshot",
 			"device": "a",
 			"doc": "ermine://2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e00000000000000000000000000000000",
-			"commit": "c2",
+			"commit": "c2e",
 			"expect": {
 				"tables": {
 					"value": {
@@ -197,10 +233,10 @@
 			"op": "fragment",
 			"device": "a",
 			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
-			"head": "c2",
+			"head": "c2d",
 			"members": [
 				"c1",
-				"c2"
+				"c2d"
 			],
 			"form": "members",
 			"expect": {}
@@ -251,7 +287,7 @@
 			"doc": "ermine://2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d00000000000000000000000000000000",
 			"expect": {
 				"heads": [
-					"c2"
+					"c2d"
 				]
 			}
 		}

@@ -5,42 +5,111 @@
 			"op": "make",
 			"name": "a",
 			"nonce": 1,
-			"patches": [{ "path": ["body"], "range": [0, 0], "value": "é🦊" }]
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "é🦊"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": ["body"], "range": [2, 2], "value": "x" }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						2,
+						2
+					],
+					"value": "x"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"nonce": 3,
-			"parents": ["b"],
-			"patches": [{ "path": ["body"], "range": [4, 4], "value": "y" }]
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						4,
+						4
+					],
+					"value": "y"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "d",
 			"nonce": 4,
-			"parents": ["c"],
-			"patches": [{ "path": ["title"], "range": [5, 5], "value": "z" }]
+			"parents": [
+				"c"
+			],
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"range": [
+						5,
+						5
+					],
+					"value": "z"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "e",
 			"nonce": 5,
-			"parents": ["d"],
-			"patches": [{ "path": ["title"], "range": [6, 6], "value": "w" }]
+			"parents": [
+				"d"
+			],
+			"patches": [
+				{
+					"path": [
+						"title"
+					],
+					"range": [
+						6,
+						6
+					],
+					"value": "w"
+				}
+			]
 		},
 		{
 			"op": "pack",
-			"commits": ["a", "b", "c", "d", "e"],
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"d",
+				"e"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef9450064626173658182f6f945006474696d65450000000000656163746f728182f6f94500656e6f6e6365450202020202657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9450067686561646572738182483401ed01ed01135ff94500676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a364706174688164626f64796572616e676582f90000f900006576616c756566c3a9f09fa68a617881a364706174688164626f64796572616e676582f94400f944006576616c7565617981a3647061746881657469746c656572616e676582f94500f945006576616c7565617a61776865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573855840a39ddc735c0b6e259f26f13d4db25ef693eb8e08eb6351949d688638896ff007edbf7eff7f11beb363514ef8dd6f24bfa8b284d8e332c724944dbb401dea970158404d6724d2fd8d80caea6bbb4d6204874bc052dc0f98dcb1e3b60e07a7f6f16ef69c40e9ab15eef9cb18ac34323c824a8d0506cddfa11c1954ae2ddfe61707580f5840f7dabe250c7de09494bdd3d3b2aeb42792b373236f11384715de31b596f03744528fa19a157b10b17648c0591d199b39ebf8c911601dc8bd6873a2d74a0cca005840d380c89bcd71ef91b2b6f54c8dc09a6f01113bbbfc797ee3a753d48a48bb7b948f367461812b873d31aa8687d7ce895338ff84f88eabfc5775400de7a6a014015840cb7339f85347791fb1bfbd14fb90bd38eee09de3d82eb7978991ffb6ee2945c6f596f680c146efb44795ac98b6381e6b1d0358b74f596de57940ccf83433ba0c"
+				"run": "b0616ef94500636964738458209940afeb64fee26f0d7643f311e614f1e0e174205593879bf1a38e633b752fad5820cce9409f4e60ae4adbcfb88754d724631bda743f8789a56f26da6960fb0f63d4582092ba4d6d78e66c52fadbc16918ca274b2471d7f0916489e5f750541d449265085820f0aefbf2c91255660559018e5d35ec114e01862088d3cab13b1f0489f037e85a64626173658182f6f945006474696d65450000000000656163746f728182f6f94500656e6f6e6365450202020202657461626c6581826576616c7565f94500667265616465728182f6f94500667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9450067686561646572738282f6f9440082483401ed01ed01135ff93c00676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a364706174688164626f64796572616e676582f90000f900006576616c756566c3a9f09fa68a617881a364706174688164626f64796572616e676582f94400f944006576616c7565617981a3647061746881657469746c656572616e676582f94500f945006576616c7565617a61776865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573815840a6d8ea985f746641daf44f23d2b921a3433902c9455c54759657b0ce3323c9dc700d4a1f91376429f339161763add2175b61d842985dd1ac5a36a4c1f3191f0f"
 			}
 		},
 		{
@@ -49,57 +118,180 @@
 			"expect": {
 				"columns": {
 					"n": 5,
-					"base": [[null, 5]],
-					"time": { "/": { "bytes": "AAAAAAA" } },
-					"actor": [[null, 5]],
-					"nonce": { "/": { "bytes": "AgICAgI" } },
-					"table": [["value", 5]],
-					"reader": [[null, 5]],
-					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 5]
+					"ids": [
+						{
+							"/": {
+								"bytes": "mUCv62T+4m8NdkPzEeYU8eDhdCBVk4eb8aOOYzt1L60"
+							}
+						},
+						{
+							"/": {
+								"bytes": "zOlAn05grkrbz7iHVNckYxvadD+HiaVvJtppYPsPY9Q"
+							}
+						},
+						{
+							"/": {
+								"bytes": "krpNbXjmbFL628FpGMonSyRx1/CRZInl91BUHUSSZQg"
+							}
+						},
+						{
+							"/": {
+								"bytes": "8K778skSVWYFWQGOXTXsEU4BhiCI08qxOx8EifA36Fo"
+							}
+						}
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 5]],
-					"lamport": { "/": { "bytes": "AgICAgI" } },
-					"parents": [[], null, null, null, null],
+					"base": [
+						[
+							null,
+							5
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							5
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							5
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							5
+						]
+					],
+					"headers": [
+						[
+							null,
+							4
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						null,
+						null,
+						null
+					],
 					"patches": [
-						[{ "path": ["body"], "range": [0, 0], "value": "é🦊" }],
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									0,
+									0
+								],
+								"value": "é🦊"
+							}
+						],
 						"x",
-						[{ "path": ["body"], "range": [4, 4], "value": "y" }],
-						[{ "path": ["title"], "range": [5, 5], "value": "z" }],
+						[
+							{
+								"path": [
+									"body"
+								],
+								"range": [
+									4,
+									4
+								],
+								"value": "y"
+							}
+						],
+						[
+							{
+								"path": [
+									"title"
+								],
+								"range": [
+									5,
+									5
+								],
+								"value": "z"
+							}
+						],
 						"w"
 					],
-					"external": [[null, 5]],
-					"metadata": [[null, 5]],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "o53cc1wLbiWfJvE9TbJe9pPrjgjrY1GUnWiGOIlv8Aftv37/fxG+s2NRTvjdbyS/qLKE2OMyxySUTbtAHeqXAQ"
-							}
-						},
-						{
-							"/": {
-								"bytes": "TWck0v2NgMrqa7tNYgSHS8BS3A+Y3LHjtg4Hp/bxbvacQOmrFe75yxisNDI8gkqNBQbN36EcGVSuLd/mFwdYDw"
-							}
-						},
-						{
-							"/": {
-								"bytes": "99q+JQx94JSUvdPTsq60J5KzcyNvEThHFd4xtZbwN0RSj6GaFXsQsXZIwFkdGZs56/jJEWAdyL1oc6LXSgzKAA"
-							}
-						},
-						{
-							"/": {
-								"bytes": "04DIm81x75GytvVMjcCabwERO7v8eX7jp1PUiki7e5SPNnRhgSuHPTGqhofXzolTOP+E+I6r/Fd1QA3npqAUAQ"
-							}
-						},
-						{
-							"/": {
-								"bytes": "y3M5+FNHeR+xv70U+5C9OO7gnePYLreXiZH/tu4pRcb1lvaAwUbvtEeVrJi2OB5rHQNYt09ZbeV5QMz4NDO6DA"
+								"bytes": "ptjqmF90ZkHa9E8j0rkho0M5AslFXFR1llewzjMjydxwDUofkTdkKfM5FhdjrdIXW2HYQphd0axaNqTB8xkfDw"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d", "e"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					{
+						"vouched": "c"
+					},
+					{
+						"vouched": "d"
+					},
+					"e"
+				]
+			}
+		}
 	]
 }

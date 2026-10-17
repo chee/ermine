@@ -1,0 +1,107 @@
+{
+	"title": "a seal is good in its own document only (what is signed names the document): one sealed for another document is refused signature, never stored; the commit sealed for this one is taken",
+	"steps": [
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101"
+		},
+		{
+			"op": "make",
+			"name": "c1",
+			"nonce": 1,
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"n": 1
+					}
+				}
+			],
+			"expect": {}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"commit": "c1",
+			"blob": "a266636f6d6d69745880a86474696d65f90000656163746f72f6656e6f6e6365f93c00657461626c656576616c7565667369676e65725822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565a1616ef93c00697369676e617475726558483401ed01ed01135fcc15abaef7b899656660a42c66e24d208c19f827a18fef56934b0212681f31f2c1b020ac4420b707946b9e86e4881defc5ae51a6fa97ba454ca27212821c9d0b",
+			"head": "b0c87ead6cce4acbd7f11d38a15bc787f65d969bec948cf605a948bf1cb68d4a",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "taking",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"expect": {
+				"waiting": [],
+				"refused": [
+					{
+						"commit": "c1",
+						"refused": "signature"
+					}
+				]
+			}
+		},
+		{
+			"op": "stored",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"expect": {
+				"stored": []
+			}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"commit": "c1",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"doc": "ermine://2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f00000000000000000000000000000000",
+			"expect": {
+				"heads": [
+					"c1"
+				]
+			}
+		},
+		{
+			"op": "put",
+			"device": "a",
+			"commit": "c1",
+			"expect": {}
+		},
+		{
+			"op": "quiet",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"device": "a",
+			"expect": {
+				"heads": [
+					"c1"
+				]
+			}
+		}
+	]
+}

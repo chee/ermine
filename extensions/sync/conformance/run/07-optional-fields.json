@@ -6,32 +6,66 @@
 			"name": "a",
 			"nonce": 1,
 			"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-			"patches": [{ "path": [], "value": 1 }]
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"nonce": 2,
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"reader": "ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
-			"external": [{ "file": "a.ts", "line": 1 }],
+			"external": [
+				{
+					"file": "a.ts",
+					"line": 1
+				}
+			],
 			"patches": []
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"nonce": 3,
-			"parents": ["b"],
-			"metadata": [["cause", { "why": 1 }]],
+			"parents": [
+				"b"
+			],
+			"metadata": [
+				[
+					"cause",
+					{
+						"why": 1
+					}
+				]
+			],
 			"patches": []
 		},
-		{ "op": "make", "name": "d", "nonce": 4, "parents": ["c"], "patches": [] },
+		{
+			"op": "make",
+			"name": "d",
+			"nonce": 4,
+			"parents": [
+				"c"
+			],
+			"patches": []
+		},
 		{
 			"op": "pack",
-			"commits": ["a", "b", "c", "d"],
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"d"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef9440064626173658182f6f944006474696d654400000000656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728282784965726d696e653a2f2f63646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364f9400082f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9440067686561646572738182483401ed01ed01135ff94400676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565f93c008080806865787465726e616c8382f6f93c008281a26466696c6564612e7473646c696e65f93c00f93c0082f6f94000686d657461646174618382f6f94000828182656361757365a163776879f93c00f93c0082f6f93c006a7369676e617475726573845840068e542468c943e109683248aecd1e30fdb152e235d54a0fa71bb0465fba8d5ab95ccf93e31e43fe205b32d05301dc5ca9cb2c558f7a0eac0b2d6bc880e2d30d5840e503ba073f2b08a13e5f3a58e100a9cce8be32c486d039e280ba901af82084598db98727c0b44147bef582db362a421a1c17c772e1ed5aa24a067317e8c7c50d5840f3cbef5270fb7eeae70eee2af3aeb778e4c023381db9981a552d341b60614f1878dcfc73c1f2e850f8bc4015da332bf71a14453b70f178ee2bc0c1e950e1dc0f584059380f7776795eb02b09bed08713cdd9184802f55cb750a2fcf40565d7bde4d6292e6f2102e1618f32b13d3e09169d6ab83404e9c2c00099dc5485c8bbd3d208"
+				"run": "b0616ef94400636964738358201e3c316c0e29ea64cb45e184be2533af2583ece06b349b385065509b3eacc07858207859ac89aa529af8cacb0e11b84133e7dbb03b595602915aebfb1a5f4ea0153158209b6ca5b7b0eadc929860067c1d098da2aab7d57c36cc4673b238d2747169926b64626173658182f6f944006474696d654400000000656163746f728182f6f94400656e6f6e63654402020202657461626c6581826576616c7565f94400667265616465728282784965726d696e653a2f2f63646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364f9400082f6f94000667369676e657281825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf9440067686561646572738282f6f9420082483401ed01ed01135ff93c00676c616d706f7274440202020267706172656e74738480f6f6f667706174636865738481a26470617468806576616c7565f93c008080806865787465726e616c8382f6f93c008281a26466696c6564612e7473646c696e65f93c00f93c0082f6f94000686d657461646174618382f6f94000828182656361757365a163776879f93c00f93c0082f6f93c006a7369676e6174757265738158400c5a320a2ce8f4b854290a16fca0001be8bc41fdba86e76d373a11876eef0d24f52c38e7fdaef2f8f2c56de010e82c8f1161a59f667a39ba6fba49971ba7cb02"
 			}
 		},
 		{
@@ -40,49 +74,174 @@
 			"expect": {
 				"columns": {
 					"n": 4,
-					"base": [[null, 4]],
-					"time": { "/": { "bytes": "AAAAAA" } },
-					"actor": [[null, 4]],
-					"nonce": { "/": { "bytes": "AgICAg" } },
-					"table": [["value", 4]],
+					"ids": [
+						{
+							"/": {
+								"bytes": "HjwxbA4p6mTLReGEviUzryWD7OBrNJs4UGVQmz6swHg"
+							}
+						},
+						{
+							"/": {
+								"bytes": "eFmsiapSmvjKyw4RuEEz59uwO1lWApFa6/saX06gFTE"
+							}
+						},
+						{
+							"/": {
+								"bytes": "m2ylt7Dq3JKYYAZ8HQmNoqq31Xw2zEZzsjjSdHFpkms"
+							}
+						}
+					],
+					"base": [
+						[
+							null,
+							4
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAA"
+						}
+					},
+					"actor": [
+						[
+							null,
+							4
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgICAg"
+						}
+					},
+					"table": [
+						[
+							"value",
+							4
+						]
+					],
 					"reader": [
-						["ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd", 2],
-						[null, 2]
+						[
+							"ermine://cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+							2
+						],
+						[
+							null,
+							2
+						]
 					],
 					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 4]
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							4
+						]
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 4]],
-					"lamport": { "/": { "bytes": "AgICAg" } },
-					"parents": [[], null, null, null],
-					"patches": [[{ "path": [], "value": 1 }], [], [], []],
-					"external": [[null, 1], [[{ "file": "a.ts", "line": 1 }], 1], [null, 2]],
-					"metadata": [[null, 2], [[["cause", { "why": 1 }]], 1], [null, 1]],
+					"headers": [
+						[
+							null,
+							3
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgICAg"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						null,
+						null
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						[],
+						[],
+						[]
+					],
+					"external": [
+						[
+							null,
+							1
+						],
+						[
+							[
+								{
+									"file": "a.ts",
+									"line": 1
+								}
+							],
+							1
+						],
+						[
+							null,
+							2
+						]
+					],
+					"metadata": [
+						[
+							null,
+							2
+						],
+						[
+							[
+								[
+									"cause",
+									{
+										"why": 1
+									}
+								]
+							],
+							1
+						],
+						[
+							null,
+							1
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "Bo5UJGjJQ+EJaDJIrs0eMP2xUuI11UoPpxuwRl+6jVq5XM+T4x5D/iBbMtBTAdxcqcssVY96DqwLLWvIgOLTDQ"
-							}
-						},
-						{
-							"/": {
-								"bytes": "5QO6Bz8rCKE+XzpY4QCpzOi+MsSG0DnigLqQGvgghFmNuYcnwLRBR771gts2KkIaHBfHcuHtWqJKBnMX6MfFDQ"
-							}
-						},
-						{
-							"/": {
-								"bytes": "88vvUnD7furnDu4q8663eOTAIzgduZgaVS00G2BhTxh43PxzwfLoUPi8QBXaMyv3GhRFO3DxeO4rwMHpUOHcDw"
-							}
-						},
-						{
-							"/": {
-								"bytes": "WTgPd3Z5XrArCb7QhxPN2RhIAvVct1Ci/PQFZde95NYpLm8hAuFhjzKxPT4JFp1quDQE6cLAAJncVIXIu9PSCA"
+								"bytes": "DFoyCizo9LhUKQoW/KAAG+i8Qf26hudtNzoRh27vDST1LDjn/a7y+PLFbeAQ6CyPEWGln2Z6ObpvukmXG6fLAg"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					{
+						"vouched": "b"
+					},
+					{
+						"vouched": "c"
+					},
+					"d"
+				]
+			}
+		}
 	]
 }

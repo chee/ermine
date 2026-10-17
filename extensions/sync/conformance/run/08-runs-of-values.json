@@ -6,24 +6,40 @@
 			"name": "a",
 			"nonce": 1,
 			"actor": "chee",
-			"patches": [{ "path": [], "value": 1 }]
+			"patches": [
+				{
+					"path": [],
+					"value": 1
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"nonce": 2,
-			"parents": ["a"],
+			"parents": [
+				"a"
+			],
 			"actor": "chee",
 			"table": "attributes",
-			"patches": [{ "path": [], "value": {} }]
+			"patches": [
+				{
+					"path": [],
+					"value": {}
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"nonce": 3,
-			"parents": ["b"],
-			"actor": { "name": "juno" },
+			"parents": [
+				"b"
+			],
+			"actor": {
+				"name": "juno"
+			},
 			"table": "attributes",
 			"patches": []
 		},
@@ -32,17 +48,36 @@
 			"name": "d",
 			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
 			"nonce": 4,
-			"parents": ["c"],
-			"actor": { "name": "juno" },
+			"parents": [
+				"c"
+			],
+			"actor": {
+				"name": "juno"
+			},
 			"patches": []
 		},
-		{ "op": "make", "name": "e", "nonce": 5, "parents": ["d"], "actor": "chee", "patches": [] },
+		{
+			"op": "make",
+			"name": "e",
+			"nonce": 5,
+			"parents": [
+				"d"
+			],
+			"actor": "chee",
+			"patches": []
+		},
 		{
 			"op": "pack",
-			"commits": ["a", "b", "c", "d", "e"],
+			"commits": [
+				"a",
+				"b",
+				"c",
+				"d",
+				"e"
+			],
 			"name": "r",
 			"expect": {
-				"run": "af616ef9450064626173658182f6f945006474696d65450000000000656163746f7283826463686565f9400082a1646e616d65646a756e6ff94000826463686565f93c00656e6f6e6365450202020202657461626c6583826576616c7565f93c00826a61747472696275746573f94000826576616c7565f94000667265616465728182f6f94500667369676e657283825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000825822ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f94000825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c0067686561646572738182483401ed01ed01135ff94500676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a26470617468806576616c7565f93c0081a26470617468806576616c7565a08080806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573855840ce0785ae0b0c877273e725a93ae1d84dd8b1af9e0d980833f25e97b97b9cf4fbdb157dde74e1dece0ee289244cb9a4ccf3c10ce5430c1f9d20123ffa515d04015840e908e0ab49e66dc71c18c0f42dbf1d2f2e99b47d22faa32f70bd9f0ce7575a2e15a70fdd6143d8d4d238a8be156b23cf369d45ab179e7a4a8bf42ba0e0a9d7015840df40701d76c1f7634489e8a8cc0da5593c700b677c758ae8db9cdd31398df11197c5954e6fc5f680aaea82fbe040f72b063fd8c95b3eeb4b8eec268242ac2c005840e9db5c967f75ddd32409e588fb61acee760161d417728862be6373faa95570087133f2cf646b5489d9140540c23849c89d050e6769564ebd54210a2013ba550b5840d06a68cdd3d87c44163ebd81d422c623d8b8018de2bfff477576ec54c70c9bf69a941fa7f095d088c7143a0b2133b41115d62a61eaae6f255d87debd10d5540e"
+				"run": "b0616ef945006369647382582028e9fadb436e1ec6422f41ea0d63eeabbd5174436016a6b165faad655027910b58205c31c75b3456b276146c52f454ca7bece97bb1f8977f5dfb5f06f037aab1b08264626173658182f6f945006474696d65450000000000656163746f7283826463686565f9400082a1646e616d65646a756e6ff94000826463686565f93c00656e6f6e6365450202020202657461626c6583826576616c7565f93c00826a61747472696275746573f94000826576616c7565f94000667265616465728182f6f94500667369676e657283825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf94000825822ed018139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394f94000825822ed018a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cf93c0067686561646572738482f6f93c0082483401ed01ed01135ff93c0082f6f93c0082483401ed01ed01135ff94000676c616d706f727445020202020267706172656e74738580f6f6f6f667706174636865738581a26470617468806576616c7565f93c0081a26470617468806576616c7565a08080806865787465726e616c8182f6f94500686d657461646174618182f6f945006a7369676e617475726573835840fd9087ec47938f74b84370a22dee5fe6acba447b7326dda0ac73936725d055805bc148130e57b48ee4f1a20aaa55140773b92207188463cf7fd6be95a4a5070258406b9ab6c418a0e72fe885fc6a1a0d2ca3bee42033882eea42b8959cee9e95400a358f5cfc8304bbf46e893cdcad5f3b30b33cdd2637554537c872b03779c3bd05584013a3a3a59a711e820f556ef7505e0d10c787f9722b6a82fad36a2ffd8404728968116e83368927bf46c836c020ac6f73abaa24e7420ba0232ac285bb210b3b0c"
 			}
 		},
 		{
@@ -51,53 +86,199 @@
 			"expect": {
 				"columns": {
 					"n": 5,
-					"base": [[null, 5]],
-					"time": { "/": { "bytes": "AAAAAAA" } },
-					"actor": [["chee", 2], [{ "name": "juno" }, 2], ["chee", 1]],
-					"nonce": { "/": { "bytes": "AgICAgI" } },
-					"table": [["value", 1], ["attributes", 2], ["value", 2]],
-					"reader": [[null, 5]],
-					"signer": [
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 2],
-						[{ "/": { "bytes": "7QGBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlA" } }, 2],
-						[{ "/": { "bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA" } }, 1]
+					"ids": [
+						{
+							"/": {
+								"bytes": "KOn620NuHsZCL0HqDWPuq71RdENgFqaxZfqtZVAnkQs"
+							}
+						},
+						{
+							"/": {
+								"bytes": "XDHHWzRWsnYUbFL0VMp77Ol7sfiXf137XwbwN6qxsII"
+							}
+						}
 					],
-					"headers": [[{ "/": { "bytes": "NAHtAe0BE18" } }, 5]],
-					"lamport": { "/": { "bytes": "AgICAgI" } },
-					"parents": [[], null, null, null, null],
-					"patches": [[{ "path": [], "value": 1 }], [{ "path": [], "value": {} }], [], [], []],
-					"external": [[null, 5]],
-					"metadata": [[null, 5]],
+					"base": [
+						[
+							null,
+							5
+						]
+					],
+					"time": {
+						"/": {
+							"bytes": "AAAAAAA"
+						}
+					},
+					"actor": [
+						[
+							"chee",
+							2
+						],
+						[
+							{
+								"name": "juno"
+							},
+							2
+						],
+						[
+							"chee",
+							1
+						]
+					],
+					"nonce": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"table": [
+						[
+							"value",
+							1
+						],
+						[
+							"attributes",
+							2
+						],
+						[
+							"value",
+							2
+						]
+					],
+					"reader": [
+						[
+							null,
+							5
+						]
+					],
+					"signer": [
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							2
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlA"
+								}
+							},
+							2
+						],
+						[
+							{
+								"/": {
+									"bytes": "7QGKiOPddAnxlf1S2y08ul1yymcJvx2UEhvzdIgBtA9vXA"
+								}
+							},
+							1
+						]
+					],
+					"headers": [
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							1
+						],
+						[
+							null,
+							1
+						],
+						[
+							{
+								"/": {
+									"bytes": "NAHtAe0BE18"
+								}
+							},
+							2
+						]
+					],
+					"lamport": {
+						"/": {
+							"bytes": "AgICAgI"
+						}
+					},
+					"parents": [
+						[],
+						null,
+						null,
+						null,
+						null
+					],
+					"patches": [
+						[
+							{
+								"path": [],
+								"value": 1
+							}
+						],
+						[
+							{
+								"path": [],
+								"value": {}
+							}
+						],
+						[],
+						[],
+						[]
+					],
+					"external": [
+						[
+							null,
+							5
+						]
+					],
+					"metadata": [
+						[
+							null,
+							5
+						]
+					],
 					"signatures": [
 						{
 							"/": {
-								"bytes": "zgeFrgsMh3Jz5yWpOuHYTdixr54NmAgz8l6XuXuc9PvbFX3edOHezg7iiSRMuaTM88EM5UMMH50gEj/6UV0EAQ"
+								"bytes": "/ZCH7EeTj3S4Q3CiLe5f5qy6RHtzJt2grHOTZyXQVYBbwUgTDle0juTxogqqVRQHc7kiBxiEY89/1r6VpKUHAg"
 							}
 						},
 						{
 							"/": {
-								"bytes": "6Qjgq0nmbcccGMD0Lb8dLy6ZtH0i+qMvcL2fDOdXWi4Vpw/dYUPY1NI4qL4VayPPNp1FqxeeekqL9Cug4KnXAQ"
+								"bytes": "a5q2xBig5y/ohfxqGg0so77kIDOILupCuJWc7p6VQAo1j1z8gwS79G6JPNytXzswszzdJjdVRTfIcrA3ecO9BQ"
 							}
 						},
 						{
 							"/": {
-								"bytes": "30BwHXbB92NEieiozA2lWTxwC2d8dYro25zdMTmN8RGXxZVOb8X2gKrqgvvgQPcrBj/YyVs+60uO7CaCQqwsAA"
-							}
-						},
-						{
-							"/": {
-								"bytes": "6dtcln913dMkCeWI+2Gs7nYBYdQXcohivmNz+qlVcAhxM/LPZGtUidkUBUDCOEnInQUOZ2lWTr1UIQogE7pVCw"
-							}
-						},
-						{
-							"/": {
-								"bytes": "0GpozdPYfEQWPr2B1CLGI9i4AY3iv/9HdXbsVMcMm/aalB+n8JXQiMcUOgshM7QRFdYqYequbyVdh969ENVUDg"
+								"bytes": "E6OjpZpxHoIPVW73UF4NEMeH+XIraoL602ov/YQEcoloEW6DNoknv0bINsAgrG9zq6ok50ILoCMqwoW7IQs7DA"
 							}
 						}
 					]
 				}
 			}
 		},
-		{ "op": "unpack", "run": "r", "expect": { "sealed": ["a", "b", "c", "d", "e"] } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"expect": {
+				"sealed": [
+					{
+						"vouched": "a"
+					},
+					"b",
+					{
+						"vouched": "c"
+					},
+					"d",
+					"e"
+				]
+			}
+		}
 	]
 }

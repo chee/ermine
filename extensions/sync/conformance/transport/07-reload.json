@@ -21,7 +21,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c2",
-			"nonce": 444,
+			"nonce": 1528,
 			"parents": ["c1"],
 			"patches": [{ "path": ["n"], "value": 2 }],
 			"expect": { "added": "taken" }
@@ -30,7 +30,7 @@
 			"op": "take",
 			"device": "a",
 			"name": "c3",
-			"nonce": 445,
+			"nonce": 1529,
 			"parents": ["c2"],
 			"patches": [{ "path": ["n"], "value": 3 }],
 			"expect": { "added": "taken" }
