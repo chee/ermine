@@ -1,0 +1,331 @@
+{
+	"title": "a refused write changes nothing, which container is where too: what it copied on the way is the one it copied again, and what it moved comes back itself, not a copy",
+	"steps": [
+		{
+			"op": "start",
+			"value": {
+				"b": {
+					"x": 1,
+					"y": 2
+				},
+				"l": [
+					{
+						"z": 0
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"value": 0
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"c"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "l",
+			"path": [
+				"l"
+			],
+			"expect": {}
+		},
+		{
+			"op": "mark",
+			"name": "l0",
+			"path": [
+				"l",
+				0
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						0
+					],
+					"move": {
+						"path": [
+							"b",
+							"x"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": "wrong-kind",
+				"patch": 0
+			}
+		},
+		{
+			"op": "same",
+			"name": "b",
+			"path": [
+				"b"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						"z"
+					],
+					"value": 1
+				},
+				{
+					"path": [
+						"b",
+						"y"
+					]
+				},
+				{
+					"path": [
+						"l",
+						5
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 2
+			}
+		},
+		{
+			"op": "same",
+			"name": "l0",
+			"path": [
+				"l",
+				0
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"l",
+						0,
+						"nope",
+						"z"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 0
+			}
+		},
+		{
+			"op": "same",
+			"name": "l",
+			"path": [
+				"l"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "same",
+			"name": "l0",
+			"path": [
+				"l",
+				0
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": {
+						"x": 1,
+						"y": 2
+					},
+					"l": [
+						{
+							"z": 0
+						}
+					],
+					"c": 0
+				}
+			}
+		},
+		{
+			"op": "start",
+			"value": {
+				"b": {
+					"x": {
+						"y": 1
+					},
+					"z": 0
+				}
+			},
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"b",
+						"z"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"undo": [
+					{
+						"path": [
+							"b",
+							"z"
+						],
+						"value": 0
+					}
+				]
+			}
+		},
+		{
+			"op": "mark",
+			"name": "x",
+			"path": [
+				"b",
+				"x"
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [],
+					"move": {
+						"path": [
+							"b",
+							"x"
+						]
+					}
+				},
+				{
+					"path": [
+						"nope",
+						"z"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 1
+			}
+		},
+		{
+			"op": "same",
+			"name": "x",
+			"path": [
+				"b",
+				"x"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "write",
+			"patches": [
+				{
+					"path": [
+						"c"
+					],
+					"move": {
+						"path": [
+							"b",
+							"x"
+						]
+					}
+				},
+				{
+					"path": [
+						"c",
+						"y"
+					],
+					"value": 2
+				},
+				{
+					"path": [
+						"c",
+						"nope",
+						"z"
+					],
+					"value": 1
+				}
+			],
+			"expect": {
+				"error": "no-key",
+				"patch": 2
+			}
+		},
+		{
+			"op": "same",
+			"name": "x",
+			"path": [
+				"b",
+				"x"
+			],
+			"expect": {
+				"same": true
+			}
+		},
+		{
+			"op": "value",
+			"expect": {
+				"value": {
+					"b": {
+						"x": {
+							"y": 1
+						},
+						"z": 1
+					}
+				}
+			}
+		}
+	]
+}

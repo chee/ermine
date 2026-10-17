@@ -21,9 +21,11 @@
 // overlay sharing an entry's value), or reading, a table whose gets are reads
 //
 // owned: only copies made here, from the root down along the paths written (a container's parent
-// is owned when it is). never a patch's value (op puts it in as given: the caller's), nor what a
-// write takes out (its undo holds it): the next write through those copies them. a write that
-// throws changes nothing. cow (node's update's flag, set false by places for children and
+// is owned when it is), and the list a span move takes out (op gives it to owned as it lands).
+// never a patch's value (op puts it in as given: the caller's; an owned container in one, of any
+// entry, is let go first: a walk over every container in each patch's value), nor what a write
+// takes out (its undo holds it): the next write through those copies them. a write that throws
+// changes nothing, which container is where too. cow (node's update's flag, set false by places for children and
 // attributes) is not read: what is changed in place is decided here, so a reader's never is
 import type { ChangeHeader, Entry } from "@ermine/node/entry"
 import apply, { type Patch } from "@ermine/op/apply"
@@ -78,6 +80,15 @@ export function createUnread(): Unread {
 
 	function update<V>(entry: Entry<V>, patches: Iterable<Patch>, change: ChangeHeader) {
 		const ps: readonly Patch[] = Array.isArray(patches) ? patches : [...patches]
+		// a run going on (keeping) may hand on what it read: let go of first
+		const ws = wired.get(unread)
+		if (ws !== undefined) { for (const g of ws) if (g.runs.size) before(g, entry) }
+		// what a patch puts is the caller's from now: nothing in it owned
+		for (const p of ps) {
+			if (p !== null && typeof p === "object" && "value" in p && container(p.value)) {
+				kept(p.value)
+			}
+		}
 		let mine = owns.get(entry)
 		if (mine === undefined) owns.set(entry, mine = {})
 		// one apply, in place where owned: what a patch changes that is not owned yet is copied as
@@ -121,6 +132,16 @@ export function createUnread(): Unread {
 		}
 	}
 
+	// a write while runs go on: what their reads gave them let go; none known (no handed), all of
+	// the entry written
+	function before(g: Going, entry: Entry<unknown>) {
+		if (!g.handed) return void owns.delete(entry)
+		for (const given of g.runs.values()) {
+			for (const x of given) drop(x)
+			given.length = 0
+		}
+	}
+
 	const unread: Unread = {
 		update,
 		read: (entry) => void owns.delete(entry),
@@ -130,16 +151,37 @@ export function createUnread(): Unread {
 	return unread
 }
 
+// a scheduler's runs going on, as keeping sees them: each run → the values its reads gave it
+// (handed: none known, an empty list)
+type Going = { runs: Map<unknown, unknown[]>; handed: boolean }
+// an unread → its wirings: its writes read them
+const wired = new WeakMap<object, Going[]>()
+
 // a scheduler's run ends wired to unread: what a computation keeps past its run is held (kept).
 // a plain result holds nothing. handed: the value a key the run tracked gave it (with places,
-// the value at its spot's path), so the walk stops there; none: results walked whole. gives back
-// the stop
+// the value at its spot's path), so the walk stops there; none: results walked whole. a write
+// made while a run goes on (its set, given the result before the run ends, or the run itself):
+// what the run's reads gave it let go first (no handed: all of the entry written), so what the
+// run keeps never changes. a run awaiting goes on no longer: its landing's set is not seen.
+// gives back the stop
 export function keeping(
-	scheduler: Pick<Scheduler, "onRunEnd">,
+	scheduler: Pick<Scheduler, "onRunStart" | "onRunEnd" | "onTrack">,
 	unread: Pick<Unread, "kept">,
 	handed?: (key: unknown) => unknown,
 ): () => void {
-	return scheduler.onRunEnd((_c, _n, _ended, reads, more) => {
+	const g: Going = { runs: new Map(), handed: handed !== undefined }
+	let ws = wired.get(unread)
+	if (ws === undefined) wired.set(unread, ws = [])
+	ws.push(g)
+	const start = scheduler.onRunStart((c) => void g.runs.set(c, []))
+	const track = handed === undefined ? () => {} : scheduler.onTrack((key, run) => {
+		const given = g.runs.get(run.computer)
+		if (given === undefined) return
+		const x = handed(key)
+		if (container(x)) given.push(x)
+	})
+	const end = scheduler.onRunEnd((c, _n, _ended, reads, more) => {
+		g.runs.delete(c)
 		if (!("kept" in more) || !container(more.kept)) return
 		if (handed === undefined || reads.length === 0) return unread.kept(more.kept)
 		const given = new Set<unknown>()
@@ -149,6 +191,10 @@ export function keeping(
 		}
 		unread.kept(more.kept, given)
 	})
+	return () => {
+		start(), track(), end()
+		ws.splice(ws.indexOf(g), 1)
+	}
 }
 
 // a table whose gets are reads: each entry a get gives is read (unread's read) first. give it to

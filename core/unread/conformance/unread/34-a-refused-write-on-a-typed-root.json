@@ -1,0 +1,21 @@
+{
+	"title": "a refused write changes nothing, where the root is a typed array the write before owns: a splice in place, then one that makes it longer, then a refused patch",
+	"steps": [
+		{ "op": "start", "value": { "/": { "int16": [1, 2, 3] } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": [], "range": [0, 1], "value": { "/": { "int16": [4] } } }],
+			"expect": { "undo": [{ "path": [], "range": [0, 1], "value": { "/": { "int16": [1] } } }] }
+		},
+		{
+			"op": "write",
+			"patches": [
+				{ "path": [], "range": [1, 2], "value": { "/": { "int16": [9] } } },
+				{ "path": [], "range": [0, 0], "value": { "/": { "int16": [7] } } },
+				{ "path": ["x"], "value": 1 }
+			],
+			"expect": { "error": "wrong-kind", "patch": 2 }
+		},
+		{ "op": "value", "expect": { "value": { "/": { "int16": [4, 2, 3] } } } }
+	]
+}

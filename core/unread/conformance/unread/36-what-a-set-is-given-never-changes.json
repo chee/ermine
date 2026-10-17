@@ -1,0 +1,30 @@
+{
+	"title": "what a compute's set is given never changes, though the set writes the entry it came from before the run ends",
+	"steps": [
+		{ "op": "start", "value": { "a": { "x": 1 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["a", "x"], "value": 2 }],
+			"expect": { "undo": [{ "path": ["a", "x"], "value": 1 }] }
+		},
+		{
+			"op": "keep",
+			"scheduler": "compute",
+			"writes": [{ "path": ["b"], "value": 3 }],
+			"hold": "k",
+			"expect": {}
+		},
+		{ "op": "held", "name": "k", "expect": { "value": { "a": { "x": 2 } } } },
+		{ "op": "value", "expect": { "value": { "a": { "x": 2 }, "b": 3 } } },
+		{
+			"op": "keep",
+			"path": ["a"],
+			"scheduler": "fails",
+			"handed": true,
+			"writes": [{ "path": ["a", "x"], "value": 4 }],
+			"hold": "j",
+			"expect": {}
+		},
+		{ "op": "held", "name": "j", "expect": { "value": { "x": 2 } } }
+	]
+}

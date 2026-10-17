@@ -81,13 +81,30 @@ static void clear(set *s) {
 	*s = (set){.owner = s->owner};
 }
 
-// a wiring of un_keeping, kept by u until un_free
-typedef struct wiring {
+// a run going on, as a wiring sees it: what its reads gave it (handed), each held (op_ref)
+typedef struct {
+	sc_computer *c;
+	op_value **given;
+	size_t n, capacity;
+} going;
+
+// a wiring of un_keeping, kept by u until un_free: the runs going on, its listeners (NULL once
+// unwired)
+typedef struct un_wiring {
 	struct un_unread *u;
 	const op_value *(*handed)(const void *key, void *ctx);
 	void *ctx;
-	struct wiring *next;
+	struct un_wiring *next;
+	going *runs;
+	size_t nruns, capacity;
+	sc_listener *start, *track, *end;
 } wiring;
+
+// what a run's reads gave it let go of (each hold released)
+static void forget_run(going *g) {
+	for (size_t i = 0; i < g->n; i++) op_free(g->given[i]);
+	free(g->given);
+}
 
 typedef struct {
 	const nd_entry *entry;
@@ -100,7 +117,7 @@ struct un_unread {
 	size_t count, capacity;
 	pm owner; // an owned container → the set it is in
 	pm by_entry; // an entry → its record
-	struct wiring *wirings;
+	struct un_wiring *wirings;
 };
 
 un_unread *un_new(void) { return calloc(1, sizeof(un_unread)); }
@@ -113,7 +130,9 @@ void un_free(un_unread *u) {
 	pm_clear(&u->owner);
 	pm_clear(&u->by_entry);
 	while (u->wirings != NULL) {
-		struct wiring *next = u->wirings->next;
+		wiring *next = u->wirings->next;
+		for (size_t i = 0; i < u->wirings->nruns; i++) forget_run(&u->wirings->runs[i]);
+		free(u->wirings->runs);
 		free(u->wirings);
 		u->wirings = next;
 	}
@@ -265,8 +284,28 @@ void un_kept(un_unread *u, const op_value *value, const op_value *const *handed,
 	if (g.big != NULL) clear(g.big), free(g.big);
 }
 
+// a write while runs go on: what their reads gave them let go of; none known (no handed), all of
+// the entry written
+static void before(un_unread *u, wiring *w, const nd_entry *entry) {
+	if (w->handed == NULL) {
+		un_read(u, entry);
+		return;
+	}
+	for (size_t i = 0; i < w->nruns; i++) {
+		going *g = &w->runs[i];
+		for (size_t j = 0; j < g->n; j++) drop(u, g->given[j]), op_free(g->given[j]);
+		g->n = 0;
+	}
+}
+
 int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, ch_header header,
 	size_t *failed) {
+	// a run going on (un_keeping) may hand on what it read: let go of first
+	for (wiring *w = u->wirings; w != NULL; w = w->next)
+		if (w->nruns) before(u, w, entry);
+	// what a patch puts is the caller's from now: nothing in it owned
+	for (size_t i = 0; i < n; i++)
+		if (patches[i].has_value && container(patches[i].value)) un_kept(u, patches[i].value, NULL, 0);
 	record *r = find(u, entry);
 	if (r == NULL) {
 		if (u->count == u->capacity) {
@@ -312,12 +351,47 @@ int un_update(un_unread *u, nd_entry *entry, const op_patch *patches, size_t n, 
 	return OP_OK;
 }
 
-// the scheduler's run end: what a run keeps past it, when a container, is kept; the values its
-// reads gave it (containers) are what it was handed
+// a run starts: going on
+static void run_start(sc_computer *c, unsigned n, int rank, void *data) {
+	(void)n, (void)rank;
+	wiring *w = data;
+	if (w->nruns == w->capacity) {
+		w->capacity = w->capacity ? 2 * w->capacity : 4;
+		w->runs = realloc(w->runs, w->capacity * sizeof *w->runs);
+		if (w->runs == NULL) abort();
+	}
+	w->runs[w->nruns++] = (going){c, NULL, 0, 0};
+}
+// a key a run tracked: what it gave the run, held
+static void run_track(const void *key, sc_run *run, void *data) {
+	wiring *w = data;
+	sc_computer *c = sc_run_computer(run);
+	size_t i = w->nruns;
+	while (i > 0 && w->runs[i - 1].c != c) i--;
+	if (i == 0) return;
+	const op_value *x = w->handed(key, w->ctx);
+	if (!container(x)) return;
+	going *g = &w->runs[i - 1];
+	if (g->n == g->capacity) {
+		g->capacity = g->capacity ? 2 * g->capacity : 4;
+		g->given = realloc(g->given, g->capacity * sizeof *g->given);
+		if (g->given == NULL) abort();
+	}
+	g->given[g->n++] = op_ref((op_value *)x);
+}
+
+// the scheduler's run end: the run goes on no more. what it keeps past it, when a container, is
+// kept; the values its reads gave it (containers) are what it was handed
 static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *const *reads, size_t nreads,
 	const sc_more *more, void *data) {
-	(void)c, (void)n, (void)ended;
+	(void)n, (void)ended;
 	wiring *w = data;
+	for (size_t i = w->nruns; i-- > 0;) {
+		if (w->runs[i].c != c) continue;
+		forget_run(&w->runs[i]);
+		w->runs[i] = w->runs[--w->nruns];
+		break;
+	}
 	if (!more->has_kept || !container(more->kept)) return;
 	if (w->handed == NULL || nreads == 0) {
 		un_kept(w->u, more->kept, NULL, 0);
@@ -337,13 +411,26 @@ static void run_end(sc_computer *c, unsigned n, sc_ended ended, const void *cons
 	if (given != stack) free(given);
 }
 
-sc_listener *un_keeping(sc_scheduler *s, un_unread *u,
+un_wiring *un_keeping(sc_scheduler *s, un_unread *u,
 	const op_value *(*handed)(const void *key, void *ctx), void *ctx) {
 	wiring *w = malloc(sizeof *w);
 	if (w == NULL) abort();
-	*w = (wiring){u, handed, ctx, u->wirings};
+	*w = (wiring){.u = u, .handed = handed, .ctx = ctx, .next = u->wirings};
 	u->wirings = w;
-	return sc_on_run_end(s, run_end, w);
+	w->start = sc_on_run_start(s, run_start, w);
+	if (handed != NULL) w->track = sc_on_track(s, run_track, w);
+	w->end = sc_on_run_end(s, run_end, w);
+	return w;
+}
+
+void un_unwire(un_wiring *w) {
+	if (w->end == NULL) return;
+	sc_remove_listener(w->start);
+	if (w->track != NULL) sc_remove_listener(w->track);
+	sc_remove_listener(w->end);
+	w->start = w->track = w->end = NULL;
+	for (size_t i = 0; i < w->nruns; i++) forget_run(&w->runs[i]);
+	w->nruns = 0;
 }
 
 // the harnesses' hooks (unread_conformance_hook.h), only in their builds

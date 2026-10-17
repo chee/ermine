@@ -31,7 +31,19 @@ static void drop(void *value, void *data) {
 static struct {
 	sc_scheduler *s;
 	op_value *k;
+	// keep's writes (NULL: none), and whether the run writes them (else its set)
+	const op_value *writes;
+	int by_run;
 } run;
+static ch_header change(void);
+// keep's writes written to the entry, by the set or the run; refused: nothing written
+static void writes(void) {
+	if (run.writes == NULL || run.writes->type != OP_LIST) return;
+	size_t n = run.writes->count;
+	op_patch *patches = hh_take((n + 1) * sizeof *patches);
+	for (size_t i = 0; i < n; i++) hh_patch(run.writes->items[i], &patches[i]);
+	un_update(unread, entry, patches, n, change(), NULL);
+}
 // the key a computation tracks; handed (keeping's) names what is at path by it
 static char tracked;
 static const op_value *handed_by(const void *key, void *ctx) { return key == &tracked ? ctx : NULL; }
@@ -39,14 +51,17 @@ static const op_value *handed_by(const void *key, void *ctx) { return key == &tr
 static sc_out compute(void *previous, void *data) {
 	(void)previous;
 	sc_track(run.s, &tracked);
+	if (run.by_run) writes();
 	return (sc_out){.kind = SC_VALUE, .value = op_ref(data)};
 }
 static char *set_nothing(void *value, void *data) {
 	(void)value, (void)data;
+	if (!run.by_run) writes();
 	return NULL;
 }
 static char *set_fails(void *value, void *data) {
 	(void)value, (void)data;
+	if (!run.by_run) writes();
 	return strdup("set failed");
 }
 static char *act_nothing(void *value, void *previous, void *data) {
@@ -65,12 +80,12 @@ static void make_computer(void *data) {
 static void keep_through_scheduler(op_value *k, const char *how, const op_value *handed) {
 	mode = how;
 	sc_scheduler *s = sc_new((sc_options){.drop = drop});
-	sc_listener *stop = un_keeping(s, unread, handed != NULL ? handed_by : NULL, (void *)handed);
+	un_wiring *wired = un_keeping(s, unread, handed != NULL ? handed_by : NULL, (void *)handed);
 	sc_pair info = {"actor", "test"};
 	run.s = s, run.k = k;
 	sc_run_with_scope(sc_create_root_scope(s, &info, 1), make_computer, NULL);
 	sc_pulse(s);
-	sc_remove_listener(stop);
+	un_unwire(wired);
 	sc_free(s);
 }
 
@@ -203,6 +218,14 @@ void hh_answer(const op_value *r, FILE *out) {
 		size_t n = list->count;
 		op_patch *patches = hh_take((n + 1) * sizeof *patches);
 		for (size_t i = 0; i < n; i++) hh_patch(list->items[i], &patches[i]);
+		// marked: patch i given what was marked under marked[i] (nothing: a removal)
+		const op_value *names = op_get(r, "marked");
+		for (size_t i = 0; names != NULL && names->type == OP_LIST && i < n && i < names->count; i++) {
+			if (names->items[i]->type != OP_STR) continue;
+			named *m = look(&marked, names->items[i]->str);
+			patches[i].value = m != NULL ? m->value : NULL;
+			patches[i].has_value = patches[i].value != NULL;
+		}
 		write(out, patches, n, hold);
 	} else if (strcmp(op, "unwrite") == 0) {
 		if (!entry->change.has_op) {
@@ -229,6 +252,8 @@ void hh_answer(const op_value *r, FILE *out) {
 		const op_value *hd = op_get(r, "handed");
 		int handed = hd != NULL && hd->type == OP_BOOL && hd->bool_;
 		const op_value *wrap = op_get(r, "wrap"), *sched = op_get(r, "scheduler");
+		const char *by = hh_str(r, "by");
+		run.writes = op_get(r, "writes"), run.by_run = by != NULL && strcmp(by, "run") == 0;
 		if (wrap != NULL && wrap->type == OP_BOOL && wrap->bool_) {
 			// nothing there, in a list: null, as the line has it
 			op_value *list = op_list();
@@ -238,6 +263,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		if (sched != NULL && sched->type == OP_BOOL && sched->bool_) keep_through_scheduler(k, "compute", handed ? v : NULL);
 		else if (sched != NULL && sched->type == OP_STR) keep_through_scheduler(k, sched->str, handed ? v : NULL);
 		else un_kept(unread, k, handed ? &v : NULL, handed ? 1 : 0);
+		run.writes = NULL, run.by_run = 0;
 		if (hold != NULL) keep(&held, hold, k);
 		else op_free(k);
 		fputs("{}", out);

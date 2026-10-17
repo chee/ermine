@@ -1,0 +1,17 @@
+{
+	"title": "one move refused where it lands, after its take: the map it took from is as it was",
+	"steps": [
+		{ "op": "start", "value": { "b": { "x": 1, "y": 2 } }, "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": ["c"], "value": 0 }],
+			"expect": { "undo": [{ "path": ["c"] }] }
+		},
+		{
+			"op": "write",
+			"patches": [{ "path": [0], "move": { "path": ["b", "x"] } }],
+			"expect": { "error": "wrong-kind", "patch": 0 }
+		},
+		{ "op": "value", "expect": { "value": { "b": { "x": 1, "y": 2 }, "c": 0 } } }
+	]
+}

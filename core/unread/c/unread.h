@@ -5,10 +5,12 @@
 // those in place, as op_apply's in_place does. a read lets go of all of it: what a reader holds is
 // never changed under it, and the next write copies again
 //
-// owned: only copies made here, from the root down along the paths written. never a patch's value
-// (op puts it in as given: the caller's), nor what a write takes out (its undo holds it). each
+// owned: only copies made here, from the root down along the paths written, and the list a span
+// move takes out (op_apply gives it to owned as it lands). never a patch's value (op puts it in as
+// given: the caller's; an owned container in one, of any entry, is let go of first: a walk over
+// every container in each patch's value), nor what a write takes out (its undo holds it). each
 // patch is owned and applied in the tree the ones before it left. a write that fails puts back
-// what landed and changes nothing
+// what landed and changes nothing, which container is where too
 //
 // memory: the owned set of an entry holds one reference (op_ref) on every container in it, so
 // a container in a set is never freed and its address never reused; released when it leaves the
@@ -55,8 +57,14 @@ void un_kept(un_unread *u, const op_value *value, const op_value *const *handed,
 // the scheduler's values are taken as op_value * (as the harness world's are). handed: NULL, or the
 // host's function from a key the run tracked to the value that key gave it (NULL: none, or not a
 // container); with it and reads, those values are the handed set, else the result is walked whole.
-// ctx is passed to it. the listener, for sc_remove_listener (u keeps the wiring until un_free)
-sc_listener *un_keeping(sc_scheduler *s, un_unread *u,
+// ctx is passed to it. a write (un_update) made while a run goes on (its set, given the result
+// before the run ends, or the run itself): what the run's reads gave it (held till the run ends)
+// let go of first; no handed, all of the entry written. a run awaiting goes on no longer: its
+// landing's set is not seen. the wiring, for un_unwire (u keeps it until un_free)
+typedef struct un_wiring un_wiring;
+un_wiring *un_keeping(sc_scheduler *s, un_unread *u,
 	const op_value *(*handed)(const void *key, void *ctx), void *ctx);
+// its listeners removed (before the scheduler is freed), what it held let go of
+void un_unwire(un_wiring *w);
 
 #endif

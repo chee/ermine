@@ -6,9 +6,12 @@
 // { op: "start", value? }          → {}   a new entry with value (none: nothing there), a new
 //    unread; what was held and marked let go. the value is the caller's, owned by no one: the
 //    first write copies it. the entry's change has no op yet
-// { op: "write", patches, hold? }  → { undo }   unread's update, its op's undo (as node's update
-//    gives it: each patch's undo, the last patch's first). patches: [] is a write ({ undo: [] }); patches not a list
-//    (or missing): { error: string }, nothing changes.
+// { op: "write", patches, hold?, marked? }  → { undo }   unread's update, its op's undo (as node's
+//    update gives it: each patch's undo, the last patch's first). patches: [] is a write
+//    ({ undo: [] }); patches not a list (or missing): { error: string }, nothing changes.
+//    marked: a list beside patches: a name at i (not null) gives patch i the value what was
+//    marked under it (mark), by identity: what the entry holds, unread or not (a name never
+//    marked: nothing, a removal).
 //    an ApplyError answers { error: code, patch: index }: code one of "not-a-patch", "no-key",
 //    "wrong-kind", "range", "into-itself" (op's apply), index the first patch that failed,
 //    counted from 0 in the whole write. a refused write changes nothing: the patches before it
@@ -30,7 +33,11 @@
 //    unobservable here: no answer tells handed or scheduler from neither. each lets go of what
 //    kept alone does (every kind of run keeps its result): an implementation may ignore both
 //    and pass. what was kept (handed too), held, or given back in an undo never changes after,
-//    even where a span moved out of a list landed as a new list holding owned elements
+//    even where a span moved out of a list landed as a new list holding owned elements.
+//    writes (with scheduler): patches written to the entry (unread's update; refused: nothing
+//    written) by a compute's set, before it returns or throws; by: "run": by the computation
+//    itself (an effect's too), after it took what it returns. what was kept never changes
+//    after, those writes too
 // { op: "held", name }             → { value? }   what was held under name, as it is now; a name
 //    never held: {}
 // { op: "value" }                  → { value? }   the entry's value now; not a read
@@ -43,8 +50,8 @@
 //
 // path (keep, mark, same): keys from the root, [] or none the whole value; a string into a map, a
 // whole number into a list; into anything else, or a key not there: nothing there. a name given
-// again (hold, mark) is replaced. answers' maps keep their keys in order (suite.json ordered): a
-// key taken out and put back goes last, in place or copied
+// again (hold, mark) is replaced. a map's key order is not part of its value (op's apply.ts):
+// answers are compared by content
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { ApplyError, type Key, type Patch } from "@ermine/op/apply"
 import { revive, toJson } from "../../../conformance/typescript/form.ts"
@@ -89,6 +96,18 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 		return { undo: toJson(entry.change.op!.undo) }
 	}
 
+	// marked's: patch i given what was marked under marked[i]
+	function given(patches: Patch[], names: unknown): Patch[] {
+		if (!Array.isArray(names)) return patches
+		return patches.map((p, i) => {
+			const name = names[i]
+			if (typeof name !== "string") return p
+			const { value: _, ...rest } = p
+			const v = marked.get(name)
+			return v === undefined ? rest : { ...rest, value: v }
+		})
+	}
+
 	function answer(r: Request) {
 		switch (r.op) {
 			case "start":
@@ -98,7 +117,7 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 				return {}
 			case "write":
 				if (!Array.isArray(r.patches)) throw new Error("write: patches is not a list")
-				return write(revive(r.patches) as Patch[], r.hold)
+				return write(given(revive(r.patches) as Patch[], r.marked), r.hold)
 			case "unwrite": {
 				const undo = entry.change.op?.undo
 				if (undo === undefined) return { error: "nothing-written" }
@@ -121,11 +140,21 @@ export function createHarness(): (r: Request) => Record<string, unknown> {
 						unread,
 						r.handed ? (x) => x === key ? v : undefined : undefined,
 					)
-					const f = () => (s.track(key), k)
+					// what the set (or, by "run", the run) writes; refused: nothing
+					const writes = () => {
+						if (!Array.isArray(r.writes)) return
+						try {
+							unread.update(entry, revive(r.writes) as Patch[], change())
+						} catch (e) {
+							if (!(e instanceof ApplyError)) throw e
+						}
+					}
+					const f = () => (s.track(key), r.by === "run" && writes(), k)
 					s.runWithScope(s.createRootScope([["actor", "test"]]), () => {
 						if (r.scheduler === "effect") s.createEffect(f, () => {})
 						else {
 							s.createComputer(f, () => {
+								if (r.by !== "run") writes()
 								if (r.scheduler === "fails") throw new Error("set fails")
 							})
 						}
