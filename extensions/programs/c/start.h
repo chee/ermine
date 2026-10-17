@@ -42,7 +42,7 @@
 #define PROGRAMS_START_H
 
 #include "../../../ermine/processes/c/start.h"
-#include "../../../ermine/programs/c/build.h"
+#include "../../build/c/build.h"
 #include "programs.h"
 
 typedef struct ps ps;

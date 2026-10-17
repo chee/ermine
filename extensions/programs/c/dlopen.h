@@ -15,7 +15,7 @@
 #ifndef PROGRAMS_DLOPEN_H
 #define PROGRAMS_DLOPEN_H
 
-#include "../../../ermine/programs/c/host.h"
+#include "../../build/c/host.h"
 
 typedef struct dlr dlr;
 

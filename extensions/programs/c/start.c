@@ -3,7 +3,7 @@
 
 #include <string.h>
 
-#include "../../../ermine/programs/c/mem.h"
+#include "../../build/c/mem.h"
 
 // a load (start.ts' Load): its key, and the value loaded (held, so a key naming it by its address
 // names no other); its live form once loaded, or its failure (malloc'd); how many processes hold it;
