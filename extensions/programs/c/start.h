@@ -1,7 +1,7 @@
 // Start (typescript/start.ts), in C: a process from a way (satisfy's program with one of its chains, or
 // one of open_with's), in a box or plain places (the root is the outermost box), at a path from its
 // root; and its stop. Same rules as start.ts (its header says them once), which the scenarios in
-// playground/programs/conformance/start hold both to. The process's life (its scope, node, row,
+// extensions/programs/conformance/start hold both to. The process's life (its scope, node, row,
 // args, cwd, pin, status and stop) is ermine/processes' start.h's; this runs the way in it. A box
 // here is its places (bx_places): places rooted at its folder, asked its processes and children; any
 // places stands in for one.

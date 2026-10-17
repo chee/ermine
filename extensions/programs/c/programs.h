@@ -1,6 +1,6 @@
 // Programs (typescript/programs.ts), in C: what runs a program, found by matching types, every way
 // listed; and what opens a file. Same rules as programs.ts (its header says them once: the model, the
-// attributes, candidates, chains, why), which the scenarios in playground/programs/conformance/programs
+// attributes, candidates, chains, why), which the scenarios in extensions/programs/conformance/programs
 // and open hold both to.
 //
 //   pg_found *f = pg_satisfy(places, "catclock.c", from, nfrom);

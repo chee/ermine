@@ -1,4 +1,4 @@
-// deno run playground/programs/typescript/programs_bench.ts [name…]   (deno bench runs it too)
+// deno run extensions/programs/typescript/programs_bench.ts [name…]   (deno bench runs it too)
 // satisfy and openwith over a real table, paths, scheduler and places (root R, children alone, no
 // box), the well-known types installed at R/ermine/types; every loader a host function in one
 // folder W (R/work), the program or file there too, the search from ["work"]. each shape timed
