@@ -10,8 +10,8 @@ import { assert, assertEquals } from "@std/assert"
 import { PlacesError } from "@ermine/places"
 import { get, list, lookup, members } from "@ermine/places/lib"
 import type { Spot } from "@ermine/scheduler/paths"
-import { isMap, rand } from "./gen.ts"
-import { createWorld, show, type Wrote } from "./world.ts"
+import { isMap, rand } from "./gen_harness.ts"
+import { createWorld, show, type Wrote } from "./world_harness.ts"
 
 const SEEDS = 40
 const STEPS = 50

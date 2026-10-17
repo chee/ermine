@@ -12,8 +12,8 @@ import apply from "@ermine/op/apply"
 import createEntry, { type Entry } from "@ermine/node/entry"
 import { createTable } from "@ermine/table"
 import { move, PlacesError } from "@ermine/places"
-import { differ, isMap, rand, snap } from "./gen.ts"
-import { createWorld, show, type Wrote } from "./world.ts"
+import { differ, isMap, rand, snap } from "./gen_harness.ts"
+import { createWorld, show, type Wrote } from "./world_harness.ts"
 import { get, list, lookup } from "@ermine/places/lib"
 
 const SEEDS = 40
