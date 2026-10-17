@@ -80,8 +80,13 @@ push (kept, fouled) j =
             | not (any (atOrUnder (path p)) fouled)
             , not (maybe False lone (value p))
             , Just joined <- join e p ->
-                (joined : rest, fouled1)
+                (reach joined rest, fouled1)
           _ -> (p : kept, fouled1)
+
+-- | merges reach back: the joined patch joined into the one before it, while they join
+reach :: P -> [P] -> [P]
+reach l (e : rest) | Just j <- join e l = reach j rest
+reach l kept = l : kept
 
 -- | drop earlier patches at or under p's path, last first, until one is not
 kill :: P -> [P] -> [P]
