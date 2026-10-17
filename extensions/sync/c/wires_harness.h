@@ -1,8 +1,8 @@
 // What the transport and sync harnesses share (extensions/sync/typescript/harnesses.ts), in C:
 // devices in one process joined by in-memory pipes, in order, as harnesses.ts's pipe is; the clock
 // the devices run on, which moves only when a harness moves it; quiet's count of what crossed
-#ifndef WR_WIRES_H
-#define WR_WIRES_H
+#ifndef WR_WIRES_HARNESS_H
+#define WR_WIRES_HARNESS_H
 
 #include "transport.h"
 

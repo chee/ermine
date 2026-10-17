@@ -104,8 +104,9 @@ export function createCommits() {
 			const h = typeof name === "string" ? name : hex(name)
 			return labels.get(h) ?? h
 		},
-		// the made commit, sealed by its seed's signer
-		sealed: (m: Made) => seal(m.bytes, m.signer, { commit: m.commit, name: m.name }),
+		// the made commit, sealed by its seed's signer for a document (its 32 bytes)
+		sealed: (m: Made, doc: Uint8Array) =>
+			seal(m.bytes, m.signer, doc, { commit: m.commit, name: m.name }),
 	}
 }
 export type Commits = ReturnType<typeof createCommits>

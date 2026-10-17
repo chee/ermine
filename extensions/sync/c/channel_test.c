@@ -1,8 +1,8 @@
 // The presence channel over a device (channel.h), as extensions/sync/typescript/channel_test.ts tries
-// it: two devices joined by a pipe (wires.h). Prints each check that fails; exits 1 if any did. Its
+// it: two devices joined by a pipe (wires_harness.h). Prints each check that fails; exits 1 if any did. Its
 // arguments are not read
 #include "channel.h"
-#include "wires.h"
+#include "wires_harness.h"
 
 #include <stdio.h>
 #include <stdlib.h>

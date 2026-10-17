@@ -23,7 +23,4 @@
 // "eg-walker": merge with state NULL is the pure rule; create makes a keeping walker (EG_LIMIT)
 extern const rp_rule eg_rule;
 
-// a keeping walker with its own limit (fewer, to see it built again); eg_rule.free lets it go
-void *eg_walker(size_t limit);
-
 #endif

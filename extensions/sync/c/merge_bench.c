@@ -1,11 +1,11 @@
 // Two hosts typing into one text at once, merging by eg-walker (extensions/sync/typescript/
 // merge_bench.ts, in C): the CPU time it takes (the machine may be loaded, so wall time misleads), and
 // the part of it merging. merge-bench [keys per host] [pure: eg-walker from scratch every merge,
-// without its walker]. Two syncs over one in-memory pipe (wires.h), each with a table of its own; the
+// without its walker]. Two syncs over one in-memory pipe (wires_harness.h), each with a table of its own; the
 // host's writes as the sync harness makes them, with no places
 #include "egwalker.h"
 #include "sync.h"
-#include "wires.h"
+#include "wires_harness.h"
 
 #include "../../../core/node/c/update.h"
 

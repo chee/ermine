@@ -530,7 +530,7 @@ static bool unset(state *s, slot *root, const op_target *t) {
 
 // the span [a, b) of the sequence at t taken out, what was there given back (when was is not NULL),
 // value's elements put in its place (value NULL: none)
-static bool splice(state *s, slot *root, const op_target *t, long a, long b, const op_value *value, op_value **was) {
+static bool splice(state *s, slot *root, const op_target *t, int64_t a, int64_t b, const op_value *value, op_value **was) {
 	val *v = at(s, root, t, t->length);
 	if (v == NULL || v->kind != SEQ || a > b || a < 0) return false;
 	size_t n;
@@ -552,21 +552,21 @@ static bool splice(state *s, slot *root, const op_target *t, long a, long b, con
 		op_value *out;
 		if (v->of == LIST) {
 			out = op_list();
-			for (long i = a; i < b; i++) op_push(out, show(s, read(s, &items[i]->slot)));
+			for (int64_t i = a; i < b; i++) op_push(out, show(s, read(s, &items[i]->slot)));
 		} else {
 			size_t length = 0;
-			for (long i = a; i < b; i++) length += items[i]->len;
+			for (int64_t i = a; i < b; i++) length += items[i]->len;
 			unsigned char *bytes = malloc(length + 1);
 			if (bytes == NULL) abort();
 			length = 0;
-			for (long i = a; i < b; i++) memcpy(bytes + length, items[i]->atom, items[i]->len), length += items[i]->len;
+			for (int64_t i = a; i < b; i++) memcpy(bytes + length, items[i]->atom, items[i]->len), length += items[i]->len;
 			bytes[length] = 0;
 			if (v->of == STRING) out = op_str_take((char *)bytes, length);
 			else out = op_typed(v->typed, bytes, (size_t)(b - a)), free(bytes);
 		}
 		*was = out;
 	}
-	for (long i = a; i < b; i++) remove_item(s, items[i]);
+	for (int64_t i = a; i < b; i++) remove_item(s, items[i]);
 	item *origin = a > 0 ? items[a - 1] : NULL;
 	free(items);
 	if (value == NULL) return true;
@@ -959,13 +959,12 @@ typedef struct {
 	state *state;
 } keeping;
 
-void *eg_walker(size_t limit) {
+static void *create(void) {
 	keeping *w = calloc(1, sizeof *w);
 	if (w == NULL) abort();
-	w->limit = limit;
+	w->limit = EG_LIMIT;
 	return w;
 }
-static void *create(void) { return eg_walker(EG_LIMIT); }
 static void walker_free(void *p) {
 	keeping *w = p;
 	if (w == NULL) return;

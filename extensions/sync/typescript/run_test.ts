@@ -1,8 +1,10 @@
 import { assert, assertEquals, assertThrows } from "@std/assert"
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, compare, encode, name } from "@ermine/encoding/commit"
-import { pack, RunError, unpack } from "./run.ts"
-import { createSigner, seal } from "./seal.ts"
+import { pack, RunError, unpack, type Unpacked } from "./run.ts"
+import { createSigner, seal, stored } from "./seal.ts"
+
+const DOC = new Uint8Array(32).fill(0x2a)
 
 const signers = [
 	await createSigner(new Uint8Array(32).fill(1)),
@@ -23,7 +25,7 @@ async function made() {
 		const commit: Commit = { ...c, signer: signers[by].key, nonce: n++, time }
 		const b = encode(commit)
 		names.push(name(b))
-		out.push(await seal(b, signers[by]))
+		out.push(await seal(b, signers[by], DOC))
 		return names[names.length - 1]
 	}
 	let head = await add({
@@ -84,20 +86,35 @@ async function made() {
 	return out
 }
 
-Deno.test("run: packs to columns and back to each sealed commit's exact bytes", async () => {
+// what was packed, as unpack gives it back: each one's seal, or only its commit and stored id when
+// the next one vouches for it
+const members = (back: Unpacked[]) =>
+	back.map((u) => u.sealed ?? { commit: u.commit, stored: u.stored })
+
+// each commit back exactly, its stored id its seal's, and its seal when it is not vouched for
+function same(back: Unpacked[], sealed: Uint8Array[]) {
+	assertEquals(back.length, sealed.length)
+	sealed.forEach((s, i) => {
+		const o = cbor.decode(s) as { commit: Uint8Array }
+		assertEquals(back[i].commit, o.commit, `commit ${i}`)
+		assertEquals(back[i].stored, stored(s), `commit ${i}`)
+		if (back[i].sealed !== undefined) assertEquals(back[i].sealed, s, `commit ${i}`)
+	})
+}
+
+Deno.test("run: packs to columns and back to each commit's exact bytes, signed ones' seals too", async () => {
 	const sealed = await made()
 	const packed = pack(sealed)
 	const back = unpack(packed)
-	assertEquals(back.length, sealed.length)
-	for (let i = 0; i < sealed.length; i++) assertEquals(back[i], sealed[i], `commit ${i}`)
+	same(back, sealed)
 	// the same commits, the same bytes
-	assertEquals(pack(back), packed)
+	assertEquals(pack(members(back)), packed)
 	// smaller: a run of typing is about its signatures
 	const whole = cbor.encode({ members: sealed }).length
 	assert(packed.length < whole / 2.5, `${packed.length} against ${whole}`)
 })
 
-Deno.test("run: typing packs to about its signatures and their list", async () => {
+Deno.test("run: typing is one signature: each commit but the last vouched for by the next", async () => {
 	const s = signers[0]
 	const sealed: Uint8Array[] = []
 	let parent: Uint8Array | undefined
@@ -113,18 +130,22 @@ Deno.test("run: typing packs to about its signatures and their list", async () =
 			patches: [{ path: ["body"], range: [i, i], value: "x" }],
 		}
 		const b = encode(c)
-		sealed.push(await seal(b, s))
+		sealed.push(await seal(b, s, DOC))
 		parent = name(b)
 	}
 	const per = pack(sealed).length / 256
-	assert(per < 74, `${per} bytes a commit`)
-	assertEquals(unpack(pack(sealed)), sealed)
+	assert(per < 44, `${per} bytes a commit`)
+	const back = unpack(pack(sealed))
+	same(back, sealed)
+	assertEquals(back.filter((u) => u.sealed !== undefined).length, 1)
 })
 
 Deno.test("run: what isn't a run is refused", () => {
 	assertThrows(() => unpack(new Uint8Array([1])), RunError)
 	assertThrows(() => unpack(cbor.encode({ n: 1 })), RunError)
 	assertEquals(unpack(pack([])), [])
+	// one that must be signed, given without its seal
+	assertThrows(() => pack([{ commit: new Uint8Array(1), stored: new Uint8Array(32) }]))
 })
 
 Deno.test("run: differences exact to 2^53 - 1 either way; a commit before its parent names it", async () => {
@@ -143,15 +164,15 @@ Deno.test("run: differences exact to 2^53 - 1 either way; a commit before its pa
 			patches: [],
 		})
 		names.push(name(b))
-		sealed.push(await seal(b, s))
+		sealed.push(await seal(b, s, DOC))
 	}
 	await add(2 ** 53 - 1, 0)
 	await add(0, 2 ** 53 - 1)
 	await add(1, 5, [names[0]])
-	assertEquals(unpack(pack(sealed)), sealed)
+	same(unpack(pack(sealed)), sealed)
 	// the child first: its parent by name, never by a place after its own
 	const backwards = [sealed[2], sealed[0]]
-	assertEquals(unpack(pack(backwards)), backwards)
+	same(unpack(pack(backwards)), backwards)
 })
 
 Deno.test("run: refused with a code, and the column", () => {
@@ -165,6 +186,7 @@ Deno.test("run: refused with a code, and the column", () => {
 				...cbor.decode(pack([])) as object,
 				n: 1,
 				signatures: [new Uint8Array(64)],
+				ids: [],
 				table: [["value", 2 ** 50]],
 			}),
 		)

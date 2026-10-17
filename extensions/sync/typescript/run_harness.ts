@@ -3,16 +3,24 @@
 // packed by label. another implementation joins by speaking this (HARNESS). conventions, and a
 // commit by label: extensions/sync/conformance/README.md
 //
-// { op: "make", name, ...fields }          → {}             a commit made, labelled and sealed
+// { op: "make", name, ...fields }          → {}             a commit made, labelled and sealed (for
+//                                                            the default document, 2a × 16 then
+//                                                            00 × 16)
 // { op: "sealed", commit }                 → { sealed }     its sealed bytes, hex
-// { op: "pack", commits, name? }           → { run }        commits: labels, or sealed bytes as hex;
-//                                                            name: the run kept under that label
+// { op: "pack", commits, name? }           → { run }        commits: labels, or sealed bytes as hex,
+//                                                            or { vouched: label, stored? }: the
+//                                                            commit without its seal, its stored id
+//                                                            (hex; default its seal's); name: the
+//                                                            run kept under that label
 // { op: "unpack", run, set?, drop? }       → { sealed }     run: a label, or hex. set: columns put
 //                                                            in (each a value in its JSON form),
 //                                                            drop: columns taken out, the run
 //                                                            encoded canonically again first.
-//                                                            sealed: labels, or hex when made by
-//                                                            none
+//                                                            sealed: each commit signed in it, a
+//                                                            label, or hex when made by none; one
+//                                                            vouched for by the next, { vouched:
+//                                                            label (or its name, hex), stored? }
+//                                                            (stored when not its seal's: hex)
 // { op: "unpack", value }                  → { sealed }     the value encoded canonically first
 // { op: "columns", run }                   → { columns }    the run as a value, in its JSON form
 // refused: { error: code, column? }, RunError's
@@ -21,7 +29,9 @@ import { revive, toJson } from "../../../conformance/typescript/form.ts"
 import { type Answer, type Request, serve } from "../../../conformance/typescript/harness.ts"
 import { hex, unhex } from "../../../ermine/encoding/typescript/commit_harness.ts"
 import { createCommits } from "./harnesses.ts"
-import { pack, RunError, unpack } from "./run.ts"
+import { type Member, pack, RunError, unpack } from "./run.ts"
+import { stored } from "./seal.ts"
+import { docOf } from "./seal_harness.ts"
 
 const commits = createCommits()
 // sealed bytes by label, and labels by sealed bytes
@@ -53,7 +63,7 @@ async function answer(r: Request): Promise<Answer> {
 		switch (r.op) {
 			case "make": {
 				const m = await commits.make(r)
-				const s = await commits.sealed(m)
+				const s = await commits.sealed(m, docOf({}))
 				seals.set(m.label, s)
 				if (!sealedLabels.has(hex(s))) sealedLabels.set(hex(s), m.label)
 				return {}
@@ -61,15 +71,31 @@ async function answer(r: Request): Promise<Answer> {
 			case "sealed":
 				return { sealed: hex(sealedOf(r.commit)) }
 			case "pack": {
-				const sealed: Uint8Array[] = []
-				for (const c of r.commits) sealed.push(sealedOf(c))
-				const run = pack(sealed)
+				const members: Member[] = []
+				for (const c of r.commits) {
+					if (c === null || typeof c !== "object") members.push(sealedOf(c))
+					else {
+						const m = commits.get(c.vouched)
+						if (!m) throw new Error(`no commit ${c.vouched}`)
+						const id = c.stored !== undefined ? unhex(c.stored) : stored(sealedOf(c.vouched))
+						members.push({ commit: m.bytes, stored: id })
+					}
+				}
+				const run = pack(members)
 				if (typeof r.name === "string") runs.set(r.name, run)
 				return { run: hex(run) }
 			}
 			case "unpack":
 				return {
-					sealed: unpack(edited(r)).map((s) => sealedLabels.get(hex(s)) ?? hex(s)),
+					sealed: unpack(edited(r)).map((u) => {
+						if (u.sealed !== undefined) {
+							return sealedLabels.get(hex(u.sealed)) ?? hex(u.sealed)
+						}
+						const label = commits.label(u.name), s = seals.get(label)
+						return s !== undefined && hex(stored(s)) === hex(u.stored)
+							? { vouched: label }
+							: { vouched: label, stored: hex(u.stored) }
+					}),
 				}
 			case "columns":
 				return { columns: toJson(cbor.decode(runOf(r.run))) }

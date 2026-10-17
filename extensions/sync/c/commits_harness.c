@@ -1,7 +1,7 @@
-// The commits a harness makes (commits.h)
-#include "commits.h"
+// The commits a harness makes (commits_harness.h)
+#include "commits_harness.h"
 
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 #include "../../../ermine/encoding/c/pack.h"
 
 #include <stdlib.h>
@@ -29,7 +29,9 @@ void cs_destroy(cs_commits *c) {
 	free(c);
 }
 
-bool cs_gives(const op_value *r) {
+// whether the request gives any of a commit's fields (table, actor, reader, external, metadata,
+// time, seed, nonce, parents, base, lamport, patches)
+static bool cs_gives(const op_value *r) {
 	static const char *const fields[] = {"table", "actor", "reader", "external", "metadata", "time",
 		"seed", "nonce", "parents", "base", "merge", "lamport", "patches"};
 	for (size_t i = 0; i < sizeof fields / sizeof *fields; i++)
@@ -170,8 +172,10 @@ const cs_made *cs_make(cs_commits *c, const op_value *r, cs_failure *why) {
 	return c->made[c->length++] = m;
 }
 
-void cs_sealed(const cs_made *m, uint8_t **out, size_t *length) {
+const uint8_t cs_doc[32] = {0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a, 0x2a};
+
+void cs_sealed(const cs_made *m, const uint8_t doc[32], uint8_t **out, size_t *length) {
 	sl_made made = {.commit = NULL};
 	memcpy(made.name, m->name, 32);
-	if (sl_seal(m->bytes, m->length, &m->signer->signer, &made, out, length, NULL, NULL) != SL_OK) abort();
+	if (sl_seal(m->bytes, m->length, &m->signer->signer, doc, &made, out, length, NULL, NULL) != SL_OK) abort();
 }

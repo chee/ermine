@@ -1,8 +1,8 @@
 // A commit signed by the device that made it, and the id it is stored under (extensions/sync/
 // typescript/seal.ts), in C. The sealed commit is the canonical map {commit, signature}: the
 // commit's bytes, and a signature: a varsig header, then the raw signature (Ed25519: 8 bytes of header,
-// then 64); the signer's key, a multikey, is in the commit. What is signed is "ermine/v0/commit" then
-// the commit's name. A signature is checked by the verifier whose header it begins with. The built in
+// then 64); the signer's key, a multikey, is in the commit. What is signed is "ermine/v0/commit", the
+// document's 32 bytes, then the commit's name: a seal is good in its document only. A signature is checked by the verifier whose header it begins with. The built in
 // is Ed25519, checked strictly (ed25519.h): S below the group order, A and R canonical and not of
 // small order, the equation without the cofactor. Same bytes as seal.ts.
 #ifndef SL_SEAL_H
@@ -76,21 +76,20 @@ typedef struct {
 	uint8_t name[32];
 } sl_made;
 
-// whether the raw Ed25519 signature is good for the raw key and the message (strictly)
-bool sl_good(const uint8_t signature[64], const uint8_t key[32], const uint8_t *message, size_t length);
 // how many bytes of a signature are its varsig header (0x34 0x01, an algorithm of those varsig
 // names, then the payload encoding: raw, DAG-CBOR, DAG-JSON); 0 for any other, which is no header
 // this reads
 size_t sl_header_length(const uint8_t *signature, size_t length);
-// the sealed commit's bytes, malloc'd into *out (free it). made may be NULL: the commit is decoded
+// the sealed commit's bytes for the document (its 32 bytes), malloc'd into *out (free it). made may
+// be NULL: the commit is decoded
 // and named here, and a bad one is SL_COMMIT with *why and *field set (free *field) (either may
 // be NULL). The commit's signer not the signer's key: SL_SIGNATURE. The signature sign gave no
 // bytes, or too many: SL_SHAPE
-sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, const sl_made *made,
-	uint8_t **out, size_t *out_length, cm_code *why, char **field);
+sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, const uint8_t doc[32],
+	const sl_made *made, uint8_t **out, size_t *out_length, cm_code *why, char **field);
 
-// the commit, checked: its shape, and its signer's signature. bytes: the commit's bytes (the
-// unsealed owns them), name: its name, stored: the seal's id
+// the commit, checked: its shape, and its signer's signature for the document (its 32 bytes).
+// bytes: the commit's bytes (the unsealed owns them), name: its name, stored: the seal's id
 typedef struct {
 	cm_commit commit;
 	uint8_t *bytes;
@@ -103,7 +102,7 @@ typedef struct {
 // bytes or not a commit, a signature not bytes or not the size its verifier says. SL_SIGNATURE: no
 // verifier for the signature's header, the header's key type not the signer's, or not good. more:
 // verifiers beside the built in (NULL: none). sl_free it on SL_OK
-sl_code sl_unseal(const uint8_t *sealed, size_t length, sl_unsealed *out, const sl_verifiers *more);
+sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], sl_unsealed *out, const sl_verifiers *more);
 void sl_free(sl_unsealed *u);
 // the id a sealed commit is stored under: the BLAKE3 hash of its sealed bytes
 void sl_stored(const uint8_t *sealed, size_t length, uint8_t stored[32]);

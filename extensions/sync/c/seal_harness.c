@@ -3,7 +3,7 @@
 #include "seal.h"
 #include "ed25519/ed25519.h"
 
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 #include "../../../ermine/encoding/c/pack.h"
 
 #include <stdlib.h>
@@ -11,6 +11,24 @@
 
 static void refuse(FILE *out, sl_code code) {
 	fprintf(out, "{\"error\":\"%s\"}", sl_code_name(code));
+}
+
+// the document a seal is for: doc (hex), else the default's 32 bytes; refused shape when not 32
+// bytes, the answer written
+static bool doc_of(const op_value *r, FILE *out, uint8_t doc[32]) {
+	const char *hex = hh_str(r, "doc");
+	if (hex == NULL) {
+		// 2a × 16, then 00 × 16
+		memset(doc, 0, 32);
+		memset(doc, 0x2a, 16);
+		return true;
+	}
+	uint8_t *b;
+	size_t n;
+	if (!cf_unhex(hex, &b, &n)) return hh_error(out, "not hex"), false;
+	if (n != 32) return refuse(out, SL_SHAPE), false;
+	memcpy(doc, b, 32);
+	return true;
 }
 
 // a seed: hex, 32 bytes; the answer is written when it is not
@@ -65,7 +83,12 @@ static void seal(const op_value *r, FILE *out) {
 	size_t sealed_length;
 	cm_code why;
 	char *field;
-	sl_code code = sl_seal(commit, length, &s.signer, NULL, &sealed, &sealed_length, &why, &field);
+	uint8_t doc[32];
+	if (!doc_of(r, out, doc)) {
+		if (made) free(commit);
+		return;
+	}
+	sl_code code = sl_seal(commit, length, &s.signer, doc, NULL, &sealed, &sealed_length, &why, &field);
 	if (made) free(commit);
 	if (code == SL_COMMIT) {
 		cf_put_refusal(out, why, field);
@@ -93,8 +116,10 @@ static void unseal(const op_value *r, FILE *out) {
 		hh_error(out, "not hex");
 		return;
 	}
+	uint8_t doc[32];
+	if (!doc_of(r, out, doc)) return;
 	sl_unsealed u;
-	sl_code code = sl_unseal(bytes, length, &u, NULL);
+	sl_code code = sl_unseal(bytes, length, doc, &u, NULL);
 	if (code != SL_OK) {
 		refuse(out, code);
 		return;

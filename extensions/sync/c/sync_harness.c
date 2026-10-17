@@ -1,6 +1,6 @@
 // Whole hosts (sync.h) on the line protocol (conformance/c/harness.h), as extensions/sync/typescript/
 // sync_harness.ts has them: each a table and sync over its own device and store, joined by in-memory
-// pipes (wires.h); its header lists the requests and answers. State lasts for the process. The C host
+// pipes (wires_harness.h); its header lists the requests and answers. State lasts for the process. The C host
 // has no places and no scheduler: reads are the table's, and sync is told the host's writes and the
 // table's events as the TypeScript host tells it.
 //
@@ -13,11 +13,11 @@
 #include "egwalker.h"
 #include "ids.h"
 #include "sync.h"
-#include "wires.h"
+#include "wires_harness.h"
 
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 #include "../../../core/node/c/update.h"
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 
 #include <stdlib.h>
 #include <string.h>

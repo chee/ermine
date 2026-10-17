@@ -7,13 +7,13 @@
 // it cannot judge yet, and it waits on the check. eg-walker's merges
 // are made twice: by the pure rule, and by a keeping walker kept for the process, which must give the
 // same, byte for byte
-#include "commits.h"
+#include "commits_harness.h"
 #include "egwalker.h"
 #include "snapshot.h"
 
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -388,6 +388,26 @@ static void keep(const op_value *r, FILE *out) {
 	fputs("{}", out);
 }
 
+// { op: "hint", commit, tables }: a snapshot from elsewhere, kept (as keep) only when it matches
+static void hint(const op_value *r, FILE *out) {
+	uint8_t name[32], *bytes;
+	size_t length;
+	if (!named(r, out, name) || !packed(r, out, &bytes, &length)) return;
+	bool ok = rp_matches(history, name, bytes, length, snapshots, NULL, &merges);
+	if (!ok) free(bytes);
+	else {
+		char *key = key_of((const uint8_t(*)[32])name, 1);
+		snap *s = (snap *)find(key);
+		if (s != NULL) free(s->bytes), free(key), s->bytes = bytes, s->length = length;
+		else {
+			kept = realloc(kept, (kept_length + 1) * sizeof *kept);
+			if (kept == NULL) abort();
+			kept[kept_length++] = (snap){key, bytes, length};
+		}
+	}
+	fprintf(out, "{\"kept\":%s}", ok ? "true" : "false");
+}
+
 // heads (taken) merged by the rule, default eg-walker
 static void merge(const op_value *r, FILE *out) {
 	uint8_t(*names)[32];
@@ -517,6 +537,7 @@ void hh_answer(const op_value *r, FILE *out) {
 		}
 	} else if (strcmp(op, "replay") == 0) replay(r, out);
 	else if (strcmp(op, "keep") == 0) keep(r, out);
+	else if (strcmp(op, "hint") == 0) hint(r, out);
 	else if (strcmp(op, "merge") == 0) merge(r, out);
 	else if (strcmp(op, "since") == 0) since(r, out);
 	else if (strcmp(op, "snapshot") == 0) snapshot(r, out);
