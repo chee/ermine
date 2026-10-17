@@ -25,10 +25,10 @@
 			"expect": {
 				"moments": [
 					{ "due": "c", "tick": 2 },
-					{ "starts": "c", "run": 1 },
+					{ "starts": "c", "run": 1, "rank": 0 },
 					{ "ends": "c", "run": 1, "ended": "pending" },
 					{ "due": "c", "tick": 3 },
-					{ "starts": "c", "run": 2 },
+					{ "starts": "c", "run": 2, "rank": 0 },
 					{ "ends": "c", "run": 2, "ended": "pending" },
 					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
 				]

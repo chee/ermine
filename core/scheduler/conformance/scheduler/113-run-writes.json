@@ -1,5 +1,5 @@
 {
-	"title": "a change in a run's own code makes its compute the key's writer, as a set does: b, made first, reads k; once a has written k in its run, b is after a and runs after it",
+	"title": "a change in a run's own code makes its compute the key's writer, as a set does: b, made first, reads k; once a has written k in its run, b is ranked after a and runs after it",
 	"steps": [
 		{
 			"op": "root",
@@ -67,7 +67,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -77,7 +78,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"due": "b",
@@ -92,7 +94,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -130,7 +133,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -140,7 +144,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"ends": "b",

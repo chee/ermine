@@ -62,7 +62,8 @@
 					},
 					{
 						"starts": "r",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "r",
@@ -72,7 +73,8 @@
 					},
 					{
 						"starts": "r2",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "r2",
@@ -146,7 +148,8 @@
 				"moments": [
 					{
 						"starts": "w",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "w",
@@ -156,7 +159,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -166,7 +170,8 @@
 					},
 					{
 						"starts": "r",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "r",
@@ -230,7 +235,8 @@
 				"moments": [
 					{
 						"starts": "r",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "r",
@@ -240,7 +246,8 @@
 					},
 					{
 						"starts": "w",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "w",
@@ -250,7 +257,8 @@
 					},
 					{
 						"starts": "r",
-						"run": 4
+						"run": 4,
+						"rank": 1
 					},
 					{
 						"ends": "r",
@@ -317,7 +325,8 @@
 				"moments": [
 					{
 						"starts": "r2",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "r2",
@@ -327,7 +336,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "e",

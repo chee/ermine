@@ -31,7 +31,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -49,7 +50,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -71,7 +73,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "e", "tick": 4 },
-					{ "starts": "e", "run": 3 },
+					{ "starts": "e", "run": 3, "rank": 0 },
 					{ "ends": "e", "run": 3, "ended": "done", "equal": true }
 				]
 			}

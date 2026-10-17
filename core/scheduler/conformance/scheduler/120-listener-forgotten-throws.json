@@ -154,7 +154,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -164,7 +165,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "d",

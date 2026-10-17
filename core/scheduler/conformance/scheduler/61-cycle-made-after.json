@@ -1,5 +1,5 @@
 {
-	"title": "a cycle made after a chain: p0 reads h, p1 reads p0; c0 reads p1, and c2 once shut is true, closing c0, c1, c2. the cycle runs after p1, as c0 did",
+	"title": "a cycle made after a chain: p0 reads h, p1 reads p0; c0 reads p1, and c2 once shut is true, closing c0, c1, c2. the cycle's rank is one past p1's, 2, not 0",
 	"steps": [
 		{
 			"op": "root",
@@ -135,7 +135,8 @@
 					},
 					{
 						"starts": "p0",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "p0",
@@ -145,7 +146,8 @@
 					},
 					{
 						"starts": "p1",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "p1",
@@ -155,7 +157,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -165,7 +168,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c1",
@@ -175,7 +179,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c2",
@@ -189,7 +194,8 @@
 					},
 					{
 						"starts": "p0",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"due": "p1",
@@ -204,7 +210,8 @@
 					},
 					{
 						"starts": "p1",
-						"run": 2
+						"run": 2,
+						"rank": 1
 					},
 					{
 						"due": "c0",
@@ -219,7 +226,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 2
+						"run": 2,
+						"rank": 2
 					},
 					{
 						"due": "c1",
@@ -234,7 +242,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 2
+						"run": 2,
+						"rank": 3
 					},
 					{
 						"due": "c2",
@@ -249,7 +258,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 2
+						"run": 2,
+						"rank": 4
 					},
 					{
 						"ends": "c2",
@@ -296,7 +306,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 3
+						"run": 3,
+						"rank": 2
 					},
 					{
 						"ends": "c0",
@@ -310,7 +321,8 @@
 					},
 					{
 						"starts": "p0",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"due": "p1",
@@ -325,7 +337,8 @@
 					},
 					{
 						"starts": "p1",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"due": "c0",
@@ -340,7 +353,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 4
+						"run": 4,
+						"rank": 2
 					},
 					{
 						"due": "c1",
@@ -355,7 +369,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 3
+						"run": 3,
+						"rank": 2
 					},
 					{
 						"due": "c2",
@@ -370,7 +385,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 3
+						"run": 3,
+						"rank": 2
 					},
 					{
 						"due": "c0",
@@ -385,7 +401,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 5
+						"run": 5,
+						"rank": 2
 					},
 					{
 						"ends": "c0",

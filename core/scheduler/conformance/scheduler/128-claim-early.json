@@ -1,0 +1,189 @@
+{
+	"title": "an early effect made in a run runs and acts at once, inside the run (70); made again by the next run, it is claimed, not made (mine): due by that run, it runs in the round after it, not inside it, and acts in the early queue when its value is new (equal here: no act)",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1,
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"do": [
+					{
+						"effect": [
+							"e",
+							{
+								"read": "x"
+							},
+							{
+								"log": [
+									"e acts",
+									{
+										"given": "value"
+									}
+								]
+							},
+							true
+						]
+					},
+					{
+						"log": [
+							"P runs",
+							{
+								"read": "p"
+							}
+						]
+					},
+					{
+						"read": "p"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"e acts",
+						1
+					],
+					[
+						"P runs",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 2
+					},
+					{
+						"starts": "P",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"due": "e",
+						"tick": 3,
+						"writer": "P"
+					},
+					{
+						"starts": "e",
+						"run": 1,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 1,
+						"early": true
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"P runs",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 5
+					},
+					{
+						"starts": "P",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"due": "e",
+						"tick": 6,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2,
+						"rank": 0
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		}
+	]
+}

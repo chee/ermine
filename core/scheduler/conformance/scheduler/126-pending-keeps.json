@@ -1,5 +1,5 @@
 {
-	"title": "a run that ends pending keeps what it did not make again, as one that fails: what each run made with no name (a plain scope) stays parked through pending runs; the latest run's promise landing done lets them go then, newest first, and its cleanups set aside run once the round's runs are",
+	"title": "a run that ends pending keeps what it did not make again, as one that fails: what each run made with no name (a plain scope) stays, alive, through pending runs; the latest run's promise landing done lets them go then, newest first, and its cleanups set aside run once the round's runs are",
 	"steps": [
 		{
 			"op": "root",
@@ -220,7 +220,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "P",
@@ -239,7 +240,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "P",
@@ -252,7 +254,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "P",

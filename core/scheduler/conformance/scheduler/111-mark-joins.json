@@ -110,7 +110,8 @@
 					},
 					{
 						"starts": "t",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "t",
@@ -120,7 +121,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -158,7 +160,8 @@
 					},
 					{
 						"starts": "t",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "t",
@@ -168,7 +171,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"due": "t",
@@ -183,7 +187,8 @@
 					},
 					{
 						"starts": "t",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "t",

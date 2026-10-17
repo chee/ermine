@@ -64,7 +64,8 @@
 					},
 					{
 						"starts": "x",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "x",
@@ -91,7 +92,8 @@
 				"moments": [
 					{
 						"starts": "b",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -101,7 +103,8 @@
 					},
 					{
 						"starts": "x",
-						"run": 2
+						"run": 2,
+						"rank": 1
 					},
 					{
 						"ends": "x",
