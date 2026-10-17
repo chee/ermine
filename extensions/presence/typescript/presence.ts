@@ -6,6 +6,7 @@
 //   - a channel (channel.ts) sends my rows on topic = the anchor and applies the rows it receives
 //     under the sender's name. "gone" is until lapsing, never the transport
 //   - never saved, unless the host says so (save, below): saving is a side's choice
+import { decode, encode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import type { Patch } from "@ermine/op/apply"
@@ -211,7 +212,6 @@ type Message = {
 	patches?: Patch[]
 	n?: number
 }
-const enc = new TextEncoder(), dec = new TextDecoder()
 
 // the rows at an anchor, over the channel on topic (default: the anchor). what is sent: my rows,
 // whole, as they are written, with the time left (not a time: devices' clocks differ). what is
@@ -244,13 +244,18 @@ export function connect(
 				m.n = n
 			} else m.value = e.row.value
 		}
-		channel.send(topic, enc.encode(JSON.stringify(m)))
+		channel.send(topic, encode(m as never))
 	}
 	let set = s.heard.get(anchor)
 	if (set === undefined) s.heard.set(anchor, set = new Set())
 	set.add(send)
 	const off = channel.on(topic, (from, bytes) => {
-		const m = JSON.parse(dec.decode(bytes)) as Message
+		let m: Message
+		try {
+			m = decode(bytes) as Message
+		} catch {
+			return
+		}
 		if (m.gone) return void take(w, anchor, [from])
 		const until = now(w) + (m.ttl ?? 0)
 		let last = s.last.get(anchor)

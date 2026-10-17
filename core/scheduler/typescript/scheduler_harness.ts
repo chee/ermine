@@ -48,12 +48,25 @@
 //                                                                             → {"keys":[k...]}
 //   {"op":"tick"}       the tick of the latest mark; none yet: 0                 → {"tick":t}
 //   {"op":"current"}   what is open, as the form current shows it              → {"value":v}
+//   {"op":"listener","on":l,"throw":s,"at"?:x}                                       → {}
+//        the harness's own listener l throws an error of message s the next time it is told (of
+//        x, when given), once: "mark" (onMark; x one of its keys), "starts", "ends", "acts" (a
+//        run's start, its end, an act; x the computation), "forgotten", "started" (onTrackingEnd,
+//        onTrackingStart; x the key). armed again: the last one. else "unknown listener l"
+//
+// thrown out (finish, then rethrow): what a listener throws, or a cleanup run after a run, is
+// held while what was going on finishes (every listener told, the run or act or dispose or mark
+// all done), then comes out: the first one, as the answer's error of the request it came out
+// of. a pulse is left there: what is still due, or to act, waits for the next. a run is done
+// before what one threw in it (its start, end, a read's) comes out; a read's, out of the read,
+// into the run, so the run fails with it unless it catches it. the error of a pulse left past
+// ENDLESS is "endless"
 //
 // ticks: each mark (write, changed, a write form, a compute's set) and each new computation takes
 // the next, from 1. a computation made is due at once, at its tick.
 //
 // a moment, computations by name, an error as below:
-//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n,"rank":r}
+//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n}
 //   {"acts":c,"run":n,"early"?:true,"error"?:s}
 //   {"ends":c,"run":n,"ended":"done"|"pending"|"failed"|"stopped"|"looping","equal"?:b,
 //    "error"?:s,"waits"?:c,"through"?:[c..],"reads"?:[k..]}   reads: when asked for
@@ -67,14 +80,16 @@
 // promise settling has no starts before it. a run disposed in itself is told no end. an act: run,
 // the run whose value it is. through: the computations on the loop, each once, in the order they
 // were made (not the order along the loop).
-// what runs: in rounds. the settled land first, in the order settled; then the due run, lowest
-// rank first, then the earliest due (tick), then the order made; one waiting after a due one
-// (stopped) later; then the early effects act, then the others, each queue in the order their
-// runs ended, an owner's act before what it made. an act whose effect is due again does not act.
-// ranks: a computation is after the writers of the keys its last run read and the one it waits
-// after; nothing after: 0; else one past the most of those. learned as runs end, so a first run
-// is rank 0 unless a key was declared. ranks only rise as edges change (an edge gone lowers
-// nothing, even when everything is ranked again); a cycle (a component of more than one) shares one rank, one past what it is after.
+// what runs: in rounds. the settled land first, in the order settled; then the due run, one at a
+// time: of the due, not one waiting after a due one (stopped), nor one with a due one above it;
+// of the rest, the earliest due (tick), then the order made. then the early effects act, then
+// the others, each queue in the order their runs ended, an owner's act before what it made. an
+// act whose effect is due again does not act.
+// above: a computation is after the writers of the keys its last run read and the one it waits
+//   after (learned as runs end: a first run is after nothing, unless a key was declared); above
+//   it, what it is after, what that is after, and on, but for one on a cycle with it (each above
+//   the other). what is not due is passed through: a due one above one not due above it is
+//   above it. no rank is said or pinned: only this order
 // writer: a key's, the compute last named by a change of it, alive then: named by a run of it (in
 //   its code, after an await too, the latest run or not) or by it (its set, its cleanup: its
 //   latest run); or declared. a change named by an effect, by one gone or not run yet, or by none
@@ -96,16 +111,21 @@
 //   carries to the next run when no mark came since
 // a flagged run: a new result ends looping (not set, not acted on, the last result kept); equal,
 //   done, but looping when it cut; failed when it cut, looping, its error told. cut: a loop mark
-//   its change makes (in its code, its cleanups before it, after its await) is dropped, that
+//   its change makes (in its code, its cleanups after it, after its await) is dropped, that
 //   computation not made due; a computation it makes (made due all the same) cuts too. it is
 //   flagged till it ends; pending, till it lands and ends
 // looping: its computation is made due by no mark on a loop through it; one that is not on one
 //   makes it due, and ends it
 // owns: what is made with a computation open (scopes, computations, cleanups) in its run, set or
-//   act is under it. torn down: a compute's, before each run; an effect's, what was made since its
-//   last act before each run, all before each act; all when it goes. a teardown: what is under
-//   first, newest first (each the same way), then its cleanups, newest first
-// a cleanup's writer open: on a computation, it (its latest run; the run starting, before a run);
+//   act is under it. before each run (a compute's: all; an effect's: what was made since its last
+//   act), what is under it goes, newest first (each the same way; what one throws is thrown out),
+//   and its own cleanups are set aside: like Solid, they run once the run is done (its result
+//   set, before its end is told; for every way a run ends), newest first, with no catch: the
+//   first that throws ends the rest, and its error is thrown out (above). a computation that
+//   goes takes those set aside with it. before each act, all of an effect's goes. a teardown
+//   (dispose, or one that goes): what is under first, newest first (each the same way), then its
+//   cleanups, newest first; every one runs, and the first error is the teardown's, after
+// a cleanup's writer open: on a computation, it (its latest run: after a run, that run);
 //   on a plain scope, the teardown's: by a computation's teardown or clean, that computation; by a
 //   dispose, the writer open there (the host's: none)
 // info: a scope's pairs, those given then ["owner", the info of the one it is under] (a root:
@@ -200,7 +220,7 @@ function moment(m: Told, reads: boolean): Json {
 			tick: m.tick,
 		}
 	}
-	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run, rank: m.rank }
+	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run }
 	if ("acts" in m) {
 		const out: Record<string, Json> = { acts: nameOf(m.acts), run: m.run }
 		if (m.early) out.early = true
@@ -219,16 +239,38 @@ function moment(m: Told, reads: boolean): Json {
 // a pulse past this many moments is endless: every moment after throws, so the pulse is left
 const ENDLESS = 10000
 let told = 0
+let pulsing = false
+// a listener armed to throw, once: which, at what (a computation's name, or a key), its message
+let armed: { on: string; at?: string; error: string } | undefined
+const LISTENERS = ["mark", "starts", "ends", "acts", "forgotten", "started"]
+function fire(on: string, at: () => string[]) {
+	if (armed?.on !== on || (armed.at !== undefined && !at().includes(armed.at))) return
+	const e = armed.error
+	armed = undefined
+	throw new Error(e)
+}
 const s = createScheduler()
 trace(s, (m) => {
 	moments.push(m)
-	if (++told > ENDLESS) throw new Error("endless")
+	if (pulsing && ++told > ENDLESS) throw new Error("endless")
+	if ("starts" in m) fire("starts", () => [nameOf(m.starts)])
+	else if ("ends" in m) fire("ends", () => [nameOf(m.ends)])
+	else if ("acts" in m) fire("acts", () => [nameOf(m.acts)])
 })
-s.onTrackingEnd((key) => void forgotten.push(key))
-s.onTrackingStart((key) => void started.push(key))
+s.onTrackingEnd((key) => {
+	forgotten.push(key)
+	fire("forgotten", () => [key as string])
+})
+s.onTrackingStart((key) => {
+	started.push(key)
+	fire("started", () => [key as string])
+})
 // the tick of the latest mark (each mark and each new computer takes the next)
 let tick = 0
-s.onMark((_keys, _run, _due, t) => void (tick = t))
+s.onMark((keys, _run, _due, t) => {
+	tick = t
+	fire("mark", () => keys as string[])
+})
 
 // a name taken (by one not torn down: else taken over) is refused before anything is made
 function vacant(n: string) {
@@ -472,7 +514,17 @@ async function run(r: Request): Promise<Json> {
 			return { tick: s.mark(r.keys as string[]) }
 		case "pulse":
 			told = 0
-			s.pulse()
+			pulsing = true
+			try {
+				s.pulse()
+			} finally {
+				pulsing = false
+			}
+			return {}
+		case "listener":
+			if (!LISTENERS.includes(r.on as string)) throw new Error(`unknown listener ${r.on}`)
+			armed = { on: r.on as string, error: r.throw as string }
+			if (r.at !== undefined) armed.at = r.at as string
 			return {}
 		case "resolve":
 		case "reject": {

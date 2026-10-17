@@ -16,7 +16,11 @@
 //    cow: false the undo is the one apply builds changing the value in place: the same undo
 //    → { undo }                    the undo's patches, in the order to apply them, a value in
 //                                  them in the JSON form, an index or position of -0 as 0.
-//                                  none: []
+//                                  none: []. Which patches is each implementation's: the suite
+//                                  pins only that they undo (suite.json "undoes", conformance/
+//                                  run.ts): asked back of the harness, apply(value after, undo)
+//                                  is value, and apply(value, the undo of that undo) is the value
+//                                  after again; maps by content. An error is pinned exactly
 //    → { error: { code, patch } }  an ApplyError: its code and the patch's index; as apply's
 //
 // A move's undo: moved back, else fallen back. decided by the patch's shape and these checks,
@@ -73,7 +77,8 @@
 //    the last key of a put or a removal: wrong-kind as along the way, no-key for a list's index
 //    a span: reversed (a > b) range; the target no string, list or typed array wrong-kind; past
 //    the end range; the value not of the target's kind wrong-kind
-//    a move: its take first (as a removal or a span: a missing map key no-key), then its landing
+//    a move: its take first (as a removal or a span: a missing map key no-key), then its landing.
+//    a span of the root as the landing of the root's own take: nothing there, no-key
 // A map's keys are answered in their order (the suites are ordered); keys that read as array
 // indices ("0", "10") are not compared in order (the runner parses answers in JavaScript)
 //

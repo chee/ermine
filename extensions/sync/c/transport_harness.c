@@ -12,6 +12,7 @@
 #include "run.h"
 #include "snapshot.h"
 #include "transport.h"
+#include "transport_conformance_hook.h"
 #include "wires.h"
 
 #include "../../../conformance/c/protocol.h"
@@ -179,7 +180,7 @@ static bool quiet(void) {
 static void settle(device_t *d) {
 	for (int round = 0; round < 3000; round++) {
 		run_all();
-		if (tp_ready(d->t) && tp_idle(d->t) && tp_fetching(d->t) == 0 && tp_putting(d->t) == 0) return;
+		if (tp_ready(d->t) && tp_idle(d->t) && tp_fetching(d->t) == 0 && tp_conformance_hook_putting(d->t) == 0) return;
 		wr_ms += 1;
 	}
 }
@@ -413,7 +414,7 @@ static void put(const op_value *r, FILE *out) {
 		}
 		cm_free(&c);
 	}
-	if (!tp_put(d->t, doc_of(r), head, (const uint8_t(*)[32])parents, count, blob, length)) {
+	if (!tp_conformance_hook_put(d->t, doc_of(r), head, (const uint8_t(*)[32])parents, count, blob, length)) {
 		hh_error(out, "not a document id: %s", doc_of(r));
 		return;
 	}
@@ -503,7 +504,7 @@ static void fragment_op(const op_value *r, FILE *out) {
 	size_t bn;
 	uint8_t(*boundary)[32] = ids_of(op_get(r, "boundary"), &bn, out);
 	if (boundary == NULL) return;
-	if (!tp_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn, NULL, 0, blob, length)) {
+	if (!tp_conformance_hook_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn, NULL, 0, blob, length)) {
 		hh_error(out, "not a document id: %s", doc_of(r));
 		return;
 	}
@@ -563,7 +564,7 @@ static void put_labels(FILE *out, const uint8_t (*ids)[32], size_t n) {
 static void taking(const op_value *r, FILE *out) {
 	device_t *d;
 	if (history_of(r, out, &d) == NULL) return;
-	tp_taking t = tp_taking_of(d->t, doc_of(r), layer_of(r));
+	tp_conformance_hook_taking t = tp_conformance_hook_taking_of(d->t, doc_of(r), layer_of(r));
 	fputs("{\"waiting\":[", out);
 	for (size_t i = 0; i < t.waiting_count; i++) {
 		if (i) fputc(',', out);
@@ -575,7 +576,7 @@ static void taking(const op_value *r, FILE *out) {
 	}
 	fputs("],\"refused\":[", out);
 	for (size_t i = 0; i < t.refused_count; i++) {
-		const tp_refused *x = &t.refused[i];
+		const tp_conformance_hook_refused *x = &t.refused[i];
 		if (i) fputc(',', out);
 		fprintf(out, "{\"%s\":", x->fragment ? "fragment" : "commit");
 		put_label(out, x->id);
@@ -586,7 +587,7 @@ static void taking(const op_value *r, FILE *out) {
 		fputc('}', out);
 	}
 	fputs("]}", out);
-	tp_taking_free(&t);
+	tp_conformance_hook_taking_free(&t);
 }
 
 static void arrivals(const op_value *r, FILE *out) {

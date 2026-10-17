@@ -1,4 +1,5 @@
 import { assert, assertEquals } from "@std/assert"
+import { decode } from "@ermine/encoding/cbor"
 import createEntry from "@ermine/node/entry"
 import { place } from "@ermine/places"
 import { createPair } from "./channel.ts"
@@ -185,7 +186,7 @@ Deno.test("an edit with patches on: patches cross, the row is the sender's, one 
 	assertEquals(seen.length, 2)
 	assert(!editPresence(a, ANCHOR, "nobody", [], 5000))
 	// the message is the patch, numbered
-	assertEquals(JSON.parse(new TextDecoder().decode(pair.sent.at(-1)!.bytes)), {
+	assertEquals(decode(pair.sent.at(-1)!.bytes), {
 		ttl: 5000,
 		patches: [{ path: ["pts"], range: [1, 1], value: [[1, 1]] }],
 		n: 2,

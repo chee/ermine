@@ -15,6 +15,11 @@ import {
 	type Lock,
 	unlocked,
 } from "./transport.ts"
+import {
+	transport_conformance_hook_put,
+	transport_conformance_hook_putFragment,
+	transport_conformance_hook_taking,
+} from "./transport_conformance_hook.ts"
 
 const DOC = "ermine://" + "2a".repeat(16) + "0".repeat(32)
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
@@ -136,9 +141,12 @@ Deno.test({
 		assertEquals((await b.device.stored(DOC)).map(hex), [hex(c.stored)])
 		// not a seal: refused shape, by its head
 		const head = new Uint8Array(32).fill(0x11)
-		await a.device.put(DOC, head, [], new Uint8Array([1, 2, 3]))
+		await transport_conformance_hook_put(a.device, DOC, head, [], new Uint8Array([1, 2, 3]))
 		await quiet(a, b)
-		assertEquals(b.device.taking(DOC).refused, [{ commit: hex(head), refused: "shape" }])
+		assertEquals(transport_conformance_hook_taking(b.device, DOC).refused, [{
+			commit: hex(head),
+			refused: "shape",
+		}])
 		await a.device.close(), await b.device.close()
 	},
 })
@@ -149,15 +157,15 @@ Deno.test({
 	async fn() {
 		const a = await party(1)
 		const p = await make(a.signer, [], 1), c = await make(a.signer, [p], 2)
-		await a.device.put(DOC, c.stored, [p.stored], c.sealed)
+		await transport_conformance_hook_put(a.device, DOC, c.stored, [p.stored], c.sealed)
 		await quiet(a)
-		assertEquals(a.device.taking(DOC).waiting, [{
+		assertEquals(transport_conformance_hook_taking(a.device, DOC).waiting, [{
 			commit: hex(c.stored),
 			waiting: [hex(p.name)],
 		}])
-		await a.device.put(DOC, p.stored, [], p.sealed)
+		await transport_conformance_hook_put(a.device, DOC, p.stored, [], p.sealed)
 		await quiet(a)
-		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
+		assertEquals(transport_conformance_hook_taking(a.device, DOC), { waiting: [], refused: [] })
 		assertEquals(names(a.device.history(DOC).heads()), [hex(c.name)])
 		await a.device.close()
 	},
@@ -171,12 +179,15 @@ Deno.test({
 		const lock: Lock = { ...unlocked, open: (_d, bytes) => ready ? bytes : { wait: true } }
 		const a = await party(1, { lock })
 		const r = await make(a.signer, [], 1)
-		await a.device.put(DOC, r.stored, [], r.sealed)
+		await transport_conformance_hook_put(a.device, DOC, r.stored, [], r.sealed)
 		await quiet(a)
-		assertEquals(a.device.taking(DOC).waiting, [{ commit: hex(r.stored), waiting: [] }])
+		assertEquals(transport_conformance_hook_taking(a.device, DOC).waiting, [{
+			commit: hex(r.stored),
+			waiting: [],
+		}])
 		ready = true
 		await a.device.changed()
-		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
+		assertEquals(transport_conformance_hook_taking(a.device, DOC), { waiting: [], refused: [] })
 		assertEquals(a.device.history(DOC).heads().length, 1)
 		await a.device.close()
 	},
@@ -201,7 +212,7 @@ Deno.test({
 		assertEquals(a.device.take(DOC, c2.bytes, "stored"), "passed")
 		await quiet(a)
 		assertEquals([opened, checked, arrivals.length], [0, 0, 0])
-		assertEquals(a.device.taking(DOC), { waiting: [], refused: [] })
+		assertEquals(transport_conformance_hook_taking(a.device, DOC), { waiting: [], refused: [] })
 		assertEquals(
 			(await a.device.stored(DOC)).map(hex).sort(),
 			[hex(c1.stored), hex(c2.stored)].sort(),
@@ -266,7 +277,7 @@ Deno.test({
 		assertEquals(a.device.take(DOC, f.bytes, "ephemeral"), "taken")
 		await quiet(a, b)
 		assertEquals(b.device.history(DOC, "ephemeral").get(f.name), undefined)
-		assertEquals(b.device.taking(DOC, "ephemeral").refused, [{
+		assertEquals(transport_conformance_hook_taking(b.device, DOC, "ephemeral").refused, [{
 			commit: hex(f.name),
 			refused: "signature",
 		}])
@@ -331,9 +342,19 @@ Deno.test({
 	async fn() {
 		const a = await party(1)
 		const [, d] = await (line ??= deepLine(a.signer))
-		await a.device.putFragment(DOC, d.stored, [], [], cbor.encode([d.sealed]))
+		await transport_conformance_hook_putFragment(
+			a.device,
+			DOC,
+			d.stored,
+			[],
+			[],
+			cbor.encode([d.sealed]),
+		)
 		await quiet(a)
-		assertEquals(a.device.taking(DOC).refused, [{ fragment: hex(d.stored), refused: "shape" }])
+		assertEquals(transport_conformance_hook_taking(a.device, DOC).refused, [{
+			fragment: hex(d.stored),
+			refused: "shape",
+		}])
 		assertEquals(a.device.history(DOC).heads(), [])
 		await a.device.close()
 	},

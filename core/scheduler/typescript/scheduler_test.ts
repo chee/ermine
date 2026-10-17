@@ -456,7 +456,10 @@ Deno.test("made in an act, under the effect, its set changing what the effect re
 })
 
 Deno.test("a cleanup writing what its computation read, on a plain scope made in the run: the loop ends, as one on the computation does", () => {
-	// written by the writer open (current().writer), as a program that knows no more would
+	// written by the writer open (current().writer), as a program that knows no more would. the
+	// plain scope goes before the next run, the computation's own cleanup once that run is done
+	// (like Solid): so k is 2 (the run-1 cleanup, before run 2) or 101 (the run-2 cleanup, after
+	// run 2; run 3's write cut)
 	const go = (nested: boolean) => {
 		const { s, at, write, get, store, runs } = bounded(50)
 		store.set("k", 0)
@@ -476,7 +479,7 @@ Deno.test("a cleanup writing what its computation read, on a plain scope made in
 		s.pulse()
 		return [runs(), store.get("k")]
 	}
-	assertEquals(go(false), [3, 2])
+	assertEquals(go(false), [3, 101])
 	assertEquals(go(true), [3, 2])
 })
 

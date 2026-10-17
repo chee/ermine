@@ -9,12 +9,22 @@ import { pack as packRun, RunError, unpack as unpackRun } from "./run.ts"
 import { hex, unhex } from "./hex.ts"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, CommitError, decode, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, CommitError, decode, name as nameOf, splitKey } from "@ermine/encoding/commit"
 import { build, depth, type Fragment } from "@ermine/subduction/fragment"
 import { type Added, createHistory, type History, type Kept, type Refusal } from "./history.ts"
 import type { Tables } from "./replay.ts"
-import { seal, SealError, type Signer, stored, unseal } from "./seal.ts"
+import {
+	ED25519,
+	ed25519Key,
+	seal,
+	SealError,
+	type Signer,
+	stored,
+	unseal,
+	type Verifier,
+} from "./seal.ts"
 import { tablesOf } from "./snapshot.ts"
+import { keep as hooks, type Taking } from "./transport_conformance_hook.ts"
 
 export type { Fragment }
 
@@ -55,15 +65,6 @@ export const unlocked: Lock = { close: (_d, _n, _p, bytes) => bytes, open: (_d, 
 // what a history refuses (lamport, patches, a parent) is the history's: history(doc).refused()
 export type Code = "lock" | "shape" | "signature" | "stored" | "parents"
 
-export type Taking = {
-	waiting: { commit: string; waiting: string[] }[]
-	refused: (
-		| { commit: string; refused: Code }
-		| { commit: string; stuck: string[] }
-		| { fragment: string; refused: Code }
-	)[]
-}
-
 // starting: createDevice returns at once, and begins taking in everything the storage holds (every
 // fragment, then every loose commit, as a save is taken in; a commit whose parents come later waits,
 // as ever). everything that touches the network (connect, connectDiscover, follow) waits for that;
@@ -74,6 +75,7 @@ export type Device = {
 	connect(transport: sd.Transport, initiator: boolean): Promise<void>
 	// a server by its WebSocket url, by discovery (the service name its url's host, unless given)
 	connectDiscover(url: string, service?: string): Promise<void>
+	// every connection to the peer with that key (a multikey)
 	disconnect(key: Uint8Array): Promise<void>
 	follow(doc: string): Promise<void>
 	// default "stored". the ephemeral one holds every stored commit too
@@ -90,8 +92,9 @@ export type Device = {
 	): Added
 	arrived(listener: (a: Arrival) => void): () => void
 	// told each ephemeral commit heard on a followed document whose signer is the sender, new or
-	// heard before (sent again), after any arrival it made: the document, the sender's key as
-	// lowercase hex, the commit's name. what keeps another device's ephemeral commits standing
+	// heard before (sent again), after any arrival it made: the document, the sender's key (its
+	// multikey, as lowercase hex), the commit's name. what keeps another device's ephemeral commits
+	// standing
 	heard(listener: (doc: string, from: string, name: Uint8Array) => void): () => void
 	// an ephemeral commit of this device's (in the ephemeral history, not a stored one) published
 	// again, queued as a take is; false: no such commit
@@ -105,7 +108,7 @@ export type Device = {
 	// bytes to whoever listens on a topic (a string, named by hash so it is never a document's):
 	// ephemeral, kept nowhere, not heard here. over LIMIT: sent as parts, joined at the other end
 	send(topic: string, bytes: Uint8Array): Promise<void>
-	// fn told each message on the topic: the sender's verifying key as lowercase hex, the bytes.
+	// fn told each message on the topic: the sender's key (its multikey, as lowercase hex), the bytes.
 	// subscribes as needed (queued: idle() waits for it); gives back the stop, which only removes fn
 	listen(topic: string, fn: (from: string, bytes: Uint8Array) => void): () => void
 	stored(doc: string): Promise<Uint8Array[]>
@@ -117,22 +120,6 @@ export type Device = {
 	// nothing left to take in, build, seal, store or send; throws what one of them threw
 	idle(): Promise<void>
 	close(): Promise<void>
-}
-
-// for tests and conformance, beside the device
-export type Hooks = {
-	// addCommit as given: nothing checked or taken in first
-	put(doc: string, head: Uint8Array, parents: Uint8Array[], blob: Uint8Array): Promise<void>
-	// addFragment as given: nothing checked or taken in first
-	putFragment(
-		doc: string,
-		head: Uint8Array,
-		boundary: Uint8Array[],
-		checkpoints: Uint8Array[],
-		blob: Uint8Array,
-	): Promise<void>
-	// what the transport holds back or refused, before the histories
-	taking(doc: string, layer?: Layer): Taking
 }
 
 // Subduction drops an ephemeral payload over this; a closed commit over it is sent as parts of at
@@ -210,7 +197,10 @@ type Document = {
 export function createDevice(
 	// join: how long, in ms, the parts of an ephemeral payload may wait for the rest
 	options: {
+		// its key must be Ed25519: Subduction's peer keys are
 		signer: Signer
+		// signature algorithms beyond the built in Ed25519, for the seals taken in (seal.ts)
+		verifiers?: readonly Verifier[]
 		lock?: Lock
 		service?: string
 		join?: number
@@ -222,7 +212,7 @@ export function createDevice(
 		// undefined: none for this one (the integration decides when one is worth it)
 		snapshotOf?: (doc: string, head: Kept) => Uint8Array | undefined
 	},
-): Device & Hooks {
+): Device {
 	const lock = options.lock ?? unlocked
 	const service = options.service ?? "ermine"
 	const join = options.join ?? 30000
@@ -412,7 +402,7 @@ export function createDevice(
 
 	// a seal opened and checked: its commit, as the transport reads it. a SealError: refused
 	async function opened(sealed: Uint8Array): Promise<Sealed> {
-		const u = await unseal(sealed)
+		const u = await unseal(sealed, options.verifiers)
 		const { lamport, parents } = u.commit
 		return { name: u.name, bytes: u.bytes, stored: u.stored, lamport, parents }
 	}
@@ -581,7 +571,7 @@ export function createDevice(
 			d.heard.set(key, "shape")
 			return
 		}
-		if (hex(c.signer) !== hex(from)) {
+		if (hex(c.signer) !== hex(ed25519Key(from))) {
 			d.heard.set(key, "signature")
 			return
 		}
@@ -590,7 +580,7 @@ export function createDevice(
 		tell()
 		for (const fn of [...hearers]) {
 			try {
-				fn(d.id, hex(from), name)
+				fn(d.id, hex(c.signer), name)
 			} catch (e) {
 				trouble.push(e)
 			}
@@ -847,8 +837,10 @@ export function createDevice(
 		},
 	}) as unknown as sd.SedimentreeStorage
 
+	const own = splitKey(options.signer.key)
+	if (own?.code !== ED25519) throw new Error("a device's key is Ed25519")
 	const sub = new sd.Subduction({
-		signer: { sign: (m) => options.signer.sign(m), verifyingKey: () => options.signer.key },
+		signer: { sign: (m) => options.signer.sign(m), verifyingKey: () => own.key },
 		storage,
 		onEphemeral: (topic: sd.Topic, from: sd.PeerId, payload: Uint8Array) => {
 			const t = topic.toBytes(), k = hex(t), d = documents.get(k)
@@ -856,7 +848,7 @@ export function createDevice(
 			// a channel topic (hashed, so never a document's) goes to its listeners
 			const c = topics.get(k)
 			if (c && !d) {
-				const who = hex(from.toBytes())
+				const who = hex(ed25519Key(from.toBytes()))
 				const tell = (bytes: Uint8Array) => {
 					for (const fn of [...c.fns]) fn(who, bytes)
 					return Promise.resolve()
@@ -956,7 +948,7 @@ export function createDevice(
 		timers.add(t)
 	}
 
-	const device: Device & Hooks = {
+	const device: Device = {
 		ready: () => loaded,
 		async connect(transport, initiator) {
 			await loaded
@@ -977,8 +969,11 @@ export function createDevice(
 			for (const doc of followed) await fetched(documents.get(doc)!)
 		},
 		async disconnect(key) {
-			const peer = peers.get(hex(key)) ?? new sd.PeerId(key)
-			peers.delete(hex(key))
+			// the peer by its Ed25519 key: the multikey's
+			const raw = splitKey(key)?.key
+			if (raw === undefined) return
+			const peer = peers.get(hex(raw)) ?? new sd.PeerId(raw)
+			peers.delete(hex(raw))
 			await sub.disconnectFromPeer(peer)
 		},
 		async follow(doc) {
@@ -1079,6 +1074,8 @@ export function createDevice(
 			await device.idle().catch(() => {})
 			await sub.disconnectAll()
 		},
+	}
+	hooks(device, {
 		async put(doc, head, parents, blob) {
 			const d = named(doc)
 			const r = await sub.addCommit(d.tree, commitId(head), parents.map(commitId), blob)
@@ -1095,7 +1092,7 @@ export function createDevice(
 			)
 			await run(() => building(d))
 		},
-		taking(doc, layer = "stored") {
+		taking(doc, layer) {
 			const d = named(doc)
 			if (layer === "ephemeral") {
 				return {
@@ -1124,6 +1121,6 @@ export function createDevice(
 				refused: refused.sort((a, b) => by(a.key, b.key)).map(({ key: _, ...r }) => r),
 			}
 		},
-	}
+	})
 	return device
 }

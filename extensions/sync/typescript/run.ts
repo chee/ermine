@@ -15,7 +15,9 @@
 //          run is a merge by a rule
 //   patches: a string when the commit is one insert going on from the commit before's last (at
 //            the same path, where that one's text ended): its text; else the patches as they are
-//   signatures: every one, 64 bytes each, end to end: what is left, about 70 bytes a commit
+//   headers: runs of each signature's varsig header (seal.ts), the same for a device's every commit;
+//            empty for a signature that has none this reads (it is whole in signatures)
+//   signatures: a list of each one's bytes after its header: what is left, about 70 bytes a commit
 //
 // a ref (parents, base): a commit earlier in the run by its place, else its name. unpack takes any
 // run whose columns say the commits (a run split in two, a parent written out, an insert as a
@@ -23,9 +25,10 @@
 // no, as RunError's code (and column):
 //   not-a-run    not CBOR, not a map, or a key that is no column (the first in canonical order)
 //   count        n not a whole number
-//   signatures   not bytes, or not 64 bytes for each commit
+//   signatures   not a list of n byte strings
 //   runs         a column of runs (table, actor, reader, external, metadata, signer, base, merge,
-//                in this order): not a list of [value, how many ≥ 1], or not n values
+//                headers, in this order): not a list of [value, how many ≥ 1], or not n values; or
+//                headers whose values are not bytes
 //   differences  a column of differences (time, nonce, lamport): not bytes, a number cut short or
 //                longer than 8 bytes, bytes left over, or one past 2^53 - 1 either way
 //   parents      not a list of n; or one: not a list of refs, or null for the first
@@ -37,6 +40,7 @@
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
+import { headerLength } from "./seal.ts"
 
 export type Code =
 	| "not-a-run"
@@ -71,6 +75,7 @@ const COLUMNS: ReadonlySet<string> = new Set([
 	"base",
 	"merge",
 	"patches",
+	"headers",
 	"signatures",
 ])
 const utf8 = new TextEncoder()
@@ -189,12 +194,15 @@ function after(before: Commit | undefined): Patch | undefined {
 export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 	const commits: Commit[] = [],
 		names: string[] = [],
-		signatures = new Uint8Array(64 * sealed.length)
-	sealed.forEach((s, i) => {
+		headers: Uint8Array[] = [],
+		signatures: Uint8Array[] = []
+	sealed.forEach((s) => {
 		const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
 		commits.push(decode(o.commit))
 		names.push(hex(nameOf(o.commit)))
-		signatures.set(o.signature, 64 * i)
+		const h = headerLength(o.signature)
+		headers.push(o.signature.slice(0, h))
+		signatures.push(o.signature.slice(h))
 	})
 	// each commit's first place; a ref only ever to one before it, as unpack reads them in order
 	const place = new Map<string, number>()
@@ -231,6 +239,7 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 		}),
 		signatures,
 	}
+	columns.headers = runs(headers)
 	if (commits.some((c) => c.merge !== undefined)) {
 		columns.merge = runs(commits.map((c) => c.merge ?? null))
 	}
@@ -255,7 +264,10 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new RunError("count")
 	const count = n as number
 	const signatures = o.signatures
-	if (!(signatures instanceof Uint8Array) || signatures.length !== 64 * count) {
+	if (
+		!Array.isArray(signatures) || signatures.length !== count ||
+		!signatures.every((x) => x instanceof Uint8Array)
+	) {
 		throw new RunError("signatures")
 	}
 	const table = unruns(o.table, count, "table"),
@@ -265,6 +277,8 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		metadata = unruns(o.metadata, count, "metadata")
 	const signer = unruns(o.signer, count, "signer"), base = unruns(o.base, count, "base")
 	const merge = "merge" in o ? unruns(o.merge, count, "merge") : undefined
+	const headers = unruns(o.headers, count, "headers")
+	if (!headers.every((h) => h instanceof Uint8Array)) throw new RunError("runs", "headers")
 	const time = undeltas(o.time, count, "time"),
 		nonce = undeltas(o.nonce, count, "nonce"),
 		lamport = undeltas(o.lamport, count, "lamport")
@@ -315,7 +329,11 @@ export function unpack(bytes: Uint8Array): Uint8Array[] {
 		}
 		commits.push(c)
 		names.push(nameOf(b))
-		out.push(cbor.encode({ commit: b, signature: signatures.slice(64 * i, 64 * i + 64) }))
+		const header = headers[i] as Uint8Array, tail = signatures[i] as Uint8Array
+		const signature = new Uint8Array(header.length + tail.length)
+		signature.set(header)
+		signature.set(tail, header.length)
+		out.push(cbor.encode({ commit: b, signature }))
 	}
 	return out
 }

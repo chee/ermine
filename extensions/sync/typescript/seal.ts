@@ -1,20 +1,49 @@
 // a commit signed by the device that made it, and the id it is stored under (extensions/subduction/
 // plan.org, Rewrite for the new shape, 2). sealed: {commit: its bytes, signature}, the signer's key
-// once (it is in the commit). signed: "ermine/v0/commit" then the commit's name. Ed25519 through
-// WebCrypto, which every browser, Deno and Node have: a key made here never leaves as bytes
+// once (it is in the commit). signed: "ermine/v0/commit" then the commit's name. the signature is
+// self-describing: a varsig header, then the raw signature. the commit's signer is a multikey
+// (commit.ts). Ed25519 through WebCrypto, which every browser, Deno and Node have: a key made here
+// never leaves as bytes; others by a verifier a caller adds
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import * as cbor from "@ermine/encoding/cbor"
-import { type Commit, decode, name as nameOf } from "@ermine/encoding/commit"
+import { type Commit, decode, joinKey, name as nameOf, splitKey } from "@ermine/encoding/commit"
 
-export type Signer = { key: Uint8Array; sign(message: Uint8Array): Promise<Uint8Array> }
+// key: the device's multikey; header: the varsig header its signatures begin with; sign: the raw
+// signature of the message, without the header
+export type Signer = {
+	key: Uint8Array
+	header: Uint8Array
+	sign(message: Uint8Array): Promise<Uint8Array>
+}
+
+// a signature algorithm a seal can be checked with: the varsig header it is found by (a signature
+// begins with exactly these bytes), the multicodec code its keys must have, how many bytes of
+// signature follow the header, and the check, given the raw key
+export type Verifier = {
+	header: Uint8Array
+	code: number
+	size: number
+	verify(signature: Uint8Array, key: Uint8Array, message: Uint8Array): Promise<boolean>
+}
 
 export type Code = "shape" | "signature"
 
 export class SealError extends Error {
-	constructor(readonly code: Code) {
-		super(code)
+	constructor(readonly code: Code, readonly reason?: string) {
+		super(reason === undefined ? code : `${code} (${reason})`)
 	}
 }
+
+// Ed25519: the multicodec code of ed25519-pub (0xed, varint 0xed 0x01), and the varsig (v1, the
+// version UCAN 1.0 uses) header: 0x34 0x01 (varsig, version 1), then EdDSA 0xed 0x01 with its curve
+// 0xed 0x01 (ed25519-pub) and its hash 0x13 (sha2-512; RFC 8032), then the payload encoding 0x5f
+// (byte-identical): what is signed is our own bytes ("ermine/v0/commit" then a name), no DAG-CBOR
+// (0x71) or other codec to render, so the one that says the payload is used as it is
+export const ED25519 = 0xed
+const ED25519_HEADER = Uint8Array.from([0x34, 0x01, 0xed, 0x01, 0xed, 0x01, 0x13, 0x5f])
+
+// a multikey of an Ed25519 key, from its 32 raw bytes
+export const ed25519Key = (raw: Uint8Array) => joinKey(ED25519, raw)
 
 const DOMAIN = new TextEncoder().encode("ermine/v0/commit")
 // what a seed is wrapped in for WebCrypto to take it (RFC 8410, PKCS#8)
@@ -71,12 +100,13 @@ export async function createSigner(seed?: Uint8Array): Promise<Signer> {
 		privateKey = await crypto.subtle.importKey("pkcs8", der, { name: "Ed25519" }, false, ["sign"])
 	}
 	return {
-		key,
+		key: ed25519Key(key),
+		header: ED25519_HEADER,
 		sign: async (m) => new Uint8Array(await crypto.subtle.sign("Ed25519", privateKey, m.slice())),
 	}
 }
 
-// the signature good for this key and message
+// the raw signature good for this raw key and message
 export async function good(
 	signature: Uint8Array,
 	key: Uint8Array,
@@ -92,6 +122,11 @@ export async function good(
 	}
 }
 
+// the built in: Ed25519 only
+export const verifiers: readonly Verifier[] = [
+	{ header: ED25519_HEADER, code: ED25519, size: 64, verify: good },
+]
+
 // the sealed commit's bytes. the commit's signer must be this signer's key. made: its name, and
 // its commit, from whoever just made it: not decoded or named again; given a name and no commit, the
 // caller vouches that its signer is this one (a device sealing its own)
@@ -102,15 +137,23 @@ export async function seal(
 ): Promise<Uint8Array> {
 	const commit = made ? made.commit : decode(bytes)
 	if (commit && !same(commit.signer, signer.key)) throw new SealError("signature")
-	const signature = await signer.sign(message(made?.name ?? nameOf(bytes)))
-	if (!(signature instanceof Uint8Array) || signature.length !== 64) throw new SealError("shape")
+	const raw = await signer.sign(message(made?.name ?? nameOf(bytes)))
+	if (!(raw instanceof Uint8Array) || raw.length === 0) throw new SealError("shape")
+	const signature = new Uint8Array(signer.header.length + raw.length)
+	signature.set(signer.header)
+	signature.set(raw, signer.header.length)
 	return cbor.encode({ commit: bytes, signature })
 }
 
 export type Unsealed = { commit: Commit; bytes: Uint8Array; name: Uint8Array; stored: Uint8Array }
 
-// the commit, checked: its shape, and its signer's signature
-export async function unseal(sealed: Uint8Array): Promise<Unsealed> {
+// the commit, checked: its shape, and its signer's signature, by the verifier whose header the
+// signature begins with: the built in, then more (a caller's). no verifier for the header, or one
+// whose key type is not the signer's: refused as a signature not good, with the reason
+export async function unseal(
+	sealed: Uint8Array,
+	more: readonly Verifier[] = [],
+): Promise<Unsealed> {
 	let x: unknown
 	try {
 		x = cbor.decode(sealed)
@@ -123,7 +166,7 @@ export async function unseal(sealed: Uint8Array): Promise<Unsealed> {
 		throw new SealError("shape")
 	}
 	const signature = o.signature
-	if (!(signature instanceof Uint8Array) || signature.length !== 64) throw new SealError("shape")
+	if (!(signature instanceof Uint8Array)) throw new SealError("shape")
 	let commit: Commit
 	try {
 		commit = decode(o.commit)
@@ -131,7 +174,14 @@ export async function unseal(sealed: Uint8Array): Promise<Unsealed> {
 		throw new SealError("shape")
 	}
 	const name = nameOf(o.commit)
-	if (!(await good(signature, commit.signer, message(name)))) throw new SealError("signature")
+	const v = [...verifiers, ...more].find((v) => startsWith(signature, v.header))
+	if (v === undefined) throw new SealError("signature", "no verifier for this signature header")
+	const key = splitKey(commit.signer)!
+	if (key.code !== v.code) throw new SealError("signature", "the header and the signer's key differ")
+	if (signature.length !== v.header.length + v.size) throw new SealError("shape")
+	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(name)))) {
+		throw new SealError("signature")
+	}
 	return { commit, bytes: o.commit, name, stored: stored(sealed) }
 }
 
@@ -139,6 +189,32 @@ export async function unseal(sealed: Uint8Array): Promise<Unsealed> {
 export function stored(sealed: Uint8Array): Uint8Array {
 	return blake3(sealed)
 }
+
+// how many bytes of a signature are its varsig header: 0x34 0x01, an algorithm of those varsig names
+// (BLS, ECDSA, EdDSA, RSA: each with two segments after it), then the payload encoding (raw,
+// DAG-CBOR, DAG-JSON); 0 for any other, which is no header this reads
+export function headerLength(signature: Uint8Array): number {
+	let at = 0
+	const varint = () => {
+		let n = 0, scale = 1
+		for (let k = 0; k < 7; k++) {
+			if (at >= signature.length) return -1
+			const byte = signature[at++]
+			n += (byte & 0x7f) * scale
+			if (byte < 0x80) return n
+			scale *= 0x80
+		}
+		return -1
+	}
+	if (signature[0] !== 0x34 || signature[1] !== 0x01) return 0
+	at = 2
+	const algorithm = varint()
+	if (![0xb1, 0xec, 0xed, 0x1205].includes(algorithm) || varint() < 0 || varint() < 0) return 0
+	return [0x5f, 0x71, 0x0129].includes(varint()) ? at : 0
+}
+
+const startsWith = (a: Uint8Array, b: Uint8Array) =>
+	a.length >= b.length && b.every((x, i) => a[i] === x)
 
 const same = (a: Uint8Array, b: Uint8Array) =>
 	a.length === b.length && a.every((x, i) => x === b[i])
