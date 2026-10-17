@@ -31,3 +31,25 @@ pk_code sn_tables(const uint8_t *bytes, size_t length, rp_tables *out) {
 	rp_adopt(out, &read);
 	return PK_OK;
 }
+
+// one table's entry, packed alone
+static bool one(const nd_slot *slot, uint8_t **out, size_t *length) {
+	rp_tables t = {(nd_slot *)slot, 1, NULL};
+	return sn_snapshot(&t, out, length) == PK_OK;
+}
+
+bool sn_alike(const rp_tables *a, const rp_tables *b) {
+	if (a->length != b->length) return false;
+	for (size_t i = 0; i < a->length; i++) {
+		const nd_slot *x = &a->slots[i], *y = NULL;
+		for (size_t k = 0; k < b->length && y == NULL; k++)
+			if (strcmp(b->slots[k].table, x->table) == 0) y = &b->slots[k];
+		if (y == NULL) return false;
+		uint8_t *p = NULL, *q = NULL;
+		size_t m = 0, n = 0;
+		bool same = one(x, &p, &m) && one(y, &q, &n) && m == n && memcmp(p, q, m) == 0;
+		free(p), free(q);
+		if (!same) return false;
+	}
+	return true;
+}

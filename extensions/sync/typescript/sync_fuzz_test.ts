@@ -37,6 +37,7 @@ import { type Merges, plain, replay, type Tables } from "./replay.ts"
 import { hex } from "./hex.ts"
 
 const DOC = "ermine://" + "ab".repeat(32)
+const DOC_BYTES = new Uint8Array(32).fill(0xab)
 const TIME = 1_760_000_000
 const KEPT = ["value", "attributes", "children"] as const
 const MERGES: Merges = { "eg-walker": egwalker }
@@ -480,7 +481,7 @@ async function run(
 		if (c.sealed === undefined) {
 			const commit = decode(c.bytes)
 			const signer = bySigner.get(hex(commit.signer))!
-			c.sealed = await seal(c.bytes, signer, { commit, name: nameOf(c.bytes) })
+			c.sealed = await seal(c.bytes, signer, DOC_BYTES, { commit, name: nameOf(c.bytes) })
 			c.id = stored(c.sealed)
 		}
 		return c

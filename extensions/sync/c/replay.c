@@ -1,5 +1,6 @@
 // A node's tables at a commit (replay.h), in C
 #include "replay.h"
+#include "snapshot.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -64,13 +65,6 @@ static void put_slot(rp_tables *t, const char *table, nd_entry *entry) {
 		t->length++;
 	}
 	t->slots[i] = (nd_slot){table, entry};
-}
-
-void rp_drop(rp_tables *t, const char *table) {
-	size_t i = slot_of(t, table);
-	if (i == t->length) return;
-	memmove(&t->slots[i], &t->slots[i + 1], (t->length - i - 1) * sizeof *t->slots);
-	t->length--;
 }
 
 static void made(owned *o, nd_entry *e) {
@@ -270,6 +264,17 @@ static rp_code walk(const hy_history *h, const uint8_t name[32], rp_snapshots sn
 rp_code rp_replay(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, rp_tables *out) {
 	return walk(h, name, snapshots, context, merges, true, out);
+}
+
+bool rp_matches(const hy_history *h, const uint8_t name[32], const uint8_t *bytes, size_t length,
+	rp_snapshots snapshots, void *context, const rp_merges *merges) {
+	rp_tables replayed, given;
+	if (rp_replay(h, name, snapshots, context, merges, &replayed) != RP_OK) return false;
+	rp_init(&given);
+	bool same = sn_tables(bytes, length, &given) == PK_OK && sn_alike(&replayed, &given);
+	rp_free(&given);
+	rp_free(&replayed);
+	return same;
 }
 
 rp_code rp_plain(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,

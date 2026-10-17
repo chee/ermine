@@ -1,5 +1,5 @@
-// In-memory pipes between devices (wires.h)
-#include "wires.h"
+// In-memory pipes between devices (wires_harness.h)
+#include "wires_harness.h"
 
 #include <stdlib.h>
 

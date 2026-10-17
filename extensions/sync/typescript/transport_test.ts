@@ -22,6 +22,7 @@ import {
 } from "./transport_conformance_hook.ts"
 
 const DOC = "ermine://" + "2a".repeat(16) + "0".repeat(32)
+const DOC_BYTES = Uint8Array.from(DOC.slice(9).match(/../g)!, (x) => parseInt(x, 16))
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("")
 const names = (ks: Kept[]) => ks.map((k) => hex(k.name))
 
@@ -96,7 +97,7 @@ function commitBy(key: Uint8Array, parents: On[], value: unknown) {
 async function make(signer: Signer, parents: On[] = [], value: unknown = 0, deep = false) {
 	for (;;) {
 		const c = commitBy(signer.key, parents, value)
-		const sealed = await seal(c.bytes, signer)
+		const sealed = await seal(c.bytes, signer, DOC_BYTES)
 		const s = stored(sealed)
 		if ((s[0] === 0) === deep) return { ...c, sealed, stored: s }
 	}
@@ -410,6 +411,39 @@ Deno.test({
 			(await a.device.stored(DOC)).map(hex).sort(),
 			[c1, c2, c3].map((c) => hex(c.stored)).sort(),
 		)
+		await a.device.close(), await b.device.close()
+	},
+})
+
+Deno.test({
+	name:
+		"transport: a check that throws is no refusal: the commit waits on the check, idle throws what it threw, and changed judges it again",
+	...opts,
+	async fn() {
+		let broken = true
+		const check: Check = () => {
+			if (broken) throw new Error("the check broke")
+			return true
+		}
+		const a = await party(1), b = await party(2, { check })
+		await joined(a, b)
+		const c = await make(a.signer, [], 1)
+		a.device.take(DOC, c.bytes, "stored")
+		await quiet(a)
+		// thrown for each history that asked (the stored, then the ephemeral)
+		const thrown: unknown[] = []
+		for (let i = 0; i < 20 && thrown.length < 2; i++) {
+			await b.device.idle().catch((e) => thrown.push(e))
+			await new Promise((r) => setTimeout(r, 5))
+		}
+		assert(thrown.every((e) => e instanceof Error && e.message === "the check broke"))
+		assertEquals(thrown.length, 2)
+		assertEquals(b.device.history(DOC).refused(), [])
+		assertEquals(b.device.history(DOC).waiting(), [{ name: hex(c.name), waiting: [] }])
+		broken = false
+		await b.device.changed()
+		await quiet(b)
+		assertEquals(names(b.device.history(DOC).heads()), [hex(c.name)])
 		await a.device.close(), await b.device.close()
 	},
 })

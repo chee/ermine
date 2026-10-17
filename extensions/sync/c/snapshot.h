@@ -14,4 +14,7 @@ pk_code sn_snapshot(const rp_tables *tables, uint8_t **out, size_t *length);
 // snapshot, and out is left as it was
 pk_code sn_tables(const uint8_t *bytes, size_t length, rp_tables *out);
 
+// two nodes' tables the same: the same tables, each one's entry packed alike (snapshot.ts's alike)
+bool sn_alike(const rp_tables *a, const rp_tables *b);
+
 #endif

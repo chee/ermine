@@ -17,14 +17,12 @@ const char *sl_code_name(sl_code code) {
 	return "";
 }
 
-// "ermine/v0/commit", then the commit's name
-static void message(const uint8_t name[32], uint8_t m[48]) {
+// what is signed: "ermine/v0/commit", the document's 32 bytes, then the commit's name
+#define MESSAGE 80
+static void message(const uint8_t doc[32], const uint8_t name[32], uint8_t m[MESSAGE]) {
 	memcpy(m, "ermine/v0/commit", 16);
-	memcpy(m + 16, name, 32);
-}
-
-bool sl_good(const uint8_t signature[64], const uint8_t key[32], const uint8_t *m, size_t length) {
-	return ermEd25519Verify(key, m, length, signature);
+	memcpy(m + 16, doc, 32);
+	memcpy(m + 48, name, 32);
 }
 
 // Ed25519: the multicodec code of ed25519-pub (0xed, varint 0xed 0x01), and the varsig (v1, the
@@ -35,10 +33,41 @@ bool sl_good(const uint8_t signature[64], const uint8_t key[32], const uint8_t *
 #define ED25519 0xed
 static const uint8_t ED25519_HEADER[8] = {0x34, 0x01, 0xed, 0x01, 0xed, 0x01, 0x13, 0x5f};
 
+// the keys decoded, and the signatures found good, the oldest let go of past CACHED (one a slot): a
+// seal is checked again as it is stored, taken in and handed on, and one signer signs most of what
+// comes (seal.ts's keys and checked)
+#define CACHED 4096
+#define KEYS 16
+static ermEd25519Key keys[KEYS];
+static size_t keys_next;
+static struct {
+	uint8_t hash[32];
+	bool used;
+} checked[CACHED];
+
 static bool ed25519_verify(void *context, const uint8_t *signature, const uint8_t *key, size_t key_length,
 	const uint8_t *m, size_t length) {
 	(void)context;
-	return key_length == 32 && ermEd25519Verify(key, m, length, signature);
+	if (key_length != 32 || length > MESSAGE) return false;
+	uint8_t all[32 + 64 + MESSAGE], hash[32];
+	memcpy(all, key, 32), memcpy(all + 32, signature, 64), memcpy(all + 96, m, length);
+	cm_name(all, 96 + length, hash);
+	size_t slot;
+	memcpy(&slot, hash, sizeof slot);
+	slot %= CACHED;
+	if (checked[slot].used && memcmp(checked[slot].hash, hash, 32) == 0) return true;
+	const ermEd25519Key *k = NULL;
+	for (size_t i = 0; i < KEYS && k == NULL; i++)
+		if (memcmp(keys[i].pub, key, 32) == 0 && keys[i].good) k = &keys[i];
+	if (k == NULL) {
+		ermEd25519Key *fresh = &keys[keys_next++ % KEYS];
+		if (!ermEd25519KeyOf(fresh, key)) return false;
+		k = fresh;
+	}
+	if (!ermEd25519VerifyKey(k, m, length, signature)) return false;
+	memcpy(checked[slot].hash, hash, 32);
+	checked[slot].used = true;
+	return true;
 }
 static const sl_verifier BUILT_IN = {ED25519_HEADER, sizeof ED25519_HEADER, ED25519, 64, ed25519_verify, NULL};
 
@@ -82,8 +111,8 @@ void sl_stored(const uint8_t *sealed, size_t length, uint8_t stored[32]) {
 	cm_name(sealed, length, stored);
 }
 
-sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, const sl_made *made,
-	uint8_t **out, size_t *out_length, cm_code *why, char **field) {
+sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, const uint8_t doc[32],
+	const sl_made *made, uint8_t **out, size_t *out_length, cm_code *why, char **field) {
 	*out = NULL;
 	if (why != NULL) *why = CM_OK;
 	if (field != NULL) *field = NULL;
@@ -104,9 +133,9 @@ sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, c
 		(c->signer_length == signer->key_length && memcmp(c->signer, signer->key, signer->key_length) == 0);
 	cm_free(&decoded);
 	if (!same) return SL_SIGNATURE;
-	uint8_t m[48], *signature = allocate(signer->header_length + SL_RAW_MAX);
-	message(name, m);
-	size_t raw = signer->sign(signer->context, m, 48, signature + signer->header_length);
+	uint8_t m[MESSAGE], *signature = allocate(signer->header_length + SL_RAW_MAX);
+	message(doc, name, m);
+	size_t raw = signer->sign(signer->context, m, MESSAGE, signature + signer->header_length);
 	if (raw == 0 || raw > SL_RAW_MAX) return free(signature), SL_SHAPE;
 	memcpy(signature, signer->header, signer->header_length);
 	Json *sealed = jsonObject();
@@ -123,7 +152,7 @@ sl_code sl_seal(const uint8_t *commit, size_t length, const sl_signer *signer, c
 	return SL_OK;
 }
 
-sl_code sl_unseal(const uint8_t *sealed, size_t length, sl_unsealed *out, const sl_verifiers *more) {
+sl_code sl_unseal(const uint8_t *sealed, size_t length, const uint8_t doc[32], sl_unsealed *out, const sl_verifiers *more) {
 	memset(out, 0, sizeof *out);
 	Json *x = cborDecode(sealed, length, NULL, NULL);
 	if (x == NULL || x->type != JSON_OBJECT || x->object.count != 2) return jsonFree(x), SL_SHAPE;
@@ -134,9 +163,9 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, sl_unsealed *out, const 
 	}
 	cm_commit c;
 	if (cm_decode(commit->bytes.data, commit->bytes.length, &c, NULL) != CM_OK) return jsonFree(x), SL_SHAPE;
-	uint8_t m[48], name[32];
+	uint8_t m[MESSAGE], name[32];
 	cm_name(commit->bytes.data, commit->bytes.length, name);
-	message(name, m);
+	message(doc, name, m);
 	// the built in, then more: the first whose header the signature begins with
 	const sl_verifier *v = NULL;
 	for (size_t i = 0; v == NULL && i < 1 + (more != NULL ? more->count : 0); i++) {
@@ -155,7 +184,7 @@ sl_code sl_unseal(const uint8_t *sealed, size_t length, sl_unsealed *out, const 
 		cm_free(&c);
 		jsonFree(x);
 		return SL_SHAPE;
-	} else if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, 48)) reason = "";
+	} else if (!v->verify(v->context, signature->bytes.data + v->header_length, key, key_length, m, MESSAGE)) reason = "";
 	if (reason != NULL) {
 		cm_free(&c);
 		jsonFree(x);

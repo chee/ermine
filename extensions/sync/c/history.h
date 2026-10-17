@@ -62,6 +62,10 @@ typedef hy_refusal (*hy_check)(void *context, const hy_kept *kept, const cm_comm
 typedef struct hy_history hy_history;
 // check may be NULL: every commit's patches apply
 hy_history *hy_create(hy_check check, void *context);
+// how many commits it holds waiting (on a parent or the check), and refusals, at most (default no
+// end): past it, the oldest waiting on a parent is let go of, as if never told (told again, it is
+// judged again), and dropped is told its name (may be NULL); the oldest refusal is forgotten
+void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[32]), void *context);
 void hy_free(hy_history *h);
 
 // the commit's bytes (copied): taken in, waiting, refused or passed. made: its commit and name,
@@ -87,7 +91,6 @@ bool hy_forget(hy_history *h, const uint8_t name[32]);
 // told each commit taken in, in the order taken, released ones too
 typedef void (*hy_taken)(void *context, const hy_kept *kept);
 void hy_on_taken(hy_history *h, hy_taken f, void *context);
-void hy_off_taken(hy_history *h, hy_taken f, void *context);
 
 // the commits waiting on the check judged again, in the order they came to wait; each keeps its
 // place while it waits on

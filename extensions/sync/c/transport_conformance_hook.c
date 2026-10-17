@@ -21,6 +21,10 @@ static bool put(tp_device *t, const char *id, call_kind kind, const uint8_t head
 	p->count = count;
 	p->blob = copy(blob, length);
 	p->length = length;
+	p->checks = malloc(checks * 12 + 1);
+	if (p->checks == NULL) abort();
+	for (size_t i = 0; i < checks; i++) memcpy(p->checks + 12 * i, checkpoints[i], 12);
+	p->checks_count = checks;
 	call(t, c, kind, p);
 	t->putting++;
 	return true;

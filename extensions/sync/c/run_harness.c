@@ -3,9 +3,9 @@
 // label, each sealed by its seed's signer, and the runs packed by label
 #include "run.h"
 
-#include "commits.h"
+#include "commits_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 #include "../../../ermine/encoding/c/pack.h"
 #include "../../../ermine/encoding/c/json_text.h"
 
@@ -95,7 +95,7 @@ static void make(const op_value *r, FILE *out) {
 	if (find(&seals, m->label) == NULL) {
 		uint8_t *sealed;
 		size_t length;
-		cs_sealed(m, &sealed, &length);
+		cs_sealed(m, cs_doc, &sealed, &length);
 		keep(&seals, m->label, sealed, length);
 	}
 	fputs("{}", out);
@@ -120,8 +120,31 @@ static void pack(const op_value *r, FILE *out) {
 	for (size_t i = 0; i < list->count; i++) {
 		uint8_t *b;
 		size_t n;
-		if (!sealed_of(list->items[i], &b, &n, out)) return;
-		items[i] = (rn_item){b, n};
+		const op_value *x = list->items[i];
+		// { vouched: label, stored? }: the commit without its seal, its stored id (default its seal's)
+		if (x->type == OP_MAP) {
+			const op_value *label = op_get(x, "vouched"), *id = op_get(x, "stored");
+			const cs_made *m = label != NULL && label->type == OP_STR ? cs_get(commits, label->str) : NULL;
+			if (m == NULL || !sealed_of(label, &b, &n, out)) {
+				if (m == NULL) hh_error(out, "no commit");
+				return;
+			}
+			uint8_t *stored = hh_take(32);
+			if (id == NULL) sl_stored(b, n, stored);
+			else {
+				uint8_t *h;
+				size_t hn;
+				if (id->type != OP_STR || !cf_unhex(id->str, &h, &hn) || hn != 32) {
+					hh_error(out, "not hex");
+					return;
+				}
+				memcpy(stored, h, 32);
+			}
+			items[i] = (rn_item){m->bytes, m->length, stored};
+			continue;
+		}
+		if (!sealed_of(x, &b, &n, out)) return;
+		items[i] = (rn_item){b, n, NULL};
 	}
 	uint8_t *run;
 	size_t length;
@@ -180,13 +203,26 @@ static void unpack(const op_value *r, FILE *out) {
 	fputs("{\"sealed\":[", out);
 	for (size_t i = 0; i < u.count; i++) {
 		if (i) fputc(',', out);
-		const char *label = NULL;
-		for (size_t k = 0; k < seals.n && label == NULL; k++)
-			if (seals.p[k].length == u.lengths[i] && memcmp(seals.p[k].bytes, u.sealed[i], u.lengths[i]) == 0) {
-				label = seals.p[k].label;
-			}
-		if (label != NULL) op_json_string(out, label);
-		else cf_put_hex(out, u.sealed[i], u.lengths[i]);
+		const rn_member *m = &u.members[i];
+		if (m->sealed != NULL) {
+			const char *label = NULL;
+			for (size_t k = 0; k < seals.n && label == NULL; k++)
+				if (seals.p[k].length == m->sealed_length && memcmp(seals.p[k].bytes, m->sealed, m->sealed_length) == 0) {
+					label = seals.p[k].label;
+				}
+			if (label != NULL) op_json_string(out, label);
+			else cf_put_hex(out, m->sealed, m->sealed_length);
+			continue;
+		}
+		// vouched for: its label (or name), and its stored id when it is not its seal's
+		fputs("{\"vouched\":", out);
+		cs_put_name(commits, out, m->name);
+		const cs_made *made = cs_find(commits, m->name);
+		const kept *seal = made != NULL ? find(&seals, made->label) : NULL;
+		uint8_t id[32];
+		if (seal != NULL) sl_stored(seal->bytes, seal->length, id);
+		if (seal == NULL || memcmp(id, m->stored, 32) != 0) fputs(",\"stored\":", out), cf_put_hex(out, m->stored, 32);
+		fputc('}', out);
 	}
 	fputs("]}", out);
 	rn_free(&u);

@@ -184,6 +184,9 @@ struct sy_sync {
 	// the rules known, and the one in use (NULL: none)
 	const rp_rule **merges;
 	size_t merges_length;
+	// the rules known, each merged purely: what the device checks a snapshot hint with
+	rp_merge *pure_list;
+	rp_merges pure_merges;
 	const rp_rule *rule;
 	sy_commit_fn commit;
 	sy_drop_fn drop;
@@ -1246,6 +1249,16 @@ static bool after(const hy_kept *a, const hy_kept *b) {
 	return a->lamport != b->lamport ? a->lamport > b->lamport : memcmp(a->name, b->name, 32) > 0;
 }
 
+// the later of two ephemeral commits of one device: its count says (a lamport is its parents')
+static bool newer(const hy_kept *a, const hy_kept *b) {
+	cm_commit x, y;
+	if (cm_decode(a->bytes, a->length, &x, NULL) != CM_OK) return false;
+	if (cm_decode(b->bytes, b->length, &y, NULL) != CM_OK) return cm_free(&x), true;
+	bool later = x.nonce > y.nonce;
+	cm_free(&x), cm_free(&y);
+	return later;
+}
+
 // the rules known, each merged purely
 static rp_merges pure(sy_sync *s, rp_merge *room) {
 	for (size_t i = 0; i < s->merges_length; i++) room[i] = (rp_merge){s->merges[i], NULL};
@@ -1364,7 +1377,8 @@ static hy_refusal fleeting(sy_sync *s, const char *doc, const hy_kept *kept, con
 }
 
 // an ephemeral commit from elsewhere, taken in: it stands for its device's table in place of the one
-// before, unless that one is the later, or a stored commit of its device follows it already
+// before, unless that one is the later (by its device's count), or a stored commit of its device
+// follows it already
 static void heard(sy_sync *s, const char *doc, const hy_kept *kept) {
 	slot_t *made = im_del(&s->fresh, kept->name);
 	// one that never stands here is let go of at once
@@ -1395,7 +1409,7 @@ static void heard(sy_sync *s, const char *doc, const hy_kept *kept) {
 	peer_t *p = peer_make(nd, who, ms_of(s));
 	p->at = ms_of(s);
 	const stand_t *was = stand_of(p, kept->table);
-	if (was != NULL && !after(kept, was->kept)) {
+	if (was != NULL && !newer(kept, was->kept)) {
 		slot_clear(made), free(made);
 		tp_forget(s->device, doc, kept->name);
 		return;
@@ -1897,7 +1911,11 @@ sy_sync *sy_create(const sy_options *o) {
 	uint8_t start[4];
 	random_of(s, start, 4);
 	s->nonce = (int64_t)((uint32_t)start[0] << 24 | (uint32_t)start[1] << 16 | (uint32_t)start[2] << 8 | start[3]);
-	tp_options d = {.store = o->store, .now = o->now, .clock = o->clock, .check = check, .snapshot = snapshot_of, .context = s};
+	s->pure_list = calloc(s->merges_length + 1, sizeof *s->pure_list);
+	if (s->pure_list == NULL) abort();
+	s->pure_merges = pure(s, s->pure_list);
+	tp_options d = {.store = o->store, .now = o->now, .clock = o->clock, .check = check, .snapshot = snapshot_of, .context = s,
+		.merges = &s->pure_merges};
 	memcpy(d.seed, o->seed, 32);
 	s->device = tp_create(&d);
 	if (s->device == NULL) {
@@ -1950,6 +1968,7 @@ void sy_free(sy_sync *s) {
 	for (size_t i = 0; i < s->tables_length; i++) free(s->tables[i]);
 	free(s->tables);
 	free(s->merges);
+	free(s->pure_list);
 	free(s->dirty);
 	free(s);
 }

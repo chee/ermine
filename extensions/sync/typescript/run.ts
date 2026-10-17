@@ -1,7 +1,10 @@
 // a run of sealed commits as columns: what a fragment carries (extensions/subduction/plan.org,
-// Rewrite for the new shape). lossless: unpack gives back each sealed commit's exact bytes, so its
-// name, its stored id and its signature are as they were. deterministic: the same commits in the
-// same order give the same bytes on any device, so any device builds the same fragment.
+// Rewrite for the new shape). one signature for a run of typing: a commit the next one in the run
+// goes on alone, signed by the same signer, is vouched for by that one's signature (it names this
+// one, whose name is its bytes' hash), so its own is left out, and its stored id goes in ids in its
+// place. unpack gives back each commit's exact bytes, its stored id, and the sealed bytes of each one
+// signed, so a name, a stored id and a signature are as they were. deterministic: the same commits in
+// the same order give the same bytes on any device, so any device builds the same fragment.
 //
 // what a column saves:
 //   table, actor, reader, external, metadata, signer: runs of one value, [value, how many]
@@ -16,8 +19,10 @@
 //   patches: a string when the commit is one insert going on from the commit before's last (at
 //            the same path, where that one's text ended): its text; else the patches as they are
 //   headers: runs of each signature's varsig header (seal.ts), the same for a device's every commit;
-//            empty for a signature that has none this reads (it is whole in signatures)
-//   signatures: a list of each one's bytes after its header: what is left, about 70 bytes a commit
+//            empty for a signature that has none this reads (it is whole in signatures); null for a
+//            commit vouched for by the next
+//   signatures: a list of each signed one's bytes after its header, in order
+//   ids: a list of each vouched one's stored id, in order: about 40 bytes a commit of typing
 //
 // a ref (parents, base): a commit earlier in the run by its place, else its name. unpack takes any
 // run whose columns say the commits (a run split in two, a parent written out, an insert as a
@@ -25,7 +30,7 @@
 // no, as RunError's code (and column):
 //   not-a-run    not CBOR, not a map, or a key that is no column (the first in canonical order)
 //   count        n not a whole number
-//   signatures   not a list of n byte strings
+//   signatures   not a list of byte strings, one for each commit with a header
 //   runs         a column of runs (table, actor, reader, external, metadata, signer, base, merge,
 //                headers, in this order): not a list of [value, how many ≥ 1], or not n values; or
 //                headers whose values are not bytes
@@ -35,15 +40,18 @@
 //   patches      not a list of n; or one: not a list or a string
 //   ref          a place not a whole number below the commit's own
 //   insert       a string with no insert before it to go on from
+//   ids          not a list of 32-byte strings, one for each commit with no header
 //   commit       what the columns say for one is not a commit (commit.ts)
-//   size         the sealed commits come to more than MOST bytes for this run's
-// then, in order, each commit: its parents, its patches, its base, the commit, the size so far.
-// each gives them one at a time, as they are made, so a reader can check each (its signature)
-// before the next is made, and stop
+//   vouched      a commit with no header that the next does not go on alone, signed by its signer
+//   size         the commits come to more than most bytes for this run's
+// the first five before any commit; then, in order, each commit: its parents, its patches, its
+// base, the commit, the one before it vouched for, the size so far. each gives them one at a time,
+// as they are made, so a reader can check each signature before the next is made, and stop; one
+// vouched for comes just before the one that vouches for it
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"
-import { headerLength } from "./seal.ts"
+import { headerLength, stored } from "./seal.ts"
 
 export type Code =
 	| "not-a-run"
@@ -55,7 +63,9 @@ export type Code =
 	| "patches"
 	| "ref"
 	| "insert"
+	| "ids"
 	| "commit"
+	| "vouched"
 	| "size"
 
 export class RunError extends Error {
@@ -81,6 +91,7 @@ const COLUMNS: ReadonlySet<string> = new Set([
 	"patches",
 	"headers",
 	"signatures",
+	"ids",
 ])
 const utf8 = new TextEncoder()
 // canonical order: shorter first, then bytewise
@@ -194,19 +205,63 @@ function after(before: Commit | undefined): Patch | undefined {
 	return { path: [...last.path], range: [at, at] }
 }
 
-// the sealed commits, in the run's order, as columns
-export function pack(sealed: readonly Uint8Array[]): Uint8Array {
+// what a run is made of: a sealed commit, or a commit vouched for by the next one in the run (held
+// without a seal of its own), its bytes and its stored id
+export type Member = Uint8Array | { commit: Uint8Array; stored: Uint8Array }
+
+// what unpack gives for each commit: its bytes, name and stored id; sealed: its sealed bytes, when it
+// is signed in the run (none: vouched for by the next)
+export type Unpacked = {
+	commit: Uint8Array
+	name: Uint8Array
+	stored: Uint8Array
+	sealed?: Uint8Array
+}
+
+const same = (a: Uint8Array, b: Uint8Array) =>
+	a.length === b.length && a.every((x, i) => x === b[i])
+
+// the commits, in the run's order, as columns: one vouched for by the next is written without its
+// signature (a member given without a seal must be). an Error: a member that is neither, or one
+// that must be signed given without a seal
+export function pack(members: readonly Member[]): Uint8Array {
 	const commits: Commit[] = [],
 		names: string[] = [],
-		headers: Uint8Array[] = [],
-		signatures: Uint8Array[] = []
-	sealed.forEach((s) => {
-		const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
-		commits.push(decode(o.commit))
-		names.push(hex(nameOf(o.commit)))
-		const h = headerLength(o.signature)
-		headers.push(o.signature.slice(0, h))
-		signatures.push(o.signature.slice(h))
+		seals: (Uint8Array | undefined)[] = [],
+		ids: Uint8Array[] = []
+	for (const m of members) {
+		let bytes: Uint8Array, id: Uint8Array
+		if (m instanceof Uint8Array) {
+			const o = cbor.decode(m) as { commit: Uint8Array; signature: Uint8Array }
+			bytes = o.commit, id = stored(m)
+			seals.push(m)
+		} else {
+			bytes = m.commit, id = m.stored
+			seals.push(undefined)
+		}
+		commits.push(decode(bytes))
+		names.push(hex(nameOf(bytes)))
+		ids.push(id)
+	}
+	// each one the next goes on alone, by the same signer
+	const vouched = commits.map((c, i) => {
+		const next = commits[i + 1]
+		return next !== undefined && next.parents.length === 1 &&
+			hex(next.parents[0]) === names[i] && same(next.signer, c.signer)
+	})
+	const headers: (Uint8Array | null)[] = [], signatures: Uint8Array[] = [], kept: Uint8Array[] = []
+	commits.forEach((_, i) => {
+		if (vouched[i]) {
+			headers.push(null)
+			kept.push(ids[i])
+			return
+		}
+		const s = seals[i]
+		if (s === undefined) throw new Error("a commit not vouched for has no seal")
+		const signature = (cbor.decode(s) as { signature: Uint8Array }).signature
+		const h = headerLength(signature)
+		headers.push(signature.slice(0, h))
+		signatures.push(signature.slice(h))
 	})
 	// each commit's first place; a ref only ever to one before it, as unpack reads them in order
 	const place = new Map<string, number>()
@@ -242,6 +297,7 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 			return c.patches
 		}),
 		signatures,
+		ids: kept,
 	}
 	columns.headers = runs(headers)
 	if (commits.some((c) => c.merge !== undefined)) {
@@ -250,17 +306,17 @@ export function pack(sealed: readonly Uint8Array[]): Uint8Array {
 	return cbor.encode(columns as cbor.Value)
 }
 
-// the run's sealed commits back, each its exact bytes. RunError: not a run
-export function unpack(bytes: Uint8Array): Uint8Array[] {
+// the run's commits back, each its exact bytes, and its seal's when it is signed. RunError: not a run
+export function unpack(bytes: Uint8Array): Unpacked[] {
 	return [...each(bytes)]
 }
 
-// how many bytes of sealed commits a run of this many bytes may give: a run saves about four
-// fifths of typing, and a value the same on every commit is written once, so 64 times, and a MiB
+// how many bytes of commits a run of this many bytes may give: a run saves about four fifths of
+// typing, and a value the same on every commit is written once, so 64 times, and a MiB
 export const most = (length: number) => 64 * length + 2 ** 20
 
-// the run's sealed commits, one at a time, in order. RunError: not a run, as far as it is read
-export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined> {
+// the run's commits, one at a time, in order. RunError: not a run, as far as it is read
+export function* each(bytes: Uint8Array): Generator<Unpacked, void, undefined> {
 	let x: unknown
 	try {
 		x = cbor.decode(bytes)
@@ -276,12 +332,12 @@ export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined>
 	const n = o.n
 	if (!Number.isSafeInteger(n) || (n as number) < 0) throw new RunError("count")
 	const count = n as number
-	const signatures = o.signatures
-	if (
-		!Array.isArray(signatures) || signatures.length !== count ||
-		!signatures.every((x) => x instanceof Uint8Array)
-	) {
+	const signatures = o.signatures, ids = o.ids
+	if (!Array.isArray(signatures) || !signatures.every((x) => x instanceof Uint8Array)) {
 		throw new RunError("signatures")
+	}
+	if (!Array.isArray(ids) || !ids.every((x) => x instanceof Uint8Array && x.length === 32)) {
+		throw new RunError("ids")
 	}
 	const table = unruns(o.table, count, "table"),
 		actor = unruns(o.actor, count, "actor"),
@@ -291,7 +347,12 @@ export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined>
 	const signer = unruns(o.signer, count, "signer"), base = unruns(o.base, count, "base")
 	const merge = "merge" in o ? unruns(o.merge, count, "merge") : undefined
 	const headers = unruns(o.headers, count, "headers")
-	if (!headers.every((h) => h instanceof Uint8Array)) throw new RunError("runs", "headers")
+	if (!headers.every((h) => h instanceof Uint8Array || h === null)) {
+		throw new RunError("runs", "headers")
+	}
+	const signed = headers.filter((h) => h !== null).length
+	if (signatures.length !== signed) throw new RunError("signatures")
+	if (ids.length !== count - signed) throw new RunError("ids")
 	const time = undeltas(o.time, count, "time"),
 		nonce = undeltas(o.nonce, count, "nonce"),
 		lamport = undeltas(o.lamport, count, "lamport")
@@ -299,7 +360,9 @@ export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined>
 	if (!Array.isArray(o.patches) || o.patches.length !== count) throw new RunError("patches")
 	const names: Uint8Array[] = [], commits: Commit[] = []
 	const room = most(bytes.length)
-	let size = 0
+	let size = 0, sig = 0, id = 0
+	// one with no header, until the next shows it vouched for
+	let held: Unpacked | undefined
 	const deref = (r: unknown, i: number): Uint8Array => {
 		if (r instanceof Uint8Array) return r
 		if (!Number.isSafeInteger(r) || (r as number) < 0 || (r as number) >= i) {
@@ -342,15 +405,35 @@ export function* each(bytes: Uint8Array): Generator<Uint8Array, void, undefined>
 		} catch {
 			throw new RunError("commit")
 		}
+		const name = nameOf(b)
+		if (held !== undefined) {
+			const before = commits[i - 1]
+			if (
+				parents.length !== 1 || !same(parents[0], held.name) ||
+				!same(c.signer, before.signer)
+			) throw new RunError("vouched")
+			yield held
+			held = undefined
+		}
 		commits.push(c)
-		names.push(nameOf(b))
-		const header = headers[i] as Uint8Array, tail = signatures[i] as Uint8Array
-		const signature = new Uint8Array(header.length + tail.length)
-		signature.set(header)
-		signature.set(tail, header.length)
-		const sealed = cbor.encode({ commit: b, signature })
-		size += sealed.length
+		names.push(name)
+		size += b.length
+		const header = headers[i] as Uint8Array | null
+		let out: Unpacked
+		if (header === null) out = { commit: b, name, stored: ids[id++] as Uint8Array }
+		else {
+			const tail = signatures[sig++] as Uint8Array
+			const signature = new Uint8Array(header.length + tail.length)
+			signature.set(header)
+			signature.set(tail, header.length)
+			const sealed = cbor.encode({ commit: b, signature })
+			size += sealed.length
+			out = { commit: b, name, stored: stored(sealed), sealed }
+		}
 		if (size > room) throw new RunError("size")
-		yield sealed
+		if (header === null) held = out
+		else yield out
 	}
+	// the last one vouched for by none
+	if (held !== undefined) throw new RunError("vouched")
 }

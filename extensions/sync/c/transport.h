@@ -5,8 +5,11 @@
 // waiting on a parent goes once the parent lets it in. What arrives (the network, or what the store
 // held) is checked here (the seal, its stored id, its parents), then by the histories and the
 // integration's check, and told. Fragments carry {run, snapshot?} (run.h, snapshot.h), built when a
-// commit can head one (a leading zero byte), and a stored fragment lets go of the loose commits it
-// covers. A followed document still empty is asked for again, 0.25 s doubling to 16 s. Ephemeral
+// commit can head one (a leading zero byte): one from elsewhere is checked as transport.ts checks it,
+// each member's seal as it is read, its head, boundary and checkpoints; its snapshot is a hint, kept
+// once a replay to its head gives the same tables. A stored fragment lets go of the loose commits it
+// covers: those the fragment the store holds for that head carries and reaches from it. A followed
+// document still empty is asked for again, 0.25 s doubling to 16 s. Ephemeral
 // messages on hashed topics (tp_send, tp_listen), sent as parts over 65 536 bytes. Same rules as
 // transport.ts, whose header comments say why; only the lock "unlocked" is built (close and open
 // give back what they are given), so nothing waits on a lock and nothing is refused "lock".
@@ -17,8 +20,9 @@
 // it must run again. One thread at a time. Time is the options' clock. A document is an ermine:// id
 // (64 lowercase hex digits); its tree and ephemeral topic are its 32 bytes.
 //
-// Subduction keeps what it holds in the host's store (store.h); the device wraps it, and takes in
-// each commit and fragment saved to it. A new device takes in everything the store holds on its first
+// Subduction keeps what it holds in the host's store (store.h); the device wraps it: it stores only
+// what it admits (a loose commit that unseals under its stored id; a fragment that is checked), and
+// takes in each commit and fragment saved to it. A new device takes in everything the store holds on its first
 // tp_run, before anything else: every fragment, then every loose commit, of each tree, as saves are.
 //
 // On a server (extensions/subduction/c/subduction/transport.h: websocket.c over transport_openssl.c):
@@ -46,10 +50,20 @@ typedef enum { TP_STORED, TP_EPHEMERAL } tp_layer;
 const char *tp_layer_name(tp_layer layer);
 
 // why the transport refused a seal, a fragment or an ephemeral commit before a history saw it (what a
-// history refuses is the history's: hy_refused)
-typedef enum { TP_LOCK = 1, TP_SHAPE, TP_SIGNATURE, TP_STORED_ID, TP_PARENTS } tp_code;
-// "lock", "shape", "signature", "stored", "parents"
+// history refuses is the history's: hy_refused). TP_BOUNDARY: a fragment's members, boundary or
+// checkpoints not what its head's walk makes them
+typedef enum { TP_LOCK = 1, TP_SHAPE, TP_SIGNATURE, TP_STORED_ID, TP_PARENTS, TP_BOUNDARY } tp_code;
+// "lock", "shape", "signature", "stored", "parents", "boundary"
 const char *tp_code_name(tp_code code);
+
+// what a device holds for others at most, each letting go of its oldest past it (heard again, it
+// comes in again), as transport.ts's Limits: pending, a document's seals waiting on a parent's seal
+// and its stored commits waiting on a parent; refused, its refusals noted (each kind) and its snapshot
+// hints; waiting, its ephemeral commits waiting on a parent; joins, the ephemeral payloads being
+// joined; parts, the parts one may have. 0: the default (65 536, 4 096, 1 024, 64, 1 024)
+typedef struct {
+	size_t pending, refused, waiting, joins, parts;
+} tp_limits;
 
 // a commit taken into a history from elsewhere (the network or the store), after it is taken in;
 // heard: from a peer's ephemeral message. This device's own takes are not told. Good for the call
@@ -63,7 +77,8 @@ typedef void (*tp_arrived_fn)(void *context, const tp_arrival *arrival);
 
 // the integration's: whether a commit from elsewhere, its parents all taken in, applies to its
 // parent's node. Never asked of this device's own takes. It may apply it as it looks. 0: yes; else
-// the refusal (HY_PATCHES: it does not apply; HY_MERGE: a merge by a rule not known here)
+// the refusal (HY_PATCHES: it does not apply; HY_MERGE: a merge by a rule not known here); HY_WAIT:
+// it cannot judge it yet, and asks again on tp_changed
 typedef hy_refusal (*tp_check_fn)(void *context, const char *doc, const hy_kept *kept, const cm_commit *commit,
 	tp_layer layer);
 // the integration's: the tables at a fragment's head, packed (snapshot.h), malloc'd into *out; false:
@@ -89,6 +104,10 @@ typedef struct {
 	tp_check_fn check;
 	tp_snapshot_fn snapshot;
 	void *context;
+	// the merge rules a snapshot from elsewhere is checked with (a replay to its head); NULL: none.
+	// borrowed: it must outlive the device
+	const rp_merges *merges;
+	tp_limits limits;
 } tp_options;
 
 // a device; it takes in what the store holds on its first tp_run. NULL when Subduction says no
@@ -194,7 +213,7 @@ typedef struct tp_listener tp_listener;
 // subscribes as needed; the listener, for tp_unlisten
 tp_listener *tp_listen(tp_device *t, const char *topic, tp_heard_fn fn, void *context);
 void tp_unlisten(tp_device *t, tp_listener *l);
-// the parts of an ephemeral payload not joined yet dropped now, as the clock would in time
-void tp_expire(tp_device *t);
+// the check's changed: what waited on it (HY_WAIT) is judged again, at the next tp_run
+void tp_changed(tp_device *t);
 
 #endif

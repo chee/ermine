@@ -28,8 +28,12 @@ const char *rn_code_name(rn_code code) {
 	case RN_REF: return "ref";
 	case RN_INSERT: return "insert";
 	case RN_COMMIT: return "commit";
+	case RN_IDS: return "ids";
+	case RN_VOUCHED: return "vouched";
+	case RN_SIZE: return "size";
 	case RN_OK:
-	case RN_INPUT: break;
+	case RN_INPUT:
+	case RN_STOPPED: break;
 	}
 	return "";
 }
@@ -160,16 +164,25 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 	*length = 0;
 	rn_code code = RN_OK;
 	Json **commits = allocate((n + 1) * sizeof *commits);
-	uint8_t(*names)[32] = allocate((n + 1) * 32);
-	// each signature's varsig header, and the bytes after it
+	uint8_t(*names)[32] = allocate((n + 1) * 32), (*ids)[32] = allocate((n + 1) * 32);
+	// each signature's varsig header, and the bytes after it (NULL: given without a seal)
 	Json **header = allocate((n + 1) * sizeof *header), **tail = allocate((n + 1) * sizeof *tail);
+	bool *vouched = allocate((n + 1) * sizeof *vouched);
 	size_t made = 0;
 	for (; made < n; made++) {
-		Json *x = cborDecode(sealed[made].bytes, sealed[made].length, NULL, NULL);
-		const Json *commit = jsonGet(x, "commit"), *signature = jsonGet(x, "signature");
-		Json *c = NULL;
-		if (is_bytes(commit) && is_bytes(signature)) {
-			c = cborDecode(commit->bytes.data, commit->bytes.length, NULL, NULL);
+		const rn_item *it = &sealed[made];
+		Json *x = NULL, *c = NULL;
+		const Json *commit = NULL, *signature = NULL;
+		const uint8_t *cb = it->bytes;
+		size_t cl = it->length;
+		if (it->stored == NULL) {
+			x = cborDecode(it->bytes, it->length, NULL, NULL);
+			commit = jsonGet(x, "commit"), signature = jsonGet(x, "signature");
+			if (is_bytes(commit) && is_bytes(signature)) cb = commit->bytes.data, cl = commit->bytes.length;
+			else cb = NULL;
+		}
+		if (cb != NULL) {
+			c = cborDecode(cb, cl, NULL, NULL);
 			if (c != NULL && cm_check(c, NULL) != CM_OK) jsonFree(c), c = NULL;
 		}
 		if (c == NULL) {
@@ -178,11 +191,28 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 			goto done;
 		}
 		commits[made] = c;
-		cm_name(commit->bytes.data, commit->bytes.length, names[made]);
-		size_t h = sl_header_length(signature->bytes.data, signature->bytes.length);
-		header[made] = jsonBytes(signature->bytes.data, h);
-		tail[made] = jsonBytes(signature->bytes.data + h, signature->bytes.length - h);
+		cm_name(cb, cl, names[made]);
+		if (it->stored != NULL) memcpy(ids[made], it->stored, 32);
+		else {
+			sl_stored(it->bytes, it->length, ids[made]);
+			size_t h = sl_header_length(signature->bytes.data, signature->bytes.length);
+			header[made] = jsonBytes(signature->bytes.data, h);
+			tail[made] = jsonBytes(signature->bytes.data + h, signature->bytes.length - h);
+		}
 		jsonFree(x);
+	}
+	// each one the next goes on alone, by the same signer
+	for (size_t i = 0; i + 1 < n; i++) {
+		const Json *ps = jsonGet(commits[i + 1], "parents"), *a = jsonGet(commits[i], "signer"),
+			   *b = jsonGet(commits[i + 1], "signer");
+		vouched[i] = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, names[i], 32) == 0 &&
+			a->bytes.length == b->bytes.length && memcmp(a->bytes.data, b->bytes.data, a->bytes.length) == 0;
+	}
+	for (size_t i = 0; i < n; i++) {
+		if (vouched[i] || header[i] != NULL) continue;
+		// one that must be signed, given without its seal
+		code = RN_INPUT;
+		goto done;
 	}
 	places at;
 	places_make(&at, (const uint8_t(*)[32])names, n);
@@ -230,7 +260,7 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		v[i] = m != NULL ? (merges = true, m) : none;
 	}
 	if (merges) jsonAdd(cols, "merge", runs(v, n));
-	for (size_t i = 0; i < n; i++) v[i] = header[i];
+	for (size_t i = 0; i < n; i++) v[i] = vouched[i] ? none : header[i];
 	jsonAdd(cols, "headers", runs(v, n));
 	Json *patches = jsonArray();
 	for (size_t i = 0; i < n; i++) {
@@ -249,9 +279,13 @@ rn_code rn_pack(const rn_item *sealed, size_t n, uint8_t **out, size_t *length) 
 		jsonPush(patches, jsonRef((Json *)ps));
 	}
 	jsonAdd(cols, "patches", patches);
-	Json *tails = jsonArray();
-	for (size_t i = 0; i < n; i++) jsonPush(tails, jsonRef(tail[i]));
+	Json *tails = jsonArray(), *said = jsonArray();
+	for (size_t i = 0; i < n; i++) {
+		if (vouched[i]) jsonPush(said, jsonBytes(ids[i], 32));
+		else jsonPush(tails, jsonRef(tail[i]));
+	}
 	jsonAdd(cols, "signatures", tails);
+	jsonAdd(cols, "ids", said);
 	cborEncode(cols, NULL, 0, &made, NULL);
 	*out = allocate(made ? made : 1);
 	cborEncode(cols, *out, made, length, NULL);
@@ -265,15 +299,17 @@ done:
 	for (size_t i = 0; i < made; i++) jsonFree(commits[i]), jsonFree(header[i]), jsonFree(tail[i]);
 	free(commits);
 	free(names);
+	free(ids);
 	free(header);
 	free(tail);
+	free(vouched);
 	return code;
 }
 
 // --- reading ---
 
 static const char *const COLUMNS[] = {"n", "table", "actor", "reader", "external", "metadata", "signer",
-	"time", "nonce", "lamport", "parents", "base", "merge", "patches", "headers", "signatures"};
+	"time", "nonce", "lamport", "parents", "base", "merge", "patches", "headers", "signatures", "ids"};
 
 // canonical order: shorter first, then bytewise (a key's U+0000 held as C0 80 is the byte 00)
 static size_t real(const char *s, size_t n, unsigned char *out) {
@@ -355,8 +391,12 @@ static Json *name_json(const Json *bytes, const uint8_t *name) {
 	return bytes != NULL ? jsonRef((Json *)bytes) : jsonBytes(name, 32);
 }
 
-rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **column) {
-	*out = (rn_unpacked){0};
+// what a run of this many bytes may give, as run.ts's most: 64 times, and a MiB
+static size_t most(size_t length) {
+	return length > (SIZE_MAX - ((size_t)1 << 20)) / 64 ? SIZE_MAX : 64 * length + ((size_t)1 << 20);
+}
+
+rn_code rn_each(const uint8_t *bytes, size_t length, rn_each_fn each, void *context, char **column) {
 	if (column != NULL) *column = NULL;
 	Json *x = cborDecode(bytes, length, NULL, NULL);
 	if (x == NULL) return RN_NOT_A_RUN;
@@ -377,15 +417,22 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		return RN_NOT_A_RUN;
 	}
 	int64_t n64;
-	const Json *signatures = jsonGet(x, "signatures");
+	const Json *signatures = jsonGet(x, "signatures"), *ids = jsonGet(x, "ids");
 	// Number.isSafeInteger(n) && n >= 0
 	if (!safe_integer(jsonGet(x, "n"), &n64) || n64 < 0) return jsonFree(x), RN_COUNT;
 	size_t n = (size_t)n64;
-	bool listed = signatures != NULL && signatures->type == JSON_ARRAY && (size_t)signatures->array.count == n;
-	for (size_t i = 0; listed && i < n; i++) listed = is_bytes(signatures->array.items[i]);
+	bool listed = signatures != NULL && signatures->type == JSON_ARRAY;
+	for (int i = 0; listed && i < signatures->array.count; i++) listed = is_bytes(signatures->array.items[i]);
 	if (!listed) {
 		jsonFree(x);
 		return RN_SIGNATURES;
+	}
+	listed = ids != NULL && ids->type == JSON_ARRAY;
+	for (int i = 0; listed && i < ids->array.count; i++)
+		listed = is_bytes(ids->array.items[i]) && ids->array.items[i]->bytes.length == 32;
+	if (!listed) {
+		jsonFree(x);
+		return RN_IDS;
 	}
 	// the columns of runs, in the order run.ts reads them
 	static const char *const run_columns[] = {"table", "actor", "reader", "external", "metadata", "signer", "base"};
@@ -394,6 +441,9 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		*lamport = allocate((n + 1) * sizeof *lamport);
 	uint8_t(*names)[32] = allocate((n + 1) * 32);
 	Json *before = NULL;
+	// one with no header, until the next shows it vouched for
+	rn_member held = {0};
+	uint8_t *held_commit = NULL;
 	for (int k = 0; k < 7; k++) {
 		if ((col[k] = unruns(jsonGet(x, run_columns[k]), n)) == NULL) {
 			code = fail(RN_RUNS, column, run_columns[k]);
@@ -405,16 +455,27 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		code = fail(RN_RUNS, column, "merge");
 		goto done;
 	}
-	// headers: runs of bytes
+	// headers: runs of bytes, or null for one vouched for by the next
 	if ((col[8] = unruns(jsonGet(x, "headers"), n)) == NULL) {
 		code = fail(RN_RUNS, column, "headers");
 		goto done;
 	}
+	size_t signed_count = 0;
 	for (size_t i = 0; i < n; i++) {
+		if (col[8][i]->type == JSON_NULL) continue;
 		if (!is_bytes(col[8][i])) {
 			code = fail(RN_RUNS, column, "headers");
 			goto done;
 		}
+		signed_count++;
+	}
+	if ((size_t)signatures->array.count != signed_count) {
+		code = RN_SIGNATURES;
+		goto done;
+	}
+	if ((size_t)ids->array.count != n - signed_count) {
+		code = RN_IDS;
+		goto done;
 	}
 	if (!undeltas(jsonGet(x, "time"), n, time)) {
 		code = fail(RN_DIFFERENCES, column, "time");
@@ -437,8 +498,7 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 		code = RN_PATCHES;
 		goto done;
 	}
-	out->sealed = allocate((n + 1) * sizeof *out->sealed);
-	out->lengths = allocate((n + 1) * sizeof *out->lengths);
+	size_t room = most(length), made = 0, sig = 0, id = 0;
 	for (size_t i = 0; i < n; i++) {
 		const Json *ps = parents->array.items[i], *p = patches->array.items[i];
 		Json *plist = jsonArray(), *c = NULL, *own_patches = NULL;
@@ -517,38 +577,107 @@ rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **
 			goto done;
 		}
 		cm_name(b, b_length, names[i]);
+		// the one before, held: vouched for only if this one goes on it alone, by its signer
+		if (held.commit != NULL) {
+			const Json *ps = jsonGet(c, "parents"), *was = col[5][i - 1], *now = col[5][i];
+			bool on = ps->array.count == 1 && memcmp(ps->array.items[0]->bytes.data, held.name, 32) == 0 &&
+				was->bytes.length == now->bytes.length &&
+				memcmp(was->bytes.data, now->bytes.data, was->bytes.length) == 0;
+			if (!on) code = RN_VOUCHED;
+			else if (!each(context, &held)) code = RN_STOPPED;
+			free(held_commit);
+			held_commit = NULL;
+			held = (rn_member){0};
+			if (code != RN_OK) {
+				jsonFree(c);
+				free(b);
+				goto done;
+			}
+		}
 		// the next insert goes on from these patches: the column's own, or the one made
 		jsonFree(before);
 		before = jsonRef((Json *)these);
 		jsonFree(c);
+		made += b_length;
+		const Json *h = col[8][i];
+		if (h->type == JSON_NULL) {
+			held = (rn_member){.commit = b, .commit_length = b_length};
+			held_commit = b;
+			memcpy(held.name, names[i], 32);
+			memcpy(held.stored, ids->array.items[id++]->bytes.data, 32);
+			if (made > room) {
+				code = RN_SIZE;
+				goto done;
+			}
+			continue;
+		}
+		const Json *t = signatures->array.items[sig++];
 		Json *s = jsonObject();
 		jsonAdd(s, "commit", jsonBytes(b, b_length));
-		const Json *h = col[8][i], *t = signatures->array.items[i];
 		uint8_t *whole = allocate(h->bytes.length + t->bytes.length + 1);
 		memcpy(whole, h->bytes.data, h->bytes.length);
 		memcpy(whole + h->bytes.length, t->bytes.data, t->bytes.length);
 		jsonAdd(s, "signature", jsonBytes(whole, h->bytes.length + t->bytes.length));
 		free(whole);
-		free(b);
 		size_t size;
 		cborEncode(s, NULL, 0, &size, NULL);
-		out->sealed[i] = allocate(size);
-		cborEncode(s, out->sealed[i], size, &out->lengths[i], NULL);
+		uint8_t *sealed = allocate(size);
+		cborEncode(s, sealed, size, &size, NULL);
 		jsonFree(s);
-		out->count++;
+		made += size;
+		if (made > room) {
+			free(sealed), free(b);
+			code = RN_SIZE;
+			goto done;
+		}
+		rn_member m = {.commit = b, .commit_length = b_length, .sealed = sealed, .sealed_length = size};
+		memcpy(m.name, names[i], 32);
+		sl_stored(sealed, size, m.stored);
+		bool on = each(context, &m);
+		free(sealed), free(b);
+		if (!on) {
+			code = RN_STOPPED;
+			goto done;
+		}
 	}
+	// the last one vouched for by none
+	if (held.commit != NULL) code = RN_VOUCHED;
 done:
+	free(held_commit);
 	for (int k = 0; k < 9; k++) free((void *)col[k]);
 	free(time), free(nonce), free(lamport), free(names);
 	jsonFree(before);
 	jsonFree(x);
+	return code;
+}
+
+// each commit kept in the unpacked, its own bytes
+static bool collect(void *context, const rn_member *m) {
+	rn_unpacked *out = context;
+	out->members = realloc(out->members, (out->count + 1) * sizeof *out->members);
+	if (out->members == NULL) abort();
+	rn_member *k = &out->members[out->count++];
+	*k = *m;
+	uint8_t *commit = allocate(m->commit_length + 1);
+	memcpy(commit, m->commit, m->commit_length);
+	k->commit = commit;
+	if (m->sealed != NULL) {
+		uint8_t *sealed = allocate(m->sealed_length + 1);
+		memcpy(sealed, m->sealed, m->sealed_length);
+		k->sealed = sealed;
+	}
+	return true;
+}
+
+rn_code rn_unpack(const uint8_t *bytes, size_t length, rn_unpacked *out, char **column) {
+	*out = (rn_unpacked){0};
+	rn_code code = rn_each(bytes, length, collect, out, column);
 	if (code != RN_OK) rn_free(out);
 	return code;
 }
 
 void rn_free(rn_unpacked *u) {
-	for (size_t i = 0; i < u->count; i++) free(u->sealed[i]);
-	free(u->sealed);
-	free(u->lengths);
+	for (size_t i = 0; i < u->count; i++) free((void *)u->members[i].commit), free((void *)u->members[i].sealed);
+	free(u->members);
 	*u = (rn_unpacked){0};
 }

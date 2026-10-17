@@ -2,6 +2,7 @@
 // waiting or refused, or one only waited on (state NONE). Recs are found by name in a hash, and
 // never let go of until the history is, but a head forgotten (hy_forget)
 #include "history.h"
+#include "keyed.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -58,12 +59,16 @@ struct hy_history {
 	uint64_t serial;
 	hy_check check;
 	void *context;
-	// open addressing on a name's first bytes
+	// open addressing on a keyed hash of a name (keyed.h): names are what others send
 	rec **table;
 	size_t slots, count;
 	list taken, heads, waits, refusals;
 	listener *listeners;
 	size_t listeners_length;
+	// hy_limit's; how many recs wait (on parents or on the check)
+	size_t most, waiting;
+	void (*dropped)(void *context, const uint8_t name[32]);
+	void *dropped_context;
 };
 
 hy_history *hy_create(hy_check check, void *context) {
@@ -74,7 +79,14 @@ hy_history *hy_create(hy_check check, void *context) {
 	h->context = context;
 	h->slots = 64;
 	h->table = allocate(h->slots * sizeof *h->table);
+	h->most = SIZE_MAX;
 	return h;
+}
+
+void hy_limit(hy_history *h, size_t most, void (*dropped)(void *context, const uint8_t name[32]), void *context) {
+	h->most = most;
+	h->dropped = dropped;
+	h->dropped_context = context;
 }
 
 static void free_rec(rec *r) {
@@ -97,9 +109,7 @@ void hy_free(hy_history *h) {
 }
 
 static size_t hash_of(const uint8_t name[32]) {
-	size_t x;
-	memcpy(&x, name, sizeof x);
-	return x;
+	return ky_hash(name);
 }
 
 static rec *find(const hy_history *h, const uint8_t name[32]) {
@@ -135,10 +145,100 @@ static rec *get(hy_history *h, const uint8_t name[32]) {
 	return r;
 }
 
+// out of the hash and freed: what follows it in its run moved back where it may stand
+static void unhash(hy_history *h, rec *r) {
+	size_t mask = h->slots - 1, s = hash_of(r->kept.name) & mask;
+	while (h->table[s] != r) s = (s + 1) & mask;
+	h->table[s] = NULL;
+	for (size_t j = (s + 1) & mask; h->table[j] != NULL; j = (j + 1) & mask) {
+		size_t home = hash_of(h->table[j]->kept.name) & mask;
+		// j's rec may stay unless the hole at s lies between its home and j
+		bool stays = s <= j ? (home > s && home <= j) : (home > s || home <= j);
+		if (stays) continue;
+		h->table[s] = h->table[j];
+		h->table[j] = NULL;
+		s = j;
+	}
+	h->count--;
+	free_rec(r);
+}
+
+// r out of the list, looked for from its end
+static void unlist(list *l, const rec *r) {
+	for (size_t k = l->n; k-- > 0;) {
+		if (l->p[k] != r) continue;
+		memmove(&l->p[k], &l->p[k + 1], (l->n - k - 1) * sizeof *l->p);
+		l->n--;
+		return;
+	}
+}
+
+static void become(hy_history *h, rec *r, state s);
+
+// the oldest commit waiting on a parent let go of, as if never told: out of its parents' waiters (a
+// parent only waited on, with no waiter left, let go of too, but keep), back to only waited on if
+// something waits on it, else let go of; dropped told
+static void let_go(hy_history *h, const rec *keep) {
+	rec *r = NULL;
+	for (size_t i = 0; i < h->waits.n && r == NULL; i++)
+		if (h->waits.p[i]->state == S_WAITING && h->waits.p[i]->on_length > 0) r = h->waits.p[i];
+	if (r == NULL) return;
+	unlist(&h->waits, r);
+	for (size_t i = 0; i < r->on_length; i++) {
+		rec *p = r->on[i];
+		for (size_t k = 0; k < p->waiters_length; k++) {
+			if (p->waiters[k] != r) continue;
+			memmove(&p->waiters[k], &p->waiters[k + 1], (p->waiters_length - k - 1) * sizeof *p->waiters);
+			p->waiters_length--;
+			break;
+		}
+		if (p->state == S_NONE && p->waiters_length == 0 && p != keep) unhash(h, p);
+	}
+	uint8_t name[32];
+	memcpy(name, r->kept.name, 32);
+	become(h, r, S_NONE);
+	r->on_length = 0;
+	if (r->waiters_length == 0) unhash(h, r);
+	else {
+		free(r->kept.bytes), free(r->kept.table), free((void *)r->kept.merge), free((void *)r->kept.parents);
+		uint8_t keep[32];
+		memcpy(keep, r->kept.name, 32);
+		r->kept = (hy_kept){0};
+		memcpy(r->kept.name, keep, 32);
+	}
+	if (h->dropped != NULL) h->dropped(h->dropped_context, name);
+}
+
+// the oldest refusals past most let go of (once nothing goes on them), and the waits list kept to
+// what still waits
+static void trim(hy_history *h) {
+	while (h->refusals.n > h->most) {
+		rec *r = h->refusals.p[0];
+		memmove(&h->refusals.p[0], &h->refusals.p[1], (h->refusals.n - 1) * sizeof *h->refusals.p);
+		h->refusals.n--;
+		unlist(&h->waits, r);
+		if (r->waiters_length == 0) unhash(h, r);
+		else become(h, r, S_NONE);
+	}
+	if (h->waits.n > 2 * h->waiting + 64) {
+		size_t k = 0;
+		for (size_t i = 0; i < h->waits.n; i++)
+			if (h->waits.p[i]->state == S_WAITING) h->waits.p[k++] = h->waits.p[i];
+		h->waits.n = k;
+	}
+}
+
+// a rec's state, the count of those waiting kept
+static void become(hy_history *h, rec *r, state s) {
+	if (r->state == S_WAITING) h->waiting--;
+	if (s == S_WAITING) h->waiting++;
+	r->state = s;
+}
+
 // --- refusing ---
 
 static void mark(hy_history *h, rec *r, hy_refusal why) {
-	r->state = S_REFUSED;
+	become(h, r, S_REFUSED);
 	r->refusal = why;
 	push(&h->refusals, r);
 }
@@ -191,8 +291,7 @@ static bool is_taken(const hy_history *h, const uint8_t name[32]) {
 
 // on the check: waiting on nothing named, listed in the waits once
 static void hold(hy_history *h, rec *r) {
-	if (r->state != S_WAITING) push(&h->waits, r);
-	r->state = S_WAITING;
+	if (r->state != S_WAITING) push(&h->waits, r), become(h, r, S_WAITING);
 	r->on_length = 0;
 }
 
@@ -208,7 +307,7 @@ static bool take(hy_history *h, rec *r, const cm_commit *commit) {
 	hy_refusal why = h->check != NULL ? h->check(h->context, &r->kept, commit) : 0;
 	if (why == HY_WAIT) return hold(h, r), false;
 	if (why != 0) return refuse(h, r, why), false;
-	r->state = S_TAKEN;
+	become(h, r, S_TAKEN);
 	push(&h->taken, r);
 	for (size_t i = 0; i < r->kept.parents_length; i++) {
 		rec *p = find(h, r->kept.parents[i]);
@@ -276,6 +375,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	else {
 		if (cm_decode(bytes, length, &own, NULL) != CM_OK) {
 			mark(h, r, HY_SHAPE);
+			trim(h);
 			return a.kind = HY_REFUSED, a.refusal = HY_SHAPE, a;
 		}
 		c = &own;
@@ -285,6 +385,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 		if (p != NULL && p->state == S_REFUSED) {
 			refuse(h, r, HY_PARENT);
 			cm_free(&own);
+			trim(h);
 			return a.kind = HY_REFUSED, a.refusal = HY_PARENT, a;
 		}
 	}
@@ -302,14 +403,18 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 	else if (c->parents_length > 0) k->has_base = 1, memcpy(k->base, c->parents[0], 32);
 	k->lamport = c->lamport;
 	size_t missing = 0;
+	for (size_t i = 0; i < c->parents_length; i++) missing += !is_taken(h, c->parents[i]);
+	// before its parents' recs are had: letting go may let go of one only waited on
+	if (missing > 0 && h->waiting >= h->most) let_go(h, r);
 	r->on = allocate((c->parents_length + 1) * sizeof *r->on);
+	missing = 0;
 	for (size_t i = 0; i < c->parents_length; i++) {
 		if (is_taken(h, c->parents[i])) continue;
 		r->on[missing++] = get(h, c->parents[i]);
 	}
 	if (missing > 0) {
 		r->on_length = missing;
-		r->state = S_WAITING;
+		become(h, r, S_WAITING);
 		push(&h->waits, r);
 		a.kind = HY_WAITING;
 		a.waiting = allocate(missing * 32);
@@ -333,6 +438,7 @@ hy_added hy_add(hy_history *h, const uint8_t *bytes, size_t length, const hy_mad
 		a.refusal = r->refusal;
 	}
 	cm_free(&own);
+	trim(h);
 	return a;
 }
 
@@ -356,6 +462,7 @@ void hy_again(hy_history *h) {
 		if (ok) release(h, r);
 	}
 	free(held.p);
+	trim(h);
 }
 
 void hy_added_free(hy_added *a) {
@@ -389,16 +496,6 @@ size_t hy_heads(const hy_history *h, const hy_kept ***out) {
 
 size_t hy_all(const hy_history *h, const hy_kept ***out) { return kept_of(&h->taken, out); }
 
-// r out of the list, looked for from its end
-static void unlist(list *l, const rec *r) {
-	for (size_t k = l->n; k-- > 0;) {
-		if (l->p[k] != r) continue;
-		memmove(&l->p[k], &l->p[k + 1], (l->n - k - 1) * sizeof *l->p);
-		l->n--;
-		return;
-	}
-}
-
 bool hy_forget(hy_history *h, const uint8_t name[32]) {
 	rec *r = find(h, name);
 	if (r == NULL || r->state != S_TAKEN || r->children > 0) return false;
@@ -409,21 +506,7 @@ bool hy_forget(hy_history *h, const uint8_t name[32]) {
 		if (p == NULL || --p->children > 0 || p->state != S_TAKEN) continue;
 		push(&h->heads, p);
 	}
-	// out of the hash: what follows it in its run moved back where it may stand
-	size_t mask = h->slots - 1, s = hash_of(name) & mask;
-	while (h->table[s] != r) s = (s + 1) & mask;
-	h->table[s] = NULL;
-	for (size_t j = (s + 1) & mask; h->table[j] != NULL; j = (j + 1) & mask) {
-		size_t home = hash_of(h->table[j]->kept.name) & mask;
-		// j's rec may stay unless the hole at s lies between its home and j
-		bool stays = s <= j ? (home > s && home <= j) : (home > s || home <= j);
-		if (stays) continue;
-		h->table[s] = h->table[j];
-		h->table[j] = NULL;
-		s = j;
-	}
-	h->count--;
-	free_rec(r);
+	unhash(h, r);
 	return true;
 }
 
@@ -436,16 +519,6 @@ void hy_on_taken(hy_history *h, hy_taken f, void *context) {
 	h->listeners = realloc(h->listeners, (h->listeners_length + 1) * sizeof *h->listeners);
 	if (h->listeners == NULL) abort();
 	h->listeners[h->listeners_length++] = (listener){f, context};
-}
-
-void hy_off_taken(hy_history *h, hy_taken f, void *context) {
-	for (size_t i = 0; i < h->listeners_length; i++) {
-		if (h->listeners[i].f == f && h->listeners[i].context == context) {
-			memmove(&h->listeners[i], &h->listeners[i + 1], (h->listeners_length - i - 1) * sizeof *h->listeners);
-			h->listeners_length--;
-			return;
-		}
-	}
 }
 
 size_t hy_waiting(const hy_history *h, hy_waiting_row **out) {

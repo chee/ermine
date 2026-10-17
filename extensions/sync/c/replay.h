@@ -45,9 +45,6 @@ void rp_put_copy(rp_tables *t, const char *table, op_value *value, const ch_head
 // refers to alive), replacing the table's if it has one
 void rp_put(rp_tables *t, const char *table, op_value *value, const ch_header *change);
 
-// the table taken out, if the tables have it (what it held is let go of with the tables)
-void rp_drop(rp_tables *t, const char *table);
-
 // the tables of a snapshot's entries (pack.h), keyed by their part; takes *read (left empty). The
 // snapshot's tables replace any the tables had
 void rp_adopt(rp_tables *t, pk_read *read);
@@ -88,6 +85,13 @@ const rp_merge *rp_merge_find(const rp_merges *merges, const char *name);
 // merging (rp_plain), so a merge never waits on another. snapshots may be NULL
 rp_code rp_replay(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,
 	const rp_merges *merges, rp_tables *out);
+// whether a snapshot of the tables at name (packed, snapshot.h) from elsewhere is right: the tables
+// replayed to it (from the snapshots given, each checked so itself) are the same (sn_alike). No
+// snapshot is signed, so one is a hint, kept only when it matches (transport.c). false: not taken in,
+// a merge on the way by a rule not given, or bytes that are no snapshot
+bool rp_matches(const hy_history *h, const uint8_t name[32], const uint8_t *bytes, size_t length,
+	rp_snapshots snapshots, void *context, const rp_merges *merges);
+
 // the tables at name when had without merging: a snapshot, or a walk back to one or the root that
 // meets no merge commit; else RP_UNMERGED
 rp_code rp_plain(const hy_history *h, const uint8_t name[32], rp_snapshots snapshots, void *context,

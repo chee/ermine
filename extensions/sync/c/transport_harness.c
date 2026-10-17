@@ -1,23 +1,23 @@
 // Devices (transport.h) on the line protocol (conformance/c/harness.h): commits over Subduction, with
-// no table, joined by in-memory pipes (wires.h), as extensions/sync/typescript/transport_harness.ts
+// no table, joined by in-memory pipes (wires_harness.h), as extensions/sync/typescript/transport_harness.ts
 // has them; its header lists the requests and answers. State lasts for the process.
 //
 // A device here checks nothing (every commit applies) and gives every fragment it builds a snapshot:
 // the tables at its head (replay.h), packed. A commit a request makes is signed by its seed, default
-// the device's. doc: an ermine:// id, default ermine://2a...2a00...00 (16 bytes each). A commit in an
+// the device's, sealed for each document it is used in. doc: an ermine:// id, default ermine://2a...2a00...00 (16 bytes each). A commit in an
 // answer: its label (for its name and its seal's stored id alike), else hex. Deterministic: the
-// devices run on the harness's clock (wires.h), which quiet moves 2 ms a round
-#include "commits.h"
+// devices run on the harness's clock (wires_harness.h), which quiet moves 2 ms a round
+#include "commits_harness.h"
 #include "ids.h"
 #include "run.h"
 #include "snapshot.h"
 #include "transport.h"
 #include "transport_conformance_hook.h"
-#include "wires.h"
+#include "wires_harness.h"
 
-#include "../../../conformance/c/protocol.h"
+#include "../../../conformance/c/protocol_harness.h"
 #include "../../../ermine/encoding/c/cbor.h"
-#include "../../../ermine/encoding/c/commit_form.h"
+#include "../../../ermine/encoding/c/commit_form_harness.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -66,13 +66,17 @@ static device_t *of(const op_value *r, const char *key, FILE *out) {
 // ---- commits: labels for names and stored ids alike
 
 static cs_commits *commits;
+// a commit's seal for a document (a seal is good in its own only)
 typedef struct {
 	char *label;
+	uint8_t doc[32];
 	uint8_t *bytes;
 	size_t length;
 } seal_t;
 static seal_t *seals;
 static size_t seal_count, seal_room;
+// the document of the request being answered: what a label is sealed for
+static uint8_t here[32];
 // a name or a stored id to its label (the first given)
 static im_map labels;
 
@@ -82,16 +86,20 @@ static void put_label(FILE *out, const uint8_t id[32]) {
 	else cf_put_hex(out, id, 32);
 }
 
+static const seal_t *sealed(const cs_made *m);
+
+// a label's seal for the request's document, made then if it is not yet
 static const seal_t *seal_of(const char *label) {
 	for (size_t i = 0; label != NULL && i < seal_count; i++)
-		if (strcmp(seals[i].label, label) == 0) return &seals[i];
-	return NULL;
+		if (strcmp(seals[i].label, label) == 0 && memcmp(seals[i].doc, here, 32) == 0) return &seals[i];
+	const cs_made *m = label != NULL ? cs_get(commits, label) : NULL;
+	return m != NULL ? sealed(m) : NULL;
 }
 
-// the made commit's seal, made once
+// the made commit's seal for the request's document, made once
 static const seal_t *sealed(const cs_made *m) {
-	const seal_t *s = seal_of(m->label);
-	if (s != NULL) return s;
+	for (size_t i = 0; i < seal_count; i++)
+		if (strcmp(seals[i].label, m->label) == 0 && memcmp(seals[i].doc, here, 32) == 0) return &seals[i];
 	if (seal_count == seal_room) {
 		seal_room = seal_room ? seal_room * 2 : 16;
 		seals = realloc(seals, seal_room * sizeof *seals);
@@ -99,7 +107,8 @@ static const seal_t *sealed(const cs_made *m) {
 	}
 	seal_t *n = &seals[seal_count++];
 	n->label = copyString(m->label);
-	cs_sealed(m, &n->bytes, &n->length);
+	memcpy(n->doc, here, 32);
+	cs_sealed(m, here, &n->bytes, &n->length);
 	uint8_t stored[32];
 	sl_stored(n->bytes, n->length, stored);
 	if (!im_has(&labels, m->name)) im_set(&labels, m->name, n->label);
@@ -259,6 +268,15 @@ static void device(const op_value *r, FILE *out) {
 	}
 	tp_options o = {.store = d->store, .now = wr_clock, .snapshot = snapshot_of, .context = d};
 	memcpy(o.seed, d->seed, 32);
+	const op_value *limits = op_get(r, "limits");
+	if (limits != NULL && limits->type == OP_MAP) {
+		const char *names[] = {"pending", "refused", "waiting", "joins", "parts"};
+		size_t *at[] = {&o.limits.pending, &o.limits.refused, &o.limits.waiting, &o.limits.joins, &o.limits.parts};
+		for (size_t i = 0; i < 5; i++) {
+			const op_value *n = op_get(limits, names[i]);
+			if (n != NULL && n->type == OP_NUM && n->num >= 1) *at[i] = (size_t)n->num;
+		}
+	}
 	d->t = tp_create(&o);
 	if (d->t == NULL) hh_fail("Subduction would not make a node");
 	tp_arrived(d->t, arrived, d);
@@ -445,11 +463,27 @@ static void fragment_op(const op_value *r, FILE *out) {
 	const op_value *members = op_get(r, "members");
 	size_t count = members != NULL && members->type == OP_LIST ? members->count : 0;
 	const seal_t **ms = hh_take((count + 1) * sizeof *ms);
+	const op_value *tamper = op_get(r, "tamper");
 	for (size_t i = 0; i < count; i++) {
 		const op_value *x = members->items[i];
 		if ((ms[i] = seal_of(x->type == OP_STR ? x->str : NULL)) == NULL) {
 			hh_error(out, "no commit %s", x->type == OP_STR ? x->str : "(none)");
 			return;
+		}
+		// tampered: its signature's last byte flipped
+		for (size_t k = 0; tamper != NULL && tamper->type == OP_LIST && k < tamper->count; k++) {
+			if (tamper->items[k]->type != OP_STR || strcmp(tamper->items[k]->str, x->str) != 0) continue;
+			Json *o = cborDecode(ms[i]->bytes, ms[i]->length, NULL, NULL);
+			Json *sig = (Json *)jsonGet(o, "signature");
+			sig->bytes.data[sig->bytes.length - 1] ^= 1;
+			seal_t *t = hh_take(sizeof *t);
+			t->label = ms[i]->label;
+			t->length = 0;
+			cborEncode(o, NULL, 0, &t->length, NULL);
+			t->bytes = hh_take(t->length + 1);
+			cborEncode(o, t->bytes, t->length, &t->length, NULL);
+			jsonFree(o);
+			ms[i] = t;
 		}
 	}
 	const char *form = hh_str(r, "form");
@@ -471,7 +505,7 @@ static void fragment_op(const op_value *r, FILE *out) {
 			else {
 				jsonFree(list);
 				rn_item *items = hh_take((count + 1) * sizeof *items);
-				for (size_t i = 0; i < count; i++) items[i] = (rn_item){ms[i]->bytes, ms[i]->length};
+				for (size_t i = 0; i < count; i++) items[i] = (rn_item){ms[i]->bytes, ms[i]->length, NULL};
 				uint8_t *run;
 				size_t n;
 				if (rn_pack(items, count, &run, &n) != RN_OK) {
@@ -501,10 +535,23 @@ static void fragment_op(const op_value *r, FILE *out) {
 	}
 	uint8_t head[32];
 	if (!stored_id(op_get(r, "head"), head, out)) return;
-	size_t bn;
+	size_t bn, cn = 0;
 	uint8_t(*boundary)[32] = ids_of(op_get(r, "boundary"), &bn, out);
 	if (boundary == NULL) return;
-	if (!tp_conformance_hook_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn, NULL, 0, blob, length)) {
+	// checkpoints: given, else each member but the head with a leading zero byte
+	uint8_t(*checkpoints)[32];
+	if (op_get(r, "checkpoints") != NULL) {
+		if ((checkpoints = ids_of(op_get(r, "checkpoints"), &cn, out)) == NULL) return;
+	} else {
+		checkpoints = hh_take(count * 32 + 1);
+		for (size_t i = 0; i < count; i++) {
+			uint8_t id[32];
+			sl_stored(ms[i]->bytes, ms[i]->length, id);
+			if (id[0] == 0 && memcmp(id, head, 32) != 0) memcpy(checkpoints[cn++], id, 32);
+		}
+	}
+	if (!tp_conformance_hook_put_fragment(d->t, doc_of(r), head, (const uint8_t(*)[32])boundary, bn,
+		    (const uint8_t(*)[32])checkpoints, cn, blob, length)) {
 		hh_error(out, "not a document id: %s", doc_of(r));
 		return;
 	}
@@ -713,10 +760,8 @@ static void blob(const op_value *r, FILE *out) {
 	}
 	fputs("{\"members\":[", out);
 	for (size_t i = 0; i < u.count; i++) {
-		uint8_t s[32];
-		sl_stored(u.sealed[i], u.lengths[i], s);
 		if (i) fputc(',', out);
-		put_label(out, s);
+		put_label(out, u.members[i].stored);
 	}
 	fputc(']', out);
 	rn_free(&u);
@@ -775,6 +820,7 @@ void hh_finish(void) {
 
 void hh_answer(const op_value *r, FILE *out) {
 	const char *op = hh_str(r, "op");
+	if (!tp_doc(doc_of(r), here)) memset(here, 0, 32);
 	if (op == NULL) hh_unknown(out, r);
 	else if (strcmp(op, "device") == 0) device(r, out);
 	else if (strcmp(op, "close") == 0) close_device(r, out);

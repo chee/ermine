@@ -5,7 +5,8 @@
 //
 // a device here checks nothing (every commit applies) and gives every fragment it builds a snapshot:
 // the tables at its head (replay.ts), packed. a commit a request makes is signed by its seed,
-// default the device's. doc: an ermine:// id, default ermine://2a…2a00…00 (16 bytes each)
+// default the device's, and sealed for each document it is used in. doc: an ermine:// id, default
+// ermine://2a…2a00…00 (16 bytes each)
 //
 // { op: "device", name, seed, storage?, limits? }  → { key }    storage: a label; a device made with
 //                                                        it takes in what that storage holds;
@@ -99,30 +100,35 @@ const label = (b: Uint8Array | string) => {
 	const h = typeof b === "string" ? b : hex(b)
 	return labels.get(h) ?? h
 }
-async function made(m: Made): Promise<Uint8Array> {
-	let s = seals.get(m.label)
+// a commit's seal for a document (a seal is good in its own only), made once
+async function made(m: Made, doc: string): Promise<Uint8Array> {
+	const k = m.label + " " + doc
+	let s = seals.get(k)
 	if (s) return s
-	s = await commits.sealed(m)
-	seals.set(m.label, s)
+	s = await commits.sealed(m, unhex(doc.slice("ermine://".length)))
+	seals.set(k, s)
 	for (const h of [hex(m.name), hex(storedOf(s))]) if (!labels.has(h)) labels.set(h, m.label)
 	return s
 }
 // made under its label, signed by its seed (default: seed); made already, that one
-async function make(r: Request, seed?: string): Promise<Made> {
+async function make(r: Request, doc: string, seed?: string): Promise<Made> {
 	const fresh = commits.get(r.name) === undefined && seed !== undefined && r.seed === undefined
 	const m = await commits.make(fresh ? { ...r, seed } : r)
-	await made(m)
+	await made(m, doc)
 	return m
 }
-// a label's seal, by label
-function sealOf(x: unknown): Uint8Array {
-	const s = seals.get(x as string)
-	if (!s) throw new Error(`no commit ${x}`)
-	return s
+// a label's seal for the document, by label
+async function sealOf(x: unknown, doc: string): Promise<Uint8Array> {
+	const m = commits.get(x as string)
+	if (!m) throw new Error(`no commit ${x}`)
+	return await made(m, doc)
 }
-// a label (its seal's stored id), or hex
-const storedId = (x: unknown) =>
-	typeof x === "string" && seals.has(x) ? storedOf(sealOf(x)) : unhex(x as string)
+// a label (its seal's stored id, in the document), or hex
+const storedId = async (x: unknown, doc: string) =>
+	typeof x === "string" && commits.get(x) !== undefined
+		? storedOf(await sealOf(x, doc))
+		: unhex(x as string)
+const storedIds = (xs: unknown[], doc: string) => Promise.all(xs.map((x) => storedId(x, doc)))
 
 const added = (a: Added): unknown =>
 	typeof a === "object" && "waiting" in a ? { waiting: a.waiting.map(label) } : a
@@ -182,11 +188,11 @@ async function answer(r: Request): Promise<Answer> {
 			await of(r.device).device.follow(doc)
 			return {}
 		case "make":
-			await make(r)
+			await make(r, doc)
 			return {}
 		case "take": {
 			const d = of(r.device)
-			const m = await make(r, d.seed)
+			const m = await make(r, doc, d.seed)
 			return {
 				added: added(
 					d.device.take(doc, m.bytes, r.layer ?? "stored", { commit: m.commit, name: m.name }),
@@ -196,11 +202,11 @@ async function answer(r: Request): Promise<Answer> {
 		case "put": {
 			const d = of(r.device)
 			const m = typeof r.commit === "string" ? commits.get(r.commit) : undefined
-			const blob = r.blob !== undefined ? unhex(r.blob) : sealOf(r.commit)
-			const head = r.head !== undefined ? storedId(r.head) : storedOf(blob)
+			const blob = r.blob !== undefined ? unhex(r.blob) : await sealOf(r.commit, doc)
+			const head = r.head !== undefined ? await storedId(r.head, doc) : storedOf(blob)
 			const parents: Uint8Array[] = r.parents !== undefined
-				? r.parents.map(storedId)
-				: (m?.commit.parents ?? []).map((p) => storedId(label(p)))
+				? await storedIds(r.parents, doc)
+				: await storedIds((m?.commit.parents ?? []).map((p) => label(p)), doc)
 			await transport_conformance_hook_put(d.device, doc, head, parents, blob)
 			return {}
 		}
@@ -208,14 +214,15 @@ async function answer(r: Request): Promise<Answer> {
 			const d = of(r.device)
 			let blob: Uint8Array
 			const tamper = new Set<string>(r.tamper ?? [])
-			const seals = (r.members ?? []).map((m: string) => {
-				const s = sealOf(m)
-				if (!tamper.has(m)) return s
-				const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
-				const signature = o.signature.slice()
-				signature[signature.length - 1] ^= 1
-				return cbor.encode({ commit: o.commit, signature })
-			})
+			const seals = (await Promise.all((r.members ?? []).map((m: string) => sealOf(m, doc))))
+				.map((s, i) => {
+					const m = r.members[i]
+					if (!tamper.has(m)) return s
+					const o = cbor.decode(s) as { commit: Uint8Array; signature: Uint8Array }
+					const signature = o.signature.slice()
+					signature[signature.length - 1] ^= 1
+					return cbor.encode({ commit: o.commit, signature })
+				})
 			if (r.blob !== undefined) blob = cbor.encode(revive(r.blob) as cbor.Value)
 			else if (r.form === "list") blob = cbor.encode(seals)
 			else {
@@ -225,17 +232,17 @@ async function answer(r: Request): Promise<Answer> {
 				if (r.tables !== undefined) o.snapshot = snapshot(revive(r.tables) as Tables)
 				blob = cbor.encode(o)
 			}
-			const head = storedId(r.head)
+			const head = await storedId(r.head, doc)
 			const checkpoints = r.checkpoints !== undefined
-				? r.checkpoints.map(storedId)
-				: (r.members ?? []).map(storedId).filter((id: Uint8Array) =>
+				? await storedIds(r.checkpoints, doc)
+				: (await storedIds(r.members ?? [], doc)).filter((id: Uint8Array) =>
 					id[0] === 0 && hex(id) !== hex(head)
 				)
 			await transport_conformance_hook_putFragment(
 				d.device,
 				doc,
 				head,
-				(r.boundary ?? []).map(storedId),
+				await storedIds(r.boundary ?? [], doc),
 				checkpoints,
 				blob,
 			)
@@ -298,13 +305,13 @@ async function answer(r: Request): Promise<Answer> {
 			}
 		}
 		case "blob": {
-			const d = of(r.device), head = hex(storedId(r.head))
+			const d = of(r.device), head = hex(await storedId(r.head, doc))
 			const tree = sd.SedimentreeId.fromBytes(unhex(doc.slice("ermine://".length)))
 			const all = await d.storage.loadAllFragments(tree) as sd.FragmentWithBlob[]
 			const f = all.find((f) => hex(f.signed.payload.head.toBytes()) === head)
 			if (f === undefined) return {}
 			const o = cbor.decode(f.blob) as { run: Uint8Array; snapshot?: Uint8Array }
-			const out: Answer = { members: unpack(o.run).map((s) => label(storedOf(s))) }
+			const out: Answer = { members: unpack(o.run).map((u) => label(u.stored)) }
 			if (o.snapshot !== undefined) out.snapshot = tablesJson(tablesOf(o.snapshot))
 			out.hash = hex(blake3(f.blob))
 			return out

@@ -1,6 +1,8 @@
 // a commit signed by the device that made it, and the id it is stored under (extensions/subduction/
 // plan.org, Rewrite for the new shape, 2). sealed: {commit: its bytes, signature}, the signer's key
-// once (it is in the commit). signed: "ermine/v0/commit" then the commit's name. the signature is
+// once (it is in the commit). signed: "ermine/v0/commit", the document's 32 bytes (the ermine://
+// id's), then the commit's name, so a seal is good in its document only (nothing of the document
+// goes in the seal: the document is where it came, a sedimentree). the signature is
 // self-describing: a varsig header, then the raw signature. the commit's signer is a multikey
 // (commit.ts). Ed25519 through WebCrypto, which every browser, Deno and Node have: a key made here
 // never leaves as bytes; others by a verifier a caller adds
@@ -67,10 +69,13 @@ const PKCS8 = Uint8Array.from([
 	0x20,
 ])
 
-const message = (name: Uint8Array) => {
-	const m = new Uint8Array(DOMAIN.length + name.length)
+// what is signed: the domain, the document's bytes, the commit's name
+const message = (doc: Uint8Array, name: Uint8Array) => {
+	if (doc.length !== 32) throw new SealError("shape")
+	const m = new Uint8Array(DOMAIN.length + 32 + name.length)
 	m.set(DOMAIN)
-	m.set(name, DOMAIN.length)
+	m.set(doc, DOMAIN.length)
+	m.set(name, DOMAIN.length + 32)
 	return m
 }
 
@@ -149,17 +154,19 @@ export const verifiers: readonly Verifier[] = [
 	{ header: ED25519_HEADER, code: ED25519, size: 64, verify: good },
 ]
 
-// the sealed commit's bytes. the commit's signer must be this signer's key. made: its name, and
-// its commit, from whoever just made it: not decoded or named again; given a name and no commit, the
-// caller vouches that its signer is this one (a device sealing its own)
+// the sealed commit's bytes, for the document (its 32 bytes). the commit's signer must be this
+// signer's key. made: its name, and its commit, from whoever just made it: not decoded or named
+// again; given a name and no commit, the caller vouches that its signer is this one (a device sealing
+// its own)
 export async function seal(
 	bytes: Uint8Array,
 	signer: Signer,
+	doc: Uint8Array,
 	made?: { commit?: Commit; name: Uint8Array },
 ): Promise<Uint8Array> {
 	const commit = made ? made.commit : decode(bytes)
 	if (commit && !same(commit.signer, signer.key)) throw new SealError("signature")
-	const raw = await signer.sign(message(made?.name ?? nameOf(bytes)))
+	const raw = await signer.sign(message(doc, made?.name ?? nameOf(bytes)))
 	if (!(raw instanceof Uint8Array) || raw.length === 0) throw new SealError("shape")
 	const signature = new Uint8Array(signer.header.length + raw.length)
 	signature.set(signer.header)
@@ -169,11 +176,13 @@ export async function seal(
 
 export type Unsealed = { commit: Commit; bytes: Uint8Array; name: Uint8Array; stored: Uint8Array }
 
-// the commit, checked: its shape, and its signer's signature, by the verifier whose header the
-// signature begins with: the built in, then more (a caller's). no verifier for the header, or one
-// whose key type is not the signer's: refused as a signature not good, with the reason
+// the commit, checked: its shape, and its signer's signature for the document (its 32 bytes), by
+// the verifier whose header the signature begins with: the built in, then more (a caller's). no
+// verifier for the header, or one whose key type is not the signer's: refused as a signature not
+// good, with the reason
 export async function unseal(
 	sealed: Uint8Array,
+	doc: Uint8Array,
 	more: readonly Verifier[] = [],
 ): Promise<Unsealed> {
 	let x: unknown
@@ -203,7 +212,7 @@ export async function unseal(
 		throw new SealError("signature", "the header and the signer's key differ")
 	}
 	if (signature.length !== v.header.length + v.size) throw new SealError("shape")
-	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(name)))) {
+	if (!(await v.verify(signature.subarray(v.header.length), key.key, message(doc, name)))) {
 		throw new SealError("signature")
 	}
 	return { commit, bytes: o.commit, name, stored: stored(sealed) }

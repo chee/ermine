@@ -52,6 +52,7 @@ const char *tp_code_name(tp_code code) {
 	case TP_SIGNATURE: return "signature";
 	case TP_STORED_ID: return "stored";
 	case TP_PARENTS: return "parents";
+	case TP_BOUNDARY: return "boundary";
 	}
 	return "";
 }
@@ -102,11 +103,14 @@ static void sealed_of(sealed_t *s, sl_unsealed *u) {
 	sl_free(u);
 }
 
-// a seal taken in: its commit's name and lamport, its sealed bytes, and the stored ids of the seals
-// it was taken in over (its commit's parents; or, for a seal alone, every seal of each)
+// a seal taken in: its commit's name and lamport, its commit's bytes, its sealed bytes (NULL: a
+// commit a run's next vouched for, held without a seal), and the stored ids of the seals it was taken
+// in over (its commit's parents; or, for a seal alone, every seal of each)
 typedef struct {
 	uint8_t stored[32], name[32];
 	int64_t lamport;
+	uint8_t *bytes;
+	size_t length;
 	uint8_t *sealed;
 	size_t sealed_length;
 	uint8_t (*ids)[32];
@@ -151,6 +155,62 @@ typedef struct {
 	size_t length;
 } blob_t;
 
+static void blob_free(void *b) {
+	if (b == NULL) return;
+	free(((blob_t *)b)->bytes);
+	free(b);
+}
+
+// the keys of a map in the order they came, so its oldest can be let go of past a most (transport.ts's
+// note, a Map's order): each with the serial it came with, which at keeps, so one that went and came
+// again is where it came last
+typedef struct {
+	im_map at;
+	struct {
+		uint8_t key[32];
+		uintptr_t serial;
+	} *keys;
+	size_t first, count, room;
+	uintptr_t serial;
+} order_t;
+
+static void order_free(order_t *o) {
+	im_free(&o->at);
+	free(o->keys);
+	*o = (order_t){0};
+}
+
+// whether the order's entry k is the key's place in the map now
+static bool current(const im_map *m, const order_t *o, size_t k) {
+	return im_has(m, o->keys[k].key) && (uintptr_t)im_get(&o->at, o->keys[k].key) == o->keys[k].serial;
+}
+
+// the key into the map, under value. New to it: past most, the oldest let go of first (drop: what is
+// done with its value, or NULL)
+static void note(im_map *m, order_t *o, const uint8_t key[32], void *value, size_t most, void (*drop)(void *value)) {
+	if (!im_has(m, key)) {
+		while (m->count >= most && o->first < o->count) {
+			size_t k = o->first++;
+			if (!current(m, o, k)) continue;
+			im_del(&o->at, o->keys[k].key);
+			void *v = im_del(m, o->keys[k].key);
+			if (drop != NULL) drop(v);
+		}
+		// the entries that are no key's place now let go of, once they are most of them
+		if (o->count - o->first > 2 * m->count + 64) {
+			size_t n = 0;
+			for (size_t k = o->first; k < o->count; k++)
+				if (current(m, o, k)) o->keys[n++] = o->keys[k];
+			o->first = 0, o->count = n;
+		}
+		ROOM(o->keys, o->count, o->room);
+		memcpy(o->keys[o->count].key, key, 32);
+		o->keys[o->count++].serial = ++o->serial;
+		im_set(&o->at, key, (void *)o->serial);
+	}
+	im_set(m, key, value);
+}
+
 // ---- documents
 
 typedef struct doc doc;
@@ -177,14 +237,17 @@ struct doc {
 	size_t order_count, order_room;
 	// by head (fragment *)
 	im_map fragments;
-	// the snapshots fragments carried, packed, by their head's name (blob_t)
-	im_map snapshots;
+	// the snapshots fragments carried, packed, by their head's name (blob_t), each checked (hint); the
+	// snapshots not checked yet (blob_t), and the heads checked
+	im_map snapshots, hints, judged;
 	// by a commit's head or a seal's stored id (pending_t)
 	im_map pending;
 	// codes: by head or stored id; fragments refused whole, by head; refused ephemeral commits, by name
 	im_map refused, broken, heard;
 	// names of seals refused here
 	im_map bad;
+	// the order each capped map's keys came in (note)
+	order_t pending_order, refused_order, broken_order, heard_order, bad_order, hints_order;
 	// how many taken-in seals have a depth, so a build with none is passed over
 	size_t deep;
 	// ephemeral commits to let go of once nothing queued holds them (tp_forget)
@@ -218,13 +281,15 @@ typedef enum {
 struct job {
 	job_kind kind;
 	doc *d;
-	// J_TAKE, J_SAVE: the record's kind and tree, its bytes (or given: its head, parents or boundary
-	// and blob as the hook put had them)
+	// J_TAKE, J_SAVE: the record's kind and tree, its bytes (or given: its head, parents or boundary,
+	// checkpoints (12 bytes each) and blob as the hook put had them)
 	int record;
 	uint8_t tree[32];
 	bool given;
+	uint8_t *checks;
+	size_t checks_count;
 	uint8_t head[32];
-	// parents, boundary; J_COMPACT's members; J_BUILD's heads (none: every head)
+	// parents, boundary; J_BUILD's heads (none: every head). J_COMPACT: the fragment's head
 	uint8_t (*list)[32];
 	size_t count;
 	bool all;
@@ -277,6 +342,9 @@ typedef struct {
 	size_t count;
 	uint8_t *blob;
 	size_t length;
+	// a fragment's checkpoints, 12 bytes each
+	uint8_t *checks;
+	size_t checks_count;
 	bool saw;
 } put_t;
 
@@ -337,6 +405,8 @@ struct tp_device {
 	tp_check_fn check;
 	tp_snapshot_fn snapshot;
 	void *context;
+	const rp_merges *merges;
+	tp_limits limits;
 
 	im_map docs;
 	doc *first, *last;
@@ -359,6 +429,14 @@ struct tp_device {
 	size_t told_count, told_next, told_room;
 	told_t *released;
 	size_t released_count, released_next, released_room;
+	// heads with a snapshot hint, taken in by an add: checked by tell, after it (kept: the name)
+	struct {
+		doc *d;
+		uint8_t name[32];
+	} *judging;
+	size_t judging_count, judging_room;
+	// the check changed: what waited on it is judged again at the next run
+	bool changed;
 
 	job *jobs, *jobs_last, *cursor;
 	item *items, *items_last;
@@ -435,6 +513,7 @@ static job *job_new(job_kind kind, doc *d) {
 // the fragments a build made are the document's: only the list of them is the job's
 static void job_free(job *j) {
 	free(j->list);
+	free(j->checks);
 	free(j->bytes);
 	free(j->fresh);
 	free(j);
@@ -485,6 +564,8 @@ static void enqueue(tp_device *t, doc *d, tp_layer layer, const hy_kept *kept) {
 
 // ---- taking in
 
+static void judge(doc *d, const uint8_t name[32]);
+
 static void tell(tp_device *t) {
 	while (t->told_next < t->told_count) {
 		told_t a = t->told[t->told_next++];
@@ -497,6 +578,8 @@ static void tell(tp_device *t) {
 		enqueue(t, r.d, r.layer, r.kept);
 	}
 	t->released_count = t->released_next = 0;
+	for (size_t i = 0; i < t->judging_count; i++) judge(t->judging[i].d, t->judging[i].name);
+	t->judging_count = 0;
 }
 
 // own takes and the check: everything from elsewhere is marked in elsewhere before its history's add,
@@ -514,6 +597,11 @@ static void taken(void *context, const hy_kept *kept) {
 	side_t *s = context;
 	doc *d = s->d;
 	tp_device *t = d->t;
+	if (s->layer == TP_STORED && im_has(&d->hints, kept->name)) {
+		ROOM(t->judging, t->judging_count, t->judging_room);
+		t->judging[t->judging_count].d = d;
+		memcpy(t->judging[t->judging_count++].name, kept->name, 32);
+	}
 	void *mark = im_get(&d->elsewhere[s->layer], kept->name);
 	if (mark == NULL) {
 		if (im_del(&d->own[s->layer], kept->name) != NULL) {
@@ -525,6 +613,13 @@ static void taken(void *context, const hy_kept *kept) {
 	im_del(&d->elsewhere[s->layer], kept->name);
 	ROOM(t->told, t->told_count, t->told_room);
 	t->told[t->told_count++] = (told_t){d, s->layer, kept, (uintptr_t)mark == 2};
+}
+
+// a commit from elsewhere a history let go of (past its most): its marks go too
+static void dropped(void *context, const uint8_t name[32]) {
+	side_t *s = context;
+	im_del(&s->d->elsewhere[s->layer], name);
+	im_del(&s->d->own[s->layer], name);
 }
 
 static doc *document(tp_device *t, const uint8_t tree[32]) {
@@ -539,6 +634,7 @@ static doc *document(tp_device *t, const uint8_t tree[32]) {
 	for (int l = 0; l < 2; l++) {
 		d->sides[l] = (side_t){d, (tp_layer)l};
 		d->histories[l] = hy_create(checked, &d->sides[l]);
+		hy_limit(d->histories[l], l == TP_EPHEMERAL ? t->limits.waiting : t->limits.pending, dropped, &d->sides[l]);
 		hy_on_taken(d->histories[l], taken, &d->sides[l]);
 	}
 	im_set(&t->docs, tree, d);
@@ -569,6 +665,7 @@ static void doc_free(doc *d) {
 	im_free(&d->names);
 	for (size_t i = 0; i < d->order_count; i++) {
 		free(d->order[i]->sealed);
+		free(d->order[i]->bytes);
 		free(d->order[i]->ids);
 		free(d->order[i]);
 	}
@@ -580,12 +677,16 @@ static void doc_free(doc *d) {
 		free(d->fragments.values[i]);
 	}
 	im_free(&d->fragments);
-	for (size_t i = 0; i < d->snapshots.slots; i++) {
-		if (!d->snapshots.used[i]) continue;
-		free(((blob_t *)d->snapshots.values[i])->bytes);
-		free(d->snapshots.values[i]);
+	for (int k = 0; k < 2; k++) {
+		im_map *m = k == 0 ? &d->snapshots : &d->hints;
+		for (size_t i = 0; i < m->slots; i++)
+			if (m->used[i]) blob_free(m->values[i]);
+		im_free(m);
 	}
-	im_free(&d->snapshots);
+	im_free(&d->judged);
+	order_t *orders[] = {&d->pending_order, &d->refused_order, &d->broken_order, &d->heard_order, &d->bad_order,
+		&d->hints_order};
+	for (size_t i = 0; i < sizeof orders / sizeof *orders; i++) order_free(orders[i]);
 	for (size_t i = 0; i < d->pending.slots; i++)
 		if (d->pending.used[i]) pending_free(d->pending.values[i]);
 	im_free(&d->pending);
@@ -627,7 +728,9 @@ static void hand(doc *d, const sealed_t *it, const uint8_t *sealed, size_t seale
 	memcpy(s->stored, it->stored, 32);
 	memcpy(s->name, it->name, 32);
 	s->lamport = it->lamport;
-	s->sealed = copy(sealed, sealed_length);
+	s->bytes = copy(it->bytes, it->length);
+	s->length = it->length;
+	s->sealed = sealed != NULL ? copy(sealed, sealed_length) : NULL;
 	s->sealed_length = sealed_length;
 	s->ids = copy(ids, count * 32);
 	s->ids_length = count;
@@ -647,8 +750,8 @@ static void refuse(doc *d, const uint8_t key[32], tp_code code, const uint8_t *n
 	memcpy(k, key, 32);
 	if (name != NULL) memcpy(n, name, 32);
 	pending_t *p = im_del(&d->pending, k);
-	im_set(&d->refused, k, CODE(code));
-	if (name != NULL) im_set(&d->bad, n, SET);
+	note(&d->refused, &d->refused_order, k, CODE(code), d->t->limits.refused, NULL);
+	if (name != NULL) note(&d->bad, &d->bad_order, n, SET, d->t->limits.refused, NULL);
 	if (p != NULL) pending_free(p);
 }
 
@@ -754,24 +857,41 @@ static tp_code code_of(sl_code code) {
 	return code == SL_SIGNATURE ? TP_SIGNATURE : TP_SHAPE;
 }
 
+// pending, the oldest let go of past the limit (heard again, it comes in again)
+static void pending_drop(void *p) {
+	pending_free(p);
+}
+static void pend(doc *d, pending_t *p) {
+	pending_t *old = im_del(&d->pending, p->key);
+	if (old != NULL) pending_free(old);
+	note(&d->pending, &d->pending_order, p->key, p, d->t->limits.pending, pending_drop);
+}
+
+// a loose commit's first steps, the lock (unlocked), the seal, its stored id: its commit in *it;
+// false: refused, noted
+static bool opening(doc *d, const uint8_t head[32], const uint8_t *blob, size_t length, sl_unsealed *it) {
+	sl_code code = sl_unseal(blob, length, d->bytes, it, NULL);
+	if (code != SL_OK) {
+		refuse(d, head, code_of(code), NULL);
+		return false;
+	}
+	if (memcmp(it->stored, head, 32) != 0) {
+		uint8_t name[32];
+		memcpy(name, it->name, 32);
+		sl_free(it);
+		refuse(d, head, TP_STORED_ID, name);
+		settle(d);
+		return false;
+	}
+	return true;
+}
+
 // the steps of a loose commit, in order: the lock (unlocked), the seal, its stored id, then pending
 static void take_commit(doc *d, const uint8_t head[32], const uint8_t (*parents)[32], size_t count, const uint8_t *blob,
 	size_t length) {
 	if (im_has(&d->seen, head)) return;
 	sl_unsealed u;
-	sl_code code = sl_unseal(blob, length, &u, NULL);
-	if (code != SL_OK) {
-		refuse(d, head, code_of(code), NULL);
-		return;
-	}
-	if (memcmp(u.stored, head, 32) != 0) {
-		uint8_t name[32];
-		memcpy(name, u.name, 32);
-		sl_free(&u);
-		refuse(d, head, TP_STORED_ID, name);
-		settle(d);
-		return;
-	}
+	if (!opening(d, head, blob, length, &u)) return;
 	im_del(&d->refused, head);
 	pending_t *p = calloc(1, sizeof *p);
 	if (p == NULL) abort();
@@ -783,113 +903,339 @@ static void take_commit(doc *d, const uint8_t head[32], const uint8_t (*parents)
 	p->given = copy(parents, count * 32);
 	p->given_length = count;
 	qsort(p->given, count, 32, by_id);
-	pending_t *old = im_del(&d->pending, head);
-	if (old != NULL) pending_free(old);
-	im_set(&d->pending, head, p);
+	pend(d, p);
 	settle(d);
 }
 
-// a seal taken in as a fragment's member: from unseal on, no commit around it
-static void member(doc *d, const uint8_t *sealed, size_t length) {
-	uint8_t s[32];
-	sl_stored(sealed, length, s);
-	if (im_has(&d->seen, s)) return;
+// what Subduction may store of a loose commit (its admission): one that unseals under its stored id
+// (the lock, unlocked, opens all). What is refused is noted, as taking it in notes it
+static bool allows(doc *d, const uint8_t head[32], const uint8_t *blob, size_t length) {
+	if (im_has(&d->seen, head)) return true;
 	sl_unsealed u;
-	sl_code code = sl_unseal(sealed, length, &u, NULL);
-	if (code != SL_OK) {
-		im_set(&d->refused, s, CODE(code_of(code)));
-		return;
-	}
-	im_del(&d->refused, s);
+	if (!opening(d, head, blob, length, &u)) return false;
+	sl_free(&u);
+	return true;
+}
+
+// a fragment's member: its sealed bytes (NULL: vouched for by the next in its run), and its commit as
+// the transport reads it
+typedef struct {
+	uint8_t *sealed;
+	size_t length;
+	sealed_t it;
+} member_t;
+
+// a seal taken in as a fragment's member, unsealed: no commit around it. Takes the member's
+static void member(doc *d, member_t *m) {
+	if (im_has(&d->seen, m->it.stored)) return;
+	im_del(&d->refused, m->it.stored);
 	pending_t *p = calloc(1, sizeof *p);
 	if (p == NULL) abort();
-	memcpy(p->key, s, 32);
-	sealed_of(&p->it, &u);
-	p->sealed = copy(sealed, length);
-	p->sealed_length = length;
-	pending_t *old = im_del(&d->pending, s);
-	if (old != NULL) pending_free(old);
-	im_set(&d->pending, s, p);
+	memcpy(p->key, m->it.stored, 32);
+	p->it = m->it;
+	m->it = (sealed_t){0};
+	p->sealed = m->sealed;
+	p->sealed_length = m->length;
+	m->sealed = NULL;
+	pend(d, p);
 }
 
 // a fragment's blob opened: {run: its members as columns (run.h), snapshot?: packed tables}, or
-// {members: [sealed...], snapshot?} as it was first written; the snapshot dropped when it does not
-// read back
+// {members: [sealed...], snapshot?} as it was first written. Each member unsealed as it is read, in
+// order: the first that is not good ends it, and the fragment is refused whole with its code (a run
+// that is not one, or comes to too much: shape). The snapshot dropped when it does not read back
 typedef struct {
-	uint8_t **members;
-	size_t *lengths;
-	size_t count;
+	member_t *members;
+	size_t count, room;
 	uint8_t *snapshot;
 	size_t snapshot_length;
+	// while reading: the first member refused
+	tp_code code;
 } contents_t;
 
 static void contents_free(contents_t *c) {
-	for (size_t i = 0; i < c->count; i++) free(c->members[i]);
+	for (size_t i = 0; i < c->count; i++) {
+		free(c->members[i].sealed);
+		sealed_free(&c->members[i].it);
+	}
 	free(c->members);
-	free(c->lengths);
 	free(c->snapshot);
 	*c = (contents_t){0};
 }
 
-static bool contents(const uint8_t *open, size_t length, contents_t *out) {
-	*out = (contents_t){0};
-	Json *x = cborDecode(open, length, NULL, NULL);
-	if (x == NULL || x->type != JSON_OBJECT || x->object.count < 1 || x->object.count > 2) return jsonFree(x), false;
-	const Json *run = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
-	if ((run == NULL) == (members == NULL) || (size_t)x->object.count != 1 + (snapshot != NULL)) return jsonFree(x), false;
-	if (run != NULL) {
-		if (run->type != JSON_BYTES) return jsonFree(x), false;
-		rn_unpacked u;
-		if (rn_unpack(run->bytes.data, run->bytes.length, &u, NULL) != RN_OK) return jsonFree(x), false;
-		out->count = u.count;
-		out->members = u.sealed;
-		out->lengths = u.lengths;
-	} else {
-		if (members->type != JSON_ARRAY) return jsonFree(x), false;
-		for (int i = 0; i < members->array.count; i++)
-			if (members->array.items[i]->type != JSON_BYTES) return jsonFree(x), false;
-		out->count = (size_t)members->array.count;
-		out->members = malloc((out->count + 1) * sizeof *out->members);
-		out->lengths = malloc((out->count + 1) * sizeof *out->lengths);
-		if (out->members == NULL || out->lengths == NULL) abort();
-		for (size_t i = 0; i < out->count; i++) {
-			const Json *m = members->array.items[i];
-			out->members[i] = copy(m->bytes.data, m->bytes.length);
-			out->lengths[i] = m->bytes.length;
-		}
+// what a reading keeps: the contents, the document its seals are for, and the members vouched for
+// by one not read yet
+typedef struct {
+	contents_t *c;
+	const uint8_t *doc;
+	member_t *vouched;
+	size_t vouched_count, vouched_room;
+} reading_t;
+
+// a member kept
+static member_t *push_member(contents_t *c) {
+	ROOM(c->members, c->count, c->room);
+	member_t *m = &c->members[c->count++];
+	*m = (member_t){0};
+	return m;
+}
+
+// one member read: a seal unsealed and kept, with the ones it vouches for before it; one vouched for,
+// held until then. The first that is not good ends the reading
+static bool read_member(void *context, const rn_member *r) {
+	reading_t *g = context;
+	contents_t *c = g->c;
+	if (r->sealed == NULL) {
+		cm_commit commit;
+		if (cm_decode(r->commit, r->commit_length, &commit, NULL) != CM_OK) return c->code = TP_SHAPE, false;
+		ROOM(g->vouched, g->vouched_count, g->vouched_room);
+		member_t *m = &g->vouched[g->vouched_count++];
+		*m = (member_t){0};
+		memcpy(m->it.name, r->name, 32);
+		memcpy(m->it.stored, r->stored, 32);
+		m->it.bytes = copy(r->commit, r->commit_length);
+		m->it.length = r->commit_length;
+		m->it.lamport = commit.lamport;
+		m->it.parents_length = commit.parents_length;
+		m->it.parents = copy(commit.parents, commit.parents_length * 32);
+		cm_free(&commit);
+		return true;
 	}
-	if (snapshot != NULL) {
-		if (snapshot->type != JSON_BYTES) return contents_free(out), jsonFree(x), false;
-		rp_tables tables;
-		rp_init(&tables);
-		if (sn_tables(snapshot->bytes.data, snapshot->bytes.length, &tables) == PK_OK) {
-			out->snapshot = copy(snapshot->bytes.data, snapshot->bytes.length);
-			out->snapshot_length = snapshot->bytes.length;
-		}
-		rp_free(&tables);
+	sl_unsealed u;
+	sl_code code = sl_unseal(r->sealed, r->sealed_length, g->doc, &u, NULL);
+	if (code != SL_OK) {
+		c->code = code_of(code);
+		return false;
 	}
-	jsonFree(x);
+	for (size_t i = 0; i < g->vouched_count; i++) *push_member(c) = g->vouched[i];
+	g->vouched_count = 0;
+	member_t *m = push_member(c);
+	m->sealed = copy(r->sealed, r->sealed_length);
+	m->length = r->sealed_length;
+	sealed_of(&m->it, &u);
 	return true;
 }
 
-// a snapshot kept by its head's name; the first one kept stays
-static void keep(doc *d, const uint8_t name[32], const uint8_t *bytes, size_t length) {
-	if (bytes == NULL || im_has(&d->snapshots, name)) return;
+// a {members} list's one seal read
+static bool read_seal(reading_t *g, const uint8_t *sealed, size_t length) {
+	rn_member r = {.sealed = sealed, .sealed_length = length};
+	return read_member(g, &r);
+}
+
+// 0, or the code the fragment is refused with (out is left empty)
+static tp_code contents(const uint8_t doc[32], const uint8_t *open, size_t length, contents_t *out) {
+	*out = (contents_t){0};
+	reading_t g = {out, doc, NULL, 0, 0};
+	Json *x = cborDecode(open, length, NULL, NULL);
+	if (x == NULL || x->type != JSON_OBJECT || x->object.count < 1 || x->object.count > 2) return jsonFree(x), TP_SHAPE;
+	const Json *run = jsonGet(x, "run"), *members = jsonGet(x, "members"), *snapshot = jsonGet(x, "snapshot");
+	if ((run == NULL) == (members == NULL) || (size_t)x->object.count != 1 + (snapshot != NULL)) return jsonFree(x), TP_SHAPE;
+	tp_code code = 0;
+	if (run != NULL) {
+		if (run->type != JSON_BYTES) code = TP_SHAPE;
+		else {
+			rn_code c = rn_each(run->bytes.data, run->bytes.length, read_member, &g, NULL);
+			if (c == RN_STOPPED) code = out->code;
+			else if (c != RN_OK) code = TP_SHAPE;
+		}
+	} else if (members->type != JSON_ARRAY) code = TP_SHAPE;
+	else {
+		for (int i = 0; i < members->array.count && code == 0; i++) {
+			const Json *m = members->array.items[i];
+			if (m->type != JSON_BYTES) code = TP_SHAPE;
+			else if (!read_seal(&g, m->bytes.data, m->bytes.length)) code = out->code;
+		}
+	}
+	for (size_t i = 0; i < g.vouched_count; i++) sealed_free(&g.vouched[i].it);
+	free(g.vouched);
+	if (code == 0 && snapshot != NULL) {
+		if (snapshot->type != JSON_BYTES) code = TP_SHAPE;
+		else {
+			rp_tables tables;
+			rp_init(&tables);
+			if (sn_tables(snapshot->bytes.data, snapshot->bytes.length, &tables) == PK_OK) {
+				out->snapshot = copy(snapshot->bytes.data, snapshot->bytes.length);
+				out->snapshot_length = snapshot->bytes.length;
+			}
+			rp_free(&tables);
+		}
+	}
+	jsonFree(x);
+	if (code != 0) contents_free(out);
+	return code;
+}
+
+static bool lookup(void *context, const uint8_t id[32], const uint8_t (**parents)[32], size_t *count);
+static const fragment *known(void *context, const uint8_t head[32]);
+
+// the stored ids of the members reached from the head, along each one's parents (by name) among the
+// members, into reached (empty)
+static void reach(const uint8_t head[32], const contents_t *c, im_map *reached) {
+	const member_t **todo = malloc((c->count + 1) * sizeof *todo);
+	if (todo == NULL) abort();
+	size_t n = 0;
+	for (size_t i = 0; i < c->count; i++)
+		if (memcmp(c->members[i].it.stored, head, 32) == 0) todo[n++] = &c->members[i];
+	while (n > 0) {
+		const member_t *m = todo[--n];
+		if (im_has(reached, m->it.stored)) continue;
+		im_set(reached, m->it.stored, SET);
+		for (size_t p = 0; p < m->it.parents_length; p++) {
+			for (size_t i = 0; i < c->count; i++) {
+				if (memcmp(c->members[i].it.name, m->it.parents[p], 32) != 0) continue;
+				todo = realloc(todo, (n + 2) * sizeof *todo);
+				if (todo == NULL) abort();
+				todo[n++] = &c->members[i];
+			}
+		}
+	}
+	free(todo);
+}
+
+// whether two lists of ids hold the same ids
+static bool same_ids(const uint8_t (*a)[32], size_t an, const uint8_t (*b)[32], size_t bn) {
+	im_map x = {0}, y = {0};
+	for (size_t i = 0; i < an; i++) im_set(&x, a[i], SET);
+	for (size_t i = 0; i < bn; i++) im_set(&y, b[i], SET);
+	bool same = x.count == y.count;
+	for (size_t i = 0; i < an && same; i++) same = im_has(&y, a[i]);
+	im_free(&x), im_free(&y);
+	return same;
+}
+
+// a fragment's contents (into got), checked against what Subduction says of it, as transport.ts's
+// checked: its head one of its members; its head of depth 1 or more, every other member of less depth,
+// and reached from the head along parents among the members; its boundary of the head's depth or more
+// and none of its members; its checkpoints (their first 12 bytes; NULL: none said) each member but the
+// head with a depth; a member's stored id seen here under its own name. A head here whose walk can be
+// made here: its members and boundary that walk's.
+// 0, or the code it is refused with (got left empty)
+static tp_code vetted(doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
+	const uint8_t *checkpoints, size_t checks, const uint8_t *open, size_t length, contents_t *got) {
+	tp_code code = contents(d->bytes, open, length, got);
+	if (code != 0) return code;
+	size_t top = depth(head);
+	bool has = false;
+	im_map ids = {0}, reached = {0};
+	for (size_t i = 0; i < got->count; i++) {
+		has = has || memcmp(got->members[i].it.stored, head, 32) == 0;
+		im_set(&ids, got->members[i].it.stored, SET);
+	}
+	// a stored id here already is under the name it has here (a vouched one's is only said)
+	for (size_t i = 0; i < got->count && has; i++) {
+		const seen_t *was = im_get(&d->seen, got->members[i].it.stored);
+		if (was != NULL && memcmp(was->name, got->members[i].it.name, 32) != 0) has = false;
+	}
+	if (!has) code = TP_STORED_ID;
+	else {
+		reach(head, got, &reached);
+		if (top == 0 || reached.count != ids.count) code = TP_BOUNDARY;
+		for (size_t i = 0; i < got->count && code == 0; i++) {
+			const uint8_t *id = got->members[i].it.stored;
+			if (memcmp(id, head, 32) != 0 && depth(id) >= top) code = TP_BOUNDARY;
+		}
+		for (size_t i = 0; i < count && code == 0; i++)
+			if (depth(boundary[i]) < top || im_has(&ids, boundary[i])) code = TP_BOUNDARY;
+		if (code == 0 && checkpoints != NULL) {
+			im_map want = {0}, given = {0};
+			uint8_t k[32] = {0};
+			for (size_t i = 0; i < ids.slots; i++) {
+				if (!ids.used[i] || memcmp(ids.keys[i], head, 32) == 0 || depth(ids.keys[i]) == 0) continue;
+				memcpy(k, ids.keys[i], 12);
+				im_set(&want, k, SET);
+			}
+			for (size_t i = 0; i < checks; i++) memcpy(k, checkpoints + 12 * i, 12), im_set(&given, k, SET);
+			bool same = want.count == given.count;
+			for (size_t i = 0; i < want.slots && same; i++) same = !want.used[i] || im_has(&given, want.keys[i]);
+			if (!same) code = TP_BOUNDARY;
+			im_free(&want), im_free(&given);
+		}
+		if (code == 0 && im_has(&d->seen, head)) {
+			fragment w = {0};
+			if (fragment_walk(head, lookup, known, d, &w) == FRAGMENT_OK) {
+				uint8_t(*mine)[32] = malloc(got->count * 32 + 1);
+				if (mine == NULL) abort();
+				for (size_t i = 0; i < got->count; i++) memcpy(mine[i], got->members[i].it.stored, 32);
+				bool same = same_ids((const uint8_t(*)[32])w.members.ids, w.members.count, (const uint8_t(*)[32])mine,
+						    got->count) &&
+					same_ids((const uint8_t(*)[32])w.boundary.ids, w.boundary.count, boundary, count);
+				free(mine);
+				if (!same) code = TP_BOUNDARY;
+			}
+			fragment_free(&w);
+		}
+	}
+	im_free(&ids), im_free(&reached);
+	if (code != 0) contents_free(got);
+	return code;
+}
+
+// a fragment refused whole, by head
+static void broke(doc *d, const uint8_t head[32], tp_code code) {
+	note(&d->broken, &d->broken_order, head, CODE(code), d->t->limits.refused, NULL);
+}
+
+// what Subduction may store of a fragment (its admission): one that is checked (vetted; the lock,
+// unlocked, opens all). One whose head is not here yet is noted refused whole
+static bool allows_fragment(doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
+	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
+	contents_t got;
+	tp_code code = vetted(d, head, boundary, count, checkpoints, checks, blob, length, &got);
+	if (code == 0) return contents_free(&got), true;
+	if (!im_has(&d->seen, head)) broke(d, head, code);
+	return false;
+}
+
+// the tables at a commit, from a snapshot kept here
+static bool snapshot_of(void *context, const uint8_t name[32], rp_tables *out) {
+	const doc *d = context;
+	const blob_t *b = im_get(&d->snapshots, name);
+	return b != NULL && sn_tables(b->bytes, b->length, out) == PK_OK;
+}
+
+// a hint checked, when its head is taken in (rp_matches)
+static void judge(doc *d, const uint8_t name[32]) {
+	blob_t *b = im_get(&d->hints, name);
+	if (b == NULL || hy_get(d->histories[TP_STORED], name) == NULL) return;
+	im_del(&d->hints, name);
+	im_set(&d->judged, name, SET);
+	if (rp_matches(d->histories[TP_STORED], name, b->bytes, b->length, snapshot_of, d, d->t->merges)) {
+		blob_free(im_del(&d->snapshots, name));
+		im_set(&d->snapshots, name, b);
+	} else blob_free(b);
+}
+
+// a snapshot a fragment carried is a hint, checked once: once its head is taken in, the tables are
+// replayed to it, and it is kept only if they are the same; one that is not is let go of, and so is
+// any after it for that head. own: made here, kept as it is. Once there is auth: snapshots signed by
+// the fragment's builder (Subduction's issuer), kept if the builder may edit
+static void hint(doc *d, const uint8_t name[32], const uint8_t *bytes, size_t length, bool own) {
+	if (bytes == NULL || im_has(&d->judged, name)) return;
 	blob_t *b = malloc(sizeof *b);
 	if (b == NULL) abort();
-	b->bytes = copy(bytes, length);
-	b->length = length;
-	im_set(&d->snapshots, name, b);
+	*b = (blob_t){copy(bytes, length), length};
+	if (own) {
+		im_set(&d->judged, name, SET);
+		blob_free(im_del(&d->snapshots, name));
+		im_set(&d->snapshots, name, b);
+		return;
+	}
+	if (im_has(&d->hints, name)) {
+		blob_free(b);
+		return;
+	}
+	note(&d->hints, &d->hints_order, name, b, d->t->limits.refused, blob_free);
+	judge(d, name);
 }
 
 // a fragment taken in: its members as its blob has them (sorted, a seal there twice kept twice, as
 // transport.ts keeps the list), its boundary as Subduction gave it
-static fragment *fragment_of(const uint8_t head[32], const uint8_t (*members)[32], size_t count,
-	const uint8_t (*boundary)[32], size_t boundary_count) {
+static fragment *fragment_of(const uint8_t head[32], const contents_t *c, const uint8_t (*boundary)[32],
+	size_t boundary_count) {
 	fragment *f = calloc(1, sizeof *f);
 	if (f == NULL) abort();
 	memcpy(f->head, head, 32);
-	for (size_t i = 0; i < count; i++) fragment_push(&f->members, members[i]);
+	for (size_t i = 0; i < c->count; i++) fragment_push(&f->members, c->members[i].it.stored);
 	for (size_t i = 0; i < boundary_count; i++) fragment_push(&f->boundary, boundary[i]);
 	if (f->members.count) qsort(f->members.ids, f->members.count, 32, by_id);
 	fragment_settle(&f->boundary);
@@ -902,52 +1248,25 @@ static void put_fragment(doc *d, fragment *f) {
 	im_set(&d->fragments, f->head, f);
 }
 
-// the stored ids of the contents' members
-static uint8_t (*stored_ids(const contents_t *c))[32] {
-	uint8_t(*ids)[32] = malloc(c->count * 32 + 1);
-	if (ids == NULL) abort();
-	for (size_t i = 0; i < c->count; i++) sl_stored(c->members[i], c->lengths[i], ids[i]);
-	return ids;
-}
-
-// a fragment taken in: its members as seals alone, its snapshot kept. One whose head is here already
-// is only noted, and its snapshot kept if none is
+// a fragment taken in: its members (each checked) as seals alone, its snapshot a hint. One whose head
+// is here already has its members checked too, and is only noted
 static void take_fragment(doc *d, const uint8_t head[32], const uint8_t (*boundary)[32], size_t count,
-	const uint8_t *blob, size_t length) {
+	const uint8_t *checkpoints, size_t checks, const uint8_t *blob, size_t length) {
 	const seen_t *here = im_get(&d->seen, head);
-	if (here != NULL && im_has(&d->fragments, head) && im_has(&d->snapshots, here->name)) return;
+	if (here != NULL && im_has(&d->fragments, head) && im_has(&d->judged, here->name)) return;
 	contents_t got;
-	bool ok = contents(blob, length, &got);
-	if (here != NULL) {
-		if (!im_has(&d->fragments, head)) {
-			uint8_t(*ids)[32] = stored_ids(&got);
-			put_fragment(d, fragment_of(head, (const uint8_t(*)[32])ids, got.count, boundary, count));
-			free(ids);
-		}
-		if (ok) keep(d, here->name, got.snapshot, got.snapshot_length);
-		contents_free(&got);
-		return;
-	}
-	if (!ok) {
-		im_set(&d->broken, head, CODE(TP_SHAPE));
-		return;
-	}
-	uint8_t(*ids)[32] = stored_ids(&got);
-	bool has = false;
-	for (size_t i = 0; i < got.count && !has; i++) has = memcmp(ids[i], head, 32) == 0;
-	if (!has) {
-		im_set(&d->broken, head, CODE(TP_STORED_ID));
-		free(ids);
-		contents_free(&got);
+	tp_code code = vetted(d, head, boundary, count, checkpoints, checks, blob, length, &got);
+	if (code != 0) {
+		if (here == NULL) broke(d, head, code);
 		return;
 	}
 	im_del(&d->broken, head);
-	for (size_t i = 0; i < got.count; i++) member(d, got.members[i], got.lengths[i]);
-	put_fragment(d, fragment_of(head, (const uint8_t(*)[32])ids, got.count, boundary, count));
-	// by the name in its head's seal, read now; a head refused keeps none
-	const pending_t *top = im_get(&d->pending, head);
-	if (top != NULL) keep(d, top->it.name, got.snapshot, got.snapshot_length);
-	free(ids);
+	uint8_t top[32];
+	for (size_t i = 0; i < got.count; i++)
+		if (memcmp(got.members[i].it.stored, head, 32) == 0) memcpy(top, got.members[i].it.name, 32);
+	if (!im_has(&d->fragments, head)) put_fragment(d, fragment_of(head, &got, boundary, count));
+	for (size_t i = 0; i < got.count; i++) member(d, &got.members[i]);
+	if (got.snapshot != NULL) hint(d, top, got.snapshot, got.snapshot_length, false);
 	contents_free(&got);
 	settle(d);
 }
@@ -959,7 +1278,7 @@ static void hear(doc *d, const uint8_t *blob, size_t length, const uint8_t from[
 	cm_name(blob, length, name);
 	cm_commit c;
 	if (cm_decode(blob, length, &c, NULL) != CM_OK) {
-		im_set(&d->heard, name, CODE(TP_SHAPE));
+		note(&d->heard, &d->heard_order, name, CODE(TP_SHAPE), d->t->limits.refused, NULL);
 		return;
 	}
 	uint8_t who[SL_KEY];
@@ -967,7 +1286,7 @@ static void hear(doc *d, const uint8_t *blob, size_t length, const uint8_t from[
 	bool same = c.signer_length == SL_KEY && memcmp(c.signer, who, SL_KEY) == 0;
 	cm_free(&c);
 	if (!same) {
-		im_set(&d->heard, name, CODE(TP_SIGNATURE));
+		note(&d->heard, &d->heard_order, name, CODE(TP_SIGNATURE), d->t->limits.refused, NULL);
 		return;
 	}
 	im_del(&d->heard, name);
@@ -988,8 +1307,8 @@ typedef struct {
 } part_t;
 
 // a payload that is a part: a map of exactly whole, part, parts and bytes. NOT_A_PART: not one (a
-// commit, or no map); NO_PART: one, but its values are not (dropped)
-static part_kind part_of(const uint8_t *payload, size_t length, part_t *out) {
+// commit, or no map); NO_PART: one, but its values are not, or it has more than most parts (dropped)
+static part_kind part_of(const uint8_t *payload, size_t length, size_t most, part_t *out) {
 	*out = (part_t){0};
 	Json *x = cborDecode(payload, length, NULL, NULL);
 	if (x == NULL) return NOT_A_PART;
@@ -1001,7 +1320,8 @@ static part_kind part_of(const uint8_t *payload, size_t length, part_t *out) {
 	}
 	int64_t p, n;
 	if (whole->type != JSON_BYTES || whole->bytes.length != 32 || bytes->type != JSON_BYTES ||
-		bytes->bytes.length > PART || !jsonIsWhole(part, &p) || !jsonIsWhole(parts, &n) || p < 0 || p >= n) {
+		bytes->bytes.length > PART || !jsonIsWhole(part, &p) || !jsonIsWhole(parts, &n) || p < 0 || p >= n ||
+		(uint64_t)n > most) {
 		jsonFree(x);
 		return NO_PART;
 	}
@@ -1041,6 +1361,15 @@ static uint8_t *gather(tp_device *t, const job *p, size_t *length) {
 			     memcmp(j->from, p->from, 32) == 0 && memcmp(j->whole, p->whole, 32) == 0))
 		j = j->next;
 	if (j == NULL) {
+		// past the limit, the oldest let go of: the last in the list
+		size_t n = 0;
+		for (join_t *k = t->joins; k != NULL; k = k->next) n++;
+		if (n >= t->limits.joins) {
+			join_t **at = &t->joins;
+			while ((*at)->next != NULL) at = &(*at)->next;
+			join_free(*at);
+			*at = NULL;
+		}
 		j = calloc(1, sizeof *j);
 		if (j == NULL) abort();
 		memcpy(j->where, p->channel ? p->topic : p->d->bytes, 32);
@@ -1219,7 +1548,9 @@ static uint64_t build_add(tp_device *t, doc *d, const fragment *f) {
 	if (ms == NULL || items == NULL) abort();
 	for (size_t i = 0; i < f->members.count; i++) ms[i] = im_get(&d->seen, f->members.ids[i]);
 	qsort(ms, f->members.count, sizeof *ms, by_lamport);
-	for (size_t i = 0; i < f->members.count; i++) items[i] = (rn_item){ms[i]->sealed, ms[i]->sealed_length};
+	for (size_t i = 0; i < f->members.count; i++)
+		items[i] = ms[i]->sealed != NULL ? (rn_item){ms[i]->sealed, ms[i]->sealed_length, NULL}
+						  : (rn_item){ms[i]->bytes, ms[i]->length, ms[i]->stored};
 	uint8_t *run = NULL;
 	size_t run_length = 0;
 	rn_pack(items, f->members.count, &run, &run_length);
@@ -1234,7 +1565,7 @@ static uint64_t build_add(tp_device *t, doc *d, const fragment *f) {
 	size_t snapshot_length = 0;
 	if (kept != NULL && t->snapshot != NULL && t->snapshot(t->context, d->id, kept, &snapshot, &snapshot_length)) {
 		jsonAdd(blob, "snapshot", jsonBytes(snapshot, snapshot_length));
-		keep(d, top->name, snapshot, snapshot_length);
+		hint(d, top->name, snapshot, snapshot_length, true);
 		free(snapshot);
 	}
 	size_t n = 0;
@@ -1249,10 +1580,6 @@ static uint64_t build_add(tp_device *t, doc *d, const fragment *f) {
 	return c;
 }
 
-// a fragment stored: the loose commits it stands for let go from storage (sedimentree's minimal form)
-static void compact(tp_device *t, doc *d, const uint8_t (*members)[32], size_t count) {
-	for (size_t i = 0; i < count; i++) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, d->bytes, members[i]);
-}
 
 // ---- the jobs
 
@@ -1281,29 +1608,54 @@ static void record_free(record_t *r) {
 
 static const uint8_t none[1];
 
+// a fragment stored: the loose commits it stands for let go from storage (sedimentree's minimal
+// form). Only the members of the fragment the store holds for that head (Subduction keeps one a
+// head), checked, and reached from its head: whatever is let go of comes back from it
+static void compact(tp_device *t, doc *d, const uint8_t head[32]) {
+	uint8_t *bytes = NULL;
+	size_t length = 0;
+	if (t->inner.get(t->inner.self, ERM_STORE_FRAGMENT, d->bytes, head, &bytes, &length) != 1) return;
+	record_t r;
+	bool ok = record(t, ERM_STORE_FRAGMENT, bytes != NULL ? bytes : none, length, &r);
+	erm_host_free(bytes);
+	if (!ok) return;
+	contents_t got;
+	if (contents(d->bytes, r.blob != NULL ? r.blob : none, r.length, &got) == 0) {
+		im_map reached = {0};
+		reach(head, &got, &reached);
+		for (size_t i = 0; i < reached.slots; i++)
+			if (reached.used[i]) t->inner.remove(t->inner.self, ERM_STORE_COMMIT, d->bytes, reached.keys[i]);
+		im_free(&reached);
+		contents_free(&got);
+	}
+	record_free(&r);
+}
+
 // what the store held, or Subduction saved, taken in; save: then compacted and built as a save is
 static void take(tp_device *t, job *j, bool save) {
-	const uint8_t *head, *blob;
+	const uint8_t *head, *blob, *checks;
 	const uint8_t(*list)[32];
-	size_t count, length;
+	size_t count, length, checks_count;
 	record_t r;
-	if (j->given) head = j->head, list = (const uint8_t(*)[32])j->list, count = j->count, blob = j->bytes, length = j->length;
-	else {
+	if (j->given) {
+		head = j->head, list = (const uint8_t(*)[32])j->list, count = j->count, blob = j->bytes, length = j->length;
+		checks = j->checks != NULL ? j->checks : none, checks_count = j->checks_count;
+	} else {
 		if (!record(t, j->record, j->bytes, j->length, &r)) return;
 		head = r.rec.id, list = (const uint8_t(*)[32])r.rec.parents, count = r.rec.parentCount;
 		blob = r.blob ? r.blob : none, length = r.length;
+		checks = r.rec.checkpoints != NULL ? r.rec.checkpoints : none, checks_count = r.rec.checkpointCount;
 	}
 	doc *d = document(t, j->tree);
 	size_t deep = d->deep;
 	if (j->record == ERM_STORE_COMMIT) take_commit(d, head, list, count, blob, length);
-	else take_fragment(d, head, list, count, blob, length);
+	else take_fragment(d, head, list, count, checks, checks_count, blob, length);
 	if (save) {
 		if (j->record == ERM_STORE_FRAGMENT) {
 			const fragment *got = im_get(&d->fragments, head);
 			if (got != NULL && got->members.count) {
 				job *c = job_new(J_COMPACT, d);
-				c->list = copy(got->members.ids, got->members.count * 32);
-				c->count = got->members.count;
+				memcpy(c->head, head, 32);
 				later(t, c);
 			}
 		}
@@ -1395,7 +1747,7 @@ static step_t step(tp_device *t, job *j) {
 		free(all);
 		return STEP_DONE;
 	}
-	case J_COMPACT: compact(t, j->d, (const uint8_t(*)[32])j->list, j->count); return STEP_DONE;
+	case J_COMPACT: compact(t, j->d, j->head); return STEP_DONE;
 	case J_SUBSCRIBE: {
 		if (j->started) return STEP_DONE;
 		j->started = true;
@@ -1411,7 +1763,7 @@ static step_t step(tp_device *t, job *j) {
 			if (!build_start(d, j)) return STEP_DONE;
 		} else {
 			const fragment *f = j->fresh[j->at++];
-			compact(t, d, (const uint8_t(*)[32])f->members.ids, f->members.count);
+			compact(t, d, f->head);
 			if (j->at == j->fresh_count) return STEP_DONE;
 		}
 		uint64_t c = build_add(t, d, j->fresh[j->at]);
@@ -1455,7 +1807,7 @@ static void store(tp_device *t, item *it) {
 	memcpy(made.name, k->name, 32);
 	uint8_t *sealed;
 	size_t length;
-	if (sl_seal(k->bytes, k->length, &t->signer.signer, &made, &sealed, &length, NULL, NULL) != SL_OK) {
+	if (sl_seal(k->bytes, k->length, &t->signer.signer, d->bytes, &made, &sealed, &length, NULL, NULL) != SL_OK) {
 		it->state = 3;
 		return;
 	}
@@ -1623,12 +1975,14 @@ static void given_save(tp_device *t, put_t *p, int kind) {
 	memcpy(j->head, p->head, 32);
 	j->list = p->list, j->count = p->count, p->list = NULL;
 	j->bytes = p->blob, j->length = p->length, p->blob = NULL;
+	j->checks = p->checks, j->checks_count = p->checks_count, p->checks = NULL;
 	later(t, j);
 }
 
 static void put_free(put_t *p) {
 	free(p->list);
 	free(p->blob);
+	free(p->checks);
 	free(p);
 }
 
@@ -1691,7 +2045,7 @@ static void done(tp_device *t, uint64_t number, bool ok) {
 static void heard(tp_device *t, const uint8_t topic[32], const uint8_t from[32], const uint8_t *payload, size_t length) {
 	doc *d = im_get(&t->docs, topic);
 	part_t p;
-	part_kind kind = part_of(payload, length, &p);
+	part_kind kind = part_of(payload, length, t->limits.parts, &p);
 	channel_t *c = im_get(&t->channels, topic);
 	job *j = NULL;
 	if (c != NULL && d == NULL) {
@@ -1764,8 +2118,25 @@ static bool events(tp_device *t) {
 
 // ---- Subduction's store, wrapped: what it saves is taken in
 
+// what Subduction may store (its admission: allows, allows_fragment), the record decoded and its blob,
+// put just before it, read. One not admitted is refused (the save fails), its blob let go of too
+static bool admits(tp_device *t, int kind, const uint8_t tree[32], const uint8_t *bytes, size_t length) {
+	record_t r;
+	if (!record(t, kind, bytes, length, &r)) return false;
+	doc *d = document(t, tree);
+	const uint8_t *blob = r.blob != NULL ? r.blob : none;
+	bool ok = kind == ERM_STORE_COMMIT
+		? allows(d, r.rec.id, blob, r.length)
+		: allows_fragment(d, r.rec.id, (const uint8_t(*)[32])r.rec.parents, r.rec.parentCount,
+			  r.rec.checkpoints != NULL ? r.rec.checkpoints : none, r.rec.checkpointCount, blob, r.length);
+	if (!ok) t->inner.remove(t->inner.self, ERM_STORE_BLOB, NULL, r.rec.digest);
+	record_free(&r);
+	return ok;
+}
+
 static int saved(void *self, int kind, const uint8_t *tree, const uint8_t id[32], const uint8_t *bytes, size_t length) {
 	tp_device *t = self;
+	if ((kind == ERM_STORE_COMMIT || kind == ERM_STORE_FRAGMENT) && !admits(t, kind, tree, bytes, length)) return -1;
 	int r = t->inner.put(t->inner.self, kind, tree, id, bytes, length);
 	if (r != 0 || (kind != ERM_STORE_COMMIT && kind != ERM_STORE_FRAGMENT)) return r;
 	call_kind waits = kind == ERM_STORE_COMMIT ? C_PUT : C_PUT_FRAGMENT;
@@ -1814,6 +2185,10 @@ tp_device *tp_create(const tp_options *o) {
 	t->check = o->check;
 	t->snapshot = o->snapshot;
 	t->context = o->context;
+	t->merges = o->merges;
+	tp_limits l = o->limits;
+	t->limits = (tp_limits){l.pending ? l.pending : 65536, l.refused ? l.refused : 4096, l.waiting ? l.waiting : 1024,
+		l.joins ? l.joins : 64, l.parts ? l.parts : 1024};
 	t->sd = erm_sd_new(o->seed, now_of(t), &t->store);
 	if (t->sd == NULL) {
 		free(t->service);
@@ -1838,6 +2213,7 @@ void tp_free(tp_device *t) {
 	free(t->hearers);
 	free(t->told);
 	free(t->released);
+	free(t->judging);
 	for (job *j = t->jobs; j;) {
 		job *n = j->next;
 		if (j->waiter == NULL) job_free(j);
@@ -1894,12 +2270,14 @@ static void sweep(tp_device *t) {
 }
 
 static void forget_due(tp_device *t);
+static bool rejudge(tp_device *t);
 
 int64_t tp_run(tp_device *t) {
 	for (;;) {
 		uint64_t now = now_of(t);
 		int64_t wait = erm_sd_run(t->sd, now);
 		bool moved = events(t);
+		moved = rejudge(t) || moved;
 		moved = jobs(t) || moved;
 		moved = outgoing(t) || moved;
 		moved = timers(t, now) || moved;
@@ -2134,7 +2512,7 @@ void tp_send(tp_device *t, const char *topic, const uint8_t *bytes, size_t lengt
 	// a server relays a publish only from a subscriber of its topic
 	subscribe(t, id);
 	part_t p;
-	part_kind kind = part_of(bytes, length, &p);
+	part_kind kind = part_of(bytes, length, t->limits.parts, &p);
 	jsonFree(p.own);
 	// a payload that looks like a part is sent as parts too, so it arrives as it was sent
 	publish(t, id, bytes, length, kind != NOT_A_PART);
@@ -2161,8 +2539,18 @@ void tp_unlisten(tp_device *t, tp_listener *l) {
 	l->gone = true;
 }
 
-void tp_expire(tp_device *t) {
-	expire(t, true);
+void tp_changed(tp_device *t) {
+	t->changed = true;
+}
+
+// the check changed: the commits waiting on it judged again, what that lets in told
+static bool rejudge(tp_device *t) {
+	if (!t->changed) return false;
+	t->changed = false;
+	for (doc *d = t->first; d; d = d->next)
+		for (int l = 0; l < 2; l++) hy_again(d->histories[l]);
+	tell(t);
+	return true;
 }
 
 // the harnesses' hooks (transport_conformance_hook.h), only in their builds

@@ -412,22 +412,46 @@ void ermEd25519Sign(const unsigned char seed[32], const unsigned char *message, 
 // encoding (pointDecode).
 typedef enum { VERIFY_GOOD, VERIFY_S, VERIFY_A_ENCODING, VERIFY_A_SMALL, VERIFY_R_ENCODING, VERIFY_R_SMALL, VERIFY_EQUATION } Verdict;
 
-static Verdict verdict(const unsigned char pub[32], const unsigned char *message, size_t length, const unsigned char signature[64]) {
-	Point A, R, left, right;
+// the checks after A's: S, R, the equation; A decoded and checked already
+static Verdict verdictWith(const Point *A, const unsigned char pub[32], const unsigned char *message, size_t length,
+	const unsigned char signature[64]) {
+	Point R, left, right;
 	unsigned char k[32];
-	if (!scalarBelowL(signature + 32)) return VERIFY_S;
-	if (!pointDecode(&A, pub)) return VERIFY_A_ENCODING;
-	if (pointSmall(&A)) return VERIFY_A_SMALL;
 	if (!pointDecode(&R, signature)) return VERIFY_R_ENCODING;
 	if (pointSmall(&R)) return VERIFY_R_SMALL;
 	// [S]B = R + [k]A, without the cofactor
 	challenge(k, signature, pub, message, length);
 	pointMul(&left, &base, signature + 32);
-	pointMul(&right, &A, k);
+	pointMul(&right, A, k);
 	pointAdd(&right, &R);
 	return pointEqual(&left, &right) ? VERIFY_GOOD : VERIFY_EQUATION;
 }
 
+static Verdict verdict(const unsigned char pub[32], const unsigned char *message, size_t length, const unsigned char signature[64]) {
+	Point A;
+	if (!scalarBelowL(signature + 32)) return VERIFY_S;
+	if (!pointDecode(&A, pub)) return VERIFY_A_ENCODING;
+	if (pointSmall(&A)) return VERIFY_A_SMALL;
+	return verdictWith(&A, pub, message, length, signature);
+}
+
 bool ermEd25519Verify(const unsigned char pub[32], const unsigned char *message, size_t length, const unsigned char signature[64]) {
 	return verdict(pub, message, length, signature) == VERIFY_GOOD;
+}
+
+_Static_assert(sizeof(Point) == sizeof(((ermEd25519Key *)0)->point), "ermEd25519Key holds a Point");
+
+bool ermEd25519KeyOf(ermEd25519Key *key, const unsigned char pub[32]) {
+	Point A;
+	memcpy(key->pub, pub, 32);
+	key->good = pointDecode(&A, pub) && !pointSmall(&A);
+	memcpy(key->point, &A, sizeof A);
+	return key->good;
+}
+
+bool ermEd25519VerifyKey(const ermEd25519Key *key, const unsigned char *message, size_t length, const unsigned char signature[64]) {
+	if (!key->good || !scalarBelowL(signature + 32)) return false;
+	Point A;
+	memcpy(&A, key->point, sizeof A);
+	return verdictWith(&A, key->pub, message, length, signature) == VERIFY_GOOD;
 }
