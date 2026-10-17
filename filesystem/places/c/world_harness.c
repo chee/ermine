@@ -124,6 +124,22 @@ char *world_name(sc_scope *o, const char *name) {
 	return NULL;
 }
 
+// the scopes given a node ("node" on root or scope), and its id (the line's, kept)
+typedef struct {
+	const sc_scope *scope;
+	const char *id;
+} given_node;
+static given_node *given;
+static size_t ngiven, capgiven;
+
+// places' node_of: the node a scope was given, else none
+static const char *node_of(void *data, const sc_scope *o) {
+	(void)data;
+	for (size_t i = 0; i < ngiven; i++)
+		if (given[i].scope == o) return given[i].id;
+	return NULL;
+}
+
 const char *world_hosted(void (*f)(void *data), void *data) {
 	return sc_run_with_scope(world_host, f, data);
 }
@@ -922,6 +938,8 @@ static op_value *world_answer(const op_value *r) {
 		}
 		char *bad = world_name(o, world_text(op_get(r, "name")));
 		if (bad) return world_error_take(bad);
+		const char *node = world_text(op_get(r, "node"));
+		if (node != NULL) PUSH(given, ngiven, capgiven, ((given_node){o, node}));
 		return op_map();
 	}
 	if (strcmp(op, "dispose") == 0) {
@@ -985,7 +1003,7 @@ static void world_start(void) {
 	world_paths = pt_new();
 	pl_connect(world_places, &(pl_setup){.root = tb_string("R"), .table = world_table, .paths = world_paths,
 		.scheduler = world_scheduler, .contributors = contributors,
-		.ncontributors = ncontributors});
+		.ncontributors = ncontributors, .node_of = node_of});
 	host_info = (sc_pair){"actor", op_str("test")};
 	world_host = sc_create_root_scope(world_scheduler, &host_info, 1);
 }
@@ -1041,6 +1059,8 @@ void world_finish(void) {
 	for (size_t i = 0; i < nnodes; i++) nd_free_entry(nodes[i]);
 	for (size_t i = 0; i < nvalues; i++) op_free(values[i]);
 	for (size_t i = 0; i < nlines; i++) hh_release(lines[i]);
-	free(watches), free(named), free(moments), free(nodes), free(lines), free(values);
+	free(watches), free(named), free(moments), free(nodes), free(lines), free(values), free(given);
+	given = NULL;
+	ngiven = capgiven = 0;
 	world_places = NULL;
 }

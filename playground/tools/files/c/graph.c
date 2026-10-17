@@ -97,7 +97,7 @@ op_value *fg_value_of(const Json *j) {
 	switch (j->type) {
 	case JSON_NULL: return op_null();
 	case JSON_BOOLEAN: return op_bool(j->boolean);
-	case JSON_NUMBER: return op_num(j->number);
+	case JSON_NUMBER: return j->big ? op_whole(j->bigNegative, j->big, j->bigLength) : op_num(j->number);
 	case JSON_STRING: return op_str_n(j->string, j->stringLength);
 	case JSON_BYTES: return op_bytes(j->bytes.data, j->bytes.length);
 	case JSON_TYPED: return op_typed((op_elements)j->typed.kind, j->typed.data, j->typed.count);
@@ -120,7 +120,7 @@ Json *fg_json_of(const op_value *v) {
 	switch (v->type) {
 	case OP_NULL: return jsonNull();
 	case OP_BOOL: return jsonBoolean(v->bool_ != 0);
-	case OP_NUM: return jsonNumber(v->num);
+	case OP_NUM: return v->big ? jsonWhole(v->bigNegative, v->big, v->bigLength) : jsonNumber(v->num);
 	case OP_STR: return jsonStringOfLength(v->str, v->bytes);
 	case OP_BYTES: return jsonBytes(v->data, v->bytes);
 	case OP_TYPED: return jsonTyped((JsonKind)v->kind, v->data, op_length(v));

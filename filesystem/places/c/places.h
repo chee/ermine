@@ -23,9 +23,11 @@
 // read is the one tracked.
 // pl_view: the same places from another root with its own contributors, everything else shared.
 // pl_spot: names a held spot as a place; anything else none.
-// who: a write's pairs are the open scope's info (sc_get_info); extra pairs nest with "owner".
-// values are op_values, except "run" and "mark" (uint64_t, given as numbers). actor and reader:
-// the nearest such pair outward. metadata: the pairs whole. no scope open: unscoped.
+// who: levels, innermost first: extra (if any), the scope open, its parents (sc_scope_parent) to
+// the root. values are op_values, except a scope's "run" and "mark" (uint64_t, given as numbers).
+// actor: the first "actor" over all levels; reader: the first string "reader". metadata: flat
+// pairs, repeats kept, up to the first scope with a node (pl_setup's node_of), then ["node", id];
+// none: every level. no scope open: unscoped.
 // memory: a header (pl_header) refers to a pl_made block; its node holds it until its next update
 // (pl_hold, pl_hold_also). read values and listed names are borrowed from the table. out of memory
 // aborts.
@@ -105,6 +107,10 @@ typedef struct {
 	// none: children alone
 	const pl_contributor *const *contributors;
 	size_t ncontributors;
+	// the id of the node a scope has (a string that outlives the header's making), NULL: none. a
+	// header's metadata stops at the first scope with one. NULL node_of: no scope has one
+	const char *(*node_of)(void *data, const sc_scope *o);
+	void *node_data;
 } pl_setup;
 // once: before anything is read or written
 void pl_connect(pl *p, const pl_setup *setup);
@@ -370,8 +376,8 @@ pl_members pl_list(pl *p, const char *const *path, size_t n);
 // who ------------------------------------------------------------------------------------------
 
 // who the scope open says a write is, extra (n pairs) its innermost level: a map of actor and
-// reader where there are some, and metadata (a list of [key, value], nested). New, the caller's to op_free. NULL: no
-// scope open
+// reader where there are some, and metadata (a flat list of [key, value]; see who above). New, the
+// caller's to op_free. NULL: no scope open
 op_value *pl_who(pl *l, const sc_pair *extra, size_t n);
 
 // a header made now, with the scope open
@@ -386,6 +392,10 @@ char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_h
 pl_made *pl_made_ref(pl_made *made);
 // lets one hold go; the last frees the block. For pl_hold's release
 void pl_made_free(void *made);
+// a header pl_header made, as a value: {time, actor, reader, external, metadata}, not its op. made
+// once a header, the first time asked, and shared: borrowed, good while the header's block is
+// (op_ref it to keep it). a header it didn't make, or one changed since: NULL
+const op_value *pl_change_value(pl *l, const ch_header *h);
 
 // keeps something alive for the node's change to refer to (a header's block, a write's patches):
 // release(block) is called when the next pl_hold for the same node comes, or at pl_free. _also

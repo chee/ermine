@@ -1,6 +1,7 @@
 // cbor.c: values in deterministic CBOR and back. See cbor.h for every choice.
 
 #include "cbor.h"
+#include "../../../core/op/c/whole.h"
 
 #include <float.h>
 #include <limits.h>
@@ -128,8 +129,38 @@ static void putHead(Out *o, unsigned major, uint64_t argument) {
 	else putByte(o, major | 27), putBig(o, argument, 8);
 }
 
-static void putNumber(Out *o, double d) {
+/** a whole number: major type 0 or 1 in the shortest head, a bignum (tag 2 or 3 over its bytes) past 64 bits */
+static void putWhole(Out *o, bool negative, const unsigned char *m, size_t n) {
+	// a negative's argument is its magnitude less one: -1 - n
+	unsigned char less[129];
+	if (negative) {
+		memcpy(less, m, n);
+		for (size_t i = n; i-- > 0;) {
+			if (less[i]--) break;
+		}
+		m = less;
+		while (n && !*m) m++, n--;
+	}
+	uint64_t argument;
+	if (whole_u64(m, n, &argument)) {
+		putHead(o, negative ? 1 : 0, argument);
+		return;
+	}
+	putByte(o, negative ? 0xc3 : 0xc2);
+	putHead(o, 2, n);
+	for (size_t i = 0; i < n; i++) putByte(o, m[i]);
+}
+
+static void putNumber(Out *o, const Json *value) {
 	uint16_t half;
+	double d = value->number;
+	bool negative;
+	unsigned char m[128];
+	size_t n;
+	if (jsonMagnitude(value, &negative, m, &n)) {
+		putWhole(o, negative, m, n);
+		return;
+	}
 	if (isnan(d)) {
 		putByte(o, 0xf9), putBig(o, NAN16, 2);
 	} else if (halfOf(d, &half)) {
@@ -297,7 +328,7 @@ bool cborEncode(const Json *value, unsigned char *out, size_t capacity, size_t *
 		switch (value->type) {
 			case JSON_NULL: putByte(&o, 0xf6); break;
 			case JSON_BOOLEAN: putByte(&o, value->boolean ? 0xf5 : 0xf4); break;
-			case JSON_NUMBER: putNumber(&o, value->number); break;
+			case JSON_NUMBER: putNumber(&o, value); break;
 			case JSON_STRING:
 				if (!putText(&o, value->string, value->stringLength)) fault = "a string that is not UTF-8";
 				break;
@@ -493,6 +524,30 @@ static Json *getTyped(In *in, size_t start, uint64_t tag) {
 	return value;
 }
 
+/** a bignum's byte string (its tag read): more than 8 bytes (a plain integer holds the rest), no leading zero */
+static Json *getBignum(In *in, size_t start, bool negative) {
+	size_t inner = in->at, length;
+	if (!left(in)) return fail(in, inner, "the input ends after a tag"), NULL;
+	unsigned initial = in->data[in->at++];
+	if (initial >> 5 != 2) return fail(in, inner, "a bignum that is not over a byte string"), NULL;
+	if (!getLength(in, inner, initial & 31, &length)) return NULL;
+	const unsigned char *m = in->data + in->at;
+	if (length <= 8) return fail(in, start, "a bignum a plain integer holds"), NULL;
+	if (!m[0]) return fail(in, start, "a bignum with a leading zero"), NULL;
+	in->at += length;
+	if (!in->build) return &noValue;
+	if (!negative) return jsonWhole(false, m, length);
+	// -1 - n: the magnitude is n + 1
+	unsigned char *more = allocate(length + 1);
+	memcpy(more + 1, m, length);
+	for (size_t i = length + 1; i-- > 0;) {
+		if (++more[i]) break;
+	}
+	Json *value = jsonWhole(true, more, length + 1);
+	free(more);
+	return value;
+}
+
 static Json *getSimple(In *in, size_t start, unsigned info) {
 	if (info == 20) return in->build ? jsonBoolean(false) : &noValue;
 	if (info == 21) return in->build ? jsonBoolean(true) : &noValue;
@@ -518,6 +573,7 @@ static Json *getSimple(In *in, size_t start, unsigned info) {
 		if (isnan(d)) return fail(in, start, "a NaN other than f97e00"), NULL;
 		if (fitsFloat(d)) return fail(in, start, "a double a shorter float holds"), NULL;
 	}
+	if (isfinite(d) && floor(d) == d) return fail(in, start, "a whole number written as a float"), NULL;
 	return in->build ? jsonNumber(d) : &noValue;
 }
 
@@ -534,7 +590,21 @@ static Json *getItem(In *in, int64_t *count) {
 	size_t length;
 	switch (major) {
 		case 0:
-		case 1: return fail(in, start, "an integer: every number is a float"), NULL;
+		case 1: {
+			if (!getArgument(in, start, info, &argument)) return NULL;
+			if (!in->build) return &noValue;
+			if (major == 0) return jsonUnsigned(argument);
+			// -1 - argument: its magnitude is argument + 1, 2^64 at most
+			unsigned char m[9];
+			size_t n = whole_of_u64(argument, m + 1);
+			memmove(m + 1 + (8 - n), m + 1, n); // right-aligned in m[1..8]
+			memset(m + 1, 0, 8 - n);
+			m[0] = 0;
+			for (int i = 8; i >= 0; i--) {
+				if (++m[i]) break;
+			}
+			return jsonWhole(true, m, 9);
+		}
 		case 2:
 			if (!getLength(in, start, info, &length)) return NULL;
 			in->at += length;
@@ -560,6 +630,7 @@ static Json *getItem(In *in, int64_t *count) {
 				*count = 1;
 				return in->build ? jsonStand(NULL) : &noStand;
 			}
+			if (argument == 2 || argument == 3) return getBignum(in, start, argument == 3);
 			return getTyped(in, start, argument);
 		default: return getSimple(in, start, info);
 	}

@@ -68,6 +68,9 @@ typedef struct {
 	tb_table *table;
 	pt_paths *paths;
 	sc_scheduler *scheduler;
+	// the node a scope has (pl_setup's); NULL: none has one
+	const char *(*node_of)(void *data, const sc_scope *o);
+	void *node_data;
 	// the pairs by (the one part, the part), and in a list
 	tb_table *pairs;
 	pair *all;
@@ -99,7 +102,26 @@ typedef struct {
 	tb_table *kept;
 	// the places and views over it not let go
 	size_t refs;
+	// the header blocks alive, by (made_tag, their metadata), and in a list: pl_change_value finds a
+	// header's block by its metadata, which is the block's own while it lives
+	tb_table *made_by;
+	struct pl_made *mades;
 } shared;
+
+static const char made_tag;
+
+struct pl_made {
+	size_t refs;
+	ch_site site;
+	// the metadata, flat, and the actor and reader (holds; NULL: none): the header refers into them
+	op_value *pairs, *actor, *reader;
+	ch_entry *entries;
+	// the header as a value, made the first time pl_change_value asks (NULL: not yet)
+	op_value *change;
+	// the places it is found in (NULL: gone first), and its neighbours in their list
+	shared *s;
+	struct pl_made *before, *next;
+};
 
 struct pl {
 	tb_key root;
@@ -145,6 +167,7 @@ pl *pl_new(void) {
 	l->s->by_id = tb_new();
 	l->s->on_route = tb_new();
 	l->s->kept = tb_new();
+	l->s->made_by = tb_new();
 	return l;
 }
 
@@ -162,6 +185,8 @@ void pl_connect(pl *l, const pl_setup *setup) {
 	l->s->table = setup->table;
 	l->s->paths = setup->paths;
 	l->s->scheduler = setup->scheduler;
+	l->s->node_of = setup->node_of;
+	l->s->node_data = setup->node_data;
 	ask(l, setup->contributors, setup->ncontributors);
 }
 
@@ -214,6 +239,9 @@ void pl_free(pl *l) {
 	for (size_t i = 0; i < s->nowned; i++) nd_free_entry(s->owned[i]);
 	free(s->owned);
 	tb_free(s->holds);
+	// blocks still held elsewhere outlive the places: they forget it
+	for (struct pl_made *m = s->mades; m != NULL; m = m->next) m->s = NULL;
+	tb_free(s->made_by);
 	tb_free(s->kept);
 	tb_free(s->by_id);
 	tb_free(s->on_route);
@@ -1442,7 +1470,7 @@ static int same(const op_value *a, const op_value *b) {
 	switch (a->type) {
 	case OP_NULL: return 1;
 	case OP_BOOL: return !a->bool_ == !b->bool_;
-	case OP_NUM: return a->num == b->num;
+	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
 	case OP_BYTES: return a->bytes == b->bytes && memcmp(a->data, b->data, a->bytes) == 0;
 	case OP_TYPED:
@@ -1590,104 +1618,86 @@ static int scheduler_own(const sc_pair *p) {
 	return strcmp(p->key, "run") == 0 || strcmp(p->key, "mark") == 0;
 }
 
-static op_value *nested(const sc_info *info);
+// who a write is, as levels are seen: the metadata so far, the actor and reader found (holds; NULL: none
+// yet), and whether the metadata still takes pairs (not past the first scope with a node)
+typedef struct {
+	op_value *metadata, *actor, *reader;
+	bool shown;
+} seeing;
 
-// the value of pair j of an info, as an op_value: a new hold of it. the last of a scope under
-// another is "owner", the owner's info: a list of its pairs, nested
-static op_value *shown(const sc_info *info, size_t j) {
-	const sc_pair *p = &info->pairs[j];
-	if (scheduler_own(p)) return op_num((double)*(const uint64_t *)p->value);
-	if (j == info->n - 1 && strcmp(p->key, "owner") == 0) return nested(p->value);
-	return op_ref((op_value *)p->value);
-}
-
-// an info as a list of [key, value], nested
-static op_value *nested(const sc_info *info) {
-	op_value *list = op_list();
-	for (size_t j = 0; j < info->n; j++) {
-		op_value *entry = op_list();
-		op_push(entry, op_str(info->pairs[j].key));
-		op_push(entry, shown(info, j));
-		op_push(list, entry);
-	}
-	return list;
-}
-
-// the pairs of a write made now, as a list of [key, value]: the info of the scope open, as is;
-// with extra, the extra then ["owner", the info]. New. NULL: no scope open
-static op_value *pairs_of(pl *l, const sc_pair *extra, size_t n) {
-	const sc_info *info = sc_get_info(l->s->scheduler);
-	if (info == NULL) return NULL;
-	if (n == 0) return nested(info);
-	op_value *list = op_list();
-	for (size_t i = 0; i < n; i++) {
-		op_value *entry = op_list();
-		op_push(entry, op_str(extra[i].key));
-		op_push(entry, op_ref((op_value *)extra[i].value));
-		op_push(list, entry);
-	}
+static void push_pair(op_value *list, const char *key, op_value *value) {
 	op_value *entry = op_list();
-	op_push(entry, op_str("owner"));
-	op_push(entry, nested(info));
+	op_push(entry, op_str(key));
+	op_push(entry, value);
 	op_push(list, entry);
-	return list;
 }
 
-// the nearest value of a key walking outward through a list of pairs: the first at each level;
-// with want a type, the first of it. the level above: the last pair's value, keyed "owner" (an
-// "owner" before it is only a pair, as the scheduler puts its own last). NULL: none
-static op_value *nearest(const op_value *pairs, const char *key, op_type want, bool typed) {
-	while (pairs != NULL && pairs->count > 0) {
-		for (size_t i = 0; i < pairs->count; i++) {
-			const op_value *k = pairs->items[i]->items[0], *v = pairs->items[i]->items[1];
-			if (strcmp(k->str, key) == 0 && (!typed || v->type == want)) return (op_value *)v;
-		}
-		const op_value *last = pairs->items[pairs->count - 1];
-		const op_value *k = last->items[0], *v = last->items[1];
-		pairs = strcmp(k->str, "owner") == 0 && v->type == OP_LIST ? v : NULL;
+// one level's pairs, in order. a scope's (scoped): its run and mark as numbers
+static void see(seeing *w, const sc_pair *pairs, size_t n, bool scoped) {
+	for (size_t i = 0; i < n; i++) {
+		const sc_pair *p = &pairs[i];
+		op_value *v = scoped && scheduler_own(p) ? op_num((double)*(const uint64_t *)p->value)
+		                                         : op_ref((op_value *)p->value);
+		if (w->actor == NULL && strcmp(p->key, "actor") == 0) w->actor = op_ref(v);
+		if (w->reader == NULL && strcmp(p->key, "reader") == 0 && v->type == OP_STR)
+			w->reader = op_ref(v);
+		if (w->shown) push_pair(w->metadata, p->key, v);
+		else op_free(v);
 	}
-	return NULL;
+}
+
+// levels, innermost first: extra, the scope open, its parents to the root. metadata flat, up to
+// and with the first scope with a node, then ["node", its id]. 0: no scope open, nothing made
+static bool who_of(pl *l, const sc_pair *extra, size_t n, seeing *w) {
+	sc_scope *o = sc_get_current_scope(l->s->scheduler);
+	if (o == NULL) return false;
+	*w = (seeing){.metadata = op_list(), .shown = true};
+	see(w, extra, n, false);
+	for (; o != NULL; o = sc_scope_parent(o)) {
+		const sc_info *info = sc_scope_info(o);
+		if (info != NULL) see(w, info->pairs, info->n, true);
+		if (!w->shown || l->s->node_of == NULL) continue;
+		const char *id = l->s->node_of(l->s->node_data, o);
+		if (id != NULL) push_pair(w->metadata, "node", op_str(id)), w->shown = false;
+	}
+	return true;
 }
 
 op_value *pl_who(pl *l, const sc_pair *extra, size_t n) {
-	op_value *metadata = pairs_of(l, extra, n);
-	if (metadata == NULL) return NULL;
+	seeing w;
+	if (!who_of(l, extra, n, &w)) return NULL;
 	op_value *who = op_map();
-	op_value *actor = nearest(metadata, "actor", OP_NULL, false);
-	if (actor != NULL) op_set(who, "actor", op_ref(actor));
-	op_value *reader = nearest(metadata, "reader", OP_STR, true);
-	if (reader != NULL) op_set(who, "reader", op_ref(reader));
-	op_set(who, "metadata", metadata);
+	if (w.actor != NULL) op_set(who, "actor", w.actor);
+	if (w.reader != NULL) op_set(who, "reader", w.reader);
+	op_set(who, "metadata", w.metadata);
 	return who;
 }
 
-struct pl_made {
-	size_t refs;
-	ch_site site;
-	// the metadata, nested: the header's actor, reader and entries refer into it
-	op_value *pairs;
-	ch_entry *entries;
-};
 
 char *pl_header(pl *l, const sc_pair *extra, size_t n, const ch_site *site, ch_header *out,
 	pl_made **made) {
-	op_value *pairs = pairs_of(l, extra, n);
-	if (pairs == NULL) return xdup(SC_UNSCOPED);
+	seeing w;
+	if (!who_of(l, extra, n, &w)) return xdup(SC_UNSCOPED);
+	op_value *pairs = w.metadata;
 	pl_made *m = xalloc(sizeof *m);
 	m->refs = 1;
-	m->pairs = pairs;
-	m->entries = xalloc(pairs->count * sizeof *m->entries);
+	m->pairs = pairs, m->actor = w.actor, m->reader = w.reader;
+	m->entries = xalloc((pairs->count ? pairs->count : 1) * sizeof *m->entries);
 	ch_header h = {.has_time = 1, .time = (int64_t)time(NULL)};
 	for (size_t i = 0; i < pairs->count; i++)
 		m->entries[i] = (ch_entry){pairs->items[i]->items[0]->str, pairs->items[i]->items[1]};
-	h.actor = nearest(pairs, "actor", OP_NULL, false);
-	op_value *reader = nearest(pairs, "reader", OP_STR, true);
-	if (reader != NULL) h.reader = reader->str;
+	h.actor = w.actor;
+	if (w.reader != NULL) h.reader = w.reader->str;
 	h.metadata = m->entries, h.metadata_length = pairs->count;
 	if (site != NULL) {
 		m->site = *site;
 		h.external = &m->site, h.external_length = 1;
 	}
+	m->s = l->s;
+	m->next = l->s->mades;
+	if (m->next != NULL) m->next->before = m;
+	l->s->mades = m;
+	tb_add(l->s->made_by, tb_symbol(&made_tag), tb_symbol(m->entries), m);
 	*out = h;
 	*made = m;
 	return NULL;
@@ -1701,6 +1711,49 @@ pl_made *pl_made_ref(pl_made *m) {
 void pl_made_free(void *block) {
 	pl_made *m = block;
 	if (m == NULL || --m->refs > 0) return;
-	op_free(m->pairs);
+	if (m->s != NULL) {
+		tb_del(m->s->made_by, tb_symbol(&made_tag), tb_symbol(m->entries));
+		if (m->before != NULL) m->before->next = m->next;
+		else m->s->mades = m->next;
+		if (m->next != NULL) m->next->before = m->before;
+	}
+	op_free(m->change);
+	op_free(m->pairs), op_free(m->actor), op_free(m->reader);
 	free(m->entries), free(m);
+}
+
+// a header's pieces as a map: time, actor, reader, external, metadata (the block's own list)
+static op_value *change_of(const ch_header *h, pl_made *m) {
+	op_value *c = op_map();
+	if (h->has_time) op_set(c, "time", op_num((double)h->time));
+	if (h->actor != NULL) op_set(c, "actor", op_ref((op_value *)h->actor));
+	if (h->reader != NULL) op_set(c, "reader", op_str(h->reader));
+	if (h->external_length > 0) {
+		op_value *sites = op_list();
+		for (size_t i = 0; i < h->external_length; i++) {
+			const ch_site *s = &h->external[i];
+			op_value *site = op_map();
+			op_set(site, "file", op_str(s->file ? s->file : ""));
+			op_set(site, "line", op_num((double)s->line));
+			if (s->has_column) op_set(site, "column", op_num((double)s->column));
+			if (s->function != NULL) op_set(site, "function", op_str(s->function));
+			op_push(sites, site);
+		}
+		op_set(c, "external", sites);
+	}
+	if (h->metadata_length > 0) op_set(c, "metadata", op_ref(m->pairs));
+	return c;
+}
+
+const op_value *pl_change_value(pl *l, const ch_header *h) {
+	if (h == NULL || h->metadata == NULL) return NULL;
+	pl_made *m = tb_get(l->s->made_by, tb_symbol(&made_tag), tb_symbol(h->metadata));
+	// another block's metadata, or a header whose pieces were changed after: not this one
+	if (m == NULL || h->metadata_length != m->pairs->count || h->actor != m->actor) return NULL;
+	if (m->change == NULL) m->change = change_of(h, m);
+	const op_value *t = op_get(m->change, "time");
+	if (h->has_time != (t != NULL) || (t != NULL && t->num != (double)h->time)) return NULL;
+	if (h->external_length != (op_get(m->change, "external") ? op_get(m->change, "external")->count : 0))
+		return NULL;
+	return m->change;
 }

@@ -14,6 +14,8 @@
 #include <string.h>
 
 #define SET ((void *)1)
+// the most of each list in a node's status
+#define LIST 100
 
 static const char *const DEFAULT_TABLES[] = {"value", "attributes", "children"};
 
@@ -63,6 +65,41 @@ static header_t *header_copy(const ch_header *in) {
 		c->h.metadata_length = in->metadata_length;
 	}
 	return c;
+}
+
+static op_value *hex_value(const uint8_t *bytes, size_t n) {
+	char *text = malloc(2 * n + 1);
+	if (text == NULL) abort();
+	for (size_t i = 0; i < n; i++) snprintf(text + 2 * i, 3, "%02x", bytes[i]);
+	text[2 * n] = 0;
+	op_value *v = op_str(text);
+	free(text);
+	return v;
+}
+
+// a commit's change with who signed it and the commit after its metadata, ["signer", key] and
+// ["commit", name] in hex (changeOf in replay.ts, given the commit's name): sync's own
+static header_t *signed_header(const ch_header *change, const uint8_t *signer, size_t signer_length,
+	const uint8_t name[32]) {
+	header_t *c = header_copy(change);
+	size_t n = c->h.metadata_length;
+	ch_entry *es = calloc(n + 3, sizeof *es);
+	if (es == NULL) abort();
+	for (size_t i = 0; i < n; i++) es[i] = c->metadata[i];
+	free(c->metadata);
+	es[n] = (ch_entry){copyString("signer"), hex_value(signer, signer_length)};
+	es[n + 1] = (ch_entry){copyString("commit"), hex_value(name, 32)};
+	c->h.metadata = c->metadata = es;
+	c->h.metadata_length = n + 2;
+	return c;
+}
+
+// whether a change is a commit's, as changeOf gives it: its last metadata pairs who signed it and the
+// commit
+static bool is_signed(const ch_header *c) {
+	size_t n = c != NULL && c->metadata != NULL ? c->metadata_length : 0;
+	return n >= 2 && c->metadata[n - 2].key != NULL && strcmp(c->metadata[n - 2].key, "signer") == 0 &&
+		c->metadata[n - 1].key != NULL && strcmp(c->metadata[n - 1].key, "commit") == 0;
 }
 
 // what sync stamps itself: the time, and no actor
@@ -162,6 +199,17 @@ typedef struct {
 	char **over;
 	slot_t *under;
 	im_map latest;
+	// the last commit this device sent at each kept table, by its index: what a write here replays as
+	// (from_table)
+	struct {
+		uint8_t name[32];
+		bool has;
+	} *sent;
+	// the writes here no commit could carry: the first LIST ({table, error, field?}), and how many
+	op_value *unsent;
+	size_t unsent_count;
+	// its status to be worked out again
+	bool unwell;
 } node_t;
 
 #define STATES 16
@@ -206,6 +254,12 @@ struct sy_sync {
 	// nodes whose conflicts are to be worked out again: once a batch, not once a commit
 	node_t **dirty;
 	size_t dirty_count, dirty_room;
+	// nodes whose status alone is to be worked out again
+	node_t **unwell;
+	size_t unwell_count, unwell_room;
+	// where the sites a commit carries are told from (sy_options' roots)
+	char **roots;
+	size_t roots_length;
 	// by entry, and by key
 	im_map holds, at;
 	// writing what came in: the table's events are sync's own, and go out as nothing
@@ -579,12 +633,26 @@ static void notice(sy_sync *s, tb_key part, tb_key id) {
 // ---- what a commit carries of a change
 
 // what of a change header a commit can carry: metadata pairs that encode, an actor that does (else
-// null), the time (else now)
+// null), the time (else now). fresh (a new commit): never a signer or commit pair (a replayed change's:
+// not this device's to claim), each site's file as the roots say (site_of); else a copy of what a
+// commit carried. What it refers to beyond the change: its own
 typedef struct {
 	ch_header h;
 	op_value *null;
 	ch_entry *metadata;
+	ch_site *external;
+	op_value *signer, *commit;
 } carried_t;
+
+// a site's file as a commit tells it: the rest after the first root it starts with, else its last part
+static const char *site_of(const sy_sync *s, const char *file) {
+	for (size_t i = 0; i < s->roots_length; i++) {
+		size_t n = strlen(s->roots[i]);
+		if (strncmp(file, s->roots[i], n) == 0) return file + n;
+	}
+	const char *slash = strrchr(file, '/');
+	return slash != NULL ? slash + 1 : file;
+}
 
 static bool carries(const void *value) {
 	Json *j = pk_to_json(value);
@@ -595,7 +663,7 @@ static bool carries(const void *value) {
 	return ok;
 }
 
-static void carry(sy_sync *s, const ch_header *change, carried_t *out) {
+static void carry(sy_sync *s, const ch_header *change, carried_t *out, bool fresh) {
 	*out = (carried_t){0};
 	out->h.has_time = 1;
 	out->h.time = change != NULL && change->has_time ? change->time : now_of(s);
@@ -607,20 +675,36 @@ static void carry(sy_sync *s, const ch_header *change, carried_t *out) {
 	if (change->external != NULL && change->external_length > 0) {
 		out->h.external = change->external;
 		out->h.external_length = change->external_length;
+		if (fresh) {
+			out->external = malloc(change->external_length * sizeof *out->external);
+			if (out->external == NULL) abort();
+			for (size_t i = 0; i < change->external_length; i++) {
+				out->external[i] = change->external[i];
+				if (out->external[i].file != NULL) out->external[i].file = site_of(s, out->external[i].file);
+			}
+			out->h.external = out->external;
+		}
 	}
-	if (change->metadata != NULL) {
-		out->metadata = malloc((change->metadata_length + 1) * sizeof *out->metadata);
-		if (out->metadata == NULL) abort();
-		size_t n = 0;
-		for (size_t i = 0; i < change->metadata_length; i++)
-			if (change->metadata[i].key != NULL && carries(change->metadata[i].value)) out->metadata[n++] = change->metadata[i];
-		if (n > 0) out->h.metadata = out->metadata, out->h.metadata_length = n;
+	// room for two more (as_commit's)
+	size_t m = change->metadata != NULL ? change->metadata_length : 0;
+	out->metadata = malloc((m + 3) * sizeof *out->metadata);
+	if (out->metadata == NULL) abort();
+	size_t n = 0;
+	for (size_t i = 0; i < m; i++) {
+		const ch_entry *e = &change->metadata[i];
+		if (e->key == NULL || !carries(e->value)) continue;
+		if (fresh && (strcmp(e->key, "signer") == 0 || strcmp(e->key, "commit") == 0)) continue;
+		out->metadata[n++] = *e;
 	}
+	if (n > 0) out->h.metadata = out->metadata, out->h.metadata_length = n;
 }
 
 static void carried_free(carried_t *c) {
 	op_free(c->null);
 	free(c->metadata);
+	free(c->external);
+	op_free(c->signer);
+	op_free(c->commit);
 }
 
 // ---- replays
@@ -712,7 +796,7 @@ static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
 		size_t failed;
 		bool applies = op_apply(u->value, own.patches, own.patches_length, NULL, &after, &failed) == OP_OK;
 		if (applies) {
-			header_t *c = header_copy(&own.change);
+			header_t *c = signed_header(&own.change, own.signer, own.signer_length, kept->name);
 			slot_clear(u);
 			u->value = after;
 			u->change = c;
@@ -731,24 +815,39 @@ static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
 		size_t failed;
 		if (op_apply(NULL, own.patches, own.patches_length, NULL, &after, &failed) != OP_OK) ok = false;
 		else if (after != NULL) {
-			nd_entry *n = nd_make_entry(after, &own.change, NULL);
+			header_t *c = signed_header(&own.change, own.signer, own.signer_length, kept->name);
+			nd_entry *n = nd_make_entry(after, &c->h, NULL);
 			if (n == NULL) abort();
 			op_free(after);
 			hold_t *h = hold(s, n, own.table, doc, true);
 			hold_commit(h, &own);
+			h->header = c;
 			tb_add(s->table, part, id, n);
 		}
 	} else {
 		size_t failed;
-		if (nd_update(e, own.patches, own.patches_length, own.change, &failed) != OP_OK) ok = false;
-		else {
-			hold_t *h = hold(s, e, own.table, doc, false);
+		header_t *c = signed_header(&own.change, own.signer, own.signer_length, kept->name);
+		// no host's "a write landed": the table's event, a new entry in its place, whole
+		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change, NULL);
+		if (n == NULL) abort();
+		if (nd_update(n, own.patches, own.patches_length, c->h, &failed) != OP_OK) {
+			ok = false;
+			header_free(c);
+			if (n != e) nd_free_entry(n);
+		} else {
+			hold_t *h = hold(s, n, own.table, doc, n != e);
 			char *table = copyString(own.table);
 			hold_commit(h, &own);
-			if (e->value == NULL) {
+			h->header = c;
+			if (n->value == NULL) {
+				// the new one never put in: let go of
+				if (n != e) unhold(s, h);
 				tb_del(s->table, tb_string(table), id);
 				gone(s, e);
-			} else if (s->commit != NULL) s->commit(s->context, &e, 1);
+			} else if (n != e) {
+				tb_sub(s->table, tb_string(table), id, n);
+				gone(s, e);
+			} else s->commit(s->context, &e, 1);
 			free(table);
 		}
 	}
@@ -764,7 +863,7 @@ static bool step(sy_sync *s, const char *doc, const hy_kept *kept) {
 static bool moved_on(node_t *nd, const hy_kept *kept, rp_tables *node) {
 	cm_commit own;
 	bool ok = cm_decode(kept->bytes, kept->length, &own, NULL) == CM_OK;
-	if (ok && rp_apply(node, &own) != RP_OK) {
+	if (ok && rp_apply(node, &own, kept->name) != RP_OK) {
 		cm_free(&own);
 		ok = false;
 	}
@@ -826,7 +925,7 @@ static hy_refusal check(void *context, const char *doc, const hy_kept *kept, con
 	}
 	cm_commit own;
 	bool ok = cm_decode(kept->bytes, kept->length, &own, NULL) == CM_OK;
-	if (ok && rp_apply(node, &own) != RP_OK) {
+	if (ok && rp_apply(node, &own, kept->name) != RP_OK) {
 		cm_free(&own);
 		ok = false;
 	}
@@ -843,9 +942,28 @@ static hy_refusal check(void *context, const char *doc, const hy_kept *kept, con
 
 // ---- snapshots
 
-// the kept tables as the table holds them, each change as a commit carries it (so a snapshot reads as
-// a replay would): the head shown's node, into t (made here). What the changes refer to: the list
-// given back, carried_list_free it after t
+// a change as a replay of its commit has it: one from a commit (changeOf's), as it is; one written here
+// (at the table of index i), as its commit carried it, then who signed it and the commit (the last
+// sent at the table)
+static void as_commit(sy_sync *s, const node_t *nd, size_t i, const ch_header *change, carried_t *out) {
+	if (is_signed(change)) {
+		carry(s, change, out, false);
+		return;
+	}
+	carry(s, change, out, true);
+	if (nd->sent == NULL || !nd->sent[i].has) return;
+	size_t n = out->h.metadata_length;
+	out->signer = hex_value(tp_key(s->device), SL_KEY);
+	out->commit = hex_value(nd->sent[i].name, 32);
+	out->metadata[n] = (ch_entry){"signer", out->signer};
+	out->metadata[n + 1] = (ch_entry){"commit", out->commit};
+	out->h.metadata = out->metadata;
+	out->h.metadata_length = n + 2;
+}
+
+// the kept tables as the table holds them, each change as a replay of its commit has it (as_commit),
+// so a snapshot reads as a replay would: the head shown's node, into t (made here). What the changes
+// refer to: the list given back, carried_list_free it after t
 static carried_t *from_table(sy_sync *s, const char *doc, rp_tables *t) {
 	rp_init(t);
 	carried_t *carried = calloc(s->tables_length + 1, sizeof *carried);
@@ -855,13 +973,13 @@ static carried_t *from_table(sy_sync *s, const char *doc, rp_tables *t) {
 		if (overlaid(nd, i)) {
 			const slot_t *u = &nd->under[i];
 			if (u->value == NULL) continue;
-			carry(s, &u->change->h, &carried[i]);
+			as_commit(s, nd, i, &u->change->h, &carried[i]);
 			rp_put(t, s->tables[i], u->value, &carried[i].h);
 			continue;
 		}
 		nd_entry *e = tb_get(s->table, tb_string(s->tables[i]), tb_string(doc));
 		if (e == NULL || e->value == NULL) continue;
-		carry(s, &e->change, &carried[i]);
+		as_commit(s, nd, i, &e->change, &carried[i]);
 		rp_put(t, s->tables[i], e->value, &carried[i].h);
 	}
 	return carried;
@@ -1117,9 +1235,121 @@ static void conflicts(sy_sync *s, node_t *nd) {
 	}
 }
 
-// the conflicts worked out again, once the commits coming in now are all in
+// the "status" table at the id: what the device holds back or refused there (the stored layer's),
+// what its history waits on or refused, and the writes not sent ({waiting, refused, unsent, count}, as
+// sync.ts's Status). None when nothing
+static op_value *waiting_row(const uint8_t commit[32], const uint8_t (*names)[32], size_t count) {
+	op_value *m = op_map();
+	op_set(m, "commit", hex_value(commit, 32));
+	if (count == 0) op_set(m, "authority", op_bool(1));
+	else {
+		op_value *l = op_list();
+		for (size_t i = 0; i < count; i++) op_push(l, hex_value(names[i], 32));
+		op_set(m, "parents", l);
+	}
+	return m;
+}
+
+static op_value *refused_row(const char *key, const uint8_t id[32], const char *code) {
+	op_value *m = op_map();
+	op_set(m, key, hex_value(id, 32));
+	op_set(m, "code", op_str(code));
+	return m;
+}
+
+static void status(sy_sync *s, node_t *nd) {
+	tp_taking t = tp_taking_of(s->device, nd->id, TP_STORED);
+	hy_history *history = tp_history(s->device, nd->id, TP_STORED);
+	hy_waiting_row *ws;
+	hy_refused_row *rs;
+	size_t wn = hy_waiting(history, &ws), rn = hy_refused(history, &rs);
+	size_t waiting = t.waiting_count + wn, refused = t.refused_count + rn;
+	tb_key part = tb_string("status"), id = tb_string(nd->id);
+	nd_entry *have = tb_get(s->table, part, id);
+	op_value *v = NULL;
+	if (waiting > 0 || refused > 0 || nd->unsent != NULL) {
+		op_value *wl = op_list(), *rl = op_list(), *count = op_map();
+		for (size_t i = 0; i < t.waiting_count && wl->count < LIST; i++)
+			op_push(wl, waiting_row(t.waiting[i].commit, (const uint8_t(*)[32])t.waiting[i].names, t.waiting[i].count));
+		for (size_t i = 0; i < wn && wl->count < LIST; i++)
+			op_push(wl, waiting_row(ws[i].name, (const uint8_t(*)[32])ws[i].waiting, ws[i].waiting_length));
+		for (size_t i = 0; i < t.refused_count && rl->count < LIST; i++) {
+			const tp_refused_row *r = &t.refused[i];
+			op_push(rl, refused_row(r->fragment ? "fragment" : "commit", r->id, r->stuck ? "parent" : tp_code_name(r->code)));
+		}
+		for (size_t i = 0; i < rn && rl->count < LIST; i++)
+			op_push(rl, refused_row("commit", rs[i].name, hy_refusal_name(rs[i].refusal)));
+		op_set(count, "waiting", op_num((double)waiting));
+		op_set(count, "refused", op_num((double)refused));
+		op_set(count, "unsent", op_num((double)nd->unsent_count));
+		v = op_map();
+		op_set(v, "waiting", wl);
+		op_set(v, "refused", rl);
+		op_set(v, "unsent", nd->unsent != NULL ? copied(nd->unsent) : op_list());
+		op_set(v, "count", count);
+	}
+	tp_taking_free(&t);
+	hy_waiting_free(ws, wn);
+	free(rs);
+	if (v == NULL) {
+		if (have != NULL) {
+			tb_del(s->table, part, id);
+			gone(s, have);
+		}
+		return;
+	}
+	if (have != NULL && same(have->value, v)) {
+		op_free(v);
+		return;
+	}
+	header_t *c = stamp(now_of(s));
+	nd_entry *e = nd_make_entry(v, &c->h, NULL);
+	if (e == NULL) abort();
+	op_free(v);
+	hold_header(hold(s, e, "status", nd->id, true), c);
+	if (have == NULL) tb_add(s->table, part, id, e);
+	else {
+		tb_sub(s->table, part, id, e);
+		gone(s, have);
+	}
+}
+
+// the status alone worked out again, once the commits coming in now are all in
+static void recheck(sy_sync *s, node_t *nd) {
+	if (nd->unwell) return;
+	nd->unwell = true;
+	if (s->unwell_count == s->unwell_room) {
+		s->unwell_room = s->unwell_room ? s->unwell_room * 2 : 8;
+		s->unwell = realloc(s->unwell, s->unwell_room * sizeof *s->unwell);
+		if (s->unwell == NULL) abort();
+	}
+	s->unwell[s->unwell_count++] = nd;
+}
+
+// a write at (id, table) no commit could carry: noted in the status
+static void failed(sy_sync *s, node_t *nd, const char *part, cm_code code, const char *field) {
+	if (nd->unsent == NULL) nd->unsent = op_list();
+	nd->unsent_count++;
+	if (nd->unsent->count < LIST) {
+		op_value *m = op_map();
+		op_set(m, "table", op_str(part));
+		op_set(m, "error", op_str(cm_code_name(code)));
+		if (field != NULL && *field) op_set(m, "field", op_str(field));
+		op_push(nd->unsent, m);
+	}
+	recheck(s, nd);
+}
+
+static void moving(void *context, const char *doc) {
+	sy_sync *s = context;
+	node_t *nd = node_of(s, doc);
+	if (nd != NULL) recheck(s, nd);
+}
+
+// the conflicts worked out again, once the commits coming in now are all in; the status of those and
+// of the nodes rechecked
 static void flush(sy_sync *s) {
-	if (s->dirty_count == 0) return;
+	if (s->dirty_count == 0 && s->unwell_count == 0) return;
 	bool was = s->applying;
 	s->applying = true;
 	for (size_t i = 0; i < s->dirty_count; i++) {
@@ -1133,8 +1363,16 @@ static void flush(sy_sync *s) {
 		}
 		conflicts(s, nd);
 		listed(s, nd);
+		status(s, nd);
 	}
 	s->dirty_count = 0;
+	for (size_t i = 0; i < s->unwell_count; i++) {
+		node_t *nd = s->unwell[i];
+		if (!nd->unwell) continue;
+		nd->unwell = false;
+		status(s, nd);
+	}
+	s->unwell_count = 0;
 	s->applying = was;
 }
 
@@ -1189,12 +1427,12 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 		}
 	}
 	carried_t carried;
-	carry(s, change, &carried);
+	carry(s, change, &carried, true);
 	cm_commit c = {0};
 	c.table = (char *)part;
 	c.change = carried.h;
 	memcpy(c.signer, tp_key(s->device), SL_KEY), c.signer_length = SL_KEY;
-	c.nonce = s->nonce++;
+	c.nonce = s->nonce;
 	c.parents = (const uint8_t(*)[32])parents;
 	c.parents_length = on_count;
 	if (on_merge) c.merge = (char *)s->rule->name;
@@ -1206,15 +1444,24 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 	size_t length;
 	char *field = NULL;
 	*code = cm_encode(&c, &bytes, &length, &field);
+	// what no commit can carry (a value with no encoding) is not sent, and the rest goes on: noted
+	if (*code != CM_OK) failed(s, nd, part, *code, field);
 	free(field);
 	const hy_kept *taken = NULL;
 	if (*code == CM_OK) {
+		s->nonce++;
 		hy_made made = {.commit = &c};
 		cm_name(bytes, length, made.name);
 		grew(nd, made.name, length);
 		hy_added a = tp_take(s->device, id, bytes, length, TP_STORED, &made);
 		if (a.kind == HY_TAKEN) {
 			taken = hy_get(history, made.name);
+			if (at < s->tables_length) {
+				if (nd->sent == NULL) nd->sent = calloc(s->tables_length, sizeof *nd->sent);
+				if (nd->sent == NULL) abort();
+				memcpy(nd->sent[at].name, made.name, 32);
+				nd->sent[at].has = true;
+			}
 			nd->shown = taken;
 			// kept until the end: on may be them
 			if (on_merge) nd->merged = NULL;
@@ -1225,7 +1472,11 @@ static const hy_kept *send(sy_sync *s, const char *id, const char *part, const o
 				later(s, nd);
 			}
 			if (on_merge) free(merged), merged = NULL;
-			if (nd->over != NULL || nd->peers_count > 0) landed(s, nd, part, all, stored, &c.change);
+			if (nd->over != NULL || nd->peers_count > 0) {
+				header_t *sh = signed_header(&c.change, c.signer, c.signer_length, made.name);
+				landed(s, nd, part, all, stored, &sh->h);
+				header_free(sh);
+			}
 		}
 		hy_added_free(&a);
 		free(bytes);
@@ -1369,7 +1620,7 @@ static hy_refusal fleeting(sy_sync *s, const char *doc, const hy_kept *kept, con
 	slot_t *made = calloc(1, sizeof *made);
 	if (made == NULL) abort();
 	made->value = after;
-	if (after != NULL) made->change = header_copy(&commit->change);
+	if (after != NULL) made->change = signed_header(&commit->change, commit->signer, commit->signer_length, kept->name);
 	slot_t *old = im_get(&s->fresh, kept->name);
 	if (old != NULL) slot_clear(old), free(old);
 	im_set(&s->fresh, kept->name, made);
@@ -1759,12 +2010,12 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	qsort(sorted, on_count, sizeof *sorted, by_name);
 	for (size_t i = 0; i < on_count; i++) memcpy(parents[i], sorted[i], 32);
 	carried_t carried;
-	carry(s, change, &carried);
+	carry(s, change, &carried, true);
 	cm_commit c = {0};
 	c.table = (char *)part;
 	c.change = carried.h;
 	memcpy(c.signer, me, SL_KEY), c.signer_length = SL_KEY;
-	c.nonce = s->nonce++;
+	c.nonce = s->nonce;
 	c.parents = (const uint8_t(*)[32])parents;
 	c.parents_length = on_count;
 	if (merge != NULL) c.merge = (char *)merge;
@@ -1775,8 +2026,10 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 	size_t length;
 	char *field = NULL;
 	cm_code code = cm_encode(&c, &bytes, &length, &field);
+	if (code != CM_OK) failed(s, nd, part, code, field);
 	free(field);
 	if (code == CM_OK) {
+		s->nonce++;
 		hy_made made = {.commit = &c};
 		cm_name(bytes, length, made.name);
 		hy_added a = tp_take(s->device, id, bytes, length, TP_EPHEMERAL, &made);
@@ -1795,7 +2048,8 @@ static cm_code fleet(sy_sync *s, const char *id, const char *part, const op_patc
 				rp_free(&pre);
 			}
 			slot_t entry = {0};
-			if (value != NULL) entry.value = copied(value), entry.change = header_copy(&c.change);
+			if (value != NULL)
+				entry.value = copied(value), entry.change = signed_header(&c.change, c.signer, c.signer_length, made.name);
 			mine = peer_make(nd, me, 0);
 			// the one it replaces is let go of (tp_forget waits until it is sent)
 			const stand_t *gone_one = stand_of(mine, part);
@@ -1918,6 +2172,9 @@ sy_sync *sy_create(const sy_options *o) {
 	s->beat = o->beat ? o->beat : 1000;
 	s->ttl = o->ttl ? o->ttl : 4000;
 	s->context = o->context;
+	s->roots = calloc(o->roots_length + 1, sizeof *s->roots);
+	if (s->roots == NULL) abort();
+	for (size_t i = 0; o->roots != NULL && i < o->roots_length; i++) s->roots[s->roots_length++] = copyString(o->roots[i]);
 	const char *const *tables = o->tables != NULL ? o->tables : DEFAULT_TABLES;
 	s->tables_length = o->tables != NULL ? o->tables_length : 3;
 	s->tables = calloc(s->tables_length + 1, sizeof *s->tables);
@@ -1947,6 +2204,7 @@ sy_sync *sy_create(const sy_options *o) {
 	tp_arrived(s->device, arrived, s);
 	tp_hearing(s->device, hearing, s);
 	tp_stopped(s->device, stopping, s);
+	tp_moved(s->device, moving, s);
 	return s;
 }
 
@@ -1969,6 +2227,8 @@ void sy_free(sy_sync *s) {
 		free(nd->over);
 		free(nd->under);
 		im_free(&nd->latest);
+		free(nd->sent);
+		op_free(nd->unsent);
 		free(nd);
 	}
 	free(s->list);
@@ -1993,6 +2253,9 @@ void sy_free(sy_sync *s) {
 	free(s->merges);
 	free(s->pure_list);
 	free(s->dirty);
+	free(s->unwell);
+	for (size_t i = 0; i < s->roots_length; i++) free(s->roots[i]);
+	free(s->roots);
 	free(s);
 }
 
@@ -2081,7 +2344,7 @@ cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change) {
 	if (k != NULL && at < s->tables_length && overlaid(nd, at)) {
 		slot_t *u = &nd->under[at];
 		if (u->value != NULL && cm_decode(k->bytes, k->length, &own, NULL) == CM_OK) {
-			header_t *c = header_copy(&own.change);
+			header_t *c = signed_header(&own.change, own.signer, own.signer_length, k->name);
 			header_free(u->change);
 			u->change = c;
 			cm_free(&own);
@@ -2093,9 +2356,21 @@ cm_code sy_settle(sy_sync *s, const char *id, const ch_header *change) {
 	if (e != NULL && cm_decode(k->bytes, k->length, &own, NULL) == CM_OK) {
 		bool was = s->applying;
 		s->applying = true;
-		if (nd_update(e, NULL, 0, own.change, NULL) == OP_OK) {
-			hold_commit(hold(s, e, "value", id, false), &own);
-			if (s->commit != NULL) s->commit(s->context, &e, 1);
+		header_t *c = signed_header(&own.change, own.signer, own.signer_length, k->name);
+		// no host's "a write landed": the table's event, a new entry in its place
+		nd_entry *n = s->commit != NULL ? e : nd_make_entry(e->value, &e->change, NULL);
+		if (n == NULL) abort();
+		if (nd_update(n, NULL, 0, c->h, NULL) == OP_OK) {
+			hold_t *h = hold(s, n, "value", id, n != e);
+			hold_commit(h, &own);
+			h->header = c;
+			if (n != e) {
+				tb_sub(s->table, tb_string("value"), tb_string(id), n);
+				gone(s, e);
+			} else s->commit(s->context, &e, 1);
+		} else {
+			header_free(c);
+			if (n != e) nd_free_entry(n);
 		}
 		cm_free(&own);
 		s->applying = was;
@@ -2184,5 +2459,5 @@ int64_t sy_run(sy_sync *s) {
 }
 
 bool sy_idle(const sy_sync *s) {
-	return tp_idle(s->device) && s->dirty_count == 0;
+	return tp_idle(s->device) && s->dirty_count == 0 && s->unwell_count == 0;
 }

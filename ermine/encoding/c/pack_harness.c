@@ -57,14 +57,14 @@ static op_value *value_of(Json **slot) {
 	return v;
 }
 
-// set when a number given is not one a C node holds (a safe integer, never -0): that node has no
+// set when a number given is not one a C node holds (a safe integer; -0 is 0): that node has no
 // form, as the reference refuses it
 static int bent;
 
 static int64_t number_of(const Json *j) {
 	if (j == NULL || !jsonIsNumber(j)) return 0;
 	double d = j->number;
-	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d) || (d == 0 && signbit(d))) {
+	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d)) {
 		bent = 1;
 		return 0;
 	}

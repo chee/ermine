@@ -990,7 +990,7 @@ static void loadedAgain(Imaged *m, const char *path) {
 
 /**
  * An entry's info (attributes): each loaded where it is not so already, unless a person or a program changed the
- * node's attributes here: then they are not loaded, and the log says so once
+ * node's attributes here: then they are not loaded
  */
 static void imageInfo(Host *h, Json *e, const char *const *at, size_t n, const char *name) {
 	Json *info = jsonGet(e, "info");
@@ -1011,7 +1011,6 @@ static void imageInfo(Host *h, Json *e, const char *const *at, size_t n, const c
 		if (owned < 0) {
 			const ap_item *it = ap_first(&api, address, n + 1);
 			owned = !it || !id_is(it->id) || imageOwns(h, it->id, "attributes");
-			if (!owned) hostSay(h, "image: %s info edited here, not loaded", pathText(h, address, n + 1));
 		}
 		if (owned) {
 			op_patch p = valWhole(v);
@@ -1025,8 +1024,7 @@ static void imageInfo(Host *h, Json *e, const char *const *at, size_t n, const c
 
 /**
  * A node the card holds already, the image's value differing from its: loaded again when every stored change of
- * the value was the image's own; not loaded the moment a person or a program changed it here, and the log says
- * so once
+ * the value was the image's own; not loaded the moment a person or a program changed it here
  */
 static void loadImageAgain(Host *h, Imaged *m, Json *e, const char *const *address, size_t n) {
 	ap_api api = imageApi(h);
@@ -1037,8 +1035,7 @@ static void loadImageAgain(Host *h, Imaged *m, Json *e, const char *const *addre
 	bool same = valEqual(held, v) || (!held && v->type == OP_NULL);
 	if (!same) {
 		const char *path = pathText(h, address, n);
-		if (!imageOwns(h, it->id, "value")) hostSay(h, "image: %s edited here, not loaded", path);
-		else if (!hostFailed(h, hostSnap(&api, address, n, v), path)) loadedAgain(m, path);
+		if (imageOwns(h, it->id, "value") && !hostFailed(h, hostSnap(&api, address, n, v), path)) loadedAgain(m, path);
 	}
 	op_free(v);
 }

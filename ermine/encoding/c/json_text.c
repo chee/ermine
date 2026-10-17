@@ -2,6 +2,7 @@
 // printer. Apart from json.c, so what never reads or writes text links none of it.
 
 #include "json_text.h"
+#include "../../../core/op/c/whole.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -17,7 +18,7 @@ static bool isContinuation(unsigned char byte) {
 	return (byte & 0xc0) == 0x80;
 }
 
-// values in JSON (ENCODING.tex, JSON form) ---------------------------------------
+// values in JSON (conformance/typescript/form.ts) ---------------------------------------
 
 static const char base64Digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -133,10 +134,37 @@ static bool isSlashMap(const Json *value) {
 	return jsonIsObject(value) && value->object.count == 1 && isKey(&value->object.members[0], "/");
 }
 
+/** a whole number from decimal digits, a '-' first or not (and no leading zero when `strict`); NULL when not that */
+static Json *wholeOf(const char *text, size_t length, bool strict) {
+	bool negative = length && text[0] == '-';
+	const char *digits = text + negative;
+	size_t n = length - negative;
+	if (!n || (strict && n > 1 && digits[0] == '0')) return NULL;
+	for (size_t i = 0; i < n; i++)
+		if (digits[i] < '0' || digits[i] > '9') return NULL;
+	size_t bytes;
+	unsigned char *m = whole_parse(digits, n, &bytes);
+	Json *value = jsonWhole(negative, m, bytes);
+	free(m);
+	return value;
+}
+
+/** a whole number past 2^53 - 1 either way, in decimal: the one spelling ({"/":{"bigint":"…"}}); a safe one is plain digits, so NULL */
+static Json *bigintOf(const Json *text) {
+	if (!jsonIsString(text)) return NULL;
+	Json *value = wholeOf(text->string, text->stringLength, true);
+	if (value && !value->big && fabs(value->number) <= 9007199254740991.0) {
+		jsonFree(value);
+		return NULL;
+	}
+	return value;
+}
+
 /** the value one "/" form other than map stands for: bytes, a number, a stand-in (its kind still to decode), or a typed array; NULL when malformed */
 static Json *formOf(const JsonMember *form) {
 	double number;
 	if (isKey(form, "bytes")) return bytesOf(form->value);
+	if (isKey(form, "bigint")) return bigintOf(form->value);
 	if (isKey(form, "number")) return numberWord(form->value, &number) ? jsonNumber(number) : NULL;
 	if (isKey(form, "live")) return jsonStand(form->value);
 	return typedOf(form->key, form->keyLength, form->value);
@@ -336,7 +364,13 @@ static Json *parseNumber(Parser *parser) {
 		}
 		while (isDigit(peek(parser))) parser->at++;
 	}
-	char *spelled = copyStringOfLength((const char *)parser->text + start, parser->at - start);
+	const char *text = (const char *)parser->text + start;
+	size_t length = parser->at - start;
+	// digits alone: a whole number, exactly
+	if (!memchr(text, '.', length) && !memchr(text, 'e', length) && !memchr(text, 'E', length) && length > 15) {
+		return wholeOf(text, length, false);
+	}
+	char *spelled = copyStringOfLength(text, length);
 	double number = strtod(spelled, NULL);
 	free(spelled);
 	if (!isfinite(number)) {
@@ -708,9 +742,23 @@ static void putScalar(Bytes *bytes, const Json *value) {
 		case JSON_BOOLEAN:
 			putText(bytes, value->boolean ? "true" : "false");
 			break;
-		case JSON_NUMBER:
+		case JSON_NUMBER: {
+			// a whole number past 2^53 - 1: its digits, in the bigint form
+			bool negative;
+			unsigned char m[128];
+			size_t n;
+			if (fabs(value->number) > 9007199254740991.0 && jsonMagnitude(value, &negative, m, &n)) {
+				char *digits = allocate(3 * n + 3);
+				whole_decimal(negative, m, n, digits);
+				putText(bytes, "{\"/\":{\"bigint\":\"");
+				putText(bytes, digits);
+				putText(bytes, "\"}}");
+				free(digits);
+				break;
+			}
 			putNumber(bytes, value->number, "{\"/\":{\"number\":\"", "\"}}");
 			break;
+		}
 		case JSON_STRING:
 			putString(bytes, value->string, value->stringLength);
 			break;

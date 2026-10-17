@@ -213,7 +213,7 @@ static int ident(const op_value *a, const op_value *b) {
 	switch (a->type) {
 	case OP_NULL: return 1;
 	case OP_BOOL: return !a->bool_ == !b->bool_;
-	case OP_NUM: return a->num == b->num;
+	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
 	default: return 0;
 	}

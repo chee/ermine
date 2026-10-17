@@ -1,18 +1,21 @@
 // cbor.h: a value (json.h) in CBOR and back, in one deterministic form (RFC 8949 4.2.1, typed
-// arrays as RFC 8746). conformance/encoding/vectors.json holds the bytes for other codecs.
+// arrays as RFC 8746). ermine/encoding/conformance/cbor/vectors.json holds the bytes for other codecs.
 //
 // - shortest heads, definite lengths; map keys sorted bytewise by their encodings
-// - numbers: the shortest float that holds them exactly (f9, fa, fb); never an integer. 1 is
-//   f93c00, -0 f98000, the one NaN f97e00
+// - whole numbers: integers, major type 0 or 1 in the shortest head; past 64 bits a bignum, tag 2
+//   or 3 over its bytes, big-endian, no leading zero. 1 is 01, -0 is 0 (00)
+// - other numbers: the shortest float that holds them exactly (f9, fa, fb); the one NaN f97e00
 // - null f6, false f4, true f5; no other simple value
 // - strings: text, plain UTF-8 (json.h's C0 80 is 00); a lone surrogate has no encoding
 // - bytes: byte string
 // - typed arrays: tag over a byte string, little-endian: uint16 69, uint32 70, uint64 71, int8 72,
 //   int16 77, int32 78, int64 79, float32 85, float64 86; no uint8 (tag 64 never written); NaN
-//   elements as 0x7fc00000 / 0x7ff8000000000000
+//   elements as 0x7fc00000 / 0x7ff8000000000000; -0 elements kept
 // - stand-ins (JSON_STAND): tag 0x12345678 (da12345678) over its kind
 //
-// decoding accepts exactly what the encoder writes; anything else is rejected.
+// decoding accepts exactly what the encoder writes (never a whole number as a float, a longer head,
+// a bignum a plain integer holds); anything else is rejected. ermine/encoding/typescript/cbor.ts's
+// header is the rule.
 // memory: encoding writes into the caller's buffer; decoding builds with json.h's constructors.
 // nothing recurses; at most CBOR_DEPTH nested containers (cbor.ts's DEPTH).
 

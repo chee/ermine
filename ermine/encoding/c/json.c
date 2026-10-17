@@ -2,6 +2,7 @@
 // See json.h. Owner: the skeleton (done).
 
 #include "json.h"
+#include "../../../core/op/c/whole.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -84,12 +85,31 @@ Json *jsonBoolean(bool boolean) {
 
 Json *jsonNumber(double number) {
 	Json *value = make(JSON_NUMBER);
-	value->number = number;
+	value->number = number == 0 ? 0 : number; // -0 is 0
 	return value;
 }
 
+Json *jsonWhole(bool negative, const unsigned char *magnitude, size_t length) {
+	while (length && !*magnitude) magnitude++, length--;
+	if (whole_exact(magnitude, length)) return jsonNumber(whole_near(negative, magnitude, length));
+	Json *value = make(JSON_NUMBER);
+	value->number = whole_near(negative, magnitude, length);
+	value->big = allocate(length);
+	memcpy(value->big, magnitude, length);
+	value->bigLength = length;
+	value->bigNegative = negative;
+	return value;
+}
+
+Json *jsonUnsigned(uint64_t number) {
+	unsigned char m[8];
+	return jsonWhole(false, m, whole_of_u64(number, m));
+}
+
 Json *jsonInteger(int64_t number) {
-	return jsonNumber((double)number);
+	unsigned char m[8];
+	uint64_t magnitude = number < 0 ? (uint64_t)0 - (uint64_t)number : (uint64_t)number;
+	return jsonWhole(number < 0, m, whole_of_u64(magnitude, m));
 }
 
 Json *jsonString(const char *text) {
@@ -222,6 +242,9 @@ Json *jsonShallow(const Json *value) {
 		case JSON_STAND:
 			jsonFree(copy);
 			return jsonStand(jsonRef(value->stand.kind));
+		case JSON_NUMBER:
+			jsonFree(copy);
+			return value->big ? jsonWhole(value->bigNegative, value->big, value->bigLength) : jsonNumber(value->number);
 		default:
 			*copy = *value;
 			copy->refs = 0;
@@ -263,6 +286,8 @@ void jsonFree(Json *value) {
 			if (at->stand.kind) push(&stack, at->stand.kind);
 		} else if (at->type == JSON_BYTES) {
 			free(at->bytes.data);
+		} else if (at->type == JSON_NUMBER) {
+			free(at->big);
 		} else if (at->type == JSON_TYPED) {
 			free(at->typed.data);
 		} else if (at->type == JSON_ARRAY) {
@@ -320,20 +345,68 @@ bool jsonIsWhole(const Json *value, int64_t *out) {
 	return true;
 }
 
-/** whether two numbers are the same as Object.is has it */
+bool jsonInt64(const Json *value, int64_t *out) {
+	bool negative;
+	unsigned char m[128];
+	size_t n;
+	uint64_t u;
+	if (!jsonMagnitude(value, &negative, m, &n) || !whole_u64(m, n, &u)) return false;
+	if (negative ? u > (uint64_t)INT64_MAX + 1 : u > (uint64_t)INT64_MAX) return false;
+	*out = negative ? (int64_t)(0 - u) : (int64_t)u;
+	return true;
+}
+
+bool jsonDouble(const Json *value, double *out) {
+	if (!jsonIsNumber(value)) return false;
+	*out = value->number;
+	return true;
+}
+
+bool jsonMagnitude(const Json *value, bool *negative, unsigned char out[128], size_t *length) {
+	if (!jsonIsNumber(value)) return false;
+	if (value->big) {
+		if (value->bigLength > 128) return false;
+		memcpy(out, value->big, value->bigLength);
+		*length = value->bigLength;
+		*negative = value->bigNegative;
+		return true;
+	}
+	double d = value->number;
+	if (!isfinite(d) || floor(d) != d) return false;
+	*negative = d < 0;
+	*length = whole_of_double(d, out);
+	return true;
+}
+
+/** whether two numbers are the same: by value, NaN the same as NaN (0 and -0 the same: -0 is 0) */
 static bool jsonSameNumber(double a, double b) {
+	if (isnan(a) || isnan(b)) return isnan(a) && isnan(b);
+	return a == b;
+}
+
+/** two numbers the same: big ones by their bytes */
+static bool sameNumbers(const Json *x, const Json *y) {
+	if (x->big || y->big) {
+		return x->big && y->big && x->bigNegative == y->bigNegative && x->bigLength == y->bigLength &&
+		       memcmp(x->big, y->big, x->bigLength) == 0;
+	}
+	return jsonSameNumber(x->number, y->number);
+}
+
+/** two float elements as Object.is has them: a typed array keeps -0 */
+static bool sameElement(double a, double b) {
 	if (isnan(a) || isnan(b)) return isnan(a) && isnan(b);
 	return a == b && signbit(a) == signbit(b);
 }
 
-/** two typed arrays of one kind, element by element as numbers are: floats as Object.is has them, integers by value */
+/** two typed arrays of one kind, element by element: floats as Object.is has them, integers by value */
 static bool sameElements(const Json *x, const Json *y) {
 	if (x->typed.kind != y->typed.kind || x->typed.count != y->typed.count) return false;
 	for (size_t i = 0; i < x->typed.count; i++) {
 		if (x->typed.kind == JSON_FLOAT32) {
-			if (!jsonSameNumber(((float *)x->typed.data)[i], ((float *)y->typed.data)[i])) return false;
+			if (!sameElement(((float *)x->typed.data)[i], ((float *)y->typed.data)[i])) return false;
 		} else if (x->typed.kind == JSON_FLOAT64) {
-			if (!jsonSameNumber(((double *)x->typed.data)[i], ((double *)y->typed.data)[i])) return false;
+			if (!sameElement(((double *)x->typed.data)[i], ((double *)y->typed.data)[i])) return false;
 		}
 	}
 	if (x->typed.kind == JSON_FLOAT32 || x->typed.kind == JSON_FLOAT64) return true;
@@ -355,7 +428,7 @@ bool jsonEqual(const Json *a, const Json *b) {
 		} else if (x->type == JSON_BOOLEAN) {
 			equal = x->boolean == y->boolean;
 		} else if (x->type == JSON_NUMBER) {
-			equal = jsonSameNumber(x->number, y->number);
+			equal = sameNumbers(x, y);
 		} else if (x->type == JSON_BYTES) {
 			equal = x->bytes.length == y->bytes.length && (!x->bytes.length || memcmp(x->bytes.data, y->bytes.data, x->bytes.length) == 0);
 		} else if (x->type == JSON_TYPED) {

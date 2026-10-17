@@ -435,6 +435,11 @@ struct tp_device {
 		void *context;
 	} *stoppers;
 	size_t stopper_count, stopper_room;
+	struct {
+		tp_moved_fn fn;
+		void *context;
+	} *movers;
+	size_t mover_count, mover_room;
 	// arrivals the histories' taken listeners told, told on after the add that let them in; own takes
 	// that waited, let in, sent after them
 	told_t *told;
@@ -1660,6 +1665,11 @@ static void compact(tp_device *t, doc *d, const uint8_t head[32]) {
 }
 
 // what the store held, or Subduction saved, taken in; save: then compacted and built as a save is
+// what is held back or refused at the document may have changed: told
+static void tell_moved(tp_device *t, doc *d) {
+	for (size_t i = 0; i < t->mover_count; i++) t->movers[i].fn(t->movers[i].context, d->id);
+}
+
 static void take(tp_device *t, job *j, bool save) {
 	const uint8_t *head, *blob, *checks;
 	const uint8_t(*list)[32];
@@ -1678,6 +1688,7 @@ static void take(tp_device *t, job *j, bool save) {
 	size_t deep = d->deep;
 	if (j->record == ERM_STORE_COMMIT) take_commit(d, head, list, count, blob, length);
 	else take_fragment(d, head, list, count, checks, checks_count, blob, length);
+	tell_moved(t, d);
 	if (save) {
 		if (j->record == ERM_STORE_FRAGMENT) {
 			const fragment *got = im_get(&d->fragments, head);
@@ -1889,6 +1900,7 @@ static void store(tp_device *t, item *it) {
 		free(sorted);
 		// a seal from elsewhere may wait on this one
 		settle(d);
+		tell_moved(t, d);
 	}
 	memcpy(it->stored, s, 32);
 	uint64_t c = erm_sd_add_commit(t->sd, d->bytes, s, k->parents_length ? (const uint8_t *)ids : NULL, k->parents_length,
@@ -2286,6 +2298,7 @@ void tp_free(tp_device *t) {
 	free(t->followed);
 	free(t->listeners);
 	free(t->hearers);
+	free(t->movers);
 	free(t->stoppers);
 	free(t->told);
 	free(t->released);
@@ -2493,6 +2506,12 @@ void tp_arrived(tp_device *t, tp_arrived_fn fn, void *context) {
 	t->listeners[t->listener_count++].context = context;
 }
 
+void tp_moved(tp_device *t, tp_moved_fn fn, void *context) {
+	ROOM(t->movers, t->mover_count, t->mover_room);
+	t->movers[t->mover_count].fn = fn;
+	t->movers[t->mover_count++].context = context;
+}
+
 void tp_hearing(tp_device *t, tp_hearing_fn fn, void *context) {
 	ROOM(t->hearers, t->hearer_count, t->hearer_room);
 	t->hearers[t->hearer_count].fn = fn;
@@ -2650,7 +2669,76 @@ static bool rejudge(tp_device *t) {
 	for (doc *d = t->first; d; d = d->next)
 		for (int l = 0; l < 2; l++) hy_again(d->histories[l]);
 	tell(t);
+	for (doc *d = t->first; d; d = d->next) tell_moved(t, d);
 	return true;
+}
+
+// ---- what is held back or refused
+
+static int by_waiting(const void *a, const void *b) {
+	return memcmp(((const tp_waiting_row *)a)->commit, ((const tp_waiting_row *)b)->commit, 32);
+}
+
+static int by_refused(const void *a, const void *b) {
+	return memcmp(((const tp_refused_row *)a)->id, ((const tp_refused_row *)b)->id, 32);
+}
+
+tp_taking tp_taking_of(tp_device *t, const char *id, tp_layer layer) {
+	tp_taking out = {0};
+	doc *d = named(t, id);
+	if (d == NULL) return out;
+	if (layer == TP_EPHEMERAL) {
+		out.refused = calloc(d->heard.count + 1, sizeof *out.refused);
+		if (out.refused == NULL) abort();
+		for (size_t i = 0; i < d->heard.slots; i++) {
+			if (!d->heard.used[i]) continue;
+			tp_refused_row *r = &out.refused[out.refused_count++];
+			memcpy(r->id, d->heard.keys[i], 32);
+			r->code = (tp_code)(uintptr_t)d->heard.values[i];
+		}
+		qsort(out.refused, out.refused_count, sizeof *out.refused, by_refused);
+		return out;
+	}
+	out.waiting = calloc(d->pending.count + 1, sizeof *out.waiting);
+	out.refused = calloc(d->pending.count + d->refused.count + d->broken.count + 1, sizeof *out.refused);
+	if (out.waiting == NULL || out.refused == NULL) abort();
+	for (size_t i = 0; i < d->pending.slots; i++) {
+		if (!d->pending.used[i]) continue;
+		const pending_t *p = d->pending.values[i];
+		if (p->waits) {
+			tp_waiting_row *w = &out.waiting[out.waiting_count++];
+			memcpy(w->commit, p->key, 32);
+			w->names = copy(p->waiting, p->waiting_length * 32);
+			w->count = p->waiting_length;
+		} else if (p->sticks) {
+			tp_refused_row *r = &out.refused[out.refused_count++];
+			memcpy(r->id, p->key, 32);
+			r->stuck = true;
+			r->names = copy(p->stuck, p->stuck_length * 32);
+			r->count = p->stuck_length;
+		}
+	}
+	for (int k = 0; k < 2; k++) {
+		const im_map *m = k == 0 ? &d->refused : &d->broken;
+		for (size_t i = 0; i < m->slots; i++) {
+			if (!m->used[i]) continue;
+			tp_refused_row *r = &out.refused[out.refused_count++];
+			memcpy(r->id, m->keys[i], 32);
+			r->fragment = k == 1;
+			r->code = (tp_code)(uintptr_t)m->values[i];
+		}
+	}
+	qsort(out.waiting, out.waiting_count, sizeof *out.waiting, by_waiting);
+	qsort(out.refused, out.refused_count, sizeof *out.refused, by_refused);
+	return out;
+}
+
+void tp_taking_free(tp_taking *taking) {
+	for (size_t i = 0; i < taking->waiting_count; i++) free(taking->waiting[i].names);
+	for (size_t i = 0; i < taking->refused_count; i++) free(taking->refused[i].names);
+	free(taking->waiting);
+	free(taking->refused);
+	*taking = (tp_taking){0};
 }
 
 // the harnesses' hooks (transport_conformance_hook.h), only in their builds

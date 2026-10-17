@@ -4,7 +4,8 @@
 // decoded from bytes, shared with nothing, so applying in place costs the patches, not the tables.
 //
 // Tables are entries (core/node/c/node.h): each table's value, and the change that last touched it,
-// as the graph has a change header: time, actor, reader, external, metadata (changeOf in replay.ts).
+// as the graph has a change header: time, actor, reader, external, metadata, then who signed the
+// commit and the commit, ["signer", key] and ["commit", name] in hex (changeOf in replay.ts).
 // The tables own what they refer to: the commits they were made from, the entries, a snapshot's
 // read. Out of memory aborts
 #ifndef RP_REPLAY_H
@@ -98,8 +99,14 @@ rp_code rp_plain(const hy_history *h, const uint8_t name[32], rp_snapshots snaps
 	rp_tables *out);
 
 // one commit applied to the tables in place; takes it (*commit is left empty) on RP_OK. RP_PATCHES:
-// the patches do not apply; nothing changed, the commit still the caller's
-rp_code rp_apply(rp_tables *t, cm_commit *commit);
+// the patches do not apply; nothing changed, the commit still the caller's. name: the commit's, its
+// change signed (rp_signed); NULL: the commit's header as it is
+rp_code rp_apply(rp_tables *t, cm_commit *commit, const uint8_t name[32]);
+// a commit's change as the graph has it (changeOf in replay.ts, given the commit's name): its header,
+// then ["signer", its key (a multikey)] and ["commit", name] after its metadata, both lowercase hex.
+// What it adds is the tables' own; the rest is borrowed from change
+const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
+	const uint8_t name[32]);
 // whether the commit's patches would apply to its table: nothing is changed, here or in the commit
 bool rp_check(const rp_tables *t, const cm_commit *commit);
 

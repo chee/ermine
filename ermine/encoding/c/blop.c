@@ -32,7 +32,7 @@ static int known(const char *key, size_t length) {
 static int whole(const Json *x) {
 	if (x == NULL || x->type != JSON_NUMBER) return 0;
 	double n = x->number;
-	return isfinite(n) && n == floor(n) && n >= 0 && n <= 9007199254740991.0 && !signbit(n);
+	return isfinite(n) && n == floor(n) && n >= 0 && n <= 9007199254740991.0;
 }
 
 static int sized(const Json *x, size_t n) {

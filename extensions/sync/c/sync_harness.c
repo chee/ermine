@@ -39,6 +39,17 @@ typedef struct {
 	// the tables whose changes go out ephemerally
 	char **ephemeral;
 	size_t ephemeral_length;
+	// whether sync is given a commit callback (none here does anything: the host has no places)
+	bool commit;
+	// sync's roots
+	char **roots;
+	size_t roots_length;
+	// the table's events by "table id", since last asked
+	struct {
+		char *key;
+		size_t count;
+	} *events;
+	size_t event_count;
 	const ErmStore *store;
 	tb_table *table;
 	sy_sync *sync;
@@ -140,7 +151,24 @@ static void ephemeral_set(host_t *h, const op_value *tables) {
 
 static void table_event(void *context, tb_key part, tb_key id) {
 	host_t *h = context;
+	if (part.string != NULL && id.string != NULL) {
+		char *key = formatString("%s %s", part.string, id.string);
+		size_t i = 0;
+		while (i < h->event_count && strcmp(h->events[i].key, key) != 0) i++;
+		if (i == h->event_count) {
+			h->events = realloc(h->events, (h->event_count + 1) * sizeof *h->events);
+			if (h->events == NULL) abort();
+			h->events[h->event_count].key = key;
+			h->events[h->event_count++].count = 0;
+		} else free(key);
+		h->events[i].count++;
+	}
 	if (h->sync != NULL) sy_table_changed(h->sync, part, id);
+}
+
+// the host's "a write landed": nothing to tell, with no places
+static void landed(void *context, nd_entry *const *changed, size_t count) {
+	(void)context, (void)changed, (void)count;
 }
 
 // the request's line kept: an entry's change refers to it
@@ -196,7 +224,8 @@ static void make(host_t *h) {
 	sy_options o = {.table = h->table, .store = h->store, .now = wr_clock, .random = random_of, .time = time_of,
 		.zeros = h->zeros, .lazy = h->lazy, .tables = h->has_tables ? (const char *const *)h->tables : NULL,
 		.tables_length = h->tables_length, .merges = h->merges, .merges_length = h->merges_length,
-		.merge = h->merge, .drop = dropped, .ephemeral = ephemeral_of, .context = h};
+		.merge = h->merge, .drop = dropped, .ephemeral = ephemeral_of, .context = h,
+		.commit = h->commit ? landed : NULL, .roots = (const char *const *)h->roots, .roots_length = h->roots_length};
 	memcpy(o.seed, h->seed, 32);
 	h->sync = sy_create(&o);
 	if (h->sync == NULL) hh_fail("Subduction would not make a node");
@@ -224,6 +253,10 @@ static void host_free(host_t *h) {
 	free(h->tables);
 	free(h->merge);
 	ephemeral_set(h, NULL);
+	for (size_t i = 0; i < h->roots_length; i++) free(h->roots[i]);
+	free(h->roots);
+	for (size_t i = 0; i < h->event_count; i++) free(h->events[i].key);
+	free(h->events);
 	free(h->made);
 	free(h->name);
 	free(h);
@@ -447,6 +480,14 @@ static void host(const op_value *r, FILE *out) {
 	const op_value *zeros = op_get(r, "zeros"), *tables = op_get(r, "tables"), *lazy = op_get(r, "lazy");
 	h->zeros = zeros != NULL && zeros->type == OP_BOOL && zeros->bool_;
 	h->lazy = lazy != NULL && lazy->type == OP_BOOL && lazy->bool_;
+	const op_value *commit = op_get(r, "commit"), *roots = op_get(r, "roots");
+	h->commit = commit == NULL || commit->type != OP_BOOL || commit->bool_;
+	if (roots != NULL && roots->type == OP_LIST) {
+		h->roots = calloc(roots->count + 1, sizeof *h->roots);
+		if (h->roots == NULL) abort();
+		for (size_t i = 0; i < roots->count; i++)
+			if (roots->items[i]->type == OP_STR) h->roots[h->roots_length++] = copyString(roots->items[i]->str);
+	}
 	if (tables != NULL && tables->type == OP_LIST) {
 		h->has_tables = true;
 		h->tables = calloc(tables->count + 1, sizeof *h->tables);
@@ -677,6 +718,115 @@ static void overlay(const op_value *r, FILE *out) {
 	fputs("]}}", out);
 }
 
+// a commit's name (64 hex digits) as its label, else as it is
+static void put_named(FILE *out, const op_value *v) {
+	uint8_t *name;
+	size_t n;
+	if (v != NULL && v->type == OP_STR && strlen(v->str) == 64 && cf_unhex(v->str, &name, &n) && n == 32) put_label(out, name);
+	else op_json_write(out, v);
+}
+
+// the "status" table's entry at the id: {waiting, refused, unsent, count}, each commit its label
+static void status(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	nd_entry *e = tb_get(h->table, tb_string("status"), tb_string(id_of(op_get(r, "id"))));
+	if (e == NULL || e->value == NULL) {
+		fputs("{}", out);
+		return;
+	}
+	fputs("{\"status\":{", out);
+	const char *lists[] = {"waiting", "refused"};
+	for (int k = 0; k < 2; k++) {
+		fprintf(out, "\"%s\":[", lists[k]);
+		const op_value *list = op_get(e->value, lists[k]);
+		for (size_t i = 0; list != NULL && list->type == OP_LIST && i < list->count; i++) {
+			const op_value *row = list->items[i];
+			if (i) fputc(',', out);
+			fputc('{', out);
+			for (size_t f = 0; row->type == OP_MAP && f < row->count; f++) {
+				const char *key = row->keys[f];
+				const op_value *v = row->items[f];
+				if (f) fputc(',', out);
+				fprintf(out, "\"%s\":", key);
+				if (strcmp(key, "commit") == 0) put_named(out, v);
+				else if (strcmp(key, "parents") == 0 && v->type == OP_LIST) {
+					fputc('[', out);
+					for (size_t p = 0; p < v->count; p++) {
+						if (p) fputc(',', out);
+						put_named(out, v->items[p]);
+					}
+					fputc(']', out);
+				} else op_json_write(out, v);
+			}
+			fputc('}', out);
+		}
+		fputs("],", out);
+	}
+	fputs("\"unsent\":", out);
+	op_json_write(out, op_get(e->value, "unsent"));
+	fputs(",\"count\":", out);
+	op_json_write(out, op_get(e->value, "count"));
+	fputs("}}", out);
+}
+
+// the table's events at (table, id) since last asked
+static void events(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	char *key = formatString("%s %s", table_of(r), id_of(op_get(r, "id")));
+	size_t count = 0;
+	for (size_t i = 0; i < h->event_count; i++) {
+		if (strcmp(h->events[i].key, key) != 0) continue;
+		count = h->events[i].count;
+		h->events[i].count = 0;
+	}
+	free(key);
+	fprintf(out, "{\"events\":%zu}", count);
+}
+
+// each entry there already, its patches applied; then all told to sync at once: the commits made at
+// the ids, in all
+static void writes(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	const op_value *ws = op_get(r, "writes");
+	size_t n = ws != NULL && ws->type == OP_LIST ? ws->count : 0;
+	nd_entry **changed = hh_take((n + 1) * sizeof *changed);
+	const char **docs = hh_take((n + 1) * sizeof *docs);
+	size_t doc_count = 0, before = 0, after = 0;
+	keep_line();
+	for (size_t i = 0; i < n; i++) {
+		const op_value *w = ws->items[i];
+		const char *part = table_of(w), *id = id_of(op_get(w, "id"));
+		nd_entry *e = tb_get(h->table, tb_string(part), tb_string(id));
+		if (e == NULL) {
+			hh_error(out, "nothing at %s", id);
+			return;
+		}
+		const op_value *ps = op_get(w, "patches");
+		size_t pn = ps != NULL && ps->type == OP_LIST ? ps->count : 0;
+		op_patch *patches = hh_take((pn + 1) * sizeof *patches);
+		for (size_t k = 0; k < pn; k++) hh_patch(ps->items[k], &patches[k]);
+		size_t failed;
+		int code = nd_update(e, patches, pn, *hold_header(header_of(h, w)), &failed);
+		if (code != OP_OK) {
+			hh_error(out, "%s", op_code_name(code));
+			return;
+		}
+		changed[i] = e;
+		uint8_t bytes[32];
+		bool seen = !tp_doc(id, bytes);
+		for (size_t k = 0; k < doc_count && !seen; k++) seen = strcmp(docs[k], id) == 0;
+		if (!seen) docs[doc_count++] = id;
+	}
+	const hy_kept **all;
+	for (size_t k = 0; k < doc_count; k++) before += hy_all(tp_history(sy_device(h->sync), docs[k], TP_STORED), &all), free(all);
+	sy_wrote(h->sync, changed, n);
+	for (size_t k = 0; k < doc_count; k++) after += hy_all(tp_history(sy_device(h->sync), docs[k], TP_STORED), &all), free(all);
+	fprintf(out, "{\"commits\":%zu}", after - before);
+}
+
 static hy_history *history_of(const op_value *r, FILE *out, host_t **h) {
 	*h = of(r, "host", out);
 	if (*h == NULL) return NULL;
@@ -839,6 +989,9 @@ void hh_answer(const op_value *r, FILE *out) {
 	} else if (strcmp(op, "read") == 0) read_entry(r, out);
 	else if (strcmp(op, "change") == 0) change(r, out);
 	else if (strcmp(op, "conflicts") == 0) conflicts(r, out);
+	else if (strcmp(op, "status") == 0) status(r, out);
+	else if (strcmp(op, "events") == 0) events(r, out);
+	else if (strcmp(op, "writes") == 0) writes(r, out);
 	else if (strcmp(op, "heads") == 0) heads(r, out);
 	else if (strcmp(op, "commits") == 0) commits(r, out);
 	else if (strcmp(op, "commit") == 0) commit(r, out);

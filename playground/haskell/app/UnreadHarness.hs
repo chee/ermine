@@ -132,6 +132,20 @@ idsIn v = case v of
   where
     self s = if idOf v /= 0 then S.insert (idOf v) s else s
 
+-- | a value as it is now: each container with an identity as its record has it (one changed in
+-- place shows the change; one copied, what it was), one without, its children so
+now :: St -> V -> V
+now st v = case v of
+  _ | idOf v /= 0, Just sh <- M.lookup (idOf v) (records st) -> fromShallow (idOf v) sh
+  VListI i xs -> VListI i (map (now st) xs)
+  VMapI i kvs -> VMapI i [(k, now st x) | (k, x) <- kvs]
+  _ -> v
+  where
+    fromShallow i (SList ts) = VListI i (map fromTok ts)
+    fromShallow i (SMap ts) = VMapI i [(k, fromTok t) | (k, t) <- ts]
+    fromTok (TId j) = maybe (failWith "no record") (fromShallow j) (M.lookup j (records st))
+    fromTok (TLeaf x) = x
+
 -- | what is at a path: a string into a map, a whole number into a list; else nothing
 at :: [V] -> Maybe V -> Maybe V
 at [] v = v
@@ -218,12 +232,14 @@ step st req = case getStr "op" req of
     let v = at (pathOf req) (root st)
         wrapped = getField "wrap" req == Just (JBool True)
         kept = if wrapped then Just (VList [maybe VNull id v]) else v
-        letGo = maybe S.empty idsIn v
-        st' = holdAs req kept st {owned = S.difference (owned st) letGo}
-     in -- writes: by its set or its run, after what it keeps is let go (refused: nothing)
-        case getField "writes" req of
-          Just (JArr raw) -> (obj [], snd (write (obj []) (map (either failWith id . fromForm) raw) st'))
-          _ -> (obj [], st')
+        writes = case getField "writes" req of
+          Just (JArr raw) -> snd . write (obj []) (map (either failWith id . fromForm) raw)
+          _ -> id
+        -- what it keeps let go of, and held as it is in st
+        keepIn s0 = let k = fmap (now s0) kept in holdAs req k s0 {owned = S.difference (owned s0) (maybe S.empty idsIn k)}
+     in -- writes (refused: nothing): by its set, after what it keeps is let go; by its run, before:
+        -- its own, in place where owned, so what it keeps shows them
+        if getStr "by" req == Just "run" then (obj [], keepIn (writes st)) else (obj [], writes (keepIn st))
   Just "held" -> (valueAnswer (maybe Nothing id (M.lookup (nameOf req) (held st))), st)
   Just "value" -> (valueAnswer (root st), st)
   Just "mark" -> (obj [], st {marks = M.insert (nameOf req) (at (pathOf req) (root st)) (marks st)})

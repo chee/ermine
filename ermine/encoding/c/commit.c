@@ -50,7 +50,7 @@ static bool is_array(const Json *x) { return x != NULL && x->type == JSON_ARRAY;
 static bool whole(const Json *x) {
 	if (x == NULL || x->type != JSON_NUMBER) return false;
 	double d = x->number;
-	return d >= 0 && d <= 9007199254740991.0 && d == floor(d) && !(d == 0 && signbit(d));
+	return d >= 0 && d <= 9007199254740991.0 && d == floor(d);
 }
 // a list's index, a site's line or column: an integer from 0 to 2^31 - 1, what any long holds
 static bool small(const Json *x) { return whole(x) && x->number <= 2147483647.0; }

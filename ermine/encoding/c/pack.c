@@ -99,10 +99,10 @@ static void text(pk_bytes *b, const char *s) {
 	}
 }
 
-// a number, as the shortest float
+// a number, as cbor.h writes it (a whole one an integer)
 static void number(pk_bytes *b, double d) {
 	Json j = {.type = JSON_NUMBER, .number = d};
-	unsigned char buf[9];
+	unsigned char buf[160];
 	size_t n;
 	cborEncode(&j, buf, sizeof buf, &n, NULL);
 	put(b, buf, n);
@@ -130,7 +130,7 @@ static Json *leaf(const op_value *v) {
 	switch (v->type) {
 	case OP_NULL: return jsonNull();
 	case OP_BOOL: return jsonBoolean(v->bool_);
-	case OP_NUM: return jsonNumber(v->num);
+	case OP_NUM: return v->big ? jsonWhole(v->bigNegative, v->big, v->bigLength) : jsonNumber(v->num);
 	case OP_STR: return jsonStringOfLength(v->str, v->bytes);
 	case OP_BYTES: return jsonBytes(v->data, v->bytes);
 	case OP_TYPED: return jsonTyped((JsonKind)v->kind, v->data, op_length(v));
@@ -195,7 +195,7 @@ static op_value *of_leaf(const Json *j) {
 	switch (j->type) {
 	case JSON_NULL: return op_null();
 	case JSON_BOOLEAN: return op_bool(j->boolean);
-	case JSON_NUMBER: return op_num(j->number);
+	case JSON_NUMBER: return j->big ? op_whole(j->bigNegative, j->big, j->bigLength) : op_num(j->number);
 	case JSON_STRING: return op_str_n(j->string, j->stringLength);
 	case JSON_BYTES: return op_bytes(j->bytes.data, j->bytes.length);
 	default: return op_typed((op_elements)j->typed.kind, j->typed.data, j->typed.count);
@@ -729,11 +729,11 @@ void pk_free(pk_read *r) {
 	*r = (pk_read){0};
 }
 
-// a whole number, as pack.ts has it: a safe integer (to 2^53 - 1 either side), never -0
+// a whole number, as pack.ts has it: a safe integer (to 2^53 - 1 either side; -0 is 0)
 static int whole64(const Json *j, int64_t *out) {
 	if (j == NULL || j->type != JSON_NUMBER) return 0;
 	double d = j->number;
-	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d) || (d == 0 && signbit(d)))
+	if (!(d >= -9007199254740991.0 && d <= 9007199254740991.0) || d != floor(d))
 		return 0;
 	*out = (int64_t)d;
 	return 1;

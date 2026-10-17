@@ -104,7 +104,7 @@ int pr_same(const op_value *a, const op_value *b) {
 	switch (a->type) {
 	case OP_NULL: return 1;
 	case OP_BOOL: return a->bool_ == b->bool_;
-	case OP_NUM: return a->num == b->num || (isnan(a->num) && isnan(b->num));
+	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return strcmp(a->str, b->str) == 0;
 	case OP_LIST:
 		if (a->count != b->count) return 0;
@@ -156,10 +156,34 @@ static int matches(const op_value *g, const pr_ask *ask) {
 	return 1;
 }
 
+// the first field of a grant that is not known, or of the wrong kind (as protect.ts's malformed)
+static const char *malformed(const op_value *g) {
+	for (size_t i = 0; i < g->count; i++) {
+		const char *k = g->keys[i];
+		int t = g->items[i]->type;
+		if (!strcmp(k, "actor") || !strcmp(k, "reader")) continue;
+		if (!strcmp(k, "op") || !strcmp(k, "id")) { if (t != OP_STR) return k; }
+		else if (!strcmp(k, "path") || !strcmp(k, "from") || !strcmp(k, "field")) { if (t != OP_LIST) return k; }
+		else if (!strcmp(k, "deny")) { if (t != OP_BOOL) return k; }
+		else return k;
+	}
+	return NULL;
+}
+
 static pr_answer grants(const pr_policy *p, const pr_ask *ask, const pr_read *read) {
 	const op_value *rules = pr_read_at(read, p->where.part, p->where.id, NULL);
 	if (rules == NULL) return (pr_answer){PR_PENDING, NULL, &p->where};
 	if (rules->type != OP_LIST) return no("rules are not a list");
+	for (size_t i = 0; i < rules->count; i++) {
+		const op_value *g = rules->items[i];
+		const char *bad = g->type == OP_MAP ? malformed(g) : NULL;
+		if (bad != NULL) {
+			// the reason lives in a buffer kept until the next such answer on this thread
+			static _Thread_local char why[160];
+			snprintf(why, sizeof why, "bad grant %zu: %s", i, bad);
+			return no(why);
+		}
+	}
 	int allowed = 0;
 	for (size_t i = 0; i < rules->count; i++) {
 		const op_value *g = rules->items[i];

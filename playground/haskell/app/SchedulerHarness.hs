@@ -918,10 +918,20 @@ failed s c r e = do
     Nothing -> endMoment s c r "failed" [("error", JStr e)]
   dropQueued s c
 
--- | a run ended with a result: equal stops there; a flagged run's new result is a loop; else set,
--- or queued to act
+-- | a run ended with a result: told first (a returns moment, not counted toward endless); equal
+-- stops there; a flagged run's new result is a loop; else set, or queued to act
 finish :: S -> Int -> Int -> SV -> IO ()
 finish s c r v = do
+  n <- nameOf s c
+  no <- rNo . (M.! r) . wRuns <$> readIORef s
+  modifyIORef' s (\w -> w {wMoments = obj [("returns", JStr n), ("run", JNum (fromIntegral no))] : wMoments w})
+  holdL s "returns" [n]
+  -- torn down by a listener: nothing more
+  stillHere <- live s c
+  when stillHere (finishValue s c r v)
+
+finishValue :: S -> Int -> Int -> SV -> IO ()
+finishValue s c r v = do
   cc <- comp s c
   run <- (M.! r) . wRuns <$> readIORef s
   let json = case cKind cc of Compute _ j _ -> j; Effect _ _ j -> j
@@ -1457,7 +1467,7 @@ request s req = case getStr "op" req of
     _ -> throwIO (Err "keys: not a list")
   Just "listener" -> do
     l <- need req "on"
-    unless (l `elem` ["mark", "starts", "ends", "acts", "forgotten", "started", "settles"]) (throwIO (Err ("unknown listener " ++ l)))
+    unless (l `elem` ["mark", "starts", "returns", "ends", "acts", "forgotten", "started", "settles"]) (throwIO (Err ("unknown listener " ++ l)))
     e <- need req "throw"
     modifyIORef' s (\w -> w {wArmed = Just (l, getStr "at" req, e)})
     pure (obj [])
@@ -1478,9 +1488,12 @@ request s req = case getStr "op" req of
     w <- readIORef s
     writeIORef s w {wMoments = []}
     let reads = getField "reads" req == Just (JBool True)
+        returns = getField "returns" req == Just (JBool True)
         strip (JObj kvs) = JObj [(k, v) | (k, v) <- kvs, reads || k /= "reads"]
         strip m = m
-    pure (obj [("moments", JArr (map strip (reverse (wMoments w))))])
+        shown (JObj kvs) = returns || all ((/= "returns") . fst) kvs
+        shown _ = True
+    pure (obj [("moments", JArr (map strip (filter shown (reverse (wMoments w)))))])
   Just "forgotten" -> do
     w <- readIORef s
     writeIORef s w {wForgot = []}

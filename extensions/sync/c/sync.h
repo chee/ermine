@@ -5,13 +5,17 @@
 // the table shows one head. a commit on it: applied by update (core/node/c/update.h); any other:
 // checked on a replay of its parent (replay.h), the table told only if the head shown changes.
 // several heads: the first in agreed order shows, the rest in the "conflicts" table
-// ([{head, lamport, actor, tables}]). a merge rule (replay.h): heads show merged; a write is then a
+// ([{head, lamport, actor, tables}]). What is wrong with a node's sync right now is in the "status"
+// table at its id ({waiting, refused, unsent, count}, sync.ts's Status), none when nothing is: commits
+// waiting (on parents, or on authority), refused (with the code), and writes no commit could carry.
+// A change from elsewhere keeps who signed it and the commit, after its metadata (replay.h). a merge rule (replay.h): heads show merged; a write is then a
 // merge commit; a merge by a rule not in merges is refused (HY_MERGE). sy_use switches the rule.
 // ephemeral tables: an ephemeral commit on the stored state, never sealed or stored, one standing
 // per device per table, shown on top; listed in the "ephemeral" table. stops standing at a later
 // stored commit of that device or after ttl ms; resent every beat ms by sy_run.
 // runs no scheduler, knows no places: the host calls sy_wrote and sy_table_changed; incoming
-// changes on the head shown arrive through the commit callback.
+// changes on the head shown arrive through the commit callback, or with none, as the table's events
+// (a new entry in the old one's place).
 // memory: an entry sync makes is sync's, freed when it leaves the table or at sy_free; what its
 // change refers to is kept until rewritten or gone; a host entry sync removes or replaces is given
 // back through drop. out of memory aborts. one thread at a time.
@@ -66,6 +70,11 @@ typedef struct {
 	const char *merge;
 	// NULL: never ephemeral
 	sy_ephemeral_fn ephemeral;
+	// where the sites a commit carries are told from (copied): a site whose file starts with a root is
+	// the rest after it (the first root it starts with), any other its last part (after the last "/");
+	// line, column and function as they are. none: every file its last part
+	const char *const *roots;
+	size_t roots_length;
 	// ms between sending a standing ephemeral commit of this device's again (0: 1000); ms with nothing
 	// heard from a device before its ephemeral commits stop standing (0: 4000)
 	uint64_t beat, ttl;
@@ -87,7 +96,8 @@ void sy_mint(sy_sync *s, char out[9 + 64 + 1]);
 // what comes for this id is taken in (sync follows the ids it writes by itself). false: not an id
 bool sy_follow(sy_sync *s, const char *id);
 // after the host's write landed (places.commit): each change at a kept node's kept table, one commit.
-// CM_OK, or the first refusal of one that could not be encoded (a value with no encoding)
+// one that could not be encoded (a value with no encoding) is not sent, the rest are, and it is listed
+// unsent in the node's status. CM_OK, or the first such refusal
 cm_code sy_wrote(sy_sync *s, nd_entry *const *changed, size_t count);
 // the table's event: an entry under (part, id) put or taken out whole
 void sy_table_changed(sy_sync *s, tb_key part, tb_key id);
