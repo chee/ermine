@@ -1,0 +1,238 @@
+{
+	"title": "what a run makes with no name (a plain scope: nothing to claim it by) is parked by the next run; a run that fails keeps it, so its own and the one before stay; the next run that is done lets both go at its end, newest first (each owner's info says which run made it), with its run open; disposed, the latest goes",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"do": [
+					{
+						"within": [
+							[
+								[
+									"why",
+									"run"
+								]
+							],
+							{
+								"cleanup": [
+									null,
+									{
+										"log": [
+											"s goes",
+											{
+												"current": null
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									2
+								]
+							},
+							{
+								"throw": "P threw"
+							},
+							null
+						]
+					},
+					{
+						"read": "p"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 3
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"s goes",
+						{
+							"scope": null,
+							"pairs": [
+								[
+									"why",
+									"run"
+								],
+								[
+									"owner",
+									[
+										[
+											"run",
+											2
+										],
+										[
+											"mark",
+											4
+										],
+										[
+											"owner",
+											[
+												[
+													"actor",
+													"test"
+												]
+											]
+										]
+									]
+								]
+							],
+							"writer": "P"
+						}
+					],
+					[
+						"s goes",
+						{
+							"scope": null,
+							"pairs": [
+								[
+									"why",
+									"run"
+								],
+								[
+									"owner",
+									[
+										[
+											"run",
+											1
+										],
+										[
+											"mark",
+											2
+										],
+										[
+											"owner",
+											[
+												[
+													"actor",
+													"test"
+												]
+											]
+										]
+									]
+								]
+							],
+							"writer": "P"
+						}
+					]
+				]
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "P",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"s goes",
+						{
+							"scope": null,
+							"pairs": [
+								[
+									"why",
+									"run"
+								],
+								[
+									"owner",
+									[
+										[
+											"run",
+											3
+										],
+										[
+											"mark",
+											5
+										],
+										[
+											"owner",
+											[
+												[
+													"actor",
+													"test"
+												]
+											]
+										]
+									]
+								]
+							],
+							"writer": "P"
+						}
+					]
+				]
+			}
+		}
+	]
+}

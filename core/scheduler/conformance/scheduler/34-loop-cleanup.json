@@ -1,5 +1,5 @@
 {
-	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's (its cleanup runs once its next run is done, so the value set is the one read before the cleanup wrote) and an effect's (proof C5)",
+	"title": "a cleanup that changes what its computation reads: a loop through it, that ends; a compute's (its cleanup runs once its next run is done and the round's runs are, so the value set is the one read before the cleanup wrote; the loop's run after it ends looping and keeps its own cleanups set aside) and an effect's (proof C5)",
 	"steps": [
 		{ "op": "root", "name": "o", "info": [["actor", "test"]], "expect": {} },
 		{
@@ -19,7 +19,7 @@
 		{ "op": "get", "key": "c", "expect": { "value": null } },
 		{ "op": "write", "values": { "k": 10 }, "expect": { "tick": 3 } },
 		{ "op": "pulse", "expect": {} },
-		{ "op": "get", "key": "k", "expect": { "value": 12 } },
+		{ "op": "get", "key": "k", "expect": { "value": 11 } },
 		{ "op": "get", "key": "c", "expect": { "value": 10 } },
 		{
 			"op": "effect",
@@ -34,10 +34,10 @@
 			},
 			"expect": {}
 		},
-		{ "op": "write", "values": { "m": 1 }, "expect": { "tick": 8 } },
+		{ "op": "write", "values": { "m": 1 }, "expect": { "tick": 7 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["act", 1]] } },
-		{ "op": "write", "values": { "m": 5 }, "expect": { "tick": 9 } },
+		{ "op": "write", "values": { "m": 5 }, "expect": { "tick": 8 } },
 		{ "op": "pulse", "expect": {} },
 		{ "op": "log", "expect": { "log": [["act", 5]] } },
 		{ "op": "get", "key": "m", "expect": { "value": 2 } }

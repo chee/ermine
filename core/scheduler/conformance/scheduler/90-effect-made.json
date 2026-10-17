@@ -1,5 +1,5 @@
 {
-	"title": "what an effect's run makes goes before its next run, though it did not act (equal runs pile nothing up), and before its act; what its act makes stays until its next act, through runs in between",
+	"title": "what an effect's run makes stays through its act: parked by its next run, it goes once that run is done (equal or not: equal runs pile nothing up); what its act makes stays until its next act, through runs in between; disposed, both go, newest first",
 	"steps": [
 		{
 			"op": "root",
@@ -97,7 +97,6 @@
 			"op": "log",
 			"expect": {
 				"log": [
-					"r goes",
 					[
 						"e",
 						1
@@ -160,7 +159,9 @@
 		{
 			"op": "log",
 			"expect": {
-				"log": []
+				"log": [
+					"r goes"
+				]
 			}
 		},
 		{
@@ -202,7 +203,6 @@
 			"expect": {
 				"log": [
 					"r goes",
-					"r goes",
 					"t goes",
 					[
 						"e",
@@ -220,7 +220,8 @@
 			"op": "log",
 			"expect": {
 				"log": [
-					"t goes"
+					"t goes",
+					"r goes"
 				]
 			}
 		}

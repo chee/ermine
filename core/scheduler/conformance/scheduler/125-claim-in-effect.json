@@ -1,0 +1,430 @@
+{
+	"title": "an effect's run makes a compute and an effect at names: they stay through its act (what the act makes goes before its next act); its next run claims both: the same m (previous 2, run 2), the same e, due by that run, acting with its new code (e two, previous 1) once its own run is not equal; an equal one acts on nothing. a claim of one already due takes a tick and tells nothing. disposed: everything under it goes",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1,
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "effect",
+			"name": "E",
+			"scope": "o",
+			"f": {
+				"do": [
+					{
+						"compute": [
+							"m",
+							{
+								"do": [
+									{
+										"log": [
+											"m",
+											{
+												"read": "x"
+											},
+											{
+												"given": "previous"
+											}
+										]
+									},
+									{
+										"sum": [
+											{
+												"read": "x"
+											},
+											{
+												"read": "p"
+											}
+										]
+									}
+								]
+							},
+							"m"
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									1
+								]
+							},
+							{
+								"effect": [
+									"e",
+									{
+										"read": "x"
+									},
+									{
+										"log": [
+											"e one",
+											{
+												"given": "value"
+											}
+										]
+									}
+								]
+							},
+							{
+								"effect": [
+									"e",
+									{
+										"read": "x"
+									},
+									{
+										"log": [
+											"e two",
+											{
+												"given": "value"
+											},
+											{
+												"given": "previous"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"read": "p"
+					}
+				]
+			},
+			"act": {
+				"do": [
+					{
+						"log": [
+							"E acts",
+							{
+								"given": "value"
+							}
+						]
+					},
+					{
+						"scope": [
+							"t",
+							[
+								[
+									"why",
+									"act"
+								]
+							]
+						]
+					},
+					{
+						"cleanup": [
+							"t",
+							{
+								"log": "t goes"
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"m",
+						1,
+						null
+					],
+					[
+						"E acts",
+						1
+					],
+					[
+						"e one",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "m",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"m",
+						1,
+						2
+					],
+					"t goes",
+					[
+						"E acts",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "m",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "E",
+						"tick": 2
+					},
+					{
+						"starts": "E",
+						"run": 1
+					},
+					{
+						"due": "m",
+						"tick": 3,
+						"writer": "E"
+					},
+					{
+						"due": "e",
+						"tick": 4,
+						"writer": "E"
+					},
+					{
+						"ends": "E",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "m",
+						"run": 1
+					},
+					{
+						"ends": "m",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 1
+					},
+					{
+						"ends": "e",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "E",
+						"run": 1
+					},
+					{
+						"acts": "e",
+						"run": 1
+					},
+					{
+						"due": "E",
+						"tick": 6
+					},
+					{
+						"due": "m",
+						"tick": 6
+					},
+					{
+						"starts": "E",
+						"run": 2
+					},
+					{
+						"due": "e",
+						"tick": 8,
+						"writer": "E"
+					},
+					{
+						"ends": "E",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "m",
+						"run": 2
+					},
+					{
+						"ends": "m",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 2
+					},
+					{
+						"ends": "e",
+						"run": 2,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"acts": "E",
+						"run": 2
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"m",
+						2,
+						3
+					],
+					[
+						"e two",
+						2,
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "m",
+						"tick": 10
+					},
+					{
+						"due": "e",
+						"tick": 10
+					},
+					{
+						"starts": "m",
+						"run": 3
+					},
+					{
+						"ends": "m",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "e",
+						"run": 3
+					},
+					{
+						"ends": "e",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"acts": "e",
+						"run": 3
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "m",
+			"expect": {
+				"value": 4
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "E",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					"t goes"
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

@@ -1,0 +1,272 @@
+{
+	"title": "a run that ends pending keeps what it did not make again, as one that fails: what each run made with no name (a plain scope) stays parked through pending runs; the latest run's promise landing done lets them go then, newest first, and its cleanups set aside run once the round's runs are",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"do": [
+					{
+						"within": [
+							[
+								[
+									"why",
+									"run"
+								]
+							],
+							{
+								"cleanup": [
+									null,
+									{
+										"log": [
+											"s goes",
+											{
+												"read": "p"
+											}
+										]
+									}
+								]
+							}
+						]
+					},
+					{
+						"cleanup": [
+							null,
+							{
+								"log": [
+									"P cleanup",
+									{
+										"read": "p"
+									}
+								]
+							}
+						]
+					},
+					{
+						"log": [
+							"P runs",
+							{
+								"read": "p"
+							}
+						]
+					},
+					{
+						"wait": [
+							"w",
+							{
+								"read": "p"
+							}
+						]
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "resolve",
+			"promise": "w",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"P runs",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "P",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2
+			},
+			"expect": {
+				"tick": 4
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"P runs",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 3
+			},
+			"expect": {
+				"tick": 5
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"P runs",
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "resolve",
+			"promise": "w",
+			"value": null,
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"s goes",
+						3
+					],
+					[
+						"s goes",
+						3
+					],
+					[
+						"P cleanup",
+						3
+					],
+					[
+						"P cleanup",
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "P",
+			"expect": {
+				"value": 3
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 2
+					},
+					{
+						"starts": "P",
+						"run": 1
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "pending"
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "P",
+						"tick": 4
+					},
+					{
+						"starts": "P",
+						"run": 2
+					},
+					{
+						"ends": "P",
+						"run": 2,
+						"ended": "pending"
+					},
+					{
+						"due": "P",
+						"tick": 5
+					},
+					{
+						"starts": "P",
+						"run": 3
+					},
+					{
+						"ends": "P",
+						"run": 3,
+						"ended": "pending"
+					},
+					{
+						"ends": "P",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		}
+	]
+}

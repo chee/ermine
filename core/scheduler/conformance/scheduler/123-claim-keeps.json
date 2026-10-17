@@ -1,0 +1,392 @@
+{
+	"title": "a compute that makes a compute at a name again keeps it (claimed): the same computation, its runs counted on (3 after 2), its last result given as previous, due by the run that claimed it (a tick, writer P), it runs its new code. the cleanups its old code made run once that run is done and the round's runs are: newest first, the one that throws ends the rest, its error out of the pulse (as at any rerun, x). made again with P open outside its run (not parked): name taken",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1,
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"do": [
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									1
+								]
+							},
+							{
+								"compute": [
+									"y",
+									{
+										"do": [
+											{
+												"cleanup": [
+													null,
+													{
+														"log": [
+															"first",
+															{
+																"given": "previous"
+															}
+														]
+													}
+												]
+											},
+											{
+												"cleanup": [
+													null,
+													{
+														"do": [
+															{
+																"log": [
+																	"second",
+																	{
+																		"given": "previous"
+																	}
+																]
+															},
+															{
+																"throw": "second threw"
+															}
+														]
+													}
+												]
+											},
+											{
+												"log": [
+													"y one",
+													{
+														"read": "x"
+													}
+												]
+											},
+											{
+												"sum": [
+													{
+														"read": "x"
+													},
+													10
+												]
+											}
+										]
+									},
+									"y"
+								]
+							},
+							{
+								"compute": [
+									"y",
+									{
+										"do": [
+											{
+												"log": [
+													"y two",
+													{
+														"read": "x"
+													},
+													{
+														"given": "previous"
+													}
+												]
+											},
+											{
+												"sum": [
+													{
+														"read": "x"
+													},
+													20
+												]
+											}
+										]
+									},
+									"y"
+								]
+							}
+						]
+					},
+					{
+						"read": "p"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y one",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "y",
+			"expect": {
+				"value": 11
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 2
+					},
+					{
+						"starts": "P",
+						"run": 1
+					},
+					{
+						"due": "y",
+						"tick": 3,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "y",
+						"run": 1
+					},
+					{
+						"ends": "y",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "second threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y one",
+						2
+					],
+					[
+						"second",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "y",
+						"tick": 6
+					},
+					{
+						"starts": "y",
+						"run": 2
+					},
+					{
+						"ends": "y",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {
+				"error": "second threw"
+			}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y two",
+						2,
+						12
+					],
+					[
+						"second",
+						11
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 8
+					},
+					{
+						"starts": "P",
+						"run": 2
+					},
+					{
+						"due": "y",
+						"tick": 9,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "y",
+						"run": 3
+					},
+					{
+						"ends": "y",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "y",
+			"expect": {
+				"value": 22
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y two",
+						3,
+						22
+					]
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "y",
+			"expect": {
+				"value": 23
+			}
+		},
+		{
+			"op": "run",
+			"scope": "P",
+			"do": {
+				"compute": [
+					"y",
+					{
+						"read": "x"
+					},
+					"y"
+				]
+			},
+			"expect": {
+				"error": "name taken: y"
+			}
+		},
+		{
+			"op": "dispose",
+			"scope": "P",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		}
+	]
+}

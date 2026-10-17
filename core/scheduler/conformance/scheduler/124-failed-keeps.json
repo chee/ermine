@@ -1,0 +1,508 @@
+{
+	"title": "a run that fails keeps what it did not make again (chee: \"keep them until the parent is actually destroyed\") and its own cleanups set aside: y, parked, runs on; a later run that fails after claiming y keeps it too. the next run that is done claims it (the same y, run 5) and its cleanups set aside since, the failed runs' too, run newest first once the round's runs are. a done run that does not make y again: y goes at that run's end, its cleanups with it, before it runs though it was due",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [
+				[
+					"actor",
+					"test"
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1,
+				"x": 1
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "P",
+			"scope": "o",
+			"to": "P",
+			"f": {
+				"do": [
+					{
+						"cleanup": [
+							null,
+							{
+								"log": [
+									"P cleanup",
+									{
+										"given": "previous"
+									}
+								]
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									3
+								]
+							},
+							{
+								"throw": "P threw"
+							},
+							null
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									2
+								]
+							},
+							null,
+							{
+								"compute": [
+									"y",
+									{
+										"do": [
+											{
+												"cleanup": [
+													null,
+													{
+														"log": [
+															"y cleanup",
+															{
+																"given": "previous"
+															}
+														]
+													}
+												]
+											},
+											{
+												"log": [
+													"y",
+													{
+														"read": "x"
+													}
+												]
+											},
+											{
+												"read": "x"
+											}
+										]
+									},
+									"y"
+								]
+							}
+						]
+					},
+					{
+						"if": [
+							{
+								"eq": [
+									{
+										"read": "p"
+									},
+									4
+								]
+							},
+							{
+								"throw": "P threw late"
+							},
+							null
+						]
+					},
+					{
+						"read": "p"
+					}
+				]
+			},
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 3,
+				"x": 2
+			},
+			"expect": {
+				"tick": 6
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y",
+						2
+					],
+					[
+						"y cleanup",
+						null
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 2
+					},
+					{
+						"starts": "P",
+						"run": 1
+					},
+					{
+						"due": "y",
+						"tick": 3,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "y",
+						"run": 1
+					},
+					{
+						"ends": "y",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "P",
+						"tick": 6
+					},
+					{
+						"due": "y",
+						"tick": 6
+					},
+					{
+						"starts": "P",
+						"run": 2
+					},
+					{
+						"ends": "P",
+						"run": 2,
+						"ended": "failed",
+						"error": "P threw"
+					},
+					{
+						"starts": "y",
+						"run": 2
+					},
+					{
+						"ends": "y",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 3
+			},
+			"expect": {
+				"tick": 8
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y",
+						3
+					],
+					[
+						"y cleanup",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 4
+			},
+			"expect": {
+				"tick": 10
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y",
+						3
+					],
+					[
+						"y cleanup",
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "y",
+						"tick": 8
+					},
+					{
+						"starts": "y",
+						"run": 3
+					},
+					{
+						"ends": "y",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"due": "P",
+						"tick": 10
+					},
+					{
+						"starts": "P",
+						"run": 3
+					},
+					{
+						"due": "y",
+						"tick": 11,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 3,
+						"ended": "failed",
+						"error": "P threw late"
+					},
+					{
+						"starts": "y",
+						"run": 4
+					},
+					{
+						"ends": "y",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "P",
+			"expect": {
+				"value": 1
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 1
+			},
+			"expect": {
+				"tick": 12
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y",
+						3
+					],
+					[
+						"P cleanup",
+						1
+					],
+					[
+						"P cleanup",
+						1
+					],
+					[
+						"P cleanup",
+						null
+					],
+					[
+						"y cleanup",
+						3
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 12
+					},
+					{
+						"starts": "P",
+						"run": 4
+					},
+					{
+						"due": "y",
+						"tick": 13,
+						"writer": "P"
+					},
+					{
+						"ends": "P",
+						"run": 4,
+						"ended": "done",
+						"equal": true
+					},
+					{
+						"starts": "y",
+						"run": 5
+					},
+					{
+						"ends": "y",
+						"run": 5,
+						"ended": "done",
+						"equal": true
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"p": 2,
+				"x": 4
+			},
+			"expect": {
+				"tick": 14
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": [
+					[
+						"y cleanup",
+						3
+					],
+					[
+						"P cleanup",
+						1
+					]
+				]
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "P",
+						"tick": 14
+					},
+					{
+						"due": "y",
+						"tick": 14
+					},
+					{
+						"starts": "P",
+						"run": 5
+					},
+					{
+						"ends": "P",
+						"run": 5,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"x": 5
+			},
+			"expect": {
+				"tick": 16
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"expect": {
+				"log": []
+			}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": []
+			}
+		}
+	]
+}

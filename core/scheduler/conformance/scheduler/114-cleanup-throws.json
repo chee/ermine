@@ -1,5 +1,5 @@
 {
-	"title": "a cleanup that throws, like Solid: before a run its cleanups are set aside; the run goes ahead and its value lands; then they run, newest first, with no catch, so the one that throws ends the rest and its error comes out of the pulse, which is left there (d, due by c's set, runs at the next). c is not left broken: it runs again when x changes, the same way; disposed, every cleanup runs and the first error is the dispose's",
+	"title": "a cleanup that throws, like Solid: before a run its cleanups are set aside; the run goes ahead and its value lands; once the round's runs are done (d's, due by c's set, too) they run, newest first, with no catch, so the one that throws ends the rest and its error comes out of the pulse, which is left there, before any act. c is not left broken: it runs again when x changes, the same way; disposed, every cleanup runs and the first error is the dispose's",
 	"steps": [
 		{
 			"op": "root",
@@ -203,6 +203,16 @@
 						"run": 2,
 						"ended": "done",
 						"equal": false
+					},
+					{
+						"starts": "d",
+						"run": 2
+					},
+					{
+						"ends": "d",
+						"run": 2,
+						"ended": "done",
+						"equal": false
 					}
 				]
 			}
@@ -218,7 +228,7 @@
 			"op": "get",
 			"key": "d",
 			"expect": {
-				"value": 101
+				"value": 102
 			}
 		},
 		{
@@ -228,18 +238,7 @@
 		{
 			"op": "moments",
 			"expect": {
-				"moments": [
-					{
-						"starts": "d",
-						"run": 2
-					},
-					{
-						"ends": "d",
-						"run": 2,
-						"ended": "done",
-						"equal": false
-					}
-				]
+				"moments": []
 			}
 		},
 		{
