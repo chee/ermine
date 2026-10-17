@@ -143,6 +143,8 @@ function createWork(root: unknown, undo: boolean, cow: boolean) {
 	// changed, or none wanted)
 	function splice(path: readonly Key[], a: number, b: number, w: unknown): Patch | null {
 		const v = get(path)
+		// the root taken by a move: nothing there, as at a key
+		if (v === ABSENT) fail("no-key")
 		if (a > b) fail("range")
 		if (typeof v !== "string" && !isList(v) && !typed(v)) fail("wrong-kind")
 		let start = a, end: number, back: unknown

@@ -1,6 +1,7 @@
 // the scheduler in C: scheduler.h. a port of typescript/scheduler.ts, step for step.
 #include "scheduler.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,6 +48,8 @@ struct info_block {
 
 static void *xalloc(size_t n);
 
+#define PLAIN_SIZE offsetof(struct sc_scope, od)
+
 static info_block *block_new(size_t npairs) {
 	info_block *b = xalloc(sizeof *b + npairs * sizeof(sc_pair));
 	b->refs = 1;
@@ -67,7 +70,8 @@ static void block_release(info_block *b) {
 	}
 }
 
-// a scope; a computer is one with a kind and the rest
+// a scope; a computer is one with a kind and the rest. a plain scope is allocated only as far as
+// od (PLAIN_SIZE): the fields from od on are a computer's, and a plain scope never reads them
 struct sc_scope {
 	sc_scheduler *s;
 	uint64_t n;
@@ -75,15 +79,17 @@ struct sc_scope {
 	// its info; a computer's: its latest run's
 	info_block *info;
 	sc_scope **children;
-	size_t nchildren, capchildren;
 	teardown_fn *teardowns;
-	size_t nteardowns, capteardowns;
-	state_t state;
-	kind_t kind;
 	void *user;
-	// computers
+	unsigned nchildren, capchildren;
+	unsigned nteardowns, capteardowns;
+	unsigned char state;
+	unsigned char kind;
+	// computers only, from here
 	od_item od;
 	cs_item cs;
+	// an emptied set of writers, kept for its next run's
+	pm *spare;
 	sc_def def;
 	tg_node *node;
 	unsigned runs;
@@ -114,7 +120,7 @@ struct sc_run {
 	bool cut;
 	// the causes of the marks this run was given, held till it ends
 	cs_cause **given;
-	size_t ngiven;
+	size_t ngiven, capgiven;
 	cs_cause *cause;
 	// the writers of the keys it read; once order has them, they are order's
 	pm *values;
@@ -206,6 +212,10 @@ struct sc_scheduler {
 	size_t swept;
 };
 
+// the computer an od_item or cs_item is embedded in
+static sc_scope *of_od(od_item *p) { return (sc_scope *)((char *)p - offsetof(struct sc_scope, od)); }
+static sc_scope *of_cs(cs_item *p) { return (sc_scope *)((char *)p - offsetof(struct sc_scope, cs)); }
+
 static void *xalloc(size_t n) {
 	void *p = calloc(1, n);
 	if (p == NULL) abort();
@@ -296,6 +306,36 @@ static void ran_release(sc_run *r) {
 	free(r);
 }
 
+// an emptied set of writers, kept on the computation for its next run
+static void retire(sc_scope *c, pm *m) {
+	pm_reset(m);
+	if (c->spare == NULL) {
+		c->spare = m;
+	} else {
+		pm_clear(m);
+		free(m);
+	}
+}
+
+// a run held by nothing but its computer is its next run's: emptied, its memory kept
+static void run_reset(sc_run *r) {
+	for (size_t i = 0; i < r->ngiven; i++) cs_release(r->given[i]);
+	r->ngiven = 0;
+	cs_release(r->cause);
+	r->cause = NULL;
+	if (!r->adopted && r->values) retire(r->c, r->values);
+	r->values = NULL;
+	r->adopted = false;
+	free(r->loop);
+	r->loop = NULL;
+	r->nloop = 0;
+	r->nreads = 0;
+	r->stopped = NULL;
+	r->cut = false;
+	r->has_kept = false;
+	r->kept = NULL;
+}
+
 sc_run *sc_run_ref(sc_run *run) { return ran_ref(run); }
 void sc_run_unref(sc_run *run) { ran_release(run); }
 sc_run *sc_latest(sc_scope *o) { return o->kind == PLAIN ? NULL : o->ran; }
@@ -339,7 +379,7 @@ static void end_run(sc_scheduler *s, tg_node *f) {
 static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, const sc_pair *info,
 	size_t n) {
 	if (kind == PLAIN && n == 0) return NULL;
-	sc_scope *o = xalloc(sizeof *o);
+	sc_scope *o = xalloc(kind == PLAIN ? PLAIN_SIZE : sizeof *o);
 	o->s = s;
 	o->n = ++s->made;
 	o->parent = parent;
@@ -355,11 +395,12 @@ static sc_scope *make_scope(sc_scheduler *s, kind_t kind, sc_scope *parent, cons
 	}
 	o->kind = kind;
 	o->state = ALIVE;
-	o->od.owner = o;
-	o->od.n = o->n;
-	o->od.alive = true;
-	o->cs.owner = o;
-	o->cs.n = o->n;
+	if (kind != PLAIN) {
+		o->od.owner = o;
+		o->od.n = o->n;
+		o->od.alive = true;
+		o->cs.n = o->n;
+	}
 	if (parent) VEC_PUSH(parent->children, parent->nchildren, parent->capchildren, o);
 	VEC_PUSH(s->all, s->nall, s->capall, o);
 	return o;
@@ -470,6 +511,7 @@ static void drop_computation(sc_scheduler *s, sc_scope *c) {
 	pm_clear(&c->wrote);
 	if (c->acting) unact(s, c);
 	cs_forget(&c->cs);
+	pm_clear(&c->cs.kept);
 }
 
 static char *teardown(sc_scope *o);
@@ -576,7 +618,7 @@ static bool due(sc_scheduler *s, sc_scope *c, uint64_t t, sc_run *writer) {
 	sc_scope **loop = NULL;
 	if (items) {
 		loop = xalloc(n * sizeof *loop);
-		for (size_t i = 0; i < n; i++) loop[i] = items[i]->owner;
+		for (size_t i = 0; i < n; i++) loop[i] = of_cs(items[i]);
 		free(items);
 	}
 	// a loop mark from a run known to loop: the loop is cut there, and the run ends looping
@@ -665,7 +707,11 @@ static sc_track_status follow(sc_scheduler *s, sc_run *r, const void *key) {
 	EACH(s, ON_TRACK, track, key, r);
 	sc_scope *w = pm_get(&s->writers, key);
 	if (w == NULL || w == c) return SC_OK;
-	if (r->values == NULL) r->values = xalloc(sizeof *r->values);
+	if (r->values == NULL) {
+		r->values = c->spare;
+		c->spare = NULL;
+		if (r->values == NULL) r->values = xalloc(sizeof *r->values);
+	}
 	pm_set(r->values, &w->od, NULL);
 	if (od_has(s->order, &w->od) && !waits_after(s, &w->od, c) && !cs_from(s->causes, &w->cs, &c->cs)) {
 		r->stopped = w;
@@ -694,8 +740,6 @@ static void finish(sc_scheduler *s, sc_run *r, sc_ended ended, int equal, char *
 		if (ended != SC_DONE)
 			for (size_t i = 0; i < r->ngiven; i++) cs_keep(s->causes, &c->cs, r->given[i]);
 		for (size_t i = 0; i < r->ngiven; i++) cs_release(r->given[i]);
-		free(r->given);
-		r->given = NULL;
 		r->ngiven = 0;
 		if (ended == SC_LOOPING) c->looping = true;
 		if (ended != SC_STOPPED_RUN) {
@@ -832,15 +876,26 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	od_waits(s->order, &c->od, NULL);
 	unsigned n = ++c->runs;
 	size_t ngiven = c->cs.kept.count;
-	sc_run *r = xalloc(sizeof *r);
+	// its computer's last run, when nothing else holds it, is this one: emptied and used again
+	sc_run *r = c->ran;
+	bool reuse = r != NULL && r->refs == 1;
+	if (reuse) {
+		run_reset(r);
+	} else {
+		r = xalloc(sizeof *r);
+		r->s = s;
+		r->c = c;
+	}
 	r->refs = 1;
-	r->s = s;
-	r->c = c;
 	r->n = n;
 	r->mark = mark;
 	r->pulse = s->pulses;
+	if (ngiven > r->capgiven) {
+		r->given = realloc(r->given, ngiven * sizeof *r->given);
+		if (r->given == NULL) abort();
+		r->capgiven = ngiven;
+	}
 	if (ngiven > 0) {
-		r->given = xalloc(ngiven * sizeof *r->given);
 		size_t k = 0;
 		for (size_t i = 0; i < c->cs.kept.cap; i++)
 			if (c->cs.kept.keys[i] != NULL) r->given[k++] = cs_ref((cs_cause *)c->cs.kept.keys[i]);
@@ -853,8 +908,12 @@ static void first(sc_scheduler *s, sc_scope *c, int rank) {
 	r->nloop = c->nloop;
 	c->loop = NULL;
 	c->nloop = 0;
-	if (c->ran) ran_release(c->ran);
-	c->ran = ran_ref(r);
+	if (reuse) {
+		r->refs++;
+	} else {
+		if (c->ran) ran_release(c->ran);
+		c->ran = ran_ref(r);
+	}
 	// an effect acts on its latest run's value only
 	if (c->acting) unact(s, c);
 	EACH(s, ON_START, start, c, n, rank);
@@ -1021,7 +1080,7 @@ void sc_pulse(sc_scheduler *s) {
 		while (od_size(s->order)) {
 			int rank;
 			od_item *p = od_next(s->order, &rank);
-			first(s, p->owner, rank);
+			first(s, of_od(p), rank);
 		}
 		while (s->earlies.head < s->earlies.n) take(s, &s->earlies);
 		s->earlies.head = s->earlies.n = 0;
@@ -1139,11 +1198,17 @@ void sc_free(sc_scheduler *s) {
 			tg_node_free(o->node);
 			pm_clear(&o->wrote);
 			cs_forget(&o->cs);
+			pm_clear(&o->cs.kept);
 			if (o->od.values) {
 				pm_clear(o->od.values);
 				free(o->od.values);
 			}
+			if (o->spare) {
+				pm_clear(o->spare);
+				free(o->spare);
+			}
 			pm_clear(&o->od.rev);
+			od_item_free(&o->od);
 			free(o->loop);
 			if (o->ran) ran_release(o->ran);
 			if (o->has_last) drop_value(s, o->last);

@@ -3,7 +3,9 @@
 //   ids: id → its entries in the order made
 //   nodes: node → its groups, one per part, in the order each was first taken
 //   groups: (node, part) → its entries in the order made
-// A group, a node's record and an id's record are freed with their last entry.
+// A group, a node's record and an id's record are freed with their last entry. A part string is
+// kept once however many groups have it (parts: a counted copy, freed with its last group); an id
+// string lives inside its record.
 #include "table.h"
 
 #include <stdint.h>
@@ -126,6 +128,8 @@ typedef struct noderec noderec;
 
 struct entry {
 	link link; // in entries
+	tb_key part; // the group's, for a lookup without leaving the entry
+	const void *node; // the group's node
 	group *group;
 	idrec *id;
 	entry *id_next, *id_prev; // in its id's
@@ -141,9 +145,15 @@ struct group {
 };
 struct idrec {
 	link link; // in ids
-	tb_key id;
+	tb_key id; // a string is the one after the record
 	entry *first, *last;
+	char text[];
 };
+typedef struct {
+	link link; // in parts
+	size_t refs; // the groups using it
+	char text[];
+} partrec;
 struct noderec {
 	link link; // in nodes
 	const void *node;
@@ -151,7 +161,7 @@ struct noderec {
 };
 
 struct tb_table {
-	map entries, ids, nodes, groups;
+	map entries, ids, nodes, groups, parts;
 	tb_event event;
 	void *ctx;
 	tb_key *ids_out;
@@ -178,16 +188,14 @@ void tb_free(tb_table *t) {
 	for (size_t i = 0; i < t->groups.slots; i++) {
 		for (link *x = t->groups.buckets[i], *next; x; x = next) {
 			next = x->next;
-			drop(((group *)x)->part);
 			free(x);
 		}
 	}
 	for (size_t i = 0; i < t->ids.slots; i++) {
-		for (link *x = t->ids.buckets[i], *next; x; x = next) {
-			next = x->next;
-			drop(((idrec *)x)->id);
-			free(x);
-		}
+		for (link *x = t->ids.buckets[i], *next; x; x = next) next = x->next, free(x);
+	}
+	for (size_t i = 0; i < t->parts.slots; i++) {
+		for (link *x = t->parts.buckets[i], *next; x; x = next) next = x->next, free(x);
 	}
 	for (size_t i = 0; i < t->nodes.slots; i++) {
 		for (link *x = t->nodes.buckets[i], *next; x; x = next) next = x->next, free(x);
@@ -196,6 +204,7 @@ void tb_free(tb_table *t) {
 	free_map(&t->ids);
 	free_map(&t->nodes);
 	free_map(&t->groups);
+	free_map(&t->parts);
 	free(t->ids_out);
 	free(t->at_out);
 	free(t->who_out);
@@ -209,7 +218,7 @@ static entry *find_entry(const tb_table *t, tb_key part, tb_key id) {
 	size_t h = hash_pair(hash_key(part), hash_key(id));
 	for (link *x = *bucket(&t->entries, h); x; x = x->next) {
 		entry *e = (entry *)x;
-		if (x->hash == h && same(e->group->part, part) && same(e->id->id, id)) return e;
+		if (x->hash == h && same(e->part, part) && same(e->id->id, id)) return e;
 	}
 	return NULL;
 }
@@ -241,13 +250,43 @@ static group *find_group(const tb_table *t, const void *node, tb_key part) {
 
 // making and unmaking
 
-static void place(tb_table *t, tb_key part, tb_key id, void *node) {
-	idrec *i = find_id(t, id);
-	if (i == NULL) {
-		i = xrealloc(NULL, sizeof *i);
-		*i = (idrec){.link.hash = hash_key(id), .id = keep(id)};
-		put(&t->ids, &i->link);
+// a part the table keeps: a string is the one counted copy, made on first use
+static tb_key part_take(tb_table *t, tb_key part) {
+	if (part.symbol != NULL) return part;
+	size_t h = hash_key(part);
+	if (t->parts.slots != 0) {
+		for (link *x = *bucket(&t->parts, h); x; x = x->next) {
+			partrec *p = (partrec *)x;
+			if (x->hash == h && strcmp(p->text, part.string) == 0) return p->refs++, tb_string(p->text);
+		}
 	}
+	size_t n = strlen(part.string) + 1;
+	partrec *p = xrealloc(NULL, sizeof *p + n);
+	p->link.hash = h;
+	p->refs = 1;
+	memcpy(p->text, part.string, n);
+	put(&t->parts, &p->link);
+	return tb_string(p->text);
+}
+static void part_drop(tb_table *t, tb_key part) {
+	if (part.symbol != NULL) return;
+	partrec *p = (partrec *)((char *)part.string - offsetof(partrec, text));
+	if (--p->refs == 0) {
+		unlink_(&t->parts, &p->link);
+		free(p);
+	}
+}
+
+static idrec *id_make(tb_table *t, tb_key id) {
+	size_t n = id.symbol != NULL ? 0 : strlen(id.string) + 1;
+	idrec *i = xrealloc(NULL, sizeof *i + n);
+	*i = (idrec){.link.hash = hash_key(id)};
+	if (id.symbol != NULL) i->id = id;
+	else i->id = tb_string(memcpy(i->text, id.string, n));
+	put(&t->ids, &i->link);
+	return i;
+}
+static group *group_for(tb_table *t, tb_key part, void *node) {
 	noderec *n = find_node(t, node);
 	if (n == NULL) {
 		n = xrealloc(NULL, sizeof *n);
@@ -257,32 +296,36 @@ static void place(tb_table *t, tb_key part, tb_key id, void *node) {
 	group *g = find_group(t, node, part);
 	if (g == NULL) {
 		g = xrealloc(NULL, sizeof *g);
-		*g = (group){.link.hash = hash_pair(hash_node(node), hash_key(part)), .node = n, .part = keep(part)};
+		*g = (group){.link.hash = hash_pair(hash_node(node), hash_key(part)), .node = n, .part = part_take(t, part)};
 		g->prev = n->last;
 		if (n->last) n->last->next = g;
 		else n->first = g;
 		n->last = g;
 		put(&t->groups, &g->link);
 	}
-	entry *e = xrealloc(NULL, sizeof *e);
-	*e = (entry){.link.hash = hash_pair(hash_key(part), hash_key(id)), .group = g, .id = i};
+	return g;
+}
+// the end of its id's and its group's
+static void link_entry(entry *e, idrec *i, group *g) {
+	e->group = g;
+	e->id = i;
+	e->part = g->part;
+	e->node = g->node->node;
+	e->id_next = NULL;
 	e->id_prev = i->last;
 	if (i->last) i->last->id_next = e;
 	else i->first = e;
 	i->last = e;
+	e->group_next = NULL;
 	e->group_prev = g->last;
 	if (g->last) g->last->group_next = e;
 	else g->first = e;
 	g->last = e;
 	g->count++;
-	put(&t->entries, &e->link);
 }
-
-static void take(tb_table *t, entry *e) {
-	group *g = e->group;
+static void unlink_entry(entry *e) {
 	idrec *i = e->id;
-	noderec *n = g->node;
-	unlink_(&t->entries, &e->link);
+	group *g = e->group;
 	if (e->id_prev) e->id_prev->id_next = e->id_next;
 	else i->first = e->id_next;
 	if (e->id_next) e->id_next->id_prev = e->id_prev;
@@ -292,32 +335,51 @@ static void take(tb_table *t, entry *e) {
 	if (e->group_next) e->group_next->group_prev = e->group_prev;
 	else g->last = e->group_prev;
 	g->count--;
+}
+// frees a group with no entries, and its node's record with its last group
+static void group_free(tb_table *t, group *g) {
+	noderec *n = g->node;
+	unlink_(&t->groups, &g->link);
+	if (g->prev) g->prev->next = g->next;
+	else n->first = g->next;
+	if (g->next) g->next->prev = g->prev;
+	else n->last = g->prev;
+	part_drop(t, g->part);
+	free(g);
+	if (n->first == NULL) {
+		unlink_(&t->nodes, &n->link);
+		free(n);
+	}
+}
+
+static void place(tb_table *t, tb_key part, tb_key id, void *node) {
+	idrec *i = find_id(t, id);
+	if (i == NULL) i = id_make(t, id);
+	group *g = group_for(t, part, node);
+	entry *e = xrealloc(NULL, sizeof *e);
+	e->link = (link){.hash = hash_pair(hash_key(part), hash_key(id))};
+	link_entry(e, i, g);
+	put(&t->entries, &e->link);
+}
+
+static void take(tb_table *t, entry *e) {
+	group *g = e->group;
+	idrec *i = e->id;
+	unlink_(&t->entries, &e->link);
+	unlink_entry(e);
 	free(e);
 	if (i->first == NULL) {
 		unlink_(&t->ids, &i->link);
-		drop(i->id);
 		free(i);
 	}
-	if (g->first == NULL) {
-		unlink_(&t->groups, &g->link);
-		if (g->prev) g->prev->next = g->next;
-		else n->first = g->next;
-		if (g->next) g->next->prev = g->prev;
-		else n->last = g->prev;
-		drop(g->part);
-		free(g);
-		if (n->first == NULL) {
-			unlink_(&t->nodes, &n->link);
-			free(n);
-		}
-	}
+	if (g->first == NULL) group_free(t, g);
 }
 
 // the api
 
 int tb_add(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
-	if (e != NULL) return e->group->node->node == node ? 0 : TB_ALREADY_THERE;
+	if (e != NULL) return e->node == node ? 0 : TB_ALREADY_THERE;
 	place(t, part, id, node);
 	if (t->event) t->event(t->ctx, part, id);
 	return 0;
@@ -326,14 +388,15 @@ int tb_add(tb_table *t, tb_key part, tb_key id, void *node) {
 void tb_sub(tb_table *t, tb_key part, tb_key id, void *node) {
 	entry *e = find_entry(t, part, id);
 	if (e != NULL) {
-		if (e->group->node->node == node) return;
-		// the keys may be the table's own copies, which take frees
-		tb_key p = keep(part), i = keep(id);
-		take(t, e);
-		place(t, p, i, node);
-		if (t->event) t->event(t->ctx, p, i);
-		drop(p);
-		drop(i);
+		if (e->node == node) return;
+		// the entry stays in the table and its id: it moves to the new node's group, and to the end
+		// of its id's. The new group is made first and holds the part the keys may be the table's own
+		group *old = e->group;
+		group *g = group_for(t, part, node);
+		unlink_entry(e);
+		link_entry(e, e->id, g);
+		if (old->first == NULL) group_free(t, old);
+		if (t->event) t->event(t->ctx, part, id);
 		return;
 	}
 	place(t, part, id, node);
@@ -342,7 +405,7 @@ void tb_sub(tb_table *t, tb_key part, tb_key id, void *node) {
 
 void *tb_get(const tb_table *t, tb_key part, tb_key id) {
 	entry *e = find_entry(t, part, id);
-	return e ? (void *)e->group->node->node : NULL;
+	return e ? (void *)e->node : NULL;
 }
 
 const tb_key *tb_ids(tb_table *t, tb_key part, const void *node, size_t *length) {
@@ -361,7 +424,7 @@ const tb_entry *tb_at(tb_table *t, tb_key id, size_t *length) {
 	idrec *i = find_id(t, id);
 	for (entry *e = i ? i->first : NULL; e; e = e->id_next) {
 		GROW(t->at_out, t->at_count, t->at_cap);
-		t->at_out[t->at_count++] = (tb_entry){e->group->part, (void *)e->group->node->node};
+		t->at_out[t->at_count++] = (tb_entry){e->part, (void *)e->node};
 	}
 	*length = t->at_count;
 	return t->at_out;

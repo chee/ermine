@@ -23,6 +23,31 @@ typedef struct {
 	size_t n, cap;
 } bucket;
 
+typedef struct {
+	const sx_holder *h;
+	const void *key;
+	// the next pair of the same holder, or SIZE_MAX
+	size_t next;
+	int first;
+} pair;
+
+// what one mark's telling uses: kept between marks, so a mark allocates nothing once it has grown
+typedef struct {
+	pair *pairs;
+	size_t cap;
+	// holder -> its latest pair + 1
+	pm last;
+	const void **list;
+	size_t caplist;
+} scratch;
+
+static void scratch_free(scratch *z) {
+	free(z->pairs);
+	free(z->list);
+	pm_clear(&z->last);
+	*z = (scratch){0};
+}
+
 struct sx_index {
 	sc_scheduler *s;
 	sc_listener *on_mark, *on_end;
@@ -31,6 +56,9 @@ struct sx_index {
 	size_t told;
 	size_t refs;
 	sx_index *next;
+	// a marked may mark again: that telling takes a scratch of its own
+	scratch z;
+	bool busy;
 };
 
 // the index of each scheduler that has one
@@ -75,61 +103,51 @@ void sx_drop(sx_index *x, const void *key, const sx_holder *h) {
 
 size_t sx_deliveries(const sx_index *x) { return x->told; }
 
-typedef struct {
-	const sx_holder *h;
-	const void *key;
-	// the next pair of the same holder, or SIZE_MAX
-	size_t next;
-	int first;
-} pair;
-
 static void heard_mark(const void *const *keys, size_t nkeys, sc_run *run, sc_computer *const *due,
 	size_t ndue, uint64_t tick, void *data) {
 	(void)due, (void)ndue;
 	sx_index *x = data;
 	if (x->held.count == 0) return;
-	pair *pairs = NULL;
-	size_t n = 0, cap = 0;
-	// holder -> its latest pair + 1
-	pm last = {0};
+	scratch own = {0};
+	scratch *z = x->busy ? &own : &x->z;
+	if (z == &x->z) x->busy = true;
+	size_t n = 0;
 	for (size_t i = 0; i < nkeys; i++) {
 		bucket *b = pm_get(&x->held, keys[i]);
 		if (b == NULL) continue;
 		for (size_t j = 0; j < b->n; j++) {
-			if (n == cap) {
-				cap = cap ? cap * 2 : 8;
-				pairs = realloc(pairs, cap * sizeof *pairs);
-				if (pairs == NULL) abort();
+			if (n == z->cap) {
+				z->cap = z->cap ? z->cap * 2 : 8;
+				z->pairs = realloc(z->pairs, z->cap * sizeof *z->pairs);
+				if (z->pairs == NULL) abort();
 			}
-			pairs[n] = (pair){b->v[j], keys[i], SIZE_MAX, 0};
-			size_t before = (size_t)(uintptr_t)pm_get(&last, b->v[j]);
-			if (before == 0) pairs[n].first = 1;
-			else pairs[before - 1].next = n;
-			pm_set(&last, b->v[j], (void *)(uintptr_t)(n + 1));
+			z->pairs[n] = (pair){b->v[j], keys[i], SIZE_MAX, 0};
+			size_t before = (size_t)(uintptr_t)pm_get(&z->last, b->v[j]);
+			if (before == 0) z->pairs[n].first = 1;
+			else z->pairs[before - 1].next = n;
+			pm_set(&z->last, b->v[j], (void *)(uintptr_t)(n + 1));
 			n++;
 		}
 	}
-	pm_clear(&last);
-	const void **list = NULL;
-	size_t caplist = 0;
+	pm_reset(&z->last);
 	for (size_t i = 0; i < n; i++) {
-		if (!pairs[i].first) continue;
+		if (!z->pairs[i].first) continue;
 		size_t m = 0;
-		for (size_t j = i; j != SIZE_MAX; j = pairs[j].next) {
-			if (m == caplist) {
-				caplist = caplist ? caplist * 2 : 8;
-				list = realloc(list, caplist * sizeof *list);
-				if (list == NULL) abort();
+		for (size_t j = i; j != SIZE_MAX; j = z->pairs[j].next) {
+			if (m == z->caplist) {
+				z->caplist = z->caplist ? z->caplist * 2 : 8;
+				z->list = realloc(z->list, z->caplist * sizeof *z->list);
+				if (z->list == NULL) abort();
 			}
-			list[m++] = pairs[j].key;
+			z->list[m++] = z->pairs[j].key;
 		}
 		x->told++;
-		if (pairs[i].h->marked != NULL) {
-			pairs[i].h->marked(pairs[i].h->data, list, m, run, tick);
+		if (z->pairs[i].h->marked != NULL) {
+			z->pairs[i].h->marked(z->pairs[i].h->data, z->list, m, run, tick);
 		}
 	}
-	free(list);
-	free(pairs);
+	if (z == &own) scratch_free(&own);
+	else x->busy = false;
 }
 
 static void heard_end(const void *key, void *data) {
@@ -138,12 +156,13 @@ static void heard_end(const void *key, void *data) {
 	if (b == NULL) return;
 	// a copy: an ended may drop
 	size_t n = b->n;
-	const sx_holder **v = xalloc(n * sizeof *v);
+	const sx_holder *few[8];
+	const sx_holder **v = n <= sizeof few / sizeof *few ? few : xalloc(n * sizeof *v);
 	memcpy(v, b->v, n * sizeof *v);
 	for (size_t i = 0; i < n; i++) {
 		if (v[i]->ended != NULL) v[i]->ended(v[i]->data, key);
 	}
-	free(v);
+	if (v != few) free(v);
 }
 
 sx_index *sx_index_get(sc_scheduler *s) {
@@ -177,6 +196,7 @@ void sx_index_put(sx_index *x) {
 		if (x->held.keys[i]) bucket_free(x->held.vals[i]);
 	}
 	pm_clear(&x->held);
+	scratch_free(&x->z);
 	free(x);
 }
 
@@ -217,7 +237,9 @@ static char *moved(void *value, void *data) {
 	bool had = x->has;
 	x->value = value;
 	x->has = true;
-	const void **marked = xalloc((x->keys.count + 2) * sizeof *marked);
+	const void *few[8];
+	const void **marked = x->keys.count + 2 <= sizeof few / sizeof *few ? few
+		: xalloc((x->keys.count + 2) * sizeof *marked);
 	size_t n = 0;
 	if (x->equal == NULL) {
 		kobj *a = had ? pm_get(&x->keys, was) : NULL;
@@ -232,7 +254,7 @@ static char *moved(void *value, void *data) {
 		}
 	}
 	if (n > 0) sc_mark(x->s, marked, n, sc_get_run(x->s));
-	free(marked);
+	if (marked != few) free(marked);
 	return NULL;
 }
 

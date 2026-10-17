@@ -6,6 +6,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#ifndef ND_NOW
+#include <time.h>
+#endif
 
 #include "../../op/c/apply.h"
 #include "../../op/c/invert.h"
@@ -71,6 +74,13 @@ typedef struct {
 typedef struct {
 	int in_place;
 } nd_entry_options;
+
+// the time now, as nd_make_entry and nd_make_node take it when no time is given: an int64_t of
+// whole seconds since 1970, by default (int64_t)time(NULL). A build with no clock defines its own
+// before node.c is compiled (-D'ND_NOW()=my_seconds()'), and then <time.h> is not included
+#ifndef ND_NOW
+#define ND_NOW() ((int64_t)time(NULL))
+#endif
 
 // kept by the caller; nothing checked: checks are a layer above's. The entry takes an op_ref on the
 // value (NULL: none), so the caller may op_free its own hold. header: the entry's change, as given,

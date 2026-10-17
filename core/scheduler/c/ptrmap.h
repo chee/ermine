@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// keys and vals are one allocation (keys first), the smallest table four slots
 typedef struct pm {
 	const void **keys;
 	void **vals;
@@ -22,6 +23,8 @@ bool pm_set(pm *m, const void *key, void *val);
 bool pm_delete(pm *m, const void *key);
 // frees the memory; the map is empty again
 void pm_clear(pm *m);
+// empties the map, keeping its memory for the next keys (a map grown big is freed instead)
+void pm_reset(pm *m);
 // walk: for (size_t i = 0; i < m->cap; i++) if (m->keys[i]) ...; changing the map ends the walk
 
 #endif

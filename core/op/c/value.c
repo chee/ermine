@@ -32,7 +32,8 @@ static char *xdup(const char *s) {
 
 static op_value *make(op_type type) {
 	op_value *v = xrealloc(NULL, sizeof *v);
-	*v = (op_value){.type = type};
+	memset(v, 0, sizeof *v);
+	v->type = type;
 	return v;
 }
 op_value *op_null(void) { return make(OP_NULL); }
@@ -106,6 +107,13 @@ static size_t hash(const char *s) {
 // out); an item's position is its coordinate less the gaps below it, so a removal does not touch
 // the table. Coordinates in use are 0 .. count + gaps - 1
 #define GAPS 256
+// the gaps array holds gaps_room(n) coordinates (after gaps[0]) when n are in use: 4, then twice
+// that each time it is full
+static size_t gaps_room(size_t n) {
+	size_t room = 4;
+	while (room < n) room *= 2;
+	return room;
+}
 static size_t gaps_below(const op_value *m, size_t e) {
 	if (m->gaps == NULL) return 0;
 	size_t lo = 0, hi = m->gaps[0];
@@ -184,8 +192,10 @@ void op_unset(op_value *map, size_t i) {
 		}
 		map->index[h] = 0;
 		if (map->gaps == NULL) {
-			map->gaps = xrealloc(NULL, (GAPS + 1) * sizeof *map->gaps);
+			map->gaps = xrealloc(NULL, (gaps_room(0) + 1) * sizeof *map->gaps);
 			map->gaps[0] = 0;
+		} else if (map->gaps[0] == gaps_room(map->gaps[0])) {
+			map->gaps = xrealloc(map->gaps, (2 * map->gaps[0] + 1) * sizeof *map->gaps);
 		}
 		size_t n = gaps_below(map, e);
 		memmove(map->gaps + 2 + n, map->gaps + 1 + n, (map->gaps[0] - n) * sizeof *map->gaps);
@@ -223,6 +233,16 @@ void op_set(op_value *map, const char *key, op_value *v) {
 		else unindex(map);
 	}
 }
+void op_map_table_copy(op_value *to, const op_value *from) {
+	if (from->index == NULL) return;
+	to->slots = from->slots;
+	to->index = xrealloc(NULL, from->slots * sizeof *from->index);
+	memcpy(to->index, from->index, from->slots * sizeof *from->index);
+	if (from->gaps != NULL) {
+		to->gaps = xrealloc(NULL, (gaps_room(from->gaps[0]) + 1) * sizeof *from->gaps);
+		memcpy(to->gaps, from->gaps, (from->gaps[0] + 1) * sizeof *from->gaps);
+	}
+}
 op_value *op_ref(op_value *v) {
 	if (v != NULL) v->refs++;
 	return v;
@@ -233,15 +253,15 @@ void op_free(op_value *v) {
 		v->refs--;
 		return;
 	}
-	for (size_t i = 0; i < v->count; i++) {
-		op_free(v->items[i]);
-		if (v->type == OP_MAP) free(v->keys[i]);
-	}
-	free(v->items);
-	free(v->keys);
-	free(v->index);
-	free(v->gaps);
-	free(v->str);
-	free(v->data);
+	if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
+		for (size_t i = 0; i < v->count; i++) {
+			op_free(v->items[i]);
+			if (v->type == OP_MAP) free(v->keys[i]);
+		}
+		free(v->items);
+		free(v->keys);
+		free(v->index);
+		free(v->gaps);
+	} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
 	free(v);
 }

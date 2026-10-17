@@ -18,8 +18,9 @@
 // scope under a computer, run by the computer's clean or teardown, is written by it. nothing
 // open: making a scope or a computer is unscoped.
 //
-// a pulse runs what is due, in rounds: a round runs the due computations by rank (rank.ts,
-// order.ts), then acts on the effects' new values; acting may make more due, for another round.
+// a pulse runs what is due, in rounds: a round runs the due computations in order (order.ts: one
+// once every due one above it ran; of those, the earliest due, then the oldest), then acts on
+// the effects' new values; acting may make more due, for another round.
 // a result equal to the last stops there.
 //
 // early effects ("acts at once and is in an earlier queue so it goes compute, early, effect"; "it
@@ -27,7 +28,7 @@
 // made, it is due, runs and acts at once, inside createEffect, pulse or not: in a run, set, act or
 // teardown too, its run bracketed in it as any. that first run stopped (a writer due) is due, and
 // pending (or awaiting) does not act: either way it acts in an early queue later. after, a round
-// is three queues, in order: the runs, by rank; the early effects' acts; the other effects' acts.
+// is three queues, in order: the runs, in order; the early effects' acts; the other effects' acts.
 // each act queue in the order the runs ended, but owners first (E2, chee: "yes, think that's
 // right"): an act waits while the act of a computer above it (its owner: the run or act that made
 // it, or one above that) is due in the same queue; the owner acts first, and what its act tears
@@ -58,7 +59,7 @@
 // gone
 import { type Cause, createCauses } from "./causes.ts"
 import { isPromise, same } from "./helpers.ts"
-import { createOrder } from "./order.ts"
+import { createOrder, type Hold } from "./order.ts"
 import { createTracker, type Node } from "./tracker.ts"
 
 // a compute returns it, or throws it (itself, not an error wrapping it), while what it needs is
@@ -116,7 +117,7 @@ export type Computer = Scope & {
 	heldIn: number
 	// the writers of the keys its last run read, no repeats, and the one it waits after; the
 	// tick it became due at (0: not due), its rank and the making it is of, what is after it,
-	// a stamp (order.ts)
+	// a stamp, a walk's marks, what holds it and what it holds (order.ts)
 	values: Computer[]
 	after?: Computer
 	due: number
@@ -124,6 +125,11 @@ export type Computer = Scope & {
 	ranked: number
 	afters: Map<Computer, number> | undefined
 	stamp: number
+	counted: number
+	walked: number
+	via: Computer | undefined
+	held: Hold<Computer> | undefined
+	holding: Hold<Computer>[] | undefined
 	// the last run that read a key this one writes, by its number (no repeats in values)
 	seen: number
 	// the keys it is the writer of
@@ -131,6 +137,8 @@ export type Computer = Scope & {
 	loop?: Computer[]
 	looping: boolean
 	acting?: Act
+	// its cleanups set aside before its run, till the run is done (lay)
+	aside?: (() => unknown)[]
 	// an effect's: it acts in the round's early queue
 	readonly early: boolean
 }
@@ -260,6 +268,16 @@ export function createScheduler(): Scheduler {
 	let running: Ran | undefined
 	// what is open: the scope, and who a change made now is by; none: undefined
 	let open: { scope: Scope; by?: By } | undefined
+	// the first error a listener, or a cleanup after a run, threw: held while what was going on
+	// finishes, then it comes out ("finish, then rethrow"); each of those a bracket of its own
+	let thrown: { error: unknown } | undefined
+	const hold = (e: unknown) => void (thrown ??= { error: e })
+	// what was held since the bracket began comes out; what was held around it is held again
+	function rethrow(outer: typeof thrown) {
+		const t = thrown
+		thrown = outer
+		if (t) throw t.error
+	}
 
 	// scopes
 
@@ -363,12 +381,66 @@ export function createScheduler(): Scheduler {
 		return failed
 	}
 
+	// before a run ("like Solid"): what is under c goes, newest first (what one threw held), and
+	// its cleanups are set aside, to run once the run is done (lay). after, from: as clean's
+	function shed(c: Computer, after = 0, from = 0) {
+		let k = c.children.length
+		while (k > 0 && c.children[k - 1].n > after) k--
+		if (k < c.children.length) {
+			const kids = c.children.slice(k)
+			c.children.length = k
+			enter(opens(c), () => {
+				for (let i = kids.length - 1; i >= 0; i--) {
+					try {
+						teardown(kids[i])
+					} catch (e) {
+						hold(e)
+					}
+				}
+			})
+		}
+		if (c.teardowns.length > from) {
+			const fs = c.teardowns.slice(from)
+			c.teardowns.length = from
+			c.aside = c.aside ? c.aside.concat(fs) : fs
+		}
+	}
+
+	// the cleanups set aside before r, once r is done (its value landed), newest first, as
+	// teardowns run; no catch: one that throws ends the rest, its error held
+	function lay(c: Computer, r: Ran) {
+		const fs = c.aside!
+		c.aside = undefined
+		const was = reading
+		const wasRunning = running
+		reading = undefined
+		running = r
+		try {
+			for (let i = fs.length - 1; i >= 0; i--) enter(opens(c), fs[i])
+		} catch (e) {
+			hold(e)
+		} finally {
+			reading = was
+			running = wasRunning
+		}
+	}
+
 	// children first, newest first, then o's teardowns, newest first. every teardown runs; the
 	// first error is thrown after
 	function teardown(o: Scope) {
 		if (o.state !== "alive") return
+		const outer = thrown
+		thrown = undefined
 		o.state = "disposing"
-		if ("kind" in o) drop(o as Computer)
+		if ("kind" in o) {
+			const c = o as Computer
+			drop(c)
+			// set aside before its run: older than the rest
+			if (c.aside) {
+				c.teardowns = c.aside.concat(c.teardowns)
+				c.aside = undefined
+			}
+		}
 		const failed = clean(o)
 		o.state = "gone"
 		// gone: as the run of a change it names none
@@ -378,7 +450,8 @@ export function createScheduler(): Scheduler {
 			const i = p.children.lastIndexOf(o)
 			if (i >= 0) p.children.splice(i, 1)
 		}
-		if (failed) throw failed.error
+		thrown ??= failed
+		rethrow(outer)
 	}
 
 	// a computer going: not due, untracked, the writer of nothing, its act undone. the keys nobody
@@ -409,7 +482,13 @@ export function createScheduler(): Scheduler {
 			nodes = kept
 			untracked = 0
 		}
-		for (const f of untracks.fs) f(node.owner)
+		for (const f of untracks.fs) {
+			try {
+				f(node.owner)
+			} catch (e) {
+				hold(e)
+			}
+		}
 	}
 
 	// a run's end: the tracker drops the links after its cursor, what the run did not track
@@ -456,6 +535,11 @@ export function createScheduler(): Scheduler {
 			ranked: 0,
 			afters: undefined,
 			stamp: 0,
+			counted: 0,
+			walked: 0,
+			via: undefined,
+			held: undefined,
+			holding: undefined,
 			seen: 0,
 			wrote: new Set(),
 			looping: false,
@@ -476,16 +560,29 @@ export function createScheduler(): Scheduler {
 		// its info till its first run: the tick that made it due, its making
 		c.info = [["mark", t], ["owner", o.info]]
 		const now = due(c, t, running) ? [c] : []
-		for (const f of marks.fs) f([], running?.own, now, t)
+		const outer = thrown
+		thrown = undefined
+		for (const f of marks.fs) {
+			try {
+				f([], running?.own, now, t)
+			} catch (e) {
+				hold(e)
+			}
+		}
 		// early: its first run now, and its act
 		if (c.early && now.length) {
-			first(c, order.rank(c))
+			try {
+				first(c, order.rank(c))
+			} catch (e) {
+				hold(e)
+			}
 			const a = c.acting
 			if (a) {
 				unact(c)
 				act(a)
 			}
 		}
+		rethrow(outer)
 		return c
 	}
 
@@ -542,7 +639,16 @@ export function createScheduler(): Scheduler {
 				if (due(c, t, r) && now !== none) now.push(c)
 			}
 		}
-		for (const f of marks.fs) f(keys, r?.own, now, t)
+		// every listener told; the first error after
+		let failed: { error: unknown } | undefined
+		for (const f of marks.fs) {
+			try {
+				f(keys, r?.own, now, t)
+			} catch (e) {
+				failed ??= { error: e }
+			}
+		}
+		if (failed) throw failed.error
 		return t
 	}
 
@@ -569,22 +675,38 @@ export function createScheduler(): Scheduler {
 			nodes.set(key, node = tracker.node(key))
 		}
 		tracker.track(c.node, node!)
-		if (first) { for (const f of firstTracks.fs) f(key) }
+		// every listener told; what one threw comes out after the read is all done
+		let failed: { error: unknown } | undefined
+		if (first) {
+			for (const f of firstTracks.fs) {
+				try {
+					f(key)
+				} catch (e) {
+					failed ??= { error: e }
+				}
+			}
+		}
 		if (ends.fs.length) {
 			if (r.reads === none) r.reads = []
 			r.reads.push(key)
 		}
-		for (const f of tracks.fs) f(key, r.own)
+		for (const f of tracks.fs) {
+			try {
+				f(key, r.own)
+			} catch (e) {
+				failed ??= { error: e }
+			}
+		}
 		const w = writers.get(key)
-		if (w === undefined || w === c) return
-		if (w.seen !== r.id) {
-			w.seen = r.id
-			r.values.push(w)
+		if (w !== undefined && w !== c) {
+			if (w.seen !== r.id) {
+				w.seen = r.id
+				r.values.push(w)
+			}
+			if (order.has(w) && !waitsAfter(w, c) && !causes.from(w, c)) r.stopped = w
 		}
-		if (order.has(w) && !waitsAfter(w, c) && !causes.from(w, c)) {
-			r.stopped = w
-			throw new Stop()
-		}
+		if (failed) throw failed.error
+		if (r.stopped) throw new Stop()
 	}
 
 	function waitsAfter(w: Computer, c: Computer): boolean {
@@ -603,7 +725,18 @@ export function createScheduler(): Scheduler {
 
 	// runs
 
+	// a run, its own bracket: what a listener or a cleanup after it threw comes out once it is done
 	function first(c: Computer, rank: number) {
+		const outer = thrown
+		thrown = undefined
+		try {
+			begin(c, rank)
+		} finally {
+			rethrow(outer)
+		}
+	}
+
+	function begin(c: Computer, rank: number) {
 		const mark = order.at(c)!
 		order.delete(c)
 		order.waits(c, undefined)
@@ -628,14 +761,22 @@ export function createScheduler(): Scheduler {
 		c.ran = r
 		// an effect acts on its latest run's value only
 		if (c.acting) unact(c)
-		for (const f of starts.fs) f(c, n, rank)
+		for (const f of starts.fs) {
+			try {
+				f(c, n, rank)
+			} catch (e) {
+				hold(e)
+			}
+		}
 		own[inside] = r
 		const was = reading
 		const wasRunning = running
 		running = r
 		// what is under it goes first: all of a compute's; of an effect's, what was made since its
-		// last act. torn down by a teardown: nothing more
-		const before = c.kind === "compute" ? clean(c) : clean(c, ...c.acted)
+		// last act. its cleanups wait till the run is done (lay). torn down by a teardown: nothing
+		// more
+		if (c.kind === "compute") shed(c)
+		else shed(c, ...c.acted)
 		if (c.state !== "alive") {
 			running = wasRunning
 			return
@@ -660,7 +801,6 @@ export function createScheduler(): Scheduler {
 		}
 		if (c.state !== "alive") return
 		if (r.stopped) return stop(r)
-		if (before) return finish(r, "failed", { error: before.error })
 		if ("error" in out) return finish(r, "failed", { error: out.error })
 		if (out.value === PENDING) return finish(r, "pending")
 		if (isPromise(out.value)) return awaiting(r, out.value)
@@ -728,8 +868,10 @@ export function createScheduler(): Scheduler {
 
 	function finish(r: Ran, ended: Ended, more: More = {}) {
 		const c = r.c
-		// flagged, and cut a loop: a failure ends looping too
-		if (ended === "failed" && r.loop && r.cut) {
+		if (c.aside !== undefined && c.ran === r && c.state === "alive") lay(c, r)
+		// flagged, and cut a loop (in its cleanups too): a failure ends looping, and so does a
+		// result equal to the last
+		if (r.loop && r.cut && (ended === "failed" || ended === "done" && more.equal)) {
 			return finish(r, "looping", { ...more, through: r.loop })
 		}
 		if (c.state === "alive") {
@@ -742,7 +884,13 @@ export function createScheduler(): Scheduler {
 		}
 		// ended, unless awaited: no longer a run known to loop
 		if (ended !== "pending") r.loop = undefined
-		for (const f of ends.fs) f(c, r.n, ended, r.reads, more)
+		for (const f of ends.fs) {
+			try {
+				f(c, r.n, ended, r.reads, more)
+			} catch (e) {
+				hold(e)
+			}
+		}
 	}
 
 	// a promise: the run ends pending; its settling, unless run again or gone since, lands at the
@@ -752,7 +900,15 @@ export function createScheduler(): Scheduler {
 		const settle = (out: Out) => {
 			if (r.c.state !== "alive" || r.c.runs !== r.n) return
 			landed.push({ r, out })
-			for (const f of settles.fs) f()
+			let failed: { error: unknown } | undefined
+			for (const f of settles.fs) {
+				try {
+					f()
+				} catch (e) {
+					failed ??= { error: e }
+				}
+			}
+			if (failed) throw failed.error
 		}
 		p.then(
 			(value) => settle({ value }),
@@ -762,9 +918,15 @@ export function createScheduler(): Scheduler {
 
 	function land(r: Ran, out: Out) {
 		if (r.c.state !== "alive" || r.c.runs !== r.n || order.has(r.c)) return
-		if ("error" in out) return finish(r, "failed", { error: out.error })
-		if (out.value === PENDING) return finish(r, "pending")
-		result(r, out.value)
+		const outer = thrown
+		thrown = undefined
+		try {
+			if ("error" in out) finish(r, "failed", { error: out.error })
+			else if (out.value === PENDING) finish(r, "pending")
+			else result(r, out.value)
+		} finally {
+			rethrow(outer)
+		}
 	}
 
 	// acts
@@ -776,12 +938,19 @@ export function createScheduler(): Scheduler {
 	}
 
 	// the next act of q, owners first: the nearest computer above it with an act in q acts before
-	// it (and its owner before that); what that tears down does not act
+	// it (and its owner before that); what that tears down does not act. a bracket: what a
+	// listener threw comes out after
 	function take(q: Act[]) {
-		const a = q.shift()!
-		a.r.c.acting = undefined
-		if (q.length) owners(a.r.c, q)
-		act(a)
+		const outer = thrown
+		thrown = undefined
+		try {
+			const a = q.shift()!
+			a.r.c.acting = undefined
+			if (q.length) owners(a.r.c, q)
+			act(a)
+		} finally {
+			rethrow(outer)
+		}
 	}
 	function owners(c: Computer, q: Act[]) {
 		for (let o = c.parent; o !== undefined; o = o.parent) {
@@ -823,16 +992,25 @@ export function createScheduler(): Scheduler {
 		}
 		c.last = { value: a.value }
 		c.acted = [made, c.teardowns.length]
-		for (const f of effects.fs) f(c, a.r.n, failed ?? {})
+		for (const f of effects.fs) {
+			try {
+				f(c, a.r.n, failed ?? {})
+			} catch (e) {
+				hold(e)
+			}
+		}
 	}
 
 	// pulses
 
-	// rounds until nothing is due: the settled promises land, the due run by rank, the early
+	// rounds until nothing is due: the settled promises land, the due run in order, the early
 	// effects act, the effects act. a pulse in a pulse does nothing
 	function pulse() {
 		if (pulsing) return
 		pulsing = true
+		const outer = thrown
+		thrown = undefined
+		let failed: { error: unknown } | undefined
 		try {
 			for (;;) {
 				while (landed.length) {
@@ -847,13 +1025,25 @@ export function createScheduler(): Scheduler {
 				while (earlies.length) take(earlies)
 				while (acts.length) take(acts)
 			}
+		} catch (e) {
+			failed = { error: e }
 		} finally {
 			pulsing = false
 			causes.end()
 			pulses++
 			sweep()
 		}
-		for (const f of afterPulses.fs) f()
+		if (failed === undefined) {
+			for (const f of afterPulses.fs) {
+				try {
+					f()
+				} catch (e) {
+					hold(e)
+				}
+			}
+		}
+		thrown = failed ?? thrown
+		rethrow(outer)
 	}
 
 	// keys nobody tracks, untracked now and then: any the ends and teardowns left

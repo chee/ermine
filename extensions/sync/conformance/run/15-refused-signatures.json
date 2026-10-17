@@ -1,43 +1,147 @@
 {
-	"title": "signatures 64 bytes for each commit, end to end",
+	"title": "signatures a list of n byte strings, the bytes after each one's header",
 	"steps": [
 		{
 			"op": "make",
 			"name": "a",
 			"time": 1760000000,
 			"nonce": 1,
-			"patches": [{ "path": [], "value": { "body": "" } }]
+			"patches": [
+				{
+					"path": [],
+					"value": {
+						"body": ""
+					}
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "b",
 			"time": 1760000000,
 			"nonce": 2,
-			"parents": ["a"],
-			"patches": [{ "path": ["body"], "range": [0, 0], "value": "h" }]
+			"parents": [
+				"a"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						0,
+						0
+					],
+					"value": "h"
+				}
+			]
 		},
 		{
 			"op": "make",
 			"name": "c",
 			"time": 1760000000,
 			"nonce": 3,
-			"parents": ["b"],
-			"patches": [{ "path": ["body"], "range": [1, 1], "value": "i" }]
+			"parents": [
+				"b"
+			],
+			"patches": [
+				{
+					"path": [
+						"body"
+					],
+					"range": [
+						1,
+						1
+					],
+					"value": "i"
+				}
+			]
 		},
-		{ "op": "pack", "commits": ["a", "b", "c"], "name": "r" },
-		{ "op": "unpack", "run": "r", "set": { "n": 2 }, "expect": { "error": "signatures" } },
-		{ "op": "unpack", "run": "r", "set": { "n": 4 }, "expect": { "error": "signatures" } },
+		{
+			"op": "pack",
+			"commits": [
+				"a",
+				"b",
+				"c"
+			],
+			"name": "r"
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"n": 2
+			},
+			"expect": {
+				"error": "signatures"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"n": 4
+			},
+			"expect": {
+				"error": "signatures"
+			}
+		},
 		{
 			"op": "unpack",
 			"run": "r",
 			"set": {
 				"signatures": {
 					"/": {
-						"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						"bytes": "AAAA"
 					}
 				}
 			},
-			"expect": { "error": "signatures" }
+			"expect": {
+				"error": "signatures"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"signatures": [
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
+					},
+					0
+				]
+			},
+			"expect": {
+				"error": "signatures"
+			}
+		},
+		{
+			"op": "unpack",
+			"run": "r",
+			"set": {
+				"signatures": [
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
+					},
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
+					}
+				]
+			},
+			"expect": {
+				"error": "signatures"
+			}
 		},
 		{
 			"op": "unpack",
@@ -58,11 +162,27 @@
 						"/": {
 							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 						}
+					},
+					{
+						"/": {
+							"bytes": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+						}
 					}
 				]
 			},
-			"expect": { "error": "signatures" }
+			"expect": {
+				"error": "signatures"
+			}
 		},
-		{ "op": "unpack", "run": "r", "drop": ["signatures"], "expect": { "error": "signatures" } }
+		{
+			"op": "unpack",
+			"run": "r",
+			"drop": [
+				"signatures"
+			],
+			"expect": {
+				"error": "signatures"
+			}
+		}
 	]
 }

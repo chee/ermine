@@ -1,12 +1,19 @@
 #include "causes.h"
 
 #include <stdlib.h>
+#include <string.h>
+
+// causes let go wait for the next cs_run, up to this many
+#define SPARE_MAX 1024
 
 struct causes {
 	// the computations that ran in this pulse
 	pm ran;
 	// the computations holding causes, forgotten at the pulse's end
 	pm holding;
+	// causes let go, linked through small[0]
+	cs_cause *spare;
+	size_t nspare;
 };
 
 causes *cs_new(void) {
@@ -16,6 +23,11 @@ causes *cs_new(void) {
 }
 
 void cs_free(causes *c) {
+	while (c->spare != NULL) {
+		cs_cause *x = c->spare;
+		c->spare = x->small[0];
+		free(x);
+	}
 	pm_clear(&c->ran);
 	pm_clear(&c->holding);
 	free(c);
@@ -26,41 +38,60 @@ cs_cause *cs_ref(cs_cause *c) {
 	return c;
 }
 
-// lets go; a cause with no count left lets go of its parents, with a stack of its own
+// lets go; a cause with no count left lets go of its parents, with a stack of its own (on the C
+// stack while it is short)
 void cs_release(cs_cause *c) {
-	cs_cause **stack = NULL;
-	size_t top = 0, cap = 0;
+	cs_cause *first[32];
+	cs_cause **stack = first;
+	size_t top = 0, cap = sizeof first / sizeof *first;
 	for (;;) {
 		if (c != NULL && --c->refs == 0) {
 			for (size_t i = 0; i < c->count; i++) {
 				if (top == cap) {
-					cap = cap ? cap * 2 : 16;
-					stack = realloc(stack, cap * sizeof *stack);
+					cap *= 2;
+					if (stack == first) {
+						stack = malloc(cap * sizeof *stack);
+						if (stack != NULL) memcpy(stack, first, sizeof first);
+					} else {
+						stack = realloc(stack, cap * sizeof *stack);
+					}
 					if (stack == NULL) abort();
 				}
 				stack[top++] = c->parents[i];
 			}
-			free(c->parents);
-			free(c);
+			if (c->parents != c->small) free(c->parents);
+			causes *home = c->home;
+			if (home->nspare < SPARE_MAX) {
+				c->small[0] = home->spare;
+				home->spare = c;
+				home->nspare++;
+			} else {
+				free(c);
+			}
 		}
 		if (top == 0) break;
 		c = stack[--top];
 	}
-	free(stack);
+	if (stack != first) free(stack);
 }
 
 cs_cause *cs_run(causes *c, cs_item *t, cs_cause *const *given, size_t count) {
 	pm_set(&c->ran, t, NULL);
-	cs_cause *x = calloc(1, sizeof *x);
-	if (x == NULL) abort();
-	x->of = t;
-	x->refs = 1;
-	x->count = count;
-	if (count > 0) {
+	cs_cause *x = c->spare;
+	if (x != NULL) {
+		c->spare = x->small[0];
+		c->nspare--;
+	} else {
+		x = malloc(sizeof *x);
+		if (x == NULL) abort();
+	}
+	*x = (cs_cause){.of = t, .refs = 1, .count = count, .home = c};
+	x->parents = x->small;
+	if (count > 2) {
 		x->parents = malloc(count * sizeof *x->parents);
 		if (x->parents == NULL) abort();
-		for (size_t i = 0; i < count; i++) x->parents[i] = cs_ref(given[i]);
 	}
+	for (size_t i = 0; i < count; i++) x->parents[i] = cs_ref(given[i]);
 	return x;
 }
 
@@ -72,7 +103,7 @@ void cs_keep(causes *c, cs_item *t, cs_cause *cause) {
 void cs_forget(cs_item *t) {
 	for (size_t i = 0; i < t->kept.cap; i++)
 		if (t->kept.keys[i] != NULL) cs_release((cs_cause *)t->kept.keys[i]);
-	pm_clear(&t->kept);
+	pm_reset(&t->kept);
 }
 
 static void push(cs_cause ***stack, size_t *top, size_t *cap, cs_cause *x) {
@@ -172,6 +203,6 @@ bool cs_from(causes *c, const cs_item *t, const cs_item *of) {
 void cs_end(causes *c) {
 	for (size_t i = 0; i < c->holding.cap; i++)
 		if (c->holding.keys[i] != NULL) cs_forget((cs_item *)c->holding.keys[i]);
-	pm_clear(&c->holding);
-	pm_clear(&c->ran);
+	pm_reset(&c->holding);
+	pm_reset(&c->ran);
 }

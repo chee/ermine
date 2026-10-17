@@ -47,10 +47,13 @@ static char *dup(const char *s) {
 }
 
 // a set of pointers: the values made in this call
+// A small one lives in the call's own array (inl) and moves to the heap only if it grows past it.
 typedef struct {
 	const void **slots;
 	size_t cap, used, dead;
+	const void **inl;
 } pset;
+#define PSET_INLINE 32
 static const char gone_; // a deleted slot
 #define GONE ((const void *)&gone_)
 static size_t hash_of(const void *p) {
@@ -61,6 +64,12 @@ static size_t hash_of(const void *p) {
 }
 static void pset_add(pset *s, const void *p);
 static void pset_grow(pset *s) {
+	if (s->cap == 0 && s->inl != NULL) {
+		s->cap = PSET_INLINE;
+		s->slots = s->inl;
+		memset(s->slots, 0, s->cap * sizeof *s->slots);
+		return;
+	}
 	pset old = *s;
 	s->cap = old.cap ? old.cap * 2 : 64;
 	s->slots = grab(NULL, s->cap * sizeof *s->slots);
@@ -68,7 +77,7 @@ static void pset_grow(pset *s) {
 	s->used = s->dead = 0;
 	for (size_t i = 0; i < old.cap; i++)
 		if (old.slots[i] != NULL && old.slots[i] != GONE) pset_add(s, old.slots[i]);
-	free(old.slots);
+	if (old.slots != s->inl) free(old.slots);
 }
 static void pset_add(pset *s, const void *p) {
 	if ((s->used + s->dead + 1) * 2 > s->cap) pset_grow(s);
@@ -110,10 +119,14 @@ typedef struct {
 	// in place: what left a container, whose reference the container held: let go of at the end
 	op_value **orphans;
 	size_t orphaned, orphan_capacity;
+	// the first of each lives here, not on the heap
+	op_value *orphan_small[8];
+	const void *made_small[PSET_INLINE];
 	// in place: a move's take, till its landing is done (a failed landing puts it back)
 	op_patch pending;
 	int has_pending;
 	op_undo undone; // each patch's undo, in the order they land
+	size_t patches; // how many patches the call has: the undo's first room
 	// the last splice's, for the undo: what the span held, how many positions went in, whether
 	// a lone high met a lone low at an edge
 	op_value *taken;
@@ -128,14 +141,14 @@ static void fail(work *w, int code) {
 
 // frees one made value, not what it holds that is shared
 static void shell_free(op_value *v) {
-	if (v->type == OP_MAP)
-		for (size_t i = 0; i < v->count; i++) free(v->keys[i]);
-	free(v->items);
-	free(v->keys);
-	free(v->index);
-	free(v->gaps);
-	free(v->str);
-	free(v->data);
+	if (v->type == OP_LIST || v->type == OP_MAP || v->type == OP_STAND) {
+		if (v->type == OP_MAP)
+			for (size_t i = 0; i < v->count; i++) free(v->keys[i]);
+		free(v->items);
+		free(v->keys);
+		free(v->index);
+		free(v->gaps);
+	} else if (v->type == OP_STR || v->type == OP_BYTES || v->type == OP_TYPED) free(v->str);
 	free(v);
 }
 // a value made here that is let go of, and what it holds that was made here
@@ -204,6 +217,7 @@ static op_value *own(work *w, op_value *v) {
 		if (v->type == OP_MAP) {
 			c->keys = grab(NULL, v->count * sizeof *c->keys);
 			for (size_t i = 0; i < v->count; i++) c->keys[i] = dup(v->keys[i]);
+			op_map_table_copy(c, v);
 		}
 	}
 	return c;
@@ -225,15 +239,23 @@ static int real(work *w, const op_value *c) { return w->inplace && !pset_has(&w-
 // in place: v left a container, whose reference to it is now the call's
 static void orphan(work *w, op_value *v) {
 	if (v == NULL) return;
-	if (w->orphaned == w->orphan_capacity) {
-		w->orphan_capacity = w->orphan_capacity ? w->orphan_capacity * 2 : 16;
-		w->orphans = grab(w->orphans, w->orphan_capacity * sizeof *w->orphans);
+	if (w->orphans == NULL) {
+		w->orphans = w->orphan_small;
+		w->orphan_capacity = sizeof w->orphan_small / sizeof *w->orphan_small;
+	} else if (w->orphaned == w->orphan_capacity) {
+		size_t cap = w->orphan_capacity * 2;
+		if (w->orphans == w->orphan_small) {
+			op_value **big = grab(NULL, cap * sizeof *big);
+			memcpy(big, w->orphans, w->orphaned * sizeof *big);
+			w->orphans = big;
+		} else w->orphans = grab(w->orphans, cap * sizeof *w->orphans);
+		w->orphan_capacity = cap;
 	}
 	w->orphans[w->orphaned++] = v;
 }
 static void release(work *w) {
 	for (size_t i = 0; i < w->orphaned; i++) op_free(w->orphans[i]);
-	free(w->orphans);
+	if (w->orphans != w->orphan_small) free(w->orphans);
 	w->orphans = NULL;
 	w->orphaned = w->orphan_capacity = 0;
 }
@@ -241,7 +263,7 @@ static void release(work *w) {
 static void let_go(work *w) {
 	for (size_t j = 0; j < w->made.cap; j++)
 		if (w->made.slots[j] != NULL && w->made.slots[j] != GONE) shell_free((op_value *)w->made.slots[j]);
-	free(w->made.slots);
+	if (w->made.slots != w->made.inl) free(w->made.slots);
 }
 
 // strings: position -> byte offset, the one place the unit is known: code points. A lone
@@ -355,7 +377,7 @@ static op_key *longer(const op_target *t, op_key last) {
 static op_key *shift(const op_target *path, const op_target *at, long n) {
 	size_t d = at->length;
 	if (!at->has_range || path->length <= d || !within(at, path)) return NULL;
-	if (path->path[d].n < at->from) return NULL;
+	if (path->path[d].type != OP_NUM_KEY || path->path[d].n < at->from) return NULL;
 	op_key *ks = grab(NULL, path->length * sizeof *ks);
 	memcpy(ks, path->path, path->length * sizeof *ks);
 	ks[d].n += n;
@@ -468,15 +490,16 @@ static op_key *keys_of(const op_target *t) {
 	}
 	return ks;
 }
-static op_patch *undo_add(op_undo *u) {
+// room for one more; the first room is first patches
+static op_patch *undo_add(op_undo *u, size_t first) {
 	if (u->n == u->capacity) {
-		u->capacity = u->capacity ? u->capacity * 2 : 16;
+		u->capacity = u->capacity ? u->capacity * 2 : first;
 		u->patches = grab(u->patches, u->capacity * sizeof *u->patches);
 	}
 	return &u->patches[u->n++];
 }
 static void push(work *w, const op_patch *p) {
-	op_patch *q = undo_add(&w->undone);
+	op_patch *q = undo_add(&w->undone, w->patches ? w->patches : 1);
 	*q = *p;
 	q->place.path = keys_of(&p->place);
 	if (p->has_move) q->move.path = keys_of(&p->move);
@@ -494,8 +517,10 @@ static void fall(work *w, const op_patch *undone, const op_patch *untake) {
 static int splice(work *w, const op_key *path, size_t n, long a, long b, op_value *v, int taken,
 	op_patch *undo) {
 	op_value *s = get(w, path, n);
+	// the root taken by a move: nothing there, as at a key
+	if (s == NULL) fail(w, OP_NO_KEY);
 	if (a > b) fail(w, OP_RANGE);
-	if (s == NULL || (s->type != OP_STR && s->type != OP_LIST && s->type != OP_TYPED))
+	if ((s->type != OP_STR && s->type != OP_LIST && s->type != OP_TYPED))
 		fail(w, OP_WRONG_KIND);
 	taken = taken || w->undo;
 	long start = a, end = a;
@@ -516,15 +541,6 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 			if (high_before(u, x) && low_at(vu, 0, nv)) l = 1;
 			if (high_before(vu, nv) && low_at(u, y, s->bytes)) r = 1;
 		} else if (high_before(u, x) && low_at(u, y, s->bytes)) l = r = 1;
-		char *buf = grab(NULL, x + nv + post + 1);
-		memcpy(buf, s->str, x);
-		if (nv) memcpy(buf + x, v->str, nv);
-		memcpy(buf + x + nv, s->str + y, post);
-		size_t size = x + nv + post;
-		// one character again
-		join(buf, &size, x + nv);
-		if (nv) join(buf, &size, x);
-		buf[size] = 0;
 		w->joined = l + r > 0;
 		if (taken) w->taken = made_str(w, "", 0, s->str + x, y - x, "", 0);
 		if (w->undo) {
@@ -536,8 +552,42 @@ static int splice(work *w, const op_key *path, size_t n, long a, long b, op_valu
 				? made_str(w, "", 0, s->str + x - 3 * (size_t)l, y - x + 3 * (size_t)(l + r), "", 0)
 				: w->taken;
 		}
-		out = made(w, op_str_take(buf, size));
-		set(w, path, n, out, 1);
+		// the string is the call's alone (made here, or in place and held by its container only):
+		// spliced where it is, in spare room
+		int alone = pset_has(&w->made, s);
+		if (!alone && w->inplace && n > 0 && s->refs == 0 && v != s) alone = real(w, get(w, path, n - 1));
+		size_t size = x + nv + post;
+		if (alone) {
+			size_t room = s->capacity ? s->capacity : s->bytes + 1;
+			char *buf = s->str;
+			if (size + 1 > room) {
+				room = room * 2 > size + 1 ? room * 2 : size + 1;
+				buf = grab(buf, room);
+			}
+			if (post && nv != y - x) memmove(buf + x + nv, buf + y, post);
+			if (nv) memcpy(buf + x, v->str, nv);
+			join(buf, &size, x + nv);
+			if (nv) join(buf, &size, x);
+			buf[size] = 0;
+			int was_ascii = s->ascii && (nv == 0 || v->ascii);
+			s->str = buf, s->bytes = size, s->capacity = room;
+			if (!was_ascii) {
+				s->ascii = 1;
+				for (size_t i = 0; i < size; i++)
+					if ((unsigned char)buf[i] >= 0x80) s->ascii = 0;
+			}
+		} else {
+			char *buf = grab(NULL, x + nv + post + 1);
+			memcpy(buf, s->str, x);
+			if (nv) memcpy(buf + x, v->str, nv);
+			memcpy(buf + x + nv, s->str + y, post);
+			// one character again
+			join(buf, &size, x + nv);
+			if (nv) join(buf, &size, x);
+			buf[size] = 0;
+			out = made(w, op_str_take(buf, size));
+			set(w, path, n, out, 1);
+		}
 		if (v && !w->undo) drop(w, v);
 	} else if (s->type == OP_TYPED) {
 		size_t z = op_size(s->kind), x = (size_t)a * z, y = (size_t)b * z;
@@ -845,9 +895,11 @@ int op_apply(const op_value *value, const op_patch *patches, size_t n,
 	op_undo *undo = options != NULL ? options->undo : NULL;
 	int inplace = options != NULL && options->in_place;
 	// in place the undo is built even if not asked for: it takes a failed call back
-	work w = {.root = (op_value *)value, .undo = undo != NULL || inplace, .inplace = inplace};
+	work w = {.root = (op_value *)value, .undo = undo != NULL || inplace, .inplace = inplace, .patches = n};
+	w.made.inl = w.made_small;
 	// each patch's undo starts at its mark
-	size_t *marks = w.undo ? grab(NULL, (n + 1) * sizeof *marks) : NULL;
+	size_t marks_small[16];
+	size_t *marks = !w.undo ? NULL : n < 16 ? marks_small : grab(NULL, (n + 1) * sizeof *marks);
 	volatile size_t i = 0;
 	if (setjmp(w.jump)) {
 		if (inplace) roll_back(&w, marks, i);
@@ -855,7 +907,7 @@ int op_apply(const op_value *value, const op_patch *patches, size_t n,
 		let_go(&w);
 		release(&w);
 		op_undo_free(&w.undone);
-		free(marks);
+		if (marks != marks_small) free(marks);
 		if (failed) *failed = i;
 		return w.code;
 	}
@@ -875,11 +927,34 @@ int op_apply(const op_value *value, const op_patch *patches, size_t n,
 	release(&w);
 	if (undo) {
 		// the undo: the last patch's first
-		for (size_t j = n, e = w.undone.n; j-- > 0; e = marks[j])
-			for (size_t k = marks[j]; k < e; k++) *undo_add(undo) = w.undone.patches[k];
-		free(w.undone.patches);
+		size_t m = w.undone.n;
+		if (m == 0) free(w.undone.patches);
+		else if (undo->patches == NULL && undo->n == 0) {
+			// nothing there yet: the one made is handed over, its groups reversed where they are
+			op_patch *p = w.undone.patches;
+			for (size_t a = 0, b = m; a + 1 < b; a++, b--) {
+				op_patch t = p[a];
+				p[a] = p[b - 1], p[b - 1] = t;
+			}
+			// each patch's group is now backwards too: [m - end, m - mark)
+			for (size_t j = n, e = m; j-- > 0; e = marks[j]) {
+				for (size_t a = m - e, b = m - marks[j]; a + 1 < b; a++, b--) {
+					op_patch t = p[a];
+					p[a] = p[b - 1], p[b - 1] = t;
+				}
+			}
+			*undo = w.undone;
+		} else {
+			if (undo->n + m > undo->capacity) {
+				undo->capacity = undo->n + m;
+				undo->patches = grab(undo->patches, undo->capacity * sizeof *undo->patches);
+			}
+			for (size_t j = n, e = m; j-- > 0; e = marks[j])
+				for (size_t k = marks[j]; k < e; k++) undo->patches[undo->n++] = w.undone.patches[k];
+			free(w.undone.patches);
+		}
 	} else op_undo_free(&w.undone);
-	free(marks);
+	if (marks != marks_small) free(marks);
 	return OP_OK;
 }
 
