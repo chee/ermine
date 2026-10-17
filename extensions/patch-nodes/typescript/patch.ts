@@ -1,54 +1,29 @@
-// patch nodes: a node that lives in one place and changes another. its "patch" entry says what it
-// is over (on: the target's id, part: which of its entries), the version it was made against (at:
-// that entry's change time) and op's patches, laid over that entry. it lives wherever its maker
-// places it, as any node; it counts while it is in the table (loaded): placed in my tree, only I
-// load it; in a shared folder, everyone who has the folder
+// patch nodes: a node that lives in one place and changes another. its "patch" entry: on (the
+// target's id), part (which of its entries), at (that entry's change time when made) and op's
+// patches, laid over that entry. it counts while it is loaded: placed in my tree, only I load it;
+// in a shared folder, everyone who has the folder
 //
 //   const table = createTable((part, id) => overlay.onTableChange(part, id))
 //   const overlay = createOverlay(table, () => places)
 //   const places = createPlaces({ root, table: overlay, paths, scheduler })
 //   update(entry, patches, header); overlay.commit([entry]) // a write: to the table, said here
 //
-// the overlay: a table in front of places' (only get and who, as places needs). a read of (part,
-// id) is one Map check (index: a target → its patch nodes); none: the table's entry as it is.
-// some: an entry made here, its value the table's with each patch node's patches applied, in the
-// order they came: all in one apply, so what they touch is copied once and the rest shared (one
-// whose patches throw set aside, the rest applied again). kept, and made again when the overlay
-// is told the table's entry or a patch node changed (commit, a table event): a read is two Map
-// checks. a write not said here is not seen (nor told by places). its change is the table's, its op
-// left out, with ["overlay", the patch nodes applied] after its metadata: so a maker reading the
-// change gets the version to put in at. its layers (entries) made one patch node at a time, at
-// the first ask
-//
-// telling: the table's hook and commit go through the overlay to places. a patch node added,
-// changed or taken out, or the table's entry written under patch nodes (places' commit marks by
-// its patches first), changes what is under the patch nodes' spots only: the paths their patches
-// aim at and move from (a taking out at a list's number, which shifts the rest: the list). so the
-// entry is made again there and then, and compared with the one readers had at those spots,
-// before and now. where what is there is not the same value (identity: what no patch touched is
-// shared; a list of the same length, or a map of the same names, compared one step down), what is
-// there now is put, whole, at the nearest spot both have the container of. where a write's patch
-// touched a spot both have, it is put there too: what the write put, in the table's coordinates,
-// is not what the overlay shows, and a watch is told what is. said to places' commit as one change
-// of the key, its op those patches: a reader of anything else is not told. a write with nothing to
-// put: nothing more (its spots and the change's are said). nobody read the key since patch nodes
-// came over it (none made): the whole key. a table event on any key: the whole key
-//
-// in place: an entry may change in place (cow: false, as places keeps children and attributes). a
-// made entry shares what no patch touched with its base, and holds its patch nodes' values, so
-// while one is kept those are copied on write instead: what readers had never changes under them,
-// and the compare above holds. in place again once none is kept
-//
-// stale: a patch node made against an older version than its target's latest change: still
-// applied, and said (stale in its layer). one whose patches no longer apply over what is under it:
-// set aside, with the error. an override must outlive changes it doesn't care about (set aside at
-// every change, an override is gone at the target's first edit); applied with no word, its maker
-// never learns it was made against something else. so it stays, and is shown: what to do (make it
-// again, land it, take it out) is the maker's
-//
-// writes go to the table, never to the overlay: it has no add, sub or del, and what it makes is
-// made again at the next change (never change it). land puts a patch node's patches on its
-// target for real
+// the overlay: a table in front of places' (get and who only). no patch nodes over (part, id): the
+// table's entry. some: an entry made here, the table's value with each patch node's patches applied
+// in the order they came, in one apply (one whose patches throw: set aside). kept, and made again
+// when the table's entry or a patch node changes. its change is the table's without its op, with
+// ["overlay", the patch nodes applied] after its metadata. a write not said here is not seen
+// telling: a patch node added, changed or taken out, or a write under patch nodes, tells places'
+// commit one change of the key whose patches put, whole, what differs at the patch nodes' spots
+// (and the write's): a reader of anything else is not told. a table event, or a key nobody read
+// since patch nodes came over it: the whole key
+// in place: a made entry shares what no patch touched with its base, so while one is kept those are
+// copied on write
+// stale: made against an older version than its target's latest change: still applied, and said
+// (stale in its layer). patches that no longer apply: set aside, with the error. what to do (make
+// it again, land it, take it out) is the maker's
+// writes go to the table, never the overlay; never change what it makes. land puts a patch node's
+// patches on its target for real
 import createEntry, { type ChangeHeader, type Entry } from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import apply, { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"

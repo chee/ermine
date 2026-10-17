@@ -1,7 +1,7 @@
 // AUDIT (defensive, our own code): the isolation promise of ermine/boxes.
 //
-// chee 10-15: "if i box something in a folder that i share, it's a choice i've made. i just don't
-// want it seeing above that folder, it can look in that folder and place stuff". So code given a
+// Boxing something in a shared folder is a choice made on purpose; what is boxed must not see above
+// that folder, but may look and place in it. So code given a
 // box may read and write at or below the box's folder, and must not read or change anything above
 // or beside it. Whatever was deliberately boxed in is fine.
 //

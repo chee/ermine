@@ -8,7 +8,7 @@
 // the value, so a run reading it ends pending and runs again as it lands (loaded marks the key:
 // the parts with nothing there too). every part of an id at once (get(id)): PENDING. an id never
 // pointed to (one made here, a memo's node) is the table's as it is: nothing there is nothing there.
-// mine, open: an id met only inside a value, never under a name, is never pointed to, so it reads
+// open: an id met only inside a value, never under a name, is never pointed to, so it reads
 // as nothing there
 //
 //   const r = createReplica({ scheduler, want: (id) => port.postMessage({ t: "load", id }) })

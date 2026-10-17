@@ -1,26 +1,15 @@
-// What a store asks of macOS's Foundation (FILES.tex, Building it), through
-// FFI into the Objective-C runtime: libobjc's objc_getClass, sel_registerName
-// and objc_msgSend, with Foundation loaded by dlopen. Four things, each a
-// no-op or nothing on Linux:
+// what a store asks of macOS's Foundation, by FFI into libobjc (Foundation dlopened); each a no-op
+// on Linux:
 //
-//   coordinate  runs a function under NSFileCoordinator, so an app with the
-//               file open, as TextEdit or Preview, is told before it changes
-//   bookmark    an NSURL bookmark of a path, which follows it when it moves,
-//               and resolve, which leads a bookmark back to a path
-//   ubiquitous  whether macOS says a path is in iCloud (NSURLIsUbiquitousItemKey)
+//   coordinate  runs a function under NSFileCoordinator, so an app with the file open is told
+//   bookmark    an NSURL bookmark, which follows a path when it moves; resolve leads it back
+//   ubiquitous  whether macOS says a path is in iCloud
 //   alias       the path a Finder alias file leads to
 //
-// Every call is made on the main thread, as sys.ts's are, and objects are
-// made and released in an autorelease pool of each call's own.
-//
-// coordinate gives the coordinator a block, which is built by hand: a global
-// block (the runtime's _NSConcreteGlobalBlock, no captured state) whose
-// function is a Deno.UnsafeCallback. NSFileCoordinator runs its accessor
-// synchronously, on the calling thread, before the method returns, so the
-// function runs there, and must itself be synchronous: a promise it returns is
-// given back as it is, and what it does after its first await is not
-// coordinated. The store uses it around its sys calls, whose effect is made by
-// the time they return their promise.
+// every call on the main thread, in its own autorelease pool.
+// coordinate's function (a hand-built global block over a Deno.UnsafeCallback) runs synchronously
+// inside the call and must be synchronous: what it does after its first await is not coordinated
+// (the store's sys calls take effect before their promise returns)
 
 /** What a store asks of Foundation. A host or a test may give another. */
 export interface Foundation {

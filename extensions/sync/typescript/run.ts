@@ -1,53 +1,37 @@
-// a run of sealed commits as columns: what a fragment carries (extensions/subduction/plan.org,
-// Rewrite for the new shape). one signature for a run of typing: a commit the next one in the run
-// goes on alone, signed by the same signer, is vouched for by that one's signature (it names this
-// one, whose name is its bytes' hash), so its own is left out, and its stored id goes in ids in its
-// place. unpack gives back each commit's exact bytes, its stored id, and the sealed bytes of each one
-// signed, so a name, a stored id and a signature are as they were. deterministic: the same commits in
-// the same order give the same bytes on any device, so any device builds the same fragment.
+// run: a run of sealed commits as columns, what a fragment carries. a commit the next in the run
+// goes on alone, by the same signer, is vouched for by that one's signature: its own is left out,
+// its stored id goes in ids. unpack gives back each commit's exact bytes, stored id and sealed
+// bytes. deterministic: the same commits give the same bytes on any device.
 //
-// what a column saves:
-//   table, actor, reader, external, metadata, signer: runs of one value, [value, how many]
-//   time, nonce, lamport: the first, then each one's difference from the one before, as zigzag
-//            varints in one byte string (a number in this CBOR is a float, 3 bytes at least; a
-//            difference of 0 or 1 here is 1)
-//   parents: null when they are exactly the commit before's name (a run of typing, as a rule);
-//            else each parent by its place in the run, or its name when it is not in it
-//   base: as parents' refs, null when there is none
-//   merge: runs of the rule's name, null when there is none; the column only when a commit in the
-//          run is a merge by a rule
-//   patches: a string when the commit is one insert going on from the commit before's last (at
-//            the same path, where that one's text ended): its text; else the patches as they are
-//   headers: runs of each signature's varsig header (seal.ts), the same for a device's every commit;
-//            empty for a signature that has none this reads (it is whole in signatures); null for a
-//            commit vouched for by the next
-//   signatures: a list of each signed one's bytes after its header, in order
-//   ids: a list of each vouched one's stored id, in order: about 40 bytes a commit of typing
+// columns:
+//   table, actor, reader, external, metadata, signer: runs [value, how many]
+//   time, nonce, lamport: first, then differences, zigzag varints in one byte string
+//   parents: null when exactly the commit before's name; else refs
+//   base: a ref, null when none
+//   merge: runs of the rule's name, null when none; only when a commit is a merge by a rule
+//   patches: a string when one insert continuing the commit before's text; else the patches
+//   headers: runs of each signature's varsig header (seal.ts); empty: none read; null: vouched
+//   signatures: each signed one's bytes after its header, in order
+//   ids: each vouched one's stored id, in order
+// ref: a place earlier in the run, else a name. unpack takes any spelling that says the commits;
+// only pack's is canonical.
 //
-// a ref (parents, base): a commit earlier in the run by its place, else its name. unpack takes any
-// run whose columns say the commits (a run split in two, a parent written out, an insert as a
-// list): only pack's own spelling is the one the same commits give. refused, the first that says
-// no, as RunError's code (and column):
-//   not-a-run    not CBOR, not a map, or a key that is no column (the first in canonical order)
+// refused (RunError code, column), the first that fails:
+//   not-a-run    not CBOR, not a map, or an unknown key
 //   count        n not a whole number
-//   signatures   not a list of byte strings, one for each commit with a header
-//   runs         a column of runs (table, actor, reader, external, metadata, signer, base, merge,
-//                headers, in this order): not a list of [value, how many ≥ 1], or not n values; or
-//                headers whose values are not bytes
-//   differences  a column of differences (time, nonce, lamport): not bytes, a number cut short or
-//                longer than 8 bytes, bytes left over, or one past 2^53 - 1 either way
-//   parents      not a list of n; or one: not a list of refs, or null for the first
-//   patches      not a list of n; or one: not a list or a string
-//   ref          a place not a whole number below the commit's own
-//   insert       a string with no insert before it to go on from
-//   ids          not a list of 32-byte strings, one for each commit with no header
-//   commit       what the columns say for one is not a commit (commit.ts)
-//   vouched      a commit with no header that the next does not go on alone, signed by its signer
-//   size         the commits come to more than most bytes for this run's
-// the first five before any commit; then, in order, each commit: its parents, its patches, its
-// base, the commit, the one before it vouched for, the size so far. each gives them one at a time,
-// as they are made, so a reader can check each signature before the next is made, and stop; one
-// vouched for comes just before the one that vouches for it
+//   signatures   not a list of byte strings, one per commit with a header
+//   runs         a runs column not [value, how many ≥ 1] summing to n; headers not bytes
+//   differences  not bytes, a number cut short or over 8 bytes, bytes left over, past 2^53 - 1
+//   parents      not a list of n; or one not a list of refs, or null for the first
+//   patches      not a list of n; or one not a list or a string
+//   ref          a place not below the commit's own
+//   insert       a string with no insert before it
+//   ids          not a list of 32-byte strings, one per commit with no header
+//   commit       not a commit (commit.ts)
+//   vouched      a headerless commit the next does not go on alone, by its signer
+//   size         over the most bytes for this run
+// order: the first five, then per commit: parents, patches, base, commit, vouched, size. commits
+// are given one at a time, so a reader can check each signature and stop.
 import * as cbor from "@ermine/encoding/cbor"
 import { type Commit, decode, encode, name as nameOf, type Patch } from "@ermine/encoding/commit"
 import { hex } from "./hex.ts"

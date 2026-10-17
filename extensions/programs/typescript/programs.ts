@@ -1,17 +1,6 @@
 // programs: what runs a program, found by matching types, every way listed; and what opens a file.
-// chee 10-15: "the compiler is a program too" (reading 2: what runs a node is found for that node,
-// like #!); "the same C code should work on browser and ermineOS as long sa i have a compiler that
-// can output something that host can support"; "the nice thing with UTI is conformance, so it'd be
-// possible to build a cool UI out where you list all available programs for a file of a type, and
-// you can show all available chains, and also choose a program to run on a file too" (listing all
-// chains needs matching: "right exactly"); "we want both open with AND run with". earlier: "a
-// program is a node that declares what it needs and provides"; "capabilities aren't found by
-// looking up. that's boxes." from LOADERS.tex: "visualizable and explainable"; never down
-// ("absolutely not"); "we match on a path that leads from where we are to root … so there's no
-// deadend". 10-15: "do satisfy and openwith as a generator, i'd also like openwith as all lowercase
-// like that and to separate its .ways from its .why … i'd like the normal openwith to just return
-// the .ways - we should have a way to get the whynots though". the model below is mine, open; the
-// attribute names are placeholders, in ATTRIBUTES
+// a compiler is a program too: what runs a node is found for that node, like #!. matched on the
+// path from here to the root, never down. the attribute names are placeholders, in ATTRIBUTES
 //
 //   const [way] = satisfy(web.places, "catclock.c", ["clocks"])   // the first; the search stops
 //   // { program: { id: CAT, at: ["clocks", "catclock.c"] },
@@ -22,101 +11,42 @@
 //   const opens = [...openwith(web.places, CAT, ["clocks"])]
 //   // [{ program: { id: TEXT, at: ["viewers", "text"] }, chain: [page] }]
 //
-// every node here is typed data: its type is its ermine.type, a UTI, else the type its name's
-// extension gives (@ermine/types' typeOf: conformance and extensions read from the nearest
-// ermine/types). the name belongs to the placement, not the node: catclock.c at clocks/catclock.c is
-// a c-source with no attribute, the same node under another name is another type; so a program, a
-// loader and a file are each typed by the place the search met them at (openwith: the file's, if
-// given, else by the attribute alone). a node with a live function and no attribute, named with no
-// extension a type claims, is a host runner (below); one named with such an extension is typed by
-// it (the host's runners go unextended, mine, open). a loader says, in attributes:
-//   takes: the UTIs it takes (a type fits when it conforms to one)
-//   gives: one UTI: a compiler, its output that type. none: a runner, running what it takes
-//   needs: what it needs from whatever runs it ([javascript, fetch]); a program may say it too
+// types: @ermine/types' typeOf, by the place the search met a node at (openwith's file: its place
+// if given, else its attribute alone). a loader's attributes:
+//   takes: UTIs it takes (a type fits when it conforms to one)
+//   gives: a compiler's output UTI; none: a runner
+//   needs: what it needs from what runs it ([javascript, fetch]); a program may say it too
 //   provides: what a runner gives what it runs ([wasm32]). a fit: needs ⊆ provides
-// a loader is run as any node is: found by the same search. the search ends at host runners: a node
-// with no ermine.type whose value is a live function from the host (never saved): the host runs
-// it, nothing else. so a compiler holding a live function (build.ts') is run by the host too
+// host runner: a node with no ermine.type whose value is a live host function (never saved); every
+// search ends at one. a live function named with an extension a type claims is typed by it
 //
-// both are generators, yielding ways, one shape: { program, chain }, so start takes either. the
-// search goes only as far as it is iterated (mine, open): starting takes the first and stops, a UI
-// takes what it shows. nothing is read before the first next()
-//
-// satisfy(places, name, from, { onwhynot }): the ways to run the program found by name from the
-// place from, in the order below (a path with ./, ../ or / in front: from there, no lookup; as a
-// shell runs a command with a / in it): one program, each chain running its type: compilers in
-// order, each giving the next one's type, then a runner taking the last and providing the
-// program's needs. each step with by: how it is itself run, its own chain to a host runner (the
-// first in the same order)
-//
-// candidates: every member of each folder from the search's place up to the box's "/" (lookup's
-// levels), nearest first, in canonical CBOR's key order within a folder (places' merged names'
-// order); a member folder whose ermine.programs.loaders is true: its children instead, in its place
-// (one inside another likewise), the folder itself no candidate (LOADERS.tex's "provides":
-// "children"). never down otherwise. a node met again: passed over (its nearest place stands). the
-// search's place: the program's folder for satisfy (and for every step's own run), from for
-// openwith. a level is read when the search first needs a candidate past the ones read
-//   loaders: the candidates saying takes; openers: those saying opens
-// a chain: whole only (a step counts once its own run and the rest of its chain are found); no node
-// twice in one chain, nor in the chain running it, nor above (no loader runs itself), so every
-// search ends with no bound needed. a compiler's output carries the program's needs to the runner,
-// none of its own (mine, open). ermine.programs.loader (by path, as #!: a bare path looked up,
-// nearest first): a pin, that node tried first at the program's first step (mine, open: the
-// program's only)
-//
-// order: nearest, then shortest (chee 10-15: "sort the satisfy by shortest path too"; then, of
-// shortest first or nearest first, "nearest, then shortest")
-//   a way's level: the farthest level any of its steps comes from, or any step's by (a pin: the
-//     nearest, mine, open)
-//   the nearest level that gives a way wins; within a level, fewest steps first; then nearest first,
-//     then name order, at each step
-//   so k wrappers each taking and giving JavaScript, and a runner, on one level: the runner alone
-//     first, not every wrapper stacked before it; a 2-step way on a nearer level: before a 1-step one
-//     farther up
-//   no level read past the one that answers, a step's own run included: so never one the old order
-//     (depth first over the candidates) read for its first way
-// found by iterative deepening (mine, open): per level k, nearest first, rounds of at most 1, 2, …
-// steps, depth first over the levels up to k, each yielding its ways of level k and that length;
-// another round only when a compiler was passed over at the round's last step; a level adding no
-// loaders, passed over. a step's own run: looked for up to level k when first stepped on, its search
-// paused there and taken further only when a farther level is. cost: the rounds walk the shorter
-// chains again, but a node's run looks at each candidate once (fit, needs), later rounds stepping
-// through only those taken; with no onwhynot, the loaders taking nothing the type conforms to are
-// passed over unlooked (an index by UTI taken; the same reads)
-//
-// onwhynot(why), for the UI: called as the search meets each candidate not taken, in order, each
-// once, never for one taken; with none given, none is made. a callback (mine, open: as chee chose
-// for watches, "okay so we do callbacks"; a list handed back would do too). a candidate's:
-// { id, at, for: the node being run (or the file opened), type: the type looked for, why }
-//   wrong-type: it takes nothing the type conforms to
-//   unknown-type: the same, the type not in the nearest ermine/types (only itself known)
-//   needs: a runner not providing what is needed, missing: those names
-//   no-chain: it fits, but its own run or the rest of its chain was not found (told once every
-//     level is read; a compiler's rest: in the first round walking all below it)
-//   no-type: it fits, but has no type and no live function: nothing runs it (told when first
-//     stepped on)
-//   in-the-chain: it fits, but is in the chain already, or runs it
-// the search's own, no for: nothing yielded, and nothing more told
-//   { why: "nothing-there", path, from }: the program's path, or its pin's, found nothing, looked
-//     up from the place from (a pin's: the program's folder)
-//   { why: "no-type", id, at? }: the program (at its place), or the file (openwith: no at), has no
-//     type; a program with none whose value is a live function: one way, its chain empty (the host
-//     runs it)
-//   { why: "no-chain", id, at }: satisfy's program, no whole chain, told once the search is done
-//
-// openwith(places, file, from, { onwhynot }): file: an id, or a place ({ id, at }: the name it is
-// typed by, as for satisfy); every way to open the file: an opener
-// (ermine.programs.opens: UTIs the file's type conforms to), from the same candidates in the same
-// order, with each chain running it, as satisfy's are; an opener with two chains, twice (chee
-// 10-15: every host-satisfiable chain). one with none is left out, its why no-chain. none opening
-// it: nothing yielded, no refusal. a pin on an opener is not read (mine, open). starting one is the
-// scheduler's (step 6: the file boxed in, its name in ermine.process.args)
-//
-// reads only, all through places, made as the search goes: so a computer must iterate inside its
-// run (as with places' list), and what it takes after an await or outside a run is tracked by
-// none. tracked so, a computer reruns when the answer it took may change (a member coming or going
-// on a level read, an attribute here written, a type installed), and not on others (a program's
-// value edited, an attribute not named here, a level never read)
+// satisfy and openwith are generators of { program, chain }, reading only as far as iterated
+// (nothing before the first next()). satisfy(places, name, from, { onwhynot }): name looked up from
+// from (./, ../ or / in front: no lookup); a chain: compilers in order, each giving the next's
+// type, then a runner taking the last and providing the program's needs. each step's by: its own
+// chain to a host runner
+// candidates: each folder's members from the search's place up to the box's "/", nearest first,
+// canonical key order within a folder; a folder with ermine.programs.loaders true: its children in
+// its place. a node met again: passed over. chains whole only; no node twice in a chain or in the
+// chains running it. ermine.programs.loader: a pin (a path, as #!), tried first at the first step
+// order: the nearest level giving a way (a way's level: the farthest any step or by comes from),
+// then fewest steps, then nearest, then name. no level read past the one that answers. found by
+// iterative deepening
+// onwhynot(why): each candidate not taken, once, in order: { id, at, for, type, why }
+//   wrong-type    takes nothing the type conforms to
+//   unknown-type  the same, the type not in the nearest ermine/types
+//   needs         a runner not providing what is needed (missing: those names)
+//   no-chain      fits, but its own run or the rest of its chain was not found
+//   no-type       fits, but no type and no live function: nothing runs it
+//   in-the-chain  fits, but is in the chain already, or runs it
+// the search's own (no for; nothing yielded): nothing-there { path, from }; no-type { id, at? } (a
+// program with none whose value is a live function: one way, chain empty); no-chain { id, at }
+// openwith(places, file, from, { onwhynot }): file an id or { id, at }; every opener
+// (ermine.programs.opens: UTIs the file's type conforms to) with each of its chains, as satisfy's.
+// one with none: left out (no-chain); none opening it: nothing yielded, no refusal
+// reads only, all through places: iterate inside a computer's run to be tracked
+// open: the model; the search bound by iteration; pins on the program only, not on openers; a
+// compiler's own needs; host runners unextended; onwhynot as a callback
 import type { Id, Path, Places } from "@ermine/places"
 import { level } from "@ermine/places"
 import { get, lookup, members } from "@ermine/places/lib"

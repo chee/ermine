@@ -1,27 +1,16 @@
-// The files program (FILES.tex, The files program): it takes the edits people
-// and tools make in a store's folder in as changes, on graph.ts's graph.
-// files({store, watch, graph}) starts it: it starts the watcher, and makes an
-// ephemeral node listed that it writes what it could not take in to. A store
-// has one: a second's start throws, naming the store already watched. Its
-// scope ends when the scheduler tears it down, or stop() is called, and the
-// watcher stops with it.
+// the files program: takes the edits people and tools make in a store's folder in as changes on
+// graph.ts's graph
 //
-// edit is called with the differences a pass found (watch.ts), each made into
-// changes on its own, so one refused does not stop the others, each carrying
-// as its cause the path that made it. A program acts on a node by its id: its
-// holder's lists, its value and its slots, never by a walk of names.
+//   files({store, watch, graph})   starts the watcher, and an ephemeral node, listed, of what it
+//                                  could not take in. a second for one store throws. stops with
+//                                  its scope or stop()
 //
-// When edit takes an edit in, it sets the layout as the disk now is (FILES.tex,
-// Writing): a value taken in is its file's laid, a new node's entry is its
-// file or folder, a rename keeps the entry where the person put it. The next
-// batch then lays out only what is left: the other half of a renamed node, a
-// union's numbers, a link made again. A handler is called and returns at
-// once, so what needs the disk afterwards it answers, for the watcher to do:
-// ids to set, entries to remove, send to the Trash or lay again.
-//
-// A move across folders is the one place the program renames on disk
-// itself: the layout puts a node's file and folder in one folder, so the
-// other half is brought beside the half that moved before the layout is set.
+// edit: each difference a pass found (watch.ts) made into its own changes, so one refused does not
+// stop the others; cause: the path. nodes acted on by id, never by a walk of names
+// edit sets the layout as the disk now is, so the next batch lays out only what is left. it
+// returns at once, answering what the watcher must do on disk: ids to set, entries to remove, to
+// trash, to lay again
+// a move across folders: the one place it renames on disk itself (the other half brought beside)
 
 import type { Patch } from "@ermine/op/apply"
 import type { Scheduler, Scope } from "@ermine/scheduler"
