@@ -2,8 +2,9 @@
 // HARNESS (default: the TypeScript one, squish_harness.ts, which documents the protocol).
 //
 // The fuzzer applies patches (./squish_model.ts) to a content: what the squished patches make is
-// what the originals make, and they are never more. With HARNESS set, the reference is run too and
-// must give the same patches: how far squishing goes is part of the library.
+// what the originals make, they are never more, and squished again they are the same. With HARNESS
+// set, the reference is run too and must give the same patches: how far squishing goes is part of
+// the library.
 import { assert, assertEquals } from "@std/assert"
 import { apply, at, type V } from "./squish_model.ts"
 import type { Key, Patch } from "@ermine/op/apply"
@@ -49,10 +50,16 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 		const s = at(content, path) as string | unknown[]
 		return { path, len: typeof s === "string" ? chars(s) : s.length, text: typeof s === "string" }
 	}
+	// a backspace run going on: how many more, and where
+	let run = 0, runPath = ["t"]
 	for (let i = 0; i < count; i++) {
 		const k = pick(24)
 		let p: Patch | null = null
-		if (k < 11) {
+		if (run > 0) {
+			run--
+			caret = Math.min(caret, seq(runPath).len)
+			if (caret > 0) p = { path: runPath, range: [caret - 1, caret] }, caret--
+		} else if (k < 11) {
 			const s = seq(pick(3) === 0 ? ["l"] : ["t"])
 			const where = pick(4) === 0 ? pick(s.len + 1) : Math.min(caret, s.len)
 			const many = () => {
@@ -66,6 +73,8 @@ function patches(pick: (n: number) => number, content: V, count: number): Patch[
 				const value = many()
 				p = { path: s.path, range: [where, where], value }
 				caret = where + (typeof value === "string" ? chars(value) : value.length)
+				// a backspace run from past its end: merges reach back into this
+				if (pick(4) === 0) run = 2 + pick(5), runPath = s.path, caret += 2 + pick(2)
 			} else if (kind < 5 && s.len > 0) {
 				// a backspace, or a forward delete
 				const back = pick(2) === 0 && where > 0
@@ -151,14 +160,10 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${STEPS} patches, same end, never more, same 
 		assert(out.length <= r.ps.length, `seed ${i + 1}: never more`)
 		if (same) assertEquals(out, same[i].patches, `seed ${i + 1}: as the reference`)
 	})
-	// squished patches are valid patches: squishing them again changes nothing about the end
+	// squished patches are valid patches: squishing them again changes nothing (no lone surrogates)
 	const again = await ask(harness, squished.map((a) => ({ op: "squish", patches: a.patches })))
-	runs.forEach((r, i) => {
-		assertEquals(
-			applyAll(r.from, again[i].patches!),
-			applyAll(r.from, r.ps),
-			`seed ${i + 1}: again`,
-		)
+	runs.forEach((_, i) => {
+		assertEquals(again[i].patches, squished[i].patches, `seed ${i + 1}: again`)
 	})
 })
 

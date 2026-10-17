@@ -251,7 +251,11 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 	answers.forEach((a, i) => {
 		// exactly invert.ts's answer only of the TypeScript harness; an error is always the same
 		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
-			assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+			assertEquals(
+				line(a, sorted),
+				line(expected[i], sorted),
+				`${where[i]}: ${line(requests[i])}`,
+			)
 		}
 		if (a.undo) walksBack(requests[i], a.undo, where[i])
 	})
@@ -259,7 +263,11 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as invert.ts; each undo w
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) => {
 		if (!Deno.env.get("HARNESS") || a.error || expected[i].error) {
-			assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
+			assertEquals(
+				line(a, sorted),
+				line(expected[i], sorted),
+				`${where[i]} (cow: false): ${line(requests[i])}`,
+			)
 		}
 		if (a.undo) walksBack(requests[i], a.undo as unknown[], `${where[i]} (cow: false)`)
 	})

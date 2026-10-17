@@ -9,8 +9,8 @@
 // an op not named here, or none: { error: text }, the text not compared. each line is its own
 // squisher: nothing lasts between lines
 //
-// a patch: { path, range?, value?, move? }, its fields in that order, in and out; any other field
-//   dropped. -0 as a key or a position is 0
+// a patch: { path, range?, value?, move? }; any other field dropped. -0 as a key or a position is
+//   0. a map's key order is not part of its value (apply.ts): answers are compared by content
 //   path: keys, a string or a whole number; 1 and "1" are other keys. a NUL is a key's like any
 //   range: [from, to], whole numbers (2^32 and past too); a string's count code points, a list's
 //     elements. no value and no move: a removal
@@ -23,6 +23,9 @@
 //       its range grown by what the later takes
 //     - after a removal [a, b): a removal over a (c <= a <= d) is [c, b + d - a]; an insert at a
 //       is a replace [a, b] with its value
+//     joined, it is joined, as the next, with the patch kept before it, and so on, while they
+//     join (merges reach back): so the patches squished, squished again, are the same, and one
+//     at a time is all at once (a fouled place aside)
 //   values join only kind with kind: string with string, list with list, a typed array with one
 //     of its kind. bytes, numbers, maps, null never join; nor does a removal with an insert of
 //     anything else

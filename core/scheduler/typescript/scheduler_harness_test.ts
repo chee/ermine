@@ -22,7 +22,12 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 // a plain model: everything evaluated again from scratch. a few dozen seeds (fuzz runs small)
 const SEEDS = 40
 const STEPS = 12
-const HOST = ["h0", "h1", "h2", "h3"]
+// keys and names: lone halves, apart and (the next) as the pair they make, NUL; values of STRS:
+// strings of PARTS, through reads, eq and if, never sum or mod
+const HOST = ["h0", "\uD83D", "\uDE00", "h\u0000"]
+const STRS = ["😀", "\uDE00\uD83D", "s\u0000"]
+const PARTS = ["a", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
+const NAMED = ["", "é", "中", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 
 // the model's evaluator: the fuzzer's forms only
 type Expr = unknown
@@ -45,6 +50,8 @@ function evaluate(e: Expr, store: Map<string, unknown>): unknown {
 			return evaluate(a[0], store) === true ? evaluate(a[1], store) : evaluate(a[2], store)
 		case "throw":
 			throw new Error(arg as string)
+		case "quote":
+			return arg
 	}
 	throw new Error(`no form ${form}`)
 }
@@ -63,6 +70,8 @@ type Check = { at: number; check: (a: Answer, label: string) => void }
 function generate(seed: number) {
 	const pick = rand(seed)
 	const one = <T>(xs: T[]) => xs[pick(xs.length)]
+	const text = () => Array.from({ length: pick(4) }, () => one(PARTS)).join("")
+	const named = (n: string) => n + one(NAMED)
 	const requests: Request[] = []
 	const checks: Check[] = []
 	const store = new Map<string, unknown>()
@@ -73,27 +82,42 @@ function generate(seed: number) {
 		requests.push(r)
 	}
 
+	const os = [named("o0"), named("o1"), named("o2")]
 	for (let i = 0; i < 3; i++) {
-		const parent = i === 0 || pick(2) === 0 ? undefined : `o${pick(i)}`
-		scopes.set(`o${i}`, { parent, alive: true })
+		const parent = i === 0 || pick(2) === 0 ? undefined : os[pick(i)]
+		scopes.set(os[i], { parent, alive: true })
 		send(
 			parent === undefined
-				? { op: "root", name: `o${i}`, info: [["actor", `o${i}`]] }
-				: { op: "scope", name: `o${i}`, parent, info: [["why", `o${i}`]] },
+				? { op: "root", name: os[i], info: [["actor", os[i]]] }
+				: { op: "scope", name: os[i], parent, info: [[text(), os[i]]] },
 		)
 	}
-	const values: Record<string, number> = {}
+	const values: Record<string, number | string> = {}
 	for (const h of HOST) values[h] = pick(6)
+	for (const h of STRS) values[h] = text()
 	for (const [k, v] of Object.entries(values)) store.set(k, v)
 	send({ op: "write", values })
 
 	const reads = (keys: string[], n: number) =>
 		Array.from({ length: n }, () => ({ read: one(keys) }))
 	const keys = [...HOST]
+	const strs = [...STRS]
 	const computes = 3 + pick(5)
 	for (let i = 0; i < computes; i++) {
-		const k = pick(10)
+		const k = pick(13)
+		const name = named(`c${i}`)
 		let f: Expr
+		if (k >= 10) {
+			// a string chosen: on a string read, or a number
+			const test = pick(2)
+				? { eq: [{ read: one(strs) }, { quote: one([text(), one(PARTS)]) }] }
+				: { eq: [{ mod: [{ read: one(keys) }, 2] }, 0] }
+			f = { if: [test, { read: one(strs) }, pick(3) ? { read: one(strs) } : { quote: text() }] }
+			made.push({ name, kind: "compute", scope: one(os), f, alive: true })
+			send({ op: "compute", name, scope: made.at(-1)!.scope, f, to: name })
+			strs.push(name)
+			continue
+		}
 		if (k < 5) f = { sum: reads(keys, 1 + pick(3)) }
 		else if (k < 7) f = { mod: [{ sum: reads(keys, 1 + pick(2)) }, 3] }
 		else if (k < 9) {
@@ -107,17 +131,16 @@ function generate(seed: number) {
 		} else {f = {
 				if: [{ eq: [{ read: one(HOST) }, 5] }, { throw: "five" }, { sum: reads(keys, 2) }],
 			}}
-		const name = `c${i}`
-		const scope = `o${pick(3)}`
+		const scope = one(os)
 		made.push({ name, kind: "compute", scope, f, alive: true })
 		send({ op: "compute", name, scope, f, to: name })
 		keys.push(name)
 	}
 	const effects = 2 + pick(3)
 	for (let i = 0; i < effects; i++) {
-		const name = `e${i}`
-		const scope = `o${pick(3)}`
-		const f = { sum: reads(keys, 1 + pick(2)) }
+		const name = named(`e${i}`)
+		const scope = one(os)
+		const f = pick(3) ? { sum: reads(keys, 1 + pick(2)) } : { read: one(strs) }
 		made.push({ name, kind: "effect", scope, f, alive: true })
 		send({ op: "effect", name, scope, f, act: { log: [name, { given: "value" }] } })
 	}
@@ -186,8 +209,11 @@ function generate(seed: number) {
 	for (let step = 0; step < STEPS; step++) {
 		const k = pick(10)
 		if (k < 7) {
-			const w: Record<string, number> = {}
-			for (let i = 1 + pick(2); i > 0; i--) w[one(HOST)] = pick(6)
+			const w: Record<string, number | string> = {}
+			for (let i = 1 + pick(2); i > 0; i--) {
+				if (pick(3)) w[one(HOST)] = pick(6)
+				else w[one(STRS)] = text()
+			}
 			for (const [key, v] of Object.entries(w)) store.set(key, v)
 			send({ op: "write", values: w })
 		} else if (k < 9) {
@@ -198,7 +224,7 @@ function generate(seed: number) {
 				send({ op: "dispose", scope: m.name })
 			}
 		} else {
-			const o = `o${1 + pick(2)}`
+			const o = os[1 + pick(2)]
 			if (scopes.get(o)!.alive) {
 				for (const [n, x] of scopes) {
 					let y: string | undefined = n

@@ -1,46 +1,42 @@
-// The patch nodes (patch.ts) on the line protocol: one JSON request per line in, one answer per
-// line out, in order. State lasts for the process: a table, the overlay in front of it, and places
-// (root "R") reading through the overlay; the scheduler, scopes, pulse, state and header are the
-// places harness's world (filesystem/places/typescript/world.ts), whose own table and places
-// this harness leaves alone. Another implementation joins by speaking this (HARNESS).
-//
-// every write is the host's, from outside, with its scope open. time: whole seconds, the time
-// now when not given (a scenario gives it wherever staleness shows). ids are strings, a part
-// any string ("value" and "children" the usual). patches: op's, as the places harness has them.
+// patch nodes (patch.ts) on the line protocol: one JSON request per line in, one answer per line
+// out, in order. state lasts for the process: a table, the overlay in front of it, and places (root
+// "R") reading through it; the scheduler, scopes, pulse, state and header are world_harness.ts'
+// (filesystem/places/typescript), whose own table and places this leaves alone. other
+// implementations join by speaking this (HARNESS)
+// every write is the host's, outside, scope open. time: whole seconds, now when not given. ids are
+// strings, a part any string. patches: op's
 //
 // writes:
-// { op: "kids", id, value, time? }                 → {}   the children entry there, replaced
-// { op: "value", id, value, time? }                → {}   the value entry there, replaced
-// { op: "patch", id, on, part?, at?, patches, time? } → {}   a patch node's entry under "patch":
-//    part "value" if not given; at: the change time of the target's entry now, or 0 (none there)
-// { op: "edit", part, id, patches, time?, metadata? } → {}   patches to the entry there, said
-//    through the overlay's commit; none there: an entry made and added. metadata: pairs after
-//    the header's own. an ApplyError answers { error: code, patch: index }
-// { op: "del", part, id }                          → {}   the entry out of the table
+// { op: "kids", id, value, time? }                 → {}   the children entry, replaced
+// { op: "value", id, value, time? }                → {}   the value entry, replaced
+// { op: "patch", id, on, part?, at?, patches, time? } → {}   a patch node's "patch" entry; part
+//    default "value"; at default: the target entry's change time now, or 0 (none there)
+// { op: "edit", part, id, patches, time?, metadata? } → {}   patches to the entry, said through the
+//    overlay's commit (none there: made). metadata: pairs after the header's own. an ApplyError
+//    answers { error: code, patch: index }
+// { op: "del", part, id }                          → {}   the entry out of the table, or
 //                                                  → { error: "nothing-there" }
 // { op: "land", id, time? }                        → {}   patch.ts' land, then the overlay's
 //    commit; not a patch node: { error: "nothing-there" }; patches that don't apply: their code
 // reads, outside any run (told to no one):
 // { op: "read", part?, id, path? }                 → { value? }   places' read, through the overlay
-// { op: "entries", part?, id, path? }              → { items }   each { value?, from, stale?, error? }
-//    front first (error: the code of why it was set aside)
-// { op: "change", part?, id }                      → { time?, actor?, metadata?, hasOp }   the
-//    change of the entry a read sees
-// { op: "node", part?, id }                        → { value? }   the entry's value in the table,
-//    never the overlay's
-// { op: "index", id? }                             → { ids }   a target's patch nodes in order;
-//    no id: { size }, how many targets have any
+// { op: "entries", part?, id, path? }              → { items }   each { value?, from, stale?,
+//    error? }, front first (error: why it was set aside)
+// { op: "change", part?, id }                      → { time?, actor?, metadata?, hasOp }   of the
+//    entry a read sees
+// { op: "node", part?, id }                        → { value? }   the table's, never the overlay's
+// { op: "index", id? }                             → { ids }   a target's patch nodes in order; no
+//    id: { size }, how many targets have any
 // { op: "get", path }                              → { id? }   places' walk, by names
-// { op: "watch", name, scope, f }                  → {}   a compute made with scope open, running
-//    the program f each run, its results (compared as JSON) kept (op "state", world.ts)
+// { op: "watch", name, scope, f }                  → {}   a compute in scope running f each run,
+//    its results (compared as JSON) kept (op "state", world_harness.ts)
 //
-// a program e: a number, string, boolean, null is itself; a list, its members evaluated; a map is
-// one of
+// a program: a scalar is itself, a list its members evaluated, a map one of
 //   {"read":[id, path?, part?]}     the value, or null; id may be a program
 //   {"entries":[id, path?, part?]}  the items, as the entries request
 //   {"get":names}                   the id there, or null
 //   {"throw":message}               an error thrown by the run
-// or one of the world's plain forms (world.ts, basic)
+// or one of the world's plain forms (world_harness.ts, basic)
 import createEntry from "@ermine/node/entry"
 import update from "@ermine/node/update"
 import { ApplyError, type Key as Step, type Patch } from "@ermine/op/apply"
@@ -59,7 +55,7 @@ import {
 	json,
 	s,
 	scope,
-} from "../../../filesystem/places/typescript/world.ts"
+} from "../../../filesystem/places/typescript/world_harness.ts"
 import { createOverlay, entries, type Item, land, type Overlay, PatchError } from "./patch.ts"
 
 type Json = unknown

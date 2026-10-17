@@ -1,41 +1,39 @@
-// processes at paths (processes.ts) on the line protocol: one JSON request per line in, one answer
-// per line out, in order. its own world, lasting for the process: a scheduler, a table, paths, and
-// places (root "R") given [processes("R"), children]. ids are strings, a path a list of names. the
-// host writes with its scope open, its info [["actor","test"]]. a PlacesError answers { error: code }
+// processes (processes.ts) on the line protocol: one JSON request per line in, one answer per line
+// out, in order. one world per process: a scheduler, table, paths, and places (root "R",
+// contributors [processes("R"), children]). ids are strings, a path a list of names. the host
+// writes with its scope open, info [["actor","test"]]. a PlacesError answers { error: code }
 //
 // the world:
-// { op: "root", name, info }               → {}   a scope with no parent, its info the pairs given
-// { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
+// { op: "root", name, info }               → {}   a scope with no parent, those info pairs
+// { op: "kids", id, value }                → {}   the children entry, replaced (a table event)
 // { op: "place", at, name, id }            → {}   places' place, at the parent's id
 // { op: "rename", at, name, to }           → {}
 // { op: "start", path, id }                → {}   addProcess, said written
 // { op: "stop", path }                     → {}   removeProcess, said written
-// { op: "rows" }                           → { value? }   the root's process trie as the table has it
-//    (told to no one); none: {}
-// { op: "patches" }                        → { patches? }   the patches of the trie's latest change
-// { op: "asked" }                        → { steps, names }   how many times the rows' contributor
-//    was asked a step and its names since last asked (pruning: places.ts); its level not counted
+// { op: "rows" }                           → { value? }   the root's process trie, as in the table
+// { op: "patches" }                        → { patches? }   the trie's latest change's patches
+// { op: "asked" }                          → { steps, names }   steps and names asked of the rows'
+//    contributor since last asked (its level not counted)
 // reads, outside any run (lib.ts):
 // { op: "get", path }                      → { id? }
 // { op: "entries", path }                  → { entries }   each { id, from }
 // { op: "list", at }                       → { names }
-// { op: "members", at }                    → { members }   each { name, id?, from } (a level: no id)
+// { op: "members", at }                    → { members }   each { name, id?, from } (level: no id)
 // { op: "lookup", names, from }            → { path? }
 // scope nodes (scopes.ts):
-// { op: "scope", name, parent, info }      → {}   a scope under the named one, its info the pairs given
+// { op: "scope", name, parent, info }      → {}   a scope under the named one, those info pairs
 // { op: "give", scope, id? }               → { id }   the scope's node id, made the first time
 // { op: "nodeOf", scope }                  → { id? }
 // { op: "nearest", scope }                 → { id? }   its own, or the nearest above with one
-// { op: "write", id, part, value }         → {}   the entry there, replaced (a table event)
-// { op: "parts", id }                      → { parts }   the parts the table holds at the id, sorted
+// { op: "write", id, part, value }         → {}   the entry, replaced (a table event)
+// { op: "parts", id }                      → { parts }   the parts at the id, sorted
 // { op: "teardown", scope }                → {}
 // computes:
-// { op: "watch", name, scope, f }          → {}   a compute made with scope open, running the
-//    program f each run, its results compared as JSON. f: {"get":path} {"entries":path}
-//    {"names":path} {"members":path} {"lookup":[names,from]}, or a list of them
+// { op: "watch", name, scope, f }          → {}   a compute in scope running f each run, results
+//    compared as JSON. f: {"get":path} {"entries":path} {"names":path} {"members":path}
+//    {"lookup":[names,from]}, or a list of them
 // { op: "pulse" }                          → {}
-// { op: "state", name }                    → { runs, value }   how many times it ran; its last
-//    result given to set (null: none)
+// { op: "state", name }                    → { runs, value }   run count; last result (null: none)
 import createEntry from "@ermine/node/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

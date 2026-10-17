@@ -52,21 +52,28 @@
 //        the harness's own listener l throws an error of message s the next time it is told (of
 //        x, when given), once: "mark" (onMark; x one of its keys), "starts", "ends", "acts" (a
 //        run's start, its end, an act; x the computation), "forgotten", "started" (onTrackingEnd,
-//        onTrackingStart; x the key). armed again: the last one. else "unknown listener l"
+//        onTrackingStart; x the key), "settles" (onSettle; no x). armed again: the last one. else
+//        "unknown listener l"
 //
-// thrown out (finish, then rethrow): what a listener throws, or a cleanup run after a run, is
-// held while what was going on finishes (every listener told, the run or act or dispose or mark
-// all done), then comes out: the first one, as the answer's error of the request it came out
-// of. a pulse is left there: what is still due, or to act, waits for the next. a run is done
+// thrown out (finish, then rethrow): what a listener throws, or a cleanup run once the round's runs
+// are done, is held while what was going on finishes (every listener told, the run or act or
+// dispose or mark all done), then comes out: the first one, as the answer's error of the request
+// it came out of. a pulse is left there: what is still due, or to act, waits for the next. a run is done
 // before what one threw in it (its start, end, a read's) comes out; a read's, out of the read,
-// into the run, so the run fails with it unless it catches it. the error of a pulse left past
-// ENDLESS is "endless"
+// into the run, so the run fails with it unless it catches it. before an act, what the effect's
+// last act made goes: a cleanup's error there is the act's (told with it), a listener's comes out
+// once the act is done. a promise settling and a computation's making have nothing to throw to
+// (a settling no caller; the making gives back the computation) (mine): what a listener threw in
+// one comes out of a pulse, the one going on or else the next, once it is done: its answer's
+// error, before the pulse's own (TS: the scheduler holds it; C: sc_escaped after the call, kept
+// by the harness till then). a request or form that made it answers as it would have. the error
+// of a pulse left past ENDLESS is "endless"
 //
 // ticks: each mark (write, changed, a write form, a compute's set) and each new computation takes
 // the next, from 1. a computation made is due at once, at its tick.
 //
 // a moment, computations by name, an error as below:
-//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n}
+//   {"due":c,"tick":t,"writer"?:c}  {"starts":c,"run":n,"rank":r}
 //   {"acts":c,"run":n,"early"?:true,"error"?:s}
 //   {"ends":c,"run":n,"ended":"done"|"pending"|"failed"|"stopped"|"looping","equal"?:b,
 //    "error"?:s,"waits"?:c,"through"?:[c..],"reads"?:[k..]}   reads: when asked for
@@ -80,16 +87,18 @@
 // promise settling has no starts before it. a run disposed in itself is told no end. an act: run,
 // the run whose value it is. through: the computations on the loop, each once, in the order they
 // were made (not the order along the loop).
-// what runs: in rounds. the settled land first, in the order settled; then the due run, one at a
-// time: of the due, not one waiting after a due one (stopped), nor one with a due one above it;
-// of the rest, the earliest due (tick), then the order made. then the early effects act, then
-// the others, each queue in the order their runs ended, an owner's act before what it made. an
-// act whose effect is due again does not act.
-// above: a computation is after the writers of the keys its last run read and the one it waits
-//   after (learned as runs end: a first run is after nothing, unless a key was declared); above
-//   it, what it is after, what that is after, and on, but for one on a cycle with it (each above
-//   the other). what is not due is passed through: a due one above one not due above it is
-//   above it. no rank is said or pinned: only this order
+// what runs: in rounds. the settled land first, in the order settled; then the due run, lowest
+// rank first, then the earliest due (tick), then the order made; one waiting after a due one
+// (stopped) later; then the early effects act, then the others, each queue in the order their
+// runs ended, an owner's act before what it made. an act whose effect is due again does not act.
+// ranks (order.ts): a computation is after the writers of the keys its last run read and the one
+//   it waits after; nothing after: 0; else one past the most of those. learned as runs end, so a
+//   first run is rank 0 unless a key was declared. made whole when first asked (a pick, an early
+//   effect's first run), then mended as edges change, only rising (an edge gone, or one gone,
+//   lowers nothing); a cycle (a component of more than one) shares one rank, one past what it is
+//   after. a mend past 4·ranked+64 steps (ranked: how many have a rank) stops: made whole again
+//   at the next pick, from the edges then, where one may fall (103). rank: its computation's, as
+//   the run starts
 // writer: a key's, the compute last named by a change of it, alive then: named by a run of it (in
 //   its code, after an await too, the latest run or not) or by it (its set, its cleanup: its
 //   latest run); or declared. a change named by an effect, by one gone or not run yet, or by none
@@ -112,19 +121,35 @@
 // a flagged run: a new result ends looping (not set, not acted on, the last result kept); equal,
 //   done, but looping when it cut; failed when it cut, looping, its error told. cut: a loop mark
 //   its change makes (in its code, its cleanups after it, after its await) is dropped, that
-//   computation not made due; a computation it makes (made due all the same) cuts too. it is
-//   flagged till it ends; pending, till it lands and ends
+//   computation not made due; a computation it makes, new or claimed (made due all the same),
+//   cuts too (132). it is flagged till it ends; pending, till it lands and ends
 // looping: its computation is made due by no mark on a loop through it; one that is not on one
 //   makes it due, and ends it
 // owns: what is made with a computation open (scopes, computations, cleanups) in its run, set or
-//   act is under it. before each run (a compute's: all; an effect's: what was made since its last
-//   act), what is under it goes, newest first (each the same way; what one throws is thrown out),
-//   and its own cleanups are set aside: like Solid, they run once the run is done (its result
-//   set, before its end is told; for every way a run ends), newest first, with no catch: the
-//   first that throws ends the rest, and its error is thrown out (above). a computation that
-//   goes takes those set aside with it. before each act, all of an effect's goes. a teardown
-//   (dispose, or one that goes): what is under first, newest first (each the same way), then its
-//   cleanups, newest first; every one runs, and the first error is the teardown's, after
+//   act is under it. a rerun keeps what it makes again (chee 10-17: "a parent rerun does not
+//   destroy its children"). as a run starts, what its earlier runs made (a compute's: all; an
+//   effect's: all but what its act made) is old: alive as ever while the run goes (it runs when
+//   due, is read, writes), and its own cleanups are set aside. made again in the run (the effect
+//   and compute forms, by name, under the scope open): claimed: the same computation, its runs
+//   counted on, its last result and what it tracks kept, its code the new one; due (a tick, told
+//   as a due by the run's computation, or nothing told when it is due already). the run done (done,
+//   equal or not): what is still old goes at its end, newest first (each as a teardown; what one
+//   throws is thrown out), before its end is told (mine: at the run's end, not the round's, so a
+//   child not made again never runs after it); the cleanups set aside run like Solid 2.0 once the
+//   round's runs are done, before its acts (the round's commit), each computation's newest first
+//   in the order their runs were done, with no catch: the first that throws ends the rest of that
+//   computation's, and its error is thrown out (above); queued by a flagged run, a loop mark they
+//   make is cut, as that run's own are. a run that ends any other way (failed, pending, stopped,
+//   looping) keeps both (chee: "keep them until the parent is actually destroyed"): the next run
+//   finds them old with what this one made, and a promise landing done lets them go then. what is
+//   made with no name (a plain scope; a computation not made again by name) has nothing to claim
+//   it by: it is old at the next run and goes once a run is done (mine). a computation that goes
+//   takes what is old and set aside with it. before each act, what the effect's last act made
+//   goes and the cleanups made in that act run (every one; the first cleanup's error is the act's,
+//   a listener's comes out after the act, above). a teardown (dispose, or one that goes): what is
+//   under first, newest first (each the same way; then what is old), then its cleanups, newest
+//   first (those set aside older than the rest); every one runs, and the first error is the
+//   teardown's, after: a listener's (one under it too), else a cleanup's
 // a cleanup's writer open: on a computation, it (its latest run: after a run, that run);
 //   on a plain scope, the teardown's: by a computation's teardown or clean, that computation; by a
 //   dispose, the writer open there (the host's: none)
@@ -137,7 +162,12 @@
 // an error: a scheduler error's code ("disposed", "unscoped", "empty"), "pending" for a
 // thrown PENDING, else its message. a request that fails answers {"error":s}, and the harness
 // goes on. the harness's own: "unknown op o", "unknown form f" (a map of no key: "unknown form
-// undefined"), "no scope s", "no promise p", "name taken: s".
+// undefined"), "no scope s", "no promise p", "name taken: s", "a effect with no name", "a compute
+// with no name" (the form's name not a string: nothing made).
+// names (the harness's labels; the scheduler has none): a making checks the scope it is under
+// first (no scope), then the name (name taken). a name is taken by one alive and not old (else
+// taken over), and by a computation from the start of its making till it is named (mine): what an
+// early effect's first run makes at its own name is refused, so a name is never held twice
 //
 // an expression e: a number, string, boolean or null is itself; a list, its members evaluated;
 // a map of one key is one of:
@@ -174,8 +204,13 @@
 //                       of the writer; nothing: null
 //   {"cleanup":[s,e]}   e when s is cleaned up; s null: the scope open; null
 //   {"effect":[c,f,act,early?]}  an effect c made under the scope open (in an act: its effect),
-//                       as the effect request's; early true: early. null. c taken by one gone: taken
-//                       over
+//                       as the effect request's; early true: early. null. c old under the scope
+//                       open (made by an earlier run of it): claimed, its f and act these (early
+//                       or not as it was made; a claim is no making: it runs in the round, mine).
+//                       c taken by one gone, or old elsewhere: taken over
+//   {"compute":[c,f,to?]}  a compute c made under the scope open, f its code, its results kept at
+//                       to and marked as the compute request's; null. claimed and taken over as
+//                       the effect form's
 //   {"dispose":s}       s disposed; null
 //   {"quote":x}         x as it is
 import {
@@ -220,7 +255,7 @@ function moment(m: Told, reads: boolean): Json {
 			tick: m.tick,
 		}
 	}
-	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run }
+	if ("starts" in m) return { starts: nameOf(m.starts), run: m.run, rank: m.rank }
 	if ("acts" in m) {
 		const out: Record<string, Json> = { acts: nameOf(m.acts), run: m.run }
 		if (m.early) out.early = true
@@ -242,7 +277,7 @@ let told = 0
 let pulsing = false
 // a listener armed to throw, once: which, at what (a computation's name, or a key), its message
 let armed: { on: string; at?: string; error: string } | undefined
-const LISTENERS = ["mark", "starts", "ends", "acts", "forgotten", "started"]
+const LISTENERS = ["mark", "starts", "ends", "acts", "forgotten", "started", "settles"]
 function fire(on: string, at: () => string[]) {
 	if (armed?.on !== on || (armed.at !== undefined && !at().includes(armed.at))) return
 	const e = armed.error
@@ -265,38 +300,50 @@ s.onTrackingStart((key) => {
 	started.push(key)
 	fire("started", () => [key as string])
 })
-// the tick of the latest mark (each mark and each new computer takes the next); the newest
-// computer, by its mark (no keys, itself due)
+s.onSettle(() => fire("settles", () => []))
+// the tick of the latest mark (each mark and each new computer takes the next)
 let tick = 0
-let fresh: Computer | undefined
-s.onMark((keys, _run, due, t) => {
+s.onMark((keys, _run, _due, t) => {
 	tick = t
-	if (keys.length === 0 && due.length === 1) fresh = due[0]
 	fire("mark", () => keys as string[])
 })
 
-// a computer made by f and named n, though what it did at once threw out (its mark's listener, an
-// early run or act): named all the same, then the error is the request's. given: told it
+// the names of the computers being made: taken till named (what an early one's run makes under
+// the same name is refused, so a name is never held twice: mine)
+const naming = new Set<string>()
+// a computer made by f and named n (what a listener threw meanwhile comes out of a pulse: the
+// scheduler's). given: told it
 function making(n: string, f: () => Computer, given: (c: Computer) => void): Computer {
-	fresh = undefined
+	naming.add(n)
 	let c: Computer
 	try {
 		c = f()
-	} catch (e) {
-		if (fresh !== undefined && !names.has(fresh)) {
-			given(fresh)
-			name(fresh, n)
-		}
-		throw e
+	} finally {
+		naming.delete(n)
 	}
 	given(c)
 	name(c, n)
 	return c
 }
 
-// a name taken (by one not torn down: else taken over) is refused before anything is made
+// a name taken (by one being made, or one not torn down and not old: else taken over) is refused
+// before anything is made
 function vacant(n: string) {
-	if (named.get(n)?.state === "alive") throw new Error(`name taken: ${n}`)
+	const o = named.get(n)
+	if (naming.has(n) || o?.state === "alive" && !o.old) throw new Error(`name taken: ${n}`)
+}
+
+// each computation's code, in place: a claim gives it new code
+const codes = new Map<Computer, { f: Json; act?: Json }>()
+
+// the computation n, old under the scope open, claimed and given new code: true. else false
+function claimed(n: string, code: { f: Json; act?: Json }): boolean {
+	const o = named.get(n)
+	if (o === undefined || !("kind" in o) || !o.old) return false
+	if (o.parent !== s.getCurrentScope()) return false
+	const c = o as Computer
+	codes.set(c, code)
+	return s.claim(c)
 }
 function name(o: Scope, n: string) {
 	named.set(n, o)
@@ -402,13 +449,13 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			return s.runWithScope(ctx.self!, () => evaluate(arg, { ...ctx, run: undefined }))
 		case "in":
 			return s.runWithScope(scope(a[0]), () => evaluate(a[1], { ...ctx, run: undefined }))
-		case "scope":
+		case "scope": {
+			// the scope under first, then the name
+			const up = a[2] === undefined ? undefined : scope(a[2])
 			vacant(a[0] as string)
-			name(
-				s.createScope(a[1] as Pair[], a[2] === undefined ? undefined : scope(a[2])),
-				a[0] as string,
-			)
+			name(s.createScope(a[1] as Pair[], up), a[0] as string)
 			return null
+		}
 		case "within":
 			return s.runWithScope(
 				s.createScope(a[0] as Pair[]),
@@ -434,18 +481,50 @@ function evaluate(e: Json, ctx: Ctx): unknown {
 			s.teardown(scope(arg))
 			return null
 		case "effect": {
-			const [f, act] = [a[1], a[2]]
+			if (typeof a[0] !== "string") throw new Error("a effect with no name")
+			const code = { f: a[1], act: a[2] }
+			if (claimed(a[0] as string, code)) return null
 			vacant(a[0] as string)
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
+			const now = () => made ? codes.get(made)! : code
 			making(a[0] as string, () =>
 				s.createEffect(
 					(previous) =>
-						evaluate(f, { run: s.getRun(), self: self(), previous: previous as Json }),
-					(value, previous) => void evaluate(act, { self: self(), value, previous }),
+						evaluate(now().f, { run: s.getRun(), self: self(), previous: previous as Json }),
+					(value, previous) => void evaluate(now().act, { self: self(), value, previous }),
 					undefined,
 					a[3] === true ? { early: true } : undefined,
-				), (c) => made = c)
+				), (c) => {
+				made = c
+				codes.set(c, code)
+			})
+			return null
+		}
+		case "compute": {
+			const [n, f, to] = a as [string, Json, string | undefined]
+			if (typeof n !== "string") throw new Error("a compute with no name")
+			const code = { f }
+			if (claimed(n, code)) return null
+			vacant(n)
+			let c: Computer
+			making(n, () =>
+				s.createComputer(
+					(previous) =>
+						evaluate(codes.get(c)!.f, {
+							run: s.getRun(),
+							self: c,
+							previous: previous as Json,
+						}),
+					(v) => {
+						if (to === undefined) return
+						keep(to, v)
+						s.mark([to], c)
+					},
+				), (x) => {
+				c = x
+				codes.set(x, code)
+			})
 			return null
 		}
 		case "quote":
@@ -471,20 +550,20 @@ async function run(r: Request): Promise<Json> {
 			name(s.createRootScope((r.info ?? []) as Pair[]), r.name as string)
 			return {}
 		case "scope": {
+			// the scope under first, then the name
+			const up = r.parent === undefined ? undefined : scope(r.parent)
 			vacant(r.name as string)
 			const info = (r.info ?? []) as Pair[]
-			name(
-				s.createScope(info, r.parent === undefined ? undefined : scope(r.parent)),
-				r.name as string,
-			)
+			name(s.createScope(info, up), r.name as string)
 			return {}
 		}
 		case "compute": {
+			const o = scope(r.scope)
 			vacant(r.name as string)
 			const to = r.to as string | undefined
 			let c: Computer
 			making(r.name as string, () =>
-				s.runWithScope(scope(r.scope), () =>
+				s.runWithScope(o, () =>
 					s.createComputer(
 						program(r, () => c),
 						(v) => {
@@ -500,12 +579,13 @@ async function run(r: Request): Promise<Json> {
 			return {}
 		}
 		case "effect": {
+			const o = scope(r.scope)
 			vacant(r.name as string)
 			// an early one runs and acts before it is given back: itself, the scope open then
 			let made: Computer | undefined
 			const self = () => made ?? s.getCurrentScope()!
 			making(r.name as string, () =>
-				s.runWithScope(scope(r.scope), () =>
+				s.runWithScope(o, () =>
 					s.createEffect(
 						program(r, self),
 						(value, previous) => void evaluate(r.act, { self: self(), value, previous }),

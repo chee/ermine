@@ -1,8 +1,6 @@
-// layout (layout.ts) on the line protocol (conformance/typescript/harness.ts). Every request stands
-// alone: nothing is kept between lines.
+// layout (layout.ts) on the line protocol (conformance/typescript/harness.ts); requests stand alone
 //
-// Shapes (files/ts/types.ts), in JSON:
-//   hash     64 lowercase hex digits; the null value's is NULL below, which a folder's file needs
+//   hash     64 lowercase hex digits; the null value's is NULL (a folder's file needs it)
 //   head     a bin value's first bytes (names.HEAD, 12), lowercase hex
 //   node     {kept: [hash, form], head?, sides: [[hash, form, head?]], info: [[name, hash, form]],
 //            directory: {name: [ids]}}
@@ -10,11 +8,9 @@
 //   record   a Layout: {home?: [holder, name, position], file?, laid?, was?, sides?: [names],
 //            folder?: true, entries?: {slot: stem | [stem, ...]}, left?: [paths], away?: true}
 //   layout   {id: record}
-//   laid     a Laid as types.ts has it, every field as written, none undefined
-//   step     a Step as types.ts has it, its fields omitted when undefined; before and after null
-//            for nothing
-// Objects are maps: their key order is never part of an answer. Lists are: entries' union stems,
-// sides, info, and the plan's steps, in order.
+//   laid     a Laid (types.ts), every field written, none undefined
+//   step     a Step (types.ts), undefined fields omitted; before/after null for nothing
+// key order is never part of an answer; list order is (union stems, sides, info, plan steps)
 //
 //   {op: "relative", from, to}                      -> {path}
 //   {op: "dir", layout, id}                         -> {path: the path | null}
@@ -23,14 +19,10 @@
 //   {op: "sameInfo", a, b}                          -> {same: true | false}
 //   {op: "lay", graph, old, probe, ino?, time, pass?, before?}
 //                                                   -> {layout, changed, plan}
-//     probe   {folder: [names]}, every entry's name in each folder on disk; a folder not given
-//             has none
-//     ino     {path: number | null}, a folder's file id; a path not given has none (null). No
-//             ino: lay is given none
-//     pass    the store's names passed over; names.PASS when not given
-//     before  the graph old was laid out from; lay's own default (the graph) when not given
-// Bytes that reach an answer (a head) are lowercase hex. Another implementation joins by speaking
-// this (HARNESS).
+//     probe   {folder: [names]} on disk; a folder not given has none
+//     ino     {path: number | null}; a path not given: null; no ino: lay gets none
+//     pass    the store's names passed over; default names.PASS
+//     before  the graph old was laid out from; default lay's own (the graph)
 import { dir, disk, lay, prune, relative, sameInfo } from "./layout.ts"
 import * as names from "./names.ts"
 import type { Form, Graph, Id, Info, Layout, Node } from "./types.ts"

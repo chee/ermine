@@ -1,13 +1,13 @@
-// The reference presence (presence.ts) on the line protocol: one JSON request per line in, one
-// answer per line out, in order (conformance/typescript/harness.ts). State lasts for the process:
-// two devices, "a" and "b", joined by the in-memory channel (channel.ts), and one clock they share,
-// which only { op: "now" } moves: time is the scenario's, never the wall clock. Another
-// implementation joins by speaking this (HARNESS). An anchor is any string; a value plain JSON.
+// presence (presence.ts) on the line protocol: one JSON request per line in, one answer per line
+// out, in order (conformance/typescript/harness.ts). state lasts for the process: devices "a" and
+// "b" on the in-memory channel (channel.ts), and one shared clock only { op: "now" } moves (never
+// the wall clock). other implementations join by speaking this (HARNESS). an anchor is any string;
+// a value plain JSON
 //
 // time
 // { op: "now", t }                           → {}   the clock, in ms (starts at 0)
-// the devices (dev: "a" | "b"; "a" is the pair's first channel, "b" its second)
-// { op: "connect", dev, name, topic, anchor?, patches? } → {}   presence's connect, the connection kept by name
+// the devices (dev: "a" | "b"; "a" the pair's first channel, "b" its second)
+// { op: "connect", dev, name, topic, anchor?, patches? } → {}   presence's connect, kept by name
 // { op: "stop", name }                       → {}
 // { op: "announce", name }                   → {}
 // { op: "set", dev, anchor, who, value, ttl }  → {}   setPresence
@@ -22,13 +22,12 @@
 // { op: "row", dev, anchor, who }            → { row? }   readRow: { who, value, until }
 // { op: "table", dev, anchor }               → { value? }   the entry's value as the table has it
 // { op: "sent" }                             → { sent: [{ from, topic, message }] }   every message
-//    the channels carried, in order, its bytes decoded as CBOR
-// { op: "sizes" }                            → { sizes: [n] }   the bytes of each message the channels carried
-//    (canonical CBOR)
-// { op: "bytes" }                             → { bytes: [hex] }   the bytes of each message the channels carried, as hex
-// computes, made with the device's scope open, rerun as the reads they track change
-// { op: "watch", dev, name, f }              → {}   f: { presence: anchor } | { row: [anchor, who] }
-//    (a row gone: null); the run counted, the result (compared as JSON) kept
+//    carried, in order, decoded as CBOR
+// { op: "sizes" }                            → { sizes: [n] }   bytes per message (canonical CBOR)
+// { op: "bytes" }                            → { bytes: [hex] }   each message's bytes, as hex
+// computes, made with the device's scope open, rerun as their reads change
+// { op: "watch", dev, name, f }              → {}   f: {presence: anchor} | {row: [anchor, who]}
+//    (a row gone: null); runs counted, the result (compared as JSON) kept
 // { op: "state", name }                      → { runs, value }
 // the anchor in the tree (watching a path needs a node mounted there)
 // { op: "mount", dev, name, id }             → {}   the children entry "R" has id under name

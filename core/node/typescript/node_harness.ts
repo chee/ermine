@@ -6,19 +6,20 @@
 //    value: any JSON (null is a value; not given: none), typed arrays and bytes in the JSON form
 //    (conformance/typescript/form.ts: revive reads it, toJson writes it). header: the change
 //    header as given (never an op)
-//    entry: no value key when none; change: the header's fields as given, and the time now (whole
-//    seconds since 1970) when it gave none; in the header's order: time, actor, reader, external,
-//    metadata, op. any other field dropped. a time of -0 is 0
+//    entry: no value key when none; change: the header's fields as given (time, actor, reader,
+//    external, metadata, op), and the time now (whole seconds since 1970) when it gave none. any
+//    other field dropped. a time of -0 is 0
 //    the header's fields: time a whole number (0 and negatives kept); actor any JSON, null too;
-//    reader a string; external a list of sites { file, line, column?, function? }, answered in
-//    that order, column and function only when given; metadata a list of [string, value] pairs,
-//    in order, repeats kept. plain JSON, not the JSON form: give no form there
-//    the value given back as it was read: a map's keys in their order, -0 kept, NUL and lone
-//    surrogates kept in strings and keys; a typed array's elements as its kind holds them
+//    reader a string; external a list of sites { file, line, column?, function? }, column and
+//    function only when given; metadata a list of [string, value] pairs, in order, repeats kept.
+//    plain JSON, not the JSON form: give no form there
+//    the value given back as it was read: -0 kept, NUL and lone surrogates kept in strings and
+//    keys; a typed array's elements as its kind holds them
 //    (float32 rounded, an integer kind's -0 is 0, 64-bit as plain decimal: "-0" is "0", "007"
-//    is "7")
+//    is "7"). a map's key order is not part of its value (op's apply.ts): answers are compared by
+//    content
 // { op: "node", values: { <table>: value, ... }, header? } → { node: { <table>: entry, ... } }
-//    each table name any string (NUL, lone surrogates, __proto__ too), in the order given; each
+//    each table name any string (NUL, lone surrogates, __proto__ too); each
 //    value as above (JSON has no undefined: a table left out is not given); one header for every
 //    table, and with no time the same time now for all. values: a map, always given
 // Errors, as { error: "text" } (the text is no part of the protocol), the harness going on:

@@ -1,5 +1,5 @@
 // build (build.h) on the line protocol of typescript/build_harness.ts, which documents it and the
-// compilers (conformance/c/harness.h has the loop). Its world is places' (world.h): the scheduler, the
+// compilers (conformance/c/harness.h has the loop). Its world is places' (world_harness.h): the scheduler, the
 // table, the host's scope and places (root "R", children alone); this adds the builds, the watches and
 // the compilers.
 #include <stdio.h>
@@ -7,7 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "../../../filesystem/places/c/world.h"
+#include "../../../filesystem/places/c/world_harness.h"
 #include "build.h"
 #include "mem.h"
 

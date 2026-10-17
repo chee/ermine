@@ -1,36 +1,26 @@
-// The disk of the store's and the program's harnesses (store_harness.ts, program_harness.ts): a temp
-// folder of the run's own, the edits made on it between requests, and what it shows when looked
-// at. A harness makes the edits and the snapshots itself, the same for every implementation, as a
-// person's Finder would: never through the store. Nothing here is the store's or the program's rule.
+// the disk for store_harness.ts and program_harness.ts: a temp folder per run, edits made on it
+// between requests as a person's Finder would (never through the store), and snapshots of it
 //
-// The temp folder holds Store (the store's folder), Trash (the fake Trash, made by the store or an
-// edit), Home (a test home, there from the start: ~/.ermine/external is @Home/.ermine/external),
-// Outside (the one place the store's host names, made by an edit when needed) and scratch (where a
-// write is made before it is renamed in).
+// temp folder: Store, Trash (fake), Home (~/.ermine/external is @Home/.ermine/external), Outside
+// (the one place the store's host names), scratch (writes made here, then renamed in)
+// paths: from the store's folder ("" itself), or "@path" from the temp folder ("@" itself)
 //
-// A path in an edit or a request is from the store's folder ("" is the folder itself), or, written
-// "@path", from the temp folder ("@" is the temp folder itself):
-//   {edit: "write", path, text | hex, keep?}  a file's bytes: written beside it and renamed over it,
-//                       a new file id and no extended attributes, as an app saves; keep: written in
-//                       place, its time then set to 2001-01-01, so it is never the file as laid
+//   {edit: "write", path, text | hex, keep?}  written beside and renamed over: a new file id, no
+//                       xattrs, as an app saves. keep: in place, its time set to 2001-01-01
 //   {edit: "mkdir", path}  {edit: "remove", path} (all of it)  {edit: "rename", from, to}
 //   {edit: "link", path, target}
-//   {edit: "copy", from, to}  as Duplicate: every entry, hidden ones and extended attributes too
-//                       (cp -Rp)
+//   {edit: "copy", from, to}  as Duplicate (cp -Rp): hidden entries and xattrs too
 //   {edit: "attr", path, name, text | hex}  {edit: "unattr", path, name}  the entry's own
-//   {edit: "id", path, of}  the file's party.chee.ermine.id set to the id an answer showed as `of`
+//   {edit: "id", path, of}  party.chee.ermine.id set to the id an answer showed as `of`
 //   {edit: "cut", path, by}  the file less its last by bytes
-//   {edit: "unframe", count, leave}  .ermine/manifest less its last count whole frames, but the
-//                       first leave bytes of the first of them: a frame cut short
+//   {edit: "unframe", count, leave}  .ermine/manifest less its last count frames, but the first
+//                       leave bytes of the first: a frame cut short
 //   {edit: "append", path, hex}
-//   {edit: "frame", records}  a frame appended to .ermine/manifest: 4 bytes big-endian of its
-//                       length, then the CBOR of {key: bytes | null}; records {key: hex | null},
-//                       but plan given decoded, in JSON form (conformance/typescript/form.ts), each
-//                       folder's file id in a step's before or after written {"ino": path}, the
-//                       file id of what is at path now
+//   {edit: "frame", records}  a frame appended to .ermine/manifest (4-byte big-endian length, CBOR
+//                       {key: bytes | null}); records {key: hex | null}, plan in JSON form
+//                       (form.ts), a step's before/after folder file id written {"ino": path}
 //
-// What a run shows of what is not the same each run, in every answer and snapshot: the temp folder
-// in a path is "@", and each label's kind (Labels) by the order met.
+// answers and snapshots: the temp folder is "@", label kinds (Labels) numbered by order met
 import * as cbor from "@ermine/encoding/cbor"
 import { byCodePoint } from "./names.ts"
 import { attr, type Sys, system } from "./sys.ts"

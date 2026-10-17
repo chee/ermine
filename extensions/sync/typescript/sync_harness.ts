@@ -1,69 +1,46 @@
-// whole hosts (sync.ts) on the line protocol (conformance/typescript/harness.ts): each a table,
-// places, a scheduler and sync over its own device and storage, as sync_test.ts builds them, joined
-// by in-memory pipes. state lasts for the process. another implementation joins by speaking this
-// (HARNESS). conventions: extensions/sync/conformance/README.md
+// sync_harness: whole hosts (sync.ts) on the line protocol (harness.ts), each a table, places, a
+// scheduler and sync over its own device and storage (as sync_test.ts), joined by in-memory pipes.
+// conventions: extensions/sync/conformance/README.md
 //
-// deterministic: a host's random is the harness's (each call's bytes the first of BLAKE3 of
-// "<host>/<k>", k counting the host's calls from 0, across restarts), so its nonces and minted ids
-// are; a write's change is the request's, or { time: 1760000000, actor: <host>, external:
-// [{ file: "scenario", line: 1 }] }; what sync stamps with the time now (a removal, a settle with
-// no change) has the request's time, default 1760000000
+// deterministic: a host's random is BLAKE3("<host>/<k>"), k counting its calls across restarts; a
+// write's change is the request's, else { time: 1760000000, actor: <host>, external: [{ file:
+// "scenario", line: 1 }] }; sync's own stamps use the request's time, default 1760000000
 //
-// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral? } → { key }   a host
-//                                                            signing with the seed's key; zeros,
-//                                                            tables, merge: createSync's options;
-//                                                            merges: the names of the rules it
-//                                                            knows (of "eg-walker"), default
-//                                                            [merge] or none; ephemeral: the
-//                                                            tables whose changes go out
-//                                                            ephemerally, at any id (default none)
-// { op: "ephemeral", host, tables }     → {}                the host's ephemeral tables from now
-// { op: "advance", ms }                 → {}                the hosts' clock (sync's now, from
-//                                                            1760000000000, moved only so) moved
-//                                                            on, then every host ticked
-// { op: "restart", host }               → {}                closed (its pipes cut), and made again
-//                                                            over the same storage
-// { op: "close", host }                 → {}                closed, its pipes cut, gone
-// { op: "use", host, merge? }           → {}                sync.use: the rule it merges by from
-//                                                            now (one it knows), or none
-// { op: "connect", a, b }               → {}                a pipe, the handshake done (a starts)
-// { op: "disconnect", a, b }            → {}                each lets the other go, the pipe cut
+// { op: "host", name, seed, zeros?, tables?, merges?, merge?, ephemeral?, lazy? } → { key }
+//    zeros, tables, merge, lazy: createSync's; merges: rules known, default [merge] or none;
+//    ephemeral: tables going out ephemerally
+// { op: "ephemeral", host, tables }     → {}
+// { op: "stop", host, id, table? }      → {}                sync.stop, default table value
+// { op: "advance", ms }                 → {}                clock (from 1760000000000) on, hosts
+//                                                           ticked
+// { op: "restart", host }               → {}                closed, made again on its storage
+// { op: "close", host }                 → {}
+// { op: "use", host, merge? }           → {}                sync.use
+// { op: "connect", a, b }               → {}                pipe + handshake (a starts)
+// { op: "disconnect", a, b }            → {}
 // { op: "follow", host, id }            → {}
-// { op: "mint", host, as? }             → { id }            as: the id's label, for later ids
-// { op: "write", host, table?, id, patches, change?, name? }  → { commits, ephemeral? }   the
-//                                                            patches to the entry at (table, id),
-//                                                            default table value; none there: the
-//                                                            first patch's value is the entry, the
-//                                                            rest patches to it. commits: how many
-//                                                            stored commits the host made;
-//                                                            ephemeral: how many ephemeral ones,
-//                                                            left out for none; name: the last
-//                                                            one's label
-// { op: "type", host, table?, id, path, at, text, change?, name? } → { commits }   each code
-//                                                            point of text a write of its own to
-//                                                            the entry there: an insert at path,
-//                                                            from at on
-// { op: "remove", host, table?, id, time?, name? } → { commits }   the entry taken out whole
+// { op: "mint", host, as? }             → { id }            as: a label for the id
+// { op: "write", host, table?, id, patches, change?, name? } → { commits, ephemeral? }
+//    no entry: the first patch's value is it. commits/ephemeral: counts made; name: last's label
+// { op: "type", host, table?, id, path, at, text, change?, name? } → { commits }  a write per
+//    code point, inserting from at
+// { op: "remove", host, table?, id, time?, name? } → { commits }
 // { op: "settle", host, id, change?, time?, name? } → { commits }
 // { op: "quiet" }                       → {}                every host idle, nothing crossing
-// { op: "read", host, table?, id }      → { value } | {}    the entry's value; {}: none
-// { op: "change", host, table?, id }    → { change } | {}   the entry's change, but its op
-// { op: "conflicts", host, id }         → { conflicts }     the conflicts table's entry, [] for
-//                                                            none: [{ head, lamport, actor, tables }]
-// { op: "heads", host, id, layer? }     → { heads }         the history's, in the agreed order;
-//                                                            layer: stored (default) or ephemeral
-// { op: "commits", host, id, layer? }   → { commits }       how many the history has taken in
-// { op: "standing", host, id }          → { standing }      each ephemeral commit standing at the
-//                                                            id: [[key, commit]], by key, then name
-// { op: "overlay", host, id }           → { overlay } | {}   the "ephemeral" table's entry at the id:
-//                                                            { under, on: [{ by, name, tables,
-//                                                            lamport }] }, name a commit; {}: none
-// { op: "commit", host, id, commit, layer? } → { commit } | {}   a commit taken in, in JSON
-// { op: "get", host, id, commit }       → { tables } | {}   sync.get: the node's tables at it
-// { op: "stored", host, id }            → { stored }        how many loose commits are stored
-// { op: "fragments", host, id }         → { fragments }     how many fragments the device holds
-// a commit in an answer: its label (a write's name), else its name as hex. an id: a label minted
-// (as), else the string as given
+// { op: "read", host, table?, id }      → { value } | {}
+// { op: "change", host, table?, id }    → { change } | {}   without its op
+// { op: "conflicts", host, id }         → { conflicts }     [{ head, lamport, actor, tables }]
+// { op: "heads", host, id, layer? }     → { heads }         agreed order; stored (default) |
+//                                                           ephemeral
+// { op: "commits", host, id, layer? }   → { commits }       count taken in
+// { op: "standing", host, id }          → { standing }      [[key, commit]], by key then name
+// { op: "overlay", host, id }           → { overlay } | {}  { under, on: [{ by, name, tables,
+//                                                           lamport }] }
+// { op: "commit", host, id, commit, layer? } → { commit } | {}   JSON
+// { op: "get", host, id, commit }       → { tables } | {}   sync.get
+// { op: "stored", host, id }            → { stored }        count of loose commits
+// { op: "fragments", host, id }         → { fragments }     count
+// commit in an answer: its label, else hex name. id: a minted label, else the string as given
 import * as sd from "npm:@automerge/subduction@0.23.0"
 import { blake3 } from "npm:@noble/hashes@1.8.0/blake3"
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
@@ -99,6 +76,7 @@ type Options = {
 	merges?: string[]
 	merge?: string
 	ephemeral: string[]
+	lazy: boolean
 }
 type Host = {
 	name: string
@@ -146,6 +124,7 @@ async function make(name: string, options: Options, storage: sd.MemoryStorage): 
 		),
 		merge: options.merge,
 		ephemeral: (_doc, table) => options.ephemeral.includes(table as string),
+		lazy: options.lazy,
 		now: () => clock,
 		storage: storage as unknown as sd.SedimentreeStorage,
 		random: randomOf(name),
@@ -244,6 +223,7 @@ async function answer(r: Request): Promise<Answer> {
 				merges: r.merges ?? (r.merge ? [r.merge] : []),
 				merge: r.merge,
 				ephemeral: (r.ephemeral ?? []) as string[],
+				lazy: r.lazy === true,
 			}
 			const h = await make(r.name, options, new sd.MemoryStorage())
 			hosts.set(r.name, h)
@@ -257,6 +237,9 @@ async function answer(r: Request): Promise<Answer> {
 		}
 		case "ephemeral":
 			of(r.host).options.ephemeral = r.tables as string[]
+			return {}
+		case "stop":
+			of(r.host).sync.stop(idOf(r.id), r.table ?? "value")
 			return {}
 		case "advance":
 			clock += r.ms as number

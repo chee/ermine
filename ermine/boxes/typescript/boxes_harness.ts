@@ -1,44 +1,35 @@
 // boxes (boxes.ts) on the line protocol: one JSON request per line in, one answer per line out, in
-// order. its own world, lasting for the process: a scheduler, a table, paths and the host's places
-// (root "R", children alone), the table's events told to the host's places alone (a box's places is
-// a view of them). boxes by name. a folder a write made has a fresh id: answered as "new:<name>", the
-// name it was made at, wherever it is in an answer. ids are strings; a path is a list of names, an
-// address a string or a list of steps. the host writes with its scope open, its info
-// [["actor","test"]]. a PlacesError answers { error: code }
+// order. one world per run: a scheduler, a table, the host's places (root "R"). boxes by name. a
+// folder a write made is answered as "new:<name>". path: a list of names; address: a string or a
+// list of steps. the host writes with scope [["actor","test"]]. PlacesError: { error: code }
 //
-// the world:
+// world:
 // { op: "root", name }                     → {}   a scope with no parent
-// { op: "kids", id, value }                → {}   the children entry there, replaced (a table event)
-// { op: "saved", id }                      → { value? }   the children entry there, as the table has it
-// { op: "place", at, name, id }            → {}   places' place, at the parent's id, committed to the
-//    host's places
+// { op: "kids", id, value }                → {}   children entry replaced (a table event)
+// { op: "saved", id }                      → { value? }   the children entry as the table has it
+// { op: "place", at, name, id }            → {}   places' place, committed to the host's places
 // boxes:
-// { op: "create", name, at?, id?, parent? } → { root }   createBox at the address at (none: "/"), or
-//    at the folder id, in the box named parent (none: the host's); root: its folder
-// { op: "box", box, path, node }           → {}   box at the address path
+// { op: "create", name, at?, id?, parent? } → { root }   at an address (none: "/") or folder id, in
+//    box parent (none: the host's)
+// { op: "box", box, path, node }           → {}
 // { op: "unbox", box, path }               → {}
 // { op: "inside", address, from? }         → { path }
-// { op: "write", box, path, name, id }     → {}   a write made through the box: the folder at path
-//    (the box's get), the name placed in its children, committed to the box's places
+// { op: "write", box, path, name, id }     → {}   name placed in the folder at path, via the box
 // { op: "start", box, path, id }           → {}   addProcess at the box's root, committed
 // { op: "stop", box, path }                → {}   removeProcess at the box's root, committed
-// { op: "rows", box }                      → { value? }   the process rows at the box's root, as the
-//    table has them
-// reads, outside any run (lib.ts), in the box named (none: the host's places); cached: through a path
-// cache on the box's places (lookup has none: lib's)
+// { op: "rows", box }                      → { value? }   the process rows at the box's root
+// reads, outside any run, in box (none: the host's); cached: through a path cache:
 // { op: "get", box?, path, cached? }       → { id? }
 // { op: "entries", box?, path, cached? }   → { entries }   each { id, from }
 // { op: "list", box?, at, cached? }        → { names }
-// { op: "members", box?, at, cached? }     → { members }   each { name, id?, from? } (a level: no id)
+// { op: "members", box?, at, cached? }     → { members }   each { name, id?, from? }
 // { op: "lookup", box?, names, from }      → { path? }
 // computes:
-// { op: "watch", name, scope, box?, cached?, f } → {}   a compute made with scope open, running the
-//    program f each run in the box (none: the host's places), its results compared as JSON. f:
-//    {"get":path} {"entries":path} {"names":path} {"members":path} {"lookup":[names,from]}, or a
-//    list of them
+// { op: "watch", name, scope, box?, cached?, f } → {}   a compute running f each run, compared as
+//    JSON. f: {"get":path} {"entries":path} {"names":path} {"members":path}
+//    {"lookup":[names,from]}, or a list of them
 // { op: "pulse" }                          → {}
-// { op: "state", name }                    → { runs, value }   how many times it ran; its last
-//    result given to set (null: none)
+// { op: "state", name }                    → { runs, value }   runs so far; last result or null
 import createEntry from "@ermine/node/entry"
 import { type Computer, createScheduler, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

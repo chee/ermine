@@ -54,6 +54,10 @@ const typed = (v: unknown): v is Typed =>
 	ArrayBuffer.isView(v) && !(v instanceof DataView) && !(v instanceof Uint8Array)
 const isMap = (v: unknown): v is Record<string, unknown> =>
 	v !== null && typeof v === "object" && !Array.isArray(v) && !ArrayBuffer.isView(v)
+// an answer by content: a map's key order is not part of its value (apply.ts)
+const sorted = (v: unknown) =>
+	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
+const content = (a: unknown) => line(a, sorted)
 
 function text(pick: Pick, most = 6) {
 	return Array.from({ length: pick(most + 1) }, () => PARTS[pick(PARTS.length)]).join("")
@@ -283,12 +287,16 @@ Deno.test(`fuzz: ${SEEDS} seeds × ${PATCHES} patches, as apply.ts; one call as 
 	const answers = (await ask(harness, requests)) as Answer[]
 	assertEquals(answers.length, requests.length, "one answer per request")
 	answers.forEach((a, i) =>
-		assertEquals(line(a), line(expected[i]), `${where[i]}: ${line(requests[i])}`)
+		assertEquals(content(a), content(expected[i]), `${where[i]}: ${line(requests[i])}`)
 	)
 	// the same in place
 	const inPlace = await ask(harness, requests.map((r) => ({ ...r, cow: false })))
 	inPlace.forEach((a, i) =>
-		assertEquals(line(a), line(expected[i]), `${where[i]} (cow: false): ${line(requests[i])}`)
+		assertEquals(
+			content(a),
+			content(expected[i]),
+			`${where[i]} (cow: false): ${line(requests[i])}`,
+		)
 	)
 	// one call, as one call each: the end, an invalid patch's index
 	let at = 0

@@ -1,97 +1,35 @@
-// The reference transport.ts on the line protocol (conformance/run.ts: one JSON request per line in,
-// one answer per line out, in order; an answer is an object). Several devices in one process, linked by in-memory pipes (TRANSPORT.tex).
-// Values (patches, actor) in their JSON form (conformance/typescript/form.ts); names, stored ids, keys, seeds,
-// nonces and blobs as lowercase hex; a document an ermine:// id (ID.tex); an object as BLOP.tex
-// writes it; layer "stored" (the default) or "ephemeral". Lock: "unlocked" only. A scenario starts
-// with reset.
-//   {op: "reset"}                    -> {}  every device closed, every link gone
-//   {op: "device", name, seed, store?, lazy?}
-//                                    -> {key}  a device signing with the Ed25519 key of seed (32
-//                                       bytes): its peer id and its blops' signer are key. store: a
-//                                       label; the storage under it (made empty at first) is kept
-//                                       across drop, and a device made with the label takes in
-//                                       everything it holds before anything else (TRANSPORT.tex, A
-//                                       device); without one the device has storage of its own.
-//                                       lazy: true: what it holds is taken in a document at a
-//                                       time, when followed
-//   {op: "drop", device}             -> {}  the device finished (its work done) and closed, gone with
-//                                       its links; what its labelled storage holds stays
-//   {op: "follow", device, doc}      -> {}  doc followed: synced with every peer, subscribe true,
-//                                       its ephemeral messages subscribed; from now on, with each
-//                                       peer linked too
-//   {op: "link", a, b}               -> {}  an in-memory pipe, the handshake done (a initiates,
-//                                       where roles exist); each side's followed documents then
-//                                       synced with the other as follow says
-//   {op: "unlink", a, b}             -> {}  the pipe gone: nothing more crosses (offline)
-//   {op: "commit", device, doc, object, patches, actor, nonce, at?, layer?}
-//                                    -> {name, stored}  a change made through COMMIT.tex's commit
-//                                       (at: the version, default 0; roots none; time 0; random
-//                                       hands out nonce, 8 bytes); stored: sealed (SEAL.tex) with
-//                                       the device's signer, taken in and added as a loose commit;
-//                                       ephemeral: not sealed, its bytes taken in to the ephemeral
-//                                       layer and published. name: the blop's; stored: the seal's
-//                                       stored id (stored only: an ephemeral blop has none, the
-//                                       answer is {name})
-//   {op: "put", device, doc, head, parents, blob}
-//                                    -> {}  addCommit(tree, head, parents, blob) as given, nothing
-//                                       checked or taken in first: how a hand-made loose commit
-//                                       (bad seal, head not the stored id, ...) gets in
-//   {op: "putfragment", device, doc, head, boundary, checkpoints, blob}
-//                                    -> {}  addFragment(tree, head, boundary, checkpoints, blob) as
-//                                       given (ids hex lists), nothing checked or taken in first
-//   {op: "pump"}                     -> {}  everything runs until quiet: no message crossing, no
-//                                       taking in or fragment building left
-//   {op: "state", device, doc, object?, layer?}
-//                                    -> {heads, history: {waiting, refused}, taking: {waiting,
-//                                       refused}}
-//        heads: the object's (default "value") heads' names, in the agreed order (HISTORY.tex)
-//        history: the layer's histories' waiting() and refused(), as HISTORY.tex gives them
-//        taking: Taking in's own (TRANSPORT.tex), each list sorted by its first field:
-//          waiting: [{commit, waiting: [names]}]  step 5: the parents (blop names, in parents
-//                   order) whose seals are not here
-//          refused: [{commit, refused: code}]     code lock|shape|signature|stored|document|
-//                                                  parents
-//                 | [{commit, stuck: [names]}]    a commit stuck: the names of its parents
-//                                                  refused or stuck, in parents order
-//                 | [{fragment, refused: code}]   a fragment refused whole (FRAGMENT.tex)
-//          commit: a loose commit's head; for what has no commit, a fragment's member the
-//          stored id of its seal, an ephemeral blop (or what was heard as one) its name: BLAKE3
-//          of its bytes
-//   {op: "fragments", device, doc}   -> {fragments: [{head, members, boundary}]}  the fragments here (made or
-//                                       taken in, FRAGMENT.tex), sorted by head, lists sorted;
-//                                       stored ids. Checkpoints left out: one taken in holds 12
-//                                       bytes of each
-//   {op: "stored", device, doc}      -> {stored: [ids]}  the loose commits Subduction holds of the tree
-//                                       (getCommits), heads, sorted
-//   {op: "publish", device, doc, payload}
-//                                    -> {}  payload (hex, any bytes) given to the device's publish
-//                                       as given: taken in (a blop of another signer, or no blop,
-//                                       is refused there as a receiver refuses it), published
-//   {op: "expire"}                   -> {}  every device drops, now, the parts of an ephemeral payload
-//                                       not yet joined (as its setting would, in time)
-//   anything that throws             -> {error: message}
-// Another implementation joins by speaking this (TRANSPORT_HARNESS).
+// transport_harness: transport.ts on the line protocol (conformance/run.ts), several devices in one
+// process linked by in-memory pipes (TRANSPORT.tex). values in JSON form (form.ts); names, stored
+// ids, keys, seeds, nonces, blobs as lowercase hex; doc: an ermine:// id; object as BLOP.tex; layer
+// "stored" (default) | "ephemeral"; lock "unlocked" only. a scenario starts with reset.
 //
-// transport.ts is not written yet; this shim assumes:
-//   createDevice({signer}) -> Device; signer SEAL.tex's {key, sign}; the lock "unlocked"
-//   Device:
-//     connect(transport, initiator: boolean): Promise<void>  Subduction's Transport
-//                                             (sendBytes/recvBytes/disconnect/onDisconnect); the
-//                                             handshake, then the followed documents synced with it
-//     disconnect(key): Promise<void>          the peer with that key
-//     follow(doc): Promise<void>
-//     histories(doc, layer): Histories              the document's histories of that layer (HISTORY.tex)
-//     add(sealed): Promise<void>              a stored blop of this device's: taken in, then
-//                                             addCommit, then fragments built (FRAGMENT.tex)
-//     publish(doc, blop: Uint8Array): Promise<void>   an ephemeral one, its bytes, not sealed, as given:
-//                                             taken in, then publishEphemeral
-//     put(doc, head, parents, blob): Promise<void>   addCommit as given
-//     putFragment(doc, head, boundary, checkpoints, blob): Promise<void>   addFragment as given
-//     taking(doc, layer): {waiting, refused}  as state's taking, hex
-//     fragments(doc): {head, members, boundary, checkpoints}[]  ids as Uint8Array
-//     stored(doc): Promise<Uint8Array[]>
-//     idle(): Promise<void>                   resolves when no taking in or building is left
-//     close(): Promise<void>
+//   {op: "reset"}                          -> {}  every device closed, every link gone
+//   {op: "device", name, seed, store?, lazy?} -> {key}  Ed25519 from seed; store: a labelled
+//      storage kept across drop, taken in first; lazy: taken in a doc at a time, when followed
+//   {op: "drop", device}                   -> {}  finished and closed; labelled storage stays
+//   {op: "follow", device, doc}            -> {}  synced with every peer, ephemeral subscribed
+//   {op: "link", a, b}                     -> {}  pipe + handshake (a initiates), then sync
+//   {op: "unlink", a, b}                   -> {}  offline
+//   {op: "commit", device, doc, object, patches, actor, nonce, at?, layer?} -> {name, stored?}
+//      COMMIT.tex's commit (at default 0, time 0); stored: sealed and added; ephemeral: published
+//   {op: "put", device, doc, head, parents, blob}  -> {}  addCommit as given, nothing checked
+//   {op: "putfragment", device, doc, head, boundary, checkpoints, blob} -> {}  addFragment as given
+//   {op: "pump"}                           -> {}  run until quiet
+//   {op: "state", device, doc, object?, layer?} -> {heads, history: {waiting, refused},
+//      taking: {waiting, refused}}  heads in agreed order; lists sorted by first field:
+//      waiting [{commit, waiting: [names]}]; refused [{commit, refused: code}] code
+//      lock|shape|signature|stored|document|parents, [{commit, stuck: [names]}],
+//      [{fragment, refused: code}]. commit: a loose commit's head, else a seal's stored id or an
+//      ephemeral blop's BLAKE3 name
+//   {op: "fragments", device, doc}         -> {fragments: [{head, members, boundary}]}  sorted
+//   {op: "stored", device, doc}            -> {stored: [ids]}  getCommits heads, sorted
+//   {op: "publish", device, doc, payload}  -> {}  hex bytes to publish as given
+//   {op: "expire"}                         -> {}  unjoined ephemeral parts dropped now
+//   anything that throws                   -> {error: message}
+//
+// the Device it drives: createDevice({signer}); connect(transport, initiator), disconnect(key),
+// follow(doc), histories(doc, layer), add(sealed), publish(doc, blop), put(...), putFragment(...),
+// taking(doc, layer), fragments(doc), stored(doc), idle(), close()
 import { ed25519 } from "npm:@noble/curves@1.9.7/ed25519"
 import type { Transport } from "npm:@automerge/subduction@0.23.0"
 import { MemoryStorage } from "npm:@automerge/subduction@0.23.0"

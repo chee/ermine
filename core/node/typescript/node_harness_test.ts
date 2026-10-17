@@ -38,7 +38,25 @@ Deno.test("an unknown op is an error, and the harness goes on", async () => {
 const SEEDS = 40
 const STEPS = 25
 const NAMES = ["a", "b", "c", "d"]
-const STRINGS = ["", "a", "é", 'a"b\\c', "line\nbreak", "\u0001", "🦊"]
+// strings: ASCII, escapes, BMP, pairs, a pair and a modifier, lone halves, a high then a low, NUL
+const STRINGS = [
+	"",
+	"a",
+	"é",
+	'a"b\\c',
+	"line\nbreak",
+	"\u0001",
+	"🦊",
+	"中",
+	"👍🏽",
+	"\uD83D",
+	"\uDE00",
+	"a\uD800",
+	"\uDC00b",
+	"\uD83D\uDE00",
+	"\u0000",
+	"a\u0000b",
+]
 
 function json(pick: (n: number) => number, depth = 0): unknown {
 	const k = pick(depth > 2 ? 4 : 6)

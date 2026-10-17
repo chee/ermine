@@ -25,7 +25,10 @@ Deno.test("an unknown op, or a malformed request, is an error, and the harness g
 const SEEDS = 24
 const STEPS = 50
 const IDS = ["R", "A", "B", "C"]
-const NAMES = ["a", "b", "c"]
+// names: ASCII, an astral one, a lone high
+const NAMES = ["a", "😀", "\uD83D"]
+// string parts: ASCII, BMP, pairs, a pair and a modifier, lone halves (a high then a low: a pair), U+0000
+const PARTS = ["a", "b", "xy", "é", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\u0000"]
 const WATCHES = 6
 
 const generator = (seed: number) => {
@@ -36,15 +39,20 @@ const generator = (seed: number) => {
 function sequence(seed: number): Request[] {
 	const { pick, one } = generator(seed)
 	const entry = () => one(IDS)
-	const out: Request[] = [{ op: "root", name: "o" }]
+	const out: Request[] = [{ op: "root", name: "o", info: [["actor", "o"]] }]
 	const kids = () => {
 		const v: Record<string, unknown> = {}
 		// now and then something that is no id: taken, no item
 		for (const n of NAMES) if (pick(3)) v[n] = pick(8) === 0 ? [entry()] : entry()
 		return v
 	}
-	const value = () =>
-		pick(4) ? { t: pick(10), u: "abc".slice(pick(4)), l: [pick(9), pick(9)] } : "plain"
+	const text = (most = 4) => Array.from({ length: pick(most + 1) }, () => one(PARTS)).join("")
+	const value = () => pick(4) ? { t: pick(10), u: text(), l: [pick(9), pick(9)] } : text()
+	// a span of u, in code points: mostly in it, now and then past its end
+	const span = () => {
+		const a = pick(6)
+		return [a, a + pick(3)]
+	}
 	for (const id of IDS) {
 		if (pick(4)) out.push({ op: "kids", id, value: kids() })
 		if (pick(3)) out.push({ op: "value", id, value: value() })
@@ -87,7 +95,11 @@ function sequence(seed: number): Request[] {
 			const patch = one([
 				{ path: ["t"], value: pick(10) },
 				{ path: ["t"] },
-				{ path: ["u"], range: [pick(3), pick(3)], value: "x" },
+				{ path: ["u"], range: span(), value: text(2) },
+				{ path: ["u"], range: span() },
+				{ path: ["u"], range: [pick(5), pick(5)], value: text(2) },
+				{ path: ["u"], range: [pick(5), pick(5)], move: { path: ["u"], range: span() } },
+				{ path: ["t"], value: text() },
 				{ path: [], value: { t: pick(10) } },
 				{ path: ["l", pick(3)], value: pick(9) },
 			])

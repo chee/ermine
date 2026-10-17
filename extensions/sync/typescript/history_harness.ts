@@ -1,51 +1,30 @@
-// a node's history (history.ts), its replay (replay.ts) and snapshots (snapshot.ts) on the line
-// protocol (conformance/typescript/harness.ts): the history, replay and snapshot suites. state lasts
-// for the process: one history, the commits made by label, the snapshots kept. another
-// implementation joins by speaking this (HARNESS). conventions, and a commit by label:
-// extensions/sync/conformance/README.md
+// history_harness: history.ts, replay.ts and snapshot.ts on the line protocol (harness.ts), for
+// the history, replay and snapshot suites. one history per process; commits by label (conventions:
+// extensions/sync/conformance/README.md). the check: patches apply at the base (replay), a merge
+// to its rule's merge; rules known: "eg-walker", others refused "merge". a held commit waits [].
 //
-// the history's check is the integration's: a commit is taken in when its patches apply to its
-// table at its base (replay), kept snapshots used; a merge commit's, to its rule's merge of its
-// parents. the rules known: "eg-walker" (egwalker.ts); a merge by any other is refused "merge". a
-// commit held (hold) the check cannot judge yet: it waits on the check, waiting []
-//
-// { op: "make", name, ...fields }       → {}                a commit made and labelled, not added
-// { op: "add", name, ...fields }        → { added }         made (when no fields: the one made
-//                                                             under the label), then added
-// { op: "add", bytes }                  → { added }         bytes (hex) added as they are
-//     added: "taken" | "passed" | { waiting: [commit…] } | { refused: code }
-// { op: "hold", commits }              → {}                the check cannot judge these yet: it
-//                                                             answers "wait" for each, until held
-//                                                             no more (the next hold's list)
-// { op: "again" }                       → {}                the commits waiting on the check judged
-//                                                             again (history.again)
-// { op: "heads" }                       → { heads }         in the agreed order
-// { op: "all" }                         → { all }           every commit taken in, in the order taken
-// { op: "waiting" }                     → { waiting }       [{ name, waiting: [commit…] }], in the
-//                                                            order they came
-// { op: "refused" }                     → { refused }       [{ name, refused: code }], in the order
-//                                                            refused
-// { op: "name", commit }                → { name }          its name, hex
-// { op: "replay", commit }              → { tables } | {}   the node's tables at it; none: not taken
-// { op: "merge", heads, rule? }         → { tables }        heads (commits taken) merged by the rule,
-//                                                            default "eg-walker"
-// { op: "since", heads }                → { from, commits } history.ts's since, from one commit had
-//                                                            without merging or several kept: from
-//                                                            [commit…] or [] (none); commits in
-//                                                            causal order
-// { op: "keep", commits, tables }       → {}                these tables as several commits' merge
-//                                                            (by "eg-walker"), which a merge and
-//                                                            since start from
-// { op: "keep", commit, tables }        → {}                a snapshot of these tables at it, which
-//                                                            replay starts from (as one made here)
-// { op: "hint", commit, tables }        → { kept }          a snapshot of these tables at it from
-//                                                            elsewhere: kept (as keep) only when a
-//                                                            replay to it gives the same (matches)
-// { op: "snapshot", tables }            → { snapshot }      the tables packed, hex
-// { op: "tables", snapshot } | { op: "tables", value }      → { tables }   read back; value: its
-//                                                            JSON form encoded canonically first
-// a commit in an answer: its label, else its name as hex. tables: { [table]: { value, change } },
-// values in their JSON form. refused: { error: code } (PackError's, CommitError's)
+// { op: "make", name, ...fields }   → {}            made and labelled, not added
+// { op: "add", name, ...fields }    → { added }     made (no fields: the labelled one), added
+// { op: "add", bytes }              → { added }     hex bytes as they are
+//    added: "taken" | "passed" | { waiting: [commit…] } | { refused: code }
+// { op: "hold", commits }           → {}            the check answers "wait" for these until the
+//                                                   next hold
+// { op: "again" }                   → {}            history.again
+// { op: "heads" }                   → { heads }     agreed order
+// { op: "all" }                     → { all }       in the order taken
+// { op: "waiting" }                 → { waiting }   [{ name, waiting: [commit…] }], as arrived
+// { op: "refused" }                 → { refused }   [{ name, refused: code }], refusal order
+// { op: "name", commit }            → { name }      hex
+// { op: "replay", commit }          → { tables } | {}   {}: not taken
+// { op: "merge", heads, rule? }     → { tables }    default "eg-walker"
+// { op: "since", heads }            → { from, commits }   from [commit…] or []; causal order
+// { op: "keep", commits, tables }   → {}            these tables as the commits' merge
+// { op: "keep", commit, tables }    → {}            a snapshot at it, replay starts from it
+// { op: "hint", commit, tables }    → { kept }      kept only when a replay to it matches
+// { op: "snapshot", tables }        → { snapshot }  packed, hex
+// { op: "tables", snapshot } | { op: "tables", value } → { tables }  value canonically encoded
+// commit in an answer: its label, else hex name. tables: { [table]: { value, change } }, JSON form.
+// refused: { error: code } (PackError, CommitError)
 import apply from "@ermine/op/apply"
 import * as cbor from "@ermine/encoding/cbor"
 import { CommitError } from "@ermine/encoding/commit"

@@ -10,8 +10,9 @@ type Request = { op: string; from?: string; to?: string; of?: string }
 // a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 300
-const READERS = ["p", "q", "r", "s"]
-const TARGETS = ["a", "b", "c", "d", "e", "p", "q"]
+// names: ASCII, BMP, a pair, a pair and a modifier, lone halves, NUL; some both readers and targets
+const READERS = ["p", "中", "\uD83D", "a\u0000"]
+const TARGETS = ["a", "é", "😀", "👍🏽", "\uDE00", "p", "\uD83D", "a\u0000"]
 
 function sequence(seed: number): Request[] {
 	const pick = rand(seed)

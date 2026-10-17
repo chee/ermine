@@ -36,8 +36,8 @@
 //      P a list's index k: old put after it first ({ P's list, range: [k + 1, k + 1], value:
 //      [old] }), then { back, move: { path: P } }. fallen back if back's path is under P (P
 //      itself is fine)
-//      P a map key: { back, move: { path: P } }, then old put at P raised by 1 (the key goes
-//      last; nothing there before: the move alone). fallen back if back's path is P or under it
+//      P a map key: { back, move: { path: P } }, then old put at P raised by 1 (nothing there
+//      before: the move alone). fallen back if back's path is P or under it
 //    landing in a span [a, b) at P (what moved now its [a, a + size]; t what the span held):
 //      t put after what landed ({ path: P, range: [a + size, a + size], value: t }, none when
 //      t is empty), then { back, move: [...P, a] for one element into a list, else P's
@@ -56,8 +56,8 @@
 //    move: { path, range? }: what is there taken out first, then put at the target, in what is
 //    left, as a value. with value, or a move holding value or move: not-a-patch
 // What each does (the patches in order, each on what the last left):
-//    path, value: put. a map's key kept in its place, a new key last; a list's index must be
-//    there (no append); [] the whole
+//    path, value: put. a map's key, there or new; a list's index must be there (no append); []
+//    the whole
 //    path alone: removed. a list's element: the rest close up. a missing map key: nothing. []:
 //    nothing there after
 //    range, value: the span replaced; value of the sequence's kind (a string; a list, its
@@ -79,8 +79,7 @@
 //    the end range; the value not of the target's kind wrong-kind
 //    a move: its take first (as a removal or a span: a missing map key no-key), then its landing.
 //    a span of the root as the landing of the root's own take: nothing there, no-key
-// A map's keys are answered in their order (the suites are ordered); keys that read as array
-// indices ("0", "10") are not compared in order (the runner parses answers in JavaScript)
+// A map's key order is not part of its value (apply.ts): answers are compared by content
 //
 // Values (the request's, a patch's, the answer's) in ENCODING.tex's JSON form
 // (conformance/typescript/form.ts). Unlike ENCODING.tex, a string may hold lone surrogates
@@ -90,7 +89,7 @@
 //
 // Checked here, for every implementation: the value given and the patches' values are unchanged
 // after the call (an invert's too). With cow: false instead: a refused call leaves the value and
-// the patches' values as they were (by content, a key put back going last); a good one answers the
+// the patches' values as they were (by content); a good one answers the
 // value given itself, when that is a list or a map and no patch has the whole for a place.
 // Anything not understood (an unknown op, patches missing or not a list, a value not in the JSON
 // form, a line not JSON), or that broken: { error: why }, a string, its words free; the next line
@@ -111,7 +110,7 @@ const isMap = (x: unknown): x is Record<string, unknown> =>
 	x !== null && typeof x === "object" && !Array.isArray(x)
 
 const whole = (v: unknown) => line(toJson(v))
-// by content: a key put back by an undo goes last in its order
+// by content: a map's key order is not part of its value. whole: any change at all
 const sorted = (v: unknown) =>
 	isMap(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v
 const content = (v: unknown) => line(toJson(v), sorted)

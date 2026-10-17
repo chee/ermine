@@ -29,7 +29,7 @@
 typedef struct {
 	char *name;
 	uint8_t seed[32];
-	bool zeros, has_tables;
+	bool zeros, has_tables, lazy;
 	char **tables;
 	size_t tables_length;
 	// the rules it knows, and the one it merges by (NULL: none)
@@ -194,7 +194,7 @@ static void settle(host_t *h) {
 static void make(host_t *h) {
 	h->table = tb_make(table_event, h);
 	sy_options o = {.table = h->table, .store = h->store, .now = wr_clock, .random = random_of, .time = time_of,
-		.zeros = h->zeros, .tables = h->has_tables ? (const char *const *)h->tables : NULL,
+		.zeros = h->zeros, .lazy = h->lazy, .tables = h->has_tables ? (const char *const *)h->tables : NULL,
 		.tables_length = h->tables_length, .merges = h->merges, .merges_length = h->merges_length,
 		.merge = h->merge, .drop = dropped, .ephemeral = ephemeral_of, .context = h};
 	memcpy(o.seed, h->seed, 32);
@@ -444,8 +444,9 @@ static void host(const op_value *r, FILE *out) {
 	if (h == NULL) abort();
 	h->name = copyString(name);
 	memcpy(h->seed, b, 32);
-	const op_value *zeros = op_get(r, "zeros"), *tables = op_get(r, "tables");
+	const op_value *zeros = op_get(r, "zeros"), *tables = op_get(r, "tables"), *lazy = op_get(r, "lazy");
 	h->zeros = zeros != NULL && zeros->type == OP_BOOL && zeros->bool_;
+	h->lazy = lazy != NULL && lazy->type == OP_BOOL && lazy->bool_;
 	if (tables != NULL && tables->type == OP_LIST) {
 		h->has_tables = true;
 		h->tables = calloc(tables->count + 1, sizeof *h->tables);
@@ -557,6 +558,15 @@ static void follow(const op_value *r, FILE *out) {
 		return;
 	}
 	settle(h);
+	fputs("{}", out);
+}
+
+// sync.stop: the host's standing ephemeral commit at (id, table) ends, default table value
+static void stop(const op_value *r, FILE *out) {
+	host_t *h = of(r, "host", out);
+	if (h == NULL) return;
+	const char *table = hh_str(r, "table");
+	sy_stop(h->sync, id_of(op_get(r, "id")), table != NULL ? table : "value");
 	fputs("{}", out);
 }
 
@@ -836,6 +846,7 @@ void hh_answer(const op_value *r, FILE *out) {
 	else if (strcmp(op, "stored") == 0) stored(r, out);
 	else if (strcmp(op, "fragments") == 0) fragments(r, out);
 	else if (strcmp(op, "ephemeral") == 0) ephemeral(r, out);
+	else if (strcmp(op, "stop") == 0) stop(r, out);
 	else if (strcmp(op, "advance") == 0) advance(r, out);
 	else if (strcmp(op, "standing") == 0) standing(r, out);
 	else if (strcmp(op, "overlay") == 0) overlay(r, out);

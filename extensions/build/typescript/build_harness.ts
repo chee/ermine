@@ -1,7 +1,7 @@
 // build (build.ts) on the line protocol: one JSON request per line in, one answer per line out, in
-// order. its own world, lasting for the process: a scheduler, a table, paths and the host's places
-// (root "R", children alone), told the table's events. the host writes with its scope open, its info
-// [["actor","test"]]; builds are made with it open too
+// order. one world per process: a scheduler, table, paths and the host's places (root "R", children
+// alone), told the table's events. the host writes with its scope open, info [["actor","test"]];
+// builds are made with it open too
 //
 // the compilers, by name, each counting its calls:
 //   upper  a string uppercased            wrap  { wasm: input }
@@ -9,46 +9,43 @@
 //   live   a function: no encoding
 //
 // the world:
-// { op: "kids", id, value }                 → {}   the children entry there, replaced (a table event)
-// { op: "attrs", id, value }                → {}   the attributes entry there, replaced (a table event)
-// { op: "value", id, value }                → {}   the value entry there, replaced (a table event)
-// { op: "compiler", id, compiler }          → {}   the value entry there: the compiler named (a live
-//    function, never saved)
-// { op: "upsert", part, id, path, value }   → {}   value put at path in the entry (places' upsert):
-//    a patch, telling only the reads it touches
+// { op: "kids", id, value }                 → {}   the children entry, replaced (a table event)
+// { op: "attrs", id, value }                → {}   the attributes entry, replaced (a table event)
+// { op: "value", id, value }                → {}   the value entry, replaced (a table event)
+// { op: "compiler", id, compiler }          → {}   value entry: the compiler named (live, unsaved)
+// { op: "upsert", part, id, path, value }   → {}   places' upsert at path: a patch, telling only
+//    the reads it touches
 // build:
-// { op: "builds", cache }                   → {}   a fresh createBuilds over the same table, the
-//    cache folder the id cache; every watch of the last one torn down first, then it stopped
-// { op: "watch", name, compilers, input?, node? } → {}   a computer, in a scope of its own, named:
-//    each run, the input (given, or node's value, read) through each compiler in turn, each
-//    output the next's input; PENDING or an Error stops there
+// { op: "builds", cache }                   → {}   a fresh createBuilds over the same table, cache
+//    folder id cache; the last one's watches torn down first, then it stopped
+// { op: "watch", name, compilers, input?, node? } → {}   a computer in its own scope: each run, the
+//    input (or node's value) through each compiler in turn; PENDING or an Error stops there
 // { op: "stop", name }                      → {}   that scope torn down
 // { op: "pulse" }                           → {}
-// { op: "settle", fail? }                   → {}   every slow call waiting resolved (fail: rejected
-//    with Error(fail)), the promises left to land, then a pulse
-// { op: "state", name }                     → { value }   its last result: the output, "pending",
+// { op: "settle", fail? }                   → {}   every waiting slow call resolved (fail: rejected
+//    with Error(fail)), the promises landed, then a pulse
+// { op: "state", name }                     → { value }   last result: the output, "pending",
 //    { refused: code } (a BuildError), or { failed: message } (any other Error)
-// { op: "runs", name }                      → { runs }    how many times it has run
+// { op: "runs", name }                      → { runs }
 // { op: "calls" }                           → { upper, wrap, slow, boom, live }
-// { op: "cache" }                           → { size, entries }   the cache folder: each name (a
-//    key) and its node's value
-// { op: "kinds" }                           → { types }   each name in the cache folder and its node's
-//    ermine.type (null: none)
-// steps (builds.step), the runs by name, each counting its calls, each reading through places:
-//   sum     code: ids; the sum of their values      pick  code: an id; the value of the node its
-//   parity  code: an id; { odd } of its value             value names
-//   label   code: an id; "odd" or "even", by its     wait  code: an id; its value, once settled
-//           value's odd                              oops  code: an id; reads it, throws Error("oops")
+// { op: "cache" }                           → { size, entries }   each key and its node's value
+// { op: "kinds" }                           → { types }   each key, its node's type (null: none)
+// steps (builds.step), by name, each counting its calls, each reading through places:
+//   sum     code: ids; the sum of their values
+//   pick    code: an id; the value of the node its value names
+//   parity  code: an id; { odd } of its value
+//   label   code: an id; "odd" or "even", by its value
+//   wait    code: an id; its value, once settled
+//   oops    code: an id; reads it, throws Error("oops")
 //   tick    code: an id; reads it, gives how many times tick has been called
-// { op: "step", name, run, code, never?, into? } → {}   a computer, in a scope of its own, named:
-//    each run, builds.step(run, code, the run named, { never }), its result kept as it is (equal
-//    to the last, by identity: nothing set); into: each result set written as the value entry
-//    there (an Error: not written)
-// { op: "found", name }                     → { found, entry, checked, entries }   what its last
-//    run's step found (builds' onStep): hit, miss or never; the entry hit (null: none)
+// { op: "step", name, run, code, never?, into? } → {}   a computer in its own scope: each run,
+//    builds.step(run, code, the run named, { never }), its result kept as is (same identity as the
+//    last: nothing set); into: each result written as the value entry there (an Error: not)
+// { op: "found", name }                     → { found, entry, checked, entries }   its last run's
+//    step found (onStep): hit, miss or never; the entry hit (null: none)
 // { op: "ran" }                             → { sum, pick, parity, label, wait, oops, tick }
-// { op: "entries", run, code }              → { entries }   the step's entries, newest first: each
-//    { name, reads, output }, reads as [part, id, path] (no hashes)
+// { op: "entries", run, code }              → { entries }   newest first, each { name, reads,
+//    output }, reads as [part, id, path] (no hashes)
 import createEntry from "@ermine/node/entry"
 import { createScheduler, PENDING, type Scope } from "@ermine/scheduler"
 import { createPaths } from "@ermine/scheduler/paths"

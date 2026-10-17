@@ -36,9 +36,14 @@ Deno.test("an unknown op, or a malformed request, is an error, and the harness g
 // a few dozen seeds (memory: fuzz runs small)
 const SEEDS = 40
 const STEPS = 300
-const PARTS: unknown[] = ["value", "children", "info", { symbol: "drag" }]
-const IDS: unknown[] = ["a", "b", "c", "d", { symbol: "here" }]
-const NODES = ["n1", "n2", "n3", "n4"]
+// strings: ASCII, BMP, a pair (😀: the two halves below), a pair and a modifier, lone halves, both
+// halves the wrong way round (no pair), NUL
+const PARTS: unknown[] = ["value", "children", "é", "\uD83D", "a\u0000", { symbol: "drag" }]
+const IDS: unknown[] = [
+	...["a", "a\u0000", "中", "😀", "👍🏽", "\uD83D", "\uDE00", "\uDE00\uD83D"],
+	{ symbol: "here" },
+]
+const NODES = ["n1", "n2", "\u0000", "\uDE00", "👍"]
 
 type Triple = [unknown, unknown, string]
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)

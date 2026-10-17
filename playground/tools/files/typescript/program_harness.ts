@@ -1,53 +1,35 @@
-// the files program (program.ts) on the line protocol (conformance/typescript/harness.ts). A host's
-// view of the program: a store, the graph of today (graph.ts) holding what the store read, the
-// program started as the host starts it, and a watcher whose passes the scenario runs itself (no
-// disk events, no timing). It works on a temp folder of the run's own (disk_harness.ts): the store at
-// @Store, its Trash @Trash (a fake), a test home @Home, so the real Trash and home are never used;
-// the harness makes the edits a scenario asks for and looks at the folder and the Trash itself, as
-// disk_harness.ts has it. Values are in their JSON form (conformance/typescript/form.ts). Another
-// implementation joins by speaking this (HARNESS): a C harness on the C graph and the C store.
-//
-// A node is named by a path: a list of slot names from the root, each a string (the slot's first
-// item) or [name, index] (its item at index, from 0). [] is the root. Ids: the harness mints every
-// id, "i1", "i2", ... in the order they are asked for, through the whole process (a second open
-// does not start again), and every answer shows them as disk_harness.ts does: "id1" for the first met,
-// "id2" for the next, ...; the temp folder in a path is "@".
+// the files program (program.ts) on the line protocol (conformance/typescript/harness.ts): a store,
+// a graph (graph.ts) holding what it read, the program, and a watcher whose passes the scenario
+// runs (no disk events, no timing). a temp folder per run (disk_harness.ts): @Store, @Trash (fake),
+// @Home, so the real Trash and home are never used. values in JSON form (form.ts)
+// path: slot names from the root, each a name (its first item) or [name, index]; [] the root
+// ids: minted "i1", "i2", ... across the whole process; answers show them "id1", "id2", ... by
+// order met; the temp folder is "@"
 //
 //   {op: "open", refuse?, aliases?}
-//                    -> {root}  a store on @Store (files: true, the files program's store); read;
-//                       a graph holding what it read (or a root "r" holding nothing); no program
-//                       yet. An earlier open's program is stopped. refuse: slot names the host's
-//                       protect refuses to place; aliases: {path: target}, the Finder aliases the
-//                       host knows: the file at path (from the store's folder) is an alias to the
-//                       entry at target
+//                    -> {root}  a store on @Store (files: true), read; a graph of it (or a root "r"
+//                       holding nothing); no program; an earlier one stopped. refuse: slot names
+//                       protect refuses; aliases: {path: target}, Finder aliases the host knows
 //   {op: "place", path, slot, value?, at?}
-//                    -> {id}  a node made holding value (none: no value), by the host, and placed
-//                       in the slot of the node at path, at position at (from 0; the end)
+//                    -> {id}  a node made by the host, placed at position at (default the end)
 //   {op: "mount", path, slot, to, at?}
 //                    -> {}  the node at path `to` placed in that slot too
-//   {op: "write", path, value}
-//                    -> {}  the value of the node at path written whole, by the host
-//   {op: "remove", path}
-//                    -> {}  the node at path unplaced from the slot it is shown by
-//   {op: "save"}     -> {}  the graph written to the store, as the host does after a change
-//   {op: "start"}    -> {}  the files program started, with a watcher whose actor is "tester";
-//                       the watcher saves after a pass that made changes
+//   {op: "write", path, value}  -> {}  written whole, by the host
+//   {op: "remove", path}        -> {}  unplaced from the slot it is shown by
+//   {op: "save"}     -> {}  the graph written to the store
+//   {op: "start"}    -> {}  the program, with a watcher (actor "tester") that saves after a pass
+//                       that made changes
 //   {op: "pass", touched?}
-//                    -> {called, settled}  one pass of the watcher now: over the folders touched
-//                       (paths from the store's folder, "" its own), every folder if none are
-//                       given. called: edit was called; settled: the store finds no differences
-//                       between the folder and the layout afterwards
-//   {op: "graph"}    -> {root, nodes}  the graph from the root, ephemeral nodes left out: a node
-//                       {id, value: [{content, actor}], slots: [[name, [node]]]}, slots by name in
-//                       code point order, each item of the slot (a slot holding only ephemeral
-//                       nodes is left out); a node met before is {id, again: true}; an id nothing
-//                       is loaded for is {id, unloaded: true}. actor: the change's actor
-//   {op: "listed"}   -> {listed: [{path, why}]}  what the program wrote to its listed node since
-//                       the last asked, in order; why as a code (WHY below)
-//   {op: "edit", edit, ...}
-//                    -> {}  the edit made on the disk (disk_harness.ts)
-//   {op: "observe"}  -> {folder, trash, listed}  disk_harness.ts's snapshot, listed as the listed request
-//                       answers
+//                    -> {called, settled}  one pass over the folders touched ("" the store's own;
+//                       default all). called: edit was called; settled: no differences left
+//   {op: "graph"}    -> {root, nodes}  ephemeral left out; node {id, value: [{content, actor}],
+//                       slots: [[name, [node]]]}, slots in code point order (one holding only
+//                       ephemeral nodes left out); met again {id, again: true}; nothing loaded
+//                       {id, unloaded: true}
+//   {op: "listed"}   -> {listed: [{path, why}]}  written to listed since last asked; why a code
+//                       (WHY below)
+//   {op: "edit", edit, ...}  -> {}  disk_harness.ts's edit
+//   {op: "observe"}  -> {folder, trash, listed}  disk_harness.ts's snapshot
 //   a failure        -> {error: message}
 import { createGraph, type Graph } from "./graph.ts"
 import { type Files, files } from "./program.ts"

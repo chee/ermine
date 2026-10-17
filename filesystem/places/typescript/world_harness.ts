@@ -1,58 +1,44 @@
-// The world the places and guard harnesses share, made as a composer makes it: one scheduler, one
-// table, one paths, and places (root "R") joining them. The harnesses add their own reads and
-// programs (places_harness.ts, guard_harness.ts), and speak the line protocol through serve
+// world harness: the world the places and guard harnesses share, made as a composer makes it: one
+// scheduler, table and paths, and places (root "R"). the harnesses add their own requests
+// (places_harness.ts, guard_harness.ts) and speak the line protocol through serve
 // (conformance/typescript/harness.ts).
 //
-// ids are strings. a part is any string ("children" is the filesystem's). a path is a list of
-// names. a value is plain JSON. a patch is { path, range?, value?, move?: { path, range? } }. pairs: [[key, value]..]. the host writes
-// with its scope open, its info [["actor","test"]]: every write of the world's below is the
-// host's, from outside
+// id: a string. part: any string ("children" is the filesystem's). path: a list of names. value:
+// plain JSON. patch: { path, range?, value?, move?: { path, range? } }. pairs: [[key, value]..].
+// every write below is the host's, from outside, info [["actor","test"]].
 //
-// { op: "kids", id, value }                  → {}   the children entry there, replaced (a table event)
-// { op: "value", id, value }                 → {}   the value entry there, replaced
+// { op: "kids", id, value }                  → {}   the children entry replaced (a table event)
+// { op: "value", id, value }                 → {}   the value entry replaced
 // { op: "share", value, keys: [[part, id]..] } → {}   one entry under all those keys (table.add)
-// { op: "del", part, id }                    → {}   table.del
-//                                            → { error: "nothing-there" }
-// { op: "node", part, id }                   → { value? }   the entry's value as the table has it
-//    (not a read: told to no one); none there, or no value: {}
+// { op: "del", part, id }                    → {} | { error: "nothing-there" }   table.del
+// { op: "node", part, id }                   → { value? }   the table's, told to no one
 // { op: "kept" }                             → { keys, spots, steps }   what paths keeps
-// { op: "cache" }                            → {}   the path cache (cache.ts) made, once (a second:
-//    nothing); a program asking for it before makes it. made before anything reads, as cache.ts says
-// { op: "cacheKept" }                        → { entries, reads }   what the cache keeps: entries,
-//    and the keys they read (none made: both 0)
-// writes. a PlacesError or an ApplyError answers { error: code } and an ApplyError also
-// { patch: index }
-// { op: "edit", part, id, patches }                                   → {}
-//    the patches to the entry there, then said written; none there: an entry made with them, added
-// { op: "place", at, name, id }                                       → {}
-// { op: "unplace", at, name }                                         → {}
-// { op: "rename", at, name, to }                                      → {}
-// { op: "move", at, name, to: { at, name } }                          → {}
-//    at: the parent's id
-// { op: "upsert", part, id, path, value }                              → {}
-//    upsert.ts: the value made or patched at path (names) in the entry there, said written; none
-//    there: an entry made holding it nested, added. the same value there: nothing written
-// { op: "getOrSet", part, id, path, value }                           → { value }
-//    the value there at path, else the value given put there (as upsert), and told
+// { op: "cache" }                            → {}   the path cache made once (or by the first
+//    program asking for it); make it before anything reads
+// { op: "cacheKept" }                        → { entries, reads }   none made: both 0
+// writes; a PlacesError or ApplyError → { error: code }, an ApplyError also { patch: index }:
+// { op: "edit", part, id, patches }          → {}   none there: an entry made with them
+// { op: "place", at, name, id }              → {}   at: the parent's id
+// { op: "unplace", at, name }                → {}
+// { op: "rename", at, name, to }             → {}
+// { op: "move", at, name, to: { at, name } } → {}
+// { op: "upsert", part, id, path, value }    → {}   upsert.ts; the same value there: no write
+// { op: "getOrSet", part, id, path, value }  → { value }   the value at path, else value put there
 // status (status.ts):
-// { op: "status" }                           → {}   a status listener, made once (a second: nothing)
-// { op: "give", name, id }                   → {}   the compute named (a harness's watch) is given
-//    the node id its status is written on
-// { op: "statusOf", id }                     → { status }   the node's status, read outside any run:
-//    "pending", { error: message }, or null (none)
+// { op: "status" }                           → {}   the status listener, made once
+// { op: "give", name, id }                   → {}   compute name's status written on node id
+// { op: "statusOf", id }                     → { status }   read outside a run:
+//    "pending" | { error } | null
 // the scheduler:
 // { op: "root", name, info? }                → {}   a scope with no parent
 // { op: "scope", name, parent, info? }       → {}
 // { op: "dispose", name }                    → {}
 // { op: "pulse" }                            → {}
-// { op: "state", name }                      → { runs, value }   of a compute made by a harness's
-//    watch: how many times its program ran; its last result given to set (null: none)
-// { op: "moments" }                          → { moments }   since last asked: the scheduler's, as
-//    core/scheduler/typescript/scheduler_harness.ts shows them, computations by name
-// { op: "header", scope?, extra? }           → the header places makes for a write with that scope
-//    open (none: nothing open), extra its own pairs, summed up: { actor, reader?, metadata?,
-//    timely, sites }: timely, its time is now in whole seconds; sites, how many its external has.
-//    nothing open: { error: "unscoped" }
+// { op: "state", name }                      → { runs, value }   a watch's run count, last result
+// { op: "moments" }                          → { moments }   since last asked, computes by name
+// { op: "header", scope?, extra? }           → { actor, reader?, metadata?, timely, sites }
+//    the header places makes with scope open, extra its own pairs; timely: time is now (whole
+//    seconds); sites: its external's count. nothing open: { error: "unscoped" }
 // anything not understood: { error: text }
 import createEntry, { type ChangeHeader } from "@ermine/node/entry"
 import update from "@ermine/node/update"
