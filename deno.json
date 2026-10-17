@@ -32,6 +32,7 @@
 		"conformance": "deno test --quiet --allow-run --allow-read --allow-env conformance/run.ts --",
 		"perf": "deno run --quiet --allow-run --allow-read --allow-env conformance/perf.ts",
 		"differ": "deno run --quiet --allow-run --allow-read --allow-write --allow-env conformance/differ.ts",
+		"plants": "deno run --quiet --allow-run --allow-read --allow-write --allow-env conformance/plants/plants_run.ts",
 		"check": "deno check .",
 		"bench": "deno bench"
 	},
