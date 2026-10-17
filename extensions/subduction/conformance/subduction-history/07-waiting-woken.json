@@ -1,0 +1,248 @@
+{
+	"title": "a parent not added: waiting, also on a parent itself waiting; woken when it is taken in",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "FQAAABUAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "s2grDJ45kRdo+7mV9ggk3zMdv6LbhE6CxVH/+zqwoxU"
+						}
+					}
+				],
+				"lamport": 3,
+				"patches": []
+			},
+			"name": "9552753dcdc09125681f5195141548b0ba9b9d94227c2c04741368bbd7824053",
+			"expect": {
+				"added": {
+					"waiting": [
+						"b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315"
+					]
+				}
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "FAAAABQAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "gYWEt/+EDkKQy+VHQsdgXijqy9Scp/R6sHzLIkIEeuQ"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": []
+			},
+			"name": "b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315",
+			"expect": {
+				"added": {
+					"waiting": [
+						"818584b7ff840e4290cbe54742c7605e28eacbd49ca7f47ab07ccb2242047ae4"
+					]
+				}
+			}
+		},
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": [
+					{
+						"name": "9552753dcdc09125681f5195141548b0ba9b9d94227c2c04741368bbd7824053",
+						"waiting": [
+							"b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315"
+						]
+					},
+					{
+						"name": "b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315",
+						"waiting": [
+							"818584b7ff840e4290cbe54742c7605e28eacbd49ca7f47ab07ccb2242047ae4"
+						]
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"name": "b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315",
+			"expect": {}
+		},
+		{
+			"op": "get",
+			"name": "9552753dcdc09125681f5195141548b0ba9b9d94227c2c04741368bbd7824053",
+			"expect": {}
+		},
+		{
+			"op": "heads",
+			"object": "value",
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "EwAAABMAAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": []
+			},
+			"name": "818584b7ff840e4290cbe54742c7605e28eacbd49ca7f47ab07ccb2242047ae4",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": []
+			}
+		},
+		{
+			"op": "heads",
+			"object": "value",
+			"expect": {
+				"heads": [
+					{
+						"name": "9552753dcdc09125681f5195141548b0ba9b9d94227c2c04741368bbd7824053",
+						"blop": {
+							"node": "n",
+							"object": "value",
+							"actor": "a",
+							"signer": {
+								"/": {
+									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+								}
+							},
+							"nonce": {
+								"/": {
+									"bytes": "FQAAABUAAAA"
+								}
+							},
+							"parents": [
+								{
+									"/": {
+										"bytes": "s2grDJ45kRdo+7mV9ggk3zMdv6LbhE6CxVH/+zqwoxU"
+									}
+								}
+							],
+							"lamport": 3,
+							"patches": []
+						}
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"name": "b3682b0c9e39911768fbb995f60824df331dbfa2db844e82c551fffb3ab0a315",
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "FAAAABQAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "gYWEt/+EDkKQy+VHQsdgXijqy9Scp/R6sHzLIkIEeuQ"
+							}
+						}
+					],
+					"lamport": 2,
+					"patches": []
+				}
+			}
+		},
+		{
+			"op": "get",
+			"name": "9552753dcdc09125681f5195141548b0ba9b9d94227c2c04741368bbd7824053",
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "a",
+					"signer": {
+						"/": {
+							"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "FQAAABUAAAA"
+						}
+					},
+					"parents": [
+						{
+							"/": {
+								"bytes": "s2grDJ45kRdo+7mV9ggk3zMdv6LbhE6CxVH/+zqwoxU"
+							}
+						}
+					],
+					"lamport": 3,
+					"patches": []
+				}
+			}
+		},
+		{
+			"op": "refused",
+			"expect": {
+				"refused": []
+			}
+		}
+	]
+}

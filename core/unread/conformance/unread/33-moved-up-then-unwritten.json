@@ -1,0 +1,15 @@
+{
+	"title": "a map moved up to the root, then unwritten: the undo puts the old root back and the map into it, so what is at c is a new map, not the one marked",
+	"steps": [
+		{ "op": "start", "value": { "c": {} }, "expect": {} },
+		{ "op": "mark", "name": "m", "path": ["c"], "expect": {} },
+		{
+			"op": "write",
+			"patches": [{ "path": [], "move": { "path": ["c"] } }],
+			"expect": { "undo": [{ "path": [], "value": {} }, { "path": ["c"], "value": {} }] }
+		},
+		{ "op": "unwrite", "expect": { "undo": [{ "path": ["c"] }, { "path": [], "value": {} }] } },
+		{ "op": "value", "expect": { "value": { "c": {} } } },
+		{ "op": "same", "name": "m", "path": ["c"], "expect": { "same": false } }
+	]
+}

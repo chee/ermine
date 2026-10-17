@@ -1,0 +1,83 @@
+{
+	"title": "a(0) ← b(1) ← c(0) ← d(1) ← e(0) ← f(2) ← g(0): one fragment f, checkpoints b and d",
+	"names": {
+		"000025221eb0ec34cbf60eda0ff07704444c8b43725b3033049fb3627f3aac40": "f",
+		"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459": "b",
+		"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56": "d",
+		"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12": "c",
+		"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5": "a",
+		"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b": "e",
+		"f530afe4722ed4745e6171cfb0f41c7f7f4a76f68e1f2a03a15c675df144f854": "g"
+	},
+	"steps": [
+		{
+			"op": "build",
+			"commits": [
+				{
+					"id": "cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5",
+					"parents": []
+				},
+				{
+					"id": "00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+					"parents": [
+						"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5"
+					]
+				},
+				{
+					"id": "4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+					"parents": [
+						"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459"
+					]
+				},
+				{
+					"id": "00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+					"parents": [
+						"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+					]
+				},
+				{
+					"id": "e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b",
+					"parents": [
+						"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56"
+					]
+				},
+				{
+					"id": "000025221eb0ec34cbf60eda0ff07704444c8b43725b3033049fb3627f3aac40",
+					"parents": [
+						"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b"
+					]
+				},
+				{
+					"id": "f530afe4722ed4745e6171cfb0f41c7f7f4a76f68e1f2a03a15c675df144f854",
+					"parents": [
+						"000025221eb0ec34cbf60eda0ff07704444c8b43725b3033049fb3627f3aac40"
+					]
+				}
+			],
+			"heads": [
+				"f530afe4722ed4745e6171cfb0f41c7f7f4a76f68e1f2a03a15c675df144f854"
+			],
+			"known": [],
+			"expect": {
+				"fragments": [
+					{
+						"head": "000025221eb0ec34cbf60eda0ff07704444c8b43725b3033049fb3627f3aac40",
+						"members": [
+							"000025221eb0ec34cbf60eda0ff07704444c8b43725b3033049fb3627f3aac40",
+							"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+							"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56",
+							"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+							"cb0f3f70bf795cc2431209f06bd8d6976e14c8664b0d45fa5e7485bd2b7a1be5",
+							"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b"
+						],
+						"boundary": [],
+						"checkpoints": [
+							"00454adc506c6b138d54f8da86ef92c20f526d6cf0211d2ebf9a2894a4a9e459",
+							"00ee3db36532667d37890d3efebd78bf848823c2825d8279e62fae9272d6ef56"
+						]
+					}
+				]
+			}
+		}
+	]
+}

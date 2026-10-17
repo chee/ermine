@@ -1,0 +1,106 @@
+{
+	"title": "an ephemeral blop whose signer is not the device that sent it: refused signature, not taken in",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "publish",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"payload": "a8646e6f6465784965726d696e653a2f2f30633863366639363438653661396439323963663664306364346130346431383634333462323564396235386463316339383464346633316238353231376365656163746f726163656e6f6e636548000001c500000000666f626a6563746576616c7565667369676e65725820ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1676c616d706f7274f93c0067706172656e747380677061746368657381a26470617468806576616c7565f95f10",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "ec105dc253dde95239635dc51aae8e3d581e577f3feb346ca9918ce6d572942c",
+							"refused": "signature"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "state",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"layer": "ephemeral",
+			"expect": {
+				"heads": [],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": [
+						{
+							"commit": "ec105dc253dde95239635dc51aae8e3d581e577f3feb346ca9918ce6d572942c",
+							"refused": "signature"
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "stored",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"stored": []
+			}
+		}
+	]
+}

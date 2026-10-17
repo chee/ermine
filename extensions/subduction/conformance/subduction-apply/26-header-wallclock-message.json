@@ -1,0 +1,135 @@
+{
+	"title": "a version's change carries the head's wallclock and message",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"wallclock": 1760000000,
+				"message": "tidy up",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "QwAAAEMAAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": "x"
+					}
+				]
+			},
+			"name": "02fe8bad7256c405761a2d82a9b34f0101da45a7d2b7d052d6b8104b4ae15369",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"wallclock": 0,
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "RAAAAEQAAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": "y"
+					}
+				]
+			},
+			"name": "2fa5fdcc53827604a09366d41be012cd461eda53d7be0d8f17c9887124105f63",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "versions",
+			"object": "value",
+			"times": {
+				"02fe8bad7256c405761a2d82a9b34f0101da45a7d2b7d052d6b8104b4ae15369": 1066,
+				"2fa5fdcc53827604a09366d41be012cd461eda53d7be0d8f17c9887124105f63": 1067
+			},
+			"expect": {
+				"versions": [
+					{
+						"content": "y",
+						"change": {
+							"actor": "a",
+							"metadata": [
+								[
+									"wallclock",
+									0
+								]
+							],
+							"time": 1067
+						},
+						"because": {
+							"layer": "sync",
+							"place": {
+								"lamport": 1,
+								"name": "2fa5fdcc53827604a09366d41be012cd461eda53d7be0d8f17c9887124105f63"
+							},
+							"why": {
+								"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+							}
+						}
+					},
+					{
+						"content": "x",
+						"change": {
+							"actor": "a",
+							"metadata": [
+								[
+									"wallclock",
+									1760000000
+								],
+								[
+									"message",
+									"tidy up"
+								]
+							],
+							"time": 1066
+						},
+						"because": {
+							"layer": "sync",
+							"place": {
+								"lamport": 1,
+								"name": "02fe8bad7256c405761a2d82a9b34f0101da45a7d2b7d052d6b8104b4ae15369"
+							},
+							"why": {
+								"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}

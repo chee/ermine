@@ -1,1 +1,4 @@
-{ "ordered": true }
+{
+	"ordered": true,
+	"reads": [{ "op": "value" }, { "op": "same", "name": "$name", "path": "$path" }]
+}

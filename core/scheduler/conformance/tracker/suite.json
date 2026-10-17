@@ -1,1 +1,9 @@
-{ "ordered": true }
+{
+	"ordered": true,
+	"reads": [
+		{ "op": "reads", "of": "$from" },
+		{ "op": "readers", "of": "$from" },
+		{ "op": "reads", "of": "$to" },
+		{ "op": "readers", "of": "$to" }
+	]
+}

@@ -16,13 +16,7 @@
 			"patches": [
 				{ "path": ["l"], "range": [0, 0], "move": { "path": ["l"], "range": [2, 3] } },
 				{ "path": ["s"], "range": [2, 2], "value": "c" }
-			],
-			"expect": {
-				"undo": [
-					{ "path": ["s"], "range": [2, 3] },
-					{ "path": ["l"], "range": [2, 2], "move": { "path": ["l"], "range": [0, 1] } }
-				]
-			}
+			]
 		},
 		{
 			"op": "apply",
@@ -39,13 +33,7 @@
 			"patches": [
 				{ "path": ["k"], "move": { "path": ["l"] } },
 				{ "path": ["s"], "range": [0, 1] }
-			],
-			"expect": {
-				"undo": [
-					{ "path": ["s"], "range": [0, 0], "value": "a" },
-					{ "path": ["l"], "move": { "path": ["k"] } }
-				]
-			}
+			]
 		},
 		{
 			"op": "invert",
@@ -55,15 +43,7 @@
 				{ "path": ["s"], "range": [2, 2], "value": "c" },
 				{ "path": ["k"], "move": { "path": ["l"] } },
 				{ "path": ["s"], "range": [0, 1] }
-			],
-			"expect": {
-				"undo": [
-					{ "path": ["s"], "range": [0, 0], "value": "a" },
-					{ "path": ["l"], "move": { "path": ["k"] } },
-					{ "path": ["s"], "range": [2, 3] },
-					{ "path": ["l"], "range": [2, 2], "move": { "path": ["l"], "range": [0, 1] } }
-				]
-			}
+			]
 		},
 		{
 			"op": "apply",

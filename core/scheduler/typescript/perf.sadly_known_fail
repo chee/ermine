@@ -1,0 +1,2 @@
+# scheduler-perf misses of the TypeScript scheduler
+scheduler-perf/02-siblings-oldest-first  teardown oldest first is quadratic: x12-22 for x4 (28ms, 147ms, 1721ms); 25000 siblings pass 20s

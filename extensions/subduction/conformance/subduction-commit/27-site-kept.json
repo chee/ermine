@@ -1,0 +1,142 @@
+{
+	"title": "other files kept: https, a relative path",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"change": {
+				"node": "n",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 1
+					}
+				],
+				"header": {
+					"time": 1,
+					"actor": "me",
+					"external": [
+						{
+							"file": "https://example.org/x/a.ts",
+							"line": 9,
+							"column": 1
+						}
+					]
+				},
+				"signer": {
+					"/": {
+						"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+					}
+				}
+			},
+			"at": {
+				"version": 0
+			},
+			"roots": [
+				"/w"
+			],
+			"random": "c0406080a0c0e000",
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"site": {
+						"file": "https://example.org/x/a.ts",
+						"line": 9,
+						"column": 1
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wEBggKDA4AA"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		},
+		{
+			"op": "commit",
+			"change": {
+				"node": "n",
+				"object": "value",
+				"patches": [
+					{
+						"path": [],
+						"value": 1
+					}
+				],
+				"header": {
+					"time": 1,
+					"actor": "me",
+					"external": [
+						{
+							"file": "src/a.ts",
+							"line": 9,
+							"column": 1
+						}
+					]
+				},
+				"signer": {
+					"/": {
+						"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+					}
+				}
+			},
+			"at": {
+				"version": 0
+			},
+			"roots": [
+				"/w"
+			],
+			"random": "c01939597999b9d9",
+			"expect": {
+				"blop": {
+					"node": "n",
+					"object": "value",
+					"actor": "me",
+					"site": {
+						"file": "src/a.ts",
+						"line": 9,
+						"column": 1
+					},
+					"signer": {
+						"/": {
+							"bytes": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"
+						}
+					},
+					"nonce": {
+						"/": {
+							"bytes": "wBk5WXmZudk"
+						}
+					},
+					"parents": [],
+					"lamport": 1,
+					"patches": [
+						{
+							"path": [],
+							"value": 1
+						}
+					]
+				}
+			}
+		}
+	]
+}

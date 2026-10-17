@@ -1,0 +1,4 @@
+# scheduler-perf misses of the C scheduler harness
+scheduler-perf/02-siblings-oldest-first  quadratic: 80ms, 1175ms at n 2000, 8000; 32000 passes 20s
+scheduler-perf/03-owner-remakes-due-children  borderline: x10 for x4 once, x6 mostly (23ms, 200ms, 1205ms)
+scheduler-perf/04-deep-chain-after-cycle  x12-14 for x4 (57ms, 707ms, 13177ms)

@@ -1,0 +1,67 @@
+{
+	"title": "a(1) ← b(2) ← c(0) ← d(3): d takes in all; checkpoints a and b",
+	"names": {
+		"000000e25428f25dccc6202275efcf074aa4b45bd707cd7b41b823e4dfd8f42a": "d",
+		"0000d8ff958bab8fc94721907672753384b2815680a48865943a0d8383a7ea0e": "b",
+		"00fab5a15fc42cc4f93d2d5c006e00423dd8e11b69fae00d547ca8864902a825": "a",
+		"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12": "c",
+		"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b": "e"
+	},
+	"steps": [
+		{
+			"op": "build",
+			"commits": [
+				{
+					"id": "00fab5a15fc42cc4f93d2d5c006e00423dd8e11b69fae00d547ca8864902a825",
+					"parents": []
+				},
+				{
+					"id": "0000d8ff958bab8fc94721907672753384b2815680a48865943a0d8383a7ea0e",
+					"parents": [
+						"00fab5a15fc42cc4f93d2d5c006e00423dd8e11b69fae00d547ca8864902a825"
+					]
+				},
+				{
+					"id": "4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12",
+					"parents": [
+						"0000d8ff958bab8fc94721907672753384b2815680a48865943a0d8383a7ea0e"
+					]
+				},
+				{
+					"id": "000000e25428f25dccc6202275efcf074aa4b45bd707cd7b41b823e4dfd8f42a",
+					"parents": [
+						"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+					]
+				},
+				{
+					"id": "e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b",
+					"parents": [
+						"000000e25428f25dccc6202275efcf074aa4b45bd707cd7b41b823e4dfd8f42a"
+					]
+				}
+			],
+			"heads": [
+				"e072a905e2ad22d7ff0d63ee5885145a20dbd23a7aee0eda8b2de7934c424a1b"
+			],
+			"known": [],
+			"expect": {
+				"fragments": [
+					{
+						"head": "000000e25428f25dccc6202275efcf074aa4b45bd707cd7b41b823e4dfd8f42a",
+						"members": [
+							"000000e25428f25dccc6202275efcf074aa4b45bd707cd7b41b823e4dfd8f42a",
+							"0000d8ff958bab8fc94721907672753384b2815680a48865943a0d8383a7ea0e",
+							"00fab5a15fc42cc4f93d2d5c006e00423dd8e11b69fae00d547ca8864902a825",
+							"4aea63207f3acc5a5800a4ed350ad8e743f85ba1e6a8603cacec27878cda8f12"
+						],
+						"boundary": [],
+						"checkpoints": [
+							"0000d8ff958bab8fc94721907672753384b2815680a48865943a0d8383a7ea0e",
+							"00fab5a15fc42cc4f93d2d5c006e00423dd8e11b69fae00d547ca8864902a825"
+						]
+					}
+				]
+			}
+		}
+	]
+}

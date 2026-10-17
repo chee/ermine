@@ -1,0 +1,174 @@
+{
+	"title": "the root moved into a span of the root: its take leaves nothing there, so no-key, as the same move at a key (into-itself, before anything is walked); not wrong-kind",
+	"steps": [
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": "abc",
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": [
+				1,
+				2
+			],
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "no-key",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [
+							"a"
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [
+						"k"
+					],
+					"move": {
+						"path": []
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "into-itself",
+					"patch": 0
+				}
+			}
+		},
+		{
+			"op": "apply",
+			"value": {
+				"a": 1
+			},
+			"patches": [
+				{
+					"path": [],
+					"range": [
+						0,
+						0
+					],
+					"move": {
+						"path": [],
+						"range": [
+							0,
+							0
+						]
+					}
+				}
+			],
+			"expect": {
+				"error": {
+					"code": "wrong-kind",
+					"patch": 0
+				}
+			}
+		}
+	]
+}

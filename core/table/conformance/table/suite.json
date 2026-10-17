@@ -1,1 +1,9 @@
-{ "ordered": true }
+{
+	"ordered": true,
+	"reads": [
+		{ "op": "who", "node": "$node" },
+		{ "op": "at", "id": "$id" },
+		{ "op": "get", "part": "$part", "id": "$id" },
+		{ "op": "ids", "part": "$part", "node": "$node" }
+	]
+}

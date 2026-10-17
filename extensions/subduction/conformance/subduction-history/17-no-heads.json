@@ -1,0 +1,94 @@
+{
+	"title": "heads of an object with no blops: []",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "TQAAAE0AAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": []
+			},
+			"name": "5117868f2fb1d53fac0a7d2eb353c79ccfa596abadd5c6a95d91484690bfbad9",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "heads",
+			"object": [
+				"info",
+				"t"
+			],
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "heads",
+			"object": [
+				"children",
+				"t"
+			],
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "heads",
+			"object": [
+				"info",
+				"other"
+			],
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "heads",
+			"object": "value",
+			"expect": {
+				"heads": [
+					{
+						"name": "5117868f2fb1d53fac0a7d2eb353c79ccfa596abadd5c6a95d91484690bfbad9",
+						"blop": {
+							"node": "n",
+							"object": "value",
+							"actor": "a",
+							"signer": {
+								"/": {
+									"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+								}
+							},
+							"nonce": {
+								"/": {
+									"bytes": "TQAAAE0AAAA"
+								}
+							},
+							"parents": [],
+							"lamport": 1,
+							"patches": []
+						}
+					}
+				]
+			}
+		}
+	]
+}

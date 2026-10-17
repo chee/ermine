@@ -1,0 +1,14 @@
+{
+	"title": "a request missing a field it needs is an error that is not a code, never an empty answer; nothing changes and the next line is answered",
+	"steps": [
+		{ "op": "add", "part": "value", "id": "a", "node": "n", "expect": {} },
+		{ "op": "get", "fails": true },
+		{ "op": "get", "part": "value", "fails": true },
+		{ "op": "add", "node": "n", "fails": true },
+		{ "op": "add", "part": "value", "node": "m", "fails": true },
+		{ "op": "add", "id": "b", "node": "m", "fails": true },
+		{ "op": "sub", "part": "value", "fails": true },
+		{ "op": "del", "fails": true },
+		{ "op": "get", "part": "value", "id": "a", "expect": { "node": "n" } }
+	]
+}

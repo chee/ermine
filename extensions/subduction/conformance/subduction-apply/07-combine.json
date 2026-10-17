@@ -1,0 +1,211 @@
+{
+	"title": "combine: the side its patches on base's side make, as carried",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "DQAAAA0AAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": {
+							"x": 0
+						}
+					}
+				]
+			},
+			"name": "d715069b0d4e1b4cf9357534c7f4c1a51cbcd711fdfa22e17d11a9532ae47f9c",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "DgAAAA4AAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "1xUGmw1OG0z5NXU0x/TBpRy81xH9+iLhfRGpUyrkf5w"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": [
+					{
+						"path": [
+							"x"
+						],
+						"value": 1
+					}
+				]
+			},
+			"name": "07bcf1d6d29a4896a1b2b145586d97cae3f4a48160ff492c8f2e52cb3c5ec072",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "DwAAAA8AAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "1xUGmw1OG0z5NXU0x/TBpRy81xH9+iLhfRGpUyrkf5w"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": [
+					{
+						"path": [
+							"y"
+						],
+						"value": 2
+					}
+				]
+			},
+			"name": "13e74a6a98aeab668d1b387832fd76e831f0c6428e022962e9f227ed981436e1",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "EAAAABAAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "B7zx1tKaSJahsrFFWG2XyuP0pIFg/0ksjy5SyzxewHI"
+						}
+					},
+					{
+						"/": {
+							"bytes": "E+dKapiuq2aNGzh4Mv126DHwxkKOAili6fIn7ZgUNuE"
+						}
+					}
+				],
+				"base": {
+					"/": {
+						"bytes": "B7zx1tKaSJahsrFFWG2XyuP0pIFg/0ksjy5SyzxewHI"
+					}
+				},
+				"combine": true,
+				"lamport": 3,
+				"patches": [
+					{
+						"path": [
+							"y"
+						],
+						"value": 2
+					}
+				]
+			},
+			"name": "f9af59aac5fcd10caebf5c5a14370fc3d1571e179b3c6633306bf922047f0681",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "side",
+			"name": "f9af59aac5fcd10caebf5c5a14370fc3d1571e179b3c6633306bf922047f0681",
+			"expect": {
+				"side": {
+					"x": 1,
+					"y": 2
+				}
+			}
+		},
+		{
+			"op": "versions",
+			"object": "value",
+			"times": {
+				"d715069b0d4e1b4cf9357534c7f4c1a51cbcd711fdfa22e17d11a9532ae47f9c": 1012,
+				"07bcf1d6d29a4896a1b2b145586d97cae3f4a48160ff492c8f2e52cb3c5ec072": 1013,
+				"13e74a6a98aeab668d1b387832fd76e831f0c6428e022962e9f227ed981436e1": 1014,
+				"f9af59aac5fcd10caebf5c5a14370fc3d1571e179b3c6633306bf922047f0681": 1015
+			},
+			"expect": {
+				"versions": [
+					{
+						"content": {
+							"x": 1,
+							"y": 2
+						},
+						"change": {
+							"actor": "a",
+							"time": 1015
+						},
+						"because": {
+							"layer": "sync",
+							"place": {
+								"lamport": 3,
+								"name": "f9af59aac5fcd10caebf5c5a14370fc3d1571e179b3c6633306bf922047f0681"
+							},
+							"why": {
+								"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}

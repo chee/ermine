@@ -1,0 +1,170 @@
+{
+	"title": "readers run after the writers of what they read, learned from the keys a set changes",
+	"steps": [
+		{
+			"op": "root",
+			"name": "o",
+			"info": [["actor", "test"]],
+			"expect": {}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 1,
+				"x": 0
+			},
+			"expect": {
+				"tick": 1
+			}
+		},
+		{
+			"op": "compute",
+			"name": "c",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "b"
+					},
+					{
+						"read": "x"
+					}
+				]
+			},
+			"to": "c",
+			"expect": {}
+		},
+		{
+			"op": "compute",
+			"name": "b",
+			"scope": "o",
+			"f": {
+				"sum": [
+					{
+						"read": "a"
+					},
+					1
+				]
+			},
+			"to": "b",
+			"expect": {}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "c",
+						"tick": 2
+					},
+					{
+						"due": "b",
+						"tick": 3
+					},
+					{
+						"starts": "c",
+						"run": 1
+					},
+					{
+						"ends": "c",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "b",
+						"run": 1
+					},
+					{
+						"due": "c",
+						"tick": 5,
+						"writer": "b"
+					},
+					{
+						"ends": "b",
+						"run": 1,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 2
+					},
+					{
+						"ends": "c",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 2
+			}
+		},
+		{
+			"op": "write",
+			"values": {
+				"a": 10,
+				"x": 1
+			},
+			"expect": {
+				"tick": 7
+			}
+		},
+		{
+			"op": "pulse",
+			"expect": {}
+		},
+		{
+			"op": "moments",
+			"expect": {
+				"moments": [
+					{
+						"due": "b",
+						"tick": 7
+					},
+					{
+						"due": "c",
+						"tick": 7
+					},
+					{
+						"starts": "b",
+						"run": 2
+					},
+					{
+						"ends": "b",
+						"run": 2,
+						"ended": "done",
+						"equal": false
+					},
+					{
+						"starts": "c",
+						"run": 3
+					},
+					{
+						"ends": "c",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					}
+				]
+			}
+		},
+		{
+			"op": "get",
+			"key": "c",
+			"expect": {
+				"value": 12
+			}
+		}
+	]
+}

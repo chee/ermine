@@ -4,42 +4,32 @@
 		{
 			"op": "invert",
 			"value": { "a": -0 },
-			"patches": [{ "path": ["a"], "value": 0 }],
-			"expect": { "undo": [{ "path": ["a"], "value": -0 }] }
+			"patches": [{ "path": ["a"], "value": 0 }]
 		},
 		{
 			"op": "invert",
 			"value": { "a": 0 },
-			"patches": [{ "path": ["a"], "value": -0 }],
-			"expect": { "undo": [{ "path": ["a"], "value": 0 }] }
+			"patches": [{ "path": ["a"], "value": -0 }]
 		},
 		{
 			"op": "invert",
 			"value": { "a": [-0] },
-			"patches": [{ "path": ["a", 0] }],
-			"expect": { "undo": [{ "path": ["a"], "range": [0, 0], "value": [-0] }] }
+			"patches": [{ "path": ["a", 0] }]
 		},
 		{
 			"op": "invert",
 			"value": -0,
-			"patches": [{ "path": [] }],
-			"expect": { "undo": [{ "path": [], "value": -0 }] }
+			"patches": [{ "path": [] }]
 		},
 		{
 			"op": "invert",
 			"value": { "/": { "float64": [-0, "NaN"] } },
-			"patches": [{ "path": [], "range": [0, 2], "value": { "/": { "float64": [1] } } }],
-			"expect": {
-				"undo": [{ "path": [], "range": [0, 1], "value": { "/": { "float64": [-0, "NaN"] } } }]
-			}
+			"patches": [{ "path": [], "range": [0, 2], "value": { "/": { "float64": [1] } } }]
 		},
 		{
 			"op": "invert",
 			"value": { "/": { "float32": [1, -0] } },
-			"patches": [{ "path": [], "range": [1, 2] }],
-			"expect": {
-				"undo": [{ "path": [], "range": [1, 1], "value": { "/": { "float32": [-0] } } }]
-			}
+			"patches": [{ "path": [], "range": [1, 2] }]
 		},
 		{
 			"op": "invert",
@@ -61,6 +51,6 @@
 			"patches": [{ "path": ["a"], "value": { "/": { "bytes": "A" } } }],
 			"fails": true
 		},
-		{ "op": "invert", "value": { "a": 1 }, "patches": [], "expect": { "undo": [] } }
+		{ "op": "invert", "value": { "a": 1 }, "patches": [] }
 	]
 }

@@ -19,7 +19,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "c", "tick": 2 },
-					{ "starts": "c", "run": 1, "rank": 0 },
+					{ "starts": "c", "run": 1 },
 					{ "ends": "c", "run": 1, "ended": "done", "equal": false, "reads": ["a", "b", "a"] }
 				]
 			}
@@ -31,7 +31,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "c", "tick": 4 },
-					{ "starts": "c", "run": 2, "rank": 0 },
+					{ "starts": "c", "run": 2 },
 					{ "ends": "c", "run": 2, "ended": "done", "equal": false }
 				]
 			}
@@ -68,8 +68,7 @@
 					},
 					{
 						"starts": "q",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "q",
@@ -79,8 +78,7 @@
 					},
 					{
 						"starts": "w",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "w",
@@ -100,11 +98,11 @@
 				"moments": [
 					{ "due": "q", "tick": 11 },
 					{ "due": "w", "tick": 11 },
-					{ "starts": "q", "run": 2, "rank": 0 },
+					{ "starts": "q", "run": 2 },
 					{ "ends": "q", "run": 2, "ended": "stopped", "waits": "w", "reads": ["flag", "w"] },
-					{ "starts": "w", "run": 2, "rank": 0 },
+					{ "starts": "w", "run": 2 },
 					{ "ends": "w", "run": 2, "ended": "done", "equal": false, "reads": ["x"] },
-					{ "starts": "q", "run": 3, "rank": 1 },
+					{ "starts": "q", "run": 3 },
 					{
 						"ends": "q",
 						"run": 3,

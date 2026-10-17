@@ -153,8 +153,7 @@
 					},
 					{
 						"starts": "r",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "r",
@@ -164,8 +163,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "a",
@@ -174,8 +172,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "b",
@@ -184,8 +181,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c",
@@ -194,8 +190,7 @@
 					},
 					{
 						"starts": "d",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "d",
@@ -274,8 +269,7 @@
 					},
 					{
 						"starts": "r",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "r",

@@ -1,0 +1,128 @@
+{
+	"title": "the first patch applies, the second not: refused whole",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "HQAAAB0AAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 1,
+				"patches": [
+					{
+						"path": [],
+						"value": {
+							"a": 1
+						}
+					}
+				]
+			},
+			"name": "2601c9b8da3afa0c48116158e9a7eba69b9435af603d80471e163e455d6d5e1b",
+			"expect": {
+				"added": "taken"
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "HgAAAB4AAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "JgHJuNo6+gxIEWFY6afrppuUNa9gPYBHHhY+RV1tXhs"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": [
+					{
+						"path": [
+							"b"
+						],
+						"value": 2
+					},
+					{
+						"path": [
+							"a",
+							"c"
+						],
+						"value": 3
+					}
+				]
+			},
+			"name": "5411eecdaca167a49fb4c67c1ee26c99989f3eaf9b943a7865eded93aa469bfe",
+			"expect": {
+				"added": {
+					"refused": "patches"
+				}
+			}
+		},
+		{
+			"op": "side",
+			"name": "2601c9b8da3afa0c48116158e9a7eba69b9435af603d80471e163e455d6d5e1b",
+			"expect": {
+				"side": {
+					"a": 1
+				}
+			}
+		},
+		{
+			"op": "versions",
+			"object": "value",
+			"times": {
+				"2601c9b8da3afa0c48116158e9a7eba69b9435af603d80471e163e455d6d5e1b": 1028
+			},
+			"expect": {
+				"versions": [
+					{
+						"content": {
+							"a": 1
+						},
+						"change": {
+							"actor": "a",
+							"time": 1028
+						},
+						"because": {
+							"layer": "sync",
+							"place": {
+								"lamport": 1,
+								"name": "2601c9b8da3afa0c48116158e9a7eba69b9435af603d80471e163e455d6d5e1b"
+							},
+							"why": {
+								"signer": "0101010101010101010101010101010101010101010101010101010101010101"
+							}
+						}
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,5 +1,5 @@
 {
-	"title": "a cycle's member goes: a and b read each other, c reads b; a's scope disposed, b is after nothing, rank 0, and c one past it",
+	"title": "a cycle's member goes: a and b read each other, c reads b; a's scope disposed, b is after nothing, and c runs after it",
 	"steps": [
 		{
 			"op": "root",
@@ -123,8 +123,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "a",
@@ -134,8 +133,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"due": "a",
@@ -150,8 +148,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c",
@@ -161,8 +158,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "a",
@@ -180,8 +176,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "a",
@@ -191,8 +186,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"due": "c",
@@ -207,8 +201,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 4,
-						"rank": 0
+						"run": 4
 					},
 					{
 						"ends": "a",
@@ -218,8 +211,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 2,
-						"rank": 1
+						"run": 2
 					},
 					{
 						"ends": "c",
@@ -258,8 +250,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"due": "c",
@@ -274,8 +265,7 @@
 					},
 					{
 						"starts": "c",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"ends": "c",

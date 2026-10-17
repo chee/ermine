@@ -1,0 +1,64 @@
+{
+	"title": "side of a name never added, or waiting: none",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "side",
+			"name": "6d55db2d28a560e53f47be5bdfdd00fd46d841d00a556d5d970df3fc473126da",
+			"expect": {
+				"none": true
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "PwAAAD8AAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "bVXbLSilYOU/R75b390A/UbYQdAKVW1dlw3z/EcxJto"
+						}
+					}
+				],
+				"lamport": 2,
+				"patches": [
+					{
+						"path": [],
+						"value": 1
+					}
+				]
+			},
+			"name": "61df020e2014c9cdbd0db0396e850bb9a18065e128b741e73f25583eb2d2e4bc",
+			"expect": {
+				"added": {
+					"waiting": [
+						"6d55db2d28a560e53f47be5bdfdd00fd46d841d00a556d5d970df3fc473126da"
+					]
+				}
+			}
+		},
+		{
+			"op": "side",
+			"name": "61df020e2014c9cdbd0db0396e850bb9a18065e128b741e73f25583eb2d2e4bc",
+			"expect": {
+				"none": true
+			}
+		}
+	]
+}

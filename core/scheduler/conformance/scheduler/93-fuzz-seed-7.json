@@ -300,8 +300,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c0",
@@ -311,8 +310,7 @@
 					},
 					{
 						"starts": "c1",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c1",
@@ -322,8 +320,7 @@
 					},
 					{
 						"starts": "c2",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c2",
@@ -333,8 +330,7 @@
 					},
 					{
 						"starts": "c3",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "c3",
@@ -344,8 +340,7 @@
 					},
 					{
 						"starts": "e0",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e0",
@@ -355,8 +350,7 @@
 					},
 					{
 						"starts": "e1",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e1",
@@ -366,8 +360,7 @@
 					},
 					{
 						"starts": "e2",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e2",
@@ -377,8 +370,7 @@
 					},
 					{
 						"starts": "e3",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e3",
@@ -589,8 +581,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "c0",
@@ -600,8 +591,7 @@
 					},
 					{
 						"starts": "e1",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "e1",
@@ -611,8 +601,7 @@
 					},
 					{
 						"starts": "e2",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "e2",
@@ -705,8 +694,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "c0",
@@ -715,23 +703,21 @@
 						"equal": true
 					},
 					{
-						"starts": "e0",
-						"run": 2,
-						"rank": 0
+						"starts": "c3",
+						"run": 2
 					},
 					{
-						"ends": "e0",
+						"ends": "c3",
 						"run": 2,
 						"ended": "done",
 						"equal": true
 					},
 					{
-						"starts": "c3",
-						"run": 2,
-						"rank": 1
+						"starts": "e0",
+						"run": 2
 					},
 					{
-						"ends": "c3",
+						"ends": "e0",
 						"run": 2,
 						"ended": "done",
 						"equal": true
@@ -858,8 +844,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 4,
-						"rank": 0
+						"run": 4
 					},
 					{
 						"due": "c2",
@@ -873,20 +858,8 @@
 						"equal": false
 					},
 					{
-						"starts": "e0",
-						"run": 3,
-						"rank": 0
-					},
-					{
-						"ends": "e0",
-						"run": 3,
-						"ended": "done",
-						"equal": false
-					},
-					{
 						"starts": "c3",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"due": "e3",
@@ -900,9 +873,18 @@
 						"equal": false
 					},
 					{
+						"starts": "e0",
+						"run": 3
+					},
+					{
+						"ends": "e0",
+						"run": 3,
+						"ended": "done",
+						"equal": false
+					},
+					{
 						"starts": "c2",
-						"run": 2,
-						"rank": 1
+						"run": 2
 					},
 					{
 						"ends": "c2",
@@ -912,8 +894,7 @@
 					},
 					{
 						"starts": "e3",
-						"run": 2,
-						"rank": 2
+						"run": 2
 					},
 					{
 						"ends": "e3",
@@ -1051,8 +1032,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 5,
-						"rank": 0
+						"run": 5
 					},
 					{
 						"due": "c2",
@@ -1067,8 +1047,7 @@
 					},
 					{
 						"starts": "e0",
-						"run": 4,
-						"rank": 0
+						"run": 4
 					},
 					{
 						"ends": "e0",
@@ -1078,8 +1057,7 @@
 					},
 					{
 						"starts": "c2",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"due": "e3",
@@ -1094,8 +1072,7 @@
 					},
 					{
 						"starts": "e3",
-						"run": 3,
-						"rank": 2
+						"run": 3
 					},
 					{
 						"ends": "e3",
@@ -1238,8 +1215,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 6,
-						"rank": 0
+						"run": 6
 					},
 					{
 						"due": "c2",
@@ -1254,8 +1230,7 @@
 					},
 					{
 						"starts": "e0",
-						"run": 5,
-						"rank": 0
+						"run": 5
 					},
 					{
 						"ends": "e0",
@@ -1265,8 +1240,7 @@
 					},
 					{
 						"starts": "c2",
-						"run": 4,
-						"rank": 1
+						"run": 4
 					},
 					{
 						"due": "e3",
@@ -1281,8 +1255,7 @@
 					},
 					{
 						"starts": "e3",
-						"run": 4,
-						"rank": 2
+						"run": 4
 					},
 					{
 						"ends": "e3",
@@ -1424,8 +1397,7 @@
 					},
 					{
 						"starts": "c0",
-						"run": 7,
-						"rank": 0
+						"run": 7
 					},
 					{
 						"ends": "c0",
@@ -1435,8 +1407,7 @@
 					},
 					{
 						"starts": "e0",
-						"run": 6,
-						"rank": 0
+						"run": 6
 					},
 					{
 						"ends": "e0",
@@ -1446,8 +1417,7 @@
 					},
 					{
 						"starts": "e1",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "e1",
@@ -1457,8 +1427,7 @@
 					},
 					{
 						"starts": "e2",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "e2",

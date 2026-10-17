@@ -1,5 +1,5 @@
 {
-	"title": "a chain after a cycle: a and b read each other, d reads a, e reads d. a and b share a rank, d one past it, e one past d; h changed: a runs again, and the chain after it at those ranks",
+	"title": "a chain after a cycle: a and b read each other, d reads a, e reads d. h changed: a runs again, and the chain after it, in order",
 	"steps": [
 		{
 			"op": "root",
@@ -120,8 +120,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "a",
@@ -131,8 +130,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"due": "a",
@@ -147,8 +145,7 @@
 					},
 					{
 						"starts": "d",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "d",
@@ -158,8 +155,7 @@
 					},
 					{
 						"starts": "e",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "e",
@@ -169,8 +165,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "a",
@@ -180,8 +175,7 @@
 					},
 					{
 						"starts": "d",
-						"run": 2,
-						"rank": 1
+						"run": 2
 					},
 					{
 						"due": "e",
@@ -196,8 +190,7 @@
 					},
 					{
 						"starts": "e",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "e",
@@ -215,8 +208,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 3,
-						"rank": 0
+						"run": 3
 					},
 					{
 						"ends": "a",
@@ -226,8 +218,7 @@
 					},
 					{
 						"starts": "d",
-						"run": 3,
-						"rank": 1
+						"run": 3
 					},
 					{
 						"due": "e",
@@ -242,8 +233,7 @@
 					},
 					{
 						"starts": "e",
-						"run": 3,
-						"rank": 2
+						"run": 3
 					},
 					{
 						"ends": "e",
@@ -281,8 +271,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 4,
-						"rank": 0
+						"run": 4
 					},
 					{
 						"ends": "a",
@@ -292,8 +281,7 @@
 					},
 					{
 						"starts": "d",
-						"run": 4,
-						"rank": 1
+						"run": 4
 					},
 					{
 						"due": "e",
@@ -308,8 +296,7 @@
 					},
 					{
 						"starts": "e",
-						"run": 4,
-						"rank": 2
+						"run": 4
 					},
 					{
 						"ends": "e",

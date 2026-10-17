@@ -1,0 +1,195 @@
+{
+	"title": "unlinked, both commit on a shared head; relinked, both converge",
+	"steps": [
+		{
+			"op": "reset",
+			"expect": {}
+		},
+		{
+			"op": "device",
+			"name": "a",
+			"seed": "0101010101010101010101010101010101010101010101010101010101010101",
+			"expect": {
+				"key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+			}
+		},
+		{
+			"op": "device",
+			"name": "b",
+			"seed": "0202020202020202020202020202020202020202020202020202020202020202",
+			"expect": {
+				"key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+			}
+		},
+		{
+			"op": "follow",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "follow",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 6
+				}
+			],
+			"actor": "a",
+			"nonce": "0000000700000000",
+			"expect": {
+				"name": "09469bd1b33e9aea15cc0642a5d0c63ce6bd2920bca1ad6c58d3c46926ae92d6",
+				"stored": "49ecf4bdd6fd07fdab695790c851a07887466a0422bc45663364117cf2e5cf52"
+			}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "unlink",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "commit",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 7
+				}
+			],
+			"actor": "a",
+			"nonce": "0000000800000000",
+			"expect": {
+				"name": "4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05",
+				"stored": "6a567974923778490c721d1528e88b6e425f349b30fca608b5e3f78f9794a954"
+			}
+		},
+		{
+			"op": "commit",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"object": "value",
+			"patches": [
+				{
+					"path": [],
+					"value": 8
+				}
+			],
+			"actor": "b",
+			"nonce": "0000000900000000",
+			"expect": {
+				"name": "08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa",
+				"stored": "47653ab95e648329632371942bac3713b2d37ffa11c6f20d3b1eb8fa44d9d369"
+			}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "state",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "link",
+			"a": "a",
+			"b": "b",
+			"expect": {}
+		},
+		{
+			"op": "pump",
+			"expect": {}
+		},
+		{
+			"op": "state",
+			"device": "a",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05",
+					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		},
+		{
+			"op": "state",
+			"device": "b",
+			"doc": "ermine://0c8c6f9648e6a9d929cf6d0cd4a04d186434b25d9b58dc1c984d4f31b85217ce",
+			"expect": {
+				"heads": [
+					"4311480b17734322431a274826ea8a7650036e9b0e11702420ef366f38803a05",
+					"08bc5313d14751b638f8e0485c54393d6580ae0ae540e9cb0a5a8fe2e62b6eaa"
+				],
+				"history": {
+					"waiting": [],
+					"refused": []
+				},
+				"taking": {
+					"waiting": [],
+					"refused": []
+				}
+			}
+		}
+	]
+}

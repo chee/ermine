@@ -53,8 +53,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"due": "a",
@@ -69,8 +68,7 @@
 					},
 					{
 						"starts": "a",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "a",
@@ -146,8 +144,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 1,
-						"rank": 0
+						"run": 1
 					},
 					{
 						"ends": "b",
@@ -178,8 +175,7 @@
 					},
 					{
 						"starts": "b",
-						"run": 2,
-						"rank": 0
+						"run": 2
 					},
 					{
 						"ends": "b",

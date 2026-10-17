@@ -1,0 +1,236 @@
+{
+	"title": "a parent refused or stuck: stuck, before waiting (step 3 before 4); node comes first",
+	"steps": [
+		{
+			"op": "create",
+			"node": "n",
+			"expect": {}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "NwAAADcAAAA"
+					}
+				},
+				"parents": [],
+				"lamport": 2,
+				"patches": []
+			},
+			"name": "6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df",
+			"expect": {
+				"added": {
+					"refused": "lamport"
+				}
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "OAAAADgAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "bVN3jZdG3SgL1r4Mau9/W4r2l8XbA+hUXeJZgSwb4N8"
+						}
+					}
+				],
+				"lamport": 3,
+				"patches": []
+			},
+			"name": "c3956ffdbe53aef7f60df3046a4dcbf4a15713509be757e5699b68431146beb7",
+			"expect": {
+				"added": {
+					"stuck": [
+						"6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df"
+					]
+				}
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "OQAAADkAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "w5Vv/b5Trvf2DfMEak3L9KFXE1Cb51flaZtoQxFGvrc"
+						}
+					}
+				],
+				"lamport": 4,
+				"patches": []
+			},
+			"name": "4ec3f1efdedb6936e4a1309c5415ecc006b9553b293f5e544587385ad1484300",
+			"expect": {
+				"added": {
+					"stuck": [
+						"c3956ffdbe53aef7f60df3046a4dcbf4a15713509be757e5699b68431146beb7"
+					]
+				}
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "n",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "OwAAADsAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "bVN3jZdG3SgL1r4Mau9/W4r2l8XbA+hUXeJZgSwb4N8"
+						}
+					},
+					{
+						"/": {
+							"bytes": "kMrmWW9zz8XH3qivAOAVBXA4/KO4CqUPGW0aQC7ICJA"
+						}
+					}
+				],
+				"lamport": 3,
+				"patches": [],
+				"base": {
+					"/": {
+						"bytes": "bVN3jZdG3SgL1r4Mau9/W4r2l8XbA+hUXeJZgSwb4N8"
+					}
+				}
+			},
+			"name": "bfea9a03d7b8972aefcdccd55a0cf31dd0b2ce1727330d381f3a614e2b87bf4f",
+			"expect": {
+				"added": {
+					"stuck": [
+						"6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df"
+					]
+				}
+			}
+		},
+		{
+			"op": "add",
+			"blop": {
+				"node": "other",
+				"object": "value",
+				"actor": "a",
+				"signer": {
+					"/": {
+						"bytes": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+					}
+				},
+				"nonce": {
+					"/": {
+						"bytes": "PAAAADwAAAA"
+					}
+				},
+				"parents": [
+					{
+						"/": {
+							"bytes": "bVN3jZdG3SgL1r4Mau9/W4r2l8XbA+hUXeJZgSwb4N8"
+						}
+					}
+				],
+				"lamport": 3,
+				"patches": []
+			},
+			"name": "bb83a98c2ff82a495057f045936c8f49fb5ed81e4b13d6ddeab6fbac71978b8f",
+			"expect": {
+				"added": {
+					"refused": "node"
+				}
+			}
+		},
+		{
+			"op": "heads",
+			"object": "value",
+			"expect": {
+				"heads": []
+			}
+		},
+		{
+			"op": "get",
+			"name": "c3956ffdbe53aef7f60df3046a4dcbf4a15713509be757e5699b68431146beb7",
+			"expect": {}
+		},
+		{
+			"op": "waiting",
+			"expect": {
+				"waiting": []
+			}
+		},
+		{
+			"op": "refused",
+			"expect": {
+				"refused": [
+					{
+						"name": "4ec3f1efdedb6936e4a1309c5415ecc006b9553b293f5e544587385ad1484300",
+						"stuck": [
+							"c3956ffdbe53aef7f60df3046a4dcbf4a15713509be757e5699b68431146beb7"
+						]
+					},
+					{
+						"name": "6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df",
+						"refused": "lamport"
+					},
+					{
+						"name": "bb83a98c2ff82a495057f045936c8f49fb5ed81e4b13d6ddeab6fbac71978b8f",
+						"refused": "node"
+					},
+					{
+						"name": "bfea9a03d7b8972aefcdccd55a0cf31dd0b2ce1727330d381f3a614e2b87bf4f",
+						"stuck": [
+							"6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df"
+						]
+					},
+					{
+						"name": "c3956ffdbe53aef7f60df3046a4dcbf4a15713509be757e5699b68431146beb7",
+						"stuck": [
+							"6d53778d9746dd280bd6be0c6aef7f5b8af697c5db03e8545de259812c1be0df"
+						]
+					}
+				]
+			}
+		}
+	]
+}
