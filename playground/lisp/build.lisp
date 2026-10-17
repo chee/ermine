@@ -1,0 +1,10 @@
+;;; build.lisp — load every file and save one executable; the harness is chosen by its first argument
+(setf *compile-verbose* nil *compile-print* nil)
+(defparameter *here* (directory-namestring *load-truename*))
+(dolist (f '("package" "json" "harness" "apply" "invert" "ops" "squish" "node" "table" "unread" "tracker" "paths" "scheduler"))
+  (let ((src (merge-pathnames (format nil "~a.lisp" f) *here*))
+        (out (merge-pathnames (format nil "build/~a.fasl" f) *here*)))
+    (ensure-directories-exist out)
+    (load (compile-file src :output-file out))))
+(sb-ext:save-lisp-and-die (merge-pathnames "build/ermine" *here*)
+                          :toplevel #'ermine:main :executable t)
