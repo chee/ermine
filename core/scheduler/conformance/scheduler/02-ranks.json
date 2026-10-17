@@ -1,5 +1,5 @@
 {
-	"title": "readers run after the writers of what they read, learned from the keys a set changes",
+	"title": "readers run after the writers of what they read: ranks, learned from the keys a set changes",
 	"steps": [
 		{
 			"op": "root",
@@ -67,7 +67,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -77,7 +78,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"due": "c",
@@ -92,7 +94,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -138,7 +141,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -148,7 +152,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"ends": "c",

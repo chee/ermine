@@ -48,7 +48,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -58,7 +59,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -81,9 +83,9 @@
 				"moments": [
 					{ "due": "c", "tick": 5 },
 					{ "due": "e", "tick": 5 },
-					{ "starts": "c", "run": 2 },
+					{ "starts": "c", "run": 2, "rank": 0 },
 					{ "ends": "c", "run": 2, "ended": "pending" },
-					{ "starts": "e", "run": 2 },
+					{ "starts": "e", "run": 2, "rank": 0 },
 					{ "ends": "e", "run": 2, "ended": "pending" }
 				]
 			}
@@ -98,9 +100,9 @@
 				"moments": [
 					{ "due": "c", "tick": 6 },
 					{ "due": "e", "tick": 6 },
-					{ "starts": "c", "run": 3 },
+					{ "starts": "c", "run": 3, "rank": 0 },
 					{ "ends": "c", "run": 3, "ended": "done", "equal": true },
-					{ "starts": "e", "run": 3 },
+					{ "starts": "e", "run": 3, "rank": 0 },
 					{ "ends": "e", "run": 3, "ended": "done", "equal": true }
 				]
 			}
@@ -125,7 +127,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "a",

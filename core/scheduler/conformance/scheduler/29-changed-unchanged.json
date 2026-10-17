@@ -72,7 +72,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -82,7 +83,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -126,7 +128,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "c",

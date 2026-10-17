@@ -1,5 +1,5 @@
 {
-	"title": "a cycle made and gone: c0 reads c2 once shut is true, closing c0, c1, c2 into one; they run among themselves by due and age, d after them. shut false again: c0 stops reading c2, and each runs after the one it reads again",
+	"title": "a cycle made and gone: c0 reads c2 once shut is true, closing c0, c1, c2 into one component; they share a rank, d one past it. shut false again: c0 stops reading c2, and the ranks are one past each other again",
 	"steps": [
 		{
 			"op": "root",
@@ -157,7 +157,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -167,7 +168,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c1",
@@ -177,7 +179,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c2",
@@ -187,7 +190,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "d",
@@ -213,7 +217,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -223,7 +228,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 2
+						"run": 2,
+						"rank": 1
 					},
 					{
 						"ends": "c1",
@@ -233,7 +239,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 2
+						"run": 2,
+						"rank": 2
 					},
 					{
 						"ends": "c2",
@@ -243,7 +250,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 2
+						"run": 2,
+						"rank": 3
 					},
 					{
 						"ends": "d",
@@ -290,7 +298,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -316,7 +325,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -326,7 +336,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "c1",
@@ -336,7 +347,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "c2",
@@ -346,7 +358,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -356,7 +369,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"due": "c2",
@@ -371,7 +385,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "c2",
@@ -381,7 +396,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"ends": "d",
@@ -428,7 +444,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 6
+						"run": 6,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -454,7 +471,8 @@
 					},
 					{
 						"starts": "c0",
-						"run": 7
+						"run": 7,
+						"rank": 0
 					},
 					{
 						"ends": "c0",
@@ -464,7 +482,8 @@
 					},
 					{
 						"starts": "c1",
-						"run": 5
+						"run": 5,
+						"rank": 1
 					},
 					{
 						"ends": "c1",
@@ -474,7 +493,8 @@
 					},
 					{
 						"starts": "c2",
-						"run": 5
+						"run": 5,
+						"rank": 2
 					},
 					{
 						"ends": "c2",
@@ -484,7 +504,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 4
+						"run": 4,
+						"rank": 3
 					},
 					{
 						"ends": "d",

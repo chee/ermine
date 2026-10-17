@@ -1,5 +1,5 @@
 {
-	"title": "a compute that makes a compute at a name again keeps it (claimed): the same computation, its runs counted on (3 after 2), its last result given as previous, due by the run that claimed it (a tick, writer P), it runs its new code. the cleanups its old code made run once that run is done and the round's runs are: newest first, the one that throws ends the rest, its error out of the pulse (as at any rerun, x). made again with P open outside its run (not parked): name taken",
+	"title": "a compute that makes a compute at a name again keeps it (claimed): the same computation, its runs counted on (3 after 2), its last result given as previous, due by the run that claimed it (a tick, writer P), it runs its new code. the cleanups its old code made run once that run is done and the round's runs are: newest first, the one that throws ends the rest, its error out of the pulse (as at any rerun, x). made again with P open outside its run (y made in no run of P since: not old): name taken",
 	"steps": [
 		{
 			"op": "root",
@@ -168,7 +168,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"due": "y",
@@ -183,7 +184,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -234,7 +236,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -286,7 +289,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"due": "y",
@@ -301,7 +305,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "y",

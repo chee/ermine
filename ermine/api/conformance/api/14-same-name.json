@@ -1,5 +1,5 @@
 {
-	"title": "two at one name in the same run are illegal: a second memo or effect there made in the same setup, run or call from outside, while the first is alive, is already-there; the next run makes it again",
+	"title": "two at one name in the same run are illegal: a second memo or effect there made in the same setup, run or call from outside, while the first is alive, is already-there (the run fails there, the first kept); the next run makes it again: the same one, kept (chee 10-17: a parent rerun does not destroy its children), its id the same, and the second there is already-there again",
 	"steps": [
 		{
 			"op": "kids",
@@ -137,6 +137,26 @@
 			}
 		},
 		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"z"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
 			"op": "log",
 			"name": "ok-ran",
 			"expect": {
@@ -175,6 +195,26 @@
 				]
 			],
 			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"z"
+			],
+			"expect": {
+				"id": "n6"
+			}
 		},
 		{
 			"op": "log",

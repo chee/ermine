@@ -1,0 +1,510 @@
+{
+	"title": "a memo's run that fails keeps what it made before (chee: \"keep them until the parent is actually destroyed\"): ./y stays, the same id, and runs on; the next run, done, makes it again and keeps it. a done run that does not make ./y: it goes once that run is done (its computation torn down, its teardowns told, its node's entries deleted, its name unplaced), and its reader by path sees nothing there. made again later: a new one, a new id",
+	"steps": [
+		{
+			"op": "kids",
+			"id": "R",
+			"value": {
+				"w": "W"
+			},
+			"expect": {}
+		},
+		{
+			"op": "start",
+			"name": "p",
+			"at": [
+				"w",
+				"p"
+			],
+			"program": [
+				{
+					"do": [
+						"open",
+						"./k",
+						1
+					],
+					"as": "k"
+				},
+				{
+					"do": [
+						"open",
+						"./q",
+						true
+					],
+					"as": "q"
+				},
+				{
+					"do": [
+						"open",
+						"./bad",
+						false
+					],
+					"as": "bad"
+				},
+				{
+					"do": [
+						"memo",
+						"./outer",
+						{},
+						[
+							"all",
+							[
+								"if",
+								[
+									"read",
+									"$bad"
+								],
+								[
+									"throw",
+									"outer threw"
+								]
+							],
+							[
+								"if",
+								[
+									"read",
+									"$q"
+								],
+								[
+									"memo",
+									"./y",
+									{
+										"equal": "json"
+									},
+									[
+										"all",
+										[
+											"teardown",
+											"y"
+										],
+										[
+											"log",
+											"y",
+											[
+												"read",
+												"$k"
+											]
+										]
+									]
+								]
+							],
+							[
+								"log",
+								"outer",
+								[
+									"read",
+									"$q"
+								]
+							]
+						]
+					]
+				},
+				{
+					"do": [
+						"effect",
+						"./rp",
+						[
+							"read",
+							"./y"
+						],
+						"rp"
+					]
+				}
+			],
+			"expect": {
+				"id": "proc:p"
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"children",
+						"R",
+						"put"
+					],
+					[
+						"process",
+						"R",
+						"put"
+					],
+					[
+						"value",
+						"n1",
+						"put"
+					],
+					[
+						"children",
+						"W",
+						"put"
+					],
+					[
+						"value",
+						"n2",
+						"put"
+					],
+					[
+						"value",
+						"n3",
+						"put"
+					],
+					[
+						"value",
+						"n4",
+						"put"
+					],
+					[
+						"attributes",
+						"n4",
+						"put"
+					],
+					[
+						"attributes",
+						"n5",
+						"put"
+					],
+					[
+						"value",
+						"n6",
+						"put"
+					],
+					[
+						"attributes",
+						"n6",
+						"put"
+					],
+					[
+						"value",
+						"n5",
+						"put"
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$bad",
+				[
+					{
+						"path": [],
+						"value": true
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					true
+				]
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": []
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$k",
+				[
+					{
+						"path": [],
+						"value": 2
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					1,
+					2,
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "rp",
+			"expect": {
+				"values": [
+					[
+						null,
+						1
+					],
+					[
+						null,
+						2
+					]
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$bad",
+				[
+					{
+						"path": [],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					1,
+					2,
+					"replaced",
+					2,
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n6"
+			}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": []
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$q",
+				[
+					{
+						"path": [],
+						"value": false
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "outer",
+			"expect": {
+				"values": [
+					true,
+					true,
+					false
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					1,
+					2,
+					"replaced",
+					2,
+					"replaced",
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {}
+		},
+		{
+			"op": "saved",
+			"part": "value",
+			"id": "n6",
+			"expect": {}
+		},
+		{
+			"op": "events",
+			"expect": {
+				"events": [
+					[
+						"value",
+						"n6",
+						"gone"
+					],
+					[
+						"attributes",
+						"n6",
+						"gone"
+					]
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "rp",
+			"expect": {
+				"values": [
+					[
+						null,
+						1
+					],
+					[
+						null,
+						2
+					],
+					null
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$k",
+				[
+					{
+						"path": [],
+						"value": 3
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					1,
+					2,
+					"replaced",
+					2,
+					"replaced",
+					"replaced"
+				]
+			}
+		},
+		{
+			"op": "do",
+			"process": "p",
+			"call": [
+				"edit",
+				"$q",
+				[
+					{
+						"path": [],
+						"value": true
+					}
+				]
+			],
+			"expect": {}
+		},
+		{
+			"op": "id",
+			"path": [
+				"w",
+				"y"
+			],
+			"expect": {
+				"id": "n7"
+			}
+		},
+		{
+			"op": "log",
+			"name": "y",
+			"expect": {
+				"values": [
+					1,
+					2,
+					"replaced",
+					2,
+					"replaced",
+					"replaced",
+					3
+				]
+			}
+		},
+		{
+			"op": "log",
+			"name": "rp",
+			"expect": {
+				"values": [
+					[
+						null,
+						1
+					],
+					[
+						null,
+						2
+					],
+					null,
+					[
+						null,
+						3
+					]
+				]
+			}
+		}
+	]
+}

@@ -1,5 +1,5 @@
 {
-	"title": "what an effect's run makes stays through its act: parked by its next run, it goes once that run is done (equal or not: equal runs pile nothing up); what its act makes stays until its next act, through runs in between; disposed, both go, newest first",
+	"title": "what an effect's run makes stays through its act and through its next run, and goes once that run is done (equal or not: equal runs pile nothing up); what its act makes stays until its next act, through runs in between; disposed, both go, newest first",
 	"steps": [
 		{
 			"op": "root",
@@ -127,7 +127,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -145,7 +146,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "e",

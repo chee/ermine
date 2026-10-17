@@ -34,7 +34,8 @@
 					},
 					{
 						"starts": "q",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "q",
@@ -44,7 +45,8 @@
 					},
 					{
 						"starts": "w",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "w",
@@ -63,11 +65,11 @@
 				"moments": [
 					{ "due": "q", "tick": 6 },
 					{ "due": "w", "tick": 6 },
-					{ "starts": "q", "run": 2 },
+					{ "starts": "q", "run": 2, "rank": 0 },
 					{ "ends": "q", "run": 2, "ended": "stopped", "waits": "w" },
-					{ "starts": "w", "run": 2 },
+					{ "starts": "w", "run": 2, "rank": 0 },
 					{ "ends": "w", "run": 2, "ended": "done", "equal": false },
-					{ "starts": "q", "run": 3 },
+					{ "starts": "q", "run": 3, "rank": 1 },
 					{ "ends": "q", "run": 3, "ended": "done", "equal": false }
 				]
 			}

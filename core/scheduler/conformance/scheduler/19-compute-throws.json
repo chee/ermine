@@ -41,7 +41,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -51,7 +52,8 @@
 					},
 					{
 						"starts": "e",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "e",
@@ -73,7 +75,7 @@
 			"expect": {
 				"moments": [
 					{ "due": "c", "tick": 5 },
-					{ "starts": "c", "run": 2 },
+					{ "starts": "c", "run": 2, "rank": 0 },
 					{ "ends": "c", "run": 2, "ended": "failed", "error": "zero" }
 				]
 			}

@@ -1,5 +1,5 @@
 {
-	"title": "a cycle beside reads that change: a and b read each other; d1 reads d0 or src by flag. reading d0, d1 runs after it, and before b, due later and not above it; a and b run among themselves",
+	"title": "a cycle beside reads that change: a and b read each other; d1 reads d0 or src by flag. d1's rank rises past d0's and stays (ranks never fall); a and b keep theirs",
 	"steps": [
 		{
 			"op": "root",
@@ -122,7 +122,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -132,7 +133,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"due": "a",
@@ -147,7 +149,8 @@
 					},
 					{
 						"starts": "d0",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "d0",
@@ -157,7 +160,8 @@
 					},
 					{
 						"starts": "d1",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "d1",
@@ -167,7 +171,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -214,7 +219,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -224,7 +230,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -234,7 +241,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"due": "b",
@@ -249,7 +257,8 @@
 					},
 					{
 						"starts": "d0",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "d0",
@@ -259,7 +268,8 @@
 					},
 					{
 						"starts": "d1",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "d1",
@@ -269,7 +279,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -316,7 +327,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -326,7 +338,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -336,7 +349,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 6
+						"run": 6,
+						"rank": 0
 					},
 					{
 						"due": "b",
@@ -351,7 +365,8 @@
 					},
 					{
 						"starts": "d0",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "d0",
@@ -360,24 +375,26 @@
 						"equal": false
 					},
 					{
-						"starts": "d1",
-						"run": 3
-					},
-					{
-						"ends": "d1",
-						"run": 3,
-						"ended": "done",
-						"equal": false
-					},
-					{
 						"starts": "b",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"ends": "b",
 						"run": 5,
 						"ended": "done",
 						"equal": true
+					},
+					{
+						"starts": "d1",
+						"run": 3,
+						"rank": 1
+					},
+					{
+						"ends": "d1",
+						"run": 3,
+						"ended": "done",
+						"equal": false
 					}
 				]
 			}
@@ -417,7 +434,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 7
+						"run": 7,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -427,7 +445,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 6
+						"run": 6,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -437,7 +456,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 8
+						"run": 8,
+						"rank": 0
 					},
 					{
 						"due": "b",
@@ -452,7 +472,8 @@
 					},
 					{
 						"starts": "d0",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "d0",
@@ -461,24 +482,26 @@
 						"equal": false
 					},
 					{
-						"starts": "d1",
-						"run": 4
-					},
-					{
-						"ends": "d1",
-						"run": 4,
-						"ended": "done",
-						"equal": false
-					},
-					{
 						"starts": "b",
-						"run": 7
+						"run": 7,
+						"rank": 0
 					},
 					{
 						"ends": "b",
 						"run": 7,
 						"ended": "done",
 						"equal": true
+					},
+					{
+						"starts": "d1",
+						"run": 4,
+						"rank": 1
+					},
+					{
+						"ends": "d1",
+						"run": 4,
+						"ended": "done",
+						"equal": false
 					}
 				]
 			}

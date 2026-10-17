@@ -1,5 +1,5 @@
 {
-	"title": "order among the due: one runs once every due one above it ran; of those, the earliest due, then the order made. d due first, from outside, with nothing due above it, runs before c, due later though d reads what c does not; d due first with a due above it waits for a and b. a mark makes a key's readers due in the order they began reading it, one that stopped reading it and read it again last",
+	"title": "order among the due: lowest rank first, then the earliest due, then the order made; a mark makes a key's readers due in the order they began reading it, one that stopped reading it and read it again last",
 	"steps": [
 		{
 			"op": "root",
@@ -104,7 +104,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -114,7 +115,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -124,7 +126,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -134,7 +137,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "d",
@@ -185,7 +189,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -195,7 +200,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"due": "d",
@@ -210,7 +216,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -220,7 +227,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 2
+						"run": 2,
+						"rank": 1
 					},
 					{
 						"ends": "d",
@@ -271,7 +279,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"due": "d",
@@ -286,7 +295,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -296,7 +306,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -306,7 +317,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"ends": "d",
@@ -353,7 +365,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"due": "d",
@@ -368,7 +381,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 4
+						"run": 4,
+						"rank": 1
 					},
 					{
 						"ends": "d",
@@ -382,7 +396,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"due": "d",
@@ -397,7 +412,8 @@
 					},
 					{
 						"starts": "d",
-						"run": 5
+						"run": 5,
+						"rank": 1
 					},
 					{
 						"ends": "d",
@@ -440,7 +456,8 @@
 					},
 					{
 						"starts": "a",
-						"run": 6
+						"run": 6,
+						"rank": 0
 					},
 					{
 						"ends": "a",
@@ -450,7 +467,8 @@
 					},
 					{
 						"starts": "b",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "b",
@@ -460,7 +478,8 @@
 					},
 					{
 						"starts": "c",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "c",
@@ -476,141 +495,6 @@
 			"key": "d",
 			"expect": {
 				"value": 6
-			}
-		},
-		{
-			"op": "changed",
-			"keys": [
-				"a"
-			],
-			"expect": {
-				"tick": 29
-			}
-		},
-		{
-			"op": "write",
-			"values": {
-				"y": 4
-			},
-			"expect": {
-				"tick": 30
-			}
-		},
-		{
-			"op": "pulse",
-			"expect": {}
-		},
-		{
-			"op": "moments",
-			"expect": {
-				"moments": [
-					{
-						"due": "d",
-						"tick": 29
-					},
-					{
-						"due": "c",
-						"tick": 30
-					},
-					{
-						"starts": "d",
-						"run": 6
-					},
-					{
-						"ends": "d",
-						"run": 6,
-						"ended": "done",
-						"equal": true
-					},
-					{
-						"starts": "c",
-						"run": 5
-					},
-					{
-						"ends": "c",
-						"run": 5,
-						"ended": "done",
-						"equal": false
-					}
-				]
-			}
-		},
-		{
-			"op": "changed",
-			"keys": [
-				"a"
-			],
-			"expect": {
-				"tick": 32
-			}
-		},
-		{
-			"op": "write",
-			"values": {
-				"x": 4
-			},
-			"expect": {
-				"tick": 33
-			}
-		},
-		{
-			"op": "pulse",
-			"expect": {}
-		},
-		{
-			"op": "moments",
-			"expect": {
-				"moments": [
-					{
-						"due": "d",
-						"tick": 32
-					},
-					{
-						"due": "b",
-						"tick": 33
-					},
-					{
-						"due": "a",
-						"tick": 33
-					},
-					{
-						"starts": "a",
-						"run": 7
-					},
-					{
-						"ends": "a",
-						"run": 7,
-						"ended": "done",
-						"equal": false
-					},
-					{
-						"starts": "b",
-						"run": 5
-					},
-					{
-						"ends": "b",
-						"run": 5,
-						"ended": "done",
-						"equal": false
-					},
-					{
-						"starts": "d",
-						"run": 7
-					},
-					{
-						"ends": "d",
-						"run": 7,
-						"ended": "done",
-						"equal": false
-					}
-				]
-			}
-		},
-		{
-			"op": "get",
-			"key": "d",
-			"expect": {
-				"value": 8
 			}
 		}
 	]

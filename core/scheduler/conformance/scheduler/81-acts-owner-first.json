@@ -116,7 +116,8 @@
 					},
 					{
 						"starts": "p",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "p",
@@ -131,7 +132,8 @@
 					},
 					{
 						"starts": "k",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "k",
@@ -155,7 +157,8 @@
 					},
 					{
 						"starts": "B",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "B",
@@ -198,7 +201,8 @@
 					},
 					{
 						"starts": "p",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "p",
@@ -208,7 +212,8 @@
 					},
 					{
 						"starts": "k",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "k",
@@ -218,7 +223,8 @@
 					},
 					{
 						"starts": "B",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "B",
@@ -228,7 +234,8 @@
 					},
 					{
 						"starts": "p",
-						"run": 3
+						"run": 3,
+						"rank": 1
 					},
 					{
 						"ends": "p",
@@ -243,7 +250,8 @@
 					},
 					{
 						"starts": "k",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "k",

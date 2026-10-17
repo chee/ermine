@@ -1,5 +1,5 @@
 {
-	"title": "a run that fails keeps what it did not make again (chee: \"keep them until the parent is actually destroyed\") and its own cleanups set aside: y, parked, runs on; a later run that fails after claiming y keeps it too. the next run that is done claims it (the same y, run 5) and its cleanups set aside since, the failed runs' too, run newest first once the round's runs are. a done run that does not make y again: y goes at that run's end, its cleanups with it, before it runs though it was due",
+	"title": "a run that fails keeps what it did not make again (chee: \"keep them until the parent is actually destroyed\") and its own cleanups set aside: y, still alive, runs on; a later run that fails after claiming y keeps it too. the next run that is done claims it (the same y, run 5) and its cleanups set aside since, the failed runs' too, run newest first once the round's runs are. a done run that does not make y again: y goes at that run's end, its cleanups with it, before it runs though it was due",
 	"steps": [
 		{
 			"op": "root",
@@ -182,7 +182,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"due": "y",
@@ -197,7 +198,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 1
+						"run": 1,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -215,7 +217,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "P",
@@ -225,7 +228,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 2
+						"run": 2,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -302,7 +306,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -316,7 +321,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 3
+						"run": 3,
+						"rank": 0
 					},
 					{
 						"due": "y",
@@ -331,7 +337,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -399,7 +406,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 4
+						"run": 4,
+						"rank": 0
 					},
 					{
 						"due": "y",
@@ -414,7 +422,8 @@
 					},
 					{
 						"starts": "y",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"ends": "y",
@@ -468,7 +477,8 @@
 					},
 					{
 						"starts": "P",
-						"run": 5
+						"run": 5,
+						"rank": 0
 					},
 					{
 						"ends": "P",
