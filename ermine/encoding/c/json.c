@@ -320,7 +320,8 @@ bool jsonIsWhole(const Json *value, int64_t *out) {
 	return true;
 }
 
-bool jsonSameNumber(double a, double b) {
+/** whether two numbers are the same as Object.is has it */
+static bool jsonSameNumber(double a, double b) {
 	if (isnan(a) || isnan(b)) return isnan(a) && isnan(b);
 	return a == b && signbit(a) == signbit(b);
 }
@@ -399,17 +400,6 @@ size_t utf8Count(const char *text, size_t length) {
 		if (!isContinuation((unsigned char)text[i])) count++;
 	}
 	return count;
-}
-
-size_t utf8Offset(const char *text, size_t length, size_t index) {
-	size_t seen = 0;
-	for (size_t i = 0; i < length; i++) {
-		if (!isContinuation((unsigned char)text[i])) {
-			if (seen == index) return i;
-			seen++;
-		}
-	}
-	return length;
 }
 
 /** the byte at text[*at] as it would be in plain UTF-8: U+0000, held as C0 80, is 0 */

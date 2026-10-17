@@ -1,5 +1,5 @@
-// The harnesses' forms of a commit (commit_form.h), as commit_harness.ts and harnesses.ts have them
-#include "commit_form.h"
+// The harnesses' forms of a commit (commit_form_harness.h), as commit_harness.ts and harnesses.ts have them
+#include "commit_form_harness.h"
 
 #include "cbor.h"
 #include "pack.h"
@@ -84,7 +84,8 @@ static void put_target(FILE *out, const op_target *t) {
 	if (t->has_range) fprintf(out, ",\"range\":[%lld,%lld]", (long long)t->from, (long long)t->to);
 }
 
-void cf_put_patches(FILE *out, const op_patch *ps, size_t length) {
+// the patches, as {path, range?, value?, move?} each
+static void cf_put_patches(FILE *out, const op_patch *ps, size_t length) {
 	fputc('[', out);
 	for (size_t i = 0; i < length; i++) {
 		if (i) fputc(',', out);

@@ -176,16 +176,12 @@ bool jsonIsWhole(const Json *value, int64_t *out);
  * NULL and a value are not.
  */
 bool jsonEqual(const Json *a, const Json *b);
-/** whether two numbers are the same as Object.is has it */
-bool jsonSameNumber(double a, double b);
 
 // code points ------------------------------------------------------------------
 // Strings are counted and sliced by code point (as patches count them).
 
 /** how many code points the bytes hold */
 size_t utf8Count(const char *text, size_t length);
-/** the byte offset of code point `index` (0..count); `length` when index >= count */
-size_t utf8Offset(const char *text, size_t length, size_t index);
 /** code point order: <0, 0, >0 */
 int utf8Compare(const char *a, size_t aLength, const char *b, size_t bLength);
 /** code point order of two C texts (ids, names) */

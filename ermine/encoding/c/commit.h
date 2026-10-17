@@ -35,8 +35,6 @@ const char *cm_code_name(cm_code code);
 // bytes), then the raw key (1 byte or more), CM_SIGNER_MAX bytes in all. Ed25519: 0xed 0x01, then 32
 // bytes. Only a verifier needs to know what a type is (cm_key_split says the code, and where the key is)
 #define CM_SIGNER_MAX 1024
-// whether the bytes are a multikey
-int cm_multikey(const uint8_t *bytes, size_t length);
 // a multikey's code and raw key (a pointer into it); 0 when the bytes are none
 int cm_key_split(const uint8_t *bytes, size_t length, uint64_t *code, const uint8_t **key, size_t *key_length);
 // a multikey from the code and the raw key, into out (CM_SIGNER_MAX bytes at most): how long it is
@@ -77,8 +75,6 @@ cm_code cm_check(const Json *commit, char **field);
 // the commit back from its bytes; only the canonical encoding. CM_NOT_A_COMMIT: bytes that are no
 // canonical item, no map, or a field the rules say no to (*field). cm_free it
 cm_code cm_decode(const uint8_t *bytes, size_t length, cm_commit *out, char **field);
-// a checked commit in its Json form (what cm_check holds to be a commit), made into a cm_commit
-cm_code cm_of_json(const Json *commit, cm_commit *out, char **field);
 // the commit as its Json form: a fresh value; NULL when a value in it has no Json form
 Json *cm_to_json(const cm_commit *commit);
 void cm_free(cm_commit *commit);
