@@ -1,8 +1,9 @@
 // Scope nodes (typescript/scopes.ts), in C: each scope's node, an id of its own beside the scheduler's
 // scope, never saved (nothing saved reaches it). a process's value, its status and its pin are written
-// there. a computer is a scope, so it can have one too, but its status node is status.h's own. at the
-// scope's teardown its node's entries go, as table events, so whoever read them is told. Same rules as
-// scopes.ts, which the suite in ermine/processes/conformance/processes/ holds both to.
+// there. at the scope's teardown its node's entries go, as table events, so whoever read them is told.
+// a memo's or effect's node is attached (ermine/api): a computer's teardowns run after each of its
+// runs, so its node's entries are the api's to take out. Same rules as scopes.ts, which the suite in
+// ermine/processes/conformance/processes/ holds both to.
 //
 // the scheduler knows no table, so the map is kept here, beside it.
 // core candidate: a scope could carry its node's id itself (as a computer could), and the
@@ -23,6 +24,9 @@ void sn_free(sn *s);
 // the scope's node id, made the first time (id, or "scope:<random hex>" when NULL); the same after,
 // whatever id is. A scope already gone: NULL. Registers the teardown that takes the node's entries. Good until the scope's teardown
 const char *sn_give(sn *s, sc_scope *scope, const char *id);
+// the scope's node id, id (copied), the same after: nothing registered, its entries the caller's. Good
+// until sn_free
+const char *sn_attach(sn *s, sc_scope *scope, const char *id);
 // the scope's own node; none: NULL
 const char *sn_node_of(const sn *s, const sc_scope *scope);
 // the node of the scope, or of the nearest scope above it that has one: whose a computer's run is,

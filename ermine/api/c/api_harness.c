@@ -25,19 +25,9 @@
 		(v)[(n)++] = (x); \
 	} while (0)
 
-// the change op's keys: the first of each, walking into an "owner" pair (its value a list of
-// [key, value] lists: the pairs above), as the TS harness's walk does
+// the change op's keys: the first of each in the metadata, as the TS harness's
 static void found_pair(op_value *o, const char *key, const op_value *v) {
 	if (!key || !v) return;
-	if (strcmp(key, "owner") == 0) {
-		if (v->type != OP_LIST) return;
-		for (size_t i = 0; i < v->count; i++) {
-			const op_value *pair = v->items[i];
-			if (!pair || pair->type != OP_LIST || pair->count < 2 || pair->items[0]->type != OP_STR) continue;
-			found_pair(o, pair->items[0]->str, pair->items[1]);
-		}
-		return;
-	}
 	if ((strcmp(key, "actor") == 0 || strcmp(key, "process") == 0 || strcmp(key, "caller") == 0) &&
 		op_get(o, key) == NULL)
 		op_set(o, key, op_ref((op_value *)v));
@@ -253,6 +243,12 @@ static void table_event(void *ctx, tb_key part, tb_key id) {
 	else pl_event(m->places, part, id);
 }
 
+// places' node_of: the scope's node (scope nodes, the processes' and the memos')
+static const char *scope_node(void *data, const sc_scope *o) {
+	world *m = data;
+	return m->scopes ? sn_node_of(m->scopes, o) : NULL;
+}
+
 static world *make(const op_value *o) {
 	world *m = xalloc(sizeof *m);
 	m->events = op_list();
@@ -271,7 +267,8 @@ static world *make(const op_value *o) {
 	pr_processes_init(&m->rows, tb_string("R"));
 	m->walk[0] = &m->rows.contributor, m->walk[1] = &pl_children;
 	pl_connect(m->places, &(pl_setup){.root = tb_string("R"), .table = m->view, .paths = m->paths,
-		.scheduler = m->s, .contributors = m->walk, .ncontributors = 2});
+		.scheduler = m->s, .contributors = m->walk, .ncontributors = 2, .node_of = scope_node,
+		.node_data = m});
 	if (m->overlay) pn_connect(m->overlay, m->table, m->view, m->places);
 	sc_on_tracking_end(m->s, pl_forget, m->places);
 	m->scopes = sn_new(m->s, m->table);
@@ -311,7 +308,8 @@ static world *make(const op_value *o) {
 		.who = m->who,
 		.overlay = m->overlay,
 		.schedule = schedule,
-		.schedule_ctx = m};
+		.schedule_ctx = m,
+		.scopes = m->scopes};
 	// uuid: no setup.id, new ids the api's own
 	const op_value *uuid = o ? op_get(o, "uuid") : NULL;
 	if (!(uuid && uuid->type == OP_BOOL && uuid->bool_)) setup.id = next_id, setup.id_ctx = m;
@@ -945,7 +943,24 @@ static op_value *answer(const op_value *r) {
 	if (strcmp(op, "saved") == 0) {
 		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
 		op_value *o = op_map();
-		if (e && e->value) op_set(o, "value", op_ref(e->value));
+		const op_value *v = e ? e->value : NULL;
+		const op_value *path = op_get(r, "path");
+		for (size_t i = 0; v && path && path->type == OP_LIST && i < path->count; i++) {
+			v = v->type == OP_MAP && path->items[i]->type == OP_STR ? op_get(v, path->items[i]->str) : NULL;
+		}
+		if (v) op_set(o, "value", op_ref((op_value *)v));
+		return o;
+	}
+	if (strcmp(op, "metadata") == 0) {
+		const nd_entry *e = tb_get(m->table, tb_string(hh_str(r, "part")), tb_string(hh_str(r, "id")));
+		op_value *o = op_map(), *keys = op_list();
+		const op_value *node = NULL;
+		for (size_t i = 0; e && i < e->change.metadata_length; i++) {
+			op_push(keys, op_str(e->change.metadata[i].key));
+			if (node == NULL && strcmp(e->change.metadata[i].key, "node") == 0) node = e->change.metadata[i].value;
+		}
+		op_set(o, "keys", keys);
+		if (node) op_set(o, "node", op_ref((op_value *)node));
 		return o;
 	}
 	if (strcmp(op, "change") == 0) {
@@ -953,7 +968,7 @@ static op_value *answer(const op_value *r) {
 		op_value *o = op_map();
 		if (e == NULL) return o;
 		if (e->change.actor) op_set(o, "actor", op_ref((op_value *)e->change.actor));
-		// the first of each key in the pairs, however nested: an "owner" pair holds the pairs above
+		// the first of each key in the pairs
 		for (size_t i = 0; i < e->change.metadata_length; i++)
 			found_pair(o, e->change.metadata[i].key, e->change.metadata[i].value);
 		return o;

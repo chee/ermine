@@ -32,6 +32,7 @@
 #include "../../../filesystem/protect/c/protect.h"
 #include "../../../extensions/patch-nodes/c/patch.h"
 #include "../../../extensions/presence/c/presence.h"
+#include "../../processes/c/scopes.h"
 #include "../../sites/c/sites.h"
 
 typedef enum {
@@ -95,7 +96,15 @@ typedef struct {
 	// where memos, effects and send's scopes are noted (ermine/sites); NULL: not noted. a memo's site
 	// is the line that called api_memo (a macro), the program's
 	st_sites *sites;
+	// scope nodes (ermine/processes' scopes.h), the processes' too: each memo's and effect's node
+	// attached, its scope written. NULL: none. a header's metadata stops at the first scope with a
+	// node by places' own node_of (pl_setup): the host gives it sn_node_of on these
+	sn *scopes;
 } api_setup;
+
+// the attribute a memo's or effect's node holds its scope in: the node id of the nearest scope
+// above it with one, written once as the node is made (beside status.h's and runs.h's)
+#define API_SCOPE "ermine.computer.scope"
 
 typedef struct api_apis api_apis;
 typedef struct api api;

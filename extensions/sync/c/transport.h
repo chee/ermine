@@ -173,6 +173,36 @@ hy_added tp_take(tp_device *t, const char *doc, const uint8_t *bytes, size_t len
 // told each arrival, after it is taken in and what took it in is done, in order: never in the middle
 // of a history's add. Any number of listeners
 void tp_arrived(tp_device *t, tp_arrived_fn fn, void *context);
+// told a document each time what is held back or refused there may have changed (tp_taking_of):
+// after what came for it is taken in or refused, a commit of this device's is handed over, or
+// tp_changed judged it again. Any number of listeners
+typedef void (*tp_moved_fn)(void *context, const char *doc);
+void tp_moved(tp_device *t, tp_moved_fn fn, void *context);
+// what is held back or refused at a document before its histories. waiting: a loose commit (by its
+// head), or a fragment's member (by its seal's stored id), and the names of its parents not here.
+// refused, by id: a commit (code), a fragment refused whole (fragment, code), or one stuck on a parent
+// refused or stuck here (stuck, the names of those parents). Each list sorted by id. The ephemeral
+// layer: no waiting, the refused ephemeral commits by name. tp_taking_free it
+typedef struct {
+	uint8_t commit[32];
+	uint8_t (*names)[32];
+	size_t count;
+} tp_waiting_row;
+typedef struct {
+	uint8_t id[32];
+	bool fragment, stuck;
+	tp_code code;
+	uint8_t (*names)[32];
+	size_t count;
+} tp_refused_row;
+typedef struct {
+	tp_waiting_row *waiting;
+	size_t waiting_count;
+	tp_refused_row *refused;
+	size_t refused_count;
+} tp_taking;
+tp_taking tp_taking_of(tp_device *t, const char *doc, tp_layer layer);
+void tp_taking_free(tp_taking *taking);
 // told each ephemeral commit heard on a followed document whose signer is the sender, new or heard
 // before (sent again), after any arrival it made: the document, the sender's key (a multikey), the
 // commit's name.

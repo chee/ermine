@@ -66,8 +66,11 @@ static op_value *error_value(const char *message) {
 
 static op_value *text(tb_key k) { return k.string != NULL ? op_str(k.string) : op_null(); }
 
-// a header's pieces as a map: time, actor, reader, external, metadata (not its op)
-static op_value *change_value(const ch_header *h) {
+// a header's pieces as a map: time, actor, reader, external, metadata (not its op). places' own
+// (pl_change_value), made once a header and shared; one places didn't make, built here
+static op_value *change_value(crn *r, const ch_header *h) {
+	const op_value *shared = pl_change_value(r->places, h);
+	if (shared != NULL) return op_ref((op_value *)shared);
 	op_value *m = op_map();
 	if (h->has_time) op_set(m, "time", op_num((double)h->time));
 	if (h->actor != NULL) op_set(m, "actor", op_ref((op_value *)h->actor));
@@ -105,7 +108,7 @@ static int same(const op_value *a, const op_value *b) {
 	switch (a->type) {
 	case OP_NULL: return 1;
 	case OP_BOOL: return !a->bool_ == !b->bool_;
-	case OP_NUM: return a->num == b->num;
+	case OP_NUM: return op_same_num(a, b);
 	case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
 	case OP_BYTES:
 	case OP_TYPED:
@@ -140,7 +143,7 @@ static void landed(const pl_fact *fact, void *ctx) {
 	op_value *w = op_map();
 	op_set(w, "part", text(fact->part));
 	op_set(w, "id", text(fact->id));
-	if (fact->change != NULL) op_set(w, "change", change_value(fact->change));
+	if (fact->change != NULL) op_set(w, "change", change_value(r, fact->change));
 	op_push(g->writes, w);
 }
 
@@ -187,7 +190,7 @@ static op_value *named(crn *r, const void *key, int *record) {
 	}
 	if (w.keys) op_set(m, "keys", op_bool(1));
 	const nd_entry *there = tb_get(r->table, w.part, w.id);
-	if (there != NULL) op_set(m, "change", change_value(&there->change));
+	if (there != NULL) op_set(m, "change", change_value(r, &there->change));
 	return m;
 }
 

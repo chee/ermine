@@ -29,7 +29,7 @@
 typedef enum { PR_YES, PR_NO, PR_PENDING } pr_verdict;
 typedef struct {
 	pr_verdict verdict;
-	// PR_NO: why. never NULL
+	// PR_NO: why. never NULL; a grants "bad grant" reason is kept only until the next one
 	const char *reason;
 	// PR_PENDING: what it waits for, opaque (a grants policy: its pr_where); may be NULL
 	const void *need;

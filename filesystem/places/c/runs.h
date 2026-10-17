@@ -15,8 +15,9 @@
 //
 // VALUES. A change is a map of the header's pieces: time, actor, reader, external (each {file,
 // line, column?, function?}), metadata ([key, value].., the values held, as places.h makes them
-// op_values); not its op. Where runs.ts compares changes by identity, this compares them as values:
-// two changes alike in every piece are the same (two writes in one second by one scope, unlikely).
+// op_values); not its op. A header places made is one value, made once and shared by every read and
+// write naming it (pl_change_value), as runs.ts shares the header; only one places didn't make is built
+// here. Records are compared as values: two changes alike in every piece are the same.
 // An error is status.h's stand-in, {"name": "Error", "message": text}.
 //
 // MEMORY. Keeps the places, table and scheduler as given, a copy of each id given, the nodes it

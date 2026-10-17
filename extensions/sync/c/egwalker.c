@@ -860,7 +860,7 @@ static void tables(state *s, const uint32_t *version, size_t words, rp_tables *o
 			cm_commit c;
 			const hy_kept *k = s->commits[spans[i].hi];
 			if (cm_decode(k->bytes, k->length, &c, NULL) != CM_OK) abort();
-			rp_put_copy(out, t->name, value, &c.change);
+			rp_put_copy(out, t->name, value, rp_signed(out, &c.change, c.signer, c.signer_length, k->name));
 			cm_free(&c);
 		}
 		op_free(value);

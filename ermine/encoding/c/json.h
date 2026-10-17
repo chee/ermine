@@ -1,9 +1,11 @@
-// json.h: a value (ENCODING.tex), value equality, and code point helpers; parser and printer are
+// json.h: a value (cbor.h), value equality, and code point helpers; parser and printer are
 // json_text.h. nothing here knows about graphs.
 //
-// values: JSON plus bytes, typed arrays (each in its own buffer; no uint8 kind) and stand-ins; any
-// binary64 (NaN, infinities, -0). jsonDecode turns "/" forms into these; the printer writes them
-// back (base64, no padding; typed arrays little-endian; one NaN per width).
+// values: JSON plus bytes, typed arrays (each in its own buffer; no uint8 kind) and stand-ins.
+// numbers: any binary64 but -0 (it is 0: whole numbers are integers), and every whole number, of
+// any size: one no double holds exactly (past 2^53) is `big` beside the double nearest it.
+// jsonDecode turns "/" forms into these; the printer writes them back (base64, no padding; typed
+// arrays little-endian; one NaN per width; a whole number past 2^53 - 1 as {"/":{"bigint":...}}).
 // holders: a value is immutable once shared. whoever made it holds it; jsonRef adds a hold,
 // jsonFree drops one (the last frees). a function borrows what it is given; jsonPush, jsonAdd,
 // jsonSet, jsonStand take the caller's hold. to change, jsonShallow and change the copy.
@@ -23,7 +25,7 @@
 
 typedef enum { JSON_NULL, JSON_BOOLEAN, JSON_NUMBER, JSON_STRING, JSON_ARRAY, JSON_OBJECT, JSON_BYTES, JSON_TYPED, JSON_STAND } JsonType;
 
-/** a typed array's kind (ENCODING.tex), in ENCODING.tex's order; each held as its C type. No uint8: bytes are that */
+/** a typed array's kind, in cbor.h's order; each held as its C type. No uint8: bytes are that */
 typedef enum { JSON_INT8, JSON_INT16, JSON_UINT16, JSON_INT32, JSON_UINT32, JSON_INT64, JSON_UINT64, JSON_FLOAT32, JSON_FLOAT64, JSON_KINDS } JsonKind;
 
 typedef struct Json Json;
@@ -39,7 +41,14 @@ struct Json {
 	JsonType type;
 	union {
 		bool boolean;
-		double number;
+		struct {
+			double number; // the number; a big one's, the double nearest it
+			// a whole number no double holds exactly: its magnitude, big-endian, no leading zero
+			// (whole.h), and its sign. NULL for every other number
+			unsigned char *big;
+			size_t bigLength;
+			bool bigNegative;
+		};
 		struct {
 			char *string; // UTF-8 (WTF-8 for lone surrogates), NUL-terminated, `stringLength` bytes
 			size_t stringLength;
@@ -77,8 +86,12 @@ struct Json {
 
 Json *jsonNull(void);
 Json *jsonBoolean(bool value);
+/** a number: -0 is 0 */
 Json *jsonNumber(double value);
 Json *jsonInteger(int64_t value);
+Json *jsonUnsigned(uint64_t value);
+/** a whole number from its sign and magnitude, big-endian (leading zeros allowed): a double when one holds it exactly */
+Json *jsonWhole(bool negative, const unsigned char *magnitude, size_t length);
 /** copies the text (up to its NUL) */
 Json *jsonString(const char *text);
 /** copies `length` bytes, NUL included */
@@ -91,7 +104,7 @@ Json *jsonObject(void);
 Json *jsonBytes(const void *data, size_t length);
 /** a typed array: copies `count` elements of the kind's C type */
 Json *jsonTyped(JsonKind kind, const void *data, size_t count);
-/** a stand-in (ENCODING.tex) of a kind, any value: takes the kind; data, equal to another with an equal kind */
+/** a stand-in of a kind, any value: takes the kind; data, equal to another with an equal kind */
 Json *jsonStand(Json *kind);
 /** the size of one element of a kind */
 size_t jsonKindSize(JsonKind kind);
@@ -131,9 +144,15 @@ const char *jsonText(const Json *value);
  * answers right)
  */
 bool jsonIsWhole(const Json *value, int64_t *out);
+/** a whole number from INT64_MIN to INT64_MAX into *out; false for anything else (a fraction, past them) */
+bool jsonInt64(const Json *value, int64_t *out);
+/** a number as a double into *out (a big whole one: the double nearest it); false when not a number */
+bool jsonDouble(const Json *value, double *out);
+/** a whole number's sign and magnitude (big-endian, no leading zero; out has 128 bytes of room); false when not a whole number */
+bool jsonMagnitude(const Json *value, bool *negative, unsigned char out[128], size_t *length);
 /**
- * Value equality (ENCODING.tex): of the same kind with equal parts. Numbers as
- * JavaScript's Object.is tells them apart (0 and -0 differ, NaN equals NaN);
+ * Value equality: of the same kind with equal parts. Numbers by value, NaN
+ * equal to NaN (no -0 is made: 0 and -0 are equal, as are whole numbers by value);
  * strings and bytes byte for byte; typed arrays only of the same kind,
  * element by element as numbers are; lists element by element in order;
  * objects with the same keys holding equal values in any key order;
@@ -151,7 +170,7 @@ size_t utf8Count(const char *text, size_t length);
 int utf8Compare(const char *a, size_t aLength, const char *b, size_t bLength);
 /** code point order of two C texts (ids, names) */
 int textCompare(const char *a, const char *b);
-/** whether the bytes hold a lone surrogate (its WTF-8, ED A0..BF xx), which makes them no string (ENCODING.tex) */
+/** whether the bytes hold a lone surrogate (its WTF-8, ED A0..BF xx), which makes them no string */
 bool utf8Surrogate(const char *text, size_t length);
 
 // small shared helpers ---------------------------------------------------------

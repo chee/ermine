@@ -2,6 +2,7 @@
 #include "replay.h"
 #include "snapshot.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -105,6 +106,31 @@ static const void *held(owned *o, const void *v) {
 	return o->values[o->values_length++] = op_ref((op_value *)v);
 }
 
+static op_value *hex_value(const uint8_t *bytes, size_t n) {
+	char *text = allocate(2 * n + 1);
+	for (size_t i = 0; i < n; i++) snprintf(text + 2 * i, 3, "%02x", bytes[i]);
+	op_value *v = op_str(text);
+	free(text);
+	return v;
+}
+
+const ch_header *rp_signed(rp_tables *t, const ch_header *change, const uint8_t *signer, size_t signer_length,
+	const uint8_t name[32]) {
+	owned *o = t->own;
+	ch_header *c = block(o, sizeof *c);
+	*c = *change;
+	ch_entry *es = block(o, (change->metadata_length + 2) * sizeof *es);
+	for (size_t i = 0; i < change->metadata_length; i++) es[i] = change->metadata[i];
+	op_value *key = hex_value(signer, signer_length), *named = hex_value(name, 32);
+	es[change->metadata_length] = (ch_entry){"signer", held(o, key)};
+	es[change->metadata_length + 1] = (ch_entry){"commit", held(o, named)};
+	op_free(key);
+	op_free(named);
+	c->metadata = es;
+	c->metadata_length = change->metadata_length + 2;
+	return c;
+}
+
 void rp_put_copy(rp_tables *t, const char *table, op_value *value, const ch_header *in) {
 	owned *o = t->own;
 	ch_header *c = block(o, sizeof *c);
@@ -158,7 +184,7 @@ bool rp_check(const rp_tables *t, const cm_commit *c) {
 	return true;
 }
 
-rp_code rp_apply(rp_tables *t, cm_commit *c) {
+rp_code rp_apply(rp_tables *t, cm_commit *c, const uint8_t name[32]) {
 	owned *o = t->own;
 	size_t i = slot_of(t, c->table);
 	nd_entry *e = i < t->length ? t->slots[i].entry : NULL;
@@ -176,6 +202,8 @@ rp_code rp_apply(rp_tables *t, cm_commit *c) {
 	cm_commit *kept = &o->commits[o->commits_length++];
 	*kept = *c;
 	*c = (cm_commit){0};
+	const ch_header *change = name != NULL ? rp_signed(t, &kept->change, kept->signer, kept->signer_length, name)
+					       : &kept->change;
 	if (e != NULL) {
 		// the hold apply made goes to the entry, the one before is let go of
 		op_free(e->value);
@@ -183,11 +211,11 @@ rp_code rp_apply(rp_tables *t, cm_commit *c) {
 		if (after == NULL) {
 			memmove(&t->slots[i], &t->slots[i + 1], (t->length - i - 1) * sizeof *t->slots);
 			t->length--;
-		} else e->change = kept->change;
+		} else e->change = *change;
 		return RP_OK;
 	}
 	if (after == NULL) return RP_OK;
-	e = nd_make_entry(after, &kept->change, NULL);
+	e = nd_make_entry(after, change, NULL);
 	if (e == NULL) abort();
 	op_free(after);
 	made(o, e);
@@ -254,7 +282,7 @@ static rp_code walk(const hy_history *h, const uint8_t name[32], rp_snapshots sn
 	for (size_t i = n; i-- > 0 && code == RP_OK;) {
 		cm_commit c;
 		if (cm_decode(line[i]->bytes, line[i]->length, &c, NULL) != CM_OK) code = RP_PATCHES;
-		else if ((code = rp_apply(out, &c)) != RP_OK) cm_free(&c);
+		else if ((code = rp_apply(out, &c, line[i]->name)) != RP_OK) cm_free(&c);
 	}
 	free(line);
 	if (code != RP_OK) rp_free(out);

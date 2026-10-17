@@ -1086,6 +1086,7 @@ static sc_out computer_f(void *previous, void *data) {
 	if (c->early && !c->given) {
 		c->given = 1;
 		sc_computer *self = sc_run_computer(sc_get_run(c->x->s.scheduler));
+		if (c->x->s.scopes) sn_attach(c->x->s.scopes, self, c->id);
 		cst_give(c->x->statuses, self, tb_string(c->id));
 		crn_give(c->x->runs, self, tb_string(c->id));
 	}
@@ -1101,7 +1102,7 @@ static bool computer_equal(const void *p, const void *q, void *data) {
 	switch (a->type) {
 		case OP_NULL: return true;
 		case OP_BOOL: return a->bool_ == b->bool_;
-		case OP_NUM: return a->num == b->num || (a->num != a->num && b->num != b->num);
+		case OP_NUM: return op_same_num(a, b);
 		case OP_STR: return a->bytes == b->bytes && memcmp(a->str, b->str, a->bytes) == 0;
 		default: return false;
 	}
@@ -1186,12 +1187,20 @@ static void create_in(void *data) {
 	m->c->c = m->effect ? sc_create_effect(m->c->x->s.scheduler, m->def)
 	                    : sc_create_computer(m->c->x->s.scheduler, m->def);
 }
+// a computer's node placed at its path, its scope written (own's node, or the nearest above with
+// one; none: not written)
 static int place_computer(api *a, void *data) {
 	computer *c = data;
+	const char *above = a->x->s.scopes ? sn_nearest(a->x->s.scopes, c->own) : NULL;
 	char *parent = c->path.n ? id_at(a, c->path.v, c->path.n - 1) : NULL;
 	if (parent == NULL) return free(parent), fail(a, API_NOTHING_THERE, c->path.n ? c->path.v[0] : "");
 	int code = place_under(a, parent, c->path.v[c->path.n - 1], c->id, NULL, 0);
 	free(parent);
+	if (code || above == NULL) return code;
+	op_value *scope = op_map();
+	op_set(scope, API_SCOPE, op_str(above));
+	code = add_entry(a, API_ATTRIBUTES, c->id, scope);
+	op_free(scope);
 	return code;
 }
 
@@ -1265,6 +1274,7 @@ static int make_computer(api *a, int memo, int early, const char *name, api_comp
 		return fail(a, API_FAILED, bad ? bad : SC_UNSCOPED);
 	}
 	if (x->s.sites != NULL) st_note(x->s.sites, c->c, file, line, func);
+	if (x->s.scopes != NULL) sn_attach(x->s.scopes, c->c, c->id);
 	cst_give(x->statuses, c->c, tb_string(c->id));
 	crn_give(x->runs, c->c, tb_string(c->id));
 	*out = node_at(&c->path);

@@ -93,6 +93,17 @@ const char *sn_give(sn *s, sc_scope *scope, const char *id) {
 	return g->id;
 }
 
+const char *sn_attach(sn *s, sc_scope *scope, const char *id) {
+	given *had = pm_get(&s->ids, scope);
+	if (had != NULL) return had->id;
+	given *g = xalloc(sizeof *g);
+	g->owner = s;
+	g->scope = scope;
+	g->id = xdup(id);
+	pm_set(&s->ids, scope, g);
+	return g->id;
+}
+
 const char *sn_node_of(const sn *s, const sc_scope *scope) {
 	const given *g = pm_get(&s->ids, scope);
 	return g != NULL ? g->id : NULL;

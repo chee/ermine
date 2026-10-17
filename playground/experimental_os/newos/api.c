@@ -190,6 +190,12 @@ static void ended(sc_computer *c, unsigned n, sc_ended how, const void *const *r
 		how == SC_LOOPING ? "looping" : more && more->error ? more->error : "thrown");
 }
 
+// places' node_of: the scope's node (a process's, a computed node's), so a header's metadata stops there
+static const char *scope_node(void *data, const sc_scope *o) {
+	ap_os *os = data;
+	return os->scopes ? sn_node_of(os->scopes, o) : NULL;
+}
+
 ap_os *ap_new(const ap_setup *setup) {
 	ap_os *os = grab(sizeof *os);
 	os->setup = *setup;
@@ -203,7 +209,7 @@ ap_os *ap_new(const ap_setup *setup) {
 	fr_init(&os->fronts, FR_PART);
 	os->order[0] = &os->rows.contributor, os->order[1] = &os->fronts.contributor, os->order[2] = &pl_children;
 	pl_connect(os->places, &(pl_setup){.root = root, .table = os->table, .paths = os->paths, .scheduler = os->s,
-		.contributors = os->order, .ncontributors = 3});
+		.contributors = os->order, .ncontributors = 3, .node_of = scope_node, .node_data = os});
 	os->scopes = sn_new(os->s, os->table);
 	sc_on_run_end(os->s, ended, os);
 	os->status = cst_new(&(cst_setup){os->places, os->table, os->s});
@@ -1566,6 +1572,19 @@ const ap_error *ap_start(ap_given *g, const ap_startop *op, const char **id) {
 	*info = (sc_pair){"process", path};
 	sc_scope *scope = st_create_scope(os->sites, info, 1, NULL);
 	if (!scope) return ap_error_new(os, "stopped", "no part running to start under");
+	// its scope's node: the computed node (attached: it goes as an ephemeral node does), so its writes'
+	// metadata stops there. its scope written once, as made, as ermine/api's API_SCOPE: the node of the
+	// nearest scope above it with one (none: not written)
+	sn_attach(os->scopes, scope, made);
+	const char *above = sn_nearest(os->scopes, sc_scope_parent(scope));
+	if (above) {
+		op_value *v = op_str(above);
+		op_patch p = {.has_value = 1, .value = v};
+		Patching pt = {made, "attributes", "ermine.computer.scope", &p, 1};
+		e = write_with(g->api, "start", patching, &pt, NULL);
+		op_free(v);
+		if (e) return e;
+	}
 	Computed *c = keep(os, sizeof *c);
 	*c = (Computed){os, ap_process(os, scope, made, at, k + 1), op->compute, op->effect, op->deep, scope, 0};
 	sc_run_with_scope(scope, computer, c);
