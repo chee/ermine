@@ -1,39 +1,29 @@
-// /programs/panels: Control Panels, System 7's folder of them as one
-// window: the panels down the left, the one chosen on the right. A panel is
-// a node, /etc/panels/<Name>, {kind: "panel", rows}, read live: a new panel
-// is a node placed there, not code. A row says what it edits and how:
+// /programs/panels: Control Panels, as System 7's, in one window: the list left, the chosen right.
+// a panel is a node, /etc/panels/<Name>, {kind: "panel", rows}, read live: a new panel is a node.
 //
 //   {label, at, key?, control, ...}
-//     at       the node, an address (["/", "etc", "desktop"]) or its text ("/etc/desktop")
-//     key      a key of its value, or a list of them, a path into it (["window", "radius"]); none: the whole value
-//     default  what is shown while the node or key holds nothing
+//     at       the node: ["/", "etc", "desktop"] or "/etc/desktop"
+//     key      a key of its value, or a path into it (["window", "radius"]); none: the whole value
+//     default  shown while it holds nothing
 //   control:
-//     check    a box; with run, a command, toggling runs `<run> on` or `<run> off` and the box reads at's key
+//     check    a box; with run, toggling runs `<run> on` or `<run> off`
 //     choice   choices: [..], radio buttons
 //     number   step (1), min?, max?
-//     colour   a swatch and its hex; a palette of /etc/theme's colours
-//     colours  a colour row for each key of at's value holding a number
-//     picture  from: [address, ...] (/home, /etc), the pictures under them, or none: its path written
-//     preset   from: an address (/etc/themes), each node there a choice, by its name: chosen, that node
-//              placed again at at (/etc/theme), in place of the one there, as the shell's ln; so the rows
-//              editing at edit the chosen one itself. The one shown chosen is the one placed at at. New: a
-//              copy of the one at at, under from, named "<its name> copy", chosen. One at at that is none of
-//              from's, chosen away from, is kept under from first, as "untitled"
+//     colour   a swatch, its hex, /etc/theme's palette
+//     colours  a colour row for each numeric key of at's value
+//     picture  from: [address, ...] (/home, /etc), the pictures under them, or none; writes a path
+//     preset   from: an address (/etc/themes); choosing places that node at at (/etc/theme), as ln.
+//              New: a copy of at's under from, "<its name> copy". one at at not in from is kept
+//              under from first, as "untitled"
 //     text     a readline field
-//     button   run, a command as /etc/keys has them, through /dev/wm/ctl run; text, its word
+//     button   run: a /etc/keys command (/dev/wm/ctl run); text: its word
 //     show     the value, read only
 //     head     a heading
 //
-// Every change is written at once, a set at its key (the maps on the way
-// made); a text, a number typed or a hex is written by Enter. Each row says
-// the node and key it edits, in ink2; a click there opens the graph browser
-// at it, and the footer's path at the panel itself.
-//
-// Keys: up and down the rows (in the list, the panels), Tab between the two,
-// Space toggles, left and right step a number, a choice, a preset or a picture, Enter
-// edits a text, a number or a colour (Escape lets it be), cmd-g the graph
-// browser at the row's node. The panel and row chosen, the scroll, a field
-// being edited, the footer: the node view, inside this process's.
+// written at once, a set at its key (maps made on the way); a text, a typed number or a hex on
+// Enter. each row shows its node and key; a click there opens the graph browser at it.
+// keys: up/down rows, Tab between list and panel, Space toggles, left/right step, Enter edits
+// (Escape cancels), cmd-g the graph browser. view state: <its node>/view.
 import { blitter, font } from "ermine:draw"
 import { drop, effect, handler, idAt, make, val, whole } from "ermine:kit"
 import { here } from "ermine:os"

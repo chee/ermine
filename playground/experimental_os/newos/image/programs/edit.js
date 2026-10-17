@@ -1,48 +1,24 @@
-// /programs/edit: a text editor for any node. A string is edited as text,
-// and so is the key /etc/views shows of a value's kind (a program's source);
-// any other value as JSON. cmd-s writes it back,
-// as you, through protect, so a rule may refuse it, and says so. When the
-// node is a program, the windows running it are counted, and
-// cmd-r replaces it in them (/stack/on/replace): setup runs again and kept effects run again,
-// which is how ermine changes itself while it runs. If the node changes
-// while you edit, the editor says so; untouched, it follows the change.
+// /programs/edit: a text editor for any node. a string, or the key /etc/views shows for a value's
+// kind (a program's source), as text; any other value as JSON. cmd-s writes it as you, through
+// protect, saying if refused. a program: cmd-r replaces it in the windows running it
+// (/stack/on/replace). the node changed while editing: it says so; untouched, it follows.
+// cmd-d runs the cursor's line as JavaScript with core's api in scope (api.content, api.write, …),
+// as you; cmd-p runs it and prints the result below.
 //
-// As Squeak's workspace does, it runs what you write: cmd-d does the line
-// the cursor is on, as JavaScript, with core's api in scope (api.content,
-// api.write, api.look…), acting as you through this editor; cmd-p does it and
-// prints what it gave under it.
+// C programs (info ermine.program.provisions needs c): C mode (CLOADER.md, The editor). Tab types a
+// tab; Program menu: Run (cmd-r: save and start; Run Again restarts its code), Stop (cmd-.), Next
+// Error (cmd-'). a two-row strip says how it compiled and how its process is, handlers as buttons;
+// an error is a cherry dot at its line. its process: one in the program's folder whose load runs
+// it, started through the wm's launch as "<name> running", so it outlives the editor.
 //
-// A program in C (its info ermine.program.provisions needs c) is edited in C
-// mode (CLOADER.md, The editor): tabs show, Tab types one, and the Do menu is
-// Program: Run, cmd-r, saves it and starts it (Run Again, while it runs, starts
-// its code over, /stack/on/replace), Stop, cmd-., ends it, Next Error, cmd-',
-// goes to the next. Two rows under the text, the strip, say how it compiled
-// ("compiling…" once that takes 200 ms) and how its process is, its handlers
-// (on/<name>) as push buttons; an error is a cherry dot at its line. Its process
-// is found by the program's node (ermine:program), never by a window: one in
-// the program's folder whose load says it runs it. Run starts one there,
-// "<name> running", through the window manager's launch, so closing the editor
-// leaves it running, and an editor opened on it again shows it, with Stop.
+// keys: arrows, Home, End, PageUp, PageDown (shift selects); Enter keeps the indent; Tab: 2 spaces;
+// cmd-s cmd-r cmd-z cmd-a cmd-c cmd-x cmd-v (the Mac's clipboard). click puts the cursor, drag
+// selects, the wheel scrolls. draws as text runs, takes the Mac's input methods, a text area to
+// VoiceOver.
 //
-// Keys: arrows, Home, End, PageUp, PageDown move, and with shift select;
-// Enter keeps the indent; Tab is two spaces; cmd-s saves, cmd-r replaces,
-// cmd-z undoes, cmd-a selects all, cmd-c copies, cmd-x cuts and cmd-v
-// pastes, through the Mac's clipboard. Click to put the cursor, drag to
-// select; the wheel scrolls. It draws as text runs (the draw device), takes
-// the Mac's input methods at its cursor, and is a text area to VoiceOver.
-//
-// What is not saved is a draft, a document in drafts beside this process,
-// named by the path, its names between colons (/apps/edit/drafts/
-// apps:workspace:text): its lines, the change it was made from, the undo
-// list, where the last change left the cursor. Typed into, it is the slot
-// trick (front, from ermine:kit): each key's change into an ephemeral item in
-// front of the document, which every reader of the draft sees, and the
-// document written once the keys have rested REST ms, and at a close; so an
-// editor started again on the path, after a crash (less what the last REST ms
-// typed), a boot or a close, finds it there, unsaved. Saved, the draft goes. Where the cursor is, the
-// selection, the scroll, the status line, and the undo list of what is
-// saved, are the node view, inside this process's, read as it changes: a
-// field another writes is taken on.
+// drafts: /apps/edit/drafts/<the path's names joined by ":">: lines, base change, undo, cursor.
+// typing fronts the draft, written after REST ms at rest and at close; saved, the draft goes.
+// cursor, selection, scroll, status, saved undo: <its node>/view.
 import { data, drop, effect, front, handler, idAt, isStatus, make, val, whole } from "ermine:kit"
 import { after, here, kill } from "ermine:os"
 import { blitter, font } from "ermine:draw"

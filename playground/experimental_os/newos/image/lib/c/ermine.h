@@ -1,15 +1,5 @@
-// ermine.h: a C program's side of ermineOS (newos/CLOADER.md, The C side). A C
-// program is compiled to wasm32 on the fly, freestanding: no libc yet, so this
-// is all it includes (and clang's own stdint.h, stddef.h, stdarg.h, stdbool.h).
-// It defines setup(), called once as its process starts, as a JavaScript
-// program's default export is; what setup returns is the process's value.
-//
-// Native: the same source compiled for this machine (arm64, a dylib) when the
-// program says so, its ermine.programs.loader "/loaders/clang-native" (CLOADER.md,
-// Native). Then the entry points below are calls through the table its run is
-// given (ermine_host.h), and this header defines the library's run, so a native
-// program has no function of its own named run or stop. It runs in the OS's own
-// process: a crash there is the OS's, not the part's.
+// ermine.h: a C program's side of ermineOS (CLOADER.md). compiled to wasm32, freestanding, no
+// libc: this and clang's stdint.h, stddef.h, stdarg.h, stdbool.h are all it includes.
 //
 //   #include <ermine.h>
 //
@@ -18,23 +8,18 @@
 //   	return er_text("hello, world");
 //   }
 //
-// Values: an er_value is one the loader holds for the part running (setup, a
-// handler, a timer, a cleanup), good until that part returns, as a JavaScript
-// part's are. er_none() is null. Addresses are lists of names: ER_AT("count")
-// read from the process's place, ER_AT("/", "home", "count") from the root.
-// Ids are text values.
-//
-// Every er_* acts through the part running: in a handler, the call's own. An
-// operation that fails ends the part with its error, as an uncaught throw ends
-// a JavaScript part; a trap ends it too ("crashed in click: out of bounds
-// memory access"), and the process goes on.
-//
-// er_say(format, ...) adds a line to <process>/log, its last 50 lines: %d %i
-// %u %x %c %s %f (%.3f), l and ll before d u x, %v a value as JSON, %%.
-//
-// Each process has its own instance, so its own statics; a handler is a
-// function the loader calls by its table index: er_handler("click", click)
-// places it at <process>/on/click.
+// setup: called once as the process starts; what it returns is the process's value.
+// native (loader "/loaders/clang-native"): an arm64 dylib in the OS's process, calls through the
+// table run is given (ermine_host.h); this header defines run, so no run or stop of your own; a
+// crash there is the OS's.
+// values: held for the running part (setup, handler, timer, cleanup), good until it returns.
+// er_none() is null. ids are text. ER_AT("count") from the process's place, ER_AT("/", "home",
+// "count") from the root.
+// a failing er_* or a trap ends the part with its error; the process goes on.
+// er_say(format, ...): a line in <process>/log (last 50): %d %i %u %x %c %s %f (%.3f), l and ll
+// before d u x, %v a value as JSON, %%.
+// each process has its own instance and statics. er_handler("click", click) places it at
+// <process>/on/click.
 
 #ifndef ERMINE_H
 #define ERMINE_H

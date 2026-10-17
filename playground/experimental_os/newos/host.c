@@ -216,12 +216,60 @@ void hostKill(Host *h, const char *pid) {
 	hostWake(h, hostNow(h));
 }
 
-/** the stops asked for: each process stopped (its runner's stop, its row, its scope) */
+/** whether path (n names) is strictly under at (nat names) */
+static bool under(const char *const *path, size_t n, const char *const *at, size_t nat) {
+	if (n <= nat) return false;
+	for (size_t i = 0; i < nat; i++)
+		if (strcmp(path[i], at[i])) return false;
+	return true;
+}
+
+/**
+ * a process stopped (its runner's stop, its row, its scope), the processes started under its path first: one
+ * started under another's runs at /proc/<pid>, in front where it was asked (startProgram), and that place goes
+ * with the process it is in, so it goes too, as a part's children end with it
+ */
+static void stop(Host *h, const char *pid) {
+	Proc *proc = NULL;
+	for (int i = 0; i < h->nprocs && !proc; i++)
+		if (!strcmp(h->procs[i].id, pid)) proc = &h->procs[i];
+	if (!proc) return;
+	// its path, and the one it was asked for when it is nested itself
+	const char *const *at;
+	size_t nat = ps_at(proc->p, &at);
+	const char *const *asked = NULL;
+	size_t nasked = 0;
+	for (int i = 0; i < h->nnested; i++)
+		if (!strcmp(h->nested[i].id, pid)) asked = h->nested[i].at, nasked = h->nested[i].n;
+	// the ones under it, by id (stopping one takes it out of nested)
+	char **kids = NULL;
+	int nkids = 0;
+	for (int i = 0; i < h->nnested; i++) {
+		const char *const *where = h->nested[i].at;
+		size_t n = h->nested[i].n;
+		if (!strcmp(h->nested[i].id, pid)) continue;
+		if (!under(where, n, at, nat) && !(asked && under(where, n, asked, nasked))) continue;
+		kids = realloc(kids, sizeof *kids * (size_t)(nkids + 1));
+		kids[nkids++] = strdup(h->nested[i].id);
+	}
+	for (int i = 0; i < nkids; i++) stop(h, kids[i]), free(kids[i]);
+	free(kids);
+	for (int i = 0; i < h->nnested; i++)
+		if (!strcmp(h->nested[i].id, pid)) {
+			free(h->nested[i].id);
+			for (size_t k = 0; k < h->nested[i].n; k++) free((char *)h->nested[i].at[k]);
+			free(h->nested[i].at);
+			h->nested[i] = h->nested[--h->nnested];
+			break;
+		}
+	ps_stop(h->programs, proc->p);
+}
+
+/** the stops asked for */
 static void reap(Host *h) {
 	while (h->nkills) {
 		char *pid = h->kills[--h->nkills];
-		for (int i = 0; i < h->nprocs; i++)
-			if (!strcmp(h->procs[i].id, pid)) ps_stop(h->programs, h->procs[i].p);
+		stop(h, pid);
 		free(pid);
 	}
 }
@@ -242,11 +290,11 @@ const ap_error *hostRestart(Host *h, const char *const *address, size_t n) {
 	for (size_t i = 0; i < at->count; i++) path[i] = at->items[i]->type == OP_STR ? hostTempDup(h, at->items[i]->str) : "";
 	const char *const *where;
 	size_t nwhere = ps_at(proc->p, &where);
-	const char **kept = hostTemp(h, sizeof *kept * (nwhere + 1));
-	for (size_t i = 0; i < nwhere; i++) kept[i] = hostTempDup(h, where[i]);
+	const char **copy = hostTemp(h, sizeof *copy * (nwhere + 1));
+	for (size_t i = 0; i < nwhere; i++) copy[i] = hostTempDup(h, where[i]);
 	ps_stop(h->programs, proc->p);
 	const char *id = NULL;
-	return startProgram(h, kept, nwhere, path, at->count, NULL, &id);
+	return startProgram(h, copy, nwhere, path, at->count, NULL, &id);
 }
 
 void hostAfter(Host *h, int64_t at, Json *address) {
@@ -522,22 +570,20 @@ const char *const *hostPath(Host *h, size_t *n, const char *first, ...) {
 	return names;
 }
 
-static const char *const *pathOf(Host *h, const Json *list, size_t *n, bool kept) {
+const char *const *hostPathOf(Host *h, const Json *list, size_t *n) {
 	if (!jsonIsArray(list)) return NULL;
 	size_t size = sizeof(char *) * (size_t)(list->array.count + 1);
-	const char **names = kept ? calloc(1, size) : hostTemp(h, size);
+	const char **names = hostTemp(h, size);
 	for (int i = 0; i < list->array.count; i++) {
 		const char *t = jsonText(list->array.items[i]);
 		if (!t) return NULL;
-		names[i] = kept ? strdup(t) : hostTempDup(h, t);
+		names[i] = hostTempDup(h, t);
 	}
 	names[list->array.count] = NULL;
 	*n = (size_t)list->array.count;
 	return names;
 }
 
-const char *const *hostPathOf(Host *h, const Json *list, size_t *n) { return pathOf(h, list, n, false); }
-const char *const *hostPathKept(Host *h, const Json *list, size_t *n) { return pathOf(h, list, n, true); }
 
 const ap_item *hostLook(ap_api *api, const char *const *address, size_t n) {
 	return ap_first(api, address, n);
@@ -627,7 +673,7 @@ static void *createApi(const ps_context *ctx, void *data) {
 static const ap_error *startProgram(void *ctx, const char *const *at, size_t nat, const char *const *program, size_t nprogram,
 	const op_value *data, const char **id) {
 	Host *h = ctx;
-	// a process at the path already (a part that starts the same child again, as 10-12 kept it): that one
+	// a process at the path already (a part that starts the same child again, as 10-12 had it): that one
 	pl_answers there = pl_gets(ap_places(h->os), at, nat);
 	for (size_t i = 0; i < there.n; i++)
 		if (there.items[i].from && !strcmp(there.items[i].from, PR_PART) && there.items[i].id.string) {
@@ -681,9 +727,9 @@ static const ap_error *startProgram(void *ctx, const char *const *at, size_t nat
 	*id = ps_id(p);
 	if (nested) {
 		h->nested = realloc(h->nested, sizeof *h->nested * (size_t)(h->nnested + 1));
-		const char **kept = calloc(nat + 1, sizeof *kept);
-		for (size_t i = 0; i < nat; i++) kept[i] = strdup(at[i]);
-		h->nested[h->nnested].id = strdup(*id), h->nested[h->nnested].at = kept, h->nested[h->nnested].n = nat;
+		const char **copy = calloc(nat + 1, sizeof *copy);
+		for (size_t i = 0; i < nat; i++) copy[i] = strdup(at[i]);
+		h->nested[h->nnested].id = strdup(*id), h->nested[h->nnested].at = copy, h->nested[h->nnested].n = nat;
 		h->nnested++;
 		hostFailed(h, ap_insert(ap_host(h->os), above.string ? hostTempDup(h, above.string) : "", at[nat - 1], *id, NULL, NULL), "start: in front where it was asked to be");
 	}
@@ -860,7 +906,11 @@ static void makeLoaders(Host *h) {
 	}
 }
 
-// --- the image: what a first boot puts in the graph (image/image.json)
+// --- the image: loaded at every boot (image/image.json): a first boot loads it whole; a later boot loads
+// what it lacks, and loads again what changed in the image and only the image ever wrote here
+
+/** the site file the image's writes carry, by which a boot tells them from anyone else's */
+#define IMAGE_SITE "image"
 
 static Json *image(Host *h) {
 	char path[1024];
@@ -889,25 +939,115 @@ static op_value *imageValue(Host *h, Json *entry) {
 	return v;
 }
 
-/** an entry's info (attributes), each written where it is not so already */
+/** the image's own interface: what it writes says so (the change's site, file "image"), so a later boot can tell the image's writes from a person's or a program's */
+static ap_api imageApi(Host *h) {
+	ap_api a = *ap_host(h->os);
+	a.self = IMAGE_SITE;
+	return a;
+}
+
+/** "/programs/files": an address as the log says it */
+static const char *pathText(Host *h, const char *const *address, size_t n) {
+	size_t len = 2;
+	for (size_t i = 0; i < n; i++) len += strlen(address[i]) + 1;
+	char *text = hostTemp(h, len), *p = text;
+	for (size_t i = 0; i < n; i++) p += sprintf(p, "/%s", address[i]);
+	if (!n) *p++ = '/';
+	*p = 0;
+	return text;
+}
+
+/** whether a change was the image's: its site says "image"; or "machine", the host's, which on a card from before
+ * the image said so is all the host ever wrote to a node the image describes */
+static bool imageChange(void *ctx, const ch_header *c) {
+	bool *others = ctx;
+	const char *file = c->external_length ? c->external[0].file : NULL;
+	if (file && (!strcmp(file, IMAGE_SITE) || !strcmp(file, "machine"))) return true;
+	*others = true;
+	return false;
+}
+
+/** whether the image may load a document's table again: every stored change of it (every head's) was the image's.
+ * None stored counts as the image's too: nothing else could have written it */
+static bool imageOwns(Host *h, const char *id, const char *table) {
+	bool others = false;
+	cardChanges(h->card, id, table, imageChange, &others);
+	return !others;
+}
+
+/** what loadImage counts, for its log */
+typedef struct {
+	int loaded, again;
+	char *names;
+	size_t n, room;
+} Imaged;
+
+static void loadedAgain(Imaged *m, const char *path) {
+	size_t len = strlen(path) + 2;
+	if (m->n + len + 1 > m->room) m->names = realloc(m->names, m->room = (m->n + len + 1) * 2);
+	m->n += (size_t)sprintf(m->names + m->n, "%s%s", m->again++ ? ", " : "", path);
+}
+
+/**
+ * An entry's info (attributes): each loaded where it is not so already, unless a person or a program changed the
+ * node's attributes here: then they are not loaded, and the log says so once
+ */
 static void imageInfo(Host *h, Json *e, const char *const *at, size_t n, const char *name) {
 	Json *info = jsonGet(e, "info");
 	if (!jsonIsObject(info)) return;
 	const char **address = hostTemp(h, sizeof *address * (n + 2));
 	for (size_t k = 0; k < n; k++) address[k] = at[k];
 	address[n] = name, address[n + 1] = NULL;
+	ap_api api = imageApi(h);
+	int owned = -1;
 	for (int i = 0; i < info->object.count; i++) {
 		op_value *v = valOf(info->object.members[i].value);
-		attribute(h, address, n + 1, info->object.members[i].key, v);
+		const char *key = info->object.members[i].key;
+		ap_items items;
+		if (!ap_info(&api, address, n + 1, key, &items) && items.n && items.items[0].nversions && valEqual(items.items[0].versions[0].content, v)) {
+			op_free(v);
+			continue;
+		}
+		if (owned < 0) {
+			const ap_item *it = ap_first(&api, address, n + 1);
+			owned = !it || !id_is(it->id) || imageOwns(h, it->id, "attributes");
+			if (!owned) hostSay(h, "image: %s info edited here, not loaded", pathText(h, address, n + 1));
+		}
+		if (owned) {
+			op_patch p = valWhole(v);
+			char doing[256];
+			snprintf(doing, sizeof doing, "info %s", key);
+			hostFailed(h, ap_set(&api, address, n + 1, key, &p, 1, NULL, NULL), doing);
+		}
 		op_free(v);
 	}
+}
+
+/**
+ * A node the card holds already, the image's value differing from its: loaded again when every stored change of
+ * the value was the image's own; not loaded the moment a person or a program changed it here, and the log says
+ * so once
+ */
+static void loadImageAgain(Host *h, Imaged *m, Json *e, const char *const *address, size_t n) {
+	ap_api api = imageApi(h);
+	const ap_item *it = ap_first(&api, address, n);
+	if (!it || !id_is(it->id)) return;
+	op_value *v = imageValue(h, e);
+	const op_value *held = hostRead(&api, address, n);
+	bool same = valEqual(held, v) || (!held && v->type == OP_NULL);
+	if (!same) {
+		const char *path = pathText(h, address, n);
+		if (!imageOwns(h, it->id, "value")) hostSay(h, "image: %s edited here, not loaded", path);
+		else if (!hostFailed(h, hostSnap(&api, address, n, v), path)) loadedAgain(m, path);
+	}
+	op_free(v);
 }
 
 /**
  * An entry {at, name, link}: the node the image made at link (a path from the
  * root) placed again, at name, as the shell's ln places one: one node at two
  * names (/etc/theme, the theme in use, is one of /etc/themes'). A name that
- * holds a node already keeps it. True when it placed it.
+ * holds a node already is left alone. True when it placed it.
  */
 static bool linkImage(Host *h, Json *e, const char *parent, const char *const *at, size_t n, const char *name) {
 	size_t nl;
@@ -923,7 +1063,8 @@ static bool linkImage(Host *h, Json *e, const char *parent, const char *const *a
 	if (idAt(h, address, n + 1)) return false;
 	char doing[256];
 	snprintf(doing, sizeof doing, "link %s", name);
-	return !hostFailed(h, ap_insert(ap_host(h->os), parent, name, id, NULL, NULL), doing);
+	ap_api api = imageApi(h);
+	return !hostFailed(h, ap_insert(&api, parent, name, id, NULL, NULL), doing);
 }
 
 /** the parent's id of an entry: its at from the root */
@@ -934,14 +1075,17 @@ static const char *parentOf(Host *h, Json *e, const char *const **at, size_t *n)
 }
 
 /**
- * Each node made and placed by name, as the machine: a card with none of the
- * image's nodes gets them all; a card that has them gets those it lacks, by
- * name, and the info (attributes) the image gives. What a person changed is
- * left as it is.
+ * The image loaded: each node made and placed by name. A card with none of
+ * the image's nodes gets them all; a card that has them gets those it lacks,
+ * by name, the info (attributes) the image gives, and the image's value
+ * loaded again where it changed and only the image ever wrote the node's
+ * (loadImageAgain). What a person or a program changed is not loaded.
+ * Children: only made where lacking, never loaded again.
  */
-static void makeImage(Host *h, Json *img) {
+static void loadImage(Host *h, Json *img) {
 	Json *nodes = jsonGet(img, "nodes");
-	int made = 0;
+	Imaged m = { 0 };
+	ap_api api = imageApi(h);
 	for (int i = 0; nodes && i < nodes->array.count; i++) {
 		Json *e = nodes->array.items[i];
 		const char *name = jsonText(jsonGet(e, "name"));
@@ -954,7 +1098,7 @@ static void makeImage(Host *h, Json *img) {
 			continue;
 		}
 		if (jsonGet(e, "link")) {
-			if (linkImage(h, e, parent, at, n, name)) made++;
+			if (linkImage(h, e, parent, at, n, name)) m.loaded++;
 			continue;
 		}
 		const char **address = hostTemp(h, sizeof *address * (n + 2));
@@ -962,12 +1106,14 @@ static void makeImage(Host *h, Json *img) {
 		address[n] = name, address[n + 1] = NULL;
 		if (!idAt(h, address, n + 1)) {
 			op_value *v = imageValue(h, e);
-			if (hostPut(h, ap_host(h->os), parent, name, v, false)) made++;
+			if (hostPut(h, &api, parent, name, v, false)) m.loaded++;
 			op_free(v);
-		}
+		} else loadImageAgain(h, &m, e, address, n + 1);
 		imageInfo(h, e, at, n, name);
 	}
-	if (made) hostSay(h, "the image made %d nodes", made);
+	if (m.loaded) hostSay(h, "image: %d node%s loaded", m.loaded, m.loaded == 1 ? "" : "s");
+	if (m.again) hostSay(h, "image: %d node%s loaded again: %s", m.again, m.again == 1 ? "" : "s", m.names);
+	free(m.names);
 }
 
 /** what boots: each entry started at its path (start, then its name or a fresh one), its data inside it */
@@ -1040,7 +1186,7 @@ Host *hostBoot(const ErmosConfig *config) {
 	sc_run_with_scope(ap_machine(h->os), programsUp, h);
 	Json *img = image(h);
 	hostSay(h, held ? "the card (%s) holds a graph: %s" : "the card (%s) is empty: %s", sd, cardRoot(h->card));
-	if (img) makeImage(h, img);
+	if (img) loadImage(h, img);
 	makeHw(h);
 	makeLoaders(h);
 	if (!h->config.bare && img) boot(h, img);

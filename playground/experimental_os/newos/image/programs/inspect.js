@@ -1,32 +1,18 @@
-// /programs/inspect: the inspector, as Smalltalk's is for an object, for a
-// window: its layer, the process that owns it (its node, its parts, handlers
-// and state; the processes above it up to where it was started; the ones
-// beside it), its place, its program, what it keeps beside itself, and what
-// its last run read and wrote. Every node it shows can be gone into, and
-// every value inside one: the left a list, the right the one chosen, drawn
-// as what it is. All of it is read in parts that track what they read, so it is live.
+// /programs/inspect: the inspector, as Smalltalk's, for a window: its layer, its owner process
+// (node, parts, handlers, state, those above it, those beside it), place, program, what it keeps
+// beside itself, what its last run read and wrote. every node and value can be gone into: a list
+// left, the chosen one drawn right. read in tracking parts, so live.
+// opened by: the box left of minimize, cmd-i (/etc/keys: inspect), the world and Mac menus. args: a
+// layer's name; none, the focused window. `/programs/inspect windows` lists every window.
 //
-// Opened for a window: the box left of a title bar's minimize box, cmd-i
-// (/etc/keys: inspect), "Inspect the window" in the world menu and the Mac's
-// menu bar. Its words are a layer's name; none, the window with the focus.
-// /programs/inspect windows lists every window.
+// keys: up/down choose, right or cmd-down in, left, Backspace or cmd-[ back, cmd-up the enclosing
+// node, w the window, a every window, g or / the path bar; Enter edits a string, number or boolean
+// (space toggles), asks an on/<name> handler's args (JSON, Enter again calls it), or goes in; f
+// follow, e or cmd-e editor (a picture: Paint), x hex. click chooses, twice goes in.
 //
-// Keys: up and down choose, right or cmd-down goes in, left, Backspace or
-// cmd-[ goes back, cmd-up to the enclosing node, w the window, a every
-// window, g (or /) types an address into the path bar; Enter edits a string, a number or a boolean in place (space
-// toggles one), asks an on/<name> handler's args (JSON, a second Enter calls it, the answer in the footer), or goes in; f follows an address, e (cmd-e) opens the node
-// in the editor, or in Paint for a picture; x shows whole numbers in hex.
-// Click to choose, twice to go in; the path bar goes to any node above.
-//
-// Where it is, the window it inspects and the way back: at/<its name>
-// beside it (/apps/inspect/at/<name>), a document, so a window the session
-// brings back is where it was. The row chosen, the scroll, a value being
-// edited, hex, the footer's word: <its node>/view, ephemeral, read as it
-// changes: a field another writes is taken on.
-//
-// What core does not tell a read yet: whether a node is ephemeral (a dot or a ring is drawn
-// only when an item says), and a change's actor or site (a change says its time, its node and
-// the process that made it). A document's history is sync's (newos/drv_sync.c).
+// where it is: /apps/inspect/at/<name>, a document, restored with the session. view state:
+// <its node>/view, ephemeral.
+// not yet from core: whether a node is ephemeral, a change's actor or site. history is sync's.
 import { data, effect, handler, idAt, isStatus, make, put, val, whole } from "ermine:kit"
 import { after, here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

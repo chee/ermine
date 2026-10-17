@@ -1,29 +1,16 @@
-// /programs/macapps: the Mac's apps as /dev/mac mirrors them, in a list
-// window as System 7's Finder lists a folder. At the top, whether ermineOS
-// may read them (Accessibility) and see them (Screen Recording), and how to
-// let it. Then every app in /dev/mac/apps: the regular ones (the Dock's) by
-// name, then the background ones (accessory: menu bar agents, helpers)
-// folded under a row of their own. Each app its name, its state, its windows
-// counted, and under it its windows, by title; an app with none says so. At
-// the right, the row chosen: its window or app as the views tool draws it.
+// /programs/macapps: the Mac's apps from /dev/mac, listed as System 7's Finder lists a folder. top:
+// Accessibility and Screen Recording permission, and how to grant them. then /dev/mac/apps: regular
+// apps by name, background ones folded under a row of their own; each with its state, window count
+// and windows by title. right: the chosen row drawn by the views tool.
 //
-// Enter, a double click or Show Window shows a window with /programs/macview,
-// started through the window manager's launch. Launch App… asks for a name,
-// a bundle id or a path and places a launch in /dev/mac/do; Hide and Quit
-// are do acts at the app. Every act goes through the graph: one node of its
-// own, /dev/mac/do/macapps-<pid>, a new n each act, the answer in the footer.
-//
-// Keys: up and down, PageUp, PageDown, Home, End; left folds an app (or goes
-// to it from a window), right unfolds; a letter chooses the first name it
-// starts (typed quickly, the next letters too); cmd-o shows, cmd-l launches.
-// The wheel scrolls, a trackpad's few pixels at a time; the bar at the right
-// scrolls, dragged or clicked. From a shell:
+// Enter, a double click or Show Window shows it in /programs/macview (through the wm's launch).
+// Launch App… (a name, bundle id or path), Hide and Quit are acts at /dev/mac/do/macapps-<pid>, a
+// new n each, answered in the footer.
+// keys: up, down, PageUp, PageDown, Home, End; left folds, right unfolds; letters choose by name;
+// cmd-o shows, cmd-l launches. the wheel and the scroll bar scroll.
 //   start /apps/macapps programs/macapps
 //
-// What is folded, the background apps and each app by its bundle id, is a
-// document beside it, folds/<its name> (/apps/macapps/folds/<name>); the row
-// chosen, the scrolls, a dialog and the footer's word are <its node>/view,
-// read as it changes: a field another writes is taken on.
+// folds: /apps/macapps/folds/<name>, a document. view state: <its node>/view.
 import { effect, handler, idAt, make, put, val, whole } from "ermine:kit"
 import { after, here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

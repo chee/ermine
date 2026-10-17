@@ -59,8 +59,6 @@ char *hostTempDup(Host *host, const char *text);
 const char *const *hostPath(Host *host, size_t *n, const char *first, ...);
 /** a Json list of names as an address, for this turn (hostTemp); NULL if it is not one */
 const char *const *hostPathOf(Host *host, const Json *names, size_t *n);
-/** the same, kept until the host goes: what a start keeps */
-const char *const *hostPathKept(Host *host, const Json *names, size_t *n);
 /** the first loaded item at an address through api: NULL if none */
 const ap_item *hostLook(ap_api *api, const char *const *address, size_t n);
 /** the value at an address through api: its first version not a status; NULL if none */
@@ -94,7 +92,7 @@ bool hostPlaneSaid(Host *host, const char *source, int64_t id, HostPlaneSaid *ou
 /** its memory mapped, read and write, the whole object (*bytes its size); NULL when it cannot be */
 void *hostPlaneMap(const HostPlaneSaid *plane, size_t *bytes);
 void hostPlaneUnmap(void *mapping, size_t bytes);
-/** the compositor's: plane id of that source, read from its node, kept mapped while the node says the same memory; false when there is none. On the OS's thread only */
+/** the compositor's: plane id of that source, read from its node, mapped while the node says the same memory; false when there is none. On the OS's thread only */
 bool hostPlane(Host *host, const char *source, int64_t id, HostPlane *out);
 
 #endif

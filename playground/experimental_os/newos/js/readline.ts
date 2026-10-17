@@ -1,46 +1,33 @@
-// readline.ts (newos, from deno/readline.ts): the text-editing tool every program is given (tools.ts,
-// readline): readline's emacs keys, the shell's set, on a field, a value a
-// program keeps in its nodes as it keeps anything:
+// readline.ts: emacs-key text editing on a field, a value the program keeps in its nodes
 //
 //   {text, pos, mark?, ring?, undo?, yank?, last?, goal?}
+//   pos: cursor offset (UTF-16)  mark: the selection's other end, or null  ring: kills, newest last
+//   undo: [{text, pos}] before each change  yank: what the last C-y put in  goal: up/down's column
+//   last: what the key before did ("kill", "yank"), so kills in a row are one
 //
-// pos the cursor, an offset in text (UTF-16, as the Mac counts); mark the
-// selection's other end, or null; ring the kills, newest last (C-y, A-y);
-// undo the text as it was before each change, newest last ({text, pos}); yank
-// what the last C-y put in, so A-y can put the one before in its place; last
-// what the key before did ("kill", "yank"), so kills in a row are one; goal
-// the column up and down keep to. Each call answers a new field, or null for
-// a key that is not an editing key (Enter, Tab, history): the program's own.
-//
-// Keys are chords as /etc/keys writes them (chord(record) makes one): the
-// modifiers A (alt, readline's meta), C (control), H (fn), S (shift), s (cmd),
-// Emacs's letters in its order, then the key, lower case: a, return, space, tab, backspace,
-// delete, escape, left, right, up, down, home, end, pageup, pagedown, period,
-// comma, minus, equal, slash, backslash...
+// each call answers a new field, or null for a key that is not an editing key (the program's own).
+// keys: chords as /etc/keys writes them (chord(record)): modifiers A C H S s, then the key
 //
 //   C-a C-e home end s-left s-right   the line's start, its end
 //   C-b C-f left right                a character back, on
 //   A-b A-f A-left A-right C-left C-right   a word back, on
-//   C-p C-n up down                   a line up, down (lines only: else null, the program's, as history)
+//   C-p C-n up down                   a line up, down (lines only, else null)
 //   s-up s-down                       the start of the text, its end
 //   backspace C-h   delete C-d        the character before, after
 //   A-d   A-backspace   C-w           kill a word on, back, back to white space
-//   C-k   C-u s-backspace             kill to the line's end (at its end, the newline), to its start
+//   C-k   C-u s-backspace             kill to the line's end (at its end the newline), to its start
 //   C-y   A-y                         the newest kill, then the one before it in its place
-//   C-t   A-t                         the characters, the words, either side swapped
-//   A-u A-l A-c                       the word in capitals, small letters, with a capital
-//   C-_ C-slash C-S-minus   A-r       undo; the text as it was before any change
+//   C-t   A-t                         swap the characters, the words, either side
+//   A-u A-l A-c                       the word upper case, lower case, capitalised
+//   C-_ C-slash C-S-minus   A-r       undo; the text as before any change
 //   A-backslash                       the spaces around the cursor, gone
-//   s-a                               all of it selected
+//   s-a                               select all
 //   s-c s-x s-v                       copy, cut, paste: /dev/clip/text, through {api}
 //
-// With {select: true} shift and a move selects (S-left, A-S-right, S-home...);
-// typing, a paste or a delete takes the selection's place. Without it shift
-// and a move is the move. With {lines: true} the text is lines: up and down
-// keep the column, C-a and C-e are the line's, C-k at a line's end joins the
-// next; without it a paste's lines are one, joined by spaces. With {api}, the
-// part's interface, s-c, s-x and s-v reach the clipboard; without it they
-// are not editing keys.
+// {select: true}: shift and a move selects; typing, a paste or a delete replaces the selection
+// {lines: true}: up/down keep the column; C-a, C-e per line; C-k at a line's end joins the next.
+//   without it a paste's lines are joined by spaces
+// {api}: s-c s-x s-v reach the clipboard; without it they are not editing keys
 
 import { type Api as KitApi, val, whole as wholly } from "./kit.ts"
 export type Field = {

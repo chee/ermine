@@ -1,45 +1,30 @@
-// drv_link.c: /drivers/link, a window shared between machines, as erminex
-// shares one (playground/term: erminex, ermine-term, ermine-look; NOTES.md there). The link is sync:
-// a window is a few documents, synced over this machine's connection to /etc/sync's server as every
-// document is (net.c, peer/peer.c), and anyone with the window's id sees it and types into it. The old link (layers/link: an owner answering its mounters' WIRE.tex lines over
-// Subduction's ephemeral messages on a channel's topic) went with the old core; a channel is now
-// the window's id.
+// drv_link.c: /drivers/link, a window shared between machines, as erminex shares one
+// (playground/term). the link is sync: a window is a few documents synced over /etc/sync's server
+// (net.c, peer/peer.c); anyone with the window's id sees it and types into it.
 //
-// A window (playground/term/window.h), every node a document:
-//   W  {window: 1, program: [argv...], by: the key of the device running it}; {exited: status} added when it ends
-//     screen -> S   the grid: {rows, cols, lines, styles, cursor: {row, col, visible}, title}
-//     size   -> Z   {rows, cols}: what the program is given
-//     keys   -> K   null; a typer each: <typer> -> T {from, keys}: that typer's last keys, key i number from + i
+// a window (playground/term/window.h), every node a document:
+//   W  {window: 1, program: [argv...], by: the running device's key}; {exited: status} at its end
+//     screen -> S   {rows, cols, lines, styles, cursor: {row, col, visible}, title}
+//     size   -> Z   {rows, cols}: the program's size
+//     keys   -> K   null; a typer each: <typer> -> T {from, keys}, key i numbered from + i
 //
-// Seeing one (programs/erminex):
-//   /dev/link/views/<name>     a program's, ephemeral: {channel}: a window's id (ermine://, 64 hex digits; or the
-//                              digits alone), or a name: the window shared under it (below)
-//   /dev/link/windows/<name>   the driver's: {channel: W's id, state, owner?, why?}: state "dialing" till W is here,
-//                              "mounted", "gone" once its program exited (why says so); owner W's by
-//     screen -> S              W's screen, the document itself, kept in step by sync
-//   /dev/link/keys             the handler typing into a window, on/keys: called (view's name, [key...]), keys as
-//                              erminex.js gives them ("enter", "up", "C-c", a character; a paste a list of them):
-//                              written to this device's typer T in W's keys (made at the first key; t and the key's
-//                              first 8 digits, as playground/term's typer)
+// seeing one:
+//   /dev/link/views/<name>       a program's, ephemeral: {channel}: W's id (ermine:// or its 64 hex
+//                                digits), or a name
+//   /dev/link/windows/<name>     {channel, state: dialing|mounted|gone, owner?, why?}; screen -> S
+//   /dev/link/keys               on/keys (view's name, [key...]), keys as erminex.js gives them:
+//                                written to this device's T, made at the first key (as term's)
+// sharing one (the shell's erminex <name> <cmd...>):
+//   /dev/link/driver/on/share    ({argv, name?, rows?, cols?}): argv run on a pty (drv_pty.c), W
+//                                made and kept in step, the name's node pointed at W; ends at exit
+//   /dev/link/shares/<name>      {window, program, state}; inside: window, name, the pty session
+//   /dev/link/driver/on/unshare  (name): ends now, its program hung up
 //
-// Sharing one (the shell's erminex <name> <cmd...>):
-//   /dev/link/driver/on/share    ({argv, name?, rows?, cols?}): argv run on a pty (/dev/pty, drv_pty.c) and its
-//                                window shared: W made, fresh, S kept in step with the session's screen, Z given to
-//                                it as its size, each typer's new keys typed into it; with a name, the name's node
-//                                pointed at W. When the program exits W says so, and the share ends
-//   /dev/link/shares/<name>      the driver's: {window: W's id, program, state}; inside it W, as window, the name's
-//                                node, as name, and the pty session drv_pty.c makes there (<name>/<n>)
-//   /dev/link/driver/on/unshare  (name): the share ended now, its program hung up
-//
-// A name's node N: {name, window: W's id, by}, the window last shared under it; its id "ermine://", the first 16
-// bytes of BLAKE3("ermine window:" name) as hex, then 16 zero bytes (a fresh id's shape: galaxy.observer keeps
-// only those), so a share and a view of one name meet. A view of N follows it to each window shared under the
-// name. A name shared before, elsewhere, gives N two versions here once that one's history comes: the sharer
-// writes N again, over both, once (two machines sharing one name at once leave N two versions; a view shows
-// the first).
-//
-// What a view or a share reads is followed (cardFollow): N, W, and what W's lists name (S, Z, K,
-// each typer's T), so they come from the server when the card does not hold them.
+// a name's node N: {name, window, by}; id "ermine://" + the first 16 bytes of
+// BLAKE3("ermine window:" name) as hex + 16 zero bytes (a fresh id's shape), so a share and a view
+// meet. a view follows N. an older N from elsewhere is written over once; two sharers at once
+// leave two versions, a view shows the first. reads are followed (cardFollow) so they come from the
+// server when the card lacks them.
 
 #include "drivers.h"
 #include "../../../ermine/encoding/c/json_text.h"

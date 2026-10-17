@@ -1,36 +1,19 @@
-// Web.swift: WebKit, as a device (irq 49). Each page is a real WKWebView,
-// made and steered by the OS's web driver (web, webpost, webclose), in a
-// window of its own that is never shown: borderless, far off every screen,
-// never key, never in the window list. The page draws there, live, in this
-// process; its pixels go into a plane of the driver's (a file the driver
-// makes, two halves of maxw × maxh u32, as a Mac window's capture,
-// Capture.swift), a frame at most each refresh while a layer shows it
-// (webshow), only when they differ from the last, with the rectangle that
-// differs; nothing more is written until the driver says it took it
-// (webtook). The OS's compositor draws the plane as it draws any layer's,
-// so a page is covered, shadowed, stacked and shown in windows as any
-// window is. What the OS's window is given over the page comes back here
-// (webinput) as the Mac's events, given to the view itself; keys, the
-// input methods' text, clicks, drags, scrolls and moves.
+// Web.swift: WebKit as a device (irq 49). Each page is a real WKWebView in
+// a hidden window of its own (borderless, off every screen, never key),
+// steered by the web driver: web, webpost, webclose.
 //
-// What happens in it comes back as records: its title, URL, loading,
-// progress, focus, the messages a page posts with window.ermine.post(...),
-// a page it would open beside it ("open": a link to a new window,
-// window.open, cmd-click or a middle click), the pointer's shape it wants
-// (cursor), its history and scroll (state, WKWebView's interactionState, a
-// second after it settles), its back and forward list (list: each item's URL
-// and where the current one is, when it changed; web's go may be a number,
-// that far along it), and its document (dom: a script in a world of
-// its own walks it and sends what changed; webdo acts on an element).
-//
-// Frames: takeSnapshot, which WebKit answers from the GPU process in a few
-// milliseconds, at most one at a time a page, a refresh apart; a page
-// whose frames came the same 30 times in a row is looked at an eighth as
-// often until it changes or is given input. A window off every screen is
-// occluded, and WebKit stops drawing an occluded page (its timers and
-// requestAnimationFrame stop too): WebKit's _setWindowOcclusionDetectionEnabled:
-// (private, asked for only if the view answers it) keeps the page drawing
-// as a shown one does.
+// frames: takeSnapshot into the driver's plane (two halves of maxw × maxh
+// u32, as Capture.swift's), at most one a refresh while a layer shows it
+// (webshow), only when changed, with the rectangle that differs; nothing
+// more until webtook. 30 same frames in a row: looked at an eighth as
+// often until it changes or gets input. _setWindowOcclusionDetectionEnabled:
+// (private, asked only if answered) keeps the off-screen page drawing.
+// input: webinput, the Mac's events given to the view.
+// records back: title, URL, loading, progress, focus, window.ermine.post
+// messages, open (a new window, window.open, cmd or middle click), cursor,
+// state (interactionState, a second after it settles), list (back and
+// forward; web's go may be a number), dom (a script in its own world sends
+// what changed; webdo acts on an element).
 
 import AppKit
 import WebKit

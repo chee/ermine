@@ -1,33 +1,16 @@
-// /programs/term: a terminal window. It places a layer in the compositor and
-// a line under its own node (rx, stats, tx), and starts a shell on that line
-// as its child. Keys come to its "key" handler from the window manager; it
-// turns them into bytes on rx. What the shell appends to tx it reads, as a
-// small VT does (\r \n \b \t, colours, clear, erase line), into its screen,
-// the node vt beside them (ephemeral, as the window is), and draws as
-// text runs, one a colour, in the font ROM's cells, so the screen's text can
-// be selected and read aloud; a right click on a word naming a node opens
-// it, as acme's button 3 does. It says where its cursor is and what the row
-// says, for the Mac's input methods, whose text in progress shows at the
-// cursor, underlined.
+// /programs/term: a terminal window. places a layer and a line under its node (rx, stats, tx), and
+// starts a shell on it as its child. keys from the wm become bytes on rx; tx is read by a small VT
+// (\r \n \b \t, colours, clear, erase line) into vt beside them (ephemeral), drawn as text runs in
+// the font ROM's cells: selectable, read aloud. a right click on a node's name opens it (acme's
+// button 3). tells the Mac's input methods where its cursor is.
 //
-// Given a line, data {line}, a session's (/dev/pty/1, drivers/pty), it shows
-// that one instead and starts no shell: what the program printed read off its
-// tx by stats.tx, as any number of readers do, none draining; what is typed
-// appended to its rx. While a session's to lists a line this window shows
-// (its own, when its shell ran pty; or the one given), it writes the
-// session's size, {cols, rows}, as the window's grid is.
-//
-// A session it shows (one given, or one whose to lists its line) it draws
-// from the session's screen, which the driver keeps with libvterm (emacs,
-// vim, htop: colours, 256 and true, bold, underline, reverse, the cursor's
-// shape), not from its own small VT, which is the shell's; and what is typed
-// goes to the session's keys as key records, which the driver turns into
-// what the program's modes ask for. cmd-v pastes (bracketed, if the program
-// asked), cmd-left and cmd-right are Home and End, cmd-Backspace is C-u. A
-// program that asks for the mouse gets clicks, drags and the wheel;
-// otherwise the wheel and shift-PageUp, shift-PageDown go back through the
-// session's scrollback. When the session ends, what its screen showed stays,
-// in the small VT, and the shell goes on below it.
+// data {line} (a session's, /dev/pty/1): shows that line, starts no shell; reads tx by stats.tx,
+// never draining; typing appends to rx. while a session lists its line, it writes the session's
+// size, {cols, rows}.
+// a session's screen comes from the driver's libvterm (256 and true colour, bold, underline,
+// reverse, cursor shape); keys go as key records. cmd-v pastes (bracketed if asked), cmd-left and
+// cmd-right Home and End, cmd-Backspace C-u; the mouse when asked, else the wheel and shift-PageUp,
+// shift-PageDown scroll back. a session ending leaves its screen in the small VT, the shell below.
 import { blitter } from "ermine:draw"
 import { data, effect, first, handler, idAt, make, put, val, whole } from "ermine:kit"
 import { here, kill } from "ermine:os"

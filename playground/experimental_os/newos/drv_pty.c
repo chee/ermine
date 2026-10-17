@@ -1,69 +1,46 @@
-// drv_pty.c: /drivers/pty, Mac command-line programs (zsh, vim, htop, git)
-// on pseudo-terminals, each session a node. A session is a line, as
-// /dev/uart0 and a terminal window's are (programs/shell), seen from the
-// program's side: rx what is typed to it, tx what it printed; and both
-// counted in stats, so any number of readers each keep their own place.
+// drv_pty.c: /drivers/pty, Mac command-line programs on pseudo-terminals, each session a node and
+// a line (as /dev/uart0's): rx typed to it, tx what it printed, both counted in stats so each
+// reader keeps its own place.
 //
-//   /dev/pty/driver/on/new   (request?) starts a session: {argv?, cwd?, env?, cols?, rows?, to?, at?, screen?};
-//                            argv the person's $SHELL, -l (argv[0] found on PATH, then in /opt/homebrew/bin,
-//                            /usr/local/bin); cwd $HOME; env added to the OS's, TERM xterm-256color,
-//                            COLORTERM truecolor and LANG en_US.UTF-8 (with no locale) unless given;
-//                            at, a node to make it in (a shared document), else /dev/pty; screen,
-//                            {lines, cursor: {row, col}}, what the terminal showed: its screen starts as
-//                            that, as a terminal's goes on from where it was. Answers {name, address}
-//   /dev/pty/<n>             the session: {argv, cwd}; or, made at an address, {at: that address}
-//     rx                     bytes typed to the program, the last 4096; a writer appends and adds to stats.rx
-//     tx                     bytes the program printed, the last 16384; only this driver writes it
-//     stats                  {rx, tx, keys}: bytes in all, each way, and key records. A reader of tx
-//                            takes the last (stats.tx - what it had seen) bytes of it, as the shell reads rx
-//     size                   {cols, rows}: written, the pty is resized (TIOCSWINSZ, so SIGWINCH)
-//     status                 {pid, running, exit, signal}: exit and signal null while it runs
-//     to                     the redirect: a list of lines' addresses ([] none). Each line's
-//                            machine side is this session while it is listed: what the program
-//                            prints is appended to the line's tx, what is typed on its rx (by
-//                            stats.rx) goes to the program. So a terminal window shows a session
-//                            unchanged, and two show one. Emptied when the program exits.
-//     screen                 what a terminal shows of it, libvterm's screen (below): what the program
-//                            printed, read as xterm would. Only this driver writes it
-//     scrollback             {lines, styles}: the last 1000 rows gone off the top of the main screen, oldest first
-//     keys                   key records typed to it, the last 64: a writer appends and adds to
-//                            stats.keys; libvterm's keyboard turns each into bytes, as the program's
-//                            modes ask (below)
+//   /dev/pty/driver/on/new   ({argv?, cwd?, env?, cols?, rows?, to?, at?, screen?}) → {name,
+//                            address}; argv: $SHELL -l (PATH, /opt/homebrew/bin, /usr/local/bin);
+//                            cwd: $HOME; env: added to the OS's, TERM xterm-256color, COLORTERM
+//                            truecolor, LANG en_US.UTF-8 unless given; at: a node to make it in,
+//                            else /dev/pty; screen: {lines, cursor}, where its screen starts
+//   /dev/pty/<n>             {argv, cwd}, or {at} when made at an address
+//     rx                     typed to the program, last 4096; a writer appends, adds to stats.rx
+//     tx                     printed, last 16384, driver only; a reader takes the last
+//                            (stats.tx - seen) bytes
+//     stats                  {rx, tx, keys}: totals
+//     size                   {cols, rows}: written, the pty is resized (TIOCSWINSZ, SIGWINCH)
+//     status                 {pid, running, exit, signal}: exit, signal null while it runs
+//     to                     lines' addresses ([] none) driven by this session while listed: tx
+//                            appended to theirs, their rx sent in; emptied at exit
+//     screen                 libvterm's screen, below; driver only
+//     scrollback             {lines, styles}: the last 1000 rows off the main screen, oldest first
+//     keys                   key records, last 64; a writer appends, adds to stats.keys
 //
-// The screen, erminex's grid (experimental_hosts/term/c/NOTES.md, The grid) and more:
-//   {rows, cols, lines, styles, cursor, title, icon, alt, reverse, mouse, paste, app, keypad, focus, bell}
-//   lines    a string a row, a code point a cell (a wide character's second cell left out),
-//            trailing blanks left out but those a background or reverse shows
-//   styles   a list of runs a row, [[col, style], ...], each from its col to the next's; [] plain.
-//            style {fg?, bg?, rgb?: {fg?, bg?}, bold?, italic?, underline?, blink?, reverse?, conceal?,
-//            strike?}: fg and bg xterm's 0-255, a true colour folded into them, and as it was in rgb
-//            (0xrrggbb); a colour left out is the terminal's own
-//   cursor   {row, col, visible, shape ("block", "underline", "bar"), blink}
-//   title    and icon, what the program set (OSC 0, 1, 2), else ""
-//   alt      the alternate screen is shown; reverse, the whole screen reversed (?5)
-//   mouse    what the program asked to be told: "none", "click", "drag" (buttons held), "move" (any)
-//   paste    bracketed paste (?2004); app, cursor keys (?1); keypad, the keypad's (DECKPAM); focus (?1004)
-//   bell     bells rung, in all
-// Written once a turn, with what changed since: a splice of each row that did (lines, styles), a
-// set of the rest; whole when the size changes.
+// screen (erminex's grid and more): {rows, cols, lines, styles, cursor, title, icon, alt, reverse,
+// mouse, paste, app, keypad, focus, bell}
+//   lines    a string a row, a code point a cell (a wide one's second cell left out), trailing
+//            blanks left out unless a background or reverse shows
+//   styles   a row: [[col, style], ...] each to the next's col, [] plain; style {fg?, bg?, rgb?:
+//            {fg?, bg?}, bold?, italic?, underline?, blink?, reverse?, conceal?, strike?}: fg, bg
+//            xterm 0-255, a true colour folded in and kept in rgb (0xrrggbb); none: the terminal's
+//   cursor   {row, col, visible, shape: "block" | "underline" | "bar", blink}
+//   title, icon (OSC 0, 1, 2), else ""; alt screen; reverse (?5); mouse "none" | "click" | "drag" |
+//   "move"; paste (?2004); app (?1); keypad (DECKPAM); focus (?1004); bell: rung in all
+// written once a turn: a splice per changed row, a set of the rest; whole on a resize.
 //
-// A key record, as term gets them from the window manager: {key, mods?, text?}, key a name
-// (Enter, Tab, Backspace, Escape, Space, ArrowUp, Home, PageUp, Delete, Help, F1...F20) or what
-// the key is on a US keyboard ("a", "/"), text what it typed. mods: shift, ctrl, alt (meta, an
-// escape first). Control and a letter, @ [ \ ] ^ _ / ? or a digit is the control character a VT
-// sends for it. Or {text}: typed as it is (an input method's); {paste: text}: as the program's
-// paste mode asks; {mouse: "down"|"up"|"move"|"wheel", button?: 1-3, dy?: -1|1, row, col, mods?}:
-// what the program's mouse mode asks; {focus: bool}: a focus report if it asked.
+// key record: {key, mods?, text?}: key a name (Enter, Tab, Backspace, Escape, Space, ArrowUp, Home,
+// PageUp, Delete, Help, F1...F20) or the key on a US keyboard ("a", "/"); mods shift, ctrl, alt
+// (alt: escape first); ctrl with a letter, @ [ \ ] ^ _ / ? or a digit: the VT control character.
+// or {text}, {paste: text}, {mouse: "down" | "up" | "move" | "wheel", button?: 1-3, dy?: -1 | 1,
+// row, col, mods?}, {focus: bool}: each as the program's modes ask.
 //
-// Unplacing a session hangs its program up (SIGHUP to its group). One that
-// exited stays, with its status and its last output, until it is unplaced.
-//
-// The thread: polls every session's master; something there (or a write
-// that waited) posts {"irq": 63} and waits for the host's turn to take it.
-// The turn reads a burst on while it comes (8 ms at most), so a burst is
-// one write of the screen. The turn (on/irq): each
-// master read dry into tx and the lines in to, what waited written, the
-// exited reaped.
+// unplacing a session sends SIGHUP to its group; an exited one stays until unplaced.
+// thread: polls every master, posts {"irq": 63}; the turn reads a burst on (8 ms at most) so a
+// burst is one screen write, writes what waited, reaps the exited.
 
 #define _DARWIN_C_SOURCE
 

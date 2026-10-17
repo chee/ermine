@@ -1,42 +1,30 @@
-// views.ts (newos, from deno/views.ts): "ermine:views", values drawn as what they are, as readline is a
-// library a program imports: what the inspector drew, for any program that shows a value. A string with its lines, length and what is
-// hard to see; a number in hex and binary, as a time, a colour's swatch; a
-// boolean a box; a list, a map, counted and previewed; bytes as UTF-8 and a
-// dump; a typed array's stats and sparkline, uint32 pixels beside w and h a
-// picture; {kind: "picture"} the picture; an address followable; an id, a
-// function, a live value badges.
+// views.ts ("ermine:views"): values drawn as what they are, for any program that shows a value
 //
-//   const V = views.make(blit, {u, colours, hex})   blit from "ermine:draw"; colours the program's theme (paper, ink, line, lemon,
-//                                              cherry...), hex whole numbers in hex: read at each call, so the
-//                                              program changes them in place
-//   V.fonts({text, title, fixed})              the fonts it draws in, as they come; the font ROM until then
-//   V.kinds(map)                               the views registered by kind (/etc/views, below)
+//   const V = views.make(blit, {u, colours, hex})   colours, hex (numbers in hex) read each call
+//   V.fonts({text, title, fixed})   fonts to draw in; the font ROM until then
+//   V.kinds(map)                    the views registered by kind (/etc/views)
+// a row:
+//   V.kind(v, key?, ctx?)  V.badge(v, kind)
+//   V.pieces(v, kind, key?, ctx?, o?)   a line, in pieces [text, colour, swatch?]
+//   V.summary(f, x, y, v, o)        badge and pieces; f null measures
+// a pane:
+//   V.blocks(f, w) -> B             a column of blocks, each {h, draw}
+//   V.about(v, kind, o)  V.body(B, v, kind, o)  V.lay(B, R, scroll)
+//   V.pane(f, R, v, o)              all three
+//   B.zones [{x, y, w, h, act}]     act: follow (an address) | toggle | hex | into
+//   V.hit(zones, x, y)
+// editing:
+//   V.edit(v, kind, o)              a readline field for a simple value, or null
+//   V.parse(text, kind)             {value} | {error}
+//   V.field(f, box, field)          draws one; says where its caret is
 //
-// A row: V.kind(v, key?, ctx?), V.badge(v, kind), V.pieces(v, kind, key?,
-// ctx?, o?) (a line, in pieces [text, colour, swatch?]), V.summary(f, x, y,
-// v, o) (the badge and the pieces; f null measures). A pane: V.blocks(f, w)
-// (a column of blocks, each {h, draw}), V.about(v, kind, o) (one line of
-// what it is), V.body(B, v, kind, o) (the value itself), V.lay(B, R,
-// scroll) (drawn from scroll down, the scroll it could be), or all three in
-// V.pane(f, R, v, o). What can be clicked is in B.zones, {x, y, w, h, act}:
-// follow (an address, its address), toggle (a boolean), hex, into (with
-// o.into, a key of a list or a map); V.hit(zones, x, y). Editing:
-// V.edit(v, kind, o) a readline field for a simple value, or null;
-// V.parse(text, kind) {value} or {error}; V.field(f, box, field) draws one,
-// and says where its caret is.
-//
-// o: {key, ctx, parent, name, write, address, api, into, play}. key
-// the value's own key, ctx what holds it ("colors" for a picture's), parent
-// the map a typed array's w and h are in; write whether Enter may edit it;
-// api a part's interface, to say what an address reaches. play: a draw
-// list beside its w and h played into a picture, pixels drawn at a map's
-// head, a list of strings as text, and registered views.
-//
-// /etc/views, a map from a value's kind ({kind: "js", ...}) to how it
-// looks: {label, line, show}. label the badge's word (the kind); line the
-// keys whose values a row's summary shows (every key, as a map's); show the
-// key the pane shows first, drawn as what its value is, the other keys
-// below it as a map's. A kind built in (picture) is never another's.
+// o: {key, ctx, parent, name, write, address, api, into, play}
+//   ctx: what holds it ("colors" for a picture's)  parent: the map a typed array's w and h are in
+//   write: Enter may edit  api: to say what an address reaches  into: a list's or map's keys
+//   play: draw lists, pixels at a map's head, lists of strings as text, registered views
+// /etc/views: {kind: {label, line, show}}  label: the badge's word; line: the keys a row shows
+// (default all); show: the key the pane shows first, other keys below. a built-in kind (picture)
+// is never another's
 
 // deno-lint-ignore-file no-explicit-any
 import { first, idAt, make as makeAt, snap, val } from "./kit.ts"

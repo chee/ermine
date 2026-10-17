@@ -1,44 +1,23 @@
-// /programs/browser: a web browser with tabs. Its window is a layer with
-// ermine's own tab strip and toolbar (back, forward, reload, the address)
-// and, under them, the selected tab's page from the web driver: a view node
-// it places in /dev/web/views, and the layer's "web" field, which tells the
-// compositor where that page shows. The other tabs' views stay, unshown, up
-// to /etc/browser's live (6) most recently selected; one beyond is let go,
-// asleep (its title grey), and loads again when selected. The page is
-// drawn off screen by the engine, and the compositor draws its frames into
-// the window, as it draws any plane; what this window is given over the
-// page, clicks, drags, scrolls, moves and, while the page has the keyboard,
-// keys and text, goes to it (/dev/web/driver/on/input), and the pointer
-// takes the shape it asks for (/etc/cursors/<its name>, when there is one).
-// Click the page and it has the keyboard; click the strip or the toolbar,
-// or cmd-l, and ermine has it back.
+// /programs/browser: a web browser with tabs. ermine's own tab strip and toolbar over the selected
+// tab's page: a view it places in /dev/web/views, shown by the layer's "web" field. input over the
+// page goes to /dev/web/driver/on/input; the pointer takes the page's cursor (/etc/cursors). click
+// the page and it has the keyboard; click the strip or toolbar, or cmd-l, and ermine has it back.
+// the /etc/browser live (6) most recent tabs keep a view; older ones sleep (grey title) and load
+// again when selected. a page that would open another opens as a tab after it.
 //
-// The window's tabs are a document beside the process,
-// /apps/browser/tabs/<its name>, {tabs: [id], at, n, closed: [{id, at}]},
-// and each tab a document in it, <id>, {url, title, when, from, opener?}:
-// the page it went to last. A navigation is one change to it, setting from
-// (the history entry it came from, null: the one before), so the tab's
-// history is that node's history (/dev/sync/history, asked for in
-// /dev/sync/want/browser-<pid>): a tree, a page gone to from an earlier one
-// a branch. Back and forward only move where the tab is in it ("here", in
-// the view), writing nothing; when WebKit's own back and forward list
-// (/dev/web/pages' list) goes the same way it goes there itself, else the
-// address is loaded. Its page's state, the engine's own of its history and
-// where it is scrolled, is the tab's state, <id>/state, so a boot brings it
-// back where it was. A page's title, address and progress are read from
-// /dev/web/pages; a page that would open another (a link to a new window,
-// window.open, cmd-click, a middle click) says so there, "open", and it
-// opens as a tab after it. History (cmd-y): a popup over the page, every
-// tab's history, searched as it is typed.
+//   /apps/browser/tabs/<name>             {tabs: [id], at, n, closed: [{id, at}]}
+//   /apps/browser/tabs/<name>/<id>        {url, title, when, from, opener?}: a change a navigation
+//   /apps/browser/tabs/<name>/<id>/state  the engine's history and scroll, restored at boot
 //
-//   cmd-t a new tab, cmd-w closes one (the last, the window; while /etc/keys
-//   binds s-w the window manager's close comes first), cmd-shift-t the last
-//   closed again, ctrl-tab and cmd-shift-] the next, ctrl-shift-tab and
-//   cmd-shift-[ the one before, cmd-1…8 that one, cmd-9 the last; cmd-l the
-//   address (readline's keys), cmd-[ and cmd-] back and forward, cmd-r reload,
-//   cmd-y the history, cmd-shift-y all of it in a window (/programs/history).
-//   On the strip: a click selects, its box closes, a middle click closes, a
-//   drag moves it along, + is a new tab.
+// a tab's history is its node's (/dev/sync/history, wanted in /dev/sync/want/browser-<pid>): a
+// tree. back and forward only move "here" in it, through WebKit's list when it agrees, else
+// loading the address. history (cmd-y): a popup of every tab's, searched as typed.
+//
+//   cmd-t new tab, cmd-w close (the last: the window; s-w in /etc/keys: the wm's close first),
+//   cmd-shift-t reopen, ctrl-tab / cmd-shift-] next, ctrl-shift-tab / cmd-shift-[ previous,
+//   cmd-1…8 that one, cmd-9 the last; cmd-l address (readline's keys), cmd-[ cmd-] back/forward,
+//   cmd-r reload, cmd-y history, cmd-shift-y all of it in a window (/programs/history).
+//   strip: click selects, its box or a middle click closes, drag moves, + new tab.
 import { data, drop, effect, handler, idAt, key, make, val, whole } from "ermine:kit"
 import { here } from "ermine:os"
 import { blitter, font } from "ermine:draw"

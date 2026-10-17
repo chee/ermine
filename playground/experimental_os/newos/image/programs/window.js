@@ -9,11 +9,11 @@
 //   window tag <tag>[+<tag>...]             its tags; tag 2 shows it in view 2
 //   window send left|right|up|down          to the next column, or along it, while tiled
 //   window mode default|stack|max           its column's mode, while tiled
-import { data, drop, val } from "ermine:kit"
-import { here } from "ermine:os"
+import { data, val } from "ermine:kit"
+import { end } from "ermine:os"
 
 export default (given) => {
-	const { api, call, self, name } = given
+	const { api, call } = given
 	const [verb, ...rest] = data(given)?.args ?? []
 	const WM = ["/", "dev", "wm"]
 	const ctl = val(api, [...WM, "ctl"])
@@ -65,5 +65,5 @@ export default (given) => {
 		}`
 	if (line && Array.isArray(ctl)) said = String(call(ctl, [line]))
 	if (said !== "ok") console.log("window:", said ?? "no window manager")
-	drop(api, here(self).slice(0, -1), name, self)
+	end(given)
 }

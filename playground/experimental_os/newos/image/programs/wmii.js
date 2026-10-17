@@ -1,86 +1,53 @@
-// /programs/wmii: the window manager's core, after wmii's architecture,
-// which is Plan 9's: the window manager is a file server. It has no policy
-// (what keys do, what the bar says, what a click on the root opens are
-// wmiirc's and the status program's) and serves all it keeps as nodes in its
-// ".", /dev/wm, as rio serves /dev/wsys and wmii serves /:
+// /programs/wmii: the window manager's core, after wmii (and Plan 9): a file server with no policy
+// (keys, bar text, root clicks are wmiirc's and the status program's), serving at /dev/wm:
 //
-//   ctl          the address of its "ctl" handler, which takes a line, as wctl does:
+//   ctl          the "ctl" handler's address; takes a line, as wctl:
 //                  view <tag> | select next|prev|<id> | raise [id] | lower [id]
 //                  move [id] <x> <y> | resize [id] <w> <h> | kill [id] | tag [id] <tag>[+<tag>...]
 //                  minimize [id] | restore [id] (none: the last minimized in view)
-//                  layout float|tile|toggle, and while tiled: select left|right|up|down,
+//                  layout float|tile|toggle; tiled: select left|right|up|down,
 //                  send sel left|right|up|down, colmode sel default|stack|max
-//                  run <command>: a Run event, {command}, which wmiirc runs (a menu item's run)
-//   event        {n, events}: the last 64, each {n, type, ...}: CreateClient, DestroyClient,
+//                  run <command>: a Run event, {command}, for wmiirc
+//   event        {n, events}: the last 64, {n, type, ...}: CreateClient, DestroyClient,
 //                FocusClient, CreateTag, DestroyTag, FocusTag, Key, Run, LeftBarClick,
 //                RightBarClick, ClientClick, RootClick, TaskBarClick
 //   view         the tag shown
-//   tag/<name>   its layout, its columns and the one selected (col) when tiled; its clients are those whose
-//                tags hold it, front first by z
+//   tag/<name>   layout, columns, selected col when tiled; clients: those tagged it, front first
 //   client/<id>  {label, tags, owner, x, y, w, h, n, z, sized, mini?, start?, pid?, node?, away?}:
-//                n its place in the task bar, z in the stack, mini the order it was minimized in; start
-//                what launch was given, pid and node its process; away while its window is not here (after
-//                a boot, or its process killed), until launch brings it back. The focus is the front one
-//   lbar, rbar   bar items, {text, fg?, bg?, from?}, placed by anyone: lbar's at the task bar's left, rbar's at
-//                the menu bar's right; fg and bg an /etc/theme key (mint) or a colour, from the node a reading reads
-//   menu         the menu pulled down from the menu bar, {client, menu, x} (menu 0 the rabbit's), or null
-//   menu/at      the rows lit in it, a path, each one with items opening its submenu, or null: a node of its
-//                own, so the pointer going down a menu writes only it
-//   hand         what the pointer is doing: {drag?, grab?, pick?, held?, hovered?}
-//   launch       the address of its "launch" handler, which takes a start, {address, program, name?, data?},
-//                program a path (["programs", "term"], or "programs/term"), data written into the process as
-//                its node "data"; and starts it as its child, named as start names it, else by its pid, kept; with a place,
-//                {client} an away client's id, or {x, y, w, h, sized, tags}, the window the program opens
-//                goes there, not where it asks
-//   coming       each launch whose window has not come, by pid: {start, node, client?}
+//                n task bar place, z stack place, mini minimize order, start launch's argument,
+//                pid and node its process, away till launch brings it back; the front one has focus
+//   lbar, rbar   bar items {text, fg?, bg?, from?}: lbar task bar left, rbar menu bar right; fg, bg
+//                an /etc/theme key or a colour; from a node to read
+//   menu         the open menu, {client, menu, x} (menu 0 the rabbit's), or null
+//   menu/at      the lit rows' path, or null; its own node, so hovering writes only it
+//   hand         {drag?, grab?, pick?, held?, hovered?}
+//   launch       the "launch" handler's address; takes {address, program, name?, data?} (program a
+//                path, data written as the process's "data") and starts it as its child, named by
+//                name or pid; with {client} (an away one) or {x, y, w, h, sized, tags}, the window
+//                goes there
+//   coming       launches whose window has not come, by pid: {start, node, client?}
 //
-// The Mac's menu bar shows what this one does: it writes /dev/display/menus, {n, menus}, the same
-// menus, the world menu first, which the compositor sends to the metal; an item chosen there,
-// /dev/display/chosen, is what choosing it here is.
+// view, tag, client: documents on the card, this process a copy written back once a call, taken up
+// again on restart or when another writes them. a drag fronts its client, written once REST ms
+// after the button is up. the rest are ephemeral. wmiirc relaunches away clients.
 //
-// view, tag and client are documents, kept on the card: what the window manager holds is there, and
-// this process only a copy of it, written back once a call; started again (after a boot, or killed and
-// started), it takes them up; written by another (a shell's set, the inspector), it takes them up as ctl's
-// doings. A client is written when it opens, closes, is clicked or focused, or ctl
-// moves, resizes, tags or minimizes it. A drag, a move or a resize, is the slot trick (front, from
-// kit): its client, each move, into an ephemeral item in front of its document, so whoever reads it
-// sees the window go; the document written once, when the hand has rested REST ms after the button is
-// up. The rest are ephemeral. wmiirc starts each away client again, through launch
-//
-// Two bars, a menu bar as System 7's and a task bar, a dock as catclock's. The menu bar, at the top, of
-// frosted glass: its menus, the world menu first, drawn as the rabbit, then the focused window's; rbar's
-// items at the right, quiet, the clock in a tray (its bg a pair of colours). A program's
-// menus are a node in its own, the window's owner: <owner>/menus,
+// bars: a frosted menu bar at the top (the world menu as the rabbit, then the focused window's;
+// rbar at the right, the clock in a tray) and a floating pill task bar (lbar's tags as a segmented
+// control, a button per window in view: click focuses, restores, or minimizes the focused one).
+// mirrored to the Mac's menu bar: /dev/display/menus {n, menus}; /dev/display/chosen: a choice.
+// a program's menus: <owner>/menus,
 //   [{title, items: [{label, key?, call?, args?, run?, off?, check?, items?, from?} | "-"]}]
-// and the world menu's items are /etc/menu, a document, [item | "-"], items as these. An item with
-// call calls <owner>/on/<call> (or call, an address) with args; one with run runs a command as
-// /etc/keys has them (a Run event, which wmiirc runs); one with only key is that chord pressed, as
-// if typed: a chord in /etc/keys the wm's, any other the window's. Beside one that runs a command,
-// the chord /etc/keys binds to it, else its key; off, greyed; check, {from, key?}, ticked while the
-// node from reads (its key) true. A submenu: items, or from, a folder whose nodes that say what they
-// run ({run, icon?}: /Applications) are its items, by name. A title pressed pulls its menu down: a
-// click on an item, or the button let go over one, chooses it; an item with items, hovered or
-// clicked, opens them beside it; Escape or a click elsewhere lets it go. Menus are cards, round, their
-// shadows soft (a layer's shape, which the compositor rounds). The task bar, a pill floating in the
-// middle at the bottom, as wide as it holds: lbar's items (wmiirc's tags) a segmented control, then a
-// button for each window in view, in the order they came; a click focuses one, restores a minimized
-// one, minimizes the focused one. Under everything, /etc/theme's wallpaper (catclock's sky, clouds and
-// hills) and the hint, as XP's balloon pointing at the rabbit.
+// world menu items: /etc/menu, [item | "-"]. call: <owner>/on/<call> (or an address) with args;
+// run: a command (a Run event); only key: that chord typed. off greys; check {from, key?} ticks
+// while true; a submenu: items, or from, a folder of {run, icon?} nodes (/Applications).
+// wallpaper: /etc/theme's; a hint balloon points at the rabbit.
 //
-// A client is a layer with a title and an owner. Windows overlap: each opens
-// where and as big as it asks, a click raises it, its title bar moves it,
-// its edges and corners resize it, as the Mac's do, and its grip at its
-// bottom right (the wm writes want: {w, h} into its layer, and the client
-// draws itself at that size; over an edge the cursor is a double arrow, its
-// way), its × closes it, its box
-// at the right minimizes it: hidden, its button left in the task bar; the
-// box left of that inspects it (a Run of inspect <id>, /programs/inspect). A view
-// may be tiled, in wmii's columns, when asked (layout tile). Keys go to the
-// focused client, but for the chords /etc/keys binds (wmiirc runs them), which
-// it turns into Key events: {key} the chord as /etc/keys writes it (A-return,
-// s-S-1). A window whose owner holds grab, true, gets every key, as one that
-// records a chord does (the Keys app). In windows mode the Mac places the
-// windows; the wm keeps the tags and lays nothing out.
+// windows: a layer with a title and an owner. they overlap; a click raises, the title bar moves,
+// edges, corners and grip resize (the wm writes want: {w, h}; the client draws that size), ×
+// closes, the box beside it minimizes, the one left of that inspects (Run inspect <id>). layout
+// tile: wmii's columns. keys go to the focused client but for /etc/keys chords, which become Key
+// events ({key}: A-return, s-S-1); an owner holding grab: true gets every key. windows mode: the
+// Mac places windows, the wm keeps only tags.
 import {
 	compute,
 	drop,

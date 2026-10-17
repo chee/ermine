@@ -1,29 +1,19 @@
-// /programs/ermine: a desktop ermine, as Neko was on the Mac and oneko on X:
-// a white stoat in its winter coat, living on the desk. It runs after the
-// pointer at a bound, sits where it catches it, washes, yawns and falls
-// asleep while the pointer rests; the pointer going away wakes it (alert),
-// and it runs again. Idle, it sometimes wanders off somewhere on the desk.
-// Each launch is another ermine; `ermine away` sends every one away.
+// /programs/ermine: a desktop ermine, as Neko and oneko: a white stoat that chases the pointer,
+// sits, washes, yawns and sleeps while it rests, wakes (alert) when it moves, sometimes wanders.
+// each launch is another; `ermine away` sends every one away.
 //
-//   /etc/ermine          its settings, a document: {speed, above, sleepy, wander, boot, frames}.
-//                        speed: points a second; above: over the windows, as Neko was, else on the
-//                        desk under them; sleepy: seconds the pointer rests before it yawns; wander:
-//                        seconds between wanders, about (0 never); boot: wmiirc starts one at boot;
-//                        frames: the folder its pictures are in (null: /etc/ermine itself)
-//   /etc/ermine/<frame>  its pictures, as My Computer shows them and Paint edits them, read live:
-//                        run-right-1 and -2 (stretched, gathered: a bound), run-upright-*,
-//                        run-downright-*, run-up-*, run-down-*, alert, sit, wash-1 and -2, yawn,
-//                        sleep-1 and -2. Facing left, each flipped, or run-left-1 and so on when drawn.
-//                        One not drawn is the nearest that is (run-up-2: run-up-1, then run-right-1)
-//   <its node>/state     what it is doing and where, ephemeral: {doing, x, y, facing, layer}
+//   /etc/ermine          {speed, above, sleepy, wander, boot, frames}: speed points/s; above: over
+//                        the windows; sleepy: seconds before it yawns; wander: seconds between
+//                        wanders (0 never); boot: wmiirc starts one; frames: the pictures' folder
+//                        (null: /etc/ermine)
+//   /etc/ermine/<frame>  pictures, read live: run-{right,upright,downright,up,down}-{1,2}, alert,
+//                        sit, wash-1/2, yawn, sleep-1/2; left is right flipped unless run-left-* is
+//                        drawn; a missing frame falls back to the nearest drawn
+//   <its node>/state     ephemeral: {doing, x, y, facing, layer}
 //
-// Its layer, /dev/display/layers/ermine-<pid>, has no title and no owner, so it is no window and the
-// window manager gives it no clicks: they go through to what is under it. over: its clear pixels are
-// clear. Its draw is one pixels op of every frame side by side, at the screen's unit, made when a
-// picture or the unit changes; a frame shown is that op's x, one number, and a step a move of the
-// layer, so the compositor plays it again only for a new frame (a few hundred pixels) and moves its
-// tile otherwise. It ticks at the display's rate while running, ten times a second while awake and
-// four while asleep.
+// layer /dev/display/layers/ermine-<pid>: no title, no owner, so clicks pass through. one pixels op
+// of every frame side by side; a frame is its x, a step a layer move. ticks at the display's rate
+// while running, 10/s awake, 4/s asleep.
 import { data, drop, effect, handler, idAt, make, val, whole } from "ermine:kit"
 import { after, here } from "ermine:os"
 

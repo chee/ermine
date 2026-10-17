@@ -67,6 +67,11 @@ tp_device *cardDevice(Card *c);
 /** this device's key, 64 hex digits: a commit's signer */
 const char *cardKey(Card *c);
 
+/** who wrote a document's table: each stored commit of it the card holds (every head's, in the order taken
+ * in) decoded, its change header given to f (actor, external[0] the site: file and function), until f says
+ * false. How many it gave; -1: no history here (not a document, or none stored) */
+long cardChanges(Card *c, const char *doc, const char *table, bool (*f)(void *context, const ch_header *change), void *context);
+
 /** a document a driver wants synced though no list reached from the root may name it (drv_link.c): followed */
 void cardFollow(Card *c, const char *doc);
 /** told the id of each document a commit is taken in to, made here or come; one listener, the last given */
@@ -78,7 +83,7 @@ void cardTold(Card *c, void (*told)(void *context, const char *doc), void *conte
 // follows them or ttl ms of silence; sent again every beat ms)
 
 /** this device's live state at a document: written to the document's `live` table and sent at most every beat
- * (LIVE_BEAT ms), held until then (op_ref'd). NULL: withdrawn, a `live` of nothing sent in its place */
+ * (LIVE_BEAT ms), held until then (op_ref'd). NULL: withdrawn: the stop (sy_stop), what stood ends at once everywhere */
 void cardLive(Card *c, const char *doc, const op_value *value);
 /** the live state standing at the document watched: cardLived's listener told when it changes (a peer's came, changed or lapsed) */
 void cardWatch(Card *c, const char *doc, bool on);
